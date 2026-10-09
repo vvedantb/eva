@@ -17,7 +17,6 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 import {
   callConvexWithRetry,
   callHarnessSkillCatalogReport,
-  unwrapConvexMutationPayload,
   type HarnessCommandReport,
 } from "../http/convexClient.js";
 import {
@@ -65,7 +64,13 @@ import {
   beginTurnOwnership,
   endTurnOwnership,
 } from "../runtime/turnLease.js";
-import { log } from "../utils.js";
+import {
+  isJsonObject,
+  log,
+  readTrimmedString,
+  unwrapConvexMutationPayload,
+  errorText,
+} from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   bootWarmDaemon,
@@ -509,28 +514,12 @@ function readSyntheticTurnMessageId(result: JsonValue): string | null {
   return typeof messageId === "string" ? messageId : null;
 }
 
-function readParentToolUseId(message: DaemonMessage): string | null {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-
-function readStringField(
-  message: DaemonMessage,
-  field: string,
-): string | undefined {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 function recogniseSubagentToolUses(message: DaemonMessage): void {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -538,7 +527,7 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -548,15 +537,13 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
     if (name !== "Agent" && name !== "Task") {
       continue;
     }
-    const id = block.id;
-    if (typeof id === "string" && id.trim()) {
-      recognisedSubagentToolUseIds.add(id.trim());
-    }
+    const id = readTrimmedString(block.id);
+    if (id) recognisedSubagentToolUseIds.add(id);
   }
 }
 
 function shouldDropSubagentMessage(message: DaemonMessage): boolean {
-  const parentId = readParentToolUseId(message);
+  const parentId = readTrimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -574,7 +561,7 @@ function shouldMintSyntheticTurn(message: DaemonMessage): boolean {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = readTrimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -754,7 +741,7 @@ async function reportHarnessSkillCatalog(
         cliVersion,
     );
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: harness skill report failed — " + messageText);
   }
 }
@@ -770,7 +757,7 @@ function noteHarnessInitMessage(
 ): void {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField(message, "claude_code_version");
+  const cliVersion = readTrimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -817,8 +804,7 @@ async function dispatchPendingAgentStops(
       await agentRunner.stopTask(entry.taskId);
       log("daemon: stopTask dispatched taskId=" + entry.taskId);
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("daemon: stopTask failed — " + messageText);
       pendingAgentStops.add(toolUseId);
     }
@@ -866,12 +852,12 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField(message, "tool_use_id");
+  const toolUseId = readTrimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
     const entry: BackgroundAgentEntry = {
       toolUseId,
-      taskId: readStringField(message, "task_id"),
-      description: readStringField(message, "description"),
+      taskId: readTrimmedString(message.task_id),
+      description: readTrimmedString(message.description),
       status: "running",
       startedAt: Date.now(),
     };
@@ -886,7 +872,7 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
     (subtype === "task_updated" || subtype === "task_notification") &&
     toolUseId
   ) {
-    const status = readStringField(message, "status");
+    const status = readTrimmedString(message.status);
     const terminal =
       status === "completed" ||
       status === "failed" ||
@@ -1039,7 +1025,7 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   endWatchedTurn();
   log("daemon: cancel requested — interrupting in-flight turn");
   void agentRunner.interrupt().catch((error) => {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: interrupt failed — " + messageText);
   });
 }
@@ -1331,8 +1317,7 @@ function createWarmAgentRunner(
         pending.push(message);
       }
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("daemon: agent query pump failed — " + messageText);
     } finally {
       pending.close();
@@ -1368,7 +1353,7 @@ function createWarmAgentRunner(
       await query.setPermissionMode("default");
       log("daemon: permission mode set to default");
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       log("daemon: setPermissionMode failed — " + message);
     }
   };
@@ -1441,7 +1426,7 @@ export async function runSdkDaemon(): Promise<void> {
   try {
     await runDaemonMessagePump(agentRunner);
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: query failed — " + messageText);
     // Durability BEFORE completion, as failTurnAndExit does it: the SDK stream
     // died under a turn that may have committed work, and this daemon is

@@ -2,23 +2,17 @@ import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { sandboxOwnerValidator, type SandboxOwner } from "../_sandbox/owner";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
 /**
  * Discriminated owner — a PTY belongs to a session, a quick task, or a project.
- * All expose a sandbox and a repo; sessions additionally track a default
- * `ptySessionId` for the legacy single-terminal flow.
+ * All expose a sandbox and a repo.
  */
 export const ownerArg = sandboxOwnerValidator;
 
 export interface ResolvedOwner {
   sandboxId: string;
   repoId: Id<"githubRepos">;
-  /** Legacy default-terminal pointer; only sessions track this. */
-  defaultPtyId: string | undefined;
-  /** Bound mutator for the default-terminal pointer; tasks have no equivalent. */
-  setDefaultPtyId: ((nextPtyId: string) => Promise<void>) | undefined;
-  /** Stable suffix used to derive the legacy default PTY name when missing. */
-  ownerIdSuffix: string;
   /**
    * True when the owner is `stopping`/`closed`. A terminal connect must not
    * exec on the sandbox in this state — on Vercel any exec lazily resumes a
@@ -26,11 +20,6 @@ export interface ResolvedOwner {
    * (invisible to the session status) and defeats a manual stop.
    */
   isStoppingOrClosed: boolean;
-}
-
-/** A sandbox in `stopping`/`closed` must not be exec'd against (see ResolvedOwner.isStoppingOrClosed). */
-function isStoppingOrClosed(status: string | undefined): boolean {
-  return status === "stopping" || status === "closed";
 }
 
 export async function resolveOwner(
@@ -46,15 +35,7 @@ export async function resolveOwner(
     return {
       sandboxId: session.sandboxId,
       repoId: session.repoId,
-      defaultPtyId: session.ptySessionId || undefined,
-      setDefaultPtyId: async (nextPtyId: string) => {
-        await ctx.runMutation(internal.sessions.updatePtySessionInternal, {
-          id: owner.sessionId,
-          ptySessionId: nextPtyId,
-        });
-      },
-      ownerIdSuffix: String(owner.sessionId).slice(-8),
-      isStoppingOrClosed: isStoppingOrClosed(session.status),
+      isStoppingOrClosed: isSandboxClosingStatus(session.status),
     };
   }
 
@@ -68,10 +49,7 @@ export async function resolveOwner(
     return {
       sandboxId: task.sandboxId,
       repoId: task.repoId,
-      defaultPtyId: undefined,
-      setDefaultPtyId: undefined,
-      ownerIdSuffix: String(owner.taskId).slice(-8),
-      isStoppingOrClosed: isStoppingOrClosed(task.reviewTaskSandboxStatus),
+      isStoppingOrClosed: isSandboxClosingStatus(task.reviewTaskSandboxStatus),
     };
   }
 
@@ -83,9 +61,8 @@ export async function resolveOwner(
   return {
     sandboxId: project.sandboxId,
     repoId: project.repoId,
-    defaultPtyId: undefined,
-    setDefaultPtyId: undefined,
-    ownerIdSuffix: String(owner.projectId).slice(-8),
-    isStoppingOrClosed: isStoppingOrClosed(project.reviewProjectSandboxStatus),
+    isStoppingOrClosed: isSandboxClosingStatus(
+      project.reviewProjectSandboxStatus,
+    ),
   };
 }

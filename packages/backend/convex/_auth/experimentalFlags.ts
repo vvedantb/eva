@@ -1,27 +1,15 @@
+import type { Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
+import type {
+  experimentalFlagKeyValidator,
+  resolvedExperimentalFlagsValidator,
+} from "../_validators/shapes";
 
-export type ExperimentalFlagKey =
-  | "sessionTabs"
-  | "blurPid"
-  | "voiceDictation"
-  | "composerAutocomplete"
-  | "simpleView"
-  | "replyChime"
-  | "notificationBell"
-  | "disablePageMotion"
-  | "viewVercelDeployment";
+export type ExperimentalFlagKey = Infer<typeof experimentalFlagKeyValidator>;
 
-export type ResolvedExperimentalFlags = {
-  sessionTabs: boolean;
-  blurPid: boolean;
-  voiceDictation: boolean;
-  composerAutocomplete: boolean;
-  simpleView: boolean;
-  replyChime: boolean;
-  notificationBell: boolean;
-  disablePageMotion: boolean;
-  viewVercelDeployment: boolean;
-};
+export type ResolvedExperimentalFlags = Infer<
+  typeof resolvedExperimentalFlagsValidator
+>;
 
 /** Resolves experimental flags for a user. Missing / unset keys are false. */
 export function resolveExperimentalFlags(

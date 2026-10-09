@@ -3,6 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import type { JsonValue } from "../_jev/jsonValue";
+import type { ChatEntityKind } from "../validators";
 
 // Leaf module shared by tools.ts and orchestratorTools.ts. Lives apart from
 // tools.ts so the orchestrator registration does not close an import cycle
@@ -14,6 +15,13 @@ export function errorResult(message: string) {
     content: [{ type: "text" as const, text: message }],
     isError: true,
   };
+}
+
+/** Cuts long text for an agent reply and says how much was left out. */
+export function truncateForAgent(text: string, limit: number): string {
+  return text.length > limit
+    ? `${text.slice(0, limit)}… [${text.length - limit} more characters]`
+    : text;
 }
 
 export function textResult(data: Record<string, unknown> | Array<unknown>) {
@@ -34,7 +42,7 @@ export interface McpCredentials {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  entityKind?: "session" | "task" | "project";
+  entityKind?: ChatEntityKind;
   /**
    * Set only by Manager Ave's own server-side run (`mcp/aveRun.ts`) — no token
    * path can carry it. Unlocks `send_agent_message` and makes the tools that
@@ -103,7 +111,7 @@ export async function mcpCallAsUser<T>(
  * the chat (session, quick task or project) it came from.
  */
 export function chatSourceArg(
-  kind: "session" | "task" | "project",
+  kind: ChatEntityKind,
   id: string,
 ): Record<string, string> {
   if (kind === "session") return { kind, sessionId: id };
@@ -126,7 +134,7 @@ export const confirmedDeleteArg = z
 export async function mcpGetContext(
   ctx: ActionCtx,
   clerkUserId: string,
-): Promise<{ deployKey: string; userId: string }> {
+): Promise<{ userId: string }> {
   return ctx.runAction(internal.mcp.nodeActions.getContext, { clerkUserId });
 }
 
@@ -154,7 +162,7 @@ export async function mcpListUserRepos(
   ctx: ActionCtx,
   userId: string,
 ): Promise<RepoInfo[]> {
-  return ctx.runAction(internal.mcp.nodeActions.listUserRepos, { userId });
+  return ctx.runQuery(internal.mcp.queries.listUserRepos, { userId });
 }
 
 /** `owner/name` for a plain repo, `owner/name/app` for one app of a monorepo. */

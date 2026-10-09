@@ -5,7 +5,12 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
-import { authAction, authMutation, hasRepoAccess } from "./functions";
+import {
+  authAction,
+  authMutation,
+  getProjectWithAccess,
+  hasRepoAccess,
+} from "./functions";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -17,6 +22,7 @@ import {
   roleValidator,
   taskSandboxStatusValidator,
   turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
@@ -32,10 +38,8 @@ import { trackProjectChatWorkflow } from "./workflowWatchdog";
 import { projectChatStreamEntityId } from "./_chat/surfaceAdapters";
 import { buildProjectChatPrompt } from "./_projects/chatPrompt";
 import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
-import {
-  buildProjectBranchName,
-  getProjectGeneratedSpec,
-} from "./_projects/helpers";
+import { getProjectGeneratedSpec } from "./_projects/helpers";
+import { resolveProjectBranchName } from "./_git/branchNames";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
@@ -46,6 +50,7 @@ import {
   resolveTurnProviderAccountId,
 } from "./_userProviderAccounts/defaults";
 import type { Doc, Id } from "./_generated/dataModel";
+import { sandboxOwnerKey } from "./_sandbox/owner";
 import {
   CHAT_ALLOWED_TOOLS,
   projectChatDaemonLaunchArgs,
@@ -75,6 +80,7 @@ import {
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
+import { errorText } from "./_shared/errors";
 
 async function buildProjectChatTurnPrompt(
   ctx: QueryCtx,
@@ -115,9 +121,7 @@ async function buildProjectChatTurnPrompt(
     project.repoId,
   );
 
-  const branchName =
-    project.branchName ??
-    buildProjectBranchName(args.projectId, project.branchVersion);
+  const branchName = resolveProjectBranchName(args.projectId, project);
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // project owner, whose access the credential helper mints tokens against).
@@ -141,7 +145,7 @@ async function buildProjectChatTurnPrompt(
     devPort: project.devPort ?? repo.devPort,
     readableRepos,
     runtime: {
-      ownerKey: `project-${args.projectId}`,
+      ownerKey: sandboxOwnerKey({ kind: "project", projectId: args.projectId }),
       prUrl: project.prUrl,
       devCommand: project.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
@@ -313,11 +317,11 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     const role = args.role ?? "user";
     const providerAccountId =
       role === "user"
@@ -376,11 +380,11 @@ export const startExecute = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     await touchUserActivity(
       ctx,
       { kind: "project", entityId: String(args.projectId) },
@@ -445,11 +449,11 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     // Project chat is owner-sticky: only the owner picks the billed account
     // (the "owner-only" policy in `resolveTurnProviderAccountId`).
     if (ctx.userId !== project.userId) {
@@ -577,11 +581,11 @@ export const enqueueMessage = authMutation({
     const content = args.message.trim();
     if (!content) return null;
 
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     await touchUserActivity(
       ctx,
       { kind: "project", entityId: String(args.projectId) },
@@ -648,11 +652,11 @@ export const cancelExecution = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
 
     const cancelled = await cancelChatTurn(ctx, {
       id: args.projectId,
@@ -897,7 +901,7 @@ export const projectChatExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("chat", error);
         console.error(
-          `[projectChatWorkflow] pushSandboxBranch failed projectId=${String(args.projectId)}: ${error instanceof Error ? error.message : String(error)}`,
+          `[projectChatWorkflow] pushSandboxBranch failed projectId=${String(args.projectId)}: ${errorText(error)}`,
         );
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,
@@ -969,9 +973,7 @@ export const getChatData = internalQuery({
       },
     );
 
-    const branchName =
-      project.branchName ??
-      buildProjectBranchName(args.projectId, project.branchVersion);
+    const branchName = resolveProjectBranchName(args.projectId, project);
 
     return {
       sandboxId: project.sandboxId,
@@ -1052,14 +1054,9 @@ export const saveResult = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     projectId: v.id("projects"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
+    ...completionCallbackArgs,
     pendingQuestion: v.optional(v.string()),
     ...turnLeaseFenceArgs,
-    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -1213,11 +1210,11 @@ export const getChatPrewarmData = internalQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, args.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      args.userId,
+    );
     if (
       !project.sandboxId ||
       isSandboxClosingStatus(project.reviewProjectSandboxStatus)

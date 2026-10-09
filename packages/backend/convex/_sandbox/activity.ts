@@ -2,13 +2,16 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
+import { chatEntityKindValidator } from "../_validators/enums";
 import {
-  sandboxActivityKindValidator,
   sandboxActivitySourceValidator,
   type SandboxActivitySource,
 } from "../_validators/tableFields";
 import { shouldTouchActivity } from "./idlePolicy";
-import { findSandboxOwnerBySandboxId, type ResolvedSandboxOwner } from "./owner";
+import {
+  findSandboxOwnerBySandboxId,
+  type ResolvedSandboxOwner,
+} from "./owner";
 
 /** Identifies the entity a sandbox belongs to, independent of its sandbox id. */
 export interface SandboxActivityRef {
@@ -17,7 +20,7 @@ export interface SandboxActivityRef {
 }
 
 export const sandboxActivityRefArgs = {
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
 };
 
@@ -104,7 +107,10 @@ export async function touchAgentFinished(
 ): Promise<void> {
   const row = await getSandboxActivity(ctx.db, ref);
   if (!row) {
-    await ctx.db.insert("sandboxActivity", { ...ref, lastAgentFinishedAt: now });
+    await ctx.db.insert("sandboxActivity", {
+      ...ref,
+      lastAgentFinishedAt: now,
+    });
     return;
   }
   if (!shouldTouchActivity(row.lastAgentFinishedAt, now)) return;

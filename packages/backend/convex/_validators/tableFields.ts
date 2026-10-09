@@ -13,6 +13,8 @@ import {
   errorTypeValidator,
   evaluationStatusValidator,
   evalFixStatusValidator,
+  notificationTypeValidator,
+  notificationUrgencyValidator,
   phaseValidator,
   prRecapOriginValidator,
   prRecapStatusValidator,
@@ -28,19 +30,23 @@ import {
   snapshotBuildKindValidator,
   snapshotBuildStatusValidator,
   snapshotBuildTriggerValidator,
+  snapshotScheduleValidator,
   taskActivityFieldValidator,
   taskSandboxEventValidator,
   taskSandboxStatusValidator,
   taskStatusValidator,
+  teamMemberRoleValidator,
   themeValidator,
   usageLimitCompletenessValidator,
   usageLimitProviderValidator,
   usageLimitStatusValidator,
+  chatEntityKindValidator,
 } from "./enums";
 import {
   automationFindingValidator,
   conversationMessageValidator,
   customThemeValidator,
+  envVarEntryValidator,
   evalIssueValidator,
   experimentalFlagsValidator,
   logEntryValidator,
@@ -1387,15 +1393,6 @@ export const appSettingsFields = {
   sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
-// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
-// its own table (not on the session/task/project doc) so the frequent, throttled
-// touches never join the write set of hot entity documents.
-export const sandboxActivityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
 /** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
 export const sandboxActivitySourceValidator = v.union(
   /** A chat message was sent or a queued one landed. */
@@ -1416,8 +1413,11 @@ export type SandboxActivitySource = Infer<
   typeof sandboxActivitySourceValidator
 >;
 
+// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
+// its own table (not on the session/task/project doc) so the frequent, throttled
+// touches never join the write set of hot entity documents.
 export const sandboxActivityFields = {
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
   /** Last human interaction: message sent, tab opened, preview traffic, presence. */
   lastUserActivityAt: v.optional(v.number()),
@@ -1453,9 +1453,7 @@ export const sandboxGitCredentialsFields = {
  * Shared by `docs` and `artifacts`; resolved by `_chatSource/helpers.ts`.
  */
 export const chatSourceFields = {
-  sourceKind: v.optional(
-    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-  ),
+  sourceKind: v.optional(chatEntityKindValidator),
   sourceSessionId: v.optional(v.id("sessions")),
   sourceTaskId: v.optional(v.id("agentTasks")),
   sourceProjectId: v.optional(v.id("projects")),
@@ -1825,5 +1823,99 @@ export const proposedPlanFields = {
   implementedAt: v.optional(v.number()),
   implementationSessionId: v.optional(v.id("sessions")),
   createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+export const notificationFields = {
+  userId: v.id("users"),
+  type: notificationTypeValidator,
+  title: v.string(),
+  message: v.optional(v.string()),
+  read: v.boolean(),
+  href: v.optional(v.string()),
+  repoId: v.optional(v.id("githubRepos")),
+  createdAt: v.number(),
+  // Human-readable task/project context shown on the notification card, e.g.
+  // a quick task's title or "Project title: issue title" for project tasks.
+  // Only set for types whose title does not already name the task (mentions,
+  // comment replies); snapshotted at creation, absent otherwise.
+  contextLabel: v.optional(v.string()),
+  // Set once this notification has been included in an email (instant send or
+  // daily digest), so neither path emails the same notification twice.
+  emailedAt: v.optional(v.number()),
+  // When the user archived this notification out of the inbox. Absent means
+  // "in the inbox" — archiving is reversible, so the row is kept and only
+  // this stamp moves. Archived rows never count as unread.
+  archivedAt: v.optional(v.number()),
+  // The comment this notification was generated from, when it came from one.
+  // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
+  // field so the anchor survives independently of the href string. Absent on
+  // non-comment notifications and on every notification created before this
+  // field existed — those keep landing at the top of the target page.
+  commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
+  // How loudly to deliver this one: high = instant email, normal = daily
+  // digest only, low = inbox only. Undefined means not yet routed (a mention
+  // whose routing action has not landed) or legacy; treated as normal.
+  urgency: v.optional(notificationUrgencyValidator),
+};
+
+export const teamMemberFields = {
+  teamId: v.id("teams"),
+  userId: v.id("users"),
+  role: teamMemberRoleValidator,
+  joinedAt: v.number(),
+};
+
+export const taskDependencyFields = {
+  taskId: v.id("agentTasks"),
+  dependsOnId: v.id("agentTasks"),
+};
+
+export const repoSnapshotFields = {
+  repoId: v.id("githubRepos"),
+  snapshotName: v.string(),
+  schedule: snapshotScheduleValidator,
+  enabled: v.optional(v.boolean()),
+  cronJobId: v.optional(v.string()),
+  workflowRef: v.optional(v.string()),
+  buildCommands: v.optional(v.array(v.string())),
+  // Seed-once commands run ONLY during seeded-snapshot builds, in the
+  // post-daemon phase (services like `convex dev` are up). For one-time
+  // data seeding (env set, convex import). Never re-run on sandbox boot,
+  // unlike githubRepos.startupCommands. Not part of the image fingerprint.
+  seedCommands: v.optional(v.array(v.string())),
+  // Legacy image-input fingerprint. Nothing writes this; kept until a
+  // widen-then-narrow removal (see docs/eva-convex.md).
+  imageFingerprint: v.optional(v.string()),
+  // Vercel base Image capture (`snap_*`) from a running sandbox — separate
+  // from `snapshotName` and per-app `seededSnapshotName`.
+  baseSnapshotId: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+export const sandboxConfigFileFields = {
+  repoId: v.id("githubRepos"),
+  // Legacy single-blob storage (kept for backwards compat with existing records).
+  // New uploads always use `chunks` instead.
+  storageId: v.optional(v.id("_storage")),
+  // Ordered list of storage blob IDs that, when concatenated in order, form the file.
+  // Single-blob files use a 1-element array; multi-chunk files split a large file by ~100MB.
+  chunks: v.optional(v.array(v.id("_storage"))),
+  fileName: v.string(),
+  fileSize: v.number(),
+  uploadedBy: v.id("users"),
+  createdAt: v.number(),
+};
+
+export const repoEnvVarFields = {
+  repoId: v.id("githubRepos"),
+  vars: v.array(envVarEntryValidator),
+  updatedAt: v.number(),
+};
+
+export const teamEnvVarFields = {
+  teamId: v.id("teams"),
+  vars: v.array(envVarEntryValidator),
   updatedAt: v.number(),
 };

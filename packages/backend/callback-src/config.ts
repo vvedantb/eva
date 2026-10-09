@@ -1,5 +1,4 @@
 import { existsSync } from "fs";
-import { hasEvaMcpConfig } from "./evaMcp.js";
 import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
@@ -93,6 +92,8 @@ export const CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
   : 0;
 export const IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 export const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
+/** Turn prompt file. Mirrors the writer in convex/_sandbox_runtime/launch.ts:499. */
+export const PROMPT_FILE = "/tmp/design-prompt.txt";
 export const WORK_DIR = existsSync("/tmp/repo")
   ? "/tmp/repo"
   : existsSync("/workspace/repo")
@@ -332,8 +333,6 @@ function buildSettingsJson(): string {
 }
 
 export const settingsJson = buildSettingsJson();
-/** True when Eva MCP auth was supplied at callback startup. */
-export const hasMcpConfig = hasEvaMcpConfig;
 const claudeModelBase = MODEL.startsWith("claude:")
   ? MODEL.slice("claude:".length)
   : MODEL;

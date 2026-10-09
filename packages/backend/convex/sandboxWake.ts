@@ -8,8 +8,12 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
-import { sandboxActivityKindValidator } from "./_validators/tableFields";
+import {
+  chatEntityKindValidator,
+  type ChatEntityKind,
+} from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
+import { sleep } from "./_shared/async";
 
 /**
  * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
@@ -31,7 +35,7 @@ type WakeTarget =
 
 function resolveWakeTarget(
   ctx: QueryCtx,
-  kind: "session" | "task" | "project",
+  kind: ChatEntityKind,
   id: string,
 ): WakeTarget | null {
   if (kind === "session") {
@@ -48,7 +52,7 @@ function resolveWakeTarget(
 
 /** Internal: typed ids for the action below (actions have no `normalizeId`). */
 export const resolveTarget = internalQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(wakeTargetValidator, v.null()),
   handler: async (ctx, args) => resolveWakeTarget(ctx, args.kind, args.id),
 });
@@ -59,7 +63,7 @@ export const resolveTarget = internalQuery({
  * entity is gone, or the caller may not see it.
  */
 export const getWakeTarget = authQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(
     v.object({
       status: v.string(),
@@ -75,7 +79,10 @@ export const getWakeTarget = authQuery({
     if (!target) return null;
     if (target.kind === "session") {
       const session = await ctx.db.get(target.id);
-      if (!session || !(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      if (
+        !session ||
+        !(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))
+      ) {
         return null;
       }
       return {
@@ -88,7 +95,11 @@ export const getWakeTarget = authQuery({
     }
     if (target.kind === "task") {
       const task = await ctx.db.get(target.id);
-      if (!task || !task.repoId || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+      if (
+        !task ||
+        !task.repoId ||
+        !(await hasTaskAccess(ctx.db, task, ctx.userId))
+      ) {
         return null;
       }
       return {
@@ -100,7 +111,10 @@ export const getWakeTarget = authQuery({
       };
     }
     const project = await ctx.db.get(target.id);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
+    if (
+      !project ||
+      !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))
+    ) {
       return null;
     }
     return {
@@ -146,16 +160,13 @@ async function start(ctx: ActionCtx, target: WakeTarget): Promise<void> {
   });
 }
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 /**
  * Brings the entity's sandbox to `active` (starting it if paused) and returns.
  * Shares `awaitSandboxActive` with the MCP `start_sandbox` tool, so a wake from
  * a saved link follows the Start button's path, including stop/start races.
  */
 export const ensureEntitySandboxActive = action({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.object({ startRequested: v.boolean() }),
   // Explicit types: the action calls a query from its own module, and Convex's
   // inferred `internal` type would otherwise be circular (and cascade `any`).

@@ -2,12 +2,7 @@ import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import { isAllowedOAuthRedirectUri } from "../_mcp/redirectUri";
-
-function getWebAppUrl(): string {
-  const url = process.env.WEB_APP_URL;
-  if (!url) throw new Error("WEB_APP_URL is not set in Convex env");
-  return url.replace(/\/$/, "");
-}
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OAuth Metadata
@@ -118,7 +113,7 @@ export const authorizeGet = httpAction(async (ctx, request) => {
       });
     }
 
-    const target = new URL(`${getWebAppUrl()}/mcp/oauth/authorize`);
+    const target = new URL(`${getEvaBaseUrl()}/mcp/oauth/authorize`);
     for (const [key, value] of Object.entries(params)) {
       target.searchParams.set(key, value);
     }

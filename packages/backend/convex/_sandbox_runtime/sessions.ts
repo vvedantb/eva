@@ -40,7 +40,13 @@ import {
 } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
-import { sandboxOwnerKey, type SandboxOwner } from "../_sandbox/owner";
+import {
+  sandboxOwnerKey,
+  sandboxStartupEntityId,
+  type SandboxOwner,
+} from "../_sandbox/owner";
+import type { ProgressStep } from "../_sandbox/startupActivity";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   detectPackageManager,
   installPythonDependenciesBestEffort,
@@ -54,6 +60,7 @@ import { runStartupCommandsDirect } from "./execution";
 import { resolveVercelConsoleDevCommand } from "./vercelAppPorts";
 import type { GenericActionCtx } from "convex/server";
 import { startDesktopWithChrome } from "./desktop";
+import { errorText } from "../_shared/errors";
 
 /**
  * Starts the app server in Preview Console (Vercel tmux) so Console can show
@@ -149,7 +156,7 @@ async function runLoggedSessionStep<T>(
     return result;
   } catch (error) {
     console.error(
-      `[sandbox][sessions] ${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox][sessions] ${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${errorText(error)}`,
     );
     // Prefix the step label so downstream error surfaces (sandboxStartupWarning
     // errorDetail) say which step failed. Mutate rather than wrap to preserve
@@ -257,7 +264,7 @@ async function checkoutSessionBranchWithRetry(
       }
       return;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       if (
         attempt < maxAttempts &&
         !recoveredUnresolvedIndex &&
@@ -313,9 +320,7 @@ async function sessionStopRequested(
   const session = await ctx.runQuery(internal.sessions.getInternal, {
     id: sessionId,
   });
-  return (
-    !session || session.status === "stopping" || session.status === "closed"
-  );
+  return !session || isSandboxClosingStatus(session.status);
 }
 
 /**
@@ -343,11 +348,7 @@ async function taskStopRequested(
   const task = await ctx.runQuery(internal.agentTasks.getInternal, {
     id: taskId,
   });
-  return (
-    !task ||
-    task.reviewTaskSandboxStatus === "stopping" ||
-    task.reviewTaskSandboxStatus === "closed"
-  );
+  return !task || isSandboxClosingStatus(task.reviewTaskSandboxStatus);
 }
 
 /** True once the user has requested this project's sandbox stop/close. */
@@ -358,11 +359,7 @@ async function projectStopRequested(
   const project = await ctx.runQuery(internal.projects.getInternal, {
     id: projectId,
   });
-  return (
-    !project ||
-    project.reviewProjectSandboxStatus === "stopping" ||
-    project.reviewProjectSandboxStatus === "closed"
-  );
+  return !project || isSandboxClosingStatus(project.reviewProjectSandboxStatus);
 }
 
 /**
@@ -487,7 +484,7 @@ async function syncSessionRefsForRestore(
     );
   } catch (error) {
     logSession(
-      `syncSessionRefsForRestore session branch fetch failed, continuing with local snapshot refs (repo=${repoOwner}/${repoName}, branch=${branchName}, base=${baseBranch}): ${error instanceof Error ? error.message : String(error)}`,
+      `syncSessionRefsForRestore session branch fetch failed, continuing with local snapshot refs (repo=${repoOwner}/${repoName}, branch=${branchName}, base=${baseBranch}): ${errorText(error)}`,
     );
   }
   logSession(
@@ -715,104 +712,38 @@ type PreparedSessionSandbox = {
   /** The Vercel sandbox id (Vercel is the only sandbox provider). */
 };
 
-type ProgressStep = { type: string; label: string; status: string };
-
-/** Emits progress steps to a streaming entity for UI updates. */
-async function emitProgress(
-  ctx: GenericActionCtx<DataModel>,
-  entityId: string,
-  completedSteps: ProgressStep[],
-  activeLabel: string,
-): Promise<void> {
-  const steps = [
-    ...completedSteps,
-    { type: "tool", label: activeLabel, status: "active" },
-  ];
-  await ctx.runMutation(internal.streaming.internalSet, {
-    entityId,
-    currentActivity: JSON.stringify(steps),
-  });
+/**
+ * Sandbox startup progress for one streaming entity. `active` shows the
+ * completed steps plus one active step; `complete` records a step locally (the
+ * next `active` or `clear` publishes it); `step` brackets one async call.
+ */
+function startupProgress(ctx: GenericActionCtx<DataModel>, entityId: string) {
+  const completed: ProgressStep[] = [];
+  const set = async (steps: ProgressStep[]): Promise<void> => {
+    await ctx.runMutation(internal.streaming.internalSet, {
+      entityId,
+      currentActivity: JSON.stringify(steps),
+    });
+  };
+  const active = (label: string) =>
+    set([...completed, { type: "tool", label, status: "active" }]);
+  const complete = (label: string): void => {
+    completed.push({ type: "tool", label, status: "complete" });
+  };
+  return {
+    active,
+    complete,
+    step: async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      await active(label);
+      const out = await fn();
+      complete(label);
+      return out;
+    },
+    clear: () => set([]),
+  };
 }
 
-/** Clears the streaming activity for an entity when startup is done. */
-async function clearProgress(
-  ctx: GenericActionCtx<DataModel>,
-  entityId: string,
-): Promise<void> {
-  await ctx.runMutation(internal.streaming.internalSet, {
-    entityId,
-    currentActivity: JSON.stringify([]),
-  });
-}
-
-/** Emits session sandbox startup progress steps to streaming for UI updates. */
-function emitSessionProgress(
-  ctx: GenericActionCtx<DataModel>,
-  sessionId: Id<"sessions">,
-  completedSteps: ProgressStep[],
-  activeLabel: string,
-): Promise<void> {
-  return emitProgress(
-    ctx,
-    `session-startup-${sessionId}`,
-    completedSteps,
-    activeLabel,
-  );
-}
-
-/** Marks the final step complete and clears streaming. */
-function completeSessionProgress(
-  ctx: GenericActionCtx<DataModel>,
-  sessionId: Id<"sessions">,
-): Promise<void> {
-  return clearProgress(ctx, `session-startup-${sessionId}`);
-}
-
-/** Emits task sandbox startup progress steps to streaming for UI updates. */
-function emitTaskProgress(
-  ctx: GenericActionCtx<DataModel>,
-  taskId: Id<"agentTasks">,
-  completedSteps: ProgressStep[],
-  activeLabel: string,
-): Promise<void> {
-  return emitProgress(
-    ctx,
-    `task-sandbox-startup-${taskId}`,
-    completedSteps,
-    activeLabel,
-  );
-}
-
-/** Clears task sandbox startup streaming when done. */
-function completeTaskProgress(
-  ctx: GenericActionCtx<DataModel>,
-  taskId: Id<"agentTasks">,
-): Promise<void> {
-  return clearProgress(ctx, `task-sandbox-startup-${taskId}`);
-}
-
-/** Emits project sandbox startup progress steps to streaming for UI updates. */
-function emitProjectProgress(
-  ctx: GenericActionCtx<DataModel>,
-  projectId: Id<"projects">,
-  completedSteps: ProgressStep[],
-  activeLabel: string,
-): Promise<void> {
-  return emitProgress(
-    ctx,
-    `project-sandbox-startup-${projectId}`,
-    completedSteps,
-    activeLabel,
-  );
-}
-
-/** Clears project sandbox startup streaming when done. */
-function completeProjectProgress(
-  ctx: GenericActionCtx<DataModel>,
-  projectId: Id<"projects">,
-): Promise<void> {
-  return clearProgress(ctx, `project-sandbox-startup-${projectId}`);
-}
+type StartupProgress = ReturnType<typeof startupProgress>;
 
 /** Core logic for preparing a session sandbox: reuses existing or creates new, syncs refs, and starts services. */
 async function prepareSessionSandboxInternal(
@@ -824,61 +755,35 @@ async function prepareSessionSandboxInternal(
   // provider without re-deriving it from scattered per-step timings.
   const startedAt = Date.now();
   const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
-  const completedSteps: ProgressStep[] = [];
+  const owner: SandboxOwner = { kind: "session", sessionId: args.sessionId };
+  const ownerKey = sandboxOwnerKey(owner);
+  const progress = startupProgress(ctx, sandboxStartupEntityId(owner));
 
-  await emitSessionProgress(
-    ctx,
-    args.sessionId,
-    completedSteps,
-    "Loading repository config...",
-  );
-  const repo = await runLoggedSessionStep(
-    "loadSessionRepo",
-    actionDetails,
-    () =>
+  const repo = await progress.step("Loading repository config...", () =>
+    runLoggedSessionStep("loadSessionRepo", actionDetails, () =>
       ctx.runQuery(internal.githubRepos.getInternal, {
         id: args.repoId,
       }),
+    ),
   );
   const rootDir = repo?.rootDirectory ?? "";
   const launchSession = await ctx.runQuery(internal.sessions.getInternal, {
     id: args.sessionId,
   });
-  completedSteps.push({
-    type: "tool",
-    label: "Loading repository config...",
-    status: "complete",
-  });
 
-  await emitSessionProgress(
-    ctx,
-    args.sessionId,
-    completedSteps,
-    "Resolving sandbox context...",
-  );
   // Resume path: credentials-only client (no full env decrypt). Full context
   // (env map + snapshot) loads only if reuse fails and we create.
-  const client = await runLoggedSessionStep(
-    "resolveSessionSandboxClient",
-    actionDetails,
-    () => resolveSandboxClientOnly(ctx, args.repoId),
+  const client = await progress.step("Resolving sandbox context...", () =>
+    runLoggedSessionStep("resolveSessionSandboxClient", actionDetails, () =>
+      resolveSandboxClientOnly(ctx, args.repoId),
+    ),
   );
   const reuseId = args.existingSandboxId;
   logSession(
     `prepareSessionSandbox client resolved (${actionDetails}, rootDir=${rootDir || "."})`,
   );
-  completedSteps.push({
-    type: "tool",
-    label: "Resolving sandbox context...",
-    status: "complete",
-  });
 
-  await emitSessionProgress(
-    ctx,
-    args.sessionId,
-    completedSteps,
-    "Checking existing sandbox...",
-  );
+  await progress.active("Checking existing sandbox...");
   let reusedResult: PreparedSessionSandbox | null = null;
   const reusedHandle = await runLoggedSessionStep(
     "tryReuseSessionSandbox",
@@ -899,14 +804,8 @@ async function prepareSessionSandboxInternal(
                 repoName: args.repoName,
                 branchName: args.branchName,
                 baseBranch: args.baseBranch,
-                onRestoring: () =>
-                  emitSessionProgress(
-                    ctx,
-                    args.sessionId,
-                    completedSteps,
-                    // Vercel resume is snapshot wake, not Daytona cold storage.
-                    "Resuming sandbox...",
-                  ),
+                // Vercel resume is snapshot wake, not Daytona cold storage.
+                onRestoring: () => progress.active("Resuming sandbox..."),
                 onEarlyReady: async () => {
                   await ctx.runMutation(internal.sessions.sandboxReady, {
                     sessionId: args.sessionId,
@@ -954,12 +853,7 @@ async function prepareSessionSandboxInternal(
             );
           }
           await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
-          await emitSessionProgress(
-            ctx,
-            args.sessionId,
-            completedSteps,
-            "Launching background commands...",
-          );
+          await progress.active("Launching background commands...");
           const reuseBgRan = await runBackgroundCommandsStep(
             ctx,
             "reuseSessionSandbox.runBackgroundCommands",
@@ -971,11 +865,7 @@ async function prepareSessionSandboxInternal(
             },
           );
           if (reuseBgRan) {
-            completedSteps.push({
-              type: "tool",
-              label: "Launching background commands...",
-              status: "complete",
-            });
+            progress.complete("Launching background commands...");
           }
           await runStartupCommandsStep(
             ctx,
@@ -990,7 +880,7 @@ async function prepareSessionSandboxInternal(
             () =>
               launchPreviewDevServer(
                 handle,
-                `session-${args.sessionId}`,
+                ownerKey,
                 devCommand,
                 devPort,
                 rootDir,
@@ -1020,7 +910,7 @@ async function prepareSessionSandboxInternal(
               () =>
                 launchLinkedRepoDevServerInVercelConsole(
                   handle,
-                  `session-${args.sessionId}-${linkedRow.name}`,
+                  `${ownerKey}-${linkedRow.name}`,
                   linkedRow.path,
                   linkedRow.devCommand ?? "",
                   linkedRow.devPort ?? 0,
@@ -1044,7 +934,7 @@ async function prepareSessionSandboxInternal(
       ),
   );
   if (reusedHandle && reusedResult) {
-    await completeSessionProgress(ctx, args.sessionId);
+    await progress.clear();
     logSession(
       `prepareSessionSandboxInternal summary: elapsed=${formatDurationMsShort(Date.now() - startedAt)}, path=vercel-reuse, isNew=false, usedSnapshot=false (${actionDetails})`,
     );
@@ -1053,11 +943,7 @@ async function prepareSessionSandboxInternal(
   if (reuseId) {
     await refuseReplacementIfStillAlive(client, reuseId);
   }
-  completedSteps.push({
-    type: "tool",
-    label: "Checking existing sandbox...",
-    status: "complete",
-  });
+  progress.complete("Checking existing sandbox...");
 
   // Create path needs full env map + snapshot — load only after reuse failed.
   const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
@@ -1096,25 +982,11 @@ async function prepareSessionSandboxInternal(
   }
 
   if (reuseId) {
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Previous sandbox expired — creating a fresh one...",
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Previous sandbox expired — creating a fresh one...",
-      status: "complete",
-    });
+    await progress.active("Previous sandbox expired — creating a fresh one...");
+    progress.complete("Previous sandbox expired — creating a fresh one...");
   }
 
-  await emitSessionProgress(
-    ctx,
-    args.sessionId,
-    completedSteps,
-    "Creating sandbox...",
-  );
+  await progress.active("Creating sandbox...");
 
   // Mark the session active as soon as the sandbox exists so the UI can chat /
   // open tabs while branch checkout + services finish in the background.
@@ -1194,11 +1066,7 @@ async function prepareSessionSandboxInternal(
   let resolvedDevPort: number | undefined;
   let resolvedDevCommand: string | undefined;
   try {
-    completedSteps.push({
-      type: "tool",
-      label: "Creating sandbox...",
-      status: "complete",
-    });
+    progress.complete("Creating sandbox...");
 
     // Snapshot restore leaves HEAD at the (possibly stale) baked commit whose
     // lockfile the baked node_modules were installed against. Capture it before
@@ -1222,83 +1090,51 @@ async function prepareSessionSandboxInternal(
       }
     }
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Syncing repository refs...",
+    await progress.step("Syncing repository refs...", () =>
+      runLoggedSessionStep(
+        "newSessionSandbox.syncSessionRefsForRestore",
+        sandboxDetails,
+        () =>
+          syncSessionRefsForRestore(
+            handle,
+            args.repoOwner,
+            args.repoName,
+            args.branchName,
+            args.baseBranch,
+            // Refresh origin/<base> so a brand-new session branch is created from
+            // the latest base commit, not the snapshot's stale baked base.
+            { refreshBase: true },
+          ),
+      ),
     );
-    await runLoggedSessionStep(
-      "newSessionSandbox.syncSessionRefsForRestore",
-      sandboxDetails,
-      () =>
-        syncSessionRefsForRestore(
-          handle,
-          args.repoOwner,
-          args.repoName,
-          args.branchName,
-          args.baseBranch,
-          // Refresh origin/<base> so a brand-new session branch is created from
-          // the latest base commit, not the snapshot's stale baked base.
-          { refreshBase: true },
-        ),
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Syncing repository refs...",
-      status: "complete",
-    });
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Checking out branch...",
+    await progress.step("Checking out branch...", () =>
+      runLoggedSessionStep(
+        "newSessionSandbox.checkoutSessionBranch",
+        sandboxDetails,
+        () =>
+          checkoutSessionBranchWithRetry(
+            handle,
+            args.branchName,
+            args.baseBranch,
+          ),
+      ),
     );
-    await runLoggedSessionStep(
-      "newSessionSandbox.checkoutSessionBranch",
-      sandboxDetails,
-      () =>
-        checkoutSessionBranchWithRetry(
-          handle,
-          args.branchName,
-          args.baseBranch,
-        ),
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Checking out branch...",
-      status: "complete",
-    });
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Preparing branch...",
+    await progress.step("Preparing branch...", () =>
+      runLoggedSessionStep(
+        "newSessionSandbox.setupBranch",
+        sandboxDetails,
+        () => setupBranch(handle, args.branchName, args.baseBranch),
+      ),
     );
-    await runLoggedSessionStep(
-      "newSessionSandbox.setupBranch",
-      sandboxDetails,
-      () => setupBranch(handle, args.branchName, args.baseBranch),
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Preparing branch...",
-      status: "complete",
-    });
 
     // Now on the latest base: reinstall only when the lockfile actually drifted
     // from the snapshot's baked commit, so the common no-dep-change session keeps
     // its fast baked node_modules. Fresh-clone (non-snapshot) sessions already
     // installed inside createSandboxAndPrepareRepo, so this is snapshot-only.
     if (prepared.usedSnapshot) {
-      await emitSessionProgress(
-        ctx,
-        args.sessionId,
-        completedSteps,
-        "Updating dependencies...",
-      );
+      await progress.active("Updating dependencies...");
       let drift = { node: true, python: true };
       if (bakedSha) {
         // Capture into a const so the closure sees a narrowed `string`, not the
@@ -1331,11 +1167,7 @@ async function prepareSessionSandboxInternal(
           },
         );
       }
-      completedSteps.push({
-        type: "tool",
-        label: "Updating dependencies...",
-        status: "complete",
-      });
+      progress.complete("Updating dependencies...");
     }
 
     // Code is on the latest base and deps are current — release the gate so the
@@ -1356,12 +1188,7 @@ async function prepareSessionSandboxInternal(
     // exact copy (force: true) on the snapshot-restore path, and the
     // checkout/setupBranch steps above don't touch untracked files, so
     // re-copying here would be a pure duplicate on the common Vercel path.
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Restoring config files...",
-    );
+    await progress.active("Restoring config files...");
     if (!prepared.usedSnapshot) {
       await runLoggedSessionStep(
         "newSessionSandbox.copyConfigFiles",
@@ -1372,63 +1199,36 @@ async function prepareSessionSandboxInternal(
           }),
       );
     }
-    completedSteps.push({
-      type: "tool",
-      label: "Restoring config files...",
-      status: "complete",
-    });
+    progress.complete("Restoring config files...");
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Starting dev server...",
-    );
-    const services = await runLoggedSessionStep(
-      "newSessionSandbox.startSessionServices",
-      sandboxDetails,
-      () =>
-        startServicesWithRestoreAlert(
-          ctx,
-          args.sessionId,
-          handle,
-          rootDir,
-          repo,
-        ),
+    const services = await progress.step("Starting dev server...", () =>
+      runLoggedSessionStep(
+        "newSessionSandbox.startSessionServices",
+        sandboxDetails,
+        () =>
+          startServicesWithRestoreAlert(
+            ctx,
+            args.sessionId,
+            handle,
+            rootDir,
+            repo,
+          ),
+      ),
     );
     resolvedDevPort = services.port;
     resolvedDevCommand = services.devCommand;
-    completedSteps.push({
-      type: "tool",
-      label: "Starting dev server...",
-      status: "complete",
-    });
 
     if (args.startDesktop) {
-      await emitSessionProgress(
-        ctx,
-        args.sessionId,
-        completedSteps,
-        "Starting desktop environment...",
+      await progress.step("Starting desktop environment...", () =>
+        runLoggedSessionStep(
+          "newSessionSandbox.startDesktop",
+          sandboxDetails,
+          () => startDesktopWithChrome(handle),
+        ),
       );
-      await runLoggedSessionStep(
-        "newSessionSandbox.startDesktop",
-        sandboxDetails,
-        () => startDesktopWithChrome(handle),
-      );
-      completedSteps.push({
-        type: "tool",
-        label: "Starting desktop environment...",
-        status: "complete",
-      });
     }
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Launching background commands...",
-    );
+    await progress.active("Launching background commands...");
     const bgRan = await runBackgroundCommandsStep(
       ctx,
       "newSessionSandbox.runBackgroundCommands",
@@ -1440,19 +1240,10 @@ async function prepareSessionSandboxInternal(
       },
     );
     if (bgRan) {
-      completedSteps.push({
-        type: "tool",
-        label: "Launching background commands...",
-        status: "complete",
-      });
+      progress.complete("Launching background commands...");
     }
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Running startup commands...",
-    );
+    await progress.active("Running startup commands...");
     const startupCommandErrors = await runStartupCommandsStep(
       ctx,
       "newSessionSandbox.runStartupCommands",
@@ -1478,11 +1269,7 @@ async function prepareSessionSandboxInternal(
           .slice(0, 4000),
       });
     }
-    completedSteps.push({
-      type: "tool",
-      label: "Running startup commands...",
-      status: "complete",
-    });
+    progress.complete("Running startup commands...");
 
     if (resolvedDevCommand !== undefined && resolvedDevPort !== undefined) {
       const command = resolvedDevCommand;
@@ -1490,18 +1277,11 @@ async function prepareSessionSandboxInternal(
       await runLoggedSessionStep(
         "newSessionSandbox.launchDevServer",
         sandboxDetails,
-        () =>
-          launchPreviewDevServer(
-            handle,
-            `session-${args.sessionId}`,
-            command,
-            port,
-            rootDir,
-          ),
+        () => launchPreviewDevServer(handle, ownerKey, command, port, rootDir),
       );
     }
 
-    await completeSessionProgress(ctx, args.sessionId);
+    await progress.clear();
     logSession(
       `prepareSessionSandboxInternal summary: elapsed=${formatDurationMsShort(Date.now() - startedAt)}, path=new, isNew=true, usedSnapshot=${prepared.usedSnapshot} (${sandboxDetails})`,
     );
@@ -1538,7 +1318,7 @@ async function prepareSessionSandboxInternal(
         try {
           await launchPreviewDevServer(
             handle,
-            `session-${args.sessionId}`,
+            ownerKey,
             resolvedDevCommand,
             resolvedDevPort,
             rootDir,
@@ -1550,7 +1330,7 @@ async function prepareSessionSandboxInternal(
         }
       }
       try {
-        await completeSessionProgress(ctx, args.sessionId);
+        await progress.clear();
       } catch {}
       logSession(
         `prepareSessionSandboxInternal summary: elapsed=${formatDurationMsShort(Date.now() - startedAt)}, path=new-soft-keep, isNew=true, usedSnapshot=${prepared.usedSnapshot} (${sandboxDetails})`,
@@ -1673,11 +1453,7 @@ export const startSessionSandbox = internalAction({
       const sessionBefore = await ctx.runQuery(internal.sessions.getInternal, {
         id: args.sessionId,
       });
-      if (
-        sessionBefore &&
-        (sessionBefore.status === "stopping" ||
-          sessionBefore.status === "closed")
-      ) {
+      if (sessionBefore && isSandboxClosingStatus(sessionBefore.status)) {
         console.log(
           `[sandbox][sessions] startSessionSandbox aborted sessionId=${args.sessionId} status=${sessionBefore.status}`,
         );
@@ -1865,8 +1641,7 @@ type PreviewOwnerHooks = {
    * Project: the sandbox is recorded via `afterCreate`, so it is tracked, not orphaned.
    */
   deleteOnSetupFailure: boolean;
-  emit: (completedSteps: ProgressStep[], activeLabel: string) => Promise<void>;
-  complete: () => Promise<void>;
+  progress: StartupProgress;
   stopRequested: () => Promise<boolean>;
   starting: () => Promise<void>;
   afterCreate: (sandboxId: string) => Promise<void>;
@@ -1879,6 +1654,7 @@ function previewOwnerHooks(
   owner: PreviewOwner,
 ): PreviewOwnerHooks {
   const ownerKey = sandboxOwnerKey(owner);
+  const progress = startupProgress(ctx, sandboxStartupEntityId(owner));
   if (owner.kind === "task") {
     const { taskId } = owner;
     return {
@@ -1887,9 +1663,7 @@ function previewOwnerHooks(
       ownerKey,
       parentId: taskId,
       deleteOnSetupFailure: true,
-      emit: (completedSteps, activeLabel) =>
-        emitTaskProgress(ctx, taskId, completedSteps, activeLabel),
-      complete: () => completeTaskProgress(ctx, taskId),
+      progress,
       stopRequested: () => taskStopRequested(ctx, taskId),
       starting: async () => {},
       afterCreate: async () => {},
@@ -1914,9 +1688,7 @@ function previewOwnerHooks(
     ownerKey,
     parentId: projectId,
     deleteOnSetupFailure: false,
-    emit: (completedSteps, activeLabel) =>
-      emitProjectProgress(ctx, projectId, completedSteps, activeLabel),
-    complete: () => completeProjectProgress(ctx, projectId),
+    progress,
     stopRequested: () => projectStopRequested(ctx, projectId),
     starting: async () => {
       await ctx.runMutation(internal.projects.projectSandboxStarting, {
@@ -1958,128 +1730,99 @@ async function preparePreviewSandboxInternal(
   hooks: PreviewOwnerHooks,
 ): Promise<PreparedSessionSandbox> {
   const actionDetails = previewActionDetails(hooks, args);
-  const completedSteps: ProgressStep[] = [];
+  const { progress } = hooks;
 
-  await hooks.emit(completedSteps, "Loading repository config...");
-  const repo = await runLoggedSessionStep(
-    `load${hooks.label}Repo`,
-    actionDetails,
-    () =>
+  const repo = await progress.step("Loading repository config...", () =>
+    runLoggedSessionStep(`load${hooks.label}Repo`, actionDetails, () =>
       ctx.runQuery(internal.githubRepos.getInternal, {
         id: args.repoId,
       }),
+    ),
   );
   const rootDir = repo?.rootDirectory ?? "";
-  completedSteps.push({
-    type: "tool",
-    label: "Loading repository config...",
-    status: "complete",
-  });
 
-  await hooks.emit(completedSteps, "Resolving sandbox context...");
-  const client = await runLoggedSessionStep(
-    `resolve${hooks.label}SandboxClient`,
-    actionDetails,
-    () => resolveSandboxClientOnly(ctx, args.repoId),
+  const client = await progress.step("Resolving sandbox context...", () =>
+    runLoggedSessionStep(
+      `resolve${hooks.label}SandboxClient`,
+      actionDetails,
+      () => resolveSandboxClientOnly(ctx, args.repoId),
+    ),
   );
   const reuseId = args.existingSandboxId;
   logSession(
     `prepare${hooks.label}PreviewSandbox client resolved (${actionDetails}, rootDir=${rootDir || "."})`,
   );
-  completedSteps.push({
-    type: "tool",
-    label: "Resolving sandbox context...",
-    status: "complete",
-  });
 
-  await hooks.emit(completedSteps, "Checking existing sandbox...");
+  await progress.active("Checking existing sandbox...");
   let reusedResult: PreparedSessionSandbox | null = null;
   const prepareReusedPreviewSandbox = async (
     handle: SandboxHandle,
   ): Promise<void> => {
     const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}`;
-    await hooks.emit(completedSteps, "Resuming existing sandbox...");
-    await runLoggedSessionStep(
-      `reuse${hooks.label}Sandbox.prepare`,
-      sandboxDetails,
-      () =>
-        resumeReusedSandbox(ctx, handle, {
-          installationId: args.installationId,
-          repoOwner: args.repoOwner,
-          repoName: args.repoName,
-          branchName: args.branchName,
-          baseBranch: args.baseBranch,
-          onRestoring: () => hooks.emit(completedSteps, "Resuming sandbox..."),
-          onEarlyReady: () =>
-            hooks.ready({ sandboxId: handle.id, isNew: false }),
-          shouldAbort: hooks.stopRequested,
-        }),
+    await progress.step("Resuming existing sandbox...", () =>
+      runLoggedSessionStep(
+        `reuse${hooks.label}Sandbox.prepare`,
+        sandboxDetails,
+        () =>
+          resumeReusedSandbox(ctx, handle, {
+            installationId: args.installationId,
+            repoOwner: args.repoOwner,
+            repoName: args.repoName,
+            branchName: args.branchName,
+            baseBranch: args.baseBranch,
+            onRestoring: () => progress.active("Resuming sandbox..."),
+            onEarlyReady: () =>
+              hooks.ready({ sandboxId: handle.id, isNew: false }),
+            shouldAbort: hooks.stopRequested,
+          }),
+      ),
     );
-    completedSteps.push({
-      type: "tool",
-      label: "Resuming existing sandbox...",
-      status: "complete",
-    });
     // Restore baked config files from /home/eva/sandbox-config into the workspace.
     // The snapshot ships them; this re-copies in case `git clean -fd` wiped them.
-    await hooks.emit(completedSteps, "Restoring config files...");
-    await runLoggedSessionStep(
-      `reuse${hooks.label}Sandbox.copyConfigFiles`,
-      sandboxDetails,
-      () => copySandboxConfigFilesToWorkspace(handle),
+    await progress.step("Restoring config files...", () =>
+      runLoggedSessionStep(
+        `reuse${hooks.label}Sandbox.copyConfigFiles`,
+        sandboxDetails,
+        () => copySandboxConfigFilesToWorkspace(handle),
+      ),
     );
-    completedSteps.push({
-      type: "tool",
-      label: "Restoring config files...",
-      status: "complete",
-    });
-    await hooks.emit(completedSteps, "Starting dev server...");
-    const { port: devPort, devCommand } = await runLoggedSessionStep(
-      `reuse${hooks.label}Sandbox.startSessionServices`,
-      sandboxDetails,
+    const { port: devPort, devCommand } = await progress.step(
+      "Starting dev server...",
       () =>
-        startServicesWithRestoreAlert(
-          ctx,
-          hooks.parentId,
-          handle,
-          rootDir,
-          repo,
+        runLoggedSessionStep(
+          `reuse${hooks.label}Sandbox.startSessionServices`,
+          sandboxDetails,
+          () =>
+            startServicesWithRestoreAlert(
+              ctx,
+              hooks.parentId,
+              handle,
+              rootDir,
+              repo,
+            ),
         ),
     );
-    completedSteps.push({
-      type: "tool",
-      label: "Starting dev server...",
-      status: "complete",
-    });
     if (!args.skipStartupCommands) {
       // Background before startup — startup may wait on bg logs (e.g. Convex ready).
-      await hooks.emit(completedSteps, "Launching background commands...");
-      await runBackgroundCommandsStep(
-        ctx,
-        `reuse${hooks.label}Sandbox.runBackgroundCommands`,
-        sandboxDetails,
-        { sandboxId: handle.id, repoId: args.repoId },
+      await progress.step("Launching background commands...", () =>
+        runBackgroundCommandsStep(
+          ctx,
+          `reuse${hooks.label}Sandbox.runBackgroundCommands`,
+          sandboxDetails,
+          { sandboxId: handle.id, repoId: args.repoId },
+        ),
       );
-      completedSteps.push({
-        type: "tool",
-        label: "Launching background commands...",
-        status: "complete",
-      });
       // Resume Start = background only (Convex/etc.). Do not re-run seed/import
       // startupCommands — that is one-time on create, or via Retry startup.
       if (args.forceStartupCommands) {
-        await hooks.emit(completedSteps, "Running startup commands...");
-        await runStartupCommandsStep(
-          ctx,
-          `reuse${hooks.label}Sandbox.runStartupCommands`,
-          sandboxDetails,
-          { sandboxId: handle.id, repoId: args.repoId, force: true },
+        await progress.step("Running startup commands...", () =>
+          runStartupCommandsStep(
+            ctx,
+            `reuse${hooks.label}Sandbox.runStartupCommands`,
+            sandboxDetails,
+            { sandboxId: handle.id, repoId: args.repoId, force: true },
+          ),
         );
-        completedSteps.push({
-          type: "tool",
-          label: "Running startup commands...",
-          status: "complete",
-        });
       }
       // Same as sessions: put the app in Preview Console (Vercel tmux).
       await runLoggedSessionStep(
@@ -2120,11 +1863,7 @@ async function preparePreviewSandboxInternal(
   if (reuseId) {
     await refuseReplacementIfStillAlive(client, reuseId);
   }
-  completedSteps.push({
-    type: "tool",
-    label: "Checking existing sandbox...",
-    status: "complete",
-  });
+  progress.complete("Checking existing sandbox...");
 
   const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
     `resolve${hooks.label}SandboxContext`,
@@ -2132,7 +1871,7 @@ async function preparePreviewSandboxInternal(
     () => resolveSandboxContext(ctx, args.repoId),
   );
 
-  await hooks.emit(completedSteps, "Creating sandbox...");
+  await progress.active("Creating sandbox...");
   const prepared = await runLoggedSessionStep(
     `create${hooks.label}SandboxAndPrepareRepo`,
     `${actionDetails}, snapshot=${snapshotName ?? "none"}`,
@@ -2155,53 +1894,41 @@ async function preparePreviewSandboxInternal(
   const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}, usedSnapshot=${prepared.usedSnapshot ? "true" : "false"}`;
   await hooks.afterCreate(handle.id);
   try {
-    completedSteps.push({
-      type: "tool",
-      label: "Creating sandbox...",
-      status: "complete",
-    });
+    progress.complete("Creating sandbox...");
 
-    await hooks.emit(completedSteps, "Syncing repository refs...");
-    await runLoggedSessionStep(
-      `new${hooks.label}Sandbox.syncRefsForRestore`,
-      sandboxDetails,
-      () =>
-        syncSessionRefsForRestore(
-          handle,
-          args.repoOwner,
-          args.repoName,
-          args.branchName,
-          args.baseBranch,
-        ),
+    await progress.step("Syncing repository refs...", () =>
+      runLoggedSessionStep(
+        `new${hooks.label}Sandbox.syncRefsForRestore`,
+        sandboxDetails,
+        () =>
+          syncSessionRefsForRestore(
+            handle,
+            args.repoOwner,
+            args.repoName,
+            args.branchName,
+            args.baseBranch,
+          ),
+      ),
     );
-    completedSteps.push({
-      type: "tool",
-      label: "Syncing repository refs...",
-      status: "complete",
-    });
 
-    await hooks.emit(completedSteps, "Checking out branch...");
-    await runLoggedSessionStep(
-      `new${hooks.label}Sandbox.checkoutBranch`,
-      sandboxDetails,
-      () =>
-        checkoutSessionBranchWithRetry(
-          handle,
-          args.branchName,
-          args.baseBranch,
-        ),
+    await progress.step("Checking out branch...", () =>
+      runLoggedSessionStep(
+        `new${hooks.label}Sandbox.checkoutBranch`,
+        sandboxDetails,
+        () =>
+          checkoutSessionBranchWithRetry(
+            handle,
+            args.branchName,
+            args.baseBranch,
+          ),
+      ),
     );
-    completedSteps.push({
-      type: "tool",
-      label: "Checking out branch...",
-      status: "complete",
-    });
 
     // Restore baked config files from /home/eva/sandbox-config into the workspace.
     // Skipped when usedSnapshot: createSandboxAndPrepareRepo already ran this
     // exact copy (force: true) on the snapshot-restore path — see the
     // matching comment in prepareSessionSandboxInternal.
-    await hooks.emit(completedSteps, "Restoring config files...");
+    await progress.active("Restoring config files...");
     if (!prepared.usedSnapshot) {
       await runLoggedSessionStep(
         `new${hooks.label}Sandbox.copyConfigFiles`,
@@ -2212,62 +1939,48 @@ async function preparePreviewSandboxInternal(
           }),
       );
     }
-    completedSteps.push({
-      type: "tool",
-      label: "Restoring config files...",
-      status: "complete",
-    });
+    progress.complete("Restoring config files...");
 
-    await hooks.emit(completedSteps, "Starting dev server...");
-    const { port: devPort, devCommand } = await runLoggedSessionStep(
-      `new${hooks.label}Sandbox.startSessionServices`,
-      sandboxDetails,
+    const { port: devPort, devCommand } = await progress.step(
+      "Starting dev server...",
       () =>
-        startServicesWithRestoreAlert(
-          ctx,
-          hooks.parentId,
-          handle,
-          rootDir,
-          repo,
+        runLoggedSessionStep(
+          `new${hooks.label}Sandbox.startSessionServices`,
+          sandboxDetails,
+          () =>
+            startServicesWithRestoreAlert(
+              ctx,
+              hooks.parentId,
+              handle,
+              rootDir,
+              repo,
+            ),
         ),
     );
-    completedSteps.push({
-      type: "tool",
-      label: "Starting dev server...",
-      status: "complete",
-    });
 
     if (!args.skipStartupCommands) {
       // Background before startup — startup may wait on bg logs (e.g. Convex ready).
-      await hooks.emit(completedSteps, "Launching background commands...");
-      await runBackgroundCommandsStep(
-        ctx,
-        `new${hooks.label}Sandbox.runBackgroundCommands`,
-        sandboxDetails,
-        { sandboxId: handle.id, repoId: args.repoId },
+      await progress.step("Launching background commands...", () =>
+        runBackgroundCommandsStep(
+          ctx,
+          `new${hooks.label}Sandbox.runBackgroundCommands`,
+          sandboxDetails,
+          { sandboxId: handle.id, repoId: args.repoId },
+        ),
       );
-      completedSteps.push({
-        type: "tool",
-        label: "Launching background commands...",
-        status: "complete",
-      });
 
-      await hooks.emit(completedSteps, "Running startup commands...");
-      await runStartupCommandsStep(
-        ctx,
-        `new${hooks.label}Sandbox.runStartupCommands`,
-        sandboxDetails,
-        {
-          sandboxId: handle.id,
-          repoId: args.repoId,
-          force: args.forceStartupCommands,
-        },
+      await progress.step("Running startup commands...", () =>
+        runStartupCommandsStep(
+          ctx,
+          `new${hooks.label}Sandbox.runStartupCommands`,
+          sandboxDetails,
+          {
+            sandboxId: handle.id,
+            repoId: args.repoId,
+            force: args.forceStartupCommands,
+          },
+        ),
       );
-      completedSteps.push({
-        type: "tool",
-        label: "Running startup commands...",
-        status: "complete",
-      });
 
       await runLoggedSessionStep(
         `new${hooks.label}Sandbox.launchDevServer`,
@@ -2334,7 +2047,7 @@ async function runPreviewStart(
           devCommand: prepared.devCommand,
         }),
     );
-    await hooks.complete();
+    await hooks.progress.clear();
     logSession(
       `${actionName} completed in ${formatDurationMsShort(Date.now() - actionStartedAt)} (${prepared.sandboxDetails})`,
     );
@@ -2344,7 +2057,7 @@ async function runPreviewStart(
       console.log(
         `[sandbox][sessions] ${actionName} aborted by stop ${hooks.detail}: ${e.message}`,
       );
-      await hooks.complete();
+      await hooks.progress.clear();
       const stopId = args.existingSandboxId;
       if (stopId) {
         try {
@@ -2359,7 +2072,7 @@ async function runPreviewStart(
     console.error(
       `[sandbox][sessions] ${actionName} failed after ${formatDurationMsShort(Date.now() - actionStartedAt)} (${actionDetails}): ${errorMessage(e, "Unknown error")}`,
     );
-    await hooks.complete();
+    await hooks.progress.clear();
     await hooks.error(errorMessage(e, "Unknown error"));
     throw e;
   }

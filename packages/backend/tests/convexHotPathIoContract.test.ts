@@ -32,7 +32,6 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
       "_sessions/sandbox.ts",
       "_sessions/workflow.ts",
       "_chat/surfaceAdapters.ts",
-      "usageLimits.ts",
     ]) {
       expect(source(path), path).toContain("syncSessionDaemonState");
     }

@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import { authQuery, authMutation } from "./functions";
+import { findDocWithAccess, getDocWithAccess } from "./_docs/access";
 import { internalMutation } from "./_generated/server";
 import { docVersionSourceValidator } from "./validators";
 
@@ -65,9 +66,7 @@ export const touchDraft = authMutation({
   args: { docId: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
-      throw new Error("Document not found");
+    await getDocWithAccess(ctx.db, args.docId, ctx.userId);
     const existing = await ctx.db
       .query("docVersionDrafts")
       .withIndex("by_doc", (q) => q.eq("docId", args.docId))
@@ -98,9 +97,7 @@ export const saveVersion = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
-      throw new Error("Document not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
 
     if (await isSameAsLatestVersion(ctx, args.docId, args.pmContent))
       return null;
@@ -171,9 +168,7 @@ export const list = authQuery({
   args: { docId: v.id("docs") },
   returns: v.array(versionListItemValidator),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
-      return [];
+    if (!(await findDocWithAccess(ctx.db, args.docId, ctx.userId))) return [];
     const versions = await ctx.db
       .query("docVersions")
       .withIndex("by_doc", (q) => q.eq("docId", args.docId))
@@ -197,9 +192,9 @@ export const get = authQuery({
   handler: async (ctx, args) => {
     const version = await ctx.db.get(args.id);
     if (!version) return null;
-    const doc = await ctx.db.get(version.docId);
-    if (!doc || !(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
+    if (!(await findDocWithAccess(ctx.db, version.docId, ctx.userId))) {
       return null;
+    }
     return {
       _id: version._id,
       docId: version.docId,

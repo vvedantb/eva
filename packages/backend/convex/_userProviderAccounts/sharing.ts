@@ -1,5 +1,6 @@
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
+import { hasTeamAccess } from "../functions";
 
 /**
  * Teammates of `userId`: every other member of every team they belong to.
@@ -38,13 +39,7 @@ export async function usersShareTeam(
     .withIndex("by_user", (q) => q.eq("userId", a))
     .collect();
   for (const membership of memberships) {
-    const other = await db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", membership.teamId).eq("userId", b),
-      )
-      .first();
-    if (other) return true;
+    if (await hasTeamAccess(db, membership.teamId, b)) return true;
   }
   return false;
 }

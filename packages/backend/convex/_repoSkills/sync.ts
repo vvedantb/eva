@@ -2,7 +2,8 @@
 
 import type { Octokit } from "octokit";
 import { v } from "convex/values";
-import { action, internalAction, type ActionCtx } from "../_generated/server";
+import { internalAction, type ActionCtx } from "../_generated/server";
+import { authAction } from "../functions";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { getInstallationOctokit } from "../githubAuth";
@@ -227,23 +228,15 @@ const syncOutcomeValidator = v.object({
 });
 
 /** Manual Settings → Sync from GitHub (authenticated). */
-export const syncFromGithub = action({
+export const syncFromGithub = authAction({
   args: { repoId: v.id("githubRepos") },
   returns: syncOutcomeValidator,
   handler: async (ctx, args): Promise<SyncOutcome> => {
-    const userId: Id<"users"> | null = await ctx.runQuery(
-      internal.auth.getUserIdFromIdentity,
-      {},
-    );
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const target: SyncTarget = await ctx.runQuery(
       internal.repoSkills.getSyncTarget,
       {
         repoId: args.repoId,
-        userId,
+        userId: ctx.userId,
       },
     );
     return await syncSkillsForTarget(ctx, target);

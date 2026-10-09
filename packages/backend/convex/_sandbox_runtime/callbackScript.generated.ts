@@ -6,79 +6,6 @@ import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
 // callback-src/config.ts
 import { existsSync } from "fs";
 
-// callback-src/evaMcp.ts
-var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
-var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
-function buildEvaMcpServers({
-  auth,
-  baseUrl
-}) {
-  if (!auth || !baseUrl) return {};
-  return {
-    eva: {
-      type: "http",
-      url: \`\${baseUrl}/mcp\`,
-      headers: { Authorization: \`Bearer \${auth}\` }
-    }
-  };
-}
-function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
-  const auth = env[authKey];
-  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
-  delete env[authKey];
-  delete env[urlKey];
-  if (!auth || !url) return { servers: {}, handoff: {} };
-  return {
-    servers: {
-      [name]: {
-        type: "http",
-        url,
-        headers: { Authorization: \`Bearer \${auth}\` }
-      }
-    },
-    handoff: {
-      [authKey]: auth,
-      [urlKey]: url
-    }
-  };
-}
-function consumeEvaMcpEnvironment(env) {
-  const eva = buildEvaMcpServers({
-    auth: env.EVA_MCP_AUTH,
-    baseUrl: env.EVA_MCP_BASE_URL
-  });
-  const evaAuth = env.EVA_MCP_AUTH;
-  const evaBase = env.EVA_MCP_BASE_URL;
-  delete env.EVA_MCP_AUTH;
-  delete env.EVA_MCP_BASE_URL;
-  const linear = takeBearerServer(
-    env,
-    "linear",
-    "LINEAR_MCP_AUTH",
-    "LINEAR_MCP_URL",
-    LINEAR_MCP_DEFAULT_URL
-  );
-  const figma = takeBearerServer(
-    env,
-    "figma",
-    "FIGMA_MCP_AUTH",
-    "FIGMA_MCP_URL",
-    FIGMA_MCP_DEFAULT_URL
-  );
-  return {
-    servers: { ...eva, ...linear.servers, ...figma.servers },
-    workerHandoffEnv: {
-      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
-      ...linear.handoff,
-      ...figma.handoff
-    }
-  };
-}
-var consumed = consumeEvaMcpEnvironment(process.env);
-var evaMcpServers = consumed.servers;
-var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
-var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
-
 // callback-src/linkedRepos.ts
 function isLinkedRepo(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -212,6 +139,7 @@ var CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
 ) ? parsedCursorWorkerLeaseGeneration : 0;
 var IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 var SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
+var PROMPT_FILE = "/tmp/design-prompt.txt";
 var WORK_DIR = existsSync("/tmp/repo") ? "/tmp/repo" : existsSync("/workspace/repo") ? "/workspace/repo" : "/tmp/repo";
 var WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
 var LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
@@ -361,7 +289,6 @@ function buildSettingsJson() {
   return JSON.stringify(settings);
 }
 var settingsJson = buildSettingsJson();
-var hasMcpConfig = hasEvaMcpConfig;
 var claudeModelBase = MODEL.startsWith("claude:") ? MODEL.slice("claude:".length) : MODEL;
 var normalizedClaudeModel = PROVIDER === "claude" && AI_CONTEXT_1M === "1" ? \`\${claudeModelBase}[1m]\` : claudeModelBase;
 var normalizedCodexModel = MODEL.startsWith("codex:") ? MODEL.slice("codex:".length) : MODEL;
@@ -436,6 +363,79 @@ var completedLabels = {
   "Reading tasks...": "Read tasks",
   "Asking a question...": "Asked a question"
 };
+
+// callback-src/evaMcp.ts
+var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
+var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
+function buildEvaMcpServers({
+  auth,
+  baseUrl
+}) {
+  if (!auth || !baseUrl) return {};
+  return {
+    eva: {
+      type: "http",
+      url: \`\${baseUrl}/mcp\`,
+      headers: { Authorization: \`Bearer \${auth}\` }
+    }
+  };
+}
+function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
+  const auth = env[authKey];
+  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
+  delete env[authKey];
+  delete env[urlKey];
+  if (!auth || !url) return { servers: {}, handoff: {} };
+  return {
+    servers: {
+      [name]: {
+        type: "http",
+        url,
+        headers: { Authorization: \`Bearer \${auth}\` }
+      }
+    },
+    handoff: {
+      [authKey]: auth,
+      [urlKey]: url
+    }
+  };
+}
+function consumeEvaMcpEnvironment(env) {
+  const eva = buildEvaMcpServers({
+    auth: env.EVA_MCP_AUTH,
+    baseUrl: env.EVA_MCP_BASE_URL
+  });
+  const evaAuth = env.EVA_MCP_AUTH;
+  const evaBase = env.EVA_MCP_BASE_URL;
+  delete env.EVA_MCP_AUTH;
+  delete env.EVA_MCP_BASE_URL;
+  const linear = takeBearerServer(
+    env,
+    "linear",
+    "LINEAR_MCP_AUTH",
+    "LINEAR_MCP_URL",
+    LINEAR_MCP_DEFAULT_URL
+  );
+  const figma = takeBearerServer(
+    env,
+    "figma",
+    "FIGMA_MCP_AUTH",
+    "FIGMA_MCP_URL",
+    FIGMA_MCP_DEFAULT_URL
+  );
+  return {
+    servers: { ...eva, ...linear.servers, ...figma.servers },
+    workerHandoffEnv: {
+      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
+      ...linear.handoff,
+      ...figma.handoff
+    }
+  };
+}
+var consumed = consumeEvaMcpEnvironment(process.env);
+var evaMcpServers = consumed.servers;
+var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
+var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
 
 // callback-src/providers/claudeSdkDaemon.ts
 import { readdirSync as readdirSync3 } from "fs";
@@ -749,6 +749,12 @@ function resetAttemptState() {
 }
 
 // callback-src/utils.ts
+function readTurnPrompt() {
+  return readFileSync(PROMPT_FILE, "utf8");
+}
+function withSystemPrompt(prompt) {
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
+}
 function narrowJsonValue(value) {
   if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return value;
@@ -784,8 +790,33 @@ function log(msg) {
   } catch {
   }
 }
+function errorText(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 function asJsonObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isJsonObject(value) ? value : {};
+}
+function readTrimmedString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : void 0;
+}
+function readStringField(obj, keys) {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+function unwrapConvexMutationPayload(result) {
+  if (!isJsonObject(result)) return null;
+  const inner = result.value;
+  return isJsonObject(inner) ? inner : result;
+}
+function tryParseJsonObject(text) {
+  const parsed = tryParseJson(text);
+  return isJsonObject(parsed) ? parsed : null;
 }
 function tryParseJson(text) {
   try {
@@ -914,9 +945,6 @@ function buildClaudeTranscriptPath(projectDir, sessionId) {
 function attemptElapsedMs() {
   return callbackState.activeAttemptStartedAt > 0 ? Date.now() - callbackState.activeAttemptStartedAt : 0;
 }
-function elapsedAttemptMs() {
-  return attemptElapsedMs();
-}
 
 // callback-src/runtime/turnLease.ts
 var turnOwnership = TURN_ID !== null && TURN_LEASE_GENERATION !== null ? {
@@ -971,25 +999,12 @@ function parseTerminalReason(value) {
 }
 function noteHeartbeatResponse(response, sentUnder) {
   if (terminalReason !== null) return true;
-  let parsed;
-  if (typeof response === "string") {
-    try {
-      parsed = JSON.parse(response);
-    } catch {
-      return false;
-    }
-  } else {
-    parsed = response;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return false;
-  }
-  const responseValue = parsed.value;
-  const payload = typeof responseValue === "object" && responseValue !== null && !Array.isArray(responseValue) ? responseValue : parsed;
+  const payload = unwrapConvexMutationPayload(
+    typeof response === "string" ? tryParseJson(response) ?? null : response
+  );
+  if (!payload) return false;
   const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
-    return false;
-  }
+  if (!isJsonObject(lease)) return false;
   if (lease.status !== "terminal") return false;
   const reason = parseTerminalReason(lease.reason) ?? "closed";
   const current = getCurrentTurnLease();
@@ -1187,13 +1202,6 @@ async function callStreamingHeartbeat(entityId, currentActivity, currentContent,
     )
   );
 }
-function unwrapConvexMutationPayload(result) {
-  if (typeof result !== "object" || result === null || Array.isArray(result)) {
-    return null;
-  }
-  const inner = result.value;
-  return typeof inner === "object" && inner !== null && !Array.isArray(inner) ? inner : result;
-}
 async function callStreamingHeartbeatTouch(entityId) {
   return await withRetries(
     "streaming heartbeat touch",
@@ -1315,15 +1323,6 @@ function extractClaudeEdits(input) {
   }
   return edits.length > 0 ? edits : void 0;
 }
-function readStringField(obj, keys) {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
-}
 function readNumberField(obj, keys) {
   for (const key of keys) {
     const value = obj[key];
@@ -1342,8 +1341,8 @@ function pickToolCallId(obj) {
     "tool_call_id",
     "toolCallId",
     "id"
-  ]);
-  return id.trim() ? id.trim() : void 0;
+  ]).trim();
+  return id || void 0;
 }
 function probeToolCompleteResult(source) {
   if (source === null || source === void 0) {
@@ -1566,15 +1565,7 @@ var MCP_SERVER_KEYS = [
   "tool_name"
 ];
 function cursorSdkToolToStep(name, args) {
-  const pickString = (keys) => {
-    for (const key of keys) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return value;
-      }
-    }
-    return "";
-  };
+  const pickString = (keys) => readStringField(args, keys);
   const rawPath = pickString([
     "path",
     "file_path",
@@ -1751,27 +1742,10 @@ function toolCallToStep(name, input) {
   }
 }
 function getCodexFieldValue(item, keys) {
-  const sources = [item];
-  if (item.input && typeof item.input === "object" && !Array.isArray(item.input)) {
-    sources.push(item.input);
-  }
-  for (const source of sources) {
-    for (const key of keys) {
-      if (typeof source[key] === "string" && source[key].trim()) {
-        return source[key].trim();
-      }
-    }
-  }
-  return "";
+  return readStringField(item, keys).trim() || readStringField(asJsonObject(item.input), keys).trim();
 }
 function getCodexThreadId(event) {
-  if (typeof event.thread_id === "string" && event.thread_id.trim()) {
-    return event.thread_id.trim();
-  }
-  if (event.thread && typeof event.thread === "object" && !Array.isArray(event.thread) && typeof event.thread.id === "string" && event.thread.id.trim()) {
-    return event.thread.id.trim();
-  }
-  return "";
+  return readTrimmedString(event.thread_id) ?? readTrimmedString(asJsonObject(event.thread).id) ?? "";
 }
 function getCodexAgentMessageText(item) {
   if (item.type !== "agent_message" && item.type !== "agentMessage") {
@@ -2043,13 +2017,9 @@ import { readFileSync as readFileSync4, unlinkSync, writeFileSync as writeFileSy
 
 // callback-src/providers/githubToken.ts
 function tokenFromActionResponse(data) {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    return null;
-  }
+  if (!isJsonObject(data)) return null;
   const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
-  }
+  if (!isJsonObject(value)) return null;
   return typeof value.token === "string" ? value.token : null;
 }
 async function fetchInstallationToken(params) {
@@ -2131,10 +2101,10 @@ function readClaudeSessionState() {
   if (!existsSync3(CLAUDE_LOCAL_STATE_FILE)) {
     return null;
   }
-  const parsed = tryParseJson(readFileSync2(CLAUDE_LOCAL_STATE_FILE, "utf8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(
+    readFileSync2(CLAUDE_LOCAL_STATE_FILE, "utf8")
+  );
+  if (!parsed) return null;
   const resumeSessionId = typeof parsed.resumeSessionId === "string" ? parsed.resumeSessionId.trim() : "";
   if (!resumeSessionId) {
     return null;
@@ -2212,8 +2182,9 @@ function hydratePersistedClaudeState() {
 function ensureClaudeWorkspaceTrust() {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  const parsed = existsSync3(configPath) ? tryParseJson(readFileSync2(configPath, "utf8")) : null;
-  const config = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? { ...parsed } : {};
+  const config = {
+    ...(existsSync3(configPath) ? tryParseJsonObject(readFileSync2(configPath, "utf8")) : null) ?? {}
+  };
   const rawProjects = config.projects;
   const projects = rawProjects && typeof rawProjects === "object" && !Array.isArray(rawProjects) ? { ...rawProjects } : {};
   const rawProject = projects[WORK_DIR];
@@ -2413,9 +2384,7 @@ async function flushBackgroundShellQueue() {
     }
   } catch (error) {
     flushCooldownUntil = Date.now() + FLUSH_FAILURE_COOLDOWN_MS;
-    log(
-      "backgroundShells flush failed: " + (error instanceof Error ? error.message : String(error))
-    );
+    log("backgroundShells flush failed: " + errorText(error));
   } finally {
     flushInFlight = false;
   }
@@ -2442,14 +2411,11 @@ var CLAUDE_WINDOW_LABELS = {
 function readFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
-function readNonEmptyString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function readStatus(value) {
   return value === "allowed" || value === "allowed_warning" || value === "rejected" ? value : void 0;
 }
 function readIsoMs(value) {
-  const text = readNonEmptyString(value);
+  const text = readTrimmedString(value);
   if (!text) return void 0;
   const ms = Date.parse(text);
   return Number.isFinite(ms) ? ms : void 0;
@@ -2494,7 +2460,7 @@ function mergeClaudeRateLimitEvent(event) {
   const info = event.rate_limit_info;
   if (typeof info !== "object" || info === null || Array.isArray(info)) return;
   const status = readStatus(info.status);
-  const rawKey = readNonEmptyString(info.rateLimitType);
+  const rawKey = readTrimmedString(info.rateLimitType);
   if (!status && !rawKey) return;
   const snapshot = ensureSnapshot();
   snapshot.completeness = "partial";
@@ -2541,7 +2507,7 @@ function readClaudeUsageWindows(response) {
     limits.seven_day_overage_included
   );
   for (const entry of limits.model_scoped ?? []) {
-    const name = readNonEmptyString(entry.display_name);
+    const name = readTrimmedString(entry.display_name);
     if (!name) continue;
     pushUsageWindow(windows, "model_scoped:" + name, entry, \`Weekly (\${name})\`);
   }
@@ -2615,7 +2581,7 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
       return false;
     }
     const snapshot = { completeness: "complete" };
-    const subscriptionType = readNonEmptyString(payload.subscription_type);
+    const subscriptionType = readTrimmedString(payload.subscription_type);
     if (subscriptionType) snapshot.subscriptionType = subscriptionType;
     snapshot.windows = readClaudeUsageWindows(payload);
     callbackState.usageLimitSnapshot = snapshot;
@@ -2624,7 +2590,7 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
     }
     return true;
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("usage limits: claude usage lookup failed \\u2014 " + messageText);
     if (recordAttempt) {
       noteDaemonRefresh(false, null, "error:" + messageText.slice(0, 120));
@@ -2695,7 +2661,7 @@ async function reportUsageLimits(provider, force = false) {
   } catch (error) {
     callbackState.lastReportedUsageLimits = "";
     callbackState.lastReportedUsageLimitsAt = 0;
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("usage limits: report failed \\u2014 " + messageText);
   }
 }
@@ -2731,14 +2697,11 @@ async function waitForPendingClaudeUsageReport() {
 // callback-src/parse/sdkTaxonomy.ts
 var loggedUnknownKinds = /* @__PURE__ */ new Set();
 var knownBackgroundTaskIds = /* @__PURE__ */ new Set();
-function readString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function readStringArray(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
   for (const item of value) {
-    const s = readString(item);
+    const s = readTrimmedString(item);
     if (s) out.push(s);
   }
   return out;
@@ -2806,7 +2769,7 @@ function readFileNamesFromPersisted(event) {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
       continue;
     }
-    const filename = readString(entry.filename);
+    const filename = readTrimmedString(entry.filename);
     if (filename) names.push(filename);
   }
   return names.join(", ");
@@ -2819,7 +2782,7 @@ function readBackgroundTaskIds(event) {
     if (typeof task !== "object" || task === null || Array.isArray(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
+    const taskId = readTrimmedString(task.task_id);
     if (taskId) ids.push(taskId);
   }
   return ids;
@@ -2832,8 +2795,8 @@ function readBackgroundTaskDescriptions(event) {
     if (typeof task !== "object" || task === null || Array.isArray(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
-    const description = readString(task.description);
+    const taskId = readTrimmedString(task.task_id);
+    const description = readTrimmedString(task.description);
     if (taskId && description) {
       descriptions.set(taskId, description);
     }
@@ -2858,13 +2821,13 @@ function logUnknownSdkKind(kind) {
   log("unhandled sdk kind: " + kind);
 }
 function parseModelReroute(event) {
-  const subtype = readString(event.subtype);
+  const subtype = readTrimmedString(event.subtype);
   if (subtype === "model_reroute" || subtype === "model_fallback") {
-    const reason = readString(event.reason) ?? readString(event.message) ?? readString(event.content);
+    const reason = readTrimmedString(event.reason) ?? readTrimmedString(event.message) ?? readTrimmedString(event.content);
     return pushNoticeStep("Model rerouted", reason);
   }
   if (subtype === "informational") {
-    const content = readString(event.content);
+    const content = readTrimmedString(event.content);
     if (content && (content.toLowerCase().includes("rerouted") || content.toLowerCase().includes("fallback model"))) {
       return pushNoticeStep("Model rerouted", content);
     }
@@ -2888,7 +2851,7 @@ function consumesClaudeSdkTaxonomyMessage(event) {
   return true;
 }
 function parseClaudeSdkTaxonomy(event) {
-  const messageType = readString(event.type);
+  const messageType = readTrimmedString(event.type);
   if (!messageType) return [];
   if (messageType !== "system" && messageType !== "tool_progress" && messageType !== "tool_use_summary" && messageType !== "auth_status" && messageType !== "rate_limit_event") {
     return [];
@@ -2902,7 +2865,7 @@ function parseClaudeSdkTaxonomy(event) {
   }
   if (messageType === "tool_progress") {
     completeActiveStatusStep();
-    const toolUseId = readString(event.tool_use_id);
+    const toolUseId = readTrimmedString(event.tool_use_id);
     const elapsed = event.elapsed_time_seconds;
     if (toolUseId && typeof elapsed === "number" && Number.isFinite(elapsed)) {
       const seconds = Math.max(0, Math.floor(elapsed));
@@ -2912,14 +2875,14 @@ function parseClaudeSdkTaxonomy(event) {
   }
   if (messageType === "tool_use_summary") {
     completeActiveStatusStep();
-    const summary = readString(event.summary);
+    const summary = readTrimmedString(event.summary);
     const ids = readStringArray(event.preceding_tool_use_ids);
     if (summary && ids.length > 0) {
       patchStepsWithSummary(ids, summary);
     }
     return [];
   }
-  const subtype = readString(event.subtype);
+  const subtype = readTrimmedString(event.subtype);
   if (!subtype) {
     logUnknownSdkKind(\`\${messageType}:?\`);
     return [];
@@ -2955,8 +2918,8 @@ function parseClaudeSdkTaxonomy(event) {
     );
   }
   if (subtype === "hook_started") {
-    const hookId = readString(event.hook_id);
-    const hookName = readString(event.hook_name) ?? "Hook";
+    const hookId = readTrimmedString(event.hook_id);
+    const hookName = readTrimmedString(event.hook_name) ?? "Hook";
     if (!hookId) return [];
     return [
       { kind: "mark_last_complete" },
@@ -2973,15 +2936,15 @@ function parseClaudeSdkTaxonomy(event) {
     ];
   }
   if (subtype === "hook_progress") {
-    const hookId = readString(event.hook_id);
-    const output = readString(event.output) ?? readString(event.stdout) ?? readString(event.stderr);
+    const hookId = readTrimmedString(event.hook_id);
+    const output = readTrimmedString(event.output) ?? readTrimmedString(event.stdout) ?? readTrimmedString(event.stderr);
     if (hookId && output) {
       appendHookDetail(hookId, output);
     }
     return [];
   }
   if (subtype === "hook_response") {
-    const hookId = readString(event.hook_id);
+    const hookId = readTrimmedString(event.hook_id);
     if (!hookId) return [];
     return [{ kind: "complete_tool", trackingId: hookId }];
   }
@@ -3008,7 +2971,7 @@ function parseClaudeSdkTaxonomy(event) {
   return [];
 }
 function completeStatusOnNonStatusMessage(event) {
-  const messageType = readString(event.type);
+  const messageType = readTrimmedString(event.type);
   if (messageType === "system" && event.subtype === "status") {
     return;
   }
@@ -3044,11 +3007,19 @@ function extractToolResultText(content) {
       parts.push(item);
       continue;
     }
-    if (item && typeof item === "object" && !Array.isArray(item) && item.type === "text" && typeof item.text === "string") {
+    if (isJsonObject(item) && item.type === "text" && typeof item.text === "string") {
       parts.push(item.text);
     }
   }
   return parts.join("");
+}
+function toolResultEvent(source) {
+  const toolUseId = readTrimmedString(source.tool_use_id);
+  const resultText = source.content !== void 0 ? extractToolResultText(source.content) : "";
+  const isError = source.is_error === true;
+  if (toolUseId) trackClaudeToolResult(toolUseId, resultText, isError);
+  const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+  return result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId };
 }
 function normalizeTodoStatus(value) {
   return value === "in_progress" || value === "completed" ? value : "pending";
@@ -3058,7 +3029,7 @@ function reduceTodoState(name, input) {
     const raw = Array.isArray(input.todos) ? input.todos : [];
     callbackState.todoState.length = 0;
     for (const item of raw) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const content = typeof item.content === "string" ? item.content : "";
       if (!content) continue;
       callbackState.todoState.push({ content, status: normalizeTodoStatus(item.status) });
@@ -3082,22 +3053,21 @@ function reduceTodoState(name, input) {
 }
 function parseClaudeStreamEvent(event) {
   const events = [];
-  const inner = event.event && typeof event.event === "object" && !Array.isArray(event.event) ? event.event : null;
-  if (!inner) return events;
+  const inner = event.event;
+  if (!isJsonObject(inner)) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
     return events;
   }
   if (inner.type === "content_block_start") {
-    const contentBlock = inner.content_block && typeof inner.content_block === "object" && !Array.isArray(inner.content_block) ? inner.content_block : null;
-    if (contentBlock && contentBlock.type === "text") {
+    if (isJsonObject(inner.content_block) && inner.content_block.type === "text") {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta = inner.delta && typeof inner.delta === "object" && !Array.isArray(inner.delta) ? inner.delta : null;
-  if (!delta) return events;
+  const delta = inner.delta;
+  if (!isJsonObject(delta)) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
       events.push({ kind: "stream_text_delta", text: delta.text });
@@ -3120,32 +3090,14 @@ function claudeParseLine(event) {
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
-    const toolUseId = typeof event.tool_use_id === "string" && event.tool_use_id.trim() ? event.tool_use_id.trim() : void 0;
-    const resultText = event.content !== void 0 ? extractToolResultText(event.content) : "";
-    const isError = event.is_error === true;
-    if (toolUseId) {
-      trackClaudeToolResult(toolUseId, resultText, isError);
-    }
-    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-    events.push(
-      result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
-    );
+    events.push(toolResultEvent(event));
     return events;
   }
   if (event.type === "user") {
-    const message2 = event.message && typeof event.message === "object" && !Array.isArray(event.message) ? event.message : null;
-    const content2 = message2 && Array.isArray(message2.content) ? message2.content : [];
-    for (const block of content2) {
-      if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-      if (block.type === "tool_result" && typeof block.tool_use_id === "string" && block.tool_use_id.trim()) {
-        const toolUseId = block.tool_use_id.trim();
-        const resultText = block.content !== void 0 ? extractToolResultText(block.content) : "";
-        const isError = block.is_error === true;
-        trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-        events.push(
-          result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
-        );
+    const content2 = asJsonObject(event.message).content;
+    for (const block of Array.isArray(content2) ? content2 : []) {
+      if (isJsonObject(block) && block.type === "tool_result" && readTrimmedString(block.tool_use_id)) {
+        events.push(toolResultEvent(block));
       }
     }
     if (events.length > 0) {
@@ -3156,13 +3108,13 @@ function claudeParseLine(event) {
   if (callbackState.waitingForFirstAssistantEvent) {
     events.push({ kind: "mark_first_assistant" });
   }
-  const message = event.message && typeof event.message === "object" && !Array.isArray(event.message) ? event.message : null;
-  const content = message && Array.isArray(message.content) ? message.content : [];
-  const parentToolUseId = typeof event.parent_tool_use_id === "string" && event.parent_tool_use_id.trim() ? event.parent_tool_use_id.trim() : void 0;
+  const messageContent = asJsonObject(event.message).content;
+  const content = Array.isArray(messageContent) ? messageContent : [];
+  const parentToolUseId = readTrimmedString(event.parent_tool_use_id);
   for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    if (!isJsonObject(block)) continue;
     if (block.type === "tool_use" && typeof block.name === "string") {
-      const input = block.input && typeof block.input === "object" && !Array.isArray(block.input) ? block.input : {};
+      const input = asJsonObject(block.input);
       if (block.name === "TodoWrite" || block.name === "TaskCreate" || block.name === "TaskUpdate") {
         events.push({
           kind: "set_todos",
@@ -3174,7 +3126,7 @@ function claudeParseLine(event) {
         continue;
       }
       const step = toolCallToStep(block.name, input);
-      const trackingId = typeof block.id === "string" && block.id.trim() ? block.id.trim() : void 0;
+      const trackingId = readTrimmedString(block.id);
       if (trackingId) {
         step.toolUseId = trackingId;
         trackClaudeToolUse(block.name, input, trackingId);
@@ -3205,7 +3157,7 @@ function onStreamLine(parsed) {
     callbackState.claudeInitAt = Date.now();
     callbackState.waitingForFirstAssistantEvent = true;
     log(
-      "claude init event after " + String(elapsedAttemptMs()) + "ms sessionId=" + callbackState.activeClaudeSessionId
+      "claude init event after " + String(attemptElapsedMs()) + "ms sessionId=" + callbackState.activeClaudeSessionId
     );
     log("captured Claude session id " + callbackState.activeClaudeSessionId);
     const startupStep = buildClaudeStartupStep();
@@ -3219,10 +3171,10 @@ function onStreamLine(parsed) {
         "first assistant event after " + String(callbackState.firstAssistantEventAt - callbackState.activeAttemptStartedAt) + "ms"
       );
     }
-    const message = parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) ? parsed.message : null;
-    const contentBlocks = message && Array.isArray(message.content) ? message.content : [];
+    const messageContent = asJsonObject(parsed.message).content;
+    const contentBlocks = Array.isArray(messageContent) ? messageContent : [];
     for (const block of contentBlocks) {
-      if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
+      if (isJsonObject(block) && block.type === "text" && typeof block.text === "string") {
         if (callbackState.firstTextBlockAt === 0) {
           callbackState.firstTextBlockAt = Date.now();
           log(
@@ -4115,10 +4067,8 @@ function applyCanonicalEvents(events) {
   return true;
 }
 function parseStreamEvent(line) {
-  const event = tryParseJson(line);
-  if (!event || typeof event !== "object" || Array.isArray(event)) {
-    return false;
-  }
+  const event = tryParseJsonObject(line);
+  if (!event) return false;
   try {
     completeStatusOnNonStatusMessage(event);
     if (consumesClaudeSdkTaxonomyMessage(event)) {
@@ -4336,7 +4286,7 @@ function markHeartbeatSuccess(payload) {
   callbackState.heartbeatFailureStreakStartedAt = 0;
 }
 function noteHeartbeatFailure(error) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorText(error);
   callbackState.consecutiveHeartbeatFailures++;
   if (callbackState.consecutiveHeartbeatFailures === 1) {
     callbackState.heartbeatFailureStreakStartedAt = Date.now();
@@ -4759,12 +4709,15 @@ import {
   writeFileSync as writeFileSync8
 } from "fs";
 import { createHash } from "crypto";
-function parseJsonObject(line) {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
+function parseJsonLines(output) {
+  const objects = [];
+  for (const line of output.split("\\n")) {
+    const clean = line.trim();
+    if (!clean) continue;
+    const parsed = tryParseJsonObject(clean);
+    if (parsed) objects.push(parsed);
   }
-  return parsed;
+  return objects;
 }
 function writeDoneFile(status, extras) {
   if (callbackState.doneFileWritten) return;
@@ -4848,45 +4801,38 @@ function readSyntheticResult(output) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   };
   const assistantParts = [];
-  for (const line of output.split("\\n")) {
-    const clean = line.trim();
-    if (!clean) continue;
-    try {
-      const parsed = parseJsonObject(clean);
-      if (!parsed) continue;
-      if (parsed.type === "result") {
-        found.sawResult = true;
-        found.isError = Boolean(parsed.is_error);
-        found.durationMs = readNumberField2(parsed, "duration_ms");
-        found.totalCostUsd = readNumberField2(parsed, "total_cost_usd");
-        found.model = typeof parsed.model === "string" ? parsed.model : "";
-        if (typeof parsed.result === "string") {
-          found.resultText = parsed.result;
-        } else if (parsed.result !== void 0) {
-          found.resultText = JSON.stringify(parsed.result);
-        }
-        if (parsed.usage && typeof parsed.usage === "object" && !Array.isArray(parsed.usage)) {
-          found.inputTokens = readNumberField2(parsed.usage, "input_tokens");
-          found.outputTokens = readNumberField2(parsed.usage, "output_tokens");
-          found.cacheReadTokens = readNumberField2(
-            parsed.usage,
-            "cache_read_input_tokens"
-          );
-          found.cacheWriteTokens = readNumberField2(
-            parsed.usage,
-            "cache_creation_input_tokens"
-          );
-        }
-        continue;
+  for (const parsed of parseJsonLines(output)) {
+    if (parsed.type === "result") {
+      found.sawResult = true;
+      found.isError = Boolean(parsed.is_error);
+      found.durationMs = readNumberField2(parsed, "duration_ms");
+      found.totalCostUsd = readNumberField2(parsed, "total_cost_usd");
+      found.model = typeof parsed.model === "string" ? parsed.model : "";
+      if (typeof parsed.result === "string") {
+        found.resultText = parsed.result;
+      } else if (parsed.result !== void 0) {
+        found.resultText = JSON.stringify(parsed.result);
       }
-      if (parsed.type === "assistant" && parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) && Array.isArray(parsed.message.content)) {
-        for (const block of parsed.message.content) {
-          if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
-            assistantParts.push(block.text);
-          }
+      if (isJsonObject(parsed.usage)) {
+        found.inputTokens = readNumberField2(parsed.usage, "input_tokens");
+        found.outputTokens = readNumberField2(parsed.usage, "output_tokens");
+        found.cacheReadTokens = readNumberField2(
+          parsed.usage,
+          "cache_read_input_tokens"
+        );
+        found.cacheWriteTokens = readNumberField2(
+          parsed.usage,
+          "cache_creation_input_tokens"
+        );
+      }
+      continue;
+    }
+    if (parsed.type === "assistant" && isJsonObject(parsed.message) && Array.isArray(parsed.message.content)) {
+      for (const block of parsed.message.content) {
+        if (isJsonObject(block) && block.type === "text" && typeof block.text === "string") {
+          assistantParts.push(block.text);
         }
       }
-    } catch {
     }
   }
   found.assistantText = assistantParts.join("");
@@ -4928,33 +4874,26 @@ function extractResultEvent(output) {
     let lastCachedInputTokens = 0;
     let lastCacheWriteInputTokens = 0;
     let lastOutputTokens = 0;
-    for (const line of output.split("\\n")) {
-      const clean = line.trim();
-      if (!clean) continue;
-      try {
-        const parsed = parseJsonObject(clean);
-        if (!parsed) continue;
-        if (parsed.type === "item.completed" && parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item) && parsed.item.type === "agent_message") {
-          const messageText = getCodexAgentMessageText(parsed.item);
-          if (messageText) finalText2 = messageText;
-          continue;
+    for (const parsed of parseJsonLines(output)) {
+      if (parsed.type === "item.completed" && isJsonObject(parsed.item) && parsed.item.type === "agent_message") {
+        const messageText = getCodexAgentMessageText(parsed.item);
+        if (messageText) finalText2 = messageText;
+        continue;
+      }
+      if (parsed.type === "turn.completed" && isJsonObject(parsed.usage)) {
+        const usage = parsed.usage;
+        if (typeof usage.input_tokens === "number") {
+          lastInputTokens = usage.input_tokens;
         }
-        if (parsed.type === "turn.completed" && parsed.usage && typeof parsed.usage === "object" && !Array.isArray(parsed.usage)) {
-          const usage = parsed.usage;
-          if (typeof usage.input_tokens === "number") {
-            lastInputTokens = usage.input_tokens;
-          }
-          if (typeof usage.cached_input_tokens === "number") {
-            lastCachedInputTokens = usage.cached_input_tokens;
-          }
-          if (typeof usage.cache_write_input_tokens === "number") {
-            lastCacheWriteInputTokens = usage.cache_write_input_tokens;
-          }
-          if (typeof usage.output_tokens === "number") {
-            lastOutputTokens = usage.output_tokens;
-          }
+        if (typeof usage.cached_input_tokens === "number") {
+          lastCachedInputTokens = usage.cached_input_tokens;
         }
-      } catch {
+        if (typeof usage.cache_write_input_tokens === "number") {
+          lastCacheWriteInputTokens = usage.cache_write_input_tokens;
+        }
+        if (typeof usage.output_tokens === "number") {
+          lastOutputTokens = usage.output_tokens;
+        }
       }
     }
     if (!finalText2) return null;
@@ -4970,22 +4909,15 @@ function extractResultEvent(output) {
     };
   }
   let resultEvent = null;
-  for (const line of output.split("\\n")) {
-    const clean = line.trim();
-    if (!clean) continue;
-    try {
-      const parsed = parseJsonObject(clean);
-      if (!parsed) continue;
-      if (parsed.type === "result") {
-        const r = parsed.result ?? "";
-        const withProvider = JSON.stringify({ ...parsed, provider: "claude" });
-        resultEvent = {
-          result: typeof r === "string" ? r : JSON.stringify(r),
-          isError: Boolean(parsed.is_error),
-          rawResultEvent: withProvider
-        };
-      }
-    } catch {
+  for (const parsed of parseJsonLines(output)) {
+    if (parsed.type === "result") {
+      const r = parsed.result ?? "";
+      const withProvider = JSON.stringify({ ...parsed, provider: "claude" });
+      resultEvent = {
+        result: typeof r === "string" ? r : JSON.stringify(r),
+        isError: Boolean(parsed.is_error),
+        rawResultEvent: withProvider
+      };
     }
   }
   return resultEvent;
@@ -5304,10 +5236,8 @@ function processRealtimeStdoutChunk(text) {
   }
 }
 function handleRealtimeStreamLine(line) {
-  const parsed = tryParseJson(line);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return;
-  }
+  const parsed = tryParseJsonObject(line);
+  if (!parsed) return;
   getProviderAdapter(PROVIDER).onStreamLine(line, parsed);
 }
 
@@ -5392,6 +5322,27 @@ function buildCanUseTool() {
 }
 
 // callback-src/providers/attemptResult.ts
+function beginSdkAttempt(name, sessionMode, startupStep) {
+  resetAttemptState();
+  callbackState.activeAttemptStartedAt = Date.now();
+  const step = startupStep();
+  updateThinkingStep(step.label, step.detail);
+  log(
+    name + " started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  );
+}
+function finishSdkAttempt(p) {
+  const code = p.sawResult && !p.resultIsError && !p.timedOutForMaxRuntime && !p.timedOutForNoOutput ? 0 : 1;
+  log(
+    p.name + " finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + p.sawResult + ", resultIsError=" + p.resultIsError + ", timedOutForNoOutput=" + p.timedOutForNoOutput + ", timedOutForMaxRuntime=" + p.timedOutForMaxRuntime + ", outputBytes=" + p.output.length + (p.errorMessage ? ", " + p.errorLabel + "=" + p.errorMessage : "") + ")"
+  );
+  return {
+    code,
+    output: p.output,
+    timedOutForNoOutput: p.timedOutForNoOutput,
+    timedOutForMaxRuntime: p.timedOutForMaxRuntime
+  };
+}
 function buildStandardSdkAttemptResult(params) {
   return {
     code: params.code,
@@ -5410,7 +5361,7 @@ function buildStandardSdkAttemptResult(params) {
 // callback-src/providers/claudeResult.ts
 function isZeroWorkTaskNotificationResult(message) {
   const origin = message.origin;
-  return message.type === "result" && message.subtype === "success" && message.is_error !== true && message.num_turns === 0 && typeof message.result === "string" && message.result.trim() === "" && typeof origin === "object" && origin !== null && !Array.isArray(origin) && origin.kind === "task-notification";
+  return message.type === "result" && message.subtype === "success" && message.is_error !== true && message.num_turns === 0 && typeof message.result === "string" && message.result.trim() === "" && isJsonObject(origin) && origin.kind === "task-notification";
 }
 
 // callback-src/providers/claudeSdk.ts
@@ -5425,7 +5376,7 @@ async function readSdkPlanUsage(handle) {
     try {
       await handle.initializationResult();
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("usage limits: initialization wait failed \\u2014 " + messageText);
     }
   }
@@ -5490,11 +5441,7 @@ function resolvePinnedSdkEntry(pin) {
   return localRoot + pin.entryRelPath;
 }
 function sdkMessageJson(serialized) {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
+  return tryParseJsonObject(serialized);
 }
 async function loadSdk() {
   const mod = await import(resolvePinnedSdkEntry({
@@ -5549,9 +5496,6 @@ function claudeExecutablePath() {
     pinnedVersion: process.env.CLAUDE_CLI_PINNED_VERSION || null,
     fallbackBinPath: process.env.CLAUDE_BIN_PATH || ""
   });
-}
-function readPromptText() {
-  return readFileSync6("/tmp/design-prompt.txt", "utf8");
 }
 function buildSdkOptions(sessionMode) {
   const extraArgs = { settings: settingsJson };
@@ -5617,13 +5561,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   };
 }
 async function runClaudeSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupStep = buildClaudeStartupStep();
-  updateThinkingStep(startupStep.label, startupStep.detail);
-  log(
-    "runClaudeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
   let attemptOutput = "";
   let lastMessageAt = Date.now();
   let timedOutForNoOutput = false;
@@ -5636,7 +5574,7 @@ async function runClaudeSdkAttempt(sessionMode) {
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
   let q = sdk.query({
-    prompt: readPromptText(),
+    prompt: readTurnPrompt(),
     options: buildSdkOptions(effectiveMode)
   });
   const interrupt = async () => {
@@ -5698,13 +5636,13 @@ async function runClaudeSdkAttempt(sessionMode) {
         );
         sawZeroWorkTaskNotification = false;
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode)
         });
         await consumeQuery();
       }
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       if (effectiveMode.mode === "resume" && effectiveMode.sessionId && messageText.includes("No conversation found with session ID")) {
         log(
           "runClaudeSdkAttempt: resume target missing \\u2014 retrying as a new session with the same id"
@@ -5714,7 +5652,7 @@ async function runClaudeSdkAttempt(sessionMode) {
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode)
         });
         await consumeQuery();
@@ -5723,7 +5661,7 @@ async function runClaudeSdkAttempt(sessionMode) {
       }
     }
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     queryErrorMessage = messageText;
     log("runClaudeSdkAttempt: query failed \\u2014 " + messageText);
     recordSdkAttemptFailure(messageText);
@@ -5734,16 +5672,18 @@ async function runClaudeSdkAttempt(sessionMode) {
     readUsage: () => readSdkPlanUsage(q),
     error: resultErrorMessage || queryErrorMessage || void 0
   });
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runClaudeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") + ")"
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runClaudeSdkAttempt",
+      sawResult,
+      resultIsError,
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "queryError",
+      errorMessage: queryErrorMessage
+    })
   );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
 }
 
 // callback-src/runtime/turnAttachments.ts
@@ -5789,9 +5729,7 @@ async function materializeTurnAttachments(turn) {
       writeFileSync9(path3, new Uint8Array(await response.arrayBuffer()));
       paths2.push(path3);
     } catch (error) {
-      log(
-        \`daemon: attachment download error \${error instanceof Error ? error.message : String(error)}\`
-      );
+      log(\`daemon: attachment download error \${errorText(error)}\`);
     }
   }
   if (paths2.length === 0) return;
@@ -6120,23 +6058,12 @@ function readSyntheticTurnMessageId(result) {
   const messageId = payload.messageId;
   return typeof messageId === "string" ? messageId : null;
 }
-function readParentToolUseId(message) {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-function readStringField2(message, field) {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function recogniseSubagentToolUses(message) {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -6144,7 +6071,7 @@ function recogniseSubagentToolUses(message) {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -6154,14 +6081,12 @@ function recogniseSubagentToolUses(message) {
     if (name !== "Agent" && name !== "Task") {
       continue;
     }
-    const id = block.id;
-    if (typeof id === "string" && id.trim()) {
-      recognisedSubagentToolUseIds.add(id.trim());
-    }
+    const id = readTrimmedString(block.id);
+    if (id) recognisedSubagentToolUseIds.add(id);
   }
 }
 function shouldDropSubagentMessage(message) {
-  const parentId = readParentToolUseId(message);
+  const parentId = readTrimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -6171,7 +6096,7 @@ function shouldMintSyntheticTurn(message) {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = readTrimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -6303,14 +6228,14 @@ async function reportHarnessSkillCatalog(cliVersion, query) {
       "daemon: reported " + commands.length + " built-in skills from CLI " + cliVersion
     );
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: harness skill report failed \\u2014 " + messageText);
   }
 }
 function noteHarnessInitMessage(message, query) {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField2(message, "claude_code_version");
+  const cliVersion = readTrimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -6352,7 +6277,7 @@ async function dispatchPendingAgentStops(agentRunner) {
       await agentRunner.stopTask(entry.taskId);
       log("daemon: stopTask dispatched taskId=" + entry.taskId);
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("daemon: stopTask failed \\u2014 " + messageText);
       pendingAgentStops.add(toolUseId);
     }
@@ -6387,12 +6312,12 @@ function handleSystemTaskMessage(message) {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField2(message, "tool_use_id");
+  const toolUseId = readTrimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
     const entry = {
       toolUseId,
-      taskId: readStringField2(message, "task_id"),
-      description: readStringField2(message, "description"),
+      taskId: readTrimmedString(message.task_id),
+      description: readTrimmedString(message.description),
       status: "running",
       startedAt: Date.now()
     };
@@ -6404,7 +6329,7 @@ function handleSystemTaskMessage(message) {
     return;
   }
   if ((subtype === "task_updated" || subtype === "task_notification") && toolUseId) {
-    const status = readStringField2(message, "status");
+    const status = readTrimmedString(message.status);
     const terminal = status === "completed" || status === "failed" || status === "killed" || status === "stopped" || subtype === "task_notification";
     if (terminal) {
       settleSubagent(toolUseId, status ?? "completed");
@@ -6516,7 +6441,7 @@ function handleCancelRequested(agentRunner) {
   endWatchedTurn();
   log("daemon: cancel requested \\u2014 interrupting in-flight turn");
   void agentRunner.interrupt().catch((error) => {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: interrupt failed \\u2014 " + messageText);
   });
 }
@@ -6734,7 +6659,7 @@ function createWarmAgentRunner(sdk, options) {
         pending.push(message);
       }
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("daemon: agent query pump failed \\u2014 " + messageText);
     } finally {
       pending.close();
@@ -6765,7 +6690,7 @@ function createWarmAgentRunner(sdk, options) {
       await query.setPermissionMode("default");
       log("daemon: permission mode set to default");
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       log("daemon: setPermissionMode failed \\u2014 " + message);
     }
   };
@@ -6814,7 +6739,7 @@ async function runSdkDaemon() {
   try {
     await runDaemonMessagePump(agentRunner);
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: query failed \\u2014 " + messageText);
     persistTurnWork();
     try {
@@ -6853,7 +6778,7 @@ async function createOutputSchemaFile(schema) {
     return { cleanup: async () => {
     } };
   }
-  if (!isJsonObject(schema)) {
+  if (!isJsonObject2(schema)) {
     throw new Error("outputSchema must be a plain JSON object");
   }
   const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
@@ -6872,7 +6797,7 @@ async function createOutputSchemaFile(schema) {
     throw error;
   }
 }
-function isJsonObject(value) {
+function isJsonObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 var Thread = class {
@@ -7369,7 +7294,6 @@ var Codex = class {
 };
 
 // callback-src/providers/codexSdk.ts
-import { readFileSync as readFileSync7 } from "fs";
 var CODEX_CLI_PACKAGE = "@openai/codex";
 function codexExecutablePath() {
   return resolvePinnedCliBinary({
@@ -7378,10 +7302,6 @@ function codexExecutablePath() {
     pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
     fallbackBinPath: CODEX_BIN_PATH
   });
-}
-function readPromptText2() {
-  const prompt = readFileSync7("/tmp/design-prompt.txt", "utf8");
-  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
 }
 function codexEnvironment() {
   const env = {};
@@ -7411,15 +7331,10 @@ function agentMessageDelta(event, priorTextByItem) {
   return current.startsWith(previous) ? current.slice(previous.length) : current;
 }
 async function runCodexSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Codex SDK...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
-  );
-  log(
-    "runCodexSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runCodexSdkAttempt", sessionMode, () => ({
+    label: "Starting Codex SDK...",
+    detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
+  }));
   let attemptOutput = "";
   let lastEventAt2 = Date.now();
   let timedOutForNoOutput = false;
@@ -7462,9 +7377,12 @@ async function runCodexSdkAttempt(sessionMode) {
     attemptOutput = trimBufferHead(attemptOutput + line);
   };
   try {
-    const streamed = await thread.runStreamed(readPromptText2(), {
-      signal: abortController.signal
-    });
+    const streamed = await thread.runStreamed(
+      withSystemPrompt(readTurnPrompt()),
+      {
+        signal: abortController.signal
+      }
+    );
     for await (const event of streamed.events) {
       lastEventAt2 = Date.now();
       const delta = agentMessageDelta(event, agentTextByItem);
@@ -7487,7 +7405,7 @@ async function runCodexSdkAttempt(sessionMode) {
       if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     if (!abortController.signal.aborted || !attemptErrorMessage) {
       attemptErrorMessage = message;
     }
@@ -7498,16 +7416,18 @@ async function runCodexSdkAttempt(sessionMode) {
   if (attemptErrorMessage) {
     recordSdkAttemptFailure(attemptErrorMessage);
   }
-  const code = sawCompletedTurn && !turnFailed && !attemptErrorMessage && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCodexSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawCompletedTurn=" + sawCompletedTurn + ", turnFailed=" + turnFailed + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") + ")"
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runCodexSdkAttempt",
+      sawResult: sawCompletedTurn,
+      resultIsError: turnFailed || Boolean(attemptErrorMessage),
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "error",
+      errorMessage: attemptErrorMessage
+    })
   );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
 }
 
 // callback-src/providers/codexAppServerClient.ts
@@ -7585,9 +7505,8 @@ var CodexAppServerClient = class {
     this.child.stdin.write(JSON.stringify(message) + "\\n");
   }
   handleLine(line) {
-    const parsed = tryParseJson(line);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-    const message = parsed;
+    const message = tryParseJsonObject(line);
+    if (!message) return;
     if (typeof message.id === "number" && typeof message.method !== "string") {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -7767,9 +7686,7 @@ async function establishThread(client, sessionMode) {
       log("codex daemon: resumed thread " + resumedId);
       return resumedId;
     } catch (error) {
-      log(
-        "codex daemon: resume failed, starting fresh: " + (error instanceof Error ? error.message : String(error))
-      );
+      log("codex daemon: resume failed, starting fresh: " + errorText(error));
     }
   }
   const started2 = await client.request("thread/start", {
@@ -7789,7 +7706,7 @@ async function startTurn(client, turn) {
   }
   startClaimedTurn(turn);
   await materializeTurnAttachments(turn);
-  const text = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + turn.prompt : turn.prompt;
+  const text = withSystemPrompt(turn.prompt);
   activeTurnStartedAt = Date.now();
   lastEventAt = activeTurnStartedAt;
   turnStartUsage = threadTotalUsage;
@@ -7861,7 +7778,7 @@ async function runCodexAppServerDaemon() {
           threadId: callbackState.activeCodexThreadId,
           turnId: providerTurnId
         }).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = errorText(error);
           log("codex daemon: interrupt failed \\u2014 " + message);
         });
       }
@@ -7898,7 +7815,7 @@ async function runCodexAppServerDaemon() {
       await sleep(POLL_INTERVAL_MS2);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     log("codex daemon failed: " + message);
     await failActiveTurn("Codex App Server failed: " + message);
   } finally {
@@ -7911,10 +7828,10 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
+import { readFileSync as readFileSync7, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
 
 // callback-src/providers/cursorSdk.ts
-import { mkdirSync as mkdirSync7, readFileSync as readFileSync8 } from "fs";
+import { mkdirSync as mkdirSync7 } from "fs";
 var SDK_PACKAGE2 = "@cursor/sdk";
 var SDK_VERSION2 = "1.0.28";
 var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
@@ -8019,9 +7936,6 @@ async function loadCursorSdkSqlite() {
   loadedSdkSqlite = mod;
   return mod;
 }
-function readPromptText3() {
-  return readFileSync8("/tmp/design-prompt.txt", "utf8");
-}
 function cursorModelCatalogJson(models) {
   if (models.length === 0) return null;
   const valid = models.every(
@@ -8068,7 +7982,7 @@ async function resolveCursorModelSelection(sdk) {
       listUnavailable = true;
     }
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     listUnavailable = true;
     log(
       "resolveCursorModelSelection: model list failed \\u2014 keeping opted-in params only (" + messageText + ")"
@@ -8198,7 +8112,7 @@ async function runTurnWithResourceExhaustedRetries(deps) {
     try {
       outcome = await deps.runTurn();
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       if (!isResourceExhaustedMessage(messageText) || retryDelayMs === void 0 || deps.aborted()) {
         throw error;
       }
@@ -8229,12 +8143,15 @@ function readUsageTokens(value) {
   };
 }
 async function runCursorSdkAttempt(sessionMode, overrides = {}) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupActivity = cursorAgentStartupActivity(sessionMode);
-  updateThinkingStep(startupActivity.label, startupActivity.detail);
-  log(
-    "runCursorSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  if (!process.env.CURSOR_API_KEY?.trim()) {
+    throw new Error(
+      "CURSOR_API_KEY is missing in the sandbox environment \\u2014 the Cursor SDK cannot authenticate"
+    );
+  }
+  beginSdkAttempt(
+    "runCursorSdkAttempt",
+    sessionMode,
+    () => cursorAgentStartupActivity(sessionMode)
   );
   let attemptOutput = "";
   let lastMessageAt = Date.now();
@@ -8322,7 +8239,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
       agent = await resumeSavedAgent(sessionMode.sessionId);
       resumedExistingAgent = true;
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       if (error instanceof Error && canReplaceCursorAgent(error)) {
         log(
           "runCursorSdkAttempt: saved agent gone \\u2014 starting a fresh agent (" + messageText + ")"
@@ -8354,8 +8271,9 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   } else {
     agent = await createFreshAgent();
   }
-  const promptText = overrides.promptText ?? readPromptText3();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
+  const combinedPrompt = withSystemPrompt(
+    overrides.promptText ?? readTurnPrompt()
+  );
   const healthTimer = setInterval(() => {
     const now = Date.now();
     if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
@@ -8381,7 +8299,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     try {
       return readCursorCostSnapshot(await activeAgent.getUsage());
     } catch (error) {
-      const messageText = error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log(
         "runCursorSdkAttempt: getUsage failed \\u2014 turn cost unavailable (" + messageText + ")"
       );
@@ -8565,7 +8483,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
       }
     }
   } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : String(error);
+    const rawMessage = errorText(error);
     const messageText = isResourceExhaustedMessage(rawMessage) ? RESOURCE_EXHAUSTED_CHAT_MESSAGE : rawMessage;
     attemptErrorMessage = messageText;
     log("runCursorSdkAttempt: run failed \\u2014 " + rawMessage);
@@ -8581,16 +8499,18 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     } catch {
     }
   }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCursorSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") + ")"
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runCursorSdkAttempt",
+      sawResult,
+      resultIsError,
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "runError",
+      errorMessage: attemptErrorMessage
+    })
   );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
 }
 function cursorAgentStartupActivity(sessionMode) {
   return sessionMode.mode === "resume" ? {
@@ -8630,7 +8550,7 @@ function readCursorTurnWorkerClaim() {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
   }
-  const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
+  const prompt = readFileSync7(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
   if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
@@ -8826,18 +8746,13 @@ function handleCancelRequested2() {
 async function executeClaimedTurn(turn) {
   log("cursor turn worker: turn started");
   try {
-    if (!process.env.CURSOR_API_KEY?.trim()) {
-      throw new Error(
-        "CURSOR_API_KEY is missing in the sandbox environment \\u2014 the Cursor SDK cannot authenticate"
-      );
-    }
     const sessionMode = prepareCursorSessionState();
     const attempt = await runCursorSdkAttempt(sessionMode, {
       promptText: turn.prompt
     });
     await finalizeTurn3(attempt);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     log("cursor daemon: turn failed \\u2014 " + message);
     try {
       await drainStreamingAndCompleteSteps();
@@ -8907,7 +8822,7 @@ async function runClaimedTurn(turn) {
       await reportCursorTurnWorkerFailure(outcome);
     } catch (error) {
       log(
-        "cursor daemon: worker failure completion could not be delivered \\u2014 " + (error instanceof Error ? error.message : String(error))
+        "cursor daemon: worker failure completion could not be delivered \\u2014 " + errorText(error)
       );
     }
   } finally {
@@ -8964,7 +8879,7 @@ import {
   existsSync as existsSync7,
   mkdirSync as mkdirSync8,
   readdirSync as readdirSync4,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync8,
   rmSync,
   writeFileSync as writeFileSync11
 } from "fs";
@@ -8974,17 +8889,13 @@ var EXCLUDE_BEGIN = "# >>> eva-system-skills >>>";
 var EXCLUDE_END = "# <<< eva-system-skills <<<";
 var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}\$/;
 function parseSystemSkillsFile(raw) {
-  const parsed = tryParseJson(raw);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(raw);
+  if (!parsed) return null;
   const skills = parsed.skills;
   if (!Array.isArray(skills)) return null;
   const result = [];
   for (const entry of skills) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      continue;
-    }
+    if (!isJsonObject(entry)) continue;
     const name = entry.name;
     const stub = entry.stub;
     if (typeof name !== "string" || typeof stub !== "string") continue;
@@ -9027,7 +8938,7 @@ function isEvaStub(directoryName) {
   const skillFile = \`\${skillsRoot()}/\${directoryName}/SKILL.md\`;
   if (!existsSync7(skillFile)) return false;
   try {
-    return readFileSync10(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync8(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
@@ -9062,7 +8973,7 @@ function updateGitExclude(names) {
   if (!existsSync7(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync7(excludeFile) ? readFileSync10(excludeFile, "utf8") : "";
+  const existing = existsSync7(excludeFile) ? readFileSync8(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
@@ -9076,7 +8987,7 @@ function materializeSystemSkills() {
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync10(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync8(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
@@ -9165,9 +9076,7 @@ async function runCheckLoop() {
           });
           lastReported = branch;
         } catch (error) {
-          log(
-            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
-          );
+          log("branchWatcher: report failed: " + errorText(error));
         }
       }
       if (recheckQueued) {
@@ -9196,7 +9105,7 @@ function watchHeadIn(gitDir) {
     headWatcher.unref();
   } catch (error) {
     log(
-      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
+      "branchWatcher: fs.watch unavailable, polling only: " + errorText(error)
     );
   }
 }
@@ -9229,9 +9138,6 @@ function startBranchWatcher() {
   void runCheckLoop();
 }
 
-// callback-src/providers/opencodeSdk.ts
-import { readFileSync as readFileSync12 } from "fs";
-
 // callback-src/providers/opencodeServer.ts
 import { spawn as spawn4 } from "child_process";
 import {
@@ -9239,7 +9145,7 @@ import {
   existsSync as existsSync8,
   mkdirSync as mkdirSync9,
   openSync,
-  readFileSync as readFileSync11,
+  readFileSync as readFileSync9,
   rmSync as rmSync2,
   statSync as statSync4,
   writeFileSync as writeFileSync12
@@ -9255,7 +9161,7 @@ var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
   try {
-    const contents = readFileSync11(SERVER_LOG_FILE, "utf8");
+    const contents = readFileSync9(SERVER_LOG_FILE, "utf8");
     return contents.length > maxBytes ? contents.slice(-maxBytes) : contents;
   } catch {
     return "";
@@ -9273,10 +9179,8 @@ async function probeHealth() {
 }
 function readRecordedPid() {
   try {
-    const parsed = tryParseJson(readFileSync11(SERVER_STATE_FILE, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return 0;
-    }
+    const parsed = tryParseJsonObject(readFileSync9(SERVER_STATE_FILE, "utf8"));
+    if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
     return 0;
@@ -9287,7 +9191,7 @@ function killRecordedServer() {
   if (!pid) return;
   let cmdline = "";
   try {
-    cmdline = readFileSync11("/proc/" + String(pid) + "/cmdline", "utf8");
+    cmdline = readFileSync9("/proc/" + String(pid) + "/cmdline", "utf8");
   } catch {
     return;
   }
@@ -9420,9 +9324,6 @@ async function loadOpencodeSdk() {
   }));
   return mod;
 }
-function readPromptText4() {
-  return readFileSync12("/tmp/design-prompt.txt", "utf8");
-}
 function splitOpencodeModel(raw) {
   const separator = raw.indexOf("/");
   if (separator <= 0 || separator === raw.length - 1) {
@@ -9530,9 +9431,7 @@ async function ensureEvaMcpServers(client, servers = evaMcpServers) {
       );
     }
   } catch (error) {
-    log(
-      "opencode mcp registration failed: " + (error instanceof Error ? error.message : String(error))
-    );
+    log("opencode mcp registration failed: " + errorText(error));
   }
 }
 function requireData(result, what) {
@@ -9542,15 +9441,10 @@ function requireData(result, what) {
   return result.data;
 }
 async function runOpencodeSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Opencode agent...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
-  );
-  log(
-    "runOpencodeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runOpencodeSdkAttempt", sessionMode, () => ({
+    label: "Starting Opencode agent...",
+    detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
+  }));
   let attemptOutput = "";
   let lastEventAt2 = Date.now();
   let watchdogClock = Date.now();
@@ -9606,8 +9500,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
   } else {
     sessionId = await createFreshSession();
   }
-  const promptText = readPromptText4();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
+  const combinedPrompt = withSystemPrompt(readTurnPrompt());
   const model = splitOpencodeModel(normalizedOpencodeModel);
   const emitState = createPartEmitState();
   const streamAbort = new AbortController();
@@ -9775,7 +9668,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
     );
     sawResult = true;
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     attemptErrorMessage = messageText;
     log("runOpencodeSdkAttempt: turn failed \\u2014 " + messageText);
     recordSdkAttemptFailure(messageText, {
@@ -9786,16 +9679,18 @@ async function runOpencodeSdkAttempt(sessionMode) {
     markTerminal();
     streamAbort.abort();
   }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runOpencodeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") + ")"
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runOpencodeSdkAttempt",
+      sawResult,
+      resultIsError,
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "turnError",
+      errorMessage: attemptErrorMessage
+    })
   );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
 }
 
 // callback-src/providers/attempts.ts
@@ -9820,28 +9715,11 @@ function syncProviderStateToPersist(reason) {
   }
   syncClaudeStateToPersist(reason);
 }
-async function runClaudeAttempt(sessionMode) {
-  return await runClaudeSdkAttempt(sessionMode);
-}
-async function runCodexAttempt(sessionMode) {
-  return await runCodexSdkAttempt(sessionMode);
-}
-async function runOpencodeAttempt(sessionMode) {
-  return await runOpencodeSdkAttempt(sessionMode);
-}
-async function runCursorAttempt(sessionMode) {
-  if (!process.env.CURSOR_API_KEY?.trim()) {
-    throw new Error(
-      "CURSOR_API_KEY is missing in the sandbox environment \\u2014 the Cursor SDK cannot authenticate"
-    );
-  }
-  return await runCursorSdkAttempt(sessionMode);
-}
 async function runProviderAttempt(sessionMode) {
-  if (PROVIDER === "codex") return await runCodexAttempt(sessionMode);
-  if (PROVIDER === "opencode") return await runOpencodeAttempt(sessionMode);
-  if (PROVIDER === "cursor") return await runCursorAttempt(sessionMode);
-  return await runClaudeAttempt(sessionMode);
+  if (PROVIDER === "codex") return await runCodexSdkAttempt(sessionMode);
+  if (PROVIDER === "opencode") return await runOpencodeSdkAttempt(sessionMode);
+  if (PROVIDER === "cursor") return await runCursorSdkAttempt(sessionMode);
+  return await runClaudeSdkAttempt(sessionMode);
 }
 
 // callback-src/index.ts
@@ -9850,9 +9728,7 @@ if (IS_CURSOR_TURN_WORKER) {
     await runCursorTurnWorker();
     process.exit(0);
   } catch (error) {
-    log(
-      "cursor turn worker failed: " + (error instanceof Error ? error.message : String(error))
-    );
+    log("cursor turn worker failed: " + errorText(error));
     process.exit(1);
   }
 }
@@ -9902,7 +9778,7 @@ await ensureGithubToken({
   repoId: REPO_ID
 });
 log(
-  "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasMcpConfig ? "yes" : "no")
+  "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasEvaMcpConfig ? "yes" : "no")
 );
 try {
   beginTurnCheckpoint();
@@ -9989,7 +9865,7 @@ try {
     await stopStreamingLoops();
     writeDoneFile("completion-error", {
       exitCode: firstAttempt.code,
-      error: e instanceof Error ? e.message : String(e)
+      error: errorText(e)
     });
     process.exit(1);
   }
@@ -9998,7 +9874,7 @@ try {
   syncProviderStateToPersist("fatal-error");
   await stopStreamingLoops();
   writeDoneFile("fatal-error", {
-    error: err instanceof Error ? err.message : String(err)
+    error: errorText(err)
   });
   const errorArgs = {
     [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",

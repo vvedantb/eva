@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import {
   accentColorValidator,
   auditSeverityValidator,
@@ -47,6 +47,16 @@ export const turnCheckpointArgs = {
 export const turnLeaseFenceArgs = {
   turnId: v.optional(v.string()),
   leaseGeneration: v.optional(v.number()),
+};
+
+/** Args every sandbox completion callback posts to a `handleCompletion` receiver. */
+export const completionCallbackArgs = {
+  success: v.boolean(),
+  result: v.union(v.string(), v.null()),
+  error: v.union(v.string(), v.null()),
+  activityLog: v.union(v.string(), v.null()),
+  rawResultEvent: v.optional(v.string()),
+  ...turnCheckpointArgs,
 };
 
 /** Fields every daemon claim returns, whether or not it hands over a prompt. */
@@ -303,3 +313,25 @@ export const usageLimitWindowValidator = v.object({
   utilization: v.optional(v.number()),
   resetsAt: v.optional(v.number()),
 });
+
+/** One stored env var on a repo or team env var document. */
+export const envVarEntryValidator = v.object({
+  key: v.string(),
+  value: v.string(),
+  sandboxExclude: v.optional(v.boolean()),
+});
+
+/** An env var entry as listed to the client: value masked, flag resolved. */
+export const maskedEnvVarEntryValidator = v.object({
+  key: v.string(),
+  value: v.string(),
+  sandboxExclude: v.boolean(),
+});
+
+/** One chat surface, keyed by its kind and the id of its owning row. */
+export const chatRefValidator = v.union(
+  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
+);
+export type ChatRef = Infer<typeof chatRefValidator>;

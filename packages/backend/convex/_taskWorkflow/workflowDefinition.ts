@@ -12,6 +12,7 @@ import { buildQuickTaskRetryDelayMs } from "./recovery";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
+import { errorText } from "../_shared/errors";
 
 const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
@@ -107,8 +108,6 @@ export const taskExecutionWorkflow = workflow.define({
         branchName: data.branchName,
         createRetry: PR_STEP_RETRY.retry,
         skipStartupCommands,
-        sessionPersistenceId: args.projectId,
-        sessionPersistenceKind: args.projectId ? "projects" : undefined,
       }));
 
       await step.runMutation(internal.turns.markLaunching, {
@@ -200,7 +199,7 @@ export const taskExecutionWorkflow = workflow.define({
           finalSuccess = false;
           finalError = formatDelayedPublishFailureError("task", error);
           console.error(
-            `[task-workflow] run=${args.runId} pushSandboxBranch failed: ${error instanceof Error ? error.message : String(error)}`,
+            `[task-workflow] run=${args.runId} pushSandboxBranch failed: ${errorText(error)}`,
           );
         }
       }
@@ -221,7 +220,7 @@ export const taskExecutionWorkflow = workflow.define({
           );
         } catch (deploymentError) {
           console.error(
-            `[task-workflow] run=${args.runId} deployment tracking scheduling failed: ${deploymentError instanceof Error ? deploymentError.message : String(deploymentError)}`,
+            `[task-workflow] run=${args.runId} deployment tracking scheduling failed: ${errorText(deploymentError)}`,
           );
         }
       }
@@ -244,7 +243,7 @@ export const taskExecutionWorkflow = workflow.define({
             changeRequests = enrichment.changeRequests;
           } catch (enrichmentError) {
             console.error(
-              `[task-workflow] run=${args.runId} PR enrichment failed; creating PR with base body: ${enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError)}`,
+              `[task-workflow] run=${args.runId} PR enrichment failed; creating PR with base body: ${errorText(enrichmentError)}`,
             );
           }
 
@@ -313,7 +312,7 @@ export const taskExecutionWorkflow = workflow.define({
           }
         } catch (prError) {
           const action = args.isFirstTaskOnBranch ? "creation" : "refresh";
-          completionPrError = `PR ${action} failed: ${prError instanceof Error ? prError.message : String(prError)}. Commits are pushed; use the Create PR button to recover.`;
+          completionPrError = `PR ${action} failed: ${errorText(prError)}. Commits are pushed; use the Create PR button to recover.`;
           console.error(
             `PR ${action} failed for run ${args.runId}: ${completionPrError}`,
           );
@@ -362,7 +361,7 @@ export const taskExecutionWorkflow = workflow.define({
           });
         } catch (descriptionError) {
           console.error(
-            `[task-workflow] run=${args.runId} generatePrDescription failed: ${descriptionError instanceof Error ? descriptionError.message : String(descriptionError)}`,
+            `[task-workflow] run=${args.runId} generatePrDescription failed: ${errorText(descriptionError)}`,
           );
         }
       }

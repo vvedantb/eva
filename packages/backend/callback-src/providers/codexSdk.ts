@@ -1,22 +1,23 @@
 import { Codex, type ThreadEvent, type ThreadOptions } from "@openai/codex-sdk";
-import { readFileSync } from "fs";
 import {
   CODEX_BIN_PATH,
   CODEX_RUNTIME_HOME_DIR,
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
-  SYSTEM_PROMPT,
   WORK_DIR,
   normalizedCodexModel,
 } from "../config.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { updateThinkingStep } from "../parse/canonical.js";
 import { recordSdkAttemptFailure, trimBufferHead } from "../runtime/buffers.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
-import { log } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { log, readTurnPrompt, withSystemPrompt, errorText } from "../utils.js";
+import {
+  beginSdkAttempt,
+  buildStandardSdkAttemptResult,
+  finishSdkAttempt,
+} from "./attemptResult.js";
 import { resolvePinnedCliBinary } from "./claudeSdk.js";
 
 const CODEX_CLI_PACKAGE = "@openai/codex";
@@ -38,11 +39,6 @@ export function codexExecutablePath(): string {
     pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
     fallbackBinPath: CODEX_BIN_PATH,
   });
-}
-
-function readPromptText(): string {
-  const prompt = readFileSync("/tmp/design-prompt.txt", "utf8");
-  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\n\n" + prompt : prompt;
 }
 
 function codexEnvironment(): Record<string, string> {
@@ -87,21 +83,13 @@ function agentMessageDelta(
 export async function runCodexSdkAttempt(
   sessionMode: SessionMode,
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Codex SDK...",
-    sessionMode.mode === "resume"
-      ? "Restoring saved context..."
-      : "Creating Codex thread...",
-  );
-  log(
-    "runCodexSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
-  );
+  beginSdkAttempt("runCodexSdkAttempt", sessionMode, () => ({
+    label: "Starting Codex SDK...",
+    detail:
+      sessionMode.mode === "resume"
+        ? "Restoring saved context..."
+        : "Creating Codex thread...",
+  }));
 
   let attemptOutput = "";
   let lastEventAt = Date.now();
@@ -156,9 +144,12 @@ export async function runCodexSdkAttempt(
   };
 
   try {
-    const streamed = await thread.runStreamed(readPromptText(), {
-      signal: abortController.signal,
-    });
+    const streamed = await thread.runStreamed(
+      withSystemPrompt(readTurnPrompt()),
+      {
+        signal: abortController.signal,
+      },
+    );
     for await (const event of streamed.events) {
       lastEventAt = Date.now();
       const delta = agentMessageDelta(event, agentTextByItem);
@@ -181,7 +172,7 @@ export async function runCodexSdkAttempt(
       if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     if (!abortController.signal.aborted || !attemptErrorMessage) {
       attemptErrorMessage = message;
     }
@@ -194,37 +185,16 @@ export async function runCodexSdkAttempt(
     recordSdkAttemptFailure(attemptErrorMessage);
   }
 
-  const code =
-    sawCompletedTurn &&
-    !turnFailed &&
-    !attemptErrorMessage &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runCodexSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawCompletedTurn=" +
-      sawCompletedTurn +
-      ", turnFailed=" +
-      turnFailed +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") +
-      ")",
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runCodexSdkAttempt",
+      sawResult: sawCompletedTurn,
+      resultIsError: turnFailed || Boolean(attemptErrorMessage),
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "error",
+      errorMessage: attemptErrorMessage,
+    }),
   );
-
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime,
-  });
 }

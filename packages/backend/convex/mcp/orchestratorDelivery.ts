@@ -1,4 +1,8 @@
-import { normalizeAIModel, type AIModel } from "../validators";
+import {
+  normalizeAIModel,
+  type AIModel,
+  type ChatEntityKind,
+} from "../validators";
 
 /**
  * How an orchestrator-sent message must reach a child agent.
@@ -125,7 +129,7 @@ export const SANDBOX_STOP_SETTLE_TIMEOUT_MS = 120_000;
  * workflow slot, so "busy" means something different on each (see
  * `orchestratorSendMessage`).
  */
-export type ChatTargetKind = "session" | "task" | "project";
+export type ChatTargetKind = ChatEntityKind;
 
 /** One mutation to run as the sending user, by Convex function path. */
 export interface SessionMessageCall {

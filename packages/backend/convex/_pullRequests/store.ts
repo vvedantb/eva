@@ -5,9 +5,13 @@ import {
   prOriginValidator,
   prOwnerValidator,
   prStateValidator,
+  type ChatEntityKind,
 } from "../validators";
 import type { SandboxOwner } from "../_sandbox/owner";
-import { buildProjectBranchName } from "../_git/branchNames";
+import {
+  buildTaskBranchName,
+  resolveProjectBranchName,
+} from "../_git/branchNames";
 import { extractPrNumber } from "../_github/prUrl";
 import {
   schedulePrLifecycleActions,
@@ -377,7 +381,10 @@ export async function reopenArchivedPullRequests(
       continue;
     }
     const ready = asReady ?? row.stateOnArchive === "open";
-    await schedulePullRequestAction(ctx, row, { kind: "reopen", asReady: ready });
+    await schedulePullRequestAction(ctx, row, {
+      kind: "reopen",
+      asReady: ready,
+    });
     await ctx.db.patch(row._id, {
       state: ready ? "open" : "draft",
       stateOnArchive: undefined,
@@ -434,7 +441,7 @@ const EVA_OWNER_BRANCH = /^eva\/(session|task|project)-([^-/]+)(-.+)?$/;
 
 export function parseEvaOwnerBranch(
   branch: string,
-): { kind: "session" | "task" | "project"; id: string } | null {
+): { kind: ChatEntityKind; id: string } | null {
   const match = EVA_OWNER_BRANCH.exec(branch);
   if (!match) return null;
   const kind = match[1];
@@ -520,7 +527,7 @@ export async function resolvePrOwnerFromBranch(
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
-      isMainBranch: args.branch === `eva/task-${task._id}`,
+      isMainBranch: args.branch === buildTaskBranchName(task._id),
     };
   }
 
@@ -532,9 +539,7 @@ export async function resolvePrOwnerFromBranch(
     owner: { kind: "project", projectId: project._id },
     repoId: project.repoId,
     isMainBranch:
-      args.branch ===
-      (project.branchName ??
-        buildProjectBranchName(project._id, project.branchVersion)),
+      args.branch === resolveProjectBranchName(project._id, project),
   };
 }
 
@@ -549,8 +554,7 @@ export function sessionRepoPullRequest(
 ): Doc<"pullRequests"> | undefined {
   const forRepo = rows.filter(
     (row) =>
-      row.owner.kind === "session" &&
-      row.owner.sessionRepoId === sessionRepoId,
+      row.owner.kind === "session" && row.owner.sessionRepoId === sessionRepoId,
   );
   return sessionRepoId === undefined
     ? forRepo.find((row) => row.primary)

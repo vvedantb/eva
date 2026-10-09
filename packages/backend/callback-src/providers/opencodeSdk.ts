@@ -1,14 +1,11 @@
-import { readFileSync } from "fs";
 import {
   AGENT_CWD,
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
-  SYSTEM_PROMPT,
   normalizedOpencodeModel,
 } from "../config.js";
 import { evaMcpServers } from "../evaMcp.js";
-import { updateThinkingStep } from "../parse/canonical.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import {
   appendToRawLogFile,
@@ -16,14 +13,18 @@ import {
   recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import {
   syncOpencodeStateToPersist,
   writeOpencodeSessionState,
 } from "../session/opencodeSession.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
-import { log } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { log, readTurnPrompt, withSystemPrompt, errorText } from "../utils.js";
+import {
+  beginSdkAttempt,
+  buildStandardSdkAttemptResult,
+  finishSdkAttempt,
+} from "./attemptResult.js";
 import { resolvePinnedSdkEntry } from "./claudeSdk.js";
 import {
   ensureOpencodeServer,
@@ -71,10 +72,6 @@ async function loadOpencodeSdk(): Promise<OpencodeSdkModule> {
     })
   );
   return mod;
-}
-
-function readPromptText(): string {
-  return readFileSync("/tmp/design-prompt.txt", "utf8");
 }
 
 /**
@@ -283,10 +280,7 @@ export async function ensureEvaMcpServers(
       );
     }
   } catch (error) {
-    log(
-      "opencode mcp registration failed: " +
-        (error instanceof Error ? error.message : String(error)),
-    );
+    log("opencode mcp registration failed: " + errorText(error));
   }
 }
 
@@ -320,21 +314,13 @@ function requireData<TData>(
 export async function runOpencodeSdkAttempt(
   sessionMode: SessionMode,
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Opencode agent...",
-    sessionMode.mode === "resume"
-      ? "Restoring saved context..."
-      : "Creating Opencode session...",
-  );
-  log(
-    "runOpencodeSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
-  );
+  beginSdkAttempt("runOpencodeSdkAttempt", sessionMode, () => ({
+    label: "Starting Opencode agent...",
+    detail:
+      sessionMode.mode === "resume"
+        ? "Restoring saved context..."
+        : "Creating Opencode session...",
+  }));
 
   let attemptOutput = "";
   // Two clocks, deliberately: `lastEventAt` counts real stream silence and
@@ -410,10 +396,7 @@ export async function runOpencodeSdkAttempt(
     sessionId = await createFreshSession();
   }
 
-  const promptText = readPromptText();
-  const combinedPrompt = SYSTEM_PROMPT
-    ? SYSTEM_PROMPT + "\n\n" + promptText
-    : promptText;
+  const combinedPrompt = withSystemPrompt(readTurnPrompt());
   const model = splitOpencodeModel(normalizedOpencodeModel);
 
   const emitState = createPartEmitState();
@@ -634,7 +617,7 @@ export async function runOpencodeSdkAttempt(
     );
     sawResult = true;
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     attemptErrorMessage = messageText;
     log("runOpencodeSdkAttempt: turn failed — " + messageText);
     recordSdkAttemptFailure(messageText, {
@@ -646,35 +629,16 @@ export async function runOpencodeSdkAttempt(
     streamAbort.abort();
   }
 
-  const code =
-    sawResult &&
-    !resultIsError &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runOpencodeSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawResult=" +
-      sawResult +
-      ", resultIsError=" +
-      resultIsError +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") +
-      ")",
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runOpencodeSdkAttempt",
+      sawResult,
+      resultIsError,
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "turnError",
+      errorMessage: attemptErrorMessage,
+    }),
   );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime,
-  });
 }

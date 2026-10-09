@@ -174,7 +174,7 @@ describe("reconcileStoppedSandboxStatus", () => {
  */
 describe("resumeAfterStop call sites", () => {
   const files = [
-    // tryResumeSandbox, reached only from prepareSandbox/createOrResumeSandbox.
+    // tryResumeSandbox, reached only from createOrResumeSandbox.
     "_sandbox_runtime/git.ts",
     // resumeReusedSandbox — stop-checked either side of ensureSandboxRunning.
     "_sandbox_runtime/sessions.ts",

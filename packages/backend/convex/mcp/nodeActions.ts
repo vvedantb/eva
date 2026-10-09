@@ -3,7 +3,7 @@
 import { v, type Infer } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
-import { jwtVerify, SignJWT, importJWK } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,27 +27,24 @@ import {
   PROJECT_CHAT_STREAM_PREFIX,
   TASK_CHAT_STREAM_PREFIX,
 } from "../_chat/surfaceAdapters";
-import { prStateValidator } from "../validators";
+import {
+  chatEntityKindValidator,
+  prStateValidator,
+  type ChatEntityKind,
+} from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
+import { requireEnv } from "../_env/requireEnv";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
+import { signSandboxUserJwt } from "../sandboxJwt";
 import { chatSourceArg } from "./toolShared";
+import { errorText } from "../_shared/errors";
+import { sleep } from "../_shared/async";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Environment Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function getJwtSecret(): string {
-  const secret = process.env.MCP_JWT_SECRET;
-  if (!secret) throw new Error("MCP_JWT_SECRET is required");
-  return secret;
-}
-
-function getClerkSecretKey(): string {
-  const key = process.env.CLERK_SECRET_KEY;
-  if (!key) throw new Error("CLERK_SECRET_KEY is required");
-  return key;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -145,7 +142,7 @@ export const issueTokens = internalAction({
     refresh_token: v.string(),
   }),
   handler: async (_ctx, { clerkUserId, clientId }) => {
-    const secret = new TextEncoder().encode(getJwtSecret());
+    const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
     return await createOauthTokens(clerkUserId, clientId, secret);
   },
 });
@@ -170,7 +167,7 @@ export const refreshToken = internalAction({
   ),
   handler: async (_ctx, { refreshToken, clientId }) => {
     try {
-      const secret = new TextEncoder().encode(getJwtSecret());
+      const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
       const { payload } = await jwtVerify(refreshToken, secret, {
         issuer: "eva",
         audience: "mcp-oauth",
@@ -181,7 +178,9 @@ export const refreshToken = internalAction({
         return refreshFailure("Invalid refresh token");
       }
 
-      const clerk = createClerkClient({ secretKey: getClerkSecretKey() });
+      const clerk = createClerkClient({
+        secretKey: requireEnv("CLERK_SECRET_KEY"),
+      });
       await clerk.users.getUser(claims.data.sub);
       const tokens = await createOauthTokens(claims.data.sub, clientId, secret);
 
@@ -199,16 +198,14 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(
-        v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-      ),
+      entityKind: v.optional(chatEntityKindValidator),
     }),
     v.null(),
   ),
   handler: async (_ctx, { token }) => {
     // Try OAuth token first
     try {
-      const secret = new TextEncoder().encode(getJwtSecret());
+      const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
       const { payload } = await jwtVerify(token, secret, {
         issuer: "eva",
         audience: "mcp-oauth",
@@ -219,7 +216,9 @@ export const verifyAccessToken = internalAction({
         // Best-effort Clerk lookup — agent/test users may not exist in Clerk but
         // a verified JWT sub is still authoritative for MCP auth.
         try {
-          const clerk = createClerkClient({ secretKey: getClerkSecretKey() });
+          const clerk = createClerkClient({
+            secretKey: requireEnv("CLERK_SECRET_KEY"),
+          });
           await clerk.users.getUser(claims.data.sub);
         } catch (err) {
           console.error(
@@ -329,25 +328,11 @@ function wrapQueryHandler(handlerBody: string): string {
 }
 
 // In-memory caches (reset on action cold starts)
-let cachedDeployKey: { value: string; expiresAt: number } | null = null;
-const userIdCache = new Map<string, { userId: string; expiresAt: number }>();
 const repoCredentialsCache = new Map<
   string,
   { convexUrl: string; deployKey: string; expiresAt: number }
 >();
 const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
-
-function getConvexSiteUrl(): string {
-  const url = process.env.CONVEX_SITE_URL;
-  if (!url) throw new Error("CONVEX_SITE_URL is required");
-  return url;
-}
-
-function getBootstrapSecret(): string {
-  const secret = process.env.MCP_BOOTSTRAP_SECRET;
-  if (!secret) throw new Error("MCP_BOOTSTRAP_SECRET is required");
-  return secret;
-}
 
 /**
  * Eva's own Convex API URL, used for the `runAsUser` calls below.
@@ -362,32 +347,7 @@ function getBootstrapSecret(): string {
 function getEvaConvexCloudUrl(): string {
   const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
-  return getConvexSiteUrl().replace(".convex.site", ".convex.cloud");
-}
-
-/** Deployed web app origin, used to build hosted artifact view links. */
-function getWebAppUrl(): string {
-  const url = process.env.WEB_APP_URL;
-  if (!url) throw new Error("WEB_APP_URL is required");
-  return url.replace(/\/$/, "");
-}
-
-async function getDeployKey(): Promise<string> {
-  if (cachedDeployKey && cachedDeployKey.expiresAt > Date.now()) {
-    return cachedDeployKey.value;
-  }
-  const response = await fetch(`${getConvexSiteUrl()}/api/mcp/bootstrap`, {
-    headers: { Authorization: `MCPBootstrap ${getBootstrapSecret()}` },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to bootstrap deploy key: HTTP ${response.status}`);
-  }
-  const body = z.object({ deployKey: z.string() }).parse(await response.json());
-  cachedDeployKey = {
-    value: body.deployKey,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  };
-  return body.deployKey;
+  return requireEnv("CONVEX_SITE_URL").replace(".convex.site", ".convex.cloud");
 }
 
 async function runTestQueryRemote(
@@ -408,52 +368,13 @@ async function runTestQueryRemote(
   return { value: result.value, logLines: result.logLines ?? [] };
 }
 
-async function resolveUserByClerkId(
-  deployKey: string,
-  clerkUserId: string,
-): Promise<string | null> {
-  const cached = userIdCache.get(clerkUserId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.userId;
-  }
-
-  const convexUrl = getEvaConvexCloudUrl();
-  const source = wrapQueryHandler(
-    `const user = await ctx.db.query("users").withIndex("by_clerk_id", q => q.eq("clerkId", ${JSON.stringify(clerkUserId)})).first();
-    return user ? user._id : null;`,
-  );
-  const result = await runTestQueryRemote(convexUrl, deployKey, source);
-  if (typeof result.value === "string") {
-    userIdCache.set(clerkUserId, {
-      userId: result.value,
-      expiresAt: Date.now() + CACHE_TTL_MS,
-    });
-    return result.value;
-  }
-  return null;
-}
-
 async function signUserJwt(clerkUserId: string): Promise<string> {
   const cached = userJwtCache.get(clerkUserId);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.jwt;
   }
 
-  const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
-  if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
-
-  const issuer = getConvexSiteUrl();
-  const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
-  const kid = privateKeyJwk.kid ?? "sandbox-1";
-  const key = await importJWK(privateKeyJwk, "ES256");
-
-  const jwt = await new SignJWT({ sub: clerkUserId })
-    .setProtectedHeader({ alg: "ES256", kid })
-    .setIssuer(issuer)
-    .setAudience("convex")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(key);
+  const jwt = await signSandboxUserJwt(clerkUserId, "1h");
 
   userJwtCache.set(clerkUserId, {
     jwt,
@@ -549,55 +470,13 @@ async function ensureUserExists(clerkUserId: string): Promise<string> {
 
 export const getContext = internalAction({
   args: { clerkUserId: v.string() },
-  returns: v.object({ deployKey: v.string(), userId: v.string() }),
-  handler: async (_ctx, { clerkUserId }) => {
-    const deployKey = await getDeployKey();
-    let userId = await resolveUserByClerkId(deployKey, clerkUserId);
-    if (!userId) userId = await ensureUserExists(clerkUserId);
-    return { deployKey, userId };
-  },
-});
-
-const repoSchema = z.object({
-  id: z.string(),
-  owner: z.string(),
-  name: z.string(),
-  rootDirectory: z.string().nullable(),
-  mcpRootPrompt: z.string().nullable(),
-});
-
-export const listUserRepos = internalAction({
-  args: { userId: v.string() },
-  returns: v.array(
-    v.object({
-      id: v.string(),
-      owner: v.string(),
-      name: v.string(),
-      rootDirectory: v.union(v.string(), v.null()),
-      mcpRootPrompt: v.union(v.string(), v.null()),
-    }),
-  ),
-  handler: async (_ctx, { userId }) => {
-    const deployKey = await getDeployKey();
-    const convexUrl = getEvaConvexCloudUrl();
-
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const toEntry = (r) => ({ id: r._id, owner: r.owner, name: r.name, rootDirectory: r.rootDirectory ?? null, mcpRootPrompt: r.mcpRootPrompt ?? null });
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teamRepoResults = await Promise.all(memberships.map(m => ctx.db.query("githubRepos").withIndex("by_team", q => q.eq("teamId", m.teamId)).collect()));
-      const connectedRepos = await ctx.db.query("githubRepos").withIndex("by_connected_by", q => q.eq("connectedBy", userId)).collect();
-      const seen = new Set();
-      const result = [];
-      for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        result.push(toEntry(repo));
-      }
-      return result;`,
-    );
-    const result = await runTestQueryRemote(convexUrl, deployKey, source);
-    return z.array(repoSchema).parse(result.value);
+  returns: v.object({ userId: v.string() }),
+  handler: async (ctx, { clerkUserId }): Promise<{ userId: string }> => {
+    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+      clerkId: clerkUserId,
+    });
+    const userId = user?._id ?? (await ensureUserExists(clerkUserId));
+    return { userId };
   },
 });
 
@@ -792,7 +671,7 @@ export const runTestQuery = internalAction({
       const result = await runTestQueryRemote(convexUrl, deployKey, source);
       return { ok: true, value: result.value, logLines: result.logLines };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorText(err);
       return { ok: false, error: formatConvexQueryError(message) };
     }
   },
@@ -802,28 +681,6 @@ export const runTestQuery = internalAction({
 // Team + artifact actions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const teamSchema = z.object({ id: z.string(), name: z.string() });
-
-export const listUserTeams = internalAction({
-  args: { userId: v.string() },
-  returns: v.array(v.object({ id: v.string(), name: v.string() })),
-  handler: async (_ctx, { userId }) => {
-    const deployKey = await getDeployKey();
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teams = await Promise.all(memberships.map(m => ctx.db.get(m.teamId)));
-      return teams.filter(Boolean).map(t => ({ id: t._id, name: t.name }));`,
-    );
-    const result = await runTestQueryRemote(
-      getEvaConvexCloudUrl(),
-      deployKey,
-      source,
-    );
-    return z.array(teamSchema).parse(result.value);
-  },
-});
-
 export const createArtifact = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -832,9 +689,7 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
-    sourceKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    sourceKind: v.optional(chatEntityKindValidator),
     sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
@@ -898,7 +753,7 @@ export const createArtifact = internalAction({
 
     return {
       artifactId,
-      viewUrl: `${getWebAppUrl()}/artifacts/${artifactId}`,
+      viewUrl: `${getEvaBaseUrl()}/artifacts/${artifactId}`,
     };
   },
 });
@@ -913,7 +768,7 @@ export const getArtifact = internalAction({
     if (artifact === null) return null;
     return {
       artifact,
-      viewUrl: `${getWebAppUrl()}/artifacts/${artifactId}`,
+      viewUrl: `${getEvaBaseUrl()}/artifacts/${artifactId}`,
     };
   },
 });
@@ -929,7 +784,7 @@ export const listArtifacts = internalAction({
       {},
     );
     if (!Array.isArray(artifacts)) return [];
-    const webAppUrl = getWebAppUrl();
+    const webAppUrl = getEvaBaseUrl();
     return artifacts.map((artifact) => {
       const id =
         artifact !== null &&
@@ -955,23 +810,8 @@ export const listArtifacts = internalAction({
 // master can reach every agent the user can reach and nothing more.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * State, stop and watch reach all three chat surfaces, including a project's
- * sandbox chat. Listing still only enumerates sessions and tasks.
- */
-const agentKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-type AgentKind = "session" | "task" | "project";
-
-/** Every surface a chat message can be sent into. */
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
+// State, stop and watch reach all three chat surfaces, including a project's
+// sandbox chat. Listing still only enumerates sessions and tasks.
 
 /** The user-authorised read that proves the caller may reach each surface. */
 const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
@@ -981,7 +821,7 @@ const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
 };
 
 const orchestratorAgentValidator = v.object({
-  kind: agentKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   repo: v.string(),
@@ -993,7 +833,7 @@ const orchestratorAgentValidator = v.object({
 });
 
 interface OrchestratorAgent {
-  kind: AgentKind;
+  kind: ChatEntityKind;
   id: string;
   numId?: number;
   repo: string;
@@ -1107,7 +947,7 @@ const TRANSCRIPT_CHAR_LIMIT = 2000;
  */
 async function setWatchedByAve(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: ChatEntityKind,
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
@@ -1118,7 +958,7 @@ async function setWatchedByAve(
 }
 
 /** The watch-pointer mutation per surface, and the id argument it takes. */
-const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
+const WATCH_MUTATION: Record<ChatEntityKind, { fn: string; idArg: string }> = {
   session: { fn: "orchestratorWatch:setSessionWatchedBy", idArg: "sessionId" },
   task: { fn: "orchestratorWatch:setTaskWatchedBy", idArg: "taskId" },
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
@@ -1134,7 +974,7 @@ const aveThreadPointerSchema = z.object({ _id: z.string() }).nullable();
  */
 async function registerWatchIfAve(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: ChatEntityKind,
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
@@ -1229,7 +1069,7 @@ export const orchestratorListAgents = internalAction({
  * otherwise make `internal` depend on itself.
  */
 const orchestratorAgentStateValidator = v.object({
-  kind: agentKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
@@ -1272,7 +1112,7 @@ const orchestratorAgentStateValidator = v.object({
 export const orchestratorGetAgentState = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     transcriptTail: v.number(),
   },
@@ -1386,10 +1226,6 @@ export const orchestratorGetAgentState = internalAction({
   },
 });
 
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 type ChatDocHit =
   | { kind: "session"; doc: z.infer<typeof sessionDocSchema> }
   | { kind: "task"; doc: z.infer<typeof agentTaskSchema> }
@@ -1458,7 +1294,7 @@ async function ensureEntitySandboxActive(
         [surface.idArg]: id,
       });
     },
-    sleep: delay,
+    sleep,
   });
 }
 
@@ -1500,7 +1336,7 @@ function chatDelivery(
 export const orchestratorSendMessage = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
@@ -1558,7 +1394,7 @@ export const orchestratorSendMessage = internalAction({
 export const orchestratorStopAgent = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({ buildRunning: v.boolean() }),
@@ -1617,7 +1453,7 @@ export const orchestratorStopAgent = internalAction({
 export const mcpStartEntitySandbox = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({
@@ -1639,7 +1475,7 @@ export const mcpStartEntitySandbox = internalAction({
 export const mcpStopEntitySandbox = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({
@@ -1677,7 +1513,7 @@ export const mcpStopEntitySandbox = internalAction({
     const deadline = Date.now() + SANDBOX_STOP_SETTLE_TIMEOUT_MS;
     let settled = "stopping";
     while (Date.now() < deadline) {
-      await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
+      await sleep(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
       settled = await readEntitySandboxStatus(clerkUserId, kind, id);
       if (settled !== "stopping") break;
     }
@@ -1834,7 +1670,7 @@ export const orchestratorCreateSession = internalAction({
 export const orchestratorSetWatch = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     aveThreadId: v.optional(v.string()),
   },
@@ -1863,34 +1699,16 @@ export const resolveSupabaseToken = internalAction({
       return cached.token;
     }
 
-    const deployKey = await getDeployKey();
-    const userId = await resolveUserByClerkId(deployKey, clerkUserId);
-    if (!userId) return null;
-
-    // Get repos and search for SUPABASE_ACCESS_TOKEN
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teamRepoResults = await Promise.all(memberships.map(m => ctx.db.query("githubRepos").withIndex("by_team", q => q.eq("teamId", m.teamId)).collect()));
-      const connectedRepos = await ctx.db.query("githubRepos").withIndex("by_connected_by", q => q.eq("connectedBy", userId)).collect();
-      const seen = new Set();
-      const result = [];
-      for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        result.push(repo._id);
-      }
-      return result;`,
-    );
-    const result = await runTestQueryRemote(
-      getEvaConvexCloudUrl(),
-      deployKey,
-      source,
-    );
-    const repoIds = z.array(z.string()).parse(result.value);
+    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+      clerkId: clerkUserId,
+    });
+    if (!user) return null;
+    const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
+      userId: user._id,
+    });
 
     // Search for Supabase token in each repo's env vars
-    for (const repoId of repoIds) {
+    for (const { id: repoId } of repos) {
       try {
         const vars: EnvVar[] = await ctx.runAction(
           internal.mcp.routes.getDecryptedRepoEnvVars,
@@ -1924,9 +1742,7 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    entityKind: v.optional(chatEntityKindValidator),
     body: v.string(),
   },
   returns: v.object({

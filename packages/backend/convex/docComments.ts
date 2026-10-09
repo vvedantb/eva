@@ -1,16 +1,15 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
-import type { DatabaseReader } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { createNotification, truncateNotificationText } from "./notifications";
 import { ensureDocSubscribed, notifyDocSubscribers } from "./docSubscribers";
-import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import { authQuery, authMutation } from "./functions";
 import { internalMutation } from "./_generated/server";
 import {
   authorDisplayName,
   teamMentionRecipients,
 } from "./_mentions/mentionRecipients";
 import { docCommentFields } from "./validators";
-import { hasCodebaseRepoAccess } from "./_githubRepos/helpers";
+import { findDocWithAccess } from "./_docs/access";
 
 const docCommentValidator = v.object({
   _id: v.id("docComments"),
@@ -25,24 +24,13 @@ function buildDocCommentNotificationMessage(content: string): string {
     : "New comment added on this document.";
 }
 
-async function canAccessDoc(
-  db: DatabaseReader,
-  userId: Id<"users">,
-  doc: { repoId: Id<"githubRepos">; kind?: "document" | "pr-recap" },
-): Promise<boolean> {
-  if (doc.kind === "pr-recap") {
-    return hasCodebaseRepoAccess(db, doc.repoId, userId);
-  }
-  return hasRepoAccess(db, doc.repoId, userId);
-}
-
 /** Lists all comments for a doc, sorted oldest first. */
 export const listByDoc = authQuery({
   args: { docId: v.id("docs") },
   returns: v.array(docCommentValidator),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !(await canAccessDoc(ctx.db, ctx.userId, doc))) return [];
+    const doc = await findDocWithAccess(ctx.db, args.docId, ctx.userId);
+    if (!doc) return [];
     const comments = await ctx.db
       .query("docComments")
       .withIndex("by_doc", (q) => q.eq("docId", args.docId))
@@ -65,8 +53,8 @@ export const create = authMutation({
   },
   returns: v.id("docComments"),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !(await canAccessDoc(ctx.db, ctx.userId, doc))) {
+    const doc = await findDocWithAccess(ctx.db, args.docId, ctx.userId);
+    if (!doc) {
       throw new Error("Document not found");
     }
 
@@ -177,9 +165,8 @@ export const setResolved = authMutation({
     const comment = await ctx.db.get(args.id);
     if (!comment) throw new Error("Comment not found");
     if (comment.parentId) throw new Error("Only root comments can be resolved");
-    const doc = await ctx.db.get(comment.docId);
-    if (!doc || !(await canAccessDoc(ctx.db, ctx.userId, doc)))
-      throw new Error("Comment not found");
+    const doc = await findDocWithAccess(ctx.db, comment.docId, ctx.userId);
+    if (!doc) throw new Error("Comment not found");
 
     if (args.resolved) {
       await ctx.db.patch(args.id, {

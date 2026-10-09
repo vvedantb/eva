@@ -1,15 +1,12 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./startRun";
+import { startTaskRun } from "./startRun";
 import { internalMutation } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { hasActiveRun, isFirstTaskOnBranch } from "../functions";
 import { isDaytonaNetworkIssue, buildQuickTaskRetryDelayMs } from "./recovery";
-import { buildProjectBranchName } from "../_projects/helpers";
+import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { normalizeAIModel } from "../validators";
-import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
 import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
+import { scheduleTaskExecutionAt } from "../_scheduling/helpers";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -62,17 +59,7 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
 
     const delayMs = args.delayMs ?? buildQuickTaskRetryDelayMs();
     const scheduledAt = Date.now() + delayMs;
-    const functionId = await ctx.scheduler.runAfter(
-      delayMs,
-      internal.taskWorkflow.executeScheduledTask,
-      { taskId: args.taskId, scheduledAt },
-    );
-
-    await ctx.db.patch(args.taskId, {
-      scheduledAt,
-      scheduledFunctionId: functionId,
-      updatedAt: Date.now(),
-    });
+    await scheduleTaskExecutionAt(ctx, args.taskId, scheduledAt);
 
     const existingError = run.error ?? "Run failed";
     await ctx.db.patch(args.runId, {
@@ -135,38 +122,12 @@ export const executeScheduledTask = internalMutation({
       task.projectId,
     );
 
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: args.taskId,
-      status: "queued",
-      logs: [],
-      startedAt: now,
-      // Carry through any parked change-request comment so a re-run started via
-      // the scheduler is still labelled "made changes" on the timeline.
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        task.providerAccountId,
-        task.createdBy,
-      ),
-      model: normalizeAIModel(task.model),
-    });
-    await setTaskLastRunStartedAt(ctx, args.taskId, task.repoId, now);
-
-    await ctx.db.patch(args.taskId, {
-      ...clearSchedule,
-      status: "in_progress",
-      updatedAt: now,
-      pendingChangeRequestCommentId: undefined,
-    });
-
-    let branchName: string | undefined;
-    if (task.projectId) {
-      const project = await ctx.db.get(task.projectId);
-      branchName = project
-        ? (project.branchName ??
-          buildProjectBranchName(task.projectId, project.branchVersion))
-        : buildProjectBranchName(task.projectId);
-    }
+    const branchName = task.projectId
+      ? resolveProjectBranchName(
+          task.projectId,
+          await ctx.db.get(task.projectId),
+        )
+      : undefined;
 
     const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
       ctx.db,
@@ -174,19 +135,20 @@ export const executeScheduledTask = internalMutation({
       repo,
     );
 
-    await startTaskRunWorkflow(ctx, {
-      runId,
-      taskId: args.taskId,
-      repoId: task.repoId,
-      installationId: repo.installationId,
-      projectId: task.projectId,
-      branchName,
+    await ctx.db.patch(args.taskId, clearSchedule);
+    const runId = await startTaskRun(ctx, {
+      task,
+      repo,
+      userId: task.createdBy,
       baseBranch,
       isFirstTaskOnBranch: firstOnBranch,
-      model: task.model,
-      providerAccountId: task.providerAccountId,
-      credentialOwnerUserId: task.createdBy,
-      userId: task.createdBy,
+      branchName,
+      projectId: task.projectId,
+      // Carry through any parked change-request comment so a re-run started via
+      // the scheduler is still labelled "made changes" on the timeline.
+      triggeringCommentId: task.pendingChangeRequestCommentId,
+      clearPendingChangeRequest: true,
+      rollbackStatus: "todo",
     });
 
     return runId;

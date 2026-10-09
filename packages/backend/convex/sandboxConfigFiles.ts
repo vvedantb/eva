@@ -7,6 +7,7 @@ import {
 } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { findReposByOwnerAndName } from "./_githubRepos/helpers";
+import { sandboxConfigFileFields } from "./validators";
 
 /** Regex for safe filenames: alphanumeric, dash, underscore, dot only. */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -133,13 +134,7 @@ export const list = authQuery({
     v.object({
       _id: v.id("sandboxConfigFiles"),
       _creationTime: v.number(),
-      repoId: v.id("githubRepos"),
-      storageId: v.optional(v.id("_storage")),
-      chunks: v.optional(v.array(v.id("_storage"))),
-      fileName: v.string(),
-      fileSize: v.number(),
-      uploadedBy: v.id("users"),
-      createdAt: v.number(),
+      ...sandboxConfigFileFields,
     }),
   ),
   handler: async (ctx, args) => {

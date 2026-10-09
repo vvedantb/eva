@@ -4,6 +4,7 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { githubRepoFields } from "../validators";
 import { hasRepoAccess } from "../functions";
 import { pickSandboxRepoId } from "./sandboxRepoPick";
+import { findRepoEnvVarDoc } from "../_envVars/documentStore";
 
 export {
   pickDefaultVisibleAppRepo,
@@ -11,24 +12,6 @@ export {
   pickSnapshotCredentialRepoId,
   type AppRepoPickFields,
 } from "./sandboxRepoPick";
-
-/** True when the user connected the repo or shares its team. */
-export async function userCanAccessRepo(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  repo: Doc<"githubRepos">,
-): Promise<boolean> {
-  if (repo.connectedBy === userId) return true;
-  const teamId = repo.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
-}
 
 /** Resolves a repo ID to its parent repo ID if it is a sub-app, otherwise returns itself. */
 export async function resolveCanonicalRepoId(
@@ -185,10 +168,7 @@ export async function resolveSandboxRepoId(
 ): Promise<Id<"githubRepos">> {
   const siblingRepos = siblings ?? (await findSiblingRepos(db, workflowRepoId));
   return pickSandboxRepoId(workflowRepoId, siblingRepos, async (repoId) => {
-    const envDoc = await db
-      .query("repoEnvVars")
-      .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-      .first();
+    const envDoc = await findRepoEnvVarDoc(db, repoId);
     return (
       envDoc?.vars.some((entry) => entry.key === "VERCEL_PROJECT_ID") === true
     );

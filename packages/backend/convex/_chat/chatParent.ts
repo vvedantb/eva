@@ -1,15 +1,6 @@
-import { v } from "convex/values";
 import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-
-/** The chat surface a sandbox MCP token names. */
-export const chatEntityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
-type ChatEntityKind = typeof chatEntityKindValidator.type;
+import type { ChatEntityKind } from "../validators";
 
 type ChatParentId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
 

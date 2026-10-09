@@ -8,6 +8,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
   notificationTypeValidator,
+  notificationFields,
   notificationUrgencyValidator,
   withCommentAnchor,
 } from "./validators";
@@ -214,21 +215,7 @@ export function truncateNotificationText(content: string): string | null {
 const notificationValidator = v.object({
   _id: v.id("notifications"),
   _creationTime: v.number(),
-  userId: v.id("users"),
-  type: notificationTypeValidator,
-  title: v.string(),
-  message: v.optional(v.string()),
-  read: v.boolean(),
-  href: v.optional(v.string()),
-  repoId: v.optional(v.id("githubRepos")),
-  createdAt: v.number(),
-  contextLabel: v.optional(v.string()),
-  emailedAt: v.optional(v.number()),
-  commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
-  archivedAt: v.optional(v.number()),
-  // Undefined = not yet routed (a mention whose routing action has not landed)
-  // or legacy; treated as normal everywhere it is read.
-  urgency: v.optional(notificationUrgencyValidator),
+  ...notificationFields,
 });
 
 /**

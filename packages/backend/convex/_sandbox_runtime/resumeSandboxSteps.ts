@@ -1,8 +1,6 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
-import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
-import type { SandboxProviderKind } from "../_sandbox/provider";
 
 type EnsureSandboxStartedArgs = {
   sandboxId?: string;
@@ -40,31 +38,23 @@ async function setResumeActivity(
  * wait on: the actual resume is lazy, via `ensureSandboxRunning` in the start
  * action.
  *
- * Returns the resolved `provider` and `thawId` — the id to reuse, or undefined
- * when there is nothing to resume and the caller should create a fresh sandbox.
+ * Returns `thawId` — the id to reuse, or undefined when there is nothing to
+ * resume and the caller should create a fresh sandbox.
  */
 export async function ensureSandboxStartedSteps(
   step: WorkflowCtx,
   args: EnsureSandboxStartedArgs,
-): Promise<{ provider: SandboxProviderKind; thawId: string | undefined }> {
+): Promise<{ thawId: string | undefined }> {
   const thawStartedAt = Date.now();
   console.log(
     `[sandbox] ensureSandboxStartedSteps begin repoId=${args.repoId} sandboxId=${args.sandboxId ?? "none"} streamingEntityId=${args.streamingEntityId ?? "none"}`,
   );
-  const provider = await step.runAction(
-    internal.sandbox.getSandboxProviderKind,
-    {
-      repoId: args.repoId,
-    },
-  );
-  const thawId = preferPersistedSandboxId({
-    sandboxId: args.sandboxId,
-  });
+  const thawId = args.sandboxId;
   if (!thawId) {
     console.log(
-      `[sandbox] ensureSandboxStartedSteps no thaw id (provider=${provider}, elapsed=${Date.now() - thawStartedAt}ms)`,
+      `[sandbox] ensureSandboxStartedSteps no thaw id (elapsed=${Date.now() - thawStartedAt}ms)`,
     );
-    return { provider, thawId };
+    return { thawId };
   }
 
   if (args.streamingEntityId && !args.sandboxRunning) {
@@ -77,5 +67,5 @@ export async function ensureSandboxStartedSteps(
   console.log(
     `[sandbox] ensureSandboxStartedSteps skip-kickoff thawId=${thawId} elapsed=${Date.now() - thawStartedAt}ms`,
   );
-  return { provider, thawId };
+  return { thawId };
 }

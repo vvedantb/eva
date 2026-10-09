@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
-import { authMutation, hasRepoAccess } from "../functions";
+import {
+  authMutation,
+  getProjectWithAccess,
+  hasRepoAccess,
+} from "../functions";
 import {
   aiModelValidator,
   normalizeAIModel,
@@ -202,11 +206,11 @@ export const updateBackgroundAgents = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (args.agents.length === 0) return null;
     const backgroundAgents = mergeBackgroundAgents(
       project.backgroundAgents,
@@ -235,11 +239,11 @@ export const requestStopBackgroundAgent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     const pending = project.pendingTaskStops ?? [];
     if (pending.includes(args.toolUseId)) return null;
     await ctx.db.patch(args.projectId, {
@@ -264,11 +268,11 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     const turnModel = normalizeAIModel(
       args.model ?? project.lastChatModel ?? project.model,
     );
@@ -377,7 +381,6 @@ export const completeSyntheticTurn = authMutation({
     return null;
   },
 });
-
 
 export const ensurePendingTurn = internalMutation({
   args: {

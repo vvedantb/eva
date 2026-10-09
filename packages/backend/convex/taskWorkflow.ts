@@ -33,5 +33,4 @@ export {
 export {
   handleCompletion,
   cancelExecution,
-  triggerExecution,
 } from "./_taskWorkflow/publicMutations";

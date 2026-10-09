@@ -1,5 +1,10 @@
 import type { JsonObject, JsonValue, ProgressStep } from "../types.js";
-import { shortenPath } from "../utils.js";
+import {
+  asJsonObject,
+  readStringField,
+  readTrimmedString,
+  shortenPath,
+} from "../utils.js";
 import { parseQuestionInput } from "./questionInput.js";
 import { STEP_FIELD_CAPS } from "./stepBudget.js";
 import {
@@ -189,15 +194,7 @@ export function cursorSdkToolToStep(
   name: string,
   args: JsonObject,
 ): ProgressStep {
-  const pickString = (keys: string[]): string => {
-    for (const key of keys) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return value;
-      }
-    }
-    return "";
-  };
+  const pickString = (keys: string[]): string => readStringField(args, keys);
   const rawPath = pickString([
     "path",
     "file_path",
@@ -400,38 +397,18 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
 }
 
 function getCodexFieldValue(item: JsonObject, keys: string[]): string {
-  const sources: JsonObject[] = [item];
-  if (
-    item.input &&
-    typeof item.input === "object" &&
-    !Array.isArray(item.input)
-  ) {
-    sources.push(item.input);
-  }
-  for (const source of sources) {
-    for (const key of keys) {
-      if (typeof source[key] === "string" && source[key].trim()) {
-        return source[key].trim();
-      }
-    }
-  }
-  return "";
+  return (
+    readStringField(item, keys).trim() ||
+    readStringField(asJsonObject(item.input), keys).trim()
+  );
 }
 
 export function getCodexThreadId(event: JsonObject): string {
-  if (typeof event.thread_id === "string" && event.thread_id.trim()) {
-    return event.thread_id.trim();
-  }
-  if (
-    event.thread &&
-    typeof event.thread === "object" &&
-    !Array.isArray(event.thread) &&
-    typeof event.thread.id === "string" &&
-    event.thread.id.trim()
-  ) {
-    return event.thread.id.trim();
-  }
-  return "";
+  return (
+    readTrimmedString(event.thread_id) ??
+    readTrimmedString(asJsonObject(event.thread).id) ??
+    ""
+  );
 }
 
 export function getCodexAgentMessageText(item: JsonObject): string {

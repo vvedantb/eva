@@ -8,8 +8,10 @@ import {
   notifySubscribers,
 } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
-import { preferPersistedSandboxId } from "./_sandbox/resolveExistingSandboxId";
-import { buildProjectBranchName } from "./_projects/helpers";
+import {
+  buildProjectBranchName,
+  resolveProjectBranchName,
+} from "./_git/branchNames";
 import {
   deriveProjectPhaseFromPrEvent,
   isProjectReviewPhase,
@@ -29,6 +31,7 @@ import {
   type PrState,
 } from "./_pullRequests/store";
 import { findReposByOwnerAndName } from "./_githubRepos/helpers";
+import { cancelScheduledFunction } from "./_scheduling/helpers";
 
 /** Webhook actions that can change a PR's tracked state or its title. */
 const TRACKED_ACTIONS = new Set([
@@ -215,12 +218,10 @@ async function applyProjectPrEvent(
     return false;
   }
 
-  const currentBranch =
-    project.branchName ??
-    buildProjectBranchName(projectId, project.branchVersion);
+  const currentBranch = resolveProjectBranchName(projectId, project);
   if (row.state === "merged" && row.headBranch === currentBranch) {
     const nextVersion = (project.branchVersion ?? 1) + 1;
-    const deleteId = preferPersistedSandboxId({ sandboxId: project.sandboxId });
+    const deleteId = project.sandboxId;
     if (deleteId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
         sandboxId: deleteId,
@@ -293,11 +294,7 @@ async function applyQuickTaskPrClosed(
   await ctx.db.patch(task._id, { status: newStatus, updatedAt: now });
 
   if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
+    await cancelScheduledFunction(ctx, task.scheduledFunctionId);
     await ctx.db.patch(task._id, {
       scheduledAt: undefined,
       scheduledFunctionId: undefined,

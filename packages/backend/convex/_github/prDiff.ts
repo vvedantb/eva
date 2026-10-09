@@ -6,7 +6,7 @@ import { z } from "zod";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
 import { getInstallationOctokit, getRepoOctokit } from "../githubAuth";
-import { extractPrNumber } from "./helpers";
+import { extractPrNumber } from "./prUrl";
 import {
   decodeGitHubContent,
   decodeGitHubContentBytes,

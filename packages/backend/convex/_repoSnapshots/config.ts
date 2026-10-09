@@ -3,7 +3,7 @@ import { internalQuery, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
-import { snapshotScheduleValidator } from "../validators";
+import { repoSnapshotFields, snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
@@ -53,18 +53,7 @@ export const getRepoSnapshot = authQuery({
     v.object({
       _id: v.id("repoSnapshots"),
       _creationTime: v.number(),
-      repoId: v.id("githubRepos"),
-      snapshotName: v.string(),
-      schedule: snapshotScheduleValidator,
-      enabled: v.optional(v.boolean()),
-      cronJobId: v.optional(v.string()),
-      workflowRef: v.optional(v.string()),
-      buildCommands: v.optional(v.array(v.string())),
-      seedCommands: v.optional(v.array(v.string())),
-      imageFingerprint: v.optional(v.string()),
-      baseSnapshotId: v.optional(v.string()),
-      createdAt: v.number(),
-      updatedAt: v.number(),
+      ...repoSnapshotFields,
     }),
     v.null(),
   ),

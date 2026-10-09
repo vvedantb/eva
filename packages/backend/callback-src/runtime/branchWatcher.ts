@@ -1,7 +1,7 @@
 import { statSync, watch, type FSWatcher } from "fs";
 import { ENTITY_ID, ENTITY_ID_FIELD, WORK_DIR } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
-import { log } from "../utils.js";
+import { log, errorText } from "../utils.js";
 import { git, readCurrentBranch } from "./gitExec.js";
 
 /**
@@ -109,10 +109,7 @@ async function runCheckLoop(): Promise<void> {
           lastReported = branch;
         } catch (error) {
           // Leave lastReported alone so the next tick retries this branch.
-          log(
-            "branchWatcher: report failed: " +
-              (error instanceof Error ? error.message : String(error)),
-          );
+          log("branchWatcher: report failed: " + errorText(error));
         }
       }
       if (recheckQueued) {
@@ -145,8 +142,7 @@ function watchHeadIn(gitDir: string): void {
     headWatcher.unref();
   } catch (error) {
     log(
-      "branchWatcher: fs.watch unavailable, polling only: " +
-        (error instanceof Error ? error.message : String(error)),
+      "branchWatcher: fs.watch unavailable, polling only: " + errorText(error),
     );
   }
 }

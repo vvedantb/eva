@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from "fs";
+import { mkdirSync } from "fs";
 import type {
   Agent,
   AgentOptions,
@@ -19,7 +19,6 @@ import {
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
   AGENT_CWD,
-  SYSTEM_PROMPT,
   cursorFastMode,
   cursorReasoningLevel,
   cursorUse1mContext,
@@ -34,7 +33,7 @@ import {
   recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import {
   syncCursorStateToPersist,
   writeCursorSessionState,
@@ -44,8 +43,12 @@ import type {
   ProviderAttemptResult,
   SessionMode,
 } from "../types.js";
-import { log } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { log, readTurnPrompt, withSystemPrompt, errorText } from "../utils.js";
+import {
+  beginSdkAttempt,
+  buildStandardSdkAttemptResult,
+  finishSdkAttempt,
+} from "./attemptResult.js";
 import { resolvePinnedSdkEntry, type JsonLike } from "./claudeSdk.js";
 
 const SDK_PACKAGE = "@cursor/sdk";
@@ -311,10 +314,6 @@ async function loadCursorSdkSqlite(): Promise<CursorSdkSqliteModule> {
   return mod;
 }
 
-function readPromptText(): string {
-  return readFileSync("/tmp/design-prompt.txt", "utf8");
-}
-
 /**
  * Serializes a fetched model list into the catalog JSON the SDK accepts, or
  * `null` when the list cannot stand in for the SDK's own fetch. The SDK rejects
@@ -400,7 +399,7 @@ async function resolveCursorModelSelection(
       listUnavailable = true;
     }
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     listUnavailable = true;
     log(
       "resolveCursorModelSelection: model list failed — keeping opted-in params only (" +
@@ -672,8 +671,7 @@ export async function runTurnWithResourceExhaustedRetries(deps: {
     try {
       outcome = await deps.runTurn();
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       if (
         !isResourceExhaustedMessage(messageText) ||
         retryDelayMs === undefined ||
@@ -737,16 +735,13 @@ export async function runCursorSdkAttempt(
   sessionMode: SessionMode,
   overrides: CursorAttemptOverrides = {},
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  const startupActivity = cursorAgentStartupActivity(sessionMode);
-  updateThinkingStep(startupActivity.label, startupActivity.detail);
-  log(
-    "runCursorSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
+  if (!process.env.CURSOR_API_KEY?.trim()) {
+    throw new Error(
+      "CURSOR_API_KEY is missing in the sandbox environment — the Cursor SDK cannot authenticate",
+    );
+  }
+  beginSdkAttempt("runCursorSdkAttempt", sessionMode, () =>
+    cursorAgentStartupActivity(sessionMode),
   );
 
   let attemptOutput = "";
@@ -870,8 +865,7 @@ export async function runCursorSdkAttempt(
       agent = await resumeSavedAgent(sessionMode.sessionId);
       resumedExistingAgent = true;
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       if (error instanceof Error && canReplaceCursorAgent(error)) {
         log(
           "runCursorSdkAttempt: saved agent gone — starting a fresh agent (" +
@@ -913,10 +907,9 @@ export async function runCursorSdkAttempt(
     agent = await createFreshAgent();
   }
 
-  const promptText = overrides.promptText ?? readPromptText();
-  const combinedPrompt = SYSTEM_PROMPT
-    ? SYSTEM_PROMPT + "\n\n" + promptText
-    : promptText;
+  const combinedPrompt = withSystemPrompt(
+    overrides.promptText ?? readTurnPrompt(),
+  );
 
   const healthTimer = setInterval(() => {
     const now = Date.now();
@@ -956,8 +949,7 @@ export async function runCursorSdkAttempt(
     try {
       return readCursorCostSnapshot(await activeAgent.getUsage());
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log(
         "runCursorSdkAttempt: getUsage failed — turn cost unavailable (" +
           messageText +
@@ -1205,7 +1197,7 @@ export async function runCursorSdkAttempt(
       }
     }
   } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : String(error);
+    const rawMessage = errorText(error);
     const messageText = isResourceExhaustedMessage(rawMessage)
       ? RESOURCE_EXHAUSTED_CHAT_MESSAGE
       : rawMessage;
@@ -1226,37 +1218,18 @@ export async function runCursorSdkAttempt(
     }
   }
 
-  const code =
-    sawResult &&
-    !resultIsError &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runCursorSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawResult=" +
-      sawResult +
-      ", resultIsError=" +
-      resultIsError +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") +
-      ")",
+  return buildStandardSdkAttemptResult(
+    finishSdkAttempt({
+      name: "runCursorSdkAttempt",
+      sawResult,
+      resultIsError,
+      timedOutForNoOutput,
+      timedOutForMaxRuntime,
+      output: attemptOutput,
+      errorLabel: "runError",
+      errorMessage: attemptErrorMessage,
+    }),
   );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime,
-  });
 }
 
 /** User-facing startup copy must say whether this turn resumes or creates. */

@@ -64,7 +64,11 @@ describe("Node and Python dependency drift are tracked apart", () => {
   });
 
   test("each install runs only when its own manifest drifted", () => {
-    const region = sliceFrom(sessions, "let drift = {", "completedSteps.push");
+    const region = sliceFrom(
+      sessions,
+      "let drift = {",
+      "clearSandboxSetupPending",
+    );
     // No baked snapshot means we cannot diff, so install everything.
     expect(region).toContain("node: true, python: true");
 

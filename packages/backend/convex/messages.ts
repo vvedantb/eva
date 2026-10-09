@@ -1,6 +1,6 @@
-import { v } from "convex/values";
+import { v, type ObjectType } from "convex/values";
 import { internalMutation } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import {
   assertMessageParentAccess,
@@ -148,49 +148,74 @@ export const activityLogById = authQuery({
   },
 });
 
+// Legacy single-media args: stale callback bundles still in flight during a
+// deploy call with these instead of mediaStorageIds. New callers use
+// mediaStorageIds.
+const mediaTargetArgs = {
+  parentId: parentIdValidator,
+  messageId: v.optional(v.id("messages")),
+  imageStorageId: v.optional(v.id("_storage")),
+  videoStorageId: v.optional(v.id("_storage")),
+  mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+};
+
+const updateLastArgs = {
+  ...mediaTargetArgs,
+  content: v.optional(v.string()),
+  activityLog: v.optional(v.string()),
+  variations: v.optional(v.array(variationValidator)),
+};
+
+/** Patches an exact message when supplied, otherwise the parent's latest message. */
+async function updateLastMessage(
+  ctx: MutationCtx,
+  args: ObjectType<typeof updateLastArgs>,
+): Promise<void> {
+  const target = args.messageId
+    ? await ctx.db.get(args.messageId)
+    : await ctx.db
+        .query("messages")
+        .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
+        .order("desc")
+        .first();
+  if (!target || target.parentId !== args.parentId) return;
+
+  const patch: {
+    content?: string;
+    activityLog?: string;
+    variations?: (typeof variationValidator.type)[];
+    mediaStorageIds?: Id<"_storage">[];
+  } = {};
+  if (args.content !== undefined) patch.content = args.content;
+  if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
+  if (args.variations !== undefined) patch.variations = args.variations;
+
+  // Accumulates within a turn, so a second capture cannot orphan the first.
+  const mediaStorageIds = appendMediaStorageIds(target.mediaStorageIds, args);
+  if (mediaStorageIds !== undefined) {
+    patch.mediaStorageIds = mediaStorageIds;
+  }
+
+  await ctx.db.patch(target._id, patch);
+}
+
 /** Updates an exact message when supplied, otherwise the latest legacy target. */
 export const updateLastInternal = internalMutation({
-  args: {
-    parentId: parentIdValidator,
-    messageId: v.optional(v.id("messages")),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-    variations: v.optional(v.array(variationValidator)),
-    // Legacy single-media args: stale callback bundles still in flight during
-    // a deploy call with these instead of mediaStorageIds. New callers use
-    // mediaStorageIds.
-    imageStorageId: v.optional(v.id("_storage")),
-    videoStorageId: v.optional(v.id("_storage")),
-    mediaStorageIds: v.optional(v.array(v.id("_storage"))),
-  },
+  args: updateLastArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
-    const target = args.messageId
-      ? await ctx.db.get(args.messageId)
-      : await ctx.db
-          .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
-          .order("desc")
-          .first();
-    if (!target || target.parentId !== args.parentId) return null;
+    await updateLastMessage(ctx, args);
+    return null;
+  },
+});
 
-    const patch: {
-      content?: string;
-      activityLog?: string;
-      variations?: (typeof variationValidator.type)[];
-      mediaStorageIds?: Id<"_storage">[];
-    } = {};
-    if (args.content !== undefined) patch.content = args.content;
-    if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
-    if (args.variations !== undefined) patch.variations = args.variations;
-
-    // Accumulates within a turn, so a second capture cannot orphan the first.
-    const mediaStorageIds = appendMediaStorageIds(target.mediaStorageIds, args);
-    if (mediaStorageIds !== undefined) {
-      patch.mediaStorageIds = mediaStorageIds;
-    }
-
-    await ctx.db.patch(target._id, patch);
+/** Attaches media for a user after checking they may access the message parent. */
+export const attachMediaInternal = internalMutation({
+  args: { ...mediaTargetArgs, userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId, ...args }) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, userId);
+    await updateLastMessage(ctx, args);
     return null;
   },
 });

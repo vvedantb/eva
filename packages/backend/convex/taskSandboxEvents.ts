@@ -1,14 +1,11 @@
 import { v } from "convex/values";
 import { authQuery, hasTaskAccess } from "./functions";
-import { taskSandboxEventValidator } from "./validators";
+import { taskSandboxEventFields } from "./validators";
 
 const taskSandboxEventDocValidator = v.object({
   _id: v.id("taskSandboxEvents"),
   _creationTime: v.number(),
-  taskId: v.id("agentTasks"),
-  event: taskSandboxEventValidator,
-  errorDetail: v.optional(v.string()),
-  createdAt: v.number(),
+  ...taskSandboxEventFields,
 });
 
 /** Lists all sandbox lifecycle events for a task, sorted oldest first. */

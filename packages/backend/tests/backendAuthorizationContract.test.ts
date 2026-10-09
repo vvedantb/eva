@@ -116,7 +116,7 @@ describe("backend authorization boundaries", () => {
           `${entry.name} never calls getRepoWithAccess — being signed in is ` +
             "not access to this repo's env vars",
         ).toBeGreaterThan(-1);
-        const readAt = body.indexOf("findByRepo(ctx.db, args.repoId)");
+        const readAt = body.indexOf("findRepoEnvVarDoc(ctx.db, args.repoId)");
         if (readAt >= 0) {
           expect(
             readAt,

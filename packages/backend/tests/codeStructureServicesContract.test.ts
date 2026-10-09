@@ -108,6 +108,7 @@ test("PR number parsing lives only in prUrl.ts", () => {
   for (const path of [
     "convex/_pullRequests/store.ts",
     "convex/taskWorkflowActions.ts",
+    "convex/mcp/chatSelfTools.ts",
   ] as const) {
     const source = read(path);
     expect(source, `${path} should import the shared parser`).toMatch(
@@ -349,14 +350,15 @@ test("claim poll backoff uses selectClaimPollIntervalMs", () => {
 });
 
 test("Convex mutation readers share unwrapConvexMutationPayload", () => {
-  const client = read("callback-src/http/convexClient.ts");
-  expect(client).toContain("export function unwrapConvexMutationPayload(");
-  expect(client).toContain("const inner = result.value");
+  const utils = read("callback-src/utils.ts");
+  expect(utils).toContain("export function unwrapConvexMutationPayload(");
+  expect(utils).toContain("const inner = result.value");
   for (const path of [
     "callback-src/providers/claimPendingTurnParse.ts",
     "callback-src/providers/claimedTurnLifecycle.ts",
     "callback-src/runtime/pendingQuestion.ts",
     "callback-src/providers/claudeSdkDaemon.ts",
+    "callback-src/runtime/turnLease.ts",
   ] as const) {
     const source = read(path);
     expect(source, `${path} should unwrap via the shared helper`).toContain(
@@ -606,11 +608,10 @@ test("stale synthetic-turn heartbeats share isStreamingActivityStale", () => {
   }
 });
 
-test("prewarm and refresh skip closed sandboxes via isSandboxClosingStatus", () => {
+test("prewarm skips closed sandboxes via isSandboxClosingStatus", () => {
   const helper = read("convex/_sandbox/closingStatus.ts");
   expect(helper).toContain("export function isSandboxClosingStatus(");
   for (const path of [
-    "convex/usageLimits.ts",
     "convex/_sessions/execution.ts",
     "convex/projectChatWorkflow.ts",
     "convex/agentTaskChatWorkflow.ts",

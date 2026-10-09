@@ -18,6 +18,7 @@ import {
   roleValidator,
   taskSandboxStatusValidator,
   turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   usesChatDaemon,
 } from "./validators";
@@ -28,6 +29,7 @@ import {
 } from "./_taskWorkflow/helpers";
 import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
 import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
+import { sandboxOwnerKey, sandboxStartupEntityId } from "./_sandbox/owner";
 import {
   drainChatQueueQuietly,
   startNextQueuedTaskChatMessage,
@@ -75,7 +77,9 @@ import {
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { taskPrUrl } from "./_pullRequests/store";
+import { buildTaskBranchName } from "./_git/branchNames";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
+import { errorText } from "./_shared/errors";
 
 async function buildTaskChatTurnPrompt(
   ctx: QueryCtx,
@@ -142,7 +146,7 @@ async function buildTaskChatTurnPrompt(
     devPort: task.devPort ?? repo.devPort,
     readableRepos,
     runtime: {
-      ownerKey: `task-${args.taskId}`,
+      ownerKey: sandboxOwnerKey({ kind: "task", taskId: args.taskId }),
       prUrl: await taskPrUrl(ctx.db, task),
       devCommand: task.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
@@ -777,7 +781,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
             installationId: data.installationId,
             repoOwner: data.repoOwner,
             repoName: data.repoName,
-            branchName: `eva/task-${args.taskId}`,
+            branchName: buildTaskBranchName(args.taskId),
             baseBranch: data.baseBranch,
             repoId: data.repoId,
           });
@@ -1012,7 +1016,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("chat", error);
         console.error(
-          `[agentTaskChatWorkflow] pushSandboxBranch failed taskId=${String(args.taskId)}: ${error instanceof Error ? error.message : String(error)}`,
+          `[agentTaskChatWorkflow] pushSandboxBranch failed taskId=${String(args.taskId)}: ${errorText(error)}`,
         );
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,
@@ -1066,7 +1070,7 @@ export const markTaskSandboxStartingForChat = internalMutation({
     });
     await seedSandboxStartupActivity(
       ctx.db,
-      `task-sandbox-startup-${args.taskId}`,
+      sandboxStartupEntityId({ kind: "task", taskId: args.taskId }),
     );
     return null;
   },
@@ -1197,14 +1201,9 @@ export const saveResult = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     taskId: v.id("agentTasks"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
+    ...completionCallbackArgs,
     pendingQuestion: v.optional(v.string()),
     ...turnLeaseFenceArgs,
-    ...turnCheckpointArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {

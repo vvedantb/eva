@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import type { GenericDatabaseWriter } from "convex/server";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  getSessionWithAccess,
+  hasRepoAccess,
+} from "./functions";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { backgroundProcessFields } from "./validators";
@@ -64,11 +69,7 @@ export const register = authMutation({
   },
   returns: v.id("backgroundProcesses"),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
     const command = args.command.slice(0, COMMAND_MAX_CHARS);
     const existing = await ctx.db
       .query("backgroundProcesses")

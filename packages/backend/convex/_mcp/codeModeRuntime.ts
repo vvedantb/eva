@@ -21,6 +21,7 @@ import {
 } from "quickjs-emscripten-core";
 import variant from "@jitl/quickjs-singlefile-cjs-release-sync";
 import { z } from "zod";
+import { errorText } from "../_shared/errors";
 
 export type JsonValue =
   | null
@@ -223,9 +224,7 @@ export async function executeCode(
   try {
     quickJs = await loadModule();
   } catch (err) {
-    return fail(
-      `Sandbox unavailable: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    return fail(`Sandbox unavailable: ${errorText(err)}`);
   }
 
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
@@ -352,9 +351,7 @@ export async function executeCode(
       promise.dispose();
     }
   } catch (err) {
-    return fail(
-      `Sandbox failure: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    return fail(`Sandbox failure: ${errorText(err)}`);
   } finally {
     alive = false;
     for (const deferred of deferreds) if (deferred.alive) deferred.dispose();

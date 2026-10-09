@@ -1,38 +1,29 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import { action, internalAction } from "./_generated/server";
-import type { ActionCtx } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { authAction } from "./functions";
 import { encryptValue, decryptValue } from "./encryption";
 import {
   normalizeGrokBotWebhookKey,
   parseGrokBotWebhookUrl,
 } from "./_grokBot/webhookUrl";
-import type { Id } from "./_generated/dataModel";
 
 const CALL_TIMEOUT_MS = 20_000;
-
-async function requireUserId(ctx: ActionCtx): Promise<Id<"users">> {
-  const userId = await ctx.runQuery(internal.auth.getUserIdFromIdentity, {});
-  if (!userId) {
-    throw new Error("Not authenticated");
-  }
-  return userId;
-}
 
 /**
  * Saves an allowlisted Grok Bot webhook. Encrypts the bearer key at rest.
  * Omit `key` to keep the existing key when only the URL changes.
  */
-export const setWebhook = action({
+export const setWebhook = authAction({
   args: {
     url: v.string(),
     key: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
+    const { userId } = ctx;
     const url = parseGrokBotWebhookUrl(args.url);
     if (!url) {
       throw new ConvexError(

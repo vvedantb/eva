@@ -1,4 +1,4 @@
-import { unwrapConvexMutationPayload } from "../http/convexClient.js";
+import { unwrapConvexMutationPayload } from "../utils.js";
 import type { JsonValue } from "../types.js";
 import type { TurnLeaseIdentity } from "../runtime/turnLease.js";
 

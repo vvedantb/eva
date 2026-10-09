@@ -59,3 +59,10 @@ export function resolveNewTaskBaseBranch(
     repo?.defaultBaseBranch,
   );
 }
+
+export function resolveProjectBaseBranch(
+  project: Pick<Doc<"projects">, "baseBranch">,
+  repo: RepoBaseBranchSource,
+): string {
+  return firstBranchOrFallback(project.baseBranch, repo?.defaultBaseBranch);
+}

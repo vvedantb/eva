@@ -17,7 +17,7 @@ import {
   updateThinkingStep,
 } from "../parse/canonical.js";
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
-import { log } from "../utils.js";
+import { log, errorText } from "../utils.js";
 import { writeFileSync } from "fs";
 import { freemem, loadavg } from "os";
 import { callbackState as S } from "./state.js";
@@ -68,7 +68,7 @@ function markHeartbeatSuccess(payload: string): void {
 }
 
 function noteHeartbeatFailure(error: Error | string): void {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorText(error);
   S.consecutiveHeartbeatFailures++;
   if (S.consecutiveHeartbeatFailures === 1) {
     S.heartbeatFailureStreakStartedAt = Date.now();

@@ -40,7 +40,7 @@ import {
   syncCursorStateToPersist,
 } from "../session/cursorSession.js";
 import type { ProviderAttemptResult } from "../types.js";
-import { log } from "../utils.js";
+import { log, errorText } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   bootWarmDaemon,
@@ -404,11 +404,6 @@ function handleCancelRequested(): void {
 async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
   log("cursor turn worker: turn started");
   try {
-    if (!process.env.CURSOR_API_KEY?.trim()) {
-      throw new Error(
-        "CURSOR_API_KEY is missing in the sandbox environment — the Cursor SDK cannot authenticate",
-      );
-    }
     const sessionMode = prepareCursorSessionState();
     // The worker runs no claim watcher: the parent cancels it with SIGTERM.
     const attempt = await runCursorSdkAttempt(sessionMode, {
@@ -416,7 +411,7 @@ async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {
     });
     await finalizeTurn(attempt);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     log("cursor daemon: turn failed — " + message);
     try {
       await drainStreamingAndCompleteSteps();
@@ -515,7 +510,7 @@ async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {
     } catch (error) {
       log(
         "cursor daemon: worker failure completion could not be delivered — " +
-          (error instanceof Error ? error.message : String(error)),
+          errorText(error),
       );
     }
   } finally {

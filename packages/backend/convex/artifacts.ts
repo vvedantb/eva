@@ -19,6 +19,7 @@ import {
   resolveChatSource,
   type RepoCache,
 } from "./_chatSource/helpers";
+import { errorText } from "./_shared/errors";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
@@ -335,15 +336,10 @@ export const callTool = authAction({
         case "list_repos": {
           // Kept direct: artifacts parse this bare-array shape, while the MCP
           // tool now returns `{ repos, groups }` plus repo instructions.
-          const repos: Array<{
-            id: string;
-            owner: string;
-            name: string;
-            rootDirectory: string | null;
-            mcpRootPrompt: string | null;
-          }> = await ctx.runAction(internal.mcp.nodeActions.listUserRepos, {
-            userId,
-          });
+          const repos = await ctx.runQuery(
+            internal.mcp.queries.listUserRepos,
+            { userId },
+          );
           const replicaIds = new Set(
             await ctx.runQuery(internal.mcp.queries.reposWithPostgresReplica, {
               repoIds: repos.map((r) => r.id),
@@ -364,7 +360,7 @@ export const callTool = authAction({
           return await callViaMcpServer(ctx, userId, name, args);
       }
     } catch (err) {
-      return errorResult(err instanceof Error ? err.message : String(err));
+      return errorResult(errorText(err));
     }
   },
 });

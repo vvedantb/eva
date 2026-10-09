@@ -17,6 +17,7 @@ import {
 } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
+import { buildTaskBranchName } from "../_git/branchNames";
 
 const MONTH_NAMES = [
   "January",
@@ -226,7 +227,7 @@ export const getTaskData = internalQuery({
       }),
     );
 
-    const branchName = args.branchName || `eva/task-${args.taskId}`;
+    const branchName = args.branchName || buildTaskBranchName(args.taskId);
 
     const rootDirectory = repo.rootDirectory ?? "";
 
@@ -341,7 +342,7 @@ export const getTaskPrCreationData = internalQuery({
       installationId: repo.installationId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: `eva/task-${args.taskId}`,
+      branchName: buildTaskBranchName(args.taskId),
       baseBranch: await resolveTaskWorkflowBaseBranchForTask(
         ctx.db,
         task,

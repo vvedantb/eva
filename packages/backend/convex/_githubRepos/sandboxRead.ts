@@ -1,6 +1,5 @@
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
-import { userCanAccessRepo } from "../functions";
 import { gatherAccessibleRepos, findReposByOwnerAndName } from "./helpers";
 
 /**
@@ -74,7 +73,6 @@ export async function listReadableSiblingRepos(
 
   const groups = new Map<string, Array<Doc<"githubRepos">>>();
   for (const repo of candidates) {
-    if (!(await userCanAccessRepo(db, repo, userId))) continue;
     if (homeRepo && isSameGitHubRepo(repo, homeRepo)) continue;
     const key = repoKey(repo);
     const existing = groups.get(key);

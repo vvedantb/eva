@@ -19,6 +19,7 @@ import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
+import type { ChatEntityKind } from "../validators";
 import {
   entityAccess,
   entityRefArgs,
@@ -68,7 +69,7 @@ export function buildTools(
   const { assertRepoAccess, resolveRepoRef, resolveEntityTarget } =
     entityAccess(ctx, credentials);
 
-  async function getContext(): Promise<{ deployKey: string; userId: string }> {
+  async function getContext(): Promise<{ userId: string }> {
     return mcpGetContext(ctx, clerkUserId);
   }
 
@@ -1086,7 +1087,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
   async function getUserTeams(
     userId: string,
   ): Promise<{ id: string; name: string }[]> {
-    return ctx.runAction(internal.mcp.nodeActions.listUserTeams, { userId });
+    return ctx.runQuery(internal.mcp.queries.listUserTeams, { userId });
   }
 
   async function resolveTeam(
@@ -1294,7 +1295,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   // ─────────────────────────────────────────────────────────────────────────────
 
   function requireBrowserEntity():
-    | { entityKind: "session" | "task" | "project"; entityId: string }
+    | { entityKind: ChatEntityKind; entityId: string }
     | ReturnType<typeof errorResult> {
     if (entityKind === undefined || entityId === undefined) {
       return errorResult(

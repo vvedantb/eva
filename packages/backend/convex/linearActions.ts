@@ -2,9 +2,7 @@
 
 import { v } from "convex/values";
 import { z } from "zod";
-import { action } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { getActionRepoWithAccess } from "./functions";
+import { authAction, getActionRepoWithAccess } from "./functions";
 import { resolveConnectorToken } from "./_connectors/resolve";
 
 const LINEAR_API_URL = "https://api.linear.app/graphql";
@@ -29,7 +27,7 @@ const linearResponseSchema = z.object({
 });
 
 /** Fetches Linear issues by their identifiers using the Linear GraphQL API. */
-export const fetchIssues = action({
+export const fetchIssues = authAction({
   args: {
     repoId: v.id("githubRepos"),
     identifiers: v.array(v.string()),
@@ -43,13 +41,9 @@ export const fetchIssues = action({
   ),
   handler: async (ctx, args): Promise<LinearIssue[]> => {
     await getActionRepoWithAccess(ctx, args.repoId);
-    const userId = await ctx.runQuery(internal.auth.getUserIdFromIdentity, {});
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
     const picked = await resolveConnectorToken(
       ctx,
-      userId,
+      ctx.userId,
       "linear",
       args.repoId,
     );

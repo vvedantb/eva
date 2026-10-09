@@ -1,11 +1,15 @@
 import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
-import { listAutomationsForRepo } from "../_automations/helpers";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { prOriginValidator, prStateValidator } from "../validators";
+import {
+  chatEntityKindValidator,
+  prOriginValidator,
+  prStateValidator,
+  type ChatEntityKind,
+} from "../validators";
 import {
   findPullRequestByUrl,
   listOwnerPullRequests,
@@ -20,6 +24,10 @@ import {
   sessionIsExecuting,
   taskIsExecuting,
 } from "../_chat/turnProjection";
+import {
+  findRepoEnvVarDoc,
+  findTeamEnvVarDoc,
+} from "../_envVars/documentStore";
 
 /** Checks whether a user has access to a repo (via ownership or team membership). */
 export const checkRepoAccessForUser = internalQuery({
@@ -28,37 +36,54 @@ export const checkRepoAccessForUser = internalQuery({
   handler: async (ctx, args): Promise<boolean> => {
     const repoId = ctx.db.normalizeId("githubRepos", args.repoId);
     const userId = ctx.db.normalizeId("users", args.userId);
-    if (!repoId || !userId) return false;
-    const repo = await ctx.db.get(repoId);
-    if (!repo) return false;
-    if (repo.connectedBy === args.userId) return true;
-    const teamId = repo.teamId;
-    if (!teamId) return false;
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", teamId).eq("userId", userId),
-      )
-      .first();
-    return membership !== null;
+    return repoId && userId ? hasRepoAccess(ctx.db, repoId, userId) : false;
   },
 });
 
-/** Get user by Clerk ID. */
-export const getUserByClerkId = internalQuery({
-  args: { clerkUserId: v.string() },
-  handler: async (ctx, { clerkUserId }) => {
-    return ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkUserId))
-      .first();
-  },
-});
-
-/** List repos accessible to a user. */
+/** Repos a user can reach (hidden included), in the shape MCP tools report. */
 export const listUserRepos = internalQuery({
-  args: { userId: v.id("users") },
-  handler: (ctx, { userId }) => gatherAccessibleRepos(ctx.db, userId, true),
+  args: { userId: v.string() },
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      owner: v.string(),
+      name: v.string(),
+      rootDirectory: v.union(v.string(), v.null()),
+      mcpRootPrompt: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const userId = ctx.db.normalizeId("users", args.userId);
+    if (!userId) return [];
+    const repos = await gatherAccessibleRepos(ctx.db, userId, true);
+    return repos.map((repo) => ({
+      id: repo._id,
+      owner: repo.owner,
+      name: repo.name,
+      rootDirectory: repo.rootDirectory ?? null,
+      mcpRootPrompt: repo.mcpRootPrompt ?? null,
+    }));
+  },
+});
+
+/** Teams a user belongs to. */
+export const listUserTeams = internalQuery({
+  args: { userId: v.string() },
+  returns: v.array(v.object({ id: v.string(), name: v.string() })),
+  handler: async (ctx, args) => {
+    const userId = ctx.db.normalizeId("users", args.userId);
+    if (!userId) return [];
+    const memberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const teams = await Promise.all(
+      memberships.map((m) => ctx.db.get(m.teamId)),
+    );
+    return teams.flatMap((team) =>
+      team ? [{ id: team._id, name: team.name }] : [],
+    );
+  },
 });
 
 /**
@@ -71,18 +96,10 @@ type ChatTargetHit =
   | { kind: "task"; doc: Doc<"agentTasks"> }
   | { kind: "project"; doc: Doc<"projects"> };
 
-const chatTargetKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
 /** Kinds to search, in the order a bare reference most likely means. */
 const KIND_SEARCH_ORDER = ["session", "task", "project"] as const;
 
-function kindsToSearch(
-  kind: string | undefined,
-): readonly ("session" | "task" | "project")[] {
+function kindsToSearch(kind: string | undefined): readonly ChatEntityKind[] {
   if (kind === undefined) return KIND_SEARCH_ORDER;
   return KIND_SEARCH_ORDER.filter((candidate) => candidate === kind);
 }
@@ -95,7 +112,7 @@ function kindsToSearch(
 async function findById(
   ctx: QueryCtx,
   id: string,
-  kinds: readonly ("session" | "task" | "project")[],
+  kinds: readonly ChatEntityKind[],
 ): Promise<ChatTargetHit | null> {
   for (const kind of kinds) {
     if (kind === "session") {
@@ -123,7 +140,7 @@ async function findById(
 async function findByPrUrl(
   ctx: QueryCtx,
   prUrl: string,
-  kinds: readonly ("session" | "task" | "project")[],
+  kinds: readonly ChatEntityKind[],
 ): Promise<ChatTargetHit | null> {
   const row = await findPullRequestByUrl(ctx.db, prUrl);
   if (!row || !kinds.includes(row.owner.kind)) return null;
@@ -149,7 +166,7 @@ async function findByNumId(
   ctx: QueryCtx,
   numId: number,
   rawRepoId: string | undefined,
-  kinds: readonly ("session" | "task" | "project")[],
+  kinds: readonly ChatEntityKind[],
 ): Promise<ChatTargetHit | null> {
   const repoId = rawRepoId
     ? ctx.db.normalizeId("githubRepos", rawRepoId)
@@ -237,7 +254,7 @@ export const resolveChatTargetForUser = internalQuery({
   args: {
     userId: v.string(),
     /** Restricts the search to one surface. Required alongside `numId`. */
-    kind: v.optional(chatTargetKindValidator),
+    kind: v.optional(chatEntityKindValidator),
     id: v.optional(v.string()),
     numId: v.optional(v.number()),
     prUrl: v.optional(v.string()),
@@ -246,7 +263,7 @@ export const resolveChatTargetForUser = internalQuery({
   returns: v.union(
     v.null(),
     v.object({
-      kind: chatTargetKindValidator,
+      kind: chatEntityKindValidator,
       targetId: v.string(),
       numId: v.optional(v.number()),
       title: v.string(),
@@ -329,7 +346,7 @@ const MAX_ENTITY_PAGE = 50;
 const ENTITY_SCAN_BUDGET = 300;
 
 const listedEntityValidator = v.object({
-  kind: chatTargetKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
@@ -535,7 +552,7 @@ export const listEntitiesForUser = internalQuery({
     userId: v.string(),
     /** Repos to scan. Already narrowed by the tool to the caller's own repos. */
     repoIds: v.array(v.string()),
-    kind: v.optional(chatTargetKindValidator),
+    kind: v.optional(chatEntityKindValidator),
     status: v.optional(v.string()),
     limit: v.number(),
   },
@@ -665,7 +682,7 @@ export const listEntitiesForUser = internalQuery({
  * user; this only adds the turn lookup that read cannot do.
  */
 export const entityIsExecuting = internalQuery({
-  args: { kind: chatTargetKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.boolean(),
   handler: async (ctx, { kind, id }) => {
     if (kind === "session") {
@@ -722,10 +739,7 @@ export const reposWithPostgresReplica = internalQuery({
       const repoId = ctx.db.normalizeId("githubRepos", rawId);
       if (!repoId) continue;
 
-      const repoVars = await ctx.db
-        .query("repoEnvVars")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .first();
+      const repoVars = await findRepoEnvVarDoc(ctx.db, repoId);
       if (repoVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY)) {
         matches.push(rawId);
         continue;
@@ -737,10 +751,7 @@ export const reposWithPostgresReplica = internalQuery({
 
       let teamHas = teamHasKey.get(teamId);
       if (teamHas === undefined) {
-        const teamVars = await ctx.db
-          .query("teamEnvVars")
-          .withIndex("by_team", (q) => q.eq("teamId", teamId))
-          .first();
+        const teamVars = await findTeamEnvVarDoc(ctx.db, teamId);
         teamHas =
           teamVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY) ??
           false;
@@ -753,150 +764,10 @@ export const reposWithPostgresReplica = internalQuery({
   },
 });
 
-/** Query a table with access control. */
-export const queryTable = internalQuery({
-  args: {
-    table: v.string(),
-    repoId: v.optional(v.id("githubRepos")),
-    userId: v.id("users"),
-    limit: v.number(),
-  },
-  handler: async (ctx, { table, repoId, userId, limit }) => {
-    // Type-safe table queries for known tables
-    if (table === "agentTasks" && repoId) {
-      const tasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .order("desc")
-        .take(limit);
-      return tasks;
-    }
-
-    if (table === "sessions" && repoId) {
-      const sessions = await ctx.db
-        .query("sessions")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .order("desc")
-        .take(limit);
-      return sessions;
-    }
-
-    if (table === "projects" && repoId) {
-      // Projects don't have direct repoId, they have tasks with repoId
-      // Return projects that have tasks in this repo
-      const tasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      const projectIds = new Set(
-        tasks
-          .map((t) => t.projectId)
-          .filter((id): id is Id<"projects"> => id !== undefined),
-      );
-      const projects = await Promise.all(
-        Array.from(projectIds)
-          .slice(0, limit)
-          .map((id) => ctx.db.get(id)),
-      );
-      return projects.filter(Boolean);
-    }
-
-    if (table === "automations" && repoId) {
-      const automations = await listAutomationsForRepo(ctx.db, repoId);
-      return automations.slice(0, limit);
-    }
-
-    if (table === "messages") {
-      // Messages require a parentId, return empty for general query
-      return [];
-    }
-
-    if (table === "notifications") {
-      const notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .take(limit);
-      return notifications;
-    }
-
-    if (table === "teams") {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
-      const teams = await Promise.all(
-        memberships.map((m) => ctx.db.get(m.teamId)),
-      );
-      return teams.filter(Boolean).slice(0, limit);
-    }
-
-    if (table === "githubRepos") {
-      // Return user's accessible repos
-      const connectedRepos = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-        .take(limit);
-      return connectedRepos;
-    }
-
-    // For other tables, return empty (access control)
-    return [];
-  },
-});
-
-/** Get a document by ID with access control. */
-export const getDocument = internalQuery({
-  args: {
-    id: v.string(),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, { id, userId }) => {
-    // Convex IDs are opaque strings; normalizeId turns the caller's string back
-    // into a typed Id (or null) for each candidate table without an `as` cast.
-    const taskId = ctx.db.normalizeId("agentTasks", id);
-    if (taskId) {
-      const task = await ctx.db.get(taskId);
-      if (task && task.repoId) {
-        // Verify access via repo
-        const hasAccess = await ctx.db
-          .query("teamMembers")
-          .withIndex("by_user", (q) => q.eq("userId", userId))
-          .first();
-        const repo = await ctx.db.get(task.repoId);
-        if (repo && (repo.connectedBy === userId || hasAccess)) {
-          return task;
-        }
-      }
-    }
-
-    const sessionId = ctx.db.normalizeId("sessions", id);
-    if (sessionId) {
-      const session = await ctx.db.get(sessionId);
-      if (session) {
-        const repo = await ctx.db.get(session.repoId);
-        if (repo && repo.connectedBy === userId) {
-          return session;
-        }
-      }
-    }
-
-    const repoId = ctx.db.normalizeId("githubRepos", id);
-    if (repoId) {
-      const repo = await ctx.db.get(repoId);
-      if (repo && repo.connectedBy === userId) {
-        return repo;
-      }
-    }
-
-    return null;
-  },
-});
-
 /** The pull-request owner a listed row names, or null for a malformed id. */
 function chatTargetOwner(
   ctx: QueryCtx,
-  kind: "session" | "task" | "project",
+  kind: ChatEntityKind,
   id: string,
 ): PrOwnerRef | null {
   if (kind === "session") {
@@ -950,7 +821,7 @@ export function toMcpPullRequests(
 
 /** `get_agent_state`'s PR list; takes plain strings like the action holds. */
 export const chatPullRequests = internalQuery({
-  args: { kind: chatTargetKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.array(mcpPullRequestValidator),
   handler: async (ctx, { kind, id }) => {
     const owner = chatTargetOwner(ctx, kind, id);
@@ -1000,41 +871,5 @@ export const sessionLinkedRepos = internalQuery({
         prState: pr?.state,
       };
     });
-  },
-});
-
-/** Count documents in a table. */
-export const countTable = internalQuery({
-  args: {
-    table: v.string(),
-    repoId: v.optional(v.id("githubRepos")),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, { table, repoId, userId }) => {
-    if (table === "agentTasks" && repoId) {
-      const tasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      return tasks.length;
-    }
-
-    if (table === "sessions" && repoId) {
-      const sessions = await ctx.db
-        .query("sessions")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      return sessions.length;
-    }
-
-    if (table === "notifications") {
-      const notifications = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
-      return notifications.length;
-    }
-
-    return 0;
   },
 });

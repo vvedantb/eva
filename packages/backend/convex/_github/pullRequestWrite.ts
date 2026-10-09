@@ -3,6 +3,8 @@
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { getInstallationOctokit } from "../githubAuth";
 import { isPullRequestAlreadyExistsError } from "./prErrors";
+import { errorText } from "../_shared/errors";
+import { sleep } from "../_shared/async";
 
 const PR_READY_WAIT_DELAYS_MS = [0, 1000, 2000, 4000, 8000, 12000, 16000];
 
@@ -32,12 +34,6 @@ export type OpenPullRequestRef = {
   number: number;
   body: string | null;
 };
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
 
 export async function findOpenPullRequestForBranch(
   params: PullRequestWriteTarget,
@@ -163,7 +159,7 @@ export async function createPullRequestWithGitHub(
       });
     } catch (labelError) {
       console.error(
-        `Failed to add labels to PR ${prUrl}: ${labelError instanceof Error ? labelError.message : String(labelError)}`,
+        `Failed to add labels to PR ${prUrl}: ${errorText(labelError)}`,
       );
     }
   }

@@ -14,10 +14,9 @@ import {
   REPO_ID,
   REQUIRE_TASK_COMMIT,
   RUN_ID,
-  SCRIPT_STARTED_AT,
   WORK_DIR,
-  hasMcpConfig,
 } from "./config.js";
+import { hasEvaMcpConfig } from "./evaMcp.js";
 import { runSdkDaemon } from "./providers/claudeSdkDaemon.js";
 import { runCodexAppServerDaemon } from "./providers/codexAppServerDaemon.js";
 import {
@@ -63,7 +62,12 @@ import {
   syncProviderStateToPersist,
 } from "./providers/attempts.js";
 import type { JsonObject } from "./types.js";
-import { hasNewTaskCommitSince, log, readGitHeadSha } from "./utils.js";
+import {
+  hasNewTaskCommitSince,
+  log,
+  readGitHeadSha,
+  errorText,
+} from "./utils.js";
 import { writeOomScoreAdj } from "./runtime/daemonProcess.js";
 import { serializeSteps } from "./parse/stepBudget.js";
 
@@ -76,10 +80,7 @@ if (IS_CURSOR_TURN_WORKER) {
     await runCursorTurnWorker();
     process.exit(0);
   } catch (error) {
-    log(
-      "cursor turn worker failed: " +
-        (error instanceof Error ? error.message : String(error)),
-    );
+    log("cursor turn worker failed: " + errorText(error));
     process.exit(1);
   }
 }
@@ -172,7 +173,7 @@ log(
     " sessionId=" +
     (process.env.CLAUDE_SESSION_ID || "none") +
     " mcp=" +
-    (hasMcpConfig ? "yes" : "no"),
+    (hasEvaMcpConfig ? "yes" : "no"),
 );
 
 try {
@@ -323,7 +324,7 @@ try {
     await stopStreamingLoops();
     writeDoneFile("completion-error", {
       exitCode: firstAttempt.code,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorText(e),
     });
     process.exit(1);
   }
@@ -336,7 +337,7 @@ try {
   syncProviderStateToPersist("fatal-error");
   await stopStreamingLoops();
   writeDoneFile("fatal-error", {
-    error: err instanceof Error ? err.message : String(err),
+    error: errorText(err),
   });
   const errorArgs: JsonObject = {
     [ENTITY_ID_FIELD ?? "entityId"]: ENTITY_ID ?? "",
@@ -366,5 +367,3 @@ try {
   }
   process.exit(1);
 }
-
-void SCRIPT_STARTED_AT;

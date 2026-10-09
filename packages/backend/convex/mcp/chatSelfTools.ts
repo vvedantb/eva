@@ -1,20 +1,19 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { extractPrNumber } from "../_github/prUrl";
 import { repoBasePath } from "../_githubRepos/helpers";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import {
   entityAccess,
   entityRefArgs,
   entitySummary,
-  withSelfDefault,
   type EntityRef,
   type EntityTarget,
 } from "./entityRef";
 import {
   errorResult,
   mcpCallAsUser,
-  mcpGetContext,
   textResult,
   type McpCredentials,
 } from "./toolShared";
@@ -52,12 +51,6 @@ function envSettingsLink(
   }
 }
 
-/** PR number parsed off a GitHub pull request link. */
-function prNumber(prUrl: string | undefined): number | undefined {
-  const match = prUrl?.match(/\/pull\/(\d+)/);
-  return match ? Number(match[1]) : undefined;
-}
-
 /** The `{ kind, <kind>Id }` owner shape `sandboxPanes` mutations take. */
 function sandboxOwner(target: EntityTarget): Record<string, string> {
   if (target.kind === "session") {
@@ -81,7 +74,7 @@ export function chatSelfTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  const { resolveEntityTarget } = entityAccess(ctx, credentials);
+  const { resolveChat } = entityAccess(ctx, credentials);
 
   /**
    * The sandbox id when the chat's sandbox is active and its VM is running
@@ -118,17 +111,13 @@ export function chatSelfTools(
   }
 
   /** Resolves the named chat (or the caller's own) plus its details row. */
-  async function resolveChat(
+  async function resolveChatDetails(
     ref: EntityRef,
   ): Promise<
     | { target: EntityTarget; details: ChatDetails }
     | ReturnType<typeof errorResult>
   > {
-    const { userId } = await mcpGetContext(ctx, clerkUserId);
-    const resolved = await resolveEntityTarget(
-      withSelfDefault(ref, credentials),
-      userId,
-    );
+    const resolved = await resolveChat(ref);
     if ("isError" in resolved) return resolved;
     const { target } = resolved;
     const details = await ctx.runQuery(
@@ -154,7 +143,7 @@ Name no chat and it answers for your own. Use it before guessing at ports, branc
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
         return textResult({
@@ -164,7 +153,7 @@ Name no chat and it answers for your own. Use it before guessing at ports, branc
           pr: details.prUrl
             ? {
                 url: details.prUrl,
-                number: prNumber(details.prUrl),
+                number: extractPrNumber(details.prUrl),
                 state: details.prState,
               }
             : null,
@@ -213,7 +202,7 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
           ),
       },
       handler: async ({ lines, ...ref }) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
         const summary = {
@@ -286,7 +275,7 @@ Name no chat and it restarts your own. Refused while the sandbox is starting, st
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
 
@@ -345,7 +334,7 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
 
@@ -431,7 +420,7 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
           ),
       },
       handler: async ({ key, reason, scope, ...ref }) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
         if (scope === "team" && details.repoTeamId === undefined) {
@@ -501,7 +490,7 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
         if (path === undefined && port === undefined) {
           return errorResult('Pass "path", "port" or both.');
         }
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target } = chat;
         const owner = sandboxOwner(target);
@@ -555,7 +544,7 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
 
@@ -598,8 +587,8 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
           });
         }
 
-        // Sessions have no public mutation for this; resolveChat has already
-        // access-checked the chat, so the launcher is called directly.
+        // Sessions have no public mutation for this; resolveChatDetails has
+        // already access-checked the chat, so the launcher is called directly.
         const session = await sessionRow(target);
         const result = await ctx.runAction(
           internal.sandbox.runBackgroundCommands,
@@ -637,7 +626,7 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
+        const chat = await resolveChatDetails(ref);
         if ("isError" in chat) return chat;
         const { target, details } = chat;
 
@@ -693,7 +682,7 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
 
         // Sessions have no startup workflow to restart, so the forced run is
         // scheduled on its own (the action is too long to await in-line).
-        // resolveChat has already access-checked the chat.
+        // resolveChatDetails has already access-checked the chat.
         await ctx.scheduler.runAfter(0, internal.sandbox.runStartupCommands, {
           sandboxId,
           repoId: target.repoId,

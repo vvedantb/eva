@@ -13,6 +13,7 @@ import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
@@ -21,6 +22,7 @@ import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import { syncSessionDaemonState } from "./daemonState";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   stopAlertText,
   stopReasonValidator,
@@ -28,6 +30,7 @@ import {
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+import { errorText } from "../_shared/errors";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
@@ -51,49 +54,6 @@ export function toUserFacingSandboxError(raw: string): string {
     ? `${cleaned.slice(0, SANDBOX_ERROR_MAX_LENGTH - 1).trimEnd()}…`
     : cleaned;
 }
-
-/** Updates sandbox-related fields (sandbox ID, branch, PR URL) on a session. */
-export const updateSandbox = authMutation({
-  args: {
-    id: v.id("sessions"),
-    sandboxId: v.optional(v.string()),
-    branchName: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    const updates: {
-      sandboxId?: string;
-      branchName?: string;
-      prUrl?: string;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-    if (args.sandboxId !== undefined) updates.sandboxId = args.sandboxId;
-    if (args.branchName !== undefined) updates.branchName = args.branchName;
-    if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
-    await ctx.db.patch(args.id, updates);
-    return null;
-  },
-});
-
-/** Clears the sandbox association and marks the session as closed. */
-export const clearSandbox = authMutation({
-  args: { id: v.id("sessions") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await markAllRunningExited(ctx.db, args.id);
-    await ctx.db.patch(args.id, {
-      sandboxId: undefined,
-      // The association is being reset, so a previous wake failure no longer
-      // describes anything the user can act on.
-      sandboxError: undefined,
-      status: "closed",
-    });
-    return null;
-  },
-});
 
 /** Starts or restarts a sandbox for a session by launching the startup workflow. */
 export const startSandbox = authMutation({
@@ -133,7 +93,10 @@ export async function requestSessionSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `session-startup-${session._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId: session._id }),
+  );
   const reusableSandboxId = session.sandboxId;
   console.log(
     `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -294,7 +257,10 @@ export async function requestSessionSandboxStop(
 
   // Clear leftover start steps so the chat does not re-show "Starting
   // sandbox..." / cold-storage copy while status is stopping.
-  await clearSandboxStartupActivity(ctx.db, `session-startup-${sessionId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
+  );
 
   if (session.syntheticTurnMessageId) {
     const streaming = await ctx.db
@@ -390,7 +356,7 @@ export const finalizeStopSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorText(err);
     }
     await ctx.runMutation(internal._sessions.sandbox.markSandboxClosed, {
       sessionId: args.sessionId,
@@ -508,7 +474,7 @@ export const sandboxReady = internalMutation({
     // User may have clicked Stop while start/resume was still running. Never
     // flip closed/stopping back to active — that left Vercel running with UI
     // showing stopped, or re-activated after stop confirmation.
-    if (session.status === "stopping" || session.status === "closed") {
+    if (isSandboxClosingStatus(session.status)) {
       console.log(
         `[sessions] sandboxReady ignored sessionId=${args.sessionId} status=${session.status} sandboxId=${args.sandboxId}`,
       );

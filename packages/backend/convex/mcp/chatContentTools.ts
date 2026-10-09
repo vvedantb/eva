@@ -1,11 +1,6 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
-import {
-  entityAccess,
-  entityRefArgs,
-  entitySummary,
-  withSelfDefault,
-} from "./entityRef";
+import { entityAccess, entityRefArgs, entitySummary } from "./entityRef";
 import {
   confirmedDeleteArg,
   errorResult,
@@ -55,7 +50,7 @@ export function chatContentTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  const { resolveEntityTarget } = entityAccess(ctx, credentials);
+  const { resolveChat } = entityAccess(ctx, credentials);
 
   // ───────────────────────────────────────────────────────────────────────────
   // delete_artifact / delete_eva_doc
@@ -151,11 +146,7 @@ The reply is the chat's identity with the title it now has.`,
           return errorResult('Pass exactly one of "title" or "regenerate".');
         }
 
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
 
@@ -219,11 +210,7 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           .describe("The full plan as markdown. Replaces what is there."),
       },
       handler: async ({ planContent, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "session") {
@@ -274,11 +261,7 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           ),
       },
       handler: async ({ planId, implementationSessionId, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "session") {
@@ -353,11 +336,7 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           ),
       },
       handler: async ({ content, parentId, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
@@ -397,11 +376,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {

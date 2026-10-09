@@ -5,12 +5,8 @@ import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
-import {
-  execHandle,
-  LEGACY_WORKSPACE_DIR,
-  requireEnv,
-  WORKSPACE_DIR,
-} from "./helpers";
+import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
+import { requireEnv } from "../_env/requireEnv";
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 

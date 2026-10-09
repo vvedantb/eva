@@ -13,6 +13,10 @@ import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { upsertStreamingActivity } from "../streaming";
 import {
+  scheduleProjectBuildAt,
+  scheduleTaskExecutionAt,
+} from "../_scheduling/helpers";
+import {
   clearTaskRunStreaming,
   getTaskRunStreamingEntityId,
   upsertActivityLog,
@@ -330,28 +334,11 @@ export const completeRun = internalMutation({
           // Project task: schedule the build to retry at the reset time
           const proj = await ctx.db.get(task.projectId);
           if (proj && !proj.scheduledBuildFunctionId) {
-            const functionId = await ctx.scheduler.runAt(
-              resetAt,
-              internal.buildWorkflow.executeScheduledBuild,
-              { projectId: task.projectId, scheduledAt: resetAt },
-            );
-            await ctx.db.patch(task.projectId, {
-              scheduledBuildAt: resetAt,
-              scheduledBuildFunctionId: functionId,
-            });
+            await scheduleProjectBuildAt(ctx, task.projectId, resetAt);
           }
         } else if (task && !task.scheduledFunctionId) {
           // Quick task: schedule the task to retry at the reset time
-          const functionId = await ctx.scheduler.runAt(
-            resetAt,
-            internal.taskWorkflow.executeScheduledTask,
-            { taskId: args.taskId, scheduledAt: resetAt },
-          );
-          await ctx.db.patch(args.taskId, {
-            scheduledAt: resetAt,
-            scheduledFunctionId: functionId,
-            updatedAt: Date.now(),
-          });
+          await scheduleTaskExecutionAt(ctx, args.taskId, resetAt);
           await ctx.db.patch(args.runId, {
             exitReason: "auto_retry_scheduled",
           });

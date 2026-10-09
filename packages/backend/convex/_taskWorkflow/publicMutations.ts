@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./startRun";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
@@ -11,8 +10,7 @@ import {
 } from "../_chat/turnStore";
 import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
 import {
-  aiModelValidator,
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
 } from "../validators";
 import { taskCompleteEvent } from "./events";
@@ -25,6 +23,7 @@ import {
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { errorText } from "../_shared/errors";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -63,12 +62,7 @@ export const handleCompletion = authMutation({
   args: {
     taskId: v.id("agentTasks"),
     runId: v.optional(v.id("agentRuns")),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     // The run's lease, sent by every callback launched with one.
     ...turnLeaseFenceArgs,
   },
@@ -151,7 +145,7 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(latestRunningRun._id, {
         finalizingAt: undefined,
       });
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = errorText(error);
       console.error(
         `[taskWorkflow] handleCompletion: workflow.sendEvent failed after finalizing; run=${String(args.runId)} task=${String(args.taskId)}: ${detail}`,
       );
@@ -216,52 +210,6 @@ export const cancelExecution = authMutation({
       status: "todo",
       activeWorkflowId: undefined,
       updatedAt: Date.now(),
-    });
-
-    return null;
-  },
-});
-
-/** Starts a new task execution workflow for a queued run. */
-export const triggerExecution = authMutation({
-  args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.taskId !== args.taskId) {
-      throw new Error("Run not found");
-    }
-
-    if (task.activeWorkflowId || run.status !== "queued") {
-      return null;
-    }
-
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await startTaskRunWorkflow(ctx, {
-      runId: args.runId,
-      taskId: args.taskId,
-      repoId: args.repoId,
-      installationId: repo.installationId,
-      projectId: args.projectId,
-      branchName: args.branchName,
-      baseBranch: args.baseBranch,
-      isFirstTaskOnBranch: args.isFirstTaskOnBranch,
-      model: args.model,
-      userId: ctx.userId,
     });
 
     return null;

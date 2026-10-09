@@ -3,7 +3,6 @@ import {
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
   NO_MESSAGE_TIMEOUT_MS,
-  SYSTEM_PROMPT,
   WORK_DIR,
   codexReasoningEffort,
   normalizedCodexModel,
@@ -35,7 +34,7 @@ import {
   writeCodexSessionState,
 } from "../session/codexSession.js";
 import type { JsonObject, JsonValue, SessionMode } from "../types.js";
-import { asJsonObject, log } from "../utils.js";
+import { asJsonObject, log, withSystemPrompt, errorText } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   bootWarmDaemon,
@@ -253,10 +252,7 @@ async function establishThread(
       log("codex daemon: resumed thread " + resumedId);
       return resumedId;
     } catch (error) {
-      log(
-        "codex daemon: resume failed, starting fresh: " +
-          (error instanceof Error ? error.message : String(error)),
-      );
+      log("codex daemon: resume failed, starting fresh: " + errorText(error));
     }
   }
   const started = await client.request("thread/start", {
@@ -280,9 +276,7 @@ async function startTurn(
   }
   startClaimedTurn(turn);
   await materializeTurnAttachments(turn);
-  const text = SYSTEM_PROMPT
-    ? SYSTEM_PROMPT + "\n\n" + turn.prompt
-    : turn.prompt;
+  const text = withSystemPrompt(turn.prompt);
   activeTurnStartedAt = Date.now();
   lastEventAt = activeTurnStartedAt;
   // Snapshot before the request: tokenUsage notifications for this turn can
@@ -374,8 +368,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
             turnId: providerTurnId,
           })
           .catch((error) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
+            const message = errorText(error);
             log("codex daemon: interrupt failed — " + message);
           });
       }
@@ -426,7 +419,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
       await sleep(POLL_INTERVAL_MS);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     log("codex daemon failed: " + message);
     await failActiveTurn("Codex App Server failed: " + message);
   } finally {

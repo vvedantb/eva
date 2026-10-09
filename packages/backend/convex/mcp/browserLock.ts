@@ -1,11 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
-
-const entityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
+import { chatEntityKindValidator } from "../validators";
 
 /**
  * Soft UX lock for agent-driven browsing, generalized across the three
@@ -15,7 +10,7 @@ const entityKindValidator = v.union(
  */
 export const setAgentBrowsingAt = internalMutation({
   args: {
-    entityKind: entityKindValidator,
+    entityKind: chatEntityKindValidator,
     entityId: v.string(),
     locked: v.boolean(),
   },

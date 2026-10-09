@@ -9,6 +9,7 @@ import { isMissingGithubBranchError } from "../_github/deploymentSnapshot";
 import { getInstallationOctokit } from "../githubAuth";
 import { getSandboxHandle, sleep } from "./helpers";
 import { isSandboxGoneError } from "./sandboxErrors";
+import { errorText } from "../_shared/errors";
 
 type ForkSource = FunctionReturnType<typeof internal.sessions.getForkSource>;
 type ForkCopyPage = FunctionReturnType<
@@ -143,7 +144,7 @@ export const forkSession = authAction({
           });
         } catch (restartError) {
           console.warn(
-            `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${restartError instanceof Error ? restartError.message : String(restartError)}`,
+            `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${errorText(restartError)}`,
           );
         }
       }

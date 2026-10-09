@@ -5,6 +5,7 @@ import type {
   StepOutput,
   ToolCompleteResult,
 } from "../types.js";
+import { readStringField } from "../utils.js";
 import { headCap, STEP_FIELD_CAPS, tailCap } from "./stepBudget.js";
 
 /** Caps a command string for ProgressStep.command. */
@@ -82,16 +83,6 @@ export function extractClaudeEdits(input: JsonObject): StepEdit[] | undefined {
   return edits.length > 0 ? edits : undefined;
 }
 
-function readStringField(obj: JsonObject, keys: string[]): string {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
-}
-
 function readNumberField(obj: JsonObject, keys: string[]): number | undefined {
   for (const key of keys) {
     const value = obj[key];
@@ -112,8 +103,8 @@ export function pickToolCallId(obj: JsonObject): string | undefined {
     "tool_call_id",
     "toolCallId",
     "id",
-  ]);
-  return id.trim() ? id.trim() : undefined;
+  ]).trim();
+  return id || undefined;
 }
 
 /**
