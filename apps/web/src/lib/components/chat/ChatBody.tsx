@@ -359,6 +359,14 @@ function ChatBodyInner({
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
 
+  // Composer predictions read the chat only while it waits on the user and is
+  // on screen — hidden cached shells must not each spend a model call.
+  const lastMessageId = messages.at(-1)?._id;
+  const predictionTarget =
+    chatParentId && isRouteActive && !isExecuting && lastMessageId
+      ? { parentId: chatParentId, lastMessageId }
+      : undefined;
+
   // Opening a long chat used to commit every settled turn in one blocking
   // render — ~1s of locked main thread on a heavy transcript. Only the last
   // turn is ever in the viewport (ChatLastTurn pads it to `100cqh`), so the
@@ -813,6 +821,7 @@ function ChatBodyInner({
                 isDraftLoading={isDraftLoading}
                 hasPendingContext={hasComposerContext}
                 allowEmptySubmit={allowEmptySubmit}
+                predictionTarget={predictionTarget}
               />
             </m.div>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
 import { Spinner, Switch } from "@eva/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -9,16 +10,9 @@ import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
-type ExperimentalFlagKey =
-  | "sessionTabs"
-  | "blurPid"
-  | "voiceDictation"
-  | "composerAutocomplete"
-  | "simpleView"
-  | "replyChime"
-  | "notificationBell"
-  | "disablePageMotion"
-  | "viewVercelDeployment";
+type ExperimentalFlagKey = FunctionArgs<
+  typeof api.auth.setExperimentalFlag
+>["key"];
 
 export function ExperimentalSettingsClient() {
   const flags = useQuery(api.auth.getExperimentalFlags);
@@ -135,6 +129,21 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={5} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Composer predictions"
+            description="Suggest your next message when Eva finishes a turn. Press Tab to put it in the composer. It never sends on its own."
+            action={
+              <Switch
+                checked={flags.composerPredictions}
+                onCheckedChange={(checked) =>
+                  toggle("composerPredictions", checked)
+                }
+                aria-label="Composer predictions"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={6} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Reply chime"
             description="Play the notification sound when the agent finishes replying to you. Only your turns chime, and only on this machine."
             action={
@@ -146,7 +155,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={6} fast staggerMax={8}>
+        <ListEnter index={7} fast staggerMax={8}>
           <SettingsToggleRow
             title="Notification bell"
             description="Ring a bell when a new notification arrives. Sounds different from the reply chime, and only plays on this machine."
@@ -161,7 +170,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={7} fast staggerMax={8}>
+        <ListEnter index={8} fast staggerMax={8}>
           <SettingsToggleRow
             title="View Vercel Deployment"
             description="Show the Vercel deployment status in quick task properties, and the View Preview item in the More menu."
@@ -176,7 +185,7 @@ export function ExperimentalSettingsClient() {
             }
           />
         </ListEnter>
-        <ListEnter index={8} fast staggerMax={8}>
+        <ListEnter index={9} fast staggerMax={8}>
           <SettingsToggleRow
             title="Simple view"
             description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
