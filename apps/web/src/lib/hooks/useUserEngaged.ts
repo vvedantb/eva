@@ -1,18 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { SANDBOX_ENGAGED_WINDOW_MS, isSandboxUserEngaged } from "@eva/shared";
-
-/**
- * Input that proves a person is at this tab. `pointermove` is throttled below;
- * `scroll` does not bubble, so every listener uses the capture phase.
- */
-const INPUT_EVENTS = [
-  "pointerdown",
-  "pointermove",
-  "keydown",
-  "wheel",
-  "touchstart",
-  "scroll",
-] as const;
+import {
+  SANDBOX_ENGAGED_WINDOW_MS,
+  SANDBOX_ENGAGEMENT_INPUT_EVENTS,
+  isSandboxUserEngaged,
+} from "@eva/shared";
 
 /** Skip the timer reset for input this close to the last one (pointermove floods). */
 const INPUT_THROTTLE_MS = 1_000;
@@ -59,7 +50,7 @@ function onWindowBlur(): void {
 }
 
 function start(): void {
-  for (const type of INPUT_EVENTS) {
+  for (const type of SANDBOX_ENGAGEMENT_INPUT_EVENTS) {
     window.addEventListener(type, noteInput, { capture: true, passive: true });
   }
   document.addEventListener("visibilitychange", onVisibilityChange);
@@ -69,7 +60,7 @@ function start(): void {
 }
 
 function stop(): void {
-  for (const type of INPUT_EVENTS) {
+  for (const type of SANDBOX_ENGAGEMENT_INPUT_EVENTS) {
     window.removeEventListener(type, noteInput, { capture: true });
   }
   document.removeEventListener("visibilitychange", onVisibilityChange);

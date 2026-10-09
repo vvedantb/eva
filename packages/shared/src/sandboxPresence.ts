@@ -17,6 +17,20 @@ export function sandboxPresenceRoomId(entityId: string): string {
  */
 export const SANDBOX_ENGAGED_WINDOW_MS = 10 * 60_000;
 
+/**
+ * DOM events that count as input, for the Eva app and for every page the
+ * sandbox proxy serves (preview, custom tabs, editor, desktop). Listened to on
+ * `window` in the capture phase, since `scroll` does not bubble.
+ */
+export const SANDBOX_ENGAGEMENT_INPUT_EVENTS = [
+  "pointerdown",
+  "pointermove",
+  "keydown",
+  "wheel",
+  "touchstart",
+  "scroll",
+] as const;
+
 /** True when the tab is visible and had input inside the engaged window. */
 export function isSandboxUserEngaged(input: {
   visible: boolean;

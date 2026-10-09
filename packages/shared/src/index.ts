@@ -11,6 +11,7 @@ export {
 } from "./sandboxStopReason";
 export {
   SANDBOX_ENGAGED_WINDOW_MS,
+  SANDBOX_ENGAGEMENT_INPUT_EVENTS,
   isSandboxUserEngaged,
   sandboxPresenceRoomId,
 } from "./sandboxPresence";
