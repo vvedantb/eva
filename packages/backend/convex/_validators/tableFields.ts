@@ -1183,6 +1183,9 @@ export const messageFields = {
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
+  // The account behind `credentialSourceLabel`; absent = Team (or a row from
+  // before this stamp). Lets a usage-limit hold release other accounts.
+  credentialAccountId: v.optional(v.id("userProviderAccounts")),
   // User rows: model chosen in the composer, snapshotted at send/dequeue so the
   // chat can show a provider icon + tooltip later. Assistant rows: the provider
   // checkpoint, stamped on successful completion — everything after the last
