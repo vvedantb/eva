@@ -1,6 +1,10 @@
 "use node";
 
 import type { JWK } from "jose";
+import {
+  SANDBOX_ENGAGED_WINDOW_MS,
+  SANDBOX_ENGAGEMENT_INPUT_EVENTS,
+} from "@eva/shared";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
@@ -35,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v26";
+const SCRIPT_VERSION = "stream-v28";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -165,7 +169,10 @@ const targetPort = Number(process.env.EVA_PREVIEW_TARGET_PORT || "0");
 const proxyPort = Number(process.env.EVA_PREVIEW_PROXY_PORT || "0");
 const healthPath = "/__eva_preview_proxy/health";
 const html2canvasPath = "/__eva_preview_proxy/html2canvas.js";
-// The injected on-screen ping (idle pause) posts here; see visibilityPingScript.
+// The on-screen ping (idle pause) is served from here and posts to the next
+// path; see visibilityPingScript. A same-origin file passes any 'self' CSP
+// (code-server's webviews, apps with a <meta> CSP) where an inline one may not.
+const activityScriptPath = "/__eva_preview_proxy/activity.js";
 const activityPingPath = "/__eva_preview_proxy/active";
 const HTML2CANVAS_SCRIPT = ${JSON.stringify(PREVIEW_HTML2CANVAS_SCRIPT).replace(/`/g, "\\`")};
 
@@ -257,10 +264,6 @@ const AUTH_PORT = ${params.authPort ?? "targetPort"};
 const BUFFER_WHOLE_HTML =
   targetPort === ${VERCEL_DESKTOP_INTERNAL_PORT} ||
   targetPort === ${VERCEL_EDITOR_INTERNAL_PORT};
-// Dev-server and custom-tab documents get the on-screen ping. Desktop (noVNC)
-// and editor (code-server) pages do not (code-server's CSP blocks inline
-// scripts), so their browser traffic keeps counting directly.
-const ACTIVITY_PING_PAGES = ACTIVITY_ENABLED && !BUFFER_WHOLE_HTML;
 
 let PUBLIC_KEY = null;
 if (GATE_ENABLED) {
@@ -417,9 +420,11 @@ function isDocumentRequest(req) {
 }
 
 // Whether an authorized external request resets the idle clock by itself.
+// Browser traffic never does: every proxied document (dev server, custom tab,
+// editor, desktop) carries the on-screen ping, which needs recent input.
 function countsAsActivity(req) {
   if (isLoopbackRequest(req)) return false;
-  return !ACTIVITY_PING_PAGES || !isBrowserRequest(req);
+  return !isBrowserRequest(req);
 }
 
 // Clerk user behind the request's proxy session cookie, or "" when none.
@@ -909,8 +914,9 @@ const PARENT_ORIGIN_SCRIPT =
   JSON.stringify(annotationParentOrigin()) +
   ";";
 
-// On-screen ping (idle pause): while the page is visible, POST to the proxy at
-// most once per heartbeat interval. A hidden tab sends nothing, so it no longer
+// On-screen ping (idle pause): while the page is visible AND had input in the
+// engaged window, POST to the proxy at most once per heartbeat interval. A
+// hidden tab, or a visible one nobody touches, sends nothing, so it no longer
 // keeps the sandbox awake. Loopback pages are the agent's own browser.
 const visibilityPingScript = "(" + function () {
   const flag = "__evaPreviewVisibilityPing";
@@ -920,9 +926,12 @@ const visibilityPingScript = "(" + function () {
   if (host === "127.0.0.1" || host === "localhost" || host === "[::1]") return;
 
   let lastSentAt = 0;
+  // Page load counts as input: someone just opened or navigated the page.
+  let lastInputAt = Date.now();
   function ping() {
     if (document.visibilityState !== "visible") return;
     const now = Date.now();
+    if (now - lastInputAt >= ${SANDBOX_ENGAGED_WINDOW_MS}) return;
     if (now - lastSentAt < ${ACTIVITY_HEARTBEAT_INTERVAL_MS}) return;
     lastSentAt = now;
     fetch("/__eva_preview_proxy/active", {
@@ -931,10 +940,29 @@ const visibilityPingScript = "(" + function () {
       keepalive: true,
     }).catch(function () {});
   }
-  document.addEventListener("visibilitychange", ping);
+  function onInput() {
+    const wasIdle = Date.now() - lastInputAt >= ${SANDBOX_ENGAGED_WINDOW_MS};
+    lastInputAt = Date.now();
+    if (wasIdle) ping();
+  }
+  ${JSON.stringify(SANDBOX_ENGAGEMENT_INPUT_EVENTS)}.forEach(function (type) {
+    window.addEventListener(type, onInput, { capture: true, passive: true });
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") onInput();
+  });
   window.setInterval(ping, ${ACTIVITY_HEARTBEAT_INTERVAL_MS});
   ping();
 }.toString() + ")();";
+
+// The version query busts the day-long cache when a new proxy ships the script.
+const ACTIVITY_SCRIPT_TAG =
+  '<script async data-eva-preview-activity src="' +
+  activityScriptPath +
+  "?v=" +
+  SCRIPT_VERSION +
+  '"></scr' +
+  "ipt>";
 
 // Splices by index, never String.replace: a string replacement expands "$&"
 // and friends. The annotation script's CSS escape holds "$&", so replace once
@@ -950,9 +978,7 @@ function insertBeforeHeadOrBodyClose(html, tag) {
 
 function injectVisibilityPing(html) {
   if (html.includes("data-eva-preview-activity")) return html;
-  const tag =
-    "<script data-eva-preview-activity>" + visibilityPingScript + "</scr" + "ipt>";
-  return insertBeforeHeadOrBodyClose(html, tag);
+  return insertBeforeHeadOrBodyClose(html, ACTIVITY_SCRIPT_TAG);
 }
 
 function buildInjectionTag() {
@@ -1186,6 +1212,14 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
   }
 
   if (!authorize(clientReq, clientRes)) return;
+  if (path.split("?")[0] === activityScriptPath) {
+    clientRes.writeHead(200, {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "public, max-age=86400",
+    });
+    clientRes.end(visibilityPingScript);
+    return;
+  }
   if (path.split("?")[0] === activityPingPath) {
     if (!isLoopbackRequest(clientReq)) {
       noteExternalActivity(requestSubject(clientReq));
@@ -1228,7 +1262,7 @@ const server = http.createServer(function handleRequest(clientReq, clientRes) {
         contentType.toLowerCase().includes("text/html") && !contentEncoding;
       const injectsHtml = route.injects && isHtml;
       const pingsHtml =
-        ACTIVITY_PING_PAGES && isHtml && isDocumentRequest(clientReq);
+        ACTIVITY_ENABLED && isHtml && isDocumentRequest(clientReq);
       // Always rewrite HTML so noVNC module scripts lose crossorigin=.
       const rewriteHtmlBody = isHtml;
       let pathname = route.path;

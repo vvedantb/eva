@@ -58,7 +58,7 @@ const handleUpstreamFactory = new Function(
   "VERCEL_HOST_SUFFIX",
   "STATIC_ASSET_RE",
   "isLoopbackRequest",
-  "ACTIVITY_PING_PAGES",
+  "ACTIVITY_ENABLED",
   "route",
   "clientReq",
   "clientRes",
@@ -66,8 +66,8 @@ const handleUpstreamFactory = new Function(
     // Stubbed: the real tag embeds the generated nav-sync + annotation scripts.
     "function buildInjectionTag() { return INJECTION_TAG; }",
     'const NOVNC_CDN_RFB = "https://cdn.example.test/rfb.js";',
-    // Stubbed: the real ping script interpolates the heartbeat interval.
-    'const visibilityPingScript = "PING";',
+    // Stubbed: the real tag points at the proxy-served ping script.
+    'const ACTIVITY_SCRIPT_TAG = "<script data-eva-preview-activity>PING</script>";',
     extractFunctionSource("function isDocumentRequest(req) {"),
     extractFunctionSource("function insertBeforeHeadOrBodyClose(html, tag) {"),
     extractFunctionSource("function injectVisibilityPing(html) {"),
@@ -87,7 +87,7 @@ const handleUpstreamFactory = new Function(
 
 interface HarnessOptions {
   bufferWholeHtml?: boolean;
-  /** Proxy-level switch for the on-screen idle-pause ping. */
+  /** Proxy-level switch for the on-screen idle-pause ping (activity reporting on). */
   pingPages?: boolean;
   /** Request headers, e.g. `sec-fetch-dest` for a document load. */
   requestHeaders?: Record<string, string>;
@@ -386,7 +386,21 @@ describe("on-screen ping injection", () => {
     expect(received(clientRes)).not.toContain(PING_TAG);
   });
 
-  test("desktop and editor proxies (ping off) never inject it", () => {
+  test("desktop and editor proxies inject it too (whole-document rewrite)", () => {
+    const { clientRes, handleUpstream, upstream } = createHarness({
+      bufferWholeHtml: true,
+      pingPages: true,
+      requestHeaders: { "sec-fetch-dest": "iframe" },
+    });
+    const res = upstream();
+    handleUpstream(res);
+    res.emit("data", Buffer.from("<html><head></head><body>x</body></html>"));
+    res.emit("end");
+
+    expect(received(clientRes)).toContain(`${PING_TAG}</head>`);
+  });
+
+  test("a proxy without activity reporting never injects it", () => {
     const { clientRes, handleUpstream, upstream } = createHarness({
       requestHeaders: { "sec-fetch-dest": "document" },
     });
