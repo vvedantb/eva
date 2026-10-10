@@ -337,6 +337,12 @@
       "skillPath": "skills/deprecated/ubiquitous-language/SKILL.md",
       "computedHash": "4828c4957014e7d9c1fd62d65e92264d6d46808089953e14d1bbba5a92dfff4d"
     },
+    "ui-recording-timeline": {
+      "source": "rauchg/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-recording-timeline/SKILL.md",
+      "computedHash": "87a25add471c153d253a07a5cf4fb6308b739b0cbe5cecdb3daf6318ef9f2f10"
+    },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
