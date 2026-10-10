@@ -324,8 +324,16 @@ async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean>
     .first();
   if (queued === null) return false;
   // A queue waiting out a usage limit sends nothing for hours, so it must not
-  // keep the VM billing; its resume drain wakes the sandbox again.
-  return (await usageLimitHoldFor(ctx, parentId, queued)) === null;
+  // keep the VM billing; its resume drain wakes the sandbox again. The raw
+  // account pick stands in for the dequeue-time resolve: a message on another
+  // account is not held, so the drain has already sent it.
+  const hold = await usageLimitHoldFor(
+    ctx,
+    parentId,
+    queued,
+    queued.providerAccountId,
+  );
+  return hold === null;
 }
 
 async function inspectSession(

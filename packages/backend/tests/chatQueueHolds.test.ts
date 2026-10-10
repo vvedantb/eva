@@ -5,6 +5,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import {
   findUsageLimitHold,
+  isHeldByUsageLimit,
   USAGE_LIMIT_QUEUE_RESUME_DELAY_MS,
 } from "../convex/_taskWorkflow/usageLimitReset";
 
@@ -40,7 +41,28 @@ describe("findUsageLimitHold", () => {
     expect(hold).toEqual({
       resumeAt: now + HOUR_MS + USAGE_LIMIT_QUEUE_RESUME_DELAY_MS,
       model: "claude:sonnet",
+      accountId: undefined,
     });
+  });
+
+  test("names the account that ran out, or Team", () => {
+    const failed = {
+      role: "assistant",
+      errorType: "rate_limit",
+      limitResetAt: now + HOUR_MS,
+    };
+    expect(
+      findUsageLimitHold(
+        [failed, { role: "user", credentialAccountId: "acc-ana" }],
+        now,
+      )?.accountId,
+    ).toBe("acc-ana");
+    expect(
+      findUsageLimitHold(
+        [failed, { role: "user", credentialSourceLabel: "Team" }],
+        now,
+      )?.accountId,
+    ).toBeNull();
   });
 
   test("looks past system alerts to the newest real turn", () => {
@@ -96,10 +118,43 @@ describe("findUsageLimitHold", () => {
   });
 });
 
+describe("isHeldByUsageLimit", () => {
+  const hold = {
+    resumeAt: 1,
+    model: "claude:sonnet",
+    accountId: "acc-ana",
+  };
+
+  test("holds the same provider and account", () => {
+    expect(isHeldByUsageLimit(hold, "claude:opus", "acc-ana")).toBe(true);
+  });
+
+  test("releases another account on the same provider", () => {
+    expect(isHeldByUsageLimit(hold, "claude:sonnet", "acc-ben")).toBe(false);
+    expect(isHeldByUsageLimit(hold, "claude:sonnet", null)).toBe(false);
+  });
+
+  test("releases another provider", () => {
+    expect(isHeldByUsageLimit(hold, "codex:gpt-5.6", "acc-ana")).toBe(false);
+  });
+
+  test("an unstamped turn holds every account", () => {
+    expect(
+      isHeldByUsageLimit(
+        { ...hold, accountId: undefined },
+        "claude:sonnet",
+        "acc-ben",
+      ),
+    ).toBe(true);
+  });
+});
+
 async function fixture(options: {
   sandboxStatus: "active" | "closed";
   queuedModel: "claude:sonnet" | "codex:gpt-5.6";
   hitLimit: boolean;
+  /** The failed turn ran on the owner's own account; the queue is on Team. */
+  limitOnOwnAccount?: boolean;
 }) {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -111,6 +166,16 @@ async function fixture(options: {
       connectedBy: userId,
     });
     const now = Date.now();
+    const accountId = options.limitOnOwnAccount
+      ? await ctx.db.insert("userProviderAccounts", {
+          userId,
+          provider: "claude",
+          label: "Mine",
+          credentials: [],
+          createdAt: now,
+          updatedAt: now,
+        })
+      : undefined;
     const taskId = await ctx.db.insert("agentTasks", {
       title: "Ran once",
       status: "code_review" as const,
@@ -128,6 +193,8 @@ async function fixture(options: {
         content: "fix the header",
         timestamp: now - 2,
         model: "claude:sonnet" as const,
+        credentialSourceLabel: accountId === undefined ? "Team" : "Mine",
+        credentialAccountId: accountId,
       });
       await ctx.db.insert("messages", {
         parentId: taskId,
@@ -238,6 +305,27 @@ describe("a quiet drain", () => {
       });
 
       // Not held: it goes on to wake the sandbox so the message can send.
+      const task = await t.run((ctx) => ctx.db.get(taskId));
+      expect(task?.reviewTaskSandboxStatus).toBe("starting");
+      expect(await scheduledResumes(t)).toHaveLength(0);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "does not hold a message on another account of the same provider",
+    async () => {
+      const { t, taskId } = await fixture({
+        sandboxStatus: "closed",
+        queuedModel: "claude:sonnet",
+        hitLimit: true,
+        limitOnOwnAccount: true,
+      });
+
+      await t.mutation(internal._queues.helpers.drainQueueQuietly, {
+        parentId: taskId,
+      });
+
       const task = await t.run((ctx) => ctx.db.get(taskId));
       expect(task?.reviewTaskSandboxStatus).toBe("starting");
       expect(await scheduledResumes(t)).toHaveLength(0);

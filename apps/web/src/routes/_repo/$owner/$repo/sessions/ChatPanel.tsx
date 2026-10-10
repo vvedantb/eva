@@ -153,25 +153,15 @@ export function ChatPanel({
     setProviderAccountId: setStickyProviderAccountId,
     isSwitchingAccount,
   } = useSessionModel(sessionId, defaultModel, isRouteActive);
-  const {
-    displayTraits,
-    executionTraits,
-    onTraitsChange,
-    providerAccountId,
-    setProviderAccountId,
-  } = useSessionSettings({
-    defaultModel,
-    model,
-    onModelChange: setModel,
-    traits,
-    onTraitsPersist: setTraits,
-    providerAccountId: stickyProviderAccountId,
-    onProviderAccountChange: (next: string | null) => {
-      void setStickyProviderAccountId(
-        next === null ? null : (resolveAccountId(next) ?? null),
-      );
-    },
-  });
+  const { displayTraits, executionTraits, onTraitsChange, providerAccountId } =
+    useSessionSettings({
+      defaultModel,
+      model,
+      onModelChange: setModel,
+      traits,
+      onTraitsPersist: setTraits,
+      providerAccountId: stickyProviderAccountId,
+    });
   // Every visible model, across providers: a session may be moved onto another
   // provider mid-conversation, and each pick carries the account it was made
   // under so credentials follow the new provider.
@@ -226,8 +216,15 @@ export function ChatPanel({
     messages,
     queuedMessages,
     model,
+    accountId: providerAccountId,
+    accounts,
+    resolveAccountId,
     isSandboxActive,
     setModel,
+    setAccount: (next) =>
+      setStickyProviderAccountId(
+        next === null ? null : (resolveAccountId(next) ?? null),
+      ),
   });
   const { isExecuting, handleSend, handleCancel } = useSessionSend({
     sessionId,
@@ -479,7 +476,7 @@ export function ChatPanel({
           modelOptions,
           accounts,
           accountId: providerAccountId,
-          onAccountChange: setProviderAccountId,
+          onAccountChange: queueGate.setAccount,
           displayTraits,
           onTraitsChange,
         }}
