@@ -1,27 +1,16 @@
+import type { Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
+import type {
+  experimentalFlagKeyValidator,
+  resolvedExperimentalFlagsValidator,
+} from "../_validators/shapes";
 
-export type ExperimentalFlagKey =
-  | "sessionTabs"
-  | "blurPid"
-  | "voiceDictation"
-  | "composerAutocomplete"
-  | "simpleView"
-  | "replyChime"
-  | "notificationBell"
-  | "disablePageMotion"
-  | "viewVercelDeployment";
+// Derived from the validators so a new flag is declared once, in shapes.ts.
+export type ExperimentalFlagKey = Infer<typeof experimentalFlagKeyValidator>;
 
-export type ResolvedExperimentalFlags = {
-  sessionTabs: boolean;
-  blurPid: boolean;
-  voiceDictation: boolean;
-  composerAutocomplete: boolean;
-  simpleView: boolean;
-  replyChime: boolean;
-  notificationBell: boolean;
-  disablePageMotion: boolean;
-  viewVercelDeployment: boolean;
-};
+export type ResolvedExperimentalFlags = Infer<
+  typeof resolvedExperimentalFlagsValidator
+>;
 
 /** Resolves experimental flags for a user. Missing / unset keys are false. */
 export function resolveExperimentalFlags(
@@ -33,6 +22,7 @@ export function resolveExperimentalFlags(
     blurPid: flags?.blurPid ?? false,
     voiceDictation: flags?.voiceDictation ?? false,
     composerAutocomplete: flags?.composerAutocomplete ?? false,
+    composerPredictions: flags?.composerPredictions ?? false,
     simpleView: flags?.simpleView ?? false,
     replyChime: flags?.replyChime ?? false,
     notificationBell: flags?.notificationBell ?? false,

@@ -37,6 +37,7 @@ import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { type SlashItem } from "@/lib/components/mentions";
 import { useComposerCompact } from "@/lib/components/chat/_components/useComposerCompact";
 import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";
+import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 
@@ -77,6 +78,7 @@ export function ComposerInputChrome({
   seedSkillMap,
   messageHistory,
   allowEmptySubmit,
+  predictionTarget,
   onDraftChange,
 }: {
   repo?: ChatRepo;
@@ -99,6 +101,7 @@ export function ComposerInputChrome({
   seedSkillMap?: Map<string, string>;
   messageHistory: string[];
   allowEmptySubmit?: boolean;
+  predictionTarget?: ComposerPredictionTarget;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
@@ -259,6 +262,7 @@ export function ComposerInputChrome({
               enableAttachmentPaste
               onBlockedSubmit={handleBlockedSubmit}
               onDraftChange={onDraftChange}
+              predictionTarget={predictionTarget}
               completionContext={
                 repo
                   ? `a message instructing an AI coding agent working on the repository ${repo.basePath.replace(/^\//, "")}`
