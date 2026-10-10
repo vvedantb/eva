@@ -359,6 +359,7 @@ import type * as changelog from "../changelog.js";
 import type * as chatHtml from "../chatHtml.js";
 import type * as chatReads from "../chatReads.js";
 import type * as chatUi from "../chatUi.js";
+import type * as composerPredictionContext from "../composerPredictionContext.js";
 import type * as connectedAccounts from "../connectedAccounts.js";
 import type * as cronManager from "../cronManager.js";
 import type * as crons from "../crons.js";
@@ -878,6 +879,7 @@ declare const fullApi: ApiFromModules<{
   chatHtml: typeof chatHtml;
   chatReads: typeof chatReads;
   chatUi: typeof chatUi;
+  composerPredictionContext: typeof composerPredictionContext;
   connectedAccounts: typeof connectedAccounts;
   cronManager: typeof cronManager;
   crons: typeof crons;
