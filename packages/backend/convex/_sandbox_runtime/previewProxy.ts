@@ -936,13 +936,23 @@ const visibilityPingScript = "(" + function () {
   ping();
 }.toString() + ")();";
 
+// Splices by index, never String.replace: a string replacement expands "$&"
+// and friends. The annotation script's CSS escape holds "$&", so replace once
+// wrote a literal </head> inside it; the ping tag then landed there and its
+// </script> cut the annotation script, leaking its source onto the page.
+function insertBeforeHeadOrBodyClose(html, tag) {
+  for (const close of ["</head>", "</body>"]) {
+    const at = html.indexOf(close);
+    if (at !== -1) return html.slice(0, at) + tag + html.slice(at);
+  }
+  return tag + html;
+}
+
 function injectVisibilityPing(html) {
   if (html.includes("data-eva-preview-activity")) return html;
   const tag =
     "<script data-eva-preview-activity>" + visibilityPingScript + "</scr" + "ipt>";
-  if (html.includes("</head>")) return html.replace("</head>", tag + "</head>");
-  if (html.includes("</body>")) return html.replace("</body>", tag + "</body>");
-  return tag + html;
+  return insertBeforeHeadOrBodyClose(html, tag);
 }
 
 function buildInjectionTag() {
@@ -963,14 +973,7 @@ function buildInjectionTag() {
 function injectHtml(html) {
   if (html.includes("data-eva-preview-nav-sync")) return html;
 
-  const tag = buildInjectionTag();
-  if (html.includes("</head>")) {
-    return html.replace("</head>", tag + "</head>");
-  }
-  if (html.includes("</body>")) {
-    return html.replace("</body>", tag + "</body>");
-  }
-  return tag + html;
+  return insertBeforeHeadOrBodyClose(html, buildInjectionTag());
 }
 
 // noVNC's vnc_lite.html uses <script type="module" crossorigin="anonymous">.
