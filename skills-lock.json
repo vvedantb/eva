@@ -289,6 +289,12 @@
       "skillPath": "skills/review-animations/SKILL.md",
       "computedHash": "6f8d633d7884c1390eff7af4bfaf7a450e798f117e1d49a555e00819dc877f64"
     },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "98b97aad2873b3b9a8e064007c25e7827b493ba27fda8bfbdb41dab586767973"
+    },
     "ship": {
       "source": "vvedantb/skills",
       "sourceType": "github",
@@ -336,6 +342,12 @@
       "sourceType": "github",
       "skillPath": "skills/deprecated/ubiquitous-language/SKILL.md",
       "computedHash": "4828c4957014e7d9c1fd62d65e92264d6d46808089953e14d1bbba5a92dfff4d"
+    },
+    "ui-recording-timeline": {
+      "source": "rauchg/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-recording-timeline/SKILL.md",
+      "computedHash": "87a25add471c153d253a07a5cf4fb6308b739b0cbe5cecdb3daf6318ef9f2f10"
     },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
