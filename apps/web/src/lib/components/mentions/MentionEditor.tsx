@@ -427,33 +427,6 @@ function editorAriaState({
   };
 }
 
-interface EditorEventHandlers {
-  onInput: () => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
-  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  onMouseOver: (e: React.MouseEvent<HTMLDivElement>) => void;
-  onMouseOut: (e: React.MouseEvent<HTMLDivElement>) => void;
-  onBlur: () => void;
-  onPaste: (e: React.ClipboardEvent<HTMLDivElement>) => void;
-}
-
-/** A disabled editor takes no input; chip hover listens only when enabled. */
-function editorEventHandlers(
-  disabled: boolean,
-  chipHoverEnabled: boolean,
-  handlers: EditorEventHandlers,
-): { [K in keyof EditorEventHandlers]: EditorEventHandlers[K] | undefined } {
-  return {
-    onInput: disabled ? undefined : handlers.onInput,
-    onKeyDown: disabled ? undefined : handlers.onKeyDown,
-    onClick: disabled ? undefined : handlers.onClick,
-    onMouseOver: chipHoverEnabled ? handlers.onMouseOver : undefined,
-    onMouseOut: chipHoverEnabled ? handlers.onMouseOut : undefined,
-    onBlur: disabled ? undefined : handlers.onBlur,
-    onPaste: disabled ? undefined : handlers.onPaste,
-  };
-}
-
 interface ChipHoverCardOptions {
   mentionMap: Map<string, string>;
   skillMap: Map<string, string>;
@@ -1294,16 +1267,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
       )
     ) : null;
 
-  const editorHandlers = editorEventHandlers(disabled, chipHoverEnabled, {
-    onInput: handleInput,
-    onKeyDown: handleKeyDown,
-    onClick: handleChipClick,
-    onMouseOver: chipHover.handleEditorMouseOver,
-    onMouseOut: chipHover.handleEditorMouseOut,
-    onBlur: handleBlur,
-    onPaste: handlePaste,
-  });
-
   return (
     <>
       <div
@@ -1335,7 +1298,17 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
           disabled ? undefined : "cursor-text",
           className,
         )}
-        {...editorHandlers}
+        onInput={disabled ? undefined : handleInput}
+        onKeyDown={disabled ? undefined : handleKeyDown}
+        onClick={disabled ? undefined : handleChipClick}
+        onMouseOver={
+          chipHoverEnabled ? chipHover.handleEditorMouseOver : undefined
+        }
+        onMouseOut={
+          chipHoverEnabled ? chipHover.handleEditorMouseOut : undefined
+        }
+        onBlur={disabled ? undefined : handleBlur}
+        onPaste={disabled ? undefined : handlePaste}
       />
       {/* `AnimatePresence` is portalled unconditionally, with the popup as its
           conditional child: gating the portal on `pickerPopup` would unmount the

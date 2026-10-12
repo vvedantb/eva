@@ -120,6 +120,52 @@ interface QuickTaskModalProps {
 type Repo = ReturnType<typeof useRepo>["repo"];
 
 /**
+ * Seed the mention/skill maps from the initial draft's tokenized description
+ * so that @-mention and /skill chips render correctly on deep-link open.
+ */
+function initialDescriptionMaps(initialDraft: QuickTaskDraft | undefined) {
+  return initialDraft
+    ? tokenizedToEditable(initialDraft.description ?? "")
+    : {
+        mentionMap: new Map<string, string>(),
+        skillMap: new Map<string, string>(),
+      };
+}
+
+/** The repo's saved drafts, and a delete that drops them optimistically. */
+function useQuickTaskDrafts(repoId: Repo["_id"]) {
+  const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.agentTasks.listDrafts, {
+        repoId,
+      });
+      if (current !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.listDrafts,
+          { repoId },
+          draftsAfterRemove(current, args.id),
+        );
+      }
+      const count = localStore.getQuery(api.agentTasks.countDrafts, {
+        repoId,
+      });
+      if (count !== undefined) {
+        localStore.setQuery(
+          api.agentTasks.countDrafts,
+          { repoId },
+          draftCountAfterRemove(count),
+        );
+      }
+    },
+  );
+  const draftRows = useQuery(api.agentTasks.listDrafts, { repoId });
+  // `remove` only sets `deletedAt`; until listDrafts is deployed with that
+  // index range, the query still returns the row and the trash looks broken.
+  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
+  return { removeDraft, drafts };
+}
+
+/**
  * Loads the files already saved on the open draft, so reopening it keeps them.
  * Returns the setter so a form reset can forget which draft was hydrated.
  */
@@ -204,13 +250,13 @@ function VoiceInputButton({
   isListening,
   isConnecting,
   isPolishing,
-  disabled,
+  isLoading,
   onToggle,
 }: {
   isListening: boolean;
   isConnecting: boolean;
   isPolishing: boolean;
-  disabled: boolean;
+  isLoading: boolean;
   onToggle: () => void;
 }) {
   return (
@@ -221,7 +267,7 @@ function VoiceInputButton({
           size="icon"
           variant={isListening && !isConnecting ? "destructive" : "secondary"}
           onClick={onToggle}
-          disabled={disabled}
+          disabled={isLoading || isConnecting || isPolishing}
           className="h-8 w-8"
           aria-label={
             isPolishing
@@ -583,46 +629,12 @@ export function QuickTaskModal({
   });
   const readiness = useDraftReadiness();
 
-  // Seed the mention/skill maps from the initial draft's tokenized description
-  // so that @-mention and /skill chips render correctly on deep-link open.
-  const initialDescMaps = initialDraft
-    ? tokenizedToEditable(initialDraft.description ?? "")
-    : {
-        mentionMap: new Map<string, string>(),
-        skillMap: new Map<string, string>(),
-      };
+  const initialDescMaps = initialDescriptionMaps(initialDraft);
 
   const createQuickTask = useMutation(api.agentTasks.createQuickTask);
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
-  const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.listDrafts, {
-        repoId: repo._id,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.listDrafts,
-          { repoId: repo._id },
-          draftsAfterRemove(current, args.id),
-        );
-      }
-      const count = localStore.getQuery(api.agentTasks.countDrafts, {
-        repoId: repo._id,
-      });
-      if (count !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.countDrafts,
-          { repoId: repo._id },
-          draftCountAfterRemove(count),
-        );
-      }
-    },
-  );
-  const draftRows = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
-  // `remove` only sets `deletedAt`; until listDrafts is deployed with that
-  // index range, the query still returns the row and the trash looks broken.
-  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
+  const { removeDraft, drafts } = useQuickTaskDrafts(repo._id);
 
   const attachments = useTaskAttachments();
   const setHydratedDraftId = useDraftAttachmentHydration(
@@ -905,7 +917,7 @@ export function QuickTaskModal({
                 isListening={isListening}
                 isConnecting={isConnecting}
                 isPolishing={isPolishing}
-                disabled={isLoading || isConnecting || isPolishing}
+                isLoading={isLoading}
                 onToggle={() => handleToggle({ isListening, toggle })}
               />
             ) : null}
