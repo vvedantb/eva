@@ -76,7 +76,8 @@
         ]
       }
     ],
-    "no-console": ["warn", { "allow": ["warn", "error"] }]
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "complexity": ["warn", { "max": 20 }]
   },
   "overrides": [
     {
@@ -129,6 +130,8 @@
     "**/.vite/**",
     "**/.wxt/**",
     "video/**",
+    ".claude/skills/**",
+    ".agents/skills/**",
     "scripts/oxlint-plugin-anti-slop/**"
   ]
 }

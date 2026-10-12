@@ -1,14 +1,116 @@
 import type { WriteStream } from "fs";
 import { parseQuestionInput } from "../parse/questionInput.js";
 import type {
+  JsonObject,
   JsonValue,
   ProgressStep,
+  StepOutput,
   TodoItem,
   UsageLimitSnapshot,
 } from "../types.js";
 
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: JsonValue | undefined): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function nonEmptyTrimmedString(
+  value: JsonValue | undefined,
+): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function parsePriorOutput(value: JsonValue | undefined): StepOutput | undefined {
+  if (!isJsonObject(value) || typeof value.text !== "string") {
+    return undefined;
+  }
+  return {
+    text: value.text,
+    exitCode: typeof value.exitCode === "number" ? value.exitCode : undefined,
+    truncated: value.truncated === true ? true : undefined,
+  };
+}
+
+function parsePriorEdits(values: JsonValue[]): ProgressStep["edits"] {
+  const edits: NonNullable<ProgressStep["edits"]> = [];
+  for (const edit of values) {
+    if (!isJsonObject(edit)) continue;
+    if (typeof edit.oldText !== "string" || typeof edit.newText !== "string") {
+      continue;
+    }
+    edits.push({ oldText: edit.oldText, newText: edit.newText });
+  }
+  return edits.length > 0 ? edits : undefined;
+}
+
+function parsePriorFiles(values: JsonValue[]): string[] | undefined {
+  const files: string[] = [];
+  for (const file of values) {
+    const trimmed = nonEmptyTrimmedString(file);
+    if (trimmed) {
+      files.push(trimmed);
+    }
+  }
+  return files.length > 0 ? files : undefined;
+}
+
+function parsePriorTodos(values: JsonValue[]): TodoItem[] | undefined {
+  const todos: TodoItem[] = [];
+  for (const item of values) {
+    if (!isJsonObject(item)) continue;
+    if (typeof item.content !== "string" || !item.content) continue;
+    const status =
+      item.status === "in_progress" || item.status === "completed"
+        ? item.status
+        : "pending";
+    todos.push({ content: item.content, status });
+  }
+  return todos.length > 0 ? todos : undefined;
+}
+
+function parsePriorAnswers(
+  value: JsonObject,
+): Record<string, string> | undefined {
+  const answers: Record<string, string> = {};
+  for (const [question, answer] of Object.entries(value)) {
+    if (typeof answer === "string") {
+      answers[question] = answer;
+    }
+  }
+  return Object.keys(answers).length > 0 ? answers : undefined;
+}
+
+/** Copies the structured payload fields (output, edits, todos, …) in key order. */
+function addPriorStepPayload(step: ProgressStep, value: JsonObject): void {
+  const output = parsePriorOutput(value.output);
+  if (output) step.output = output;
+  const edits = Array.isArray(value.edits)
+    ? parsePriorEdits(value.edits)
+    : undefined;
+  if (edits) step.edits = edits;
+  const files = Array.isArray(value.files)
+    ? parsePriorFiles(value.files)
+    : undefined;
+  if (files) step.files = files;
+  const todos = Array.isArray(value.todos)
+    ? parsePriorTodos(value.todos)
+    : undefined;
+  if (todos) step.todos = todos;
+  const questions = Array.isArray(value.questions)
+    ? parseQuestionInput({ questions: value.questions })
+    : undefined;
+  if (questions) step.questions = questions;
+  const answers = isJsonObject(value.answers)
+    ? parsePriorAnswers(value.answers)
+    : undefined;
+  if (answers) step.answers = answers;
+}
+
 function parsePriorStep(value: JsonValue): ProgressStep | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
   const label = value.label;
@@ -28,21 +130,14 @@ function parsePriorStep(value: JsonValue): ProgressStep | null {
     path: typeof path === "string" ? path : undefined,
     status: "complete",
   };
-  if (typeof value.toolUseId === "string" && value.toolUseId.trim()) {
-    step.toolUseId = value.toolUseId.trim();
-  }
-  if (
-    typeof value.parentToolUseId === "string" &&
-    value.parentToolUseId.trim()
-  ) {
-    step.parentToolUseId = value.parentToolUseId.trim();
-  }
-  if (typeof value.command === "string" && value.command) {
-    step.command = value.command;
-  }
-  if (typeof value.contentPreview === "string" && value.contentPreview) {
-    step.contentPreview = value.contentPreview;
-  }
+  const toolUseId = nonEmptyTrimmedString(value.toolUseId);
+  if (toolUseId) step.toolUseId = toolUseId;
+  const parentToolUseId = nonEmptyTrimmedString(value.parentToolUseId);
+  if (parentToolUseId) step.parentToolUseId = parentToolUseId;
+  const command = nonEmptyString(value.command);
+  if (command) step.command = command;
+  const contentPreview = nonEmptyString(value.contentPreview);
+  if (contentPreview) step.contentPreview = contentPreview;
   if (value.isError === true) {
     step.isError = true;
   }
@@ -52,84 +147,7 @@ function parsePriorStep(value: JsonValue): ProgressStep | null {
   ) {
     step.durationMs = value.durationMs;
   }
-  if (
-    value.output &&
-    typeof value.output === "object" &&
-    !Array.isArray(value.output) &&
-    typeof value.output.text === "string"
-  ) {
-    step.output = {
-      text: value.output.text,
-      exitCode:
-        typeof value.output.exitCode === "number"
-          ? value.output.exitCode
-          : undefined,
-      truncated: value.output.truncated === true ? true : undefined,
-    };
-  }
-  if (Array.isArray(value.edits)) {
-    const edits: NonNullable<ProgressStep["edits"]> = [];
-    for (const edit of value.edits) {
-      if (!edit || typeof edit !== "object" || Array.isArray(edit)) continue;
-      if (
-        typeof edit.oldText !== "string" ||
-        typeof edit.newText !== "string"
-      ) {
-        continue;
-      }
-      edits.push({ oldText: edit.oldText, newText: edit.newText });
-    }
-    if (edits.length > 0) {
-      step.edits = edits;
-    }
-  }
-  if (Array.isArray(value.files)) {
-    const files: string[] = [];
-    for (const file of value.files) {
-      if (typeof file === "string" && file.trim()) {
-        files.push(file.trim());
-      }
-    }
-    if (files.length > 0) {
-      step.files = files;
-    }
-  }
-  if (Array.isArray(value.todos)) {
-    const todos: TodoItem[] = [];
-    for (const item of value.todos) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      if (typeof item.content !== "string" || !item.content) continue;
-      const status =
-        item.status === "in_progress" || item.status === "completed"
-          ? item.status
-          : "pending";
-      todos.push({ content: item.content, status });
-    }
-    if (todos.length > 0) {
-      step.todos = todos;
-    }
-  }
-  if (Array.isArray(value.questions)) {
-    const questions = parseQuestionInput({ questions: value.questions });
-    if (questions) {
-      step.questions = questions;
-    }
-  }
-  if (
-    value.answers &&
-    typeof value.answers === "object" &&
-    !Array.isArray(value.answers)
-  ) {
-    const answers: Record<string, string> = {};
-    for (const [question, answer] of Object.entries(value.answers)) {
-      if (typeof answer === "string") {
-        answers[question] = answer;
-      }
-    }
-    if (Object.keys(answers).length > 0) {
-      step.answers = answers;
-    }
-  }
+  addPriorStepPayload(step, value);
   return step;
 }
 
