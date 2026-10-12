@@ -15,6 +15,8 @@ import {
   errorTypeValidator,
   evaluationStatusValidator,
   evalFixStatusValidator,
+  evaluationKindValidator,
+  evaluationTriggerValidator,
   phaseValidator,
   prRecapOriginValidator,
   prRecapStatusValidator,
@@ -44,6 +46,7 @@ import {
   conversationMessageValidator,
   customThemeValidator,
   evalIssueValidator,
+  arenaScenarioResultValidator,
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
@@ -1584,6 +1587,9 @@ export const docFields = {
   activeWorkflowId: v.optional(v.string()),
   testGenStatus: v.optional(evaluationStatusValidator),
   testPrUrl: v.optional(v.string()),
+  // Testing Arena: set when browser scenarios run on every PR. Holds the user
+  // who turned it on — PR runs launch with their credentials.
+  arenaPrRunsUserId: v.optional(v.id("users")),
   contentUpdatedAt: v.optional(v.number()),
   lastParsedAt: v.optional(v.number()),
   /** Set on create going forward; optional so legacy docs need no backfill. */
@@ -1670,6 +1676,9 @@ export const promptStashFields = {
 export const evaluationReportFields = {
   repoId: v.id("githubRepos"),
   docId: v.id("docs"),
+  /** Absent on reports from before browser runs existed: those are "code". */
+  kind: v.optional(evaluationKindValidator),
+  trigger: v.optional(evaluationTriggerValidator),
   status: evaluationStatusValidator,
   // Severity-ranked issues flagged against the document.
   issues: v.optional(v.array(evalIssueValidator)),
@@ -1681,6 +1690,23 @@ export const evaluationReportFields = {
   prUrl: v.optional(v.string()),
   // Branch the evaluation ran against, so an opt-in fix uses the same base.
   branchName: v.optional(v.string()),
+  // Browser runs: one entry per scenario, filled when the run completes.
+  scenarioResults: v.optional(v.array(arenaScenarioResultValidator)),
+  // PR-triggered runs: the commit tested and the GitHub check run reporting it.
+  prNumber: v.optional(v.number()),
+  headSha: v.optional(v.string()),
+  checkRunId: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+// A stored, repeatable browser test for one Testing Arena doc. `instructions`
+// is plain English: the steps to take and the outcome that counts as a pass.
+export const arenaScenarioFields = {
+  repoId: v.id("githubRepos"),
+  docId: v.id("docs"),
+  title: v.string(),
+  instructions: v.string(),
   createdAt: v.number(),
   updatedAt: v.number(),
 };

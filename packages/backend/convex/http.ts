@@ -492,6 +492,7 @@ const prWebhookSchema = z.object({
       .object({
         ref: nullableString,
         sha: nullableString,
+        // Fork PRs carry the fork here; their branch is not in the base repo.
         repo: z
           .object({ full_name: nullableString })
           .nullable()
@@ -657,6 +658,10 @@ http.route({
       const repository = parsed.data.repository;
       const headRepo = pullRequest.head?.repo?.full_name ?? null;
       const baseRepo = repository?.full_name ?? null;
+      const headInSameRepo =
+        headRepo !== null && baseRepo !== null
+          ? headRepo.toLowerCase() === baseRepo.toLowerCase()
+          : undefined;
       await ctx.scheduler.runAfter(
         0,
         internal.githubWebhook.handlePullRequestEvent,
@@ -671,12 +676,44 @@ http.route({
           baseBranch: pullRequest.base?.ref ?? undefined,
           repoOwner: repository?.owner?.login ?? undefined,
           repoName: repository?.name ?? undefined,
-          headInSameRepo:
-            headRepo !== null && baseRepo !== null
-              ? headRepo.toLowerCase() === baseRepo.toLowerCase()
-              : undefined,
+          headInSameRepo,
         },
       );
+
+      // Testing Arena: browser runs on every new commit of a ready PR, for
+      // docs that opted in. Fork PRs are skipped: the sandbox clones the base
+      // repo, which does not have the fork's branch.
+      const ARENA_ACTIONS = new Set([
+        "opened",
+        "reopened",
+        "synchronize",
+        "ready_for_review",
+      ]);
+      const headRef = pullRequest.head?.ref;
+      const headSha = pullRequest.head?.sha;
+      const prNumber = pullRequest.number;
+      if (
+        ARENA_ACTIONS.has(action) &&
+        pullRequest.draft !== true &&
+        headInSameRepo === true &&
+        repository?.name &&
+        repository.owner?.login &&
+        headRef &&
+        headSha &&
+        prNumber !== null
+      ) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.arenaBrowserWorkflow.startPrRuns,
+          {
+            owner: repository.owner.login,
+            name: repository.name,
+            prNumber,
+            headRef,
+            headSha,
+          },
+        );
+      }
     }
 
     if (event === "push") {

@@ -4,7 +4,11 @@ import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
-import { evaluationReportFields, normalizeAIModel } from "./validators";
+import {
+  arenaScenarioResultValidator,
+  evaluationReportFields,
+  normalizeAIModel,
+} from "./validators";
 import { allocateNumId } from "./numId";
 import { ensureSubscribed } from "./taskSubscribers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
@@ -19,6 +23,15 @@ const reportValidator = v.object({
   _id: v.id("evaluationReports"),
   _creationTime: v.number(),
   ...evaluationReportFields,
+  // Browser runs: storage ids resolved to URLs for the screenshot thumbnails.
+  scenarioResults: v.optional(
+    v.array(
+      v.object({
+        ...arenaScenarioResultValidator.fields,
+        screenshotUrl: v.optional(v.string()),
+      }),
+    ),
+  ),
 });
 
 /** Lists all evaluation reports for a document, sorted by most recent first. */
@@ -33,7 +46,23 @@ export const listByDoc = authQuery({
       .query("evaluationReports")
       .withIndex("by_doc", (q) => q.eq("docId", args.docId))
       .collect();
-    return reports.sort((a, b) => b.createdAt - a.createdAt);
+    const withUrls = await Promise.all(
+      reports.map(async (report) => ({
+        ...report,
+        scenarioResults: report.scenarioResults
+          ? await Promise.all(
+              report.scenarioResults.map(async (result) => ({
+                ...result,
+                screenshotUrl: result.screenshotStorageId
+                  ? ((await ctx.storage.getUrl(result.screenshotStorageId)) ??
+                    undefined)
+                  : undefined,
+              })),
+            )
+          : undefined,
+      })),
+    );
+    return withUrls.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
 
