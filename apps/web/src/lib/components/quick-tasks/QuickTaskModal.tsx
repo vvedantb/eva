@@ -117,6 +117,419 @@ interface QuickTaskModalProps {
   initialDraft?: QuickTaskDraft;
 }
 
+type Repo = ReturnType<typeof useRepo>["repo"];
+
+/**
+ * Loads the files already saved on the open draft, so reopening it keeps them.
+ * Returns the setter so a form reset can forget which draft was hydrated.
+ */
+function useDraftAttachmentHydration(
+  activeDraftId: Id<"agentTasks"> | null,
+  attachments: ReturnType<typeof useTaskAttachments>,
+) {
+  const draftAttachments = useQuery(
+    api.agentTasks.listAttachments,
+    activeDraftId ? { taskId: activeDraftId } : "skip",
+  );
+  const [hydratedDraftId, setHydratedDraftId] =
+    useState<Id<"agentTasks"> | null>(null);
+  if (activeDraftId && draftAttachments && hydratedDraftId !== activeDraftId) {
+    setHydratedDraftId(activeDraftId);
+    // An empty draft never clears files the user just attached.
+    if (draftAttachments.length > 0) attachments.hydrate(draftAttachments);
+  }
+  return setHydratedDraftId;
+}
+
+/** Model, traits and provider account picks, seeded from the repo defaults. */
+function useModelAndAccount(repo: Repo) {
+  const defaultModel = normalizeAIModel(repo.defaultModel ?? DEFAULT_AI_MODEL);
+  const defaultTraits = storedTraitsFromRepoDefaults(repo);
+  const [model, setModel] = useState<AIModel>(defaultModel);
+  // Absent traits fall back to each model's own defaults, so an untouched menu
+  // sends nothing and the task runs exactly as it does today.
+  const [traits, setTraits] = useState<StoredModelTraits>(defaultTraits);
+  const [providerAccountId, setProviderAccountId] = useState<string | null>(
+    null,
+  );
+  const [accountDefaulted, setAccountDefaulted] = useState(false);
+  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
+  const {
+    options: accounts,
+    resolveId: resolveAccountId,
+    ready: accountsReady,
+  } = useProviderAccounts();
+
+  // Once accounts load, default to the creator's own account for the selected
+  // model provider (Team when none match), leaving an existing pick that still
+  // resolves alone. Adjust during render.
+  if (accountsReady && !accountDefaulted) {
+    if (!accounts.some((account) => account.id === providerAccountId)) {
+      setProviderAccountId(defaultProviderAccountId(accounts, model));
+    }
+    setAccountDefaulted(true);
+  }
+
+  return {
+    defaultModel,
+    defaultTraits,
+    model,
+    setModel,
+    traits,
+    setTraits,
+    providerAccountId,
+    setProviderAccountId,
+    setAccountDefaulted,
+    modelOptions,
+    accounts,
+    resolveAccountId,
+  };
+}
+
+/** A task inside a project inherits the project's base branch. */
+function useEffectiveProject(
+  effectiveProjectId: Id<"projects"> | undefined,
+  defaultBranch: string | undefined,
+) {
+  const effectiveProject = useQuery(
+    api.projects.get,
+    effectiveProjectId ? { id: effectiveProjectId } : "skip",
+  );
+  const branchLockedToProject = effectiveProjectId !== undefined;
+  const displayBaseBranch = effectiveProject?.baseBranch ?? defaultBranch;
+  return { branchLockedToProject, displayBaseBranch };
+}
+
+function VoiceInputButton({
+  isListening,
+  isConnecting,
+  isPolishing,
+  disabled,
+  onToggle,
+}: {
+  isListening: boolean;
+  isConnecting: boolean;
+  isPolishing: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant={isListening && !isConnecting ? "destructive" : "secondary"}
+          onClick={onToggle}
+          disabled={disabled}
+          className="h-8 w-8"
+          aria-label={
+            isPolishing
+              ? "Polishing transcript"
+              : isConnecting
+                ? "Connecting microphone"
+                : isListening
+                  ? "Stop voice input"
+                  : "Voice input"
+          }
+        >
+          {isConnecting || isPolishing ? (
+            <CircleSpinner size="sm" className="size-3.5" />
+          ) : isListening ? (
+            <IconPlayerStop size={14} />
+          ) : (
+            <IconMicrophone size={14} />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {isPolishing
+          ? "Polishing…"
+          : isConnecting
+            ? "Connecting…"
+            : isListening
+              ? "Stop recording"
+              : "Voice input"}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function BaseBranchBadge({
+  branchLockedToProject,
+  displayBaseBranch,
+  baseBranch,
+  setBaseBranch,
+}: {
+  branchLockedToProject: boolean;
+  displayBaseBranch: string | undefined;
+  baseBranch: string;
+  setBaseBranch: (branch: string) => void;
+}) {
+  if (branchLockedToProject) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className={QUICK_TASK_OPTION_BADGE_CLASS}>
+            <IconGitBranch size={14} />
+            <span className="text-foreground">{displayBaseBranch}</span>
+            <IconInfoCircle
+              size={12}
+              className="cursor-help text-muted-foreground"
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Inherited from the project&apos;s base branch
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className={QUICK_TASK_OPTION_BADGE_CLASS}>
+          <IconGitBranch size={14} />
+          <span className="text-foreground">{baseBranch}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-2">
+        <BranchSelect
+          value={baseBranch}
+          onValueChange={setBaseBranch}
+          placeholder="Select a base branch"
+          className="h-8 w-full"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TagsPicker({
+  allTags,
+  selectedTags,
+  tagSearch,
+  setTagSearch,
+  toggleTag,
+  addCustomTag,
+}: {
+  allTags: string[] | undefined;
+  selectedTags: string[];
+  tagSearch: string;
+  setTagSearch: (value: string) => void;
+  toggleTag: (tag: string) => void;
+  addCustomTag: (raw: string) => void;
+}) {
+  return (
+    <>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className={QUICK_TASK_OPTION_BADGE_CLASS}>
+            <IconTag size={14} />
+            {selectedTags.length > 0 ? (
+              <span className="text-foreground">
+                {selectedTags.length} tag
+                {selectedTags.length !== 1 ? "s" : ""}
+              </span>
+            ) : (
+              <span>Tags</span>
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-56 p-0">
+          <Command>
+            <CommandInput
+              placeholder="Search or create tag..."
+              value={tagSearch}
+              onValueChange={setTagSearch}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === ",") && tagSearch.trim()) {
+                  e.preventDefault();
+                  addCustomTag(tagSearch);
+                }
+              }}
+            />
+            <CommandList>
+              <CommandEmpty>
+                {tagSearch.trim() ? (
+                  <button
+                    type="button"
+                    className="w-full px-2 py-1.5 text-sm text-left hover:bg-muted rounded-sm"
+                    onClick={() => addCustomTag(tagSearch)}
+                  >
+                    Create &quot;{tagSearch.trim()}&quot;
+                  </button>
+                ) : (
+                  "No tags"
+                )}
+              </CommandEmpty>
+              <CommandGroup>
+                {(() => {
+                  const selected = new Set(selectedTags);
+                  return (allTags ?? []).map((tag) => (
+                    <CommandItem
+                      key={tag}
+                      value={tag}
+                      onSelect={() => toggleTag(tag)}
+                    >
+                      <IconTag size={14} className="text-muted-foreground" />
+                      {tag}
+                      {selected.has(tag) && (
+                        <IconCheck size={14} className="ml-auto" />
+                      )}
+                    </CommandItem>
+                  ));
+                })()}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      {selectedTags.length > 0 && (
+        <div className="flex flex-wrap gap-1 ml-1">
+          {selectedTags.map((tag) => (
+            <Badge
+              key={tag}
+              variant="secondary"
+              className="text-3xs h-8 gap-0.5 pr-0.5 sm:h-5"
+            >
+              {tag}
+              <button
+                type="button"
+                aria-label={`Remove tag ${tag}`}
+                className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
+                onClick={() => toggleTag(tag)}
+              >
+                <IconX size={10} />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function DraftRow({
+  draft,
+  confirmingDelete,
+  altHeld,
+  setConfirmDeleteId,
+  loadDraft,
+  handleDeleteDraft,
+}: {
+  draft: QuickTaskDraft;
+  confirmingDelete: boolean;
+  altHeld: boolean;
+  setConfirmDeleteId: (id: Id<"agentTasks"> | null) => void;
+  loadDraft: (draft: QuickTaskDraft) => void;
+  handleDeleteDraft: (draftId: Id<"agentTasks">) => Promise<void>;
+}) {
+  if (confirmingDelete) {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm bg-destructive/5">
+        <span className="text-destructive truncate">Delete draft?</span>
+        <div className="flex gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => setConfirmDeleteId(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => handleDeleteDraft(draft._id)}
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  // A row with its own delete control cannot be one big `<button>`, and
+  // `role="button"` on a div means hand-rolled key handling — so this follows
+  // `<ListRow>`: a stretched native button supplies the role and the keyboard,
+  // and the delete control sits above it.
+  return (
+    <div className="group relative flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted">
+      <button
+        type="button"
+        className="absolute inset-0 z-1 cursor-pointer focus-visible:outline-hidden"
+        aria-label={`Load draft ${draft.title || "Untitled"}`}
+        onClick={() => loadDraft(draft)}
+      />
+      <span className="flex-1 truncate">
+        {draft.title || (
+          <span className="text-muted-foreground italic">Untitled</span>
+        )}
+      </span>
+      <button
+        type="button"
+        aria-label={`Delete draft ${draft.title || "Untitled"}`}
+        title={skipConfirmTitle("Delete draft")}
+        className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
+        onClick={() =>
+          requestConfirm(
+            altHeld,
+            () => setConfirmDeleteId(draft._id),
+            () => {
+              void handleDeleteDraft(draft._id);
+            },
+          )
+        }
+      >
+        <IconTrash size={14} />
+      </button>
+    </div>
+  );
+}
+
+function DraftsMenu({
+  drafts,
+  confirmDeleteId,
+  ...rowProps
+}: {
+  drafts: QuickTaskDraft[] | undefined;
+  confirmDeleteId: Id<"agentTasks"> | null;
+  altHeld: boolean;
+  setConfirmDeleteId: (id: Id<"agentTasks"> | null) => void;
+  loadDraft: (draft: QuickTaskDraft) => void;
+  handleDeleteDraft: (draftId: Id<"agentTasks">) => Promise<void>;
+}) {
+  if (!drafts || drafts.length === 0) return null;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <IconFileText size={16} />
+          Drafts ({drafts.length})
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <div className="px-3 py-2 border-b border-border">
+          <p className="text-sm font-medium">Saved Drafts</p>
+        </div>
+        <div className="scrollbar max-h-56 overflow-y-auto">
+          {drafts.map((draft) => (
+            <div key={draft._id}>
+              <DraftRow
+                draft={draft}
+                confirmingDelete={confirmDeleteId === draft._id}
+                {...rowProps}
+              />
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function QuickTaskModal({
   isOpen,
   onClose,
@@ -212,58 +625,35 @@ export function QuickTaskModal({
   const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
 
   const attachments = useTaskAttachments();
-  // Files already saved on the open draft, so reopening it keeps them.
-  const draftAttachments = useQuery(
-    api.agentTasks.listAttachments,
-    activeDraftId ? { taskId: activeDraftId } : "skip",
+  const setHydratedDraftId = useDraftAttachmentHydration(
+    activeDraftId,
+    attachments,
   );
-  const [hydratedDraftId, setHydratedDraftId] =
-    useState<Id<"agentTasks"> | null>(null);
-  if (activeDraftId && draftAttachments && hydratedDraftId !== activeDraftId) {
-    setHydratedDraftId(activeDraftId);
-    // An empty draft never clears files the user just attached.
-    if (draftAttachments.length > 0) attachments.hydrate(draftAttachments);
-  }
 
-  const defaultModel = normalizeAIModel(repo.defaultModel ?? DEFAULT_AI_MODEL);
-  const defaultTraits = storedTraitsFromRepoDefaults(repo);
-  const [model, setModel] = useState<AIModel>(defaultModel);
-  // Absent traits fall back to each model's own defaults, so an untouched menu
-  // sends nothing and the task runs exactly as it does today.
-  const [traits, setTraits] = useState<StoredModelTraits>(defaultTraits);
-  const [providerAccountId, setProviderAccountId] = useState<string | null>(
-    null,
-  );
-  const [accountDefaulted, setAccountDefaulted] = useState(false);
+  const {
+    defaultModel,
+    defaultTraits,
+    model,
+    setModel,
+    traits,
+    setTraits,
+    providerAccountId,
+    setProviderAccountId,
+    setAccountDefaulted,
+    modelOptions,
+    accounts,
+    resolveAccountId,
+  } = useModelAndAccount(repo);
 
   // Drop-target highlight for the description pane. Depth-counted because
   // dragleave also fires when the pointer crosses onto a child of the pane.
   const [isDragOver, setIsDragOver] = useState(false);
   const dragEnterDepth = useRef(0);
-  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const {
-    options: accounts,
-    resolveId: resolveAccountId,
-    ready: accountsReady,
-  } = useProviderAccounts();
 
-  // Once accounts load, default to the creator's own account for the selected
-  // model provider (Team when none match), leaving an existing pick that still
-  // resolves alone. Adjust during render.
-  if (accountsReady && !accountDefaulted) {
-    if (!accounts.some((account) => account.id === providerAccountId)) {
-      setProviderAccountId(defaultProviderAccountId(accounts, model));
-    }
-    setAccountDefaulted(true);
-  }
-
-  const effectiveProjectId = projectId ?? selectedProjectId;
-  const effectiveProject = useQuery(
-    api.projects.get,
-    effectiveProjectId ? { id: effectiveProjectId } : "skip",
+  const { branchLockedToProject, displayBaseBranch } = useEffectiveProject(
+    projectId ?? selectedProjectId,
+    defaultBranch,
   );
-  const branchLockedToProject = effectiveProjectId !== undefined;
-  const displayBaseBranch = effectiveProject?.baseBranch ?? defaultBranch;
 
   const getDescription = () => {
     const tokenized = editorRef.current?.tokenize(description) ?? description;
@@ -511,46 +901,13 @@ export function QuickTaskModal({
 
           <div className="flex flex-wrap items-center gap-1.5 px-5 py-3">
             {voiceEnabled === true ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant={
-                      isListening && !isConnecting ? "destructive" : "secondary"
-                    }
-                    onClick={() => handleToggle({ isListening, toggle })}
-                    disabled={isLoading || isConnecting || isPolishing}
-                    className="h-8 w-8"
-                    aria-label={
-                      isPolishing
-                        ? "Polishing transcript"
-                        : isConnecting
-                          ? "Connecting microphone"
-                          : isListening
-                            ? "Stop voice input"
-                            : "Voice input"
-                    }
-                  >
-                    {isConnecting || isPolishing ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
-                    ) : isListening ? (
-                      <IconPlayerStop size={14} />
-                    ) : (
-                      <IconMicrophone size={14} />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isPolishing
-                    ? "Polishing…"
-                    : isConnecting
-                      ? "Connecting…"
-                      : isListening
-                        ? "Stop recording"
-                        : "Voice input"}
-                </TooltipContent>
-              </Tooltip>
+              <VoiceInputButton
+                isListening={isListening}
+                isConnecting={isConnecting}
+                isPolishing={isPolishing}
+                disabled={isLoading || isConnecting || isPolishing}
+                onToggle={() => handleToggle({ isListening, toggle })}
+              />
             ) : null}
             <PriorityPicker
               value={priority}
@@ -583,137 +940,20 @@ export function QuickTaskModal({
               className={QUICK_TASK_OPTION_BADGE_CLASS}
             />
 
-            {branchLockedToProject ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className={QUICK_TASK_OPTION_BADGE_CLASS}
-                  >
-                    <IconGitBranch size={14} />
-                    <span className="text-foreground">{displayBaseBranch}</span>
-                    <IconInfoCircle
-                      size={12}
-                      className="cursor-help text-muted-foreground"
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Inherited from the project&apos;s base branch
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className={QUICK_TASK_OPTION_BADGE_CLASS}
-                  >
-                    <IconGitBranch size={14} />
-                    <span className="text-foreground">{baseBranch}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-56 p-2">
-                  <BranchSelect
-                    value={baseBranch}
-                    onValueChange={setBaseBranch}
-                    placeholder="Select a base branch"
-                    className="h-8 w-full"
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button type="button" className={QUICK_TASK_OPTION_BADGE_CLASS}>
-                  <IconTag size={14} />
-                  {selectedTags.length > 0 ? (
-                    <span className="text-foreground">
-                      {selectedTags.length} tag
-                      {selectedTags.length !== 1 ? "s" : ""}
-                    </span>
-                  ) : (
-                    <span>Tags</span>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-56 p-0">
-                <Command>
-                  <CommandInput
-                    placeholder="Search or create tag..."
-                    value={tagSearch}
-                    onValueChange={setTagSearch}
-                    onKeyDown={(e) => {
-                      if (
-                        (e.key === "Enter" || e.key === ",") &&
-                        tagSearch.trim()
-                      ) {
-                        e.preventDefault();
-                        addCustomTag(tagSearch);
-                      }
-                    }}
-                  />
-                  <CommandList>
-                    <CommandEmpty>
-                      {tagSearch.trim() ? (
-                        <button
-                          type="button"
-                          className="w-full px-2 py-1.5 text-sm text-left hover:bg-muted rounded-sm"
-                          onClick={() => addCustomTag(tagSearch)}
-                        >
-                          Create &quot;{tagSearch.trim()}&quot;
-                        </button>
-                      ) : (
-                        "No tags"
-                      )}
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {(() => {
-                        const selected = new Set(selectedTags);
-                        return (allTags ?? []).map((tag) => (
-                          <CommandItem
-                            key={tag}
-                            value={tag}
-                            onSelect={() => toggleTag(tag)}
-                          >
-                            <IconTag
-                              size={14}
-                              className="text-muted-foreground"
-                            />
-                            {tag}
-                            {selected.has(tag) && (
-                              <IconCheck size={14} className="ml-auto" />
-                            )}
-                          </CommandItem>
-                        ));
-                      })()}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-
-            {selectedTags.length > 0 && (
-              <div className="flex flex-wrap gap-1 ml-1">
-                {selectedTags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="text-3xs h-8 gap-0.5 pr-0.5 sm:h-5"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      aria-label={`Remove tag ${tag}`}
-                      className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
-                      onClick={() => toggleTag(tag)}
-                    >
-                      <IconX size={10} />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
+            <BaseBranchBadge
+              branchLockedToProject={branchLockedToProject}
+              displayBaseBranch={displayBaseBranch}
+              baseBranch={baseBranch}
+              setBaseBranch={setBaseBranch}
+            />
+            <TagsPicker
+              allTags={allTags}
+              selectedTags={selectedTags}
+              tagSearch={tagSearch}
+              setTagSearch={setTagSearch}
+              toggleTag={toggleTag}
+              addCustomTag={addCustomTag}
+            />
 
             <ProjectPicker
               projects={projects}
@@ -727,91 +967,14 @@ export function QuickTaskModal({
 
           <DialogFooter className="flex-col-reverse gap-2 px-5 py-3 sm:flex-row sm:justify-between">
             <div>
-              {drafts && drafts.length > 0 && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <IconFileText size={16} />
-                      Drafts ({drafts.length})
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-72 p-0">
-                    <div className="px-3 py-2 border-b border-border">
-                      <p className="text-sm font-medium">Saved Drafts</p>
-                    </div>
-                    <div className="scrollbar max-h-56 overflow-y-auto">
-                      {drafts.map((draft) => (
-                        <div key={draft._id}>
-                          {confirmDeleteId === draft._id ? (
-                            <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm bg-destructive/5">
-                              <span className="text-destructive truncate">
-                                Delete draft?
-                              </span>
-                              <div className="flex gap-1 shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-2 text-xs"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="h-6 px-2 text-xs"
-                                  onClick={() => handleDeleteDraft(draft._id)}
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            // A row with its own delete control cannot be one
-                            // big `<button>`, and `role="button"` on a div
-                            // means hand-rolled key handling — so this follows
-                            // `<ListRow>`: a stretched native button supplies
-                            // the role and the keyboard, and the delete control
-                            // sits above it.
-                            <div className="group relative flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted">
-                              <button
-                                type="button"
-                                className="absolute inset-0 z-1 cursor-pointer focus-visible:outline-hidden"
-                                aria-label={`Load draft ${draft.title || "Untitled"}`}
-                                onClick={() => loadDraft(draft)}
-                              />
-                              <span className="flex-1 truncate">
-                                {draft.title || (
-                                  <span className="text-muted-foreground italic">
-                                    Untitled
-                                  </span>
-                                )}
-                              </span>
-                              <button
-                                type="button"
-                                aria-label={`Delete draft ${draft.title || "Untitled"}`}
-                                title={skipConfirmTitle("Delete draft")}
-                                className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
-                                onClick={() =>
-                                  requestConfirm(
-                                    altHeld,
-                                    () => setConfirmDeleteId(draft._id),
-                                    () => {
-                                      void handleDeleteDraft(draft._id);
-                                    },
-                                  )
-                                }
-                              >
-                                <IconTrash size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
+              <DraftsMenu
+                drafts={drafts}
+                confirmDeleteId={confirmDeleteId}
+                altHeld={altHeld}
+                setConfirmDeleteId={setConfirmDeleteId}
+                loadDraft={loadDraft}
+                handleDeleteDraft={handleDeleteDraft}
+              />
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={handleClose}>

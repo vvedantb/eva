@@ -825,7 +825,7 @@ function useChatNewMessages({
   isExecuting: boolean;
   displayMessages: ChatBodyMessage[];
   lastUserMessageIndex: number;
-  currentUserId: string | undefined;
+  currentUserId: Id<"users"> | undefined;
 }) {
   // The turn that just finished belongs to whoever sent the last user message.
   // Unattributed rows (legacy / optimistic) count as own, matching how the
@@ -914,7 +914,7 @@ function useInlineCardPlacement(
 /** First names of the other people who posted in this chat. */
 function useFirstNameByUserId(
   displayMessages: ChatBodyMessage[],
-  currentUserId: string | undefined,
+  currentUserId: Id<"users"> | undefined,
 ) {
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
   const users = useQuery(
