@@ -220,6 +220,12 @@ function SandboxCommandMenuItems({
 }
 
 /** Spinner while the item's action runs, else its own icon. */
-function BusyMenuIcon({ busy, children }: { busy: boolean; children: ReactNode }) {
+function BusyMenuIcon({
+  busy,
+  children,
+}: {
+  busy: boolean;
+  children: ReactNode;
+}) {
   return busy ? <CircleSpinner size="sm" className="size-3.5" /> : children;
 }

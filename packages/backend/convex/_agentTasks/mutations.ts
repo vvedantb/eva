@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import {
   taskStatusValidator,
@@ -26,10 +26,8 @@ import { buildProjectBranchName } from "../_projects/helpers";
 import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
-import { schedulePrTitleSync } from "../_github/prTitleSync";
 import {
   assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
@@ -44,17 +42,13 @@ import {
   composerTraitFields,
   hasComposerTraitUpdate,
 } from "../_shared/composerTraits";
-
-/** Highest taskNumber among a project's tasks, or 0 if none are numbered. */
-function maxTaskNumberOf(tasks: Doc<"agentTasks">[]): number {
-  let max = 0;
-  for (const t of tasks) {
-    if (t.taskNumber !== undefined && t.taskNumber > max) {
-      max = t.taskNumber;
-    }
-  }
-  return max;
-}
+import {
+  buildTaskUpdates,
+  logTaskUpdateActivity,
+  maxTaskNumberOf,
+  notifyTaskAssignee,
+  updateTaskArgs,
+} from "./updateTask";
 
 // Status transitions that notify subscribers. Mid-run automated transitions
 // (todo/in_progress) are intentionally excluded; those patch status directly
@@ -68,224 +62,19 @@ const STATUS_CHANGE_NOTIFY: ReadonlySet<string> = new Set([
 
 /** Updates editable fields on an agent task and notifies on assignment changes. */
 export const update = authMutation({
-  args: {
-    id: v.id("agentTasks"),
-    title: v.optional(v.string()),
-    description: v.optional(v.string()),
-    repoId: v.optional(v.id("githubRepos")),
-    projectId: v.optional(v.union(v.id("projects"), v.null())),
-    tags: v.optional(v.array(v.string())),
-    taskNumber: v.optional(v.number()),
-    assignedTo: v.optional(v.union(v.id("users"), v.null())),
-    model: v.optional(aiModelValidator),
-    // null = clear to team credentials. undefined = no change.
-    providerAccountId: v.optional(
-      v.union(v.id("userProviderAccounts"), v.null()),
-    ),
-    ...runTraitFields,
-    baseBranch: v.optional(v.string()),
-    priority: v.optional(v.union(priorityValidator, v.null())),
-  },
+  args: updateTaskArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.title !== undefined) updates.title = args.title;
-    if (args.description !== undefined) updates.description = args.description;
-    if (args.repoId !== undefined) updates.repoId = args.repoId;
-    if (args.projectId !== undefined) {
-      const newProjectId = args.projectId ?? undefined;
-      updates.projectId = newProjectId;
-      // Position the task at the end when moving it into a different project
-      // by computing taskNumber as max(existing) + 1. Mirrors createQuickTask
-      // and assignToProject.
-      if (newProjectId && newProjectId !== task.projectId) {
-        const existingTasks = await ctx.db
-          .query("agentTasks")
-          .withIndex("by_project", (q) => q.eq("projectId", newProjectId))
-          .collect();
-        updates.taskNumber = maxTaskNumberOf(existingTasks) + 1;
-      }
-    }
-    if (args.tags !== undefined) updates.tags = normalizeTaskTags(args.tags);
-    if (args.taskNumber !== undefined) updates.taskNumber = args.taskNumber;
-    if (args.assignedTo !== undefined)
-      updates.assignedTo = args.assignedTo ?? undefined;
-    if (args.model !== undefined) updates.model = args.model;
-    // Only the task owner may set a personal account; must be their own.
-    let nextProviderAccountId = task.providerAccountId;
-    if (args.providerAccountId !== undefined) {
-      if (ctx.userId !== task.createdBy) {
-        throw new Error("Only the task owner can change the provider account");
-      }
-      nextProviderAccountId = await assertProviderAccountUsableBy(
-        ctx.db,
-        args.providerAccountId,
-        task.createdBy,
-      );
-      updates.providerAccountId = nextProviderAccountId;
-    }
-    // Owner changes model alone → keep matching personal account or re-default.
-    // When providerAccountId is also in this update (picker chose Team/personal
-    // with the model), the explicit account wins — do not reconcile over it.
-    if (
-      args.model !== undefined &&
-      args.providerAccountId === undefined &&
-      ctx.userId === task.createdBy
-    ) {
-      nextProviderAccountId = await reconcileProviderAccountForModel(
-        ctx.db,
-        task.createdBy,
-        args.model,
-        nextProviderAccountId,
-      );
-      updates.providerAccountId = nextProviderAccountId;
-    }
-    if (args.reasoningLevel !== undefined)
-      updates.reasoningLevel = args.reasoningLevel;
-    if (args.thinkingEnabled !== undefined)
-      updates.thinkingEnabled = args.thinkingEnabled;
-    if (args.use1mContext !== undefined)
-      updates.use1mContext = args.use1mContext;
-    if (args.fastMode !== undefined) updates.fastMode = args.fastMode;
-    if (args.baseBranch !== undefined) updates.baseBranch = args.baseBranch;
-    if (args.priority !== undefined)
-      updates.priority = args.priority ?? undefined;
+    const updates = await buildTaskUpdates(ctx, task, args);
     await ctx.db.patch(args.id, updates);
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
-
-    if (args.title !== undefined && args.title !== task.title) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "title",
-        task.title,
-        args.title,
-      );
-      // A project task's PR carries the project's title, not the task's.
-      const primaryPr = task.projectId
-        ? null
-        : await findPrimaryPullRequest(ctx.db, {
-            kind: "task",
-            taskId: args.id,
-          });
-      if (primaryPr) {
-        await schedulePrTitleSync(ctx, {
-          repoId: primaryPr.repoId,
-          prUrl: primaryPr.prUrl,
-          title: args.title,
-        });
-      }
-    }
-    if (
-      args.description !== undefined &&
-      args.description !== task.description
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "description",
-        task.description ?? undefined,
-        args.description,
-      );
-    }
-    if (
-      args.assignedTo !== undefined &&
-      (args.assignedTo ?? undefined) !== task.assignedTo
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "assignee",
-        task.assignedTo,
-        args.assignedTo ?? undefined,
-      );
-    }
-    if (
-      args.projectId !== undefined &&
-      (args.projectId ?? undefined) !== task.projectId
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "project",
-        task.projectId,
-        args.projectId ?? undefined,
-      );
-    }
-    if (
-      args.priority !== undefined &&
-      (args.priority ?? undefined) !== task.priority
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "priority",
-        task.priority,
-        args.priority ?? undefined,
-      );
-    }
-    if (args.tags !== undefined) {
-      const oldTags = (task.tags ?? []).join(", ");
-      const normalized = normalizeTaskTags(args.tags) ?? [];
-      const newTags = normalized.join(", ");
-      if (oldTags !== newTags) {
-        await logTaskActivity(
-          ctx,
-          args.id,
-          ctx.userId,
-          "tags",
-          oldTags || undefined,
-          newTags || undefined,
-        );
-      }
-    }
-    if (args.model !== undefined && args.model !== task.model) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "model",
-        task.model,
-        args.model,
-      );
-    }
-    if (args.baseBranch !== undefined && args.baseBranch !== task.baseBranch) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "baseBranch",
-        task.baseBranch,
-        args.baseBranch,
-      );
-    }
-
-    if (args.assignedTo !== undefined && args.assignedTo !== task.assignedTo) {
-      if (args.assignedTo) {
-        await ensureSubscribed(ctx, args.id, args.assignedTo);
-      }
-      if (args.assignedTo && args.assignedTo !== ctx.userId) {
-        await createNotification(ctx, {
-          userId: args.assignedTo,
-          type: "task_assigned",
-          title: `Assigned: "${task.title}"`,
-          repoId: task.repoId,
-          projectId: task.projectId,
-          taskId: args.id,
-          message: buildTaskNotificationMessage(task, "assigned"),
-        });
-      }
-    }
+    await logTaskUpdateActivity(ctx, task, args);
+    await notifyTaskAssignee(ctx, task, args);
     return null;
   },
 });

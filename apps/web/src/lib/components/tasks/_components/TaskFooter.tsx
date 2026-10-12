@@ -24,7 +24,10 @@ import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
-import { getMoreMenuVisibility, TaskFooterMoreMenu } from "./TaskFooterMoreMenu";
+import {
+  getMoreMenuVisibility,
+  TaskFooterMoreMenu,
+} from "./TaskFooterMoreMenu";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
