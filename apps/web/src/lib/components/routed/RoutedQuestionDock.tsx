@@ -6,18 +6,21 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
-  Avatar,
-  AvatarFallback,
   CenteredSpinner,
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   cn,
 } from "@eva/ui";
-import { IconArrowUp, IconCheck, IconChevronDown } from "@tabler/icons-react";
+import {
+  IconArrowUp,
+  IconArrowUpRight,
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconInfoCircle,
+} from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { AveMark } from "@/lib/components/ave/AveMark";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { participantNames, sourceLabel } from "@/lib/components/routed/status";
 import {
@@ -32,10 +35,14 @@ type RoutedThread = FunctionReturnType<
 /** Where the dock is mounted; the full-screen page has room for a taller one. */
 export type RoutedQuestionDockSize = "popover" | "page";
 
-const DOCK_MAX_HEIGHT: Record<RoutedQuestionDockSize, string> = {
-  popover: "max-h-[min(40dvh,20rem)]",
-  page: "max-h-[min(60dvh,40rem)]",
+/** Caps the question and its replies; the header and reply box stay in view. */
+const BODY_MAX_HEIGHT: Record<RoutedQuestionDockSize, string> = {
+  popover: "max-h-[min(30dvh,15rem)]",
+  page: "max-h-[min(50dvh,32rem)]",
 };
+
+const PAGER_BUTTON_CLASS =
+  "flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
 
 /**
  * Questions Eva routed to the caller, docked above Manager Ave's composer.
@@ -43,8 +50,8 @@ const DOCK_MAX_HEIGHT: Record<RoutedQuestionDockSize, string> = {
  * Docked rather than posted into Ave's conversation: Ave's thread is the user's
  * own command channel, so a free-text "go with the ghost card" there has no
  * question to attach to, and a group question copied into each person's
- * private thread would hide the other answers. Each card here replies to its
- * routed thread directly, without starting an Ave run.
+ * private thread would hide the other answers. Each card replies to its routed
+ * thread directly, without starting an Ave run.
  *
  * Unlike AskUserQuestion's dock it sits above the composer instead of
  * replacing it — the user can still talk to Ave while questions are waiting.
@@ -56,127 +63,106 @@ export function RoutedQuestionDock({
 }) {
   const threads = useQuery(api.routedThreads.listWaitingForMe, {});
   if (!threads || threads.length === 0) return null;
-  return <QuestionStack threads={threads} size={size} />;
+  return <QuestionPager threads={threads} size={size} />;
 }
 
-function QuestionStack({
+/**
+ * One question at a time. A list of expandable rows made the popover a stack
+ * of half-visible cards; paging keeps the open question whole and the reply
+ * box always in the same place.
+ */
+function QuestionPager({
   threads,
   size,
 }: {
   threads: RoutedThread[];
   size: RoutedQuestionDockSize;
 }) {
-  // `null` means the user collapsed everything. Any other id that has left
-  // the list (it was answered) falls through to the next waiting question,
-  // so answering one opens the one after it.
-  const [openId, setOpenId] = useState<string | null>(threads[0]._id);
-  const expandedId =
-    openId === null
-      ? null
-      : threads.some((thread) => thread._id === openId)
-        ? openId
-        : threads[0]._id;
+  const [currentId, setCurrentId] = useState<string>(threads[0]._id);
+  // An answered question leaves the list; land on the one that took its slot
+  // rather than jumping back to the first.
+  const [lastIndex, setLastIndex] = useState(0);
+  const foundIndex = threads.findIndex((thread) => thread._id === currentId);
+  const index =
+    foundIndex >= 0 ? foundIndex : Math.min(lastIndex, threads.length - 1);
+  if (index !== lastIndex) setLastIndex(index);
+  const thread = threads[index];
+
+  const go = (next: number) => setCurrentId(threads[next]._id);
 
   return (
-    <div className="mb-2 rounded-surface border border-border bg-card px-3 py-2">
-      <div className="mb-1 text-xs font-medium text-muted-foreground">
-        {threads.length === 1
-          ? "Question for you"
-          : `${threads.length} questions for you`}
+    <div className="mb-2 rounded-surface border border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-xs text-muted-foreground">
+          Question for you · {sourceLabel(thread)}
+          {thread.sourceTitle ? ` · ${thread.sourceTitle}` : ""}
+        </p>
+        {threads.length > 1 ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="mr-1 text-xs tabular-nums text-muted-foreground">
+              {index + 1} of {threads.length}
+            </span>
+            <button
+              type="button"
+              aria-label="Previous question"
+              disabled={index === 0}
+              onClick={() => go(index - 1)}
+              className={PAGER_BUTTON_CLASS}
+            >
+              <IconChevronLeft size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label="Next question"
+              disabled={index === threads.length - 1}
+              onClick={() => go(index + 1)}
+              className={PAGER_BUTTON_CLASS}
+            >
+              <IconChevronRight size={14} />
+            </button>
+          </div>
+        ) : null}
       </div>
-      <ul
-        className={cn(
-          "flex flex-col divide-y divide-border overflow-y-auto scrollbar",
-          DOCK_MAX_HEIGHT[size],
-        )}
-      >
-        {threads.map((thread) => (
-          <QuestionCard
-            key={thread._id}
-            thread={thread}
-            expanded={thread._id === expandedId}
-            onToggle={() =>
-              setOpenId(thread._id === expandedId ? null : thread._id)
-            }
-          />
-        ))}
-      </ul>
+      {/* Keyed so the draft and the open "why" panel belong to one question. */}
+      <QuestionCard key={thread._id} thread={thread} size={size} />
+    </div>
+  );
+}
+
+/** Teammate chips: "Priya replied" in the success tone, "Waiting on Sam" muted. */
+function TeammateChips({
+  teammates,
+}: {
+  teammates: readonly { userId: string; name: string; needsReply: boolean }[];
+}) {
+  const replied = teammates.filter((person) => !person.needsReply);
+  const pending = teammates.filter((person) => person.needsReply);
+  if (teammates.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {replied.length > 0 ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-success">
+          <IconCheck size={12} />
+          {participantNames(replied)} replied
+        </span>
+      ) : null}
+      {pending.length > 0 ? (
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+          {replied.length > 0 ? "Waiting on" : "Also asked"}{" "}
+          {participantNames(pending)}
+        </span>
+      ) : null}
     </div>
   );
 }
 
 function QuestionCard({
   thread,
-  expanded,
-  onToggle,
+  size,
 }: {
   thread: RoutedThread;
-  expanded: boolean;
-  onToggle: () => void;
+  size: RoutedQuestionDockSize;
 }) {
-  return (
-    <li className="py-1 first:pt-0 last:pb-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="flex w-full items-start gap-2 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-muted/60"
-      >
-        <AveMark size={16} className="mt-0.5 shrink-0" />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          {/* Collapsed rows truncate so the list scans; open, this line is the
-              question itself, so it wraps instead of being repeated below. */}
-          <span
-            className={cn(
-              "text-sm font-medium",
-              expanded ? "text-pretty" : "truncate",
-            )}
-          >
-            {thread.title}
-          </span>
-          <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-            <span className="truncate">
-              {sourceLabel(thread)}
-              {thread.sourceTitle ? ` · ${thread.sourceTitle}` : ""}
-            </span>
-            <span aria-hidden>·</span>
-            <RelativeDateTime at={thread.createdAt} className="shrink-0" />
-          </span>
-        </span>
-        <IconChevronDown
-          size={14}
-          className={cn(
-            "mt-1 shrink-0 text-muted-foreground transition-transform",
-            expanded && "rotate-180",
-          )}
-        />
-      </button>
-      {expanded ? <QuestionBody thread={thread} /> : null}
-    </li>
-  );
-}
-
-/**
- * Who else is on a group question, in one line: "Priya replied",
- * "Also asked Sam", or "Priya replied · waiting on Sam". `null` for a
- * question asked of the viewer alone.
- */
-function teammatesSummary(
-  teammates: readonly { name: string; needsReply: boolean }[],
-): string | null {
-  const replied = teammates.filter((person) => !person.needsReply);
-  const pending = teammates.filter((person) => person.needsReply);
-  const parts: string[] = [];
-  if (replied.length > 0) parts.push(`${participantNames(replied)} replied`);
-  if (pending.length > 0) {
-    parts.push(
-      `${replied.length > 0 ? "waiting on" : "Also asked"} ${participantNames(pending)}`,
-    );
-  }
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-function QuestionBody({ thread }: { thread: RoutedThread }) {
   const messages = useQuery(api.routedThreads.listMessages, {
     threadId: thread._id,
   });
@@ -189,12 +175,13 @@ function QuestionBody({ thread }: { thread: RoutedThread }) {
   // physical Enter key sends.
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
-  // The others on a group question, so a reply is not written blind.
   const teammates =
     me === undefined
       ? []
       : thread.participants.filter((participant) => participant.userId !== me);
-  const summary = teammatesSummary(teammates);
+  // The first Eva message carries the briefing; its body is the title.
+  const briefing = messages?.find((message) => message.authorKind === "eva");
+  const replies = messages?.filter((message) => message !== briefing) ?? [];
 
   const handleSend = async () => {
     const body = draft.trim();
@@ -216,62 +203,72 @@ function QuestionBody({ thread }: { thread: RoutedThread }) {
     setSending(false);
   };
 
+  const canSend = !sending && draft.trim().length > 0;
+
   return (
-    <div className="flex flex-col gap-2.5 pb-1.5 pl-[1.875rem] pr-1.5 pt-0.5">
-      {summary ? (
-        <p className="text-[11px] text-muted-foreground">{summary}</p>
-      ) : null}
-      {messages === undefined ? (
-        <CenteredSpinner label="Loading question" />
-      ) : (
-        messages.map((message) => {
-          if (message.authorKind === "eva") {
-            // The header already shows the question; only a follow-up ask on
-            // the same topic says something new.
-            const isRepeat = message.body.trim() === thread.title;
-            return (
-              <div key={message._id} className="flex flex-col gap-2">
-                {message.context ? (
-                  <QuestionBackground context={message.context} />
-                ) : null}
-                {isRepeat ? null : (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {message.body}
-                  </p>
-                )}
+    <div className="flex flex-col gap-2.5">
+      <div
+        className={cn(
+          "flex flex-col gap-2.5 overflow-y-auto scrollbar",
+          BODY_MAX_HEIGHT[size],
+        )}
+      >
+        <h3 className="text-[15px] font-semibold leading-snug text-pretty">
+          {thread.title}
+        </h3>
+        {briefing?.context ? (
+          <Collapsible>
+            <CollapsibleTrigger className="group flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <IconInfoCircle size={13} />
+              Why Eva is asking
+              <IconChevronRight
+                size={12}
+                className="transition-transform group-data-[state=open]:rotate-90"
+              />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-muted px-2.5 py-2 text-xs leading-relaxed text-muted-foreground">
+                {briefing.context}
+              </p>
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
+        <TeammateChips teammates={teammates} />
+        {messages === undefined ? (
+          <CenteredSpinner label="Loading question" />
+        ) : (
+          replies.map((message) => (
+            <div
+              key={message._id}
+              className="border-l-2 border-border pl-2.5"
+            >
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xs font-medium">
+                  {message.authorKind === "eva"
+                    ? "Eva"
+                    : (message.authorName ?? "Teammate")}
+                </span>
+                <RelativeDateTime
+                  at={message.createdAt}
+                  className="text-[11px] text-muted-foreground"
+                />
               </div>
-            );
-          }
-          const name = message.authorName ?? "Teammate";
-          return (
-            <article key={message._id} className="flex gap-2">
-              <Avatar className="mt-0.5 size-5 shrink-0">
-                <AvatarFallback className="text-[10px] font-medium">
-                  {name.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xs font-medium">{name}</span>
-                  <RelativeDateTime
-                    at={message.createdAt}
-                    className="text-[11px] text-muted-foreground"
-                  />
-                </div>
-                <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
-                  {message.body}
-                </p>
-              </div>
-            </article>
-          );
-        })
-      )}
-      <InputGroup className="overflow-hidden rounded-surface">
-        <InputGroupTextarea
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                {message.body}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-end gap-2 rounded-3xl border border-border bg-background py-1.5 pl-3.5 pr-1.5 focus-within:ring-2 focus-within:ring-ring/30">
+        <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          className="min-h-[56px] text-sm"
-          placeholder="Reply to Eva…"
+          rows={1}
+          aria-label="Your answer"
+          placeholder="Your answer…"
+          className="max-h-32 min-h-7 flex-1 resize-none bg-transparent py-1 text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground"
           // Same keys as the chat composer: Enter sends, Shift+Enter breaks
           // the line. An IME confirming a word also fires Enter; leave it be.
           onKeyDown={(event) => {
@@ -286,66 +283,41 @@ function QuestionBody({ thread }: { thread: RoutedThread }) {
             }
           }}
         />
-        <InputGroupAddon align="block-end" className="justify-end">
-          <span className="flex items-center gap-1">
-            <InputGroupButton
-              variant="ghost"
-              size="sm"
-              aria-label="Resolve without replying"
-              onClick={() =>
-                void catchMutationError(
-                  resolve({ threadId: thread._id }),
-                  "Couldn't resolve",
-                  "routed-resolve",
-                )
-              }
-            >
-              <IconCheck />
-              Resolve
-            </InputGroupButton>
-            <InputGroupButton
-              variant="default"
-              size="sm"
-              disabled={sending || draft.trim().length === 0}
-              aria-label="Send reply"
-              onClick={() => void handleSend()}
-            >
-              Send
-              <IconArrowUp />
-            </InputGroupButton>
-          </span>
-        </InputGroupAddon>
-      </InputGroup>
-    </div>
-  );
-}
+        <button
+          type="button"
+          aria-label="Send answer"
+          disabled={!canSend}
+          onClick={() => void handleSend()}
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+        >
+          <IconArrowUp size={16} />
+        </button>
+      </div>
 
-/**
- * Clamped to three lines by default: the popover is small, and an unclamped
- * briefing pushes the reply box out of view before the question is read.
- */
-function QuestionBackground({ context }: { context: string }) {
-  const [showAll, setShowAll] = useState(false);
-  return (
-    <div className="rounded-lg bg-muted/60 px-2.5 py-2">
-      <p className="text-[11px] font-medium text-muted-foreground">
-        Background
-      </p>
-      <p
-        className={cn(
-          "mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground",
-          !showAll && "line-clamp-3",
-        )}
-      >
-        {context}
-      </p>
-      <button
-        type="button"
-        onClick={() => setShowAll(!showAll)}
-        className="mt-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-      >
-        {showAll ? "Show less" : "Show more"}
-      </button>
+      <div className="flex items-center justify-between gap-2 px-1">
+        <button
+          type="button"
+          onClick={() =>
+            void catchMutationError(
+              resolve({ threadId: thread._id }),
+              "Couldn't resolve",
+              "routed-resolve",
+            )
+          }
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          Resolve without answering
+        </button>
+        {thread.sourceHref ? (
+          <a
+            href={thread.sourceHref}
+            className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Open {sourceLabel(thread)}
+            <IconArrowUpRight size={12} />
+          </a>
+        ) : null}
+      </div>
     </div>
   );
 }
