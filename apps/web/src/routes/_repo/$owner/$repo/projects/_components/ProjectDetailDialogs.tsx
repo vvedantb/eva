@@ -7,6 +7,8 @@ import {
   DialogFooter,
   DialogBody,
 } from "@eva/ui";
+import { useMutation } from "convex/react";
+import { api, type Id } from "@eva/backend";
 import { IconHammer, IconMessage } from "@tabler/icons-react";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
 import { withMutationToast } from "@/lib/utils/mutationToast";
@@ -16,18 +18,19 @@ import type {
 } from "./projectDetailHelpers";
 
 export function RunEvaDialog({
+  projectId,
   open,
   setOpen,
   isStarting,
   setIsStarting,
-  startBuild,
 }: {
+  projectId: Id<"projects">;
   open: boolean;
   setOpen: (open: boolean) => void;
   isStarting: boolean;
   setIsStarting: (isStarting: boolean) => void;
-  startBuild: () => Promise<unknown>;
 }) {
+  const startBuild = useMutation(api.buildWorkflow.startBuild);
   return (
     <Dialog
       open={open}
@@ -60,7 +63,9 @@ export function RunEvaDialog({
               setIsStarting(true);
               try {
                 await withMutationToast(
-                  startBuild(),
+                  startBuild({
+                    projectId: projectId,
+                  }),
                   "Build started",
                   "Couldn't start build",
                   "project-build-start",
