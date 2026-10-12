@@ -377,3 +377,29 @@ describe("session_archived stays off the email pipeline", () => {
     expect(instantBlock).not.toContain("session_archived");
   });
 });
+
+describe("disableAutoArchive experimental flag", () => {
+  test(
+    "keeps the owner's session live when its last PR merges",
+    async () => {
+      const { t, ownerUserId, sessionId } = await fixture();
+      await t.run(async (ctx) =>
+        ctx.db.patch(ownerUserId, {
+          experimentalFlags: { disableAutoArchive: true },
+        }),
+      );
+
+      await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
+        prUrl: PR_URL,
+        action: "closed",
+        merged: true,
+      });
+
+      const session = await t.run(async (ctx) => ctx.db.get(sessionId));
+      expect(session?.archived).not.toBe(true);
+      expect(session?.prState).toBe("merged");
+      expect(await listOwnerNotifications(t, ownerUserId)).toHaveLength(0);
+    },
+    TIMEOUT_MS,
+  );
+});

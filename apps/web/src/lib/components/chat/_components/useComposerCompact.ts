@@ -1,4 +1,5 @@
 import { useRef, type RefObject } from "react";
+import { isEditorValueEmpty } from "@/lib/components/mentions";
 import {
   draftExceedsPillWidth,
   editorOverflowsHorizontally,
@@ -30,20 +31,27 @@ export function useComposerCompact({
   const pillWidthRef = useRef(0);
   const wasCompactRef = useRef(true);
 
-  const editorNode = chromeRef.current?.querySelector(
-    "[data-slot=input-group-control]",
-  );
+  // An empty draft or attached files settle the layout without measuring, so
+  // skip the DOM reads then: read mid-render they force a synchronous layout
+  // of the whole page, ~100 ms when a session switch reveals a long chat.
+  // The pill width is still cached on the first keystroke's render.
+  const needsMeasure = fileCount === 0 && !isEditorValueEmpty(value);
+  const editorNode = needsMeasure
+    ? chromeRef.current?.querySelector("[data-slot=input-group-control]")
+    : null;
   const editor = editorNode instanceof HTMLElement ? editorNode : null;
-  const font = editor ? getComputedStyle(editor).font : "14px sans-serif";
   if (editor && wasCompactRef.current) {
     const inner = readEditorInnerWidth(editor);
     if (inner > 0) pillWidthRef.current = inner;
   }
   const exceedsPill =
-    (editor !== null &&
-      wasCompactRef.current &&
-      editorOverflowsHorizontally(editor)) ||
-    draftExceedsPillWidth(value, pillWidthRef.current, font);
+    editor !== null &&
+    ((wasCompactRef.current && editorOverflowsHorizontally(editor)) ||
+      draftExceedsPillWidth(
+        value,
+        pillWidthRef.current,
+        getComputedStyle(editor).font,
+      ));
   const compact = isComposerCompact({ value, fileCount, exceedsPill });
   wasCompactRef.current = compact;
 

@@ -182,6 +182,17 @@ export function SessionDetailClient({
     }
     setExpandRightSignal((n) => n + 1);
   };
+  // Declared here, not inline in the ChatPanel JSX: inline, the compiler
+  // rebuilds them with that whole block, so they change on every switch
+  // (`isRouteActive`) and re-render each transcript row they reach.
+  const openPrdTab = () => {
+    onSandboxTabChange("prd");
+    setExpandRightSignal((n) => n + 1);
+  };
+  const openAgentsTab = () => {
+    onSandboxTabChange("agents");
+    setExpandRightSignal((n) => n + 1);
+  };
 
   const agentBrowsingAt =
     session === null || session === undefined
@@ -244,14 +255,8 @@ export function SessionDetailClient({
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}
-      onOpenPrdTab={() => {
-        onSandboxTabChange("prd");
-        setExpandRightSignal((n) => n + 1);
-      }}
-      onOpenAgentsTab={() => {
-        onSandboxTabChange("agents");
-        setExpandRightSignal((n) => n + 1);
-      }}
+      onOpenPrdTab={openPrdTab}
+      onOpenAgentsTab={openAgentsTab}
       backgroundAgents={session.backgroundAgents}
     />
   );
