@@ -1,7 +1,11 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { getAIModelProvider, normalizeAIModel } from "../validators";
+import {
+  getAIModelProvider,
+  normalizeAIModel,
+  usesChatDaemon,
+} from "../validators";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import {
   drainSessionChatQueues,
@@ -134,14 +138,21 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   sandboxId: ({ session }) => session.sandboxId,
   repoId: ({ session }) => session.repoId,
   interrupt: async (ctx, { chat, session }) => {
-    if (getAIModelProvider(normalizeAIModel(chat.lastModel)) === "claude") {
+    const model = normalizeAIModel(chat.lastModel);
+    if (getAIModelProvider(model) === "claude") {
       await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
-    } else if (session.sandboxId) {
+    } else if (session.sandboxId && usesChatDaemon(model)) {
       await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
         sandboxId: session.sandboxId,
         repoId: session.repoId,
         entityIdField: "chatId",
         entityId: String(chat._id),
+      });
+    } else if (session.sandboxId) {
+      // One-shot providers have no per-chat daemon pidfile to reap.
+      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+        sandboxId: session.sandboxId,
+        repoId: session.repoId,
       });
     }
   },

@@ -106,6 +106,43 @@ describe("previewToolCalls relay", () => {
   );
 
   test(
+    "the session-wide preview pane sees calls filed under any of its chats",
+    async () => {
+      const f = await fixture();
+      const sideChatId = await f.t.run(async (ctx) => {
+        const session = await ctx.db.get(f.sessionId);
+        if (!session) throw new Error("fixture: session missing");
+        return await ctx.db.insert("sessionChats", {
+          sessionId: f.sessionId,
+          repoId: session.repoId,
+          userId: session.userId,
+          title: "Side",
+          number: 2,
+          isMain: false,
+        });
+      });
+      // The MCP token of a parallel chat carries that chat's id.
+      const sideCallId = await f.t.mutation(internal.previewToolCalls.create, {
+        entityKind: "session",
+        entityId: sideChatId,
+        kind: "list",
+      });
+      const pending = await f.asUser.query(api.previewToolCalls.listPending, {
+        parentId: f.sessionId,
+      });
+      expect(pending.map((row) => row._id)).toEqual([f.callId, sideCallId]);
+      if (sideCallId === null) throw new Error("create returned null");
+      expect(
+        await f.asUser.mutation(api.previewToolCalls.claim, {
+          id: sideCallId,
+          clientId: "tab-a",
+        }),
+      ).toBe(true);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "ignores a completion from a tab that did not win the claim",
     async () => {
       const f = await fixture();

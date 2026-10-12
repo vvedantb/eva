@@ -169,6 +169,7 @@ import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
 import type * as _migrations_deploymentUrl from "../_migrations/deploymentUrl.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
 import type * as _migrations_logProjectIds from "../_migrations/logProjectIds.js";
+import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyChatRows.js";
 import type * as _migrations_projectInterview from "../_migrations/projectInterview.js";
 import type * as _migrations_projectPhases from "../_migrations/projectPhases.js";
 import type * as _migrations_removeProjectIdField from "../_migrations/removeProjectIdField.js";
@@ -526,6 +527,7 @@ import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 import type * as workflowManager from "../workflowManager.js";
 import type * as workflowWatchdog from "../workflowWatchdog.js";
+import type * as zzDevSeed from "../zzDevSeed.js";
 
 import type {
   ApiFromModules,
@@ -695,6 +697,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/deploymentUrl": typeof _migrations_deploymentUrl;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
   "_migrations/logProjectIds": typeof _migrations_logProjectIds;
+  "_migrations/moveLegacyChatRows": typeof _migrations_moveLegacyChatRows;
   "_migrations/projectInterview": typeof _migrations_projectInterview;
   "_migrations/projectPhases": typeof _migrations_projectPhases;
   "_migrations/removeProjectIdField": typeof _migrations_removeProjectIdField;
@@ -1052,6 +1055,7 @@ declare const fullApi: ApiFromModules<{
   validators: typeof validators;
   workflowManager: typeof workflowManager;
   workflowWatchdog: typeof workflowWatchdog;
+  zzDevSeed: typeof zzDevSeed;
 }>;
 
 /**

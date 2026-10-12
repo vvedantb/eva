@@ -15,7 +15,8 @@ import {
 } from "../_pullRequests/store";
 import { reconcileSessionArchiveState } from "./prArchive";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
-import { findOpenSessionTurn } from "../_chat/turnStore";
+import { hasOpenChatTurn } from "../_chat/turnProjection";
+import { findMainChat } from "../_sessionChats/helpers";
 
 /** Retrieves a session by ID for internal use (no auth check). */
 export const getInternal = internalQuery({
@@ -194,11 +195,15 @@ export const getTitleContext = internalQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
-    const newestFirst = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .order("desc")
-      .take(TITLE_CONTEXT_MESSAGE_LIMIT);
+    // The title follows the session's own conversation: the Main chat.
+    const mainChat = await findMainChat(ctx.db, args.sessionId);
+    const newestFirst = mainChat
+      ? await ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", mainChat._id))
+          .order("desc")
+          .take(TITLE_CONTEXT_MESSAGE_LIMIT)
+      : [];
     return {
       title: session.title,
       prUrl: session.prUrl,
@@ -278,8 +283,10 @@ const revertContextValidator = v.union(
     beforeSha: v.string(),
     /** Multi-repo checkpoint, when the turn recorded one (see messageFields.beforeShas). */
     beforeShas: v.optional(v.array(repoShaValidator)),
-    /** 1-based position of this reply among the session's real assistant turns. */
+    /** 1-based position of this reply among its chat's real assistant turns. */
     turnNumber: v.number(),
+    /** The chat the turn ran in; the restore alert lands there. */
+    chatId: v.id("sessionChats"),
   }),
   v.object({ status: v.literal("not_running"), repoId: v.id("githubRepos") }),
   v.object({ status: v.literal("turn_open"), repoId: v.id("githubRepos") }),
@@ -298,7 +305,11 @@ export const getRevertContext = internalQuery({
     if (!session) throw new Error("Session not found");
     const messageId = ctx.db.normalizeId("messages", args.messageId);
     const message = messageId === null ? null : await ctx.db.get(messageId);
-    if (!message || message.parentId !== args.sessionId) {
+    // Session messages hang off one of the session's chats.
+    const chatId =
+      message === null ? null : ctx.db.normalizeId("sessionChats", message.parentId);
+    const chat = chatId === null ? null : await ctx.db.get(chatId);
+    if (!message || !chat || chat.sessionId !== args.sessionId) {
       throw new Error("Message not found");
     }
     const repoId = session.repoId;
@@ -312,12 +323,13 @@ export const getRevertContext = internalQuery({
     ) {
       return { status: "not_running", repoId };
     }
-    if ((await findOpenSessionTurn(ctx, args.sessionId)) !== null) {
+    // Any chat's open turn blocks: all chats share the session's worktree.
+    if (await hasOpenChatTurn(ctx.db, args.sessionId)) {
       return { status: "turn_open", repoId };
     }
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
       .collect();
     const turnNumber = messages.filter(
       (row) =>
@@ -333,6 +345,7 @@ export const getRevertContext = internalQuery({
       beforeSha: message.beforeSha,
       beforeShas: message.beforeShas,
       turnNumber,
+      chatId: chat._id,
     };
   },
 });

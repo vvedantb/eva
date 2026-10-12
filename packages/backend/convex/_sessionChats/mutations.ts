@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
+import { internalMutation } from "../_generated/server";
 import { authMutation, hasRepoAccess } from "../functions";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 import {
@@ -11,6 +12,7 @@ import {
   createSessionChat,
   ensureMainChat,
   getSessionChatOrThrow,
+  moveLegacySessionRows,
   sessionChatValidator,
 } from "./helpers";
 
@@ -28,6 +30,19 @@ export const ensureMain = authMutation({
       throw new Error("Not authorized");
     }
     return await ensureMainChat(ctx, session);
+  },
+});
+
+/** Next batch of `moveLegacySessionRows`; reschedules itself until the session id holds no chat rows. */
+export const moveLegacyRows = internalMutation({
+  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    const chat = await ctx.db.get(args.chatId);
+    if (!session || !chat) return null;
+    await moveLegacySessionRows(ctx, session, chat._id);
+    return null;
   },
 });
 

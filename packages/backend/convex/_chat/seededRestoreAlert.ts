@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
+import { ensureMainChat } from "../_sessionChats/helpers";
 
 /**
  * Chat alert for a failed seeded Supabase restore. The restore is non-fatal
@@ -16,8 +17,14 @@ export const insert = internalMutation({
   handler: async (ctx, args) => {
     const parent = await ctx.db.get(args.parentId);
     if (!parent) return null;
+    // A session's chat is its Main chat; tasks and projects are their own.
+    const sessionId = ctx.db.normalizeId("sessions", args.parentId);
+    const session = sessionId === null ? null : await ctx.db.get(sessionId);
+    const parentId = session
+      ? (await ensureMainChat(ctx, session))._id
+      : args.parentId;
     await ctx.db.insert("messages", {
-      parentId: args.parentId,
+      parentId,
       role: "assistant",
       content:
         "Local database failed to start — dev server launched anyway. Pages that need the database may error.",

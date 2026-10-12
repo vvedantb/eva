@@ -4,6 +4,7 @@ import type { DatabaseReader } from "../_generated/server";
 import { authQuery, hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
+import { findMainChat } from "../_sessionChats/helpers";
 import {
   deploymentStatusValidator,
   entityNumIdFields,
@@ -310,7 +311,9 @@ export const getFirstMessagePreview = authQuery({
     const session = await ctx.db.get(args.id);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    return await firstUserMessagePreview(ctx.db, args.id);
+    const mainChat = await findMainChat(ctx.db, args.id);
+    if (!mainChat) return null;
+    return await firstUserMessagePreview(ctx.db, mainChat._id);
   },
 });
 

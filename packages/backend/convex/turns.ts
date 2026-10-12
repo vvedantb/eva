@@ -576,10 +576,20 @@ export const finalizeExpired = internalMutation({
   handler: async (ctx, args) => {
     const turn = await ctx.db.get(args.turnId);
     if (!turn || !turn.open || turn.leaseExpiresAt >= Date.now()) return null;
-    await turnAdapterForEntity(ctx.db, turn, {
+    const finalize = turnAdapterForEntity(ctx.db, turn, {
       chat: (adapter, id) =>
         finalizeExpiredChatTurn(ctx, adapter, id, turn, args.cause),
       agent: (owner) => finalizeExpiredAgentTurn(ctx, owner, turn, args.cause),
+    });
+    if (finalize) {
+      await finalize;
+      return null;
+    }
+    // No surface owns the id (e.g. a pre-sessionChats turn keyed by a session
+    // id). Close it anyway, or it stays open forever and starves `listExpired`.
+    await clearStreamingActivity(ctx, turn.streamingEntityId);
+    await closeTurn(ctx, turn, "error", {
+      error: `Turn owner not recognised (${args.cause})`,
     });
     return null;
   },

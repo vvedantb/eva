@@ -15,6 +15,7 @@ import {
   chatEntityKindValidator,
   resolveChatParent,
 } from "../_chat/chatParent";
+import { listSessionChats } from "../_sessionChats/helpers";
 
 /**
  * Relay for agent → live-preview WebMCP tool calls. The sandbox cannot reach
@@ -52,19 +53,37 @@ const callValidator = v.object({
   ...previewToolCallFields,
 });
 
-/** Unclaimed requests for one chat, oldest first, for the open tab to run. */
+/**
+ * Unclaimed requests for the open tab to run, oldest first. The preview pane
+ * is session-wide while the MCP tool files rows under the calling chat, so a
+ * session id also collects the rows of each of its chats.
+ */
 export const listPending = authQuery({
   args: { parentId: previewToolCallFields.parentId },
   returns: v.array(pendingCallValidator),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
-    const rows = await ctx.db
-      .query("previewToolCalls")
-      .withIndex("by_parent_status", (q) =>
-        q.eq("parentId", args.parentId).eq("status", "pending"),
-      )
-      .order("asc")
-      .take(PENDING_PAGE_SIZE);
+    const sessionId = ctx.db.normalizeId("sessions", args.parentId);
+    const chats = sessionId ? await listSessionChats(ctx.db, sessionId) : [];
+    const parentIds: Doc<"previewToolCalls">["parentId"][] = [
+      args.parentId,
+      ...chats.map((chat) => chat._id),
+    ];
+    const pages = await Promise.all(
+      parentIds.map((parentId) =>
+        ctx.db
+          .query("previewToolCalls")
+          .withIndex("by_parent_status", (q) =>
+            q.eq("parentId", parentId).eq("status", "pending"),
+          )
+          .order("asc")
+          .take(PENDING_PAGE_SIZE),
+      ),
+    );
+    const rows = pages
+      .flat()
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, PENDING_PAGE_SIZE);
     return rows.map((row) => ({
       _id: row._id,
       kind: row.kind,
