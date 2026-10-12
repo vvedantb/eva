@@ -305,53 +305,8 @@ function ChatBodyInner({
   onForkTranscript,
   hideJumpRail = false,
 }: ChatBodyProps) {
-  const citations = usePendingCitations();
-  const snapshots = usePendingPreviewSnapshots();
-  const webmcp = usePendingWebMcp();
-  const sendWithPendingContext = async (
-    content: string,
-    attachmentStorageIds?: Id<"_storage">[],
-  ) => {
-    const sentCitations = citations?.items ?? [];
-    const sentSnapshots = snapshots?.items ?? [];
-    const sentWebMcp = webmcp?.items ?? [];
-    const withCitations = appendCitationsToPrompt(content, sentCitations);
-    const withSnapshots = appendSnapshotsToPrompt(
-      withCitations,
-      sentSnapshots.map((item) => item.snapshot),
-    );
-    const withWebMcp = appendWebMcpToPrompt(
-      withSnapshots,
-      sentWebMcp.map((item) => item.discovery),
-    );
-    // Settlement is observed, not awaited: the composer only empties once this
-    // resolves, and holding the user's text on screen until the mutation
-    // round-trips would undo the optimistic clear every surface relies on.
-    // Same contract as useChatSend's `review?.clear()`: the pending context
-    // is consumed only once the send has actually succeeded, so a rejected send
-    // leaves the chips attached for the retry. And only the exact items that
-    // went into this prompt are dropped — `clear()` also threw away anything
-    // cited while the send was in flight, which was never sent.
-    void onSend(withWebMcp, attachmentStorageIds, {
-      draftContent: content,
-    }).then(
-      () => {
-        for (const citation of sentCitations) citations?.remove(citation.id);
-        for (const item of sentSnapshots) snapshots?.remove(item.id);
-        for (const item of sentWebMcp) webmcp?.remove(item.id);
-      },
-      () => {
-        // The send handler already raised the failure toast (with the typed
-        // text behind "Restore draft"); the chips are all we own here, and they
-        // stay so the retry carries the same context.
-      },
-    );
-  };
-  const hasComposerContext =
-    (hasPendingContext ?? false) ||
-    (citations?.items.length ?? 0) > 0 ||
-    (snapshots?.items.length ?? 0) > 0 ||
-    (webmcp?.items.length ?? 0) > 0;
+  const { citations, sendWithPendingContext, hasComposerContext } =
+    usePendingComposerContext(onSend, hasPendingContext);
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
@@ -359,13 +314,12 @@ function ChatBodyInner({
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
 
-  // Composer predictions read the chat only while it waits on the user and is
-  // on screen — hidden cached shells must not each spend a model call.
-  const lastMessageId = messages.at(-1)?._id;
-  const predictionTarget =
-    chatParentId && isRouteActive && !isExecuting && lastMessageId
-      ? { parentId: chatParentId, lastMessageId }
-      : undefined;
+  const predictionTarget = chatPredictionTarget(
+    messages,
+    chatParentId,
+    isRouteActive,
+    isExecuting,
+  );
 
   // Opening a long chat used to commit every settled turn in one blocking
   // render — ~1s of locked main thread on a heavy transcript. Only the last
@@ -398,62 +352,21 @@ function ChatBodyInner({
   const { expandedByMessageId, setMessageExpanded } =
     useChangedFilesExpansion(conversationId);
 
-  const [dismissedQuestionKey, setDismissedQuestionKey] = useState<
-    string | null
-  >(null);
-  // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
-  // the turn executing while waiting for the user; mirroring that would lock the UI.
-  const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
+  const {
+    dockedQuestions,
+    blockingQuestions,
+    isAnsweringQuestion,
+    handleQuestionAnswer,
+    handleBlockingAnswer,
+  } = useDockedQuestion({
+    streamingPendingQuestion,
+    streamingTarget,
+    lastMessage,
+    blockingQuestion,
+    onAnswerBlockingQuestion,
+    onSend,
+  });
   const [forkThroughId, setForkThroughId] = useState<string | null>(null);
-  const pendingQuestionRaw =
-    streamingPendingQuestion ??
-    streamingTarget?.pendingQuestion ??
-    lastMessage?.pendingQuestion;
-  const questionDismissed =
-    pendingQuestionRaw !== undefined &&
-    pendingQuestionRaw !== null &&
-    pendingQuestionRaw !== "" &&
-    dismissedQuestionKey === pendingQuestionRaw;
-  const activePendingQuestion = questionDismissed
-    ? null
-    : parsePendingQuestion(pendingQuestionRaw);
-  // A blocking AskUserQuestion (Agent SDK) takes precedence over the
-  // fire-and-forget path: it keeps the turn paused until the user answers.
-  const blockingQuestions = blockingQuestion
-    ? parsePendingQuestion(blockingQuestion.payload)
-    : null;
-  // Both question kinds render in the composer's slot, so the card stays put
-  // instead of scrolling with the conversation. Blocking wins: it holds the
-  // turn open and its answer resumes the run.
-  const dockedQuestions = blockingQuestions ?? activePendingQuestion;
-
-  const handleQuestionAnswer = async (answer: string) => {
-    if (pendingQuestionRaw) {
-      setDismissedQuestionKey(pendingQuestionRaw);
-    }
-    setIsAnsweringQuestion(true);
-    // Reset is duplicated into the catch instead of using `finally`: React
-    // Compiler bails on the whole file when it meets a `finally` clause.
-    try {
-      await onSend(answer);
-    } catch (error) {
-      setIsAnsweringQuestion(false);
-      throw error;
-    }
-    setIsAnsweringQuestion(false);
-  };
-
-  const handleBlockingAnswer = async (answers: Record<string, string>) => {
-    if (!blockingQuestion || !onAnswerBlockingQuestion) return;
-    setIsAnsweringQuestion(true);
-    try {
-      await onAnswerBlockingQuestion(blockingQuestion.toolUseId, answers);
-    } catch (error) {
-      setIsAnsweringQuestion(false);
-      throw error;
-    }
-    setIsAnsweringQuestion(false);
-  };
 
   const messageHistory = buildMessageHistory(displayMessages);
 
@@ -480,94 +393,23 @@ function ChatBodyInner({
 
   const currentUserId = useQuery(api.auth.me);
 
-  // The turn that just finished belongs to whoever sent the last user message.
-  // Unattributed rows (legacy / optimistic) count as own, matching how the
-  // transcript itself attributes them.
-  const lastUserMessage = displayMessages[lastUserMessageIndex];
-  useAgentReplyChime({
-    conversationId,
-    isExecuting,
-    isOwnTurn:
-      lastUserMessage === undefined ||
-      !isOtherUserChatMessage(lastUserMessage, currentUserId),
-  });
-  const { newSinceAt } = useChatReadState({
-    parentId: chatParentId,
-    active: isRouteActive,
-  });
-  const newMessageIds = findNewMessageIds(
+  const { newMessageIds, newBoundaryId, newDivider, jumpToNewDivider } =
+    useChatNewMessages({
+      conversationId,
+      chatParentId,
+      isRouteActive,
+      isExecuting,
+      displayMessages,
+      lastUserMessageIndex,
+      currentUserId,
+    });
+
+  const panelPlacement = useInlineCardPlacement(chatParentId, displayMessages);
+
+  const firstNameByUserId = useFirstNameByUserId(
     displayMessages,
-    newSinceAt,
     currentUserId,
   );
-  const newBoundaryId = newMessageIds[0];
-  // Seen state lives here, not in the divider: the pill is a sibling and needs
-  // it. It is keyed by the boundary id, so a new boundary starts unseen.
-  const newDivider = useSeenOnce(newBoundaryId);
-  const jumpToNewDivider = () => {
-    newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
-    newDivider.markSeen();
-  };
-
-  // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
-  // (`render_html`) and secret requests (`request_env_var`). One query each
-  // per chat covers all three surfaces, since every one of them renders
-  // through this component.
-  const chatUiPanels = useQuery(
-    api.chatUi.listByParent,
-    chatParentId ? { parentId: chatParentId } : "skip",
-  );
-  const htmlRenders = useQuery(
-    api.chatHtml.listByParent,
-    chatParentId ? { parentId: chatParentId } : "skip",
-  );
-  const envVarRequests = useQuery(
-    api.envVarRequests.listByParent,
-    chatParentId ? { parentId: chatParentId } : "skip",
-  );
-  const panelPlacement = placeChatUiPanels(
-    [
-      ...(chatUiPanels ?? []).map(
-        (panel): InlineCard => ({
-          _id: panel._id,
-          messageId: panel.messageId,
-          createdAt: panel.createdAt,
-          card: { kind: "panel", spec: panel.spec },
-        }),
-      ),
-      ...(htmlRenders ?? []).map(
-        (render): InlineCard => ({
-          _id: render._id,
-          messageId: render.messageId,
-          createdAt: render.createdAt,
-          card: { kind: "html", render },
-        }),
-      ),
-      ...(envVarRequests ?? []).map(
-        (request): InlineCard => ({
-          _id: request._id,
-          messageId: request.messageId,
-          createdAt: request.createdAt,
-          card: { kind: "envVarRequest", request },
-        }),
-      ),
-    ],
-    new Set(displayMessages.map((message) => message._id)),
-  );
-
-  const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
-  const users = useQuery(
-    api.users.getMany,
-    otherUserIds.length > 0 ? { ids: otherUserIds } : "skip",
-  );
-  const firstNameByUserId = (() => {
-    const map = new Map<Id<"users">, string>();
-    for (const user of users ?? []) {
-      const name = firstNameFromUser(user);
-      if (name) map.set(user._id, name);
-    }
-    return map;
-  })();
 
   // Retry re-sends the failed turn's prompt through the normal send path. It is
   // withheld while a turn is running (the send would only queue behind it) and
@@ -711,45 +553,17 @@ function ChatBodyInner({
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
           scrollClassName="[container-type:size]"
         >
-          {displayMessages.length === 0 ? (
-            transcriptTail ? (
-              // Bottom-anchored like a live last turn, so the tail sits in the
-              // same spot above the composer whether or not messages exist.
-              <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
-                {transcriptTail}
-              </div>
-            ) : isLoadingMessages ? (
-              <ChatTranscriptLoading />
-            ) : (
-              <ChatEmptyState
-                title={emptyStateTitle}
-                description={emptyStateDescription}
-                {...(onStartSandbox
-                  ? {
-                      action: {
-                        label: SANDBOX_CHAT_COPY.wakeAction,
-                        onClick: onStartSandbox,
-                      },
-                    }
-                  : {})}
-              />
-            )
-          ) : lastUserMessageIndex < 0 ? (
-            displayMessages.map((message) => renderMessage(message))
-          ) : (
-            <>
-              {backlogReady
-                ? displayMessages
-                    .slice(0, lastUserMessageIndex)
-                    .map((message) => renderMessage(message, true))
-                : null}
-              <ChatLastTurn>
-                {displayMessages
-                  .slice(lastUserMessageIndex)
-                  .map((message) => renderMessage(message))}
-              </ChatLastTurn>
-            </>
-          )}
+          <ChatBodyTranscript
+            displayMessages={displayMessages}
+            transcriptTail={transcriptTail}
+            isLoadingMessages={isLoadingMessages}
+            emptyStateTitle={emptyStateTitle}
+            emptyStateDescription={emptyStateDescription}
+            onStartSandbox={onStartSandbox}
+            lastUserMessageIndex={lastUserMessageIndex}
+            backlogReady={backlogReady}
+            renderMessage={renderMessage}
+          />
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
@@ -835,36 +649,391 @@ function ChatBodyInner({
           )}
         </AnimatePresence>
       )}
-      <MessageForkDialog
-        prefix={
-          forkThroughId
-            ? collectForkPrefix(
-                displayMessages.map((message) => ({
-                  id: message._id,
-                  role: message.role,
-                  content: message.content,
-                  isSystemAlert: message.isSystemAlert,
-                })),
-                forkThroughId,
-              )
-            : null
-        }
-        open={forkThroughId !== null}
-        onOpenChange={(open) => {
-          if (!open) setForkThroughId(null);
-        }}
-        onConfirm={
-          onForkTranscript
-            ? async (prefix) => {
-                await onForkTranscript({
-                  throughMessageId: prefix.throughMessageId,
-                  title: forkThreadTitle(prefix),
-                  prompt: formatForkPrompt(prefix),
-                });
-              }
-            : undefined
-        }
+      <ChatBodyForkDialog
+        displayMessages={displayMessages}
+        forkThroughId={forkThroughId}
+        setForkThroughId={setForkThroughId}
+        onForkTranscript={onForkTranscript}
       />
     </div>
+  );
+}
+
+/** Pending citation / preview-snapshot / WebMCP context, appended on send. */
+function usePendingComposerContext(
+  onSend: ChatBodyProps["onSend"],
+  hasPendingContext: boolean | undefined,
+) {
+  const citations = usePendingCitations();
+  const snapshots = usePendingPreviewSnapshots();
+  const webmcp = usePendingWebMcp();
+  const sendWithPendingContext = async (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => {
+    const sentCitations = citations?.items ?? [];
+    const sentSnapshots = snapshots?.items ?? [];
+    const sentWebMcp = webmcp?.items ?? [];
+    const withCitations = appendCitationsToPrompt(content, sentCitations);
+    const withSnapshots = appendSnapshotsToPrompt(
+      withCitations,
+      sentSnapshots.map((item) => item.snapshot),
+    );
+    const withWebMcp = appendWebMcpToPrompt(
+      withSnapshots,
+      sentWebMcp.map((item) => item.discovery),
+    );
+    // Settlement is observed, not awaited: the composer only empties once this
+    // resolves, and holding the user's text on screen until the mutation
+    // round-trips would undo the optimistic clear every surface relies on.
+    // Same contract as useChatSend's `review?.clear()`: the pending context
+    // is consumed only once the send has actually succeeded, so a rejected send
+    // leaves the chips attached for the retry. And only the exact items that
+    // went into this prompt are dropped — `clear()` also threw away anything
+    // cited while the send was in flight, which was never sent.
+    void onSend(withWebMcp, attachmentStorageIds, {
+      draftContent: content,
+    }).then(
+      () => {
+        for (const citation of sentCitations) citations?.remove(citation.id);
+        for (const item of sentSnapshots) snapshots?.remove(item.id);
+        for (const item of sentWebMcp) webmcp?.remove(item.id);
+      },
+      () => {
+        // The send handler already raised the failure toast (with the typed
+        // text behind "Restore draft"); the chips are all we own here, and they
+        // stay so the retry carries the same context.
+      },
+    );
+  };
+  const hasComposerContext =
+    (hasPendingContext ?? false) ||
+    (citations?.items.length ?? 0) > 0 ||
+    (snapshots?.items.length ?? 0) > 0 ||
+    (webmcp?.items.length ?? 0) > 0;
+  return { citations, sendWithPendingContext, hasComposerContext };
+}
+
+// Composer predictions read the chat only while it waits on the user and is
+// on screen — hidden cached shells must not each spend a model call.
+function chatPredictionTarget(
+  messages: ChatBodyMessage[],
+  chatParentId: ChatParentId | undefined,
+  isRouteActive: boolean,
+  isExecuting: boolean,
+) {
+  const lastMessageId = messages.at(-1)?._id;
+  return chatParentId && isRouteActive && !isExecuting && lastMessageId
+    ? { parentId: chatParentId, lastMessageId }
+    : undefined;
+}
+
+/** The question card docked in the composer's slot, and its answer handlers. */
+function useDockedQuestion({
+  streamingPendingQuestion,
+  streamingTarget,
+  lastMessage,
+  blockingQuestion,
+  onAnswerBlockingQuestion,
+  onSend,
+}: {
+  streamingPendingQuestion: string | undefined;
+  streamingTarget: ChatBodyMessage | undefined;
+  lastMessage: ChatBodyMessage | undefined;
+  blockingQuestion: ChatBodyProps["blockingQuestion"];
+  onAnswerBlockingQuestion: ChatBodyProps["onAnswerBlockingQuestion"];
+  onSend: ChatBodyProps["onSend"];
+}) {
+  const [dismissedQuestionKey, setDismissedQuestionKey] = useState<
+    string | null
+  >(null);
+  // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
+  // the turn executing while waiting for the user; mirroring that would lock the UI.
+  const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
+  const pendingQuestionRaw =
+    streamingPendingQuestion ??
+    streamingTarget?.pendingQuestion ??
+    lastMessage?.pendingQuestion;
+  const questionDismissed =
+    pendingQuestionRaw !== undefined &&
+    pendingQuestionRaw !== null &&
+    pendingQuestionRaw !== "" &&
+    dismissedQuestionKey === pendingQuestionRaw;
+  const activePendingQuestion = questionDismissed
+    ? null
+    : parsePendingQuestion(pendingQuestionRaw);
+  // A blocking AskUserQuestion (Agent SDK) takes precedence over the
+  // fire-and-forget path: it keeps the turn paused until the user answers.
+  const blockingQuestions = blockingQuestion
+    ? parsePendingQuestion(blockingQuestion.payload)
+    : null;
+  // Both question kinds render in the composer's slot, so the card stays put
+  // instead of scrolling with the conversation. Blocking wins: it holds the
+  // turn open and its answer resumes the run.
+  const dockedQuestions = blockingQuestions ?? activePendingQuestion;
+
+  const handleQuestionAnswer = async (answer: string) => {
+    if (pendingQuestionRaw) {
+      setDismissedQuestionKey(pendingQuestionRaw);
+    }
+    setIsAnsweringQuestion(true);
+    // Reset is duplicated into the catch instead of using `finally`: React
+    // Compiler bails on the whole file when it meets a `finally` clause.
+    try {
+      await onSend(answer);
+    } catch (error) {
+      setIsAnsweringQuestion(false);
+      throw error;
+    }
+    setIsAnsweringQuestion(false);
+  };
+
+  const handleBlockingAnswer = async (answers: Record<string, string>) => {
+    if (!blockingQuestion || !onAnswerBlockingQuestion) return;
+    setIsAnsweringQuestion(true);
+    try {
+      await onAnswerBlockingQuestion(blockingQuestion.toolUseId, answers);
+    } catch (error) {
+      setIsAnsweringQuestion(false);
+      throw error;
+    }
+    setIsAnsweringQuestion(false);
+  };
+
+  return {
+    dockedQuestions,
+    blockingQuestions,
+    isAnsweringQuestion,
+    handleQuestionAnswer,
+    handleBlockingAnswer,
+  };
+}
+
+/** Reply chime, read state and the "NEW" divider for the unread rows. */
+function useChatNewMessages({
+  conversationId,
+  chatParentId,
+  isRouteActive,
+  isExecuting,
+  displayMessages,
+  lastUserMessageIndex,
+  currentUserId,
+}: {
+  conversationId: string;
+  chatParentId: ChatParentId | undefined;
+  isRouteActive: boolean;
+  isExecuting: boolean;
+  displayMessages: ChatBodyMessage[];
+  lastUserMessageIndex: number;
+  currentUserId: string | undefined;
+}) {
+  // The turn that just finished belongs to whoever sent the last user message.
+  // Unattributed rows (legacy / optimistic) count as own, matching how the
+  // transcript itself attributes them.
+  const lastUserMessage = displayMessages[lastUserMessageIndex];
+  useAgentReplyChime({
+    conversationId,
+    isExecuting,
+    isOwnTurn:
+      lastUserMessage === undefined ||
+      !isOtherUserChatMessage(lastUserMessage, currentUserId),
+  });
+  const { newSinceAt } = useChatReadState({
+    parentId: chatParentId,
+    active: isRouteActive,
+  });
+  const newMessageIds = findNewMessageIds(
+    displayMessages,
+    newSinceAt,
+    currentUserId,
+  );
+  const newBoundaryId = newMessageIds[0];
+  // Seen state lives here, not in the divider: the pill is a sibling and needs
+  // it. It is keyed by the boundary id, so a new boundary starts unseen.
+  const newDivider = useSeenOnce(newBoundaryId);
+  const jumpToNewDivider = () => {
+    newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    newDivider.markSeen();
+  };
+  return { newMessageIds, newBoundaryId, newDivider, jumpToNewDivider };
+}
+
+/**
+ * Agent-posted inline cards: composed panels (`render_ui`), HTML pages
+ * (`render_html`) and secret requests (`request_env_var`). One query each per
+ * chat covers all three surfaces, since every one of them renders through
+ * ChatBody.
+ */
+function useInlineCardPlacement(
+  chatParentId: ChatParentId | undefined,
+  displayMessages: ChatBodyMessage[],
+) {
+  const chatUiPanels = useQuery(
+    api.chatUi.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const htmlRenders = useQuery(
+    api.chatHtml.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const envVarRequests = useQuery(
+    api.envVarRequests.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  return placeChatUiPanels(
+    [
+      ...(chatUiPanels ?? []).map(
+        (panel): InlineCard => ({
+          _id: panel._id,
+          messageId: panel.messageId,
+          createdAt: panel.createdAt,
+          card: { kind: "panel", spec: panel.spec },
+        }),
+      ),
+      ...(htmlRenders ?? []).map(
+        (render): InlineCard => ({
+          _id: render._id,
+          messageId: render.messageId,
+          createdAt: render.createdAt,
+          card: { kind: "html", render },
+        }),
+      ),
+      ...(envVarRequests ?? []).map(
+        (request): InlineCard => ({
+          _id: request._id,
+          messageId: request.messageId,
+          createdAt: request.createdAt,
+          card: { kind: "envVarRequest", request },
+        }),
+      ),
+    ],
+    new Set(displayMessages.map((message) => message._id)),
+  );
+}
+
+/** First names of the other people who posted in this chat. */
+function useFirstNameByUserId(
+  displayMessages: ChatBodyMessage[],
+  currentUserId: string | undefined,
+) {
+  const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
+  const users = useQuery(
+    api.users.getMany,
+    otherUserIds.length > 0 ? { ids: otherUserIds } : "skip",
+  );
+  const map = new Map<Id<"users">, string>();
+  for (const user of users ?? []) {
+    const name = firstNameFromUser(user);
+    if (name) map.set(user._id, name);
+  }
+  return map;
+}
+
+/** The transcript rows, or the tail / loading / empty state before any exist. */
+function ChatBodyTranscript({
+  displayMessages,
+  transcriptTail,
+  isLoadingMessages,
+  emptyStateTitle,
+  emptyStateDescription,
+  onStartSandbox,
+  lastUserMessageIndex,
+  backlogReady,
+  renderMessage,
+}: {
+  displayMessages: ChatBodyMessage[];
+  transcriptTail: ReactNode;
+  isLoadingMessages: boolean;
+  emptyStateTitle: string;
+  emptyStateDescription: string;
+  onStartSandbox: (() => void) | undefined;
+  lastUserMessageIndex: number;
+  backlogReady: boolean;
+  renderMessage: (message: ChatBodyMessage, isBacklog?: boolean) => ReactNode;
+}) {
+  return displayMessages.length === 0 ? (
+    transcriptTail ? (
+      // Bottom-anchored like a live last turn, so the tail sits in the
+      // same spot above the composer whether or not messages exist.
+      <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
+        {transcriptTail}
+      </div>
+    ) : isLoadingMessages ? (
+      <ChatTranscriptLoading />
+    ) : (
+      <ChatEmptyState
+        title={emptyStateTitle}
+        description={emptyStateDescription}
+        {...(onStartSandbox
+          ? {
+              action: {
+                label: SANDBOX_CHAT_COPY.wakeAction,
+                onClick: onStartSandbox,
+              },
+            }
+          : {})}
+      />
+    )
+  ) : lastUserMessageIndex < 0 ? (
+    displayMessages.map((message) => renderMessage(message))
+  ) : (
+    <>
+      {backlogReady
+        ? displayMessages
+            .slice(0, lastUserMessageIndex)
+            .map((message) => renderMessage(message, true))
+        : null}
+      <ChatLastTurn>
+        {displayMessages
+          .slice(lastUserMessageIndex)
+          .map((message) => renderMessage(message))}
+      </ChatLastTurn>
+    </>
+  );
+}
+
+/** Confirms forking the transcript through the picked message. */
+function ChatBodyForkDialog({
+  displayMessages,
+  forkThroughId,
+  setForkThroughId,
+  onForkTranscript,
+}: {
+  displayMessages: ChatBodyMessage[];
+  forkThroughId: string | null;
+  setForkThroughId: (id: string | null) => void;
+  onForkTranscript: ChatBodyProps["onForkTranscript"];
+}) {
+  return (
+    <MessageForkDialog
+      prefix={
+        forkThroughId
+          ? collectForkPrefix(
+              displayMessages.map((message) => ({
+                id: message._id,
+                role: message.role,
+                content: message.content,
+                isSystemAlert: message.isSystemAlert,
+              })),
+              forkThroughId,
+            )
+          : null
+      }
+      open={forkThroughId !== null}
+      onOpenChange={(open) => {
+        if (!open) setForkThroughId(null);
+      }}
+      onConfirm={
+        onForkTranscript
+          ? async (prefix) => {
+              await onForkTranscript({
+                throughMessageId: prefix.throughMessageId,
+                title: forkThreadTitle(prefix),
+                prompt: formatForkPrompt(prefix),
+              });
+            }
+          : undefined
+      }
+    />
   );
 }

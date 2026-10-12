@@ -1,27 +1,22 @@
 "use client";
 
-import { toast, useElapsedSeconds } from "@eva/ui";
+import { useElapsedSeconds } from "@eva/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { useState } from "react";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { taskPrUrl } from "@/lib/githubPr";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import {
   canEditTaskText,
   type TaskDetailTab,
 } from "./_components/task-detail-constants";
 import { taskRunStreamingEntityId } from "./firstRunChatTurn";
-
-const PREVIEW_SANDBOX_ALLOWED_STATUSES = [
-  "code_review",
-  "business_review",
-  "done",
-];
+import {
+  useTaskDetailTab,
+  useTaskExecutionControls,
+  useTaskSandboxControls,
+} from "./useTaskDetailControls";
 
 type QuickTaskDetailRouting = {
   detailTab: TaskDetailTab;
@@ -49,10 +44,8 @@ export type UseTaskDetailRouting =
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-detail"; project: ProjectTaskDetailRouting };
 
-export function useTaskDetail(
-  taskId: Id<"agentTasks">,
-  routing?: UseTaskDetailRouting,
-) {
+/** Every query the task detail reads, in a fixed subscription order. */
+function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskResult = useQuery(api.agentTasks.get, { id: taskId });
   const task = taskResult === null ? null : (taskResult ?? undefined);
   const currentUserId = useQuery(api.auth.me);
@@ -86,331 +79,174 @@ export function useTaskDetail(
     task?.repoId ? { id: task.repoId } : "skip",
   );
 
-  const startExecution = useMutation(api.agentTasks.startExecution);
-  const cancelExecution = useMutation(api.taskWorkflow.cancelExecution);
-  const startTaskSandboxMutation = useMutation(api.agentTasks.startTaskSandbox);
-  const stopTaskSandboxMutation = useMutation(api.agentTasks.stopTaskSandbox);
-  const retryStartupCommandsMutation = useMutation(
-    api.agentTasks.retryStartupCommands,
-  );
-  const runDevServerMutation = useMutation(api.agentTasks.runDevServer);
-  const runBackgroundCommandsMutation = useMutation(
-    api.agentTasks.runBackgroundCommands,
-  );
-  const createTaskPrAction = useAction(api.taskWorkflowActions.createTaskPr);
+  return {
+    taskResult,
+    task,
+    isOwner,
+    isBlocked,
+    runs,
+    hasActiveRun,
+    hasRuns,
+    isProjectTask,
+    activeRun,
+    activeRunElapsed,
+    streaming,
+    users,
+    projects,
+    comments,
+    taskActivity,
+    repoForTask,
+  };
+}
 
-  /**
-   * Read straight off the task row — never mirrored into local state. A mirror
-   * had to be re-seeded whenever the row changed, and any render that seeded it
-   * before `task` arrived took the repo default instead: that is how the
-   * Properties column showed `staging` for a task whose own base branch is
-   * `main`, until a reload happened to seed it in the right order. The picker
-   * writes through `updateTask`, whose optimistic update patches this same
-   * query, so the value still changes the instant it is picked.
-   */
-  const baseBranch =
+type TaskDetailQueries = ReturnType<typeof useTaskDetailQueries>;
+
+/**
+ * Read straight off the task row — never mirrored into local state. A mirror
+ * had to be re-seeded whenever the row changed, and any render that seeded it
+ * before `task` arrived took the repo default instead: that is how the
+ * Properties column showed `staging` for a task whose own base branch is
+ * `main`, until a reload happened to seed it in the right order. The picker
+ * writes through `updateTask`, whose optimistic update patches this same
+ * query, so the value still changes the instant it is picked.
+ */
+function resolveBaseBranch({ task, repoForTask }: TaskDetailQueries) {
+  return (
     task?.baseBranch?.trim() ||
     repoForTask?.defaultBaseBranch?.trim() ||
-    FALLBACK_GIT_BASE_BRANCH;
-  const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
-  const [isSandboxStarting, setIsSandboxStarting] = useState(false);
-  const [isSandboxStopping, setIsSandboxStopping] = useState(false);
-  const [isRetryingStartupCommands, setIsRetryingStartupCommands] =
-    useState(false);
-  const [isRunningDevServer, setIsRunningDevServer] = useState(false);
-  const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
-    useState(false);
-  const [showRunDevServerConfirm, setShowRunDevServerConfirm] = useState(false);
-  const [isCreatingPr, setIsCreatingPr] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-  const [showStopConfirm, setShowStopConfirm] = useState(false);
-  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
-    useState(false);
-  const [internalActiveTab, setInternalActiveTab] =
-    useState<TaskDetailTab>("activity");
-  const [executionError, setExecutionError] = useState<string | null>(null);
-
-  const activeTab: TaskDetailTab =
-    routing?.mode === "quick-detail"
-      ? routing.quick.detailTab
-      : routing?.mode === "project-detail"
-        ? routing.project.detailTab
-        : internalActiveTab;
-
-  const setActiveTab = (tab: TaskDetailTab) => {
-    if (routing?.mode === "quick-detail") {
-      routing.quick.onDetailTabChange(tab);
-    } else if (routing?.mode === "project-detail") {
-      routing.project.onDetailTabChange(tab);
-    } else {
-      setInternalActiveTab(tab);
-    }
-  };
-
-  const showSandbox =
-    routing?.mode === "quick-sandbox"
-      ? true
-      : routing?.mode === "quick-detail"
-        ? false
-        : embeddedShowSandbox;
-
-  const handleStartExecution = async () => {
-    setIsStarting(true);
-    try {
-      await startExecution({ id: taskId });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to start execution";
-      setExecutionError(message);
-    }
-    setIsStarting(false);
-  };
-
-  const handleResolveConflicts = async () => {
-    setIsStarting(true);
-    try {
-      await startExecution({ id: taskId, mode: "resolve_conflicts" });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to start execution";
-      setExecutionError(message);
-    }
-    setIsStarting(false);
-  };
-
-  const handleStopExecution = async () => {
-    setIsStopping(true);
-    try {
-      await cancelExecution({ taskId });
-    } catch (err) {
-      console.error("Failed to stop execution:", err);
-      toast.error("Could not stop the run. Try again.");
-    }
-    setIsStopping(false);
-  };
-
-  // A task moved back to `todo` after it already ran keeps its branch, so it
-  // previews like a reviewed task rather than offering a first run again.
-  // Mirrors `isPreviewSandboxAllowed` in the backend.
-  const canStartSandbox =
-    task?.status !== undefined &&
-    (PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status) ||
-      (task.status === "todo" && hasRuns));
-
-  const isSandboxActive = task?.reviewTaskSandboxStatus === "active";
-  const isSandboxStartingFromStatus =
-    task?.reviewTaskSandboxStatus === "starting";
-  const isSandboxStoppingFromStatus =
-    task?.reviewTaskSandboxStatus === "stopping";
-  const hasReviewSandbox = task?.sandboxId !== undefined;
-  const canViewSandbox =
-    canStartSandbox ||
-    hasReviewSandbox ||
-    isSandboxActive ||
-    isSandboxStartingFromStatus ||
-    isSandboxStoppingFromStatus;
-  const sandboxStartupStreaming = useQuery(
-    api.streaming.get,
-    isSandboxStartingFromStatus
-      ? { entityId: `task-sandbox-startup-${taskId}` }
-      : "skip",
+    FALLBACK_GIT_BASE_BRANCH
   );
+}
 
-  const openSandboxAfterStart = () => {
-    if (routing?.mode === "quick-detail") {
-      routing.quick.onOpenSandboxView("preview");
-    } else {
-      setEmbeddedShowSandbox(true);
-    }
-  };
+function resolveDevServerCommandLabel({
+  task,
+  repoForTask,
+}: TaskDetailQueries) {
+  const fromTask = task?.devCommand?.trim();
+  if (fromTask) return fromTask;
+  const fromRepo = repoForTask?.devCommand?.trim();
+  if (fromRepo) return fromRepo;
+  return "Auto-detected from package.json (e.g. pnpm run dev)";
+}
 
-  const handleStartSandbox = async () => {
-    setIsSandboxStarting(true);
-    try {
-      await startTaskSandboxMutation({ taskId });
-      openSandboxAfterStart();
-    } catch (err) {
-      console.error("Failed to start sandbox:", err);
-      toast.error("Could not start the sandbox. Try again.");
-    }
-    setIsSandboxStarting(false);
-  };
-
-  const handleStopSandbox = async () => {
-    setIsSandboxStopping(true);
-    try {
-      await stopTaskSandboxMutation({ taskId });
-    } catch (err) {
-      console.error("Failed to stop sandbox:", err);
-      toast.error("Could not stop the sandbox. Try again.");
-    }
-    setIsSandboxStopping(false);
-  };
-
-  const handleRetryStartupCommands = async () => {
-    setIsRetryingStartupCommands(true);
-    try {
-      await retryStartupCommandsMutation({ taskId });
-      openSandboxAfterStart();
-    } catch (err) {
-      console.error("Failed to retry startup commands:", err);
-      toast.error("Could not rerun the startup commands. Try again.");
-    }
-    setIsRetryingStartupCommands(false);
-  };
-
-  const handleRunDevServer = async () => {
-    setIsRunningDevServer(true);
-    try {
-      await runDevServerMutation({ taskId });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to run dev server";
-      setExecutionError(message);
-    }
-    setIsRunningDevServer(false);
-  };
-
-  const handleRunBackgroundCommands = async () => {
-    setIsRunningBackgroundCommands(true);
-    try {
-      await runBackgroundCommandsMutation({ taskId });
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to run background commands";
-      setExecutionError(message);
-    }
-    setIsRunningBackgroundCommands(false);
-  };
-
-  const devServerCommandLabel = (() => {
-    const fromTask = task?.devCommand?.trim();
-    if (fromTask) return fromTask;
-    const fromRepo = repoForTask?.devCommand?.trim();
-    if (fromRepo) return fromRepo;
-    return "Auto-detected from package.json (e.g. pnpm run dev)";
-  })();
-
-  const handleCreatePr = async () => {
-    setIsCreatingPr(true);
-    try {
-      await createTaskPrAction({ taskId });
-    } catch (err) {
-      setExecutionError(convexErrorMessage(err, "Failed to create PR"));
-    }
-    setIsCreatingPr(false);
-  };
-
-  const handleSelectSurface = (surface: SandboxSurface) => {
-    if (surface === "sandbox") {
-      if (routing?.mode === "quick-sandbox") return;
-      if (routing?.mode === "quick-detail") {
-        routing.quick.onOpenSandboxView("preview");
-        return;
-      }
-      setEmbeddedShowSandbox(true);
-      return;
-    }
-    if (routing?.mode === "quick-sandbox") {
-      routing.quick.onExitSandboxView();
-      return;
-    }
-    if (routing?.mode === "quick-detail") return;
-    setEmbeddedShowSandbox(false);
-  };
-
+function deriveRunSummary({
+  task,
+  runs,
+  hasActiveRun,
+  comments,
+  users,
+  projects,
+}: TaskDetailQueries) {
   const status = task?.status;
-  const canEditText = canEditTaskText(status, Boolean(hasActiveRun));
   const latestPrUrl = taskPrUrl(task, projects);
-  const latestPrError = runs?.find((r) => r.prError)?.prError;
-  const latestDeployment = runs?.find((r) => r.deploymentStatus);
-  const canCreatePr = !latestPrUrl && (runs?.length ?? 0) > 0 && !hasActiveRun;
-  const modalWidthClass = "max-w-[calc(100vw-2rem)] md:max-w-6xl";
-  const layoutGridClass = "grid-cols-1 md:grid-cols-[1fr_1fr_200px]";
   const hasTabContent =
     (runs !== undefined && runs.length > 0) ||
     (comments !== undefined && comments.length > 0);
-  const showTabsColumn = status !== "todo" || hasTabContent;
-  const creatorUser = task?.createdBy
-    ? users?.find((u) => u._id === task.createdBy)
-    : undefined;
+  return {
+    status,
+    canEditText: canEditTaskText(status, Boolean(hasActiveRun)),
+    latestPrUrl,
+    latestPrError: runs?.find((r) => r.prError)?.prError,
+    latestDeployment: runs?.find((r) => r.deploymentStatus),
+    canCreatePr: !latestPrUrl && (runs?.length ?? 0) > 0 && !hasActiveRun,
+    showTabsColumn: status !== "todo" || hasTabContent,
+    creatorUser: task?.createdBy
+      ? users?.find((u) => u._id === task.createdBy)
+      : undefined,
+  };
+}
+
+export function useTaskDetail(
+  taskId: Id<"agentTasks">,
+  routing?: UseTaskDetailRouting,
+) {
+  const data = useTaskDetailQueries(taskId);
+  const { task, runs, hasActiveRun } = data;
+  const execution = useTaskExecutionControls(taskId);
+  const sandbox = useTaskSandboxControls({
+    taskId,
+    task,
+    hasRuns: data.hasRuns,
+    routing,
+    setExecutionError: execution.setExecutionError,
+  });
+  const { activeTab, setActiveTab } = useTaskDetailTab(routing);
+  const summary = deriveRunSummary(data);
+  const modalWidthClass = "max-w-[calc(100vw-2rem)] md:max-w-6xl";
+  const layoutGridClass = "grid-cols-1 md:grid-cols-[1fr_1fr_200px]";
 
   return {
-    isLoading: taskResult === undefined,
-    isNotFound: taskResult === null,
+    isLoading: data.taskResult === undefined,
+    isNotFound: data.taskResult === null,
 
     task,
-    status,
+    status: summary.status,
     runs,
-    comments,
-    taskActivity,
-    users,
-    creatorUser,
-    projects,
-    streaming,
+    comments: data.comments,
+    taskActivity: data.taskActivity,
+    users: data.users,
+    creatorUser: summary.creatorUser,
+    projects: data.projects,
+    streaming: data.streaming,
 
-    isOwner,
-    isBlocked,
+    isOwner: data.isOwner,
+    isBlocked: data.isBlocked,
     hasActiveRun: Boolean(hasActiveRun),
-    isProjectTask,
-    hasRuns,
-    canEditTaskText: canEditText,
-    showTabsColumn,
+    isProjectTask: data.isProjectTask,
+    hasRuns: data.hasRuns,
+    canEditTaskText: summary.canEditText,
+    showTabsColumn: summary.showTabsColumn,
     isActivityBusy: Boolean(hasActiveRun),
 
-    activeRun,
-    activeRunElapsed,
-    latestPrUrl,
-    latestPrError,
-    latestDeployment,
+    activeRun: data.activeRun,
+    activeRunElapsed: data.activeRunElapsed,
+    latestPrUrl: summary.latestPrUrl,
+    latestPrError: summary.latestPrError,
+    latestDeployment: summary.latestDeployment,
 
     activeTab,
     setActiveTab,
-    baseBranch,
-    executionError,
-    setExecutionError,
-    showStopConfirm,
-    setShowStopConfirm,
-    showResolveConfirm,
-    setShowResolveConfirm,
-    showStartupCommandsConfirm,
-    setShowStartupCommandsConfirm,
-    showRunDevServerConfirm,
-    setShowRunDevServerConfirm,
-    isStarting,
-    isStopping,
+    baseBranch: resolveBaseBranch(data),
+    executionError: execution.executionError,
+    setExecutionError: execution.setExecutionError,
+    showStopConfirm: execution.showStopConfirm,
+    setShowStopConfirm: execution.setShowStopConfirm,
+    showResolveConfirm: execution.showResolveConfirm,
+    setShowResolveConfirm: execution.setShowResolveConfirm,
+    showStartupCommandsConfirm: sandbox.showStartupCommandsConfirm,
+    setShowStartupCommandsConfirm: sandbox.setShowStartupCommandsConfirm,
+    showRunDevServerConfirm: sandbox.showRunDevServerConfirm,
+    setShowRunDevServerConfirm: sandbox.setShowRunDevServerConfirm,
+    isStarting: execution.isStarting,
+    isStopping: execution.isStopping,
 
-    handleStartExecution,
-    handleStopExecution,
-    handleResolveConflicts,
+    handleStartExecution: execution.handleStartExecution,
+    handleStopExecution: execution.handleStopExecution,
+    handleResolveConflicts: execution.handleResolveConflicts,
 
-    canStartSandbox,
-    canViewSandbox,
-    showSandbox,
-    isSandboxActive,
-    isSandboxStarting: isSandboxStarting || isSandboxStartingFromStatus,
-    sandboxStartupActivity: sandboxStartupStreaming?.currentActivity,
-    isSandboxStopping: isSandboxStopping || isSandboxStoppingFromStatus,
-    handleStartSandbox,
-    handleStopSandbox,
-    handleSelectSurface,
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
-    handleRunDevServer,
-    isRunningDevServer,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
-    devServerCommandLabel,
+    canStartSandbox: sandbox.canStartSandbox,
+    canViewSandbox: sandbox.canViewSandbox,
+    showSandbox: sandbox.showSandbox,
+    isSandboxActive: sandbox.isSandboxActive,
+    isSandboxStarting: sandbox.isSandboxStarting,
+    sandboxStartupActivity: sandbox.sandboxStartupActivity,
+    isSandboxStopping: sandbox.isSandboxStopping,
+    handleStartSandbox: sandbox.handleStartSandbox,
+    handleStopSandbox: sandbox.handleStopSandbox,
+    handleSelectSurface: sandbox.handleSelectSurface,
+    handleRetryStartupCommands: sandbox.handleRetryStartupCommands,
+    isRetryingStartupCommands: sandbox.isRetryingStartupCommands,
+    handleRunDevServer: sandbox.handleRunDevServer,
+    isRunningDevServer: sandbox.isRunningDevServer,
+    handleRunBackgroundCommands: sandbox.handleRunBackgroundCommands,
+    isRunningBackgroundCommands: sandbox.isRunningBackgroundCommands,
+    devServerCommandLabel: resolveDevServerCommandLabel(data),
     sandboxId: task?.sandboxId,
     reviewTaskSandboxStatus: task?.reviewTaskSandboxStatus,
 
-    canCreatePr,
-    isCreatingPr,
-    handleCreatePr,
+    canCreatePr: summary.canCreatePr,
+    isCreatingPr: execution.isCreatingPr,
+    handleCreatePr: execution.handleCreatePr,
 
     layoutGridClass,
     modalWidthClass,
