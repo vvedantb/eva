@@ -18,6 +18,7 @@ import {
   IconArchive,
   IconGitMerge,
   IconGitPullRequestClosed,
+  IconMessageQuestion,
 } from "@tabler/icons-react";
 import { Avatar, AvatarFallback, cn } from "@eva/ui";
 import type { BadgeProps } from "@eva/ui";
@@ -134,6 +135,13 @@ const typeConfig: Record<Notification["type"], NotificationAppearance> = {
     badgeVariant: "secondary",
     iconBg: "bg-secondary",
     iconColor: "text-secondary-foreground",
+  },
+  routed_question: {
+    icon: IconMessageQuestion,
+    label: "Question",
+    badgeVariant: "default",
+    iconBg: "bg-primary/10",
+    iconColor: "text-primary",
   },
 };
 
