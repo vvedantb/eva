@@ -40,7 +40,6 @@ interface StatusFieldsSectionProps {
   baseBranch: string;
   /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
-  hasActiveRun: boolean;
   /** Locks the model picker — the model that ran must stay on the record. */
   hasRuns: boolean;
   /** Only the task owner can move it onto their own provider account. */
@@ -57,7 +56,6 @@ export function StatusFieldsSection({
   projects,
   baseBranch,
   latestDeployment,
-  hasActiveRun: _hasActiveRun,
   hasRuns,
   isOwner,
   allTags,

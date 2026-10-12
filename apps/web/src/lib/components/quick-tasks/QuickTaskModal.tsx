@@ -692,7 +692,7 @@ export function QuickTaskModal({
   };
 
   const handleClose = async () => {
-    const desc = getDescription().trim();
+    const desc = getDescription();
     if (title.trim() || desc || attachments.attachments.length > 0) {
       const attachmentStorageIds = await attachments.upload();
       await saveDraft({
@@ -711,9 +711,9 @@ export function QuickTaskModal({
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !displayBaseBranch || !repo) return;
+    if (!title.trim() || !displayBaseBranch) return;
 
-    const desc = getDescription().trim();
+    const desc = getDescription();
     const taskBaseBranch = branchLockedToProject ? undefined : baseBranch;
     // Built before the try, and the post-await one via undefinedIfEmpty: React
     // Compiler bails on the whole file when a conditional, logical or

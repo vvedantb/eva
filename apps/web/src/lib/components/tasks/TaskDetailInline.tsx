@@ -479,7 +479,6 @@ export function TaskDetailInline({
                 projects={projects}
                 baseBranch={baseBranch}
                 latestDeployment={latestDeployment}
-                hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}
                 isOwner={isOwner}
                 allTags={allTags}
