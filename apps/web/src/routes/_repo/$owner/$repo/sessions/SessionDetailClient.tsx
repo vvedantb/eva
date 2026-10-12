@@ -65,11 +65,14 @@ export function SessionDetailClient({
     api.sessionChats.listForSession,
     isRouteActive ? { sessionId } : "skip",
   );
+  // Held per session, not per chat number: a tab switch keeps the old chat
+  // painted until the new one resolves instead of unmounting the page.
   const activeChat = useHeldQuery(
     api.sessionChats.resolveForSession,
     isRouteActive
       ? { sessionId, ...(chatNumber !== null ? { number: chatNumber } : {}) }
       : "skip",
+    sessionId,
   );
   const chatStatuses = useHeldQuery(
     api.turns.listSessionChatStatuses,
@@ -301,6 +304,9 @@ export function SessionDetailClient({
 
   const chatPanel = (sandboxCollapsed?: boolean) => (
     <ChatPanel
+      // One mount per chat: composer draft, attachments and local state must
+      // not carry over to another tab.
+      key={activeChat._id}
       sessionId={sessionId}
       chat={activeChat}
       chats={chats ?? []}
