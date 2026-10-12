@@ -2,8 +2,10 @@
 
 import { Button, cn, CrossfadeIconSlot, Spinner } from "@eva/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
-import type { Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import { useQuery } from "convex/react";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   SleepControlTooltip,
   SLEEP_EVA_LABEL,
@@ -39,6 +41,18 @@ export function SandboxStartStopButton({
   /** Task and project footers run the larger icon button; headers stay compact. */
   size?: "sm" | "default";
 }) {
+  const simpleView = useSimpleView();
+  const idlePause = useQuery(
+    api.sandboxIdlePause.getSandboxIdlePauseSettings,
+    simpleView ? {} : "skip",
+  );
+  // Simple view: idle pause sleeps the sandbox and the Preview tab wakes it, so
+  // the control only shows where auto-wake cannot help — a failed wake, or idle
+  // pause not "on" (auto-wake is gated on it). Otherwise there is no way back.
+  // Hidden while the setting loads, so the common "on" case never flashes.
+  const autoWakes = idlePause === undefined || idlePause.mode === "on";
+  if (simpleView && (isActive || (!hasStartError && autoWakes))) return null;
+
   // Only stopping is unsafe mid-turn; a turn cannot be running on a sandbox
   // that is asleep, but if the flags ever disagree, starting stays available.
   const blockedMidTurn = isActive && isAssistantResponding;

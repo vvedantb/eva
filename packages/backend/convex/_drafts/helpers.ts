@@ -153,14 +153,15 @@ export async function resolveTarget(
       throw new Error("Not authorized");
     }
     const { repoId } = session;
-    const sessionId = target.sessionId;
+    const chatId = target.chatId;
     return {
       repoId,
+      // One draft per chat tab: each tab is its own composer.
       findExisting: async () => {
         const rows = await db
           .query("drafts")
-          .withIndex("by_user_and_session", (q) =>
-            q.eq("userId", userId).eq("sessionId", sessionId),
+          .withIndex("by_user_and_chat", (q) =>
+            q.eq("userId", userId).eq("chatId", chatId),
           )
           .collect();
         return rows[0] ?? null;

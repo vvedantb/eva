@@ -37,6 +37,7 @@ export {
   pushSandboxBranch,
   pushLinkedRepoBranches,
   launchOnExistingSandbox,
+  launchAgentTurn,
   prewarmSessionDaemon,
   prewarmEntityDaemon,
   killEntityDaemon,

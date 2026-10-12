@@ -18,11 +18,6 @@ export {
 export { generatePrDescription } from "./_github/prDescription";
 
 export {
-  publishScopeSection,
-  publishScopeSectionForPr,
-} from "./_github/prScopeCheck";
-
-export {
   getPrDiff,
   getPrFileContents,
   getCommitDiff,

@@ -65,7 +65,7 @@ const EVA_ICON = <EvaIcon />;
 
 /** Squares the bottom-left corner against a teammate's side avatar. */
 function otherUserBubbleRadius(): string {
-  const r = "clamp(0.75rem, var(--radius), 1.25rem)";
+  const r = "clamp(0.75rem, var(--radius), 1rem)";
   return `${r} ${r} ${r} 0`;
 }
 
@@ -152,8 +152,12 @@ interface ChatMessageProps {
   turnCheckpoint?: TurnCheckpointContext;
   /** Flash the row after a citation chip jumps here. */
   citeHighlight?: boolean;
-  /** Sessions: start a new chat with the transcript through this message. */
-  onFork?: () => void;
+  /**
+   * Sessions: start a new chat with the transcript through this message. Takes
+   * the id so the parent can pass one stable handler to every row — a per-row
+   * closure is a new prop each render and re-renders the whole transcript.
+   */
+  onFork?: (messageId: string) => void;
   /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
@@ -239,7 +243,7 @@ export const ChatMessage = memo(function ChatMessage({
         key: "fork",
         label: "Fork from here",
         icon: <IconGitFork className="size-4" />,
-        onClick: onFork,
+        onClick: () => onFork(message._id),
       }
     : undefined;
   const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
@@ -328,7 +332,7 @@ export const ChatMessage = memo(function ChatMessage({
                   <span
                     data-pii
                     className={cn(
-                      "text-[11px] font-medium text-muted-foreground",
+                      "text-2xs font-medium text-muted-foreground",
                       // Avatar (16) + gap (8) + bubble px-3 (12) → align with bubble text
                       "pl-9",
                     )}
@@ -339,7 +343,7 @@ export const ChatMessage = memo(function ChatMessage({
                 {orchestratorTag ? (
                   <span
                     className={cn(
-                      "rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground",
+                      "rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground",
                       isOtherUser ? "ml-9" : undefined,
                     )}
                   >
@@ -529,7 +533,7 @@ export const ChatMessage = memo(function ChatMessage({
                           revealOnHover={false}
                         />
                         {message.finishedAt && message.timestamp ? (
-                          <span className="text-[11px] tabular-nums text-muted-foreground/60">
+                          <span className="text-2xs tabular-nums text-muted-foreground/60">
                             {/* The turn's clock time is when Eva finished, not
                                 when it started — the duration next to it already
                                 says how long the reply took. */}
@@ -600,7 +604,7 @@ function HandoffModelChip({
   return (
     <m.span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground",
+        "inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground",
         className,
       )}
       initial={{ opacity: 0, y: 4 }}
@@ -642,7 +646,7 @@ function UserMessageMeta({
         />
       ) : null}
       {timestamp ? (
-        <span className="text-[11px] text-muted-foreground/60">
+        <span className="text-2xs text-muted-foreground/60">
           {dayjs(timestamp).format("h:mm A")}
         </span>
       ) : null}

@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
   canForkMessage,
   collectForkPrefix,
-  collectSessionForkPrefix,
   FORK_PROMPT_CHAR_LIMIT,
   forkDialogSummary,
   forkThreadTitle,
@@ -78,24 +77,6 @@ describe("message fork", () => {
     expect(prompt.length).toBeLessThanOrEqual(FORK_PROMPT_CHAR_LIMIT);
     expect(prompt).toContain("<forked_thread>");
     expect(prompt).toContain("</forked_thread>");
-    expect(prompt.endsWith(FORK_INSTRUCTION)).toBe(true);
-  });
-
-  test("a whole-session fork keeps the latest turns that fit", () => {
-    const messages = Array.from({ length: 40 }, (_, index) => ({
-      id: `msg-${index}`,
-      role: index % 2 === 0 ? "user" : "assistant",
-      content: `turn ${index} ${"invoice ".repeat(200)}`,
-    }));
-    const prefix = collectSessionForkPrefix([
-      ...messages,
-      { id: "alert", role: "assistant", content: "Sandbox stopped", isSystemAlert: true },
-    ]);
-    expect(prefix?.throughMessageId).toBe("msg-39");
-    expect(prefix?.turns.at(-1)?.messageId).toBe("msg-39");
-    expect(prefix?.turns[0]?.messageId).not.toBe("msg-0");
-    const prompt = prefix ? formatForkPrompt(prefix) : "";
-    expect(prompt).toContain("turn 39");
     expect(prompt.endsWith(FORK_INSTRUCTION)).toBe(true);
   });
 });

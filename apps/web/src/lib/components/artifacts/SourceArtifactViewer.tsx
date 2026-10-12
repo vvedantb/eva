@@ -46,7 +46,11 @@ export function SourceArtifactViewer({
     >
       {withUrl ? (
         <div className="min-h-0 flex-1 bg-white">
-          <ArtifactContent url={withUrl.url} title={artifact.name} />
+          <ArtifactContent
+            artifactId={artifact._id}
+            url={withUrl.url}
+            title={artifact.name}
+          />
         </div>
       ) : (
         <CenteredSpinner label="Loading" />

@@ -4,6 +4,7 @@ export {
   get,
   getByNumId,
   getFirstMessagePreview,
+  getForkLinks,
   countActive,
 } from "./_sessions/queries";
 
@@ -12,7 +13,6 @@ export {
   listLinkedReposInternal,
   getSessionRepoInternal,
   patchSessionRepo,
-  findSessionRepoByPrUrl,
 } from "./_sessions/repos";
 
 export {
@@ -20,9 +20,6 @@ export {
   addMessage,
   updateStatus,
   update,
-  setModel,
-  setProviderAccountId,
-  setTraits,
   updateSummary,
   archive,
   unarchive,
@@ -49,15 +46,17 @@ export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 export {
   getForkSource,
   createForkedSession,
+  copyForkMessages,
+  copyForkCards,
   settleForkSource,
 } from "./_sessions/fork";
 
 export {
   getInternal,
   getBySandboxInternal,
-  setPrUrl,
-  setPrState,
-  clearPrUrlIfMatches,
+  recordSessionPr,
+  setSessionPrState,
+  detachForeignMergedPr,
   updateDeploymentStatus,
   applyGeneratedTitle,
   getTitleContext,

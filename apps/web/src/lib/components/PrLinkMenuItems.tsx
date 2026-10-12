@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { api, type SandboxOwner } from "@eva/backend";
 import {
   DropdownMenuItem,
   Tooltip,
@@ -20,6 +22,11 @@ interface PrLinkMenuItemsArgs {
   /** Colours the View PR icon (sessions only); others leave it default. */
   prState?: "draft" | "open" | "merged" | "closed";
   /**
+   * The chat whose PRs these are. When it holds more than one PR, View PR
+   * becomes one item per PR, numbered, instead of a single link.
+   */
+  owner?: SandboxOwner;
+  /**
    * True when a deployment exists — renders the disabled View Preview hint,
    * behind the `viewVercelDeployment` experimental flag.
    */
@@ -27,7 +34,7 @@ interface PrLinkMenuItemsArgs {
 }
 
 /**
- * The Create PR / View PR / View Preview block of the "More" dropdown, shared
+ * The Create PR / View PR(s) / View Preview block of the "More" dropdown, shared
  * by the quick-task footer and header, the session header and the project
  * header. Simple view hides git/PR plumbing here, so the three surfaces cannot
  * drift apart. Returning `hasItems` lets callers keep their own separator
@@ -39,8 +46,13 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
 } {
   const simpleView = useSimpleView();
   const viewVercelDeployment = useViewVercelDeployment();
+  const ownerPrs = useQuery(
+    api.pullRequests.listForOwner,
+    args.owner !== undefined && !simpleView ? { owner: args.owner } : "skip",
+  );
+  const manyPrs = ownerPrs !== undefined && ownerPrs.length > 1;
   const showCreatePr = !simpleView && Boolean(args.createPr?.enabled);
-  const showViewPr = !simpleView && args.prUrl !== undefined;
+  const showViewPr = !simpleView && (args.prUrl !== undefined || manyPrs);
   const showViewPreview =
     !simpleView && viewVercelDeployment && args.hasDeployment;
   const hasItems = showCreatePr || showViewPr || showViewPreview;
@@ -63,7 +75,20 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
             Create PR
           </DropdownMenuItem>
         ) : null}
-        {showViewPr && args.prUrl !== undefined ? (
+        {showViewPr && manyPrs
+          ? ownerPrs.map((pr) => (
+              <DropdownMenuItem key={pr._id} asChild>
+                <a href={pr.prUrl} target="_blank" rel="noopener noreferrer">
+                  <IconGitPullRequest
+                    size={14}
+                    className={prStateIconClass(pr.state)}
+                  />
+                  View PR #{pr.prNumber}
+                </a>
+              </DropdownMenuItem>
+            ))
+          : null}
+        {showViewPr && !manyPrs && args.prUrl !== undefined ? (
           <DropdownMenuItem asChild>
             <a href={args.prUrl} target="_blank" rel="noopener noreferrer">
               <IconGitPullRequest

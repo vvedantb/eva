@@ -5,6 +5,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { recordPullRequest } from "../convex/_pullRequests/store";
 import {
   decideSandboxStartPlan,
   SANDBOX_SURFACES,
@@ -84,11 +85,18 @@ async function fixture() {
       createdBy: ownerUserId,
       reviewTaskSandboxStatus: "active",
     });
-    await ctx.db.insert("agentRuns", {
+    const runId = await ctx.db.insert("agentRuns", {
       taskId,
       status: "success",
       logs: [],
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "task", taskId, runId },
+      repoId,
       prUrl: TASK_PR_URL,
+      state: "draft",
+      primary: true,
+      origin: "eva",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -202,7 +210,7 @@ describe("list_entities returns what the caller can already open", () => {
     expect(byId.get(f.projectId)?.sandboxStatus).toBe("closed");
   });
 
-  test("a quick task's PR is read off the run that opened it", async () => {
+  test("a quick task reports the PR its run opened", async () => {
     const f = await fixture();
     const { entities } = await listFor(f, { kind: "task" });
     expect(entities).toHaveLength(1);
@@ -425,7 +433,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     expect(getState).not.toContain("session.activeWorkflowId !== undefined");
   });
 
-  test("send treats a session /loop turn as busy", () => {
+  test("send treats a /loop or synthetic turn as busy on every chat", () => {
     const nodeActions = convexSource("mcp/nodeActions.ts");
     const send = nodeActions.slice(
       nodeActions.indexOf("export const orchestratorSendMessage"),
@@ -436,8 +444,9 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
       nodeActions.indexOf("function chatDelivery"),
       nodeActions.indexOf("export const orchestratorSendMessage"),
     );
-    expect(delivery).toContain("sessionIsExecuting || queuedAhead > 0");
+    expect(delivery).toContain("const isBusy = isExecuting || queuedAhead > 0;");
     expect(delivery).not.toContain("session.activeWorkflowId");
+    expect(delivery).not.toContain("activeChatWorkflowId");
   });
 
   test("stop refuses to kill a turn that is already running", () => {
@@ -469,8 +478,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
         turnLifecycleVersion: 2,
       });
       await ctx.db.insert("turns", {
-        surface: "session",
-        entityId: String(sessionId),
+        entityId: sessionId,
         streamingEntityId: String(sessionId),
         state: "running",
         open: true,

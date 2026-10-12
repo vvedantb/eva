@@ -15,8 +15,26 @@ export const treeThemeVars: CSSProperties & Record<`--${string}`, string> = {
   "--trees-bg-muted-override": "rgb(var(--muted))",
   "--trees-border-color-override": "rgb(var(--border))",
   "--trees-accent-override": "rgb(var(--primary))",
-  "--trees-focus-ring-color-override": "rgb(var(--ring))",
+  // Rows carry state with fill alone — hover tint, muted fill when selected —
+  // and no outline on the clicked or focused row.
+  "--trees-focus-ring-color-override": "transparent",
+  "--trees-focus-ring-width-override": "0px",
+  "--trees-selected-focused-border-color-override": "transparent",
+  "--trees-selected-bg-override": "rgb(var(--muted))",
   // The tree defaults to `system-ui`; point it at the app's own sans stack so
   // it follows the user's theme font like every other surface.
   "--trees-font-family-override": "var(--font-sans)",
 };
+
+/**
+ * Passed as the tree's `unsafeCSS`. Its built-in search field otherwise draws a
+ * hard-coded 2px focus ring; this makes it focus like the app's own inputs —
+ * the 1px border darkens and nothing else.
+ */
+export const TREE_UNSAFE_CSS = `
+  [data-file-tree-search-input]:focus-visible,
+  [data-file-tree-search-input][data-file-tree-search-input-fake-focus="true"] {
+    outline: none;
+    border-color: rgb(var(--ring) / 0.5);
+  }
+`;

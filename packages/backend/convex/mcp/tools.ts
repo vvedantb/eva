@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
@@ -17,6 +16,7 @@ import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
+import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
 import {
   entityAccess,
@@ -52,6 +52,9 @@ export function buildTools(
 ): EvaTool[] {
   const { clerkUserId, scopedRepoId, entityId, entityKind } = credentials;
   const { aveThreadId } = credentials;
+  // Where this sandbox's chat content lands: a session daemon's own chat row,
+  // otherwise the task or project itself (`resolveChatParent` takes both).
+  const chatContentId = credentials.chatId ?? entityId;
   const isAve = aveThreadId !== undefined;
   const tools: EvaTool[] = [];
 
@@ -520,7 +523,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
 
   // Scoped to a sandbox token: the panel has to land in *this* chat, so a
   // caller without an entity (the user's own OAuth connector) has no target.
-  if (entityKind !== undefined && entityId !== undefined) {
+  if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       renderUiTool(async (input) => {
         const outcome = await ctx.runAction(
@@ -535,7 +538,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
 
         const panelId = await ctx.runMutation(internal.chatUi.create, {
           entityKind,
-          entityId,
+          entityId: chatContentId,
           prompt: input.prompt,
           ...(input.title !== undefined ? { title: input.title } : {}),
           spec: outcome.spec,
@@ -562,18 +565,35 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // render_html — an agent-authored HTML page rendered inline in the chat
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the page has to land in *this* chat.
+  if (entityKind !== undefined && chatContentId !== undefined) {
+    tools.push(
+      renderHtmlTool((input) =>
+        ctx.runMutation(internal.chatHtml.create, {
+          entityKind,
+          entityId: chatContentId,
+          ...input,
+        }),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // list_preview_tools / call_preview_tool — WebMCP tools in the live preview
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Scoped like render_ui: the request is relayed through *this* chat's open
   // Eva tab, so a caller without an entity has no preview to reach.
-  if (entityKind !== undefined && entityId !== undefined) {
+  if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       ...previewTools({
         create: (request) =>
           ctx.runMutation(internal.previewToolCalls.create, {
             entityKind,
-            entityId,
+            entityId: chatContentId,
             ...request,
           }),
         get: (id) => ctx.runQuery(internal.previewToolCalls.get, { id }),
@@ -859,11 +879,19 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
 
 Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kind" and a repo. An idle chat starts its sandbox and runs the message straight away; one mid-turn queues it to run next. The reply says which happened.
 
+A session holds parallel chats that share one checkout. The message lands in its "Main" chat unless "chat" names another one by number or title.
+
 Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done with it so the VM does not keep running.`,
       mutating: true,
       input: {
         message: z.string().describe("The message to post into the chat."),
         ...entityRefArgs,
+        chat: z
+          .string()
+          .optional()
+          .describe(
+            'Sessions only: which chat inside the session, by number ("2") or exact title. Omit for the Main chat.',
+          ),
         model: z
           .enum(MCP_CLAUDE_MODELS)
           .optional()
@@ -871,9 +899,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             'Claude model for this turn ("opus", "sonnet", "haiku", or "fable"). Omit to reuse the model that chat last ran on.',
           ),
       },
-      handler: async ({ message, model, ...ref }) => {
+      handler: async ({ message, model, chat, ...ref }) => {
         if (message.trim().length === 0) {
           return errorResult("message cannot be empty.");
+        }
+        if (chat !== undefined && ref.kind !== undefined && ref.kind !== "session") {
+          return errorResult('"chat" only applies to sessions.');
         }
 
         const { userId } = await getContext();
@@ -881,10 +912,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
 
+        // A session daemon may message a sibling chat of its own session, but
+        // never the chat it is running in.
         if (entityId !== undefined && target.targetId === entityId) {
-          return errorResult(
-            "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
-          );
+          if (target.kind !== "session" || chat === undefined) {
+            return errorResult(
+              "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+            );
+          }
         }
 
         const result = await ctx.runAction(
@@ -895,6 +930,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             id: target.targetId,
             message,
             model,
+            ...(target.kind === "session" && chat !== undefined ? { chat } : {}),
+            ...(credentials.chatId !== undefined
+              ? { excludeChatId: credentials.chatId }
+              : {}),
             aveThreadId,
             // Any MCP send — Manager Ave or a user OAuth connector — stamps the
             // "via MCP" chat badge so it is not mistaken for a composer-typed turn.
@@ -904,6 +943,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
         return textResult({
           ...entitySummary(target),
+          ...(result.chat !== undefined ? { chat: result.chat } : {}),
           delivered: result.delivered,
           model: result.model,
         });
@@ -1226,6 +1266,13 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
 Provide a self-contained HTML document (inline CSS/JS, or CDN links). Eva stores it and hosts it in a sandboxed iframe at the returned viewUrl. The link is viewable by members of the bound team while signed in to Eva.
 
+Artifacts can keep persistent state (localStorage is in-memory only and is lost on reload). Use window.cowork.state:
+- await cowork.state.ready — resolves once the saved state has loaded
+- cowork.state.get(key, opts?) / cowork.state.all(opts?) — synchronous reads after ready
+- await cowork.state.set(key, jsonValue, opts?) / await cowork.state.remove(key, opts?)
+- cowork.state.subscribe(fn) — fn(snapshot) on every change, including other viewers' writes; returns an unsubscribe function
+opts = { scope: "user" } (default, private to each viewer) or { scope: "shared" } (one copy for the whole team). Limits: 200 keys per scope, 64 KB per value.
+
 When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
 
 Do NOT use this for session walkthrough recordings, screen captures, or screenshots. For those, save the file under repo-root recordings/ or screenshots/ with agent-browser and leave it on disk — Eva attaches it to the chat message with the built-in video/image player.`,
@@ -1477,7 +1524,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         const result = await ctx.runAction(
           internal.grokBotActions.callWebhook,
           {
-            userId: userId as Id<"users">,
+            userId,
             task,
           },
         );

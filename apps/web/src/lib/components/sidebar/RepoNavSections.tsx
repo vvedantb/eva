@@ -231,7 +231,8 @@ export function RepoNavSections({
             )}
           />
           {!collapsed && <span className="truncate">{item.name}</span>}
-          {item.name === "Quick Tasks" && !collapsed && repo && (
+          {/* Awake-sandbox count; simple view wakes from Preview, so no count. */}
+          {item.name === "Quick Tasks" && !collapsed && !simpleView && repo && (
             <ActiveTasksBadge repoId={repo._id} />
           )}
           {item.name === "Projects" && !collapsed && repo && (

@@ -70,6 +70,15 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       numId: 9,
       lastModel: "claude:sonnet",
     });
+    // Every session holds a Main chat; its transcript and queue key on it.
+    const mainChatId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId: ownerUserId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+    });
     return {
       ownerUserId,
       designerUserId,
@@ -77,6 +86,7 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       teamId,
       repoId,
       sessionId,
+      mainChatId,
     };
   });
   return {
@@ -122,7 +132,7 @@ async function queuedWakes(f: Awaited<ReturnType<typeof fixture>>) {
 /** Pins the session mid-turn so replies stay queued instead of draining. */
 async function markSessionBusy(f: Awaited<ReturnType<typeof fixture>>) {
   await f.t.run(async (ctx) => {
-    await ctx.db.patch(f.sessionId, { activeWorkflowId: "wf-test" });
+    await ctx.db.patch(f.mainChatId, { activeWorkflowId: "wf-test" });
   });
 }
 
@@ -170,7 +180,7 @@ describe("ask_teammate", () => {
           role: "user",
           content: "Ship the empty state this week",
           timestamp: Date.now(),
-          parentId: f.sessionId,
+          parentId: f.mainChatId,
         });
       });
       const result = await f.asOwner.mutation(api.routedThreads.ask, {
@@ -207,7 +217,7 @@ describe("ask_teammate", () => {
       const alerts = await f.t.run(async (ctx) => {
         return await ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", f.sessionId))
+          .withIndex("by_parent", (q) => q.eq("parentId", f.mainChatId))
           .collect();
       });
       expect(alerts.some((row) => row.isSystemAlert === true)).toBe(true);
@@ -351,7 +361,7 @@ describe("ask_teammate", () => {
       const alerts = await f.t.run(async (ctx) => {
         return await ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", f.sessionId))
+          .withIndex("by_parent", (q) => q.eq("parentId", f.mainChatId))
           .collect();
       });
       expect(

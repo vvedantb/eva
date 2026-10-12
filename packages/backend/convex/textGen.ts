@@ -10,12 +10,13 @@ import {
   type TaskTag,
 } from "@eva/shared";
 import { v } from "convex/values";
-import { components, internal } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { getActionRepoWithAccess } from "./functions";
 import { readBoolean } from "./_jev/answers";
 import { evaluateDecision } from "./_jev/client";
 import { buildTitleDigest } from "./_sessions/prompts";
+import { chatTurnEntityIdValidator } from "./validators";
 
 /** Cheap gateway model for session titles — one-line change later. */
 const TEXT_GEN_MODEL = "openai/gpt-5-nano";
@@ -306,6 +307,102 @@ export const completeText = action({
     return await completionCache.fetch(ctx, {
       text: args.text.slice(-MAX_COMPLETION_INPUT),
       contextHint: args.contextHint,
+    });
+  },
+});
+
+/** A prediction is one instruction, not a paragraph; clip anything longer. */
+const MAX_PREDICTION_CHARS = 280;
+
+/** Smaller than the title digest: the latest reply matters most here. */
+const PREDICTION_DIGEST = { totalBudget: 6_000, entryCap: 1_500 };
+
+/**
+ * Trims a predicted message to one line, without the quotes or `USER:` prefix
+ * the model sometimes copies from the digest format.
+ */
+function cleanPrediction(raw: string): string {
+  const firstLine = stripWrappingQuotes(raw).split("\n")[0] ?? "";
+  return stripWrappingQuotes(firstLine.replace(/^USER:\s*/i, "")).slice(
+    0,
+    MAX_PREDICTION_CHARS,
+  );
+}
+
+/**
+ * Uncached next-message prediction — wrapped by the ActionCache below. Access
+ * is enforced by the public `predictNextMessage` wrapper before `fetch`.
+ * `replyId` is only the cache key: the digest is read fresh, and the reply it
+ * names is the newest message in it.
+ */
+export const predictNextMessageInternal = internalAction({
+  args: {
+    parentId: chatTurnEntityIdValidator,
+    replyId: v.id("messages"),
+  },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
+    try {
+      const messages = await ctx.runQuery(
+        internal.composerPredictionContext.getPredictionMessages,
+        { parentId: args.parentId },
+      );
+      const digest = buildTitleDigest(messages, PREDICTION_DIGEST);
+      if (!digest) return "";
+      const { text } = await generateText({
+        model: TEXT_GEN_MODEL,
+        prompt: `You predict the next message a user will send to an AI coding agent. Read the conversation below. The agent just finished its reply.
+
+Write the single most likely next USER message, in the user's own voice and style: a short, direct instruction or question of at most 25 words. Reply with the message only — no quotes, no label, no explanation. If the next step is unclear, reply with nothing.
+
+Conversation:
+${digest}`,
+        // Same trade-off as completeTextInternal: the user is looking at an
+        // empty composer, so latency beats depth.
+        providerOptions: {
+          openai: {
+            reasoningEffort: "minimal",
+            textVerbosity: "low",
+          },
+        },
+        maxOutputTokens: 256,
+      });
+      return cleanPrediction(text);
+    } catch (error) {
+      console.error("[textGen.predictNextMessageInternal]", error);
+      return "";
+    }
+  },
+});
+
+const predictionCache = new ActionCache(components.actionCache, {
+  action: internal.textGen.predictNextMessageInternal,
+  name: "composerPredictionV1",
+  ttl: COMPLETION_CACHE_TTL_MS,
+});
+
+/**
+ * Composer prediction: the user's likely next message after the agent finishes
+ * a turn, shown as ghost text in the empty composer. Returns "" when the chat
+ * does not wait on the user or the model has no confident guess.
+ *
+ * One model call per finished reply: the cache key is the reply id, so other
+ * tabs, reloads and teammates viewing the same chat reuse it.
+ */
+export const predictNextMessage = action({
+  args: {
+    parentId: chatTurnEntityIdValidator,
+  },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
+    const replyId = await ctx.runQuery(
+      api.composerPredictionContext.getPredictionTarget,
+      { parentId: args.parentId },
+    );
+    if (!replyId) return "";
+    return await predictionCache.fetch(ctx, {
+      parentId: args.parentId,
+      replyId,
     });
   },
 });

@@ -47,7 +47,7 @@ interface CommentActivityItemProps {
 }
 
 /** Author name: quieter than a heading, so the comment body stays the emphasis. */
-const AUTHOR_NAME_CLASS = "truncate text-[13px] font-medium text-foreground";
+const AUTHOR_NAME_CLASS = "truncate text-2sm font-medium text-foreground";
 
 function CommentAuthorName({
   authorId,
@@ -178,7 +178,7 @@ export function CommentActivityItem({
             )}
             <RelativeDateTime
               at={comment.createdAt}
-              className="shrink-0 text-[11px] text-muted-foreground/70"
+              className="shrink-0 text-2xs text-muted-foreground/70"
             />
           </div>
         </div>

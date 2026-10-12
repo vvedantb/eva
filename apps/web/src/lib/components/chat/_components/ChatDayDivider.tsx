@@ -12,7 +12,7 @@ export function ChatDayDivider({ timestamp }: { timestamp: number }) {
     <div
       role="separator"
       aria-label={`${day} ${time}`}
-      className="flex justify-center gap-1 pt-2 pb-1 text-[11px] text-muted-foreground/70 select-none"
+      className="flex justify-center gap-1 pt-2 pb-1 text-2xs text-muted-foreground/70 select-none"
     >
       <span className="font-medium text-muted-foreground">{day}</span>
       <span>{time}</span>

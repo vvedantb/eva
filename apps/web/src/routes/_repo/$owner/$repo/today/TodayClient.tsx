@@ -106,7 +106,7 @@ export function TodayClient() {
                   </h2>
                   <time
                     dateTime={dayjs(entry.publishedAt).toISOString()}
-                    className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+                    className="shrink-0 text-2xs tabular-nums text-muted-foreground"
                   >
                     {dayjs(entry.publishedAt).format("MMM D, HH:mm")}
                   </time>

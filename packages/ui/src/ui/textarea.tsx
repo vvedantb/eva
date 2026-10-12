@@ -10,7 +10,7 @@ const Textarea = React.forwardRef<
     <textarea
       className={cn(
         // 16px below `sm` — see the note in input.tsx.
-        "flex min-h-[84px] w-full max-sm:min-w-0 border border-input bg-card px-3.5 py-2.5 text-base sm:text-sm transition-[border-color,box-shadow,background-color] placeholder:text-muted-foreground/90 focus-visible:border-ring/60 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex min-h-[84px] w-full max-sm:min-w-0 border border-input bg-card px-3.5 py-2.5 text-base sm:text-sm transition-[border-color,box-shadow,background-color] placeholder:text-muted-foreground/90 focus-visible:border-ring/50 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
         CONTROL_RADIUS_CLASS,
         className,
       )}

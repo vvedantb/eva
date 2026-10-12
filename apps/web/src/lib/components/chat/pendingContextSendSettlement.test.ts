@@ -12,7 +12,7 @@ function sourceOf(relativePath: string): string {
 const SEND_HANDLERS = [
   [
     "session",
-    "../../../routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
+    "../../../routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
   ],
   ["task", "../tasks/TaskSandboxChatPanel.tsx"],
   ["project", "../projects/ProjectSandboxChatPanel.tsx"],

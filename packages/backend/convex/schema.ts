@@ -14,6 +14,7 @@ import {
   automationRunFields,
   agentTaskFields,
   agentRunFields,
+  pullRequestFields,
   sessionFields,
   sessionRepoFields,
   repoGroupFields,
@@ -28,6 +29,7 @@ import {
   taskCommentFields,
   taskReactionFields,
   taskSubscriberFields,
+  chatReadFields,
   repoSkillFields,
   repoSkillContentFields,
   repoSystemSkillFields,
@@ -35,12 +37,16 @@ import {
   harnessSkillReportTokenFields,
   sandboxGitCredentialsFields,
   appSettingsFields,
+  sandboxActivityFields,
   userFields,
   userPresenceFields,
   userProviderAccountFields,
   githubUserTokenFields,
   githubOauthStateFields,
+  connectedAccountFields,
+  connectorOauthStateFields,
   docFields,
+  chatLogEntryFields,
   docCommentFields,
   docSubscriberFields,
   docVersionFields,
@@ -49,13 +55,18 @@ import {
   promptStashFields,
   evaluationReportFields,
   artifactFields,
+  artifactStateFields,
   repoEntityCounterFields,
   appTabFields,
   backgroundProcessFields,
   snapshotBuildFields,
   sessionDaemonStateFields,
+  sessionChatFields,
   turnFields,
   chatUiPanelFields,
+  chatHtmlRenderFields,
+  chatHtmlRenderBodyFields,
+  envVarRequestFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -80,12 +91,16 @@ const schema = defineSchema({
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"]),
 
+  artifactState: defineTable(artifactStateFields).index(
+    "by_artifact_owner_key",
+    ["artifactId", "ownerId", "key"],
+  ),
+
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
-    .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_repo_and_sandbox_status", [
       "repoId",
@@ -111,8 +126,16 @@ const schema = defineSchema({
   agentRuns: defineTable(agentRunFields)
     .index("by_task", ["taskId"])
     .index("by_task_and_status", ["taskId", "status"])
-    .index("by_status", ["status"])
-    .index("by_pr_url", ["prUrl"]),
+    .index("by_status", ["status"]),
+
+  // Every pull request linked to a session, quick task or project. An owner
+  // may hold many; `owner.*` indexes list them, `by_pr_url` resolves webhooks.
+  pullRequests: defineTable(pullRequestFields)
+    .index("by_pr_url", ["prUrl"])
+    .index("by_session", ["owner.sessionId"])
+    .index("by_task", ["owner.taskId"])
+    .index("by_project", ["owner.projectId"])
+    .index("by_repo_and_head_branch", ["repoId", "headBranch"]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),
@@ -153,6 +176,10 @@ const schema = defineSchema({
     .index("by_task", ["taskId"])
     .index("by_task_and_user", ["taskId", "userId"]),
 
+  chatReads: defineTable(chatReadFields)
+    .index("by_user_parent", ["userId", "parentId"])
+    .index("by_user_repo", ["userId", "repoId"]),
+
   taskDependencies: defineTable({
     taskId: v.id("agentTasks"),
     dependsOnId: v.id("agentTasks"),
@@ -164,12 +191,7 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields)
-    .index("by_parent", ["parentId"])
-    // Scope verdicts are published to whichever PR contains the turn's commit,
-    // not to the session that produced it: a PR that re-lands those commits on
-    // a fresh branch (an extract) must still carry the warning.
-    .index("by_after_sha", ["afterSha"]),
+  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",
@@ -185,9 +207,18 @@ const schema = defineSchema({
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_repo_and_archived", ["repoId", "archived"])
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
-    .index("by_pr_url", ["prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_sandbox", ["sandboxId"])
+    .index("by_forked_from", ["forkedFromSessionId"]),
+  // Chat threads inside a session (Main + parallel chats). See
+  // `sessionChatFields` for the session/chat ownership split.
+  sessionChats: defineTable(sessionChatFields)
+    .index("by_session", ["sessionId"])
+    .index("by_session_and_number", ["sessionId", "number"])
+    .index("by_repo", ["repoId"]),
+  // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
+  // directly; `backfillSessionChats` empties this table and it can then be
+  // dropped from the schema.
   sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
     "by_session",
     ["sessionId"],
@@ -196,20 +227,31 @@ const schema = defineSchema({
   // on `sessions.repoId`). One row per linked repo per session.
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
-    .index("by_repo", ["repoId"])
-    .index("by_pr_url", ["prUrl"]),
+    .index("by_repo", ["repoId"]),
   // Saved codebase groups that prefill a new session's repo selection.
   repoGroups: defineTable(repoGroupFields)
     .index("by_created_by", ["createdBy"])
     .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
-    .index("by_entity_open", ["surface", "entityId", "open"])
+    .index("by_entity_open", ["entityId", "lane", "open"])
+    .index("by_session_open", ["sessionId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
     .index("by_workflow", ["workflowId"]),
   // Agent-generated chat UI panels, one row per `render_ui` call. Shared by
   // sessions, quick tasks and projects — the chat surface is one surface.
   chatUiPanels: defineTable(chatUiPanelFields).index("by_parent", ["parentId"]),
+  // Agent-authored HTML pages, one row per `render_html` call; the page body
+  // is its own row. Same three chat surfaces as `chatUiPanels`.
+  chatHtmlRenders: defineTable(chatHtmlRenderFields).index("by_parent", [
+    "parentId",
+  ]),
+  chatHtmlRenderBodies: defineTable(chatHtmlRenderBodyFields),
+  // Secret requests the agent posts as an inline card (`request_env_var`).
+  // Status only: the value goes to the encrypted env var stores.
+  envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
+    "parentId",
+  ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
   // tab. Short-lived: cleared when the entity's sandbox stops.
   previewToolCalls: defineTable(previewToolCallFields).index(
@@ -240,6 +282,10 @@ const schema = defineSchema({
   })
     .index("by_sandbox", ["sandboxId"])
     .index("by_last_heal", ["lastHealAt"]),
+  sandboxActivity: defineTable(sandboxActivityFields).index("by_entity", [
+    "kind",
+    "entityId",
+  ]),
   streamingActivity: defineTable({
     entityId: v.string(),
     currentActivity: v.string(),
@@ -279,6 +325,13 @@ const schema = defineSchema({
     .index("by_source_project", ["sourceProjectId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
+
+  chatLogEntries: defineTable(chatLogEntryFields)
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"])
+    .index("by_message", ["messageId"])
+    .index("by_repo", ["repoId"]),
 
   docComments: defineTable(docCommentFields).index("by_doc", ["docId"]),
 
@@ -464,6 +517,13 @@ const schema = defineSchema({
   githubOauthStates: defineTable(githubOauthStateFields).index("by_nonce", [
     "nonce",
   ]),
+  connectedAccounts: defineTable(connectedAccountFields)
+    .index("by_user", ["userId"])
+    .index("by_user_and_provider", ["userId", "provider"]),
+  connectorOauthStates: defineTable(connectorOauthStateFields).index(
+    "by_nonce",
+    ["nonce"],
+  ),
   teamEnvVars: defineTable({
     teamId: v.id("teams"),
     vars: v.array(
@@ -483,6 +543,8 @@ const schema = defineSchema({
   automationRuns: defineTable(automationRunFields)
     .index("by_automation", ["automationId"])
     .index("by_automation_and_status", ["automationId", "status"])
+    .index("by_automation_and_eventKey", ["automationId", "eventKey"])
+    .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
     .index("by_repo", ["repoId"]),
 
   logs: defineTable(logFields)
@@ -534,6 +596,7 @@ const schema = defineSchema({
     .index("by_user_and_task", ["userId", "taskId"])
     .index("by_user_and_project", ["userId", "projectId"])
     .index("by_user_and_session", ["userId", "sessionId"])
+    .index("by_user_and_chat", ["userId", "chatId"])
     .index("by_user_and_repo", ["userId", "repoId"]),
 
   // Explicit ⌘S queue of frozen composer snapshots (text + attachment blobs),

@@ -10,14 +10,20 @@ import type { WebMcpDiscovery } from "@/lib/components/sandbox/previewWebMcp";
 
 const DISCOVER_TIMEOUT_MS = 12_000;
 
-export function PreviewWebMcpButton({
-  iframeElement,
-  seedDiscovery,
-}: {
+interface PreviewWebMcpOptions {
   iframeElement: HTMLIFrameElement | null;
   /** Opens the dialog with this catalogue instead of discovering (demo / tests). */
   seedDiscovery?: WebMcpDiscovery;
-}) {
+}
+
+/**
+ * Lists the preview page's WebMCP tools. Render `dialog` outside any menu
+ * that triggers `discover`, so it outlives the menu closing.
+ */
+export function usePreviewWebMcp({
+  iframeElement,
+  seedDiscovery,
+}: PreviewWebMcpOptions) {
   const pending = usePendingWebMcp();
   const [discovering, setDiscovering] = useState(false);
   const [discovery, setDiscovery] = useState<WebMcpDiscovery | null>(
@@ -57,13 +63,34 @@ export function PreviewWebMcpButton({
     );
   }
 
+  const dialog = (
+    <PreviewWebMcpDialog
+      discovery={discovery}
+      open={open}
+      onOpenChange={setOpen}
+      onAddToChat={
+        pending
+          ? (next) => {
+              pending.add(next);
+              toast.success("Page tools added to chat");
+            }
+          : undefined
+      }
+    />
+  );
+  const disabled = discovering || (iframeElement === null && !seedDiscovery);
+  return { discovering, disabled, discover, dialog };
+}
+
+export function PreviewWebMcpButton(props: PreviewWebMcpOptions) {
+  const { discovering, disabled, discover, dialog } = usePreviewWebMcp(props);
   return (
     <>
       <WebPreviewNavigationButton
         tooltip={discovering ? "Listing page tools…" : "Page tools"}
         aria-label={discovering ? "Listing page tools" : "Page tools"}
         className="max-sm:hit-target"
-        disabled={discovering || (iframeElement === null && !seedDiscovery)}
+        disabled={disabled}
         data-testid="preview-webmcp-button"
         onClick={discover}
       >
@@ -73,19 +100,7 @@ export function PreviewWebMcpButton({
           <IconPlug className="h-3.5 w-3.5" />
         )}
       </WebPreviewNavigationButton>
-      <PreviewWebMcpDialog
-        discovery={discovery}
-        open={open}
-        onOpenChange={setOpen}
-        onAddToChat={
-          pending
-            ? (next) => {
-                pending.add(next);
-                toast.success("Page tools added to chat");
-              }
-            : undefined
-        }
-      />
+      {dialog}
     </>
   );
 }

@@ -3,7 +3,6 @@ import { internalMutation, internalQuery } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
-import { syncSessionDaemonState } from "../_sessions/daemonState";
 
 const emptyDaemonEntitySnapshot = {
   pendingTurn: undefined,
@@ -74,6 +73,7 @@ export const releaseDaemonLaunchLease = internalMutation({
 export const setDaemonClaimPause = internalMutation({
   args: {
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -86,14 +86,17 @@ export const setDaemonClaimPause = internalMutation({
     const claimPausedUntil = args.paused
       ? Date.now() + DAEMON_CLAIM_PAUSE_MS
       : undefined;
+    if (args.entityTable === "sessionChats") {
+      const id = ctx.db.normalizeId("sessionChats", args.entityId);
+      if (!id) return null;
+      if (!(await ctx.db.get(id))) return null;
+      await ctx.db.patch(id, { claimPausedUntil });
+      return null;
+    }
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       if (!id) return null;
-      const session = await ctx.db.get(id);
-      if (!session) return null;
-      // Both copies: the claim poll reads the compact row, and the session doc
-      // is what a lazily-created row inherits from.
-      await syncSessionDaemonState(ctx, session, { claimPausedUntil });
+      if (!(await ctx.db.get(id))) return null;
       await ctx.db.patch(id, { claimPausedUntil });
       return null;
     }
@@ -114,6 +117,7 @@ export const setDaemonClaimPause = internalMutation({
 export const readDaemonEntitySnapshot = internalQuery({
   args: {
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -126,6 +130,17 @@ export const readDaemonEntitySnapshot = internalQuery({
     syntheticTurnMessageId: v.optional(v.id("messages")),
   }),
   handler: async (ctx, args) => {
+    if (args.entityTable === "sessionChats") {
+      const id = ctx.db.normalizeId("sessionChats", args.entityId);
+      if (!id) return emptyDaemonEntitySnapshot;
+      const doc = await ctx.db.get(id);
+      if (!doc) return emptyDaemonEntitySnapshot;
+      return {
+        pendingTurn: doc.pendingTurn,
+        activeWorkflow: doc.activeWorkflowId,
+        syntheticTurnMessageId: doc.syntheticTurnMessageId,
+      };
+    }
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       if (!id) return emptyDaemonEntitySnapshot;
@@ -157,6 +172,50 @@ export const readDaemonEntitySnapshot = internalQuery({
       activeWorkflow: doc.activeChatWorkflowId,
       syntheticTurnMessageId: doc.syntheticTurnMessageId,
     };
+  },
+});
+
+/**
+ * True once the entity's sandbox is stopping/closed (or the entity is gone).
+ * Background work that can outlive a Stop (prewarm waits up to a lease window)
+ * polls this before any exec, because a Vercel exec lazily resumes a stopped
+ * VM and would leave it running, unseen by the idle sweep.
+ */
+export const isEntitySandboxStopRequested = internalQuery({
+  args: {
+    entityTable: v.union(
+      v.literal("sessionChats"),
+      v.literal("sessions"),
+      v.literal("agentTasks"),
+      v.literal("projects"),
+    ),
+    entityId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const isStopped = (status: string | undefined) =>
+      status === "stopping" || status === "closed";
+    if (args.entityTable === "sessionChats") {
+      // A chat shares its session's sandbox; a closed chat needs no daemon.
+      const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      if (!chat || chat.archived === true) return true;
+      const session = await ctx.db.get(chat.sessionId);
+      return !session || isStopped(session.status);
+    }
+    if (args.entityTable === "sessions") {
+      const id = ctx.db.normalizeId("sessions", args.entityId);
+      const doc = id ? await ctx.db.get(id) : null;
+      return !doc || isStopped(doc.status);
+    }
+    if (args.entityTable === "agentTasks") {
+      const id = ctx.db.normalizeId("agentTasks", args.entityId);
+      const doc = id ? await ctx.db.get(id) : null;
+      return !doc || isStopped(doc.reviewTaskSandboxStatus);
+    }
+    const id = ctx.db.normalizeId("projects", args.entityId);
+    const doc = id ? await ctx.db.get(id) : null;
+    return !doc || isStopped(doc.reviewProjectSandboxStatus);
   },
 });
 
@@ -248,6 +307,7 @@ export const listActiveSandboxEntities = internalQuery({
 export const reconcileStoppedSandboxStatus = internalMutation({
   args: {
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -257,8 +317,17 @@ export const reconcileStoppedSandboxStatus = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.entityTable === "sessions") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
+    if (args.entityTable === "sessionChats" || args.entityTable === "sessions") {
+      // A chat shares its session's sandbox, so its status lives on the session.
+      const chatId =
+        args.entityTable === "sessionChats"
+          ? ctx.db.normalizeId("sessionChats", args.entityId)
+          : null;
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      const id =
+        args.entityTable === "sessionChats"
+          ? (chat?.sessionId ?? null)
+          : ctx.db.normalizeId("sessions", args.entityId);
       if (!id) return null;
       const doc = await ctx.db.get(id);
       if (!doc) return null;

@@ -3,7 +3,6 @@ import {
   HEARTBEAT_FATAL_BURST,
   HEARTBEAT_FATAL_SLOW_COUNT,
   HEARTBEAT_FATAL_SLOW_WINDOW_MS,
-  CLAIM_MUTATION,
   READY_FILE,
   SCRIPT_STARTED_AT,
   STREAMING_ENTITY_ID,
@@ -42,10 +41,7 @@ let activeFlush: Promise<void> | null = null;
 let flushRequested = false;
 
 function ownsHeartbeatLease(): boolean {
-  return canSendTurnHeartbeat({
-    claimMutation: CLAIM_MUTATION,
-    ownership: getTurnOwnership(),
-  });
+  return canSendTurnHeartbeat(getTurnOwnership());
 }
 
 export function buildStreamingPayload(): string {

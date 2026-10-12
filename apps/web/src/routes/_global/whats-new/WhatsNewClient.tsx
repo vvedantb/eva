@@ -57,7 +57,7 @@ export function WhatsNewClient() {
                     Week of {dayjs(entry.publishedAt).format("MMM D, YYYY")}
                   </h2>
                   {index === 0 ? (
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-3xs font-medium text-primary">
                       Latest
                     </span>
                   ) : null}

@@ -99,7 +99,7 @@ async function withVisiblePrFailure<T>(
 
 /** Manually creates the PR for a task branch — used when the workflow's auto
  * PR step failed. Idempotent: returns the existing PR URL if one is already
- * tracked on a run. The body matches the format the workflow would produce. */
+ * live on the task branch. The body matches the format the workflow would produce. */
 export const createTaskPr = action({
   args: { taskId: v.id("agentTasks") },
   returns: v.object({ url: v.string() }),
@@ -150,12 +150,12 @@ export const createTaskPr = action({
         },
       );
 
-      if (data.latestRunId) {
-        await ctx.runMutation(internal.taskWorkflow.setRunPrUrl, {
-          runId: data.latestRunId,
-          prUrl,
-        });
-      }
+      await ctx.runMutation(internal.taskWorkflow.recordManualTaskPr, {
+        taskId: args.taskId,
+        runId: data.latestRunId ?? undefined,
+        prUrl,
+        draft: data.isQuickTask,
+      });
 
       return { url: prUrl };
     }),
@@ -222,9 +222,16 @@ export const createProjectPr = action({
           },
         );
 
-        await ctx.runMutation(internal.projects.setProjectPrUrl, {
-          projectId: args.projectId,
+        await ctx.runMutation(internal.pullRequests.record, {
+          owner: { kind: "project", projectId: args.projectId },
+          repoId: data.repoId,
           prUrl,
+          state: "open",
+          primary: true,
+          origin: "eva",
+          headBranch: data.branchName,
+          baseBranch: data.baseBranch,
+          title: data.projectTitle,
         });
 
         return { url: prUrl };

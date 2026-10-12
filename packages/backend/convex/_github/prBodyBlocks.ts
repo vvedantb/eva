@@ -1,15 +1,11 @@
 /**
  * Marker-delimited blocks inside a pull request body.
  *
- * Three writers share one body: `prBody.ts` owns the static sections (Task,
- * Change Requests, Related PRs) and the Eva footer, while generated blocks —
- * the reviewer description and the scope-check summary — are rewritten on every
- * push. Each generated block sits between its own comment markers, so rewriting
- * one never disturbs the other and a hand-edited body keeps its own prose.
- *
- * Extracted from `prDescriptionPrompt.ts` when the scope-check section needed
- * the same splice; both now share one implementation of "where does the footer
- * start" rather than each guessing.
+ * `prBody.ts` owns the static sections (Task, Change Requests, Related PRs) and
+ * the Eva footer, while generated blocks such as the reviewer description are
+ * rewritten on every push. Each generated block sits between its own comment
+ * markers, so rewriting one never disturbs the rest and a hand-edited body
+ * keeps its own prose.
  */
 
 const FOOTER_SEPARATOR = "\n---\n";

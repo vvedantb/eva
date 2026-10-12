@@ -14,6 +14,13 @@ export {
 export { useDragSensors } from "./utils/useDragSensors";
 export { ensureRuntimeVisibility } from "./utils/runtimeVisibility";
 export { quantizedSnapshot, subscribeQuantized } from "./utils/sharedClock";
+export {
+  catColorForId,
+  catColorForSlot,
+  catSlotForId,
+  CAT_SLOT_COUNT,
+} from "./utils/cat-color";
+export type { CatColorClasses, CatSlot } from "./utils/cat-color";
 
 export * from "./ui/accordion";
 export * from "./ui/alert";
@@ -50,6 +57,7 @@ export * from "./ui/sheet";
 export * from "./ui/slider";
 export * from "./ui/sonner";
 export * from "./ui/spinner";
+export * from "./ui/status-dot";
 export * from "./ui/surface";
 export * from "./ui/switch";
 export * from "./ui/tabs";

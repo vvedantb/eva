@@ -26,7 +26,7 @@ export function ChatSourceBadge({ source }: { source: ChatSource }) {
   return (
     <span
       title={chatSourceLabel(source)}
-      className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground"
+      className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground"
     >
       <SourceIcon size={11} aria-hidden className="shrink-0" />
       <span className="truncate">{chatSourceShortLabel(source)}</span>

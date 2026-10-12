@@ -136,3 +136,8 @@ rewrite.
 `legacyWorkdirStillExists` decide the shape of the migration. If the AL2023
 restore fails, Phase 2 becomes repo-by-repo re-seeding rather than a library
 bump. All sandboxes are stopped on exit; snapshots persist until `cleanup.mjs`.
+
+Phase 2 is implemented and on by default: fresh sandboxes boot the managed
+Ubuntu image. See the "Phase 2 status" section of `MANAGED-IMAGE-RESULTS.md`,
+and note that check 5's apt output is the ground truth
+for `PACKAGE_ALIASES` in `convex/_sandbox_runtime/packageManager.ts`.

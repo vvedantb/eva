@@ -11,6 +11,9 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
+import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
+import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
+import { useSeenOnce } from "@/lib/components/chat/useSeenOnce";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
   ChatComposer,
@@ -45,17 +48,27 @@ import type { TurnCheckpointContext } from "@/lib/components/chat/_components/us
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
+import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
+import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
+import {
+  api,
+  type BackgroundAgentEntry,
+  type Doc,
+  type Id,
+} from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildJumpRailTicks,
   buildMessageHistory,
   findDayBoundaryIds,
+  findNewMessageIds,
+  type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findLastAssistantMessageId,
@@ -69,6 +82,7 @@ import {
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
+  type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
@@ -85,6 +99,17 @@ export interface ChatSendOptions {
   draftContent?: string;
 }
 
+/** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
+interface InlineCard {
+  _id: string;
+  messageId?: string;
+  createdAt: number;
+  card:
+    | { kind: "panel"; spec: string }
+    | { kind: "html"; render: Doc<"chatHtmlRenders"> }
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
+}
+
 interface ChatBodyProps {
   /**
    * The codebase this chat belongs to. Absent for Manager Ave, which has none:
@@ -95,10 +120,16 @@ interface ChatBodyProps {
   conversationId: string;
   /**
    * The same chat, typed as the id its messages hang off. Used to load the
-   * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   * agent-composed UI panels (`render_ui`) and HTML pages (`render_html`)
+   * that belong to this transcript.
    * Absent (Manager Ave): no panels are loaded.
    */
-  chatParentId?: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+  chatParentId?: ChatParentId;
+  /**
+   * Cached session shells stay mounted but hidden. False stops mark-read and
+   * the "NEW" divider anchor, so a hidden chat never clears its own dot.
+   */
+  isRouteActive?: boolean;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -107,6 +138,10 @@ interface ChatBodyProps {
    */
   isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
+  queueLabel?: string;
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
@@ -139,7 +174,8 @@ interface ChatBodyProps {
   disabledReason?: string;
   /**
    * Wakes the sandbox. Set only when it is stopped and not already toggling;
-   * gives the empty state its button and the blocked-send toast its action.
+   * gives the empty state its button. Sending also wakes it (the message
+   * queues until Eva is up), so this is the explicit alternative.
    */
   onStartSandbox?: () => void;
   /** Model, account and trait controls. Absent: no picker (fixed model). */
@@ -156,12 +192,13 @@ interface ChatBodyProps {
   onCancel: () => Promise<void>;
   /** Optional slot inserted above the conversation (session summary accordion). */
   preConversationContent?: React.ReactNode;
-  /** Optional slot inserted above the queued messages panel (session startup streaming). */
-  beforeQueuedContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
-  /** Replaces the default empty-state component when there are zero messages. */
-  emptyStateOverride?: React.ReactNode;
+  /**
+   * Live block at the end of the transcript (session sandbox startup). Takes
+   * the empty state's place when there are no messages yet.
+   */
+  transcriptTail?: React.ReactNode;
   /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
   underCardLeading?: React.ReactNode;
   /**
@@ -211,6 +248,8 @@ interface ChatBodyProps {
     title: string;
     prompt: string;
   }) => Promise<void>;
+  /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
+  hideJumpRail?: boolean;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -225,9 +264,12 @@ function ChatBodyInner({
   repo,
   conversationId,
   chatParentId,
+  isRouteActive = true,
   messages,
   isLoadingMessages = false,
   queuedMessages,
+  queueLabel,
+  heldFollowUps,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
@@ -245,9 +287,8 @@ function ChatBodyInner({
   onSend,
   onCancel,
   preConversationContent,
-  beforeQueuedContent,
   preInputContent,
-  emptyStateOverride,
+  transcriptTail,
   underCardLeading,
   draft,
   localDraft,
@@ -262,6 +303,7 @@ function ChatBodyInner({
   allowEmptySubmit,
   afterMessage,
   onForkTranscript,
+  hideJumpRail = false,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -285,7 +327,7 @@ function ChatBodyInner({
     // Settlement is observed, not awaited: the composer only empties once this
     // resolves, and holding the user's text on screen until the mutation
     // round-trips would undo the optimistic clear every surface relies on.
-    // Same contract as useSessionSend's `review?.clear()`: the pending context
+    // Same contract as useChatSend's `review?.clear()`: the pending context
     // is consumed only once the send has actually succeeded, so a rejected send
     // leaves the chips attached for the retry. And only the exact items that
     // went into this prompt are dropped — `clear()` also threw away anything
@@ -316,6 +358,14 @@ function ChatBodyInner({
   // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
+
+  // Composer predictions read the chat only while it waits on the user and is
+  // on screen — hidden cached shells must not each spend a model call.
+  const lastMessageId = messages.at(-1)?._id;
+  const predictionTarget =
+    chatParentId && isRouteActive && !isExecuting && lastMessageId
+      ? { parentId: chatParentId, lastMessageId }
+      : undefined;
 
   // Opening a long chat used to commit every settled turn in one blocking
   // render — ~1s of locked main thread on a heavy transcript. Only the last
@@ -409,7 +459,9 @@ function ChatBodyInner({
 
   const lastUserMessageIndex = findLastUserMessageIndex(displayMessages);
 
-  const jumpRailMessages = buildJumpRailTicks(displayMessages);
+  const jumpRailMessages = hideJumpRail
+    ? []
+    : buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
   const dayBoundaryIds = findDayBoundaryIds(displayMessages);
   const findDocuments = collectThreadFindDocuments(
@@ -439,15 +491,67 @@ function ChatBodyInner({
       lastUserMessage === undefined ||
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
+  const { newSinceAt } = useChatReadState({
+    parentId: chatParentId,
+    active: isRouteActive,
+  });
+  const newMessageIds = findNewMessageIds(
+    displayMessages,
+    newSinceAt,
+    currentUserId,
+  );
+  const newBoundaryId = newMessageIds[0];
+  // Seen state lives here, not in the divider: the pill is a sibling and needs
+  // it. It is keyed by the boundary id, so a new boundary starts unseen.
+  const newDivider = useSeenOnce(newBoundaryId);
+  const jumpToNewDivider = () => {
+    newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    newDivider.markSeen();
+  };
 
-  // Agent-composed UI panels (`render_ui`). One query per chat covers all three
-  // surfaces, since every one of them renders through this component.
+  // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
+  // (`render_html`) and secret requests (`request_env_var`). One query each
+  // per chat covers all three surfaces, since every one of them renders
+  // through this component.
   const chatUiPanels = useQuery(
     api.chatUi.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const htmlRenders = useQuery(
+    api.chatHtml.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const envVarRequests = useQuery(
+    api.envVarRequests.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const panelPlacement = placeChatUiPanels(
-    chatUiPanels ?? [],
+    [
+      ...(chatUiPanels ?? []).map(
+        (panel): InlineCard => ({
+          _id: panel._id,
+          messageId: panel.messageId,
+          createdAt: panel.createdAt,
+          card: { kind: "panel", spec: panel.spec },
+        }),
+      ),
+      ...(htmlRenders ?? []).map(
+        (render): InlineCard => ({
+          _id: render._id,
+          messageId: render.messageId,
+          createdAt: render.createdAt,
+          card: { kind: "html", render },
+        }),
+      ),
+      ...(envVarRequests ?? []).map(
+        (request): InlineCard => ({
+          _id: request._id,
+          messageId: request.messageId,
+          createdAt: request.createdAt,
+          card: { kind: "envVarRequest", request },
+        }),
+      ),
+    ],
     new Set(displayMessages.map((message) => message._id)),
   );
 
@@ -495,15 +599,34 @@ function ChatBodyInner({
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
     panels.length === 0
       ? undefined
-      : panels.map((panel) => (
-          <ChatUiPanel
-            key={panel._id}
-            spec={panel.spec}
-            onReply={handlePanelReply}
-          />
-        ));
+      : panels.map(({ _id, card }) => {
+          switch (card.kind) {
+            case "panel":
+              return (
+                <ChatUiPanel
+                  key={_id}
+                  spec={card.spec}
+                  onReply={handlePanelReply}
+                />
+              );
+            case "html":
+              return <ChatHtmlFrame key={_id} render={card.render} />;
+            case "envVarRequest":
+              return (
+                <EnvVarRequestCard
+                  key={_id}
+                  request={card.request}
+                  onReply={handlePanelReply}
+                />
+              );
+          }
+        });
 
   /**
+   * Every prop handed to a row must keep its identity across ChatBody renders.
+   * `ChatMessage` is memoised, and switching sessions re-renders ChatBody (the
+   * cached shells flip `isRouteActive`); one unstable prop re-renders all rows.
+   *
    * `isBacklog` marks a row the chat opened already scrolled past, which skips
    * its enter animation: nothing arrived, and 80 simultaneous enter animations
    * is the most expensive part of committing a long transcript.
@@ -528,6 +651,9 @@ function ChatBodyInner({
       <div key={message._id} className="flex flex-col gap-3">
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
+        ) : null}
+        {message._id === newBoundaryId ? (
+          <ChatNewDivider ref={newDivider.ref} />
         ) : null}
         <ChatMessage
           message={message}
@@ -555,12 +681,16 @@ function ChatBodyInner({
           backgroundAgents={backgroundAgents}
           sandboxRunning={sandboxRunning}
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-          onRetryTurn={handleRetryTurn}
+          // Only a failed turn shows Retry. `handleRetryTurn` changes with
+          // `onSend`, so handing it to every row re-rendered the transcript.
+          onRetryTurn={
+            message.errorType !== undefined ? handleRetryTurn : undefined
+          }
           precedingUser={precedingUser}
           citeHighlight={citations?.highlightedMessageId === message._id}
           onFork={
             onForkTranscript && canForkMessage(message)
-              ? () => setForkThroughId(message._id)
+              ? setForkThroughId
               : undefined
           }
           belowContent={renderChatUiPanels(
@@ -582,14 +712,19 @@ function ChatBodyInner({
           scrollClassName="[container-type:size]"
         >
           {displayMessages.length === 0 ? (
-            (emptyStateOverride ??
-            (isLoadingMessages ? (
+            transcriptTail ? (
+              // Bottom-anchored like a live last turn, so the tail sits in the
+              // same spot above the composer whether or not messages exist.
+              <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
+                {transcriptTail}
+              </div>
+            ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}
                 description={emptyStateDescription}
-                {...(isInputDisabled && onStartSandbox
+                {...(onStartSandbox
                   ? {
                       action: {
                         label: SANDBOX_CHAT_COPY.wakeAction,
@@ -598,7 +733,7 @@ function ChatBodyInner({
                     }
                   : {})}
               />
-            )))
+            )
           ) : lastUserMessageIndex < 0 ? (
             displayMessages.map((message) => renderMessage(message))
           ) : (
@@ -615,14 +750,25 @@ function ChatBodyInner({
               </ChatLastTurn>
             </>
           )}
+          {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
+        {newBoundaryId ? (
+          <ChatNewMessagesPill
+            key={newBoundaryId}
+            count={newMessageIds.length}
+            visible={newDivider.status === "above"}
+            onJump={jumpToNewDivider}
+          />
+        ) : null}
         <ConversationScrollButton resetKey={conversationId} />
         {/* Mounted with the backlog: the rail resolves its ticks by querying
             `[data-message-id]` from an effect keyed on the (memoised) tick
             array, so binding it before those rows exist would observe nothing
             and never retry. */}
-        {backlogReady ? <ChatJumpRail messages={jumpRailMessages} /> : null}
+        {backlogReady && !hideJumpRail ? (
+          <ChatJumpRail messages={jumpRailMessages} />
+        ) : null}
         {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
       {isArchived ? null : (
@@ -656,6 +802,8 @@ function ChatBodyInner({
                 repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
+                queueLabel={queueLabel}
+                heldFollowUps={heldFollowUps}
                 messageHistory={messageHistory}
                 isExecuting={isExecuting}
                 isInputDisabled={isInputDisabled}
@@ -665,7 +813,6 @@ function ChatBodyInner({
                 modelPicker={modelPicker}
                 onSend={sendWithPendingContext}
                 onCancel={onCancel}
-                beforeQueuedContent={beforeQueuedContent}
                 preInputContent={
                   <>
                     <PendingCitationChips />
@@ -682,6 +829,7 @@ function ChatBodyInner({
                 isDraftLoading={isDraftLoading}
                 hasPendingContext={hasComposerContext}
                 allowEmptySubmit={allowEmptySubmit}
+                predictionTarget={predictionTarget}
               />
             </m.div>
           )}

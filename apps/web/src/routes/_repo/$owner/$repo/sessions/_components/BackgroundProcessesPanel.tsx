@@ -144,7 +144,7 @@ export function BackgroundProcessesPanel({
                               <p className="truncate font-mono text-xs text-foreground">
                                 {row.command}
                               </p>
-                              <p className="text-[11px] text-muted-foreground">
+                              <p className="text-2xs text-muted-foreground">
                                 {formatElapsed(row.startedAt, now)}
                               </p>
                             </div>

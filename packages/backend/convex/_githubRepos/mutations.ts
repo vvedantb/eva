@@ -244,6 +244,7 @@ export const updateConfig = authMutation({
     sessionsVncEnabled: v.optional(v.boolean()),
     sessionsVscodeEnabled: v.optional(v.boolean()),
     sandboxReadExcluded: v.optional(v.boolean()),
+    agentMemoryEnabled: v.optional(v.boolean()),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
     devPort: v.optional(v.union(v.number(), v.null())),
@@ -280,6 +281,8 @@ export const updateConfig = authMutation({
       sharedPatch.sessionsVscodeEnabled = args.sessionsVscodeEnabled;
     if (args.sandboxReadExcluded !== undefined)
       sharedPatch.sandboxReadExcluded = args.sandboxReadExcluded;
+    if (args.agentMemoryEnabled !== undefined)
+      sharedPatch.agentMemoryEnabled = args.agentMemoryEnabled;
 
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {

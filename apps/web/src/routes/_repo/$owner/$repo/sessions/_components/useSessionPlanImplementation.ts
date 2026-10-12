@@ -3,7 +3,7 @@ import { toast } from "@eva/ui";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useSessionModel } from "@/lib/hooks/useSessionModel";
+import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -12,14 +12,17 @@ import {
   buildPlanImplementationThreadTitle,
 } from "./planExport";
 import type { ProposedPlanRow } from "./proposedPlanLogic";
-import type { SessionSendOptions } from "./useSessionSend";
+import type { SessionSendOptions } from "./useChatSend";
 
 export function useSessionPlanImplementation({
   sessionId,
+  chatId,
   handleSend,
   isRouteActive = true,
 }: {
   sessionId: Id<"sessions">;
+  /** The chat tab whose model and account a new session inherits. */
+  chatId: Id<"sessionChats">;
   handleSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
@@ -33,7 +36,7 @@ export function useSessionPlanImplementation({
   const { resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId, isRouteActive);
   const { model, traits, providerAccountId: stickyProviderAccountId } =
-    useSessionModel(sessionId, defaultModel, isRouteActive);
+    useChatModel(chatId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,

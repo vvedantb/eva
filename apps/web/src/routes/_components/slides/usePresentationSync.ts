@@ -20,12 +20,7 @@ interface UsePresentationSyncArgs {
   updateSearch: (next: { slide?: number; session?: string }) => void;
 }
 
-export type SessionState =
-  | "none"
-  | "loading"
-  | "live"
-  | "ended"
-  | "notfound";
+export type SessionState = "none" | "loading" | "live" | "ended" | "notfound";
 
 export function usePresentationSync({
   slide,
@@ -106,21 +101,26 @@ export function usePresentationSync({
     updateSearch({ slide: target });
   };
 
+  const shareSession = async () => {
+    const result = await createSessionMut({ slide });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(hostKeyStorage(result.code), result.hostKey);
+    }
+    setHostKey(result.hostKey);
+    updateSearch({ session: result.code });
+  };
+
+  // No `finally`: the React Compiler cannot compile it and skips the whole
+  // file. The cleanup runs in the `catch` and again after the `try`.
   const startSharing = async () => {
     setIsStarting(true);
     try {
-      const result = await createSessionMut({ slide });
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          hostKeyStorage(result.code),
-          result.hostKey,
-        );
-      }
-      setHostKey(result.hostKey);
-      updateSearch({ session: result.code });
-    } finally {
+      await shareSession();
+    } catch (error) {
       setIsStarting(false);
+      throw error;
     }
+    setIsStarting(false);
   };
 
   const stopSharing = async () => {

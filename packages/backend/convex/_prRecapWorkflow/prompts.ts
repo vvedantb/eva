@@ -69,6 +69,8 @@ Focus on what changed and why it matters to reviewers.
 ## PART 2 — Interactive HTML walkthrough (after the marker)
 A single self-contained HTML document that walks a reviewer through this PR file by file.
 
+If the frontend-design skill is available to you, use it for the visual design of this page. The hard requirements below always win over the skill's advice (for example, no web fonts or external assets).
+
 Hard requirements:
 - A complete <!doctype html> document with ALL CSS inside one <style> tag and ALL JavaScript inside one <script> tag. No external URLs, CDNs, web fonts, images, or network requests of any kind.
 - The page runs inside a sandboxed iframe with NO storage access: do NOT use localStorage, sessionStorage, cookies, IndexedDB, or any storage API. Keep all state in in-memory JavaScript variables.

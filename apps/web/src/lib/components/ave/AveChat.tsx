@@ -15,9 +15,10 @@ import {
  *
  * Ave runs on the server on a fixed model with no codebase of its own, so the
  * chat has no repo (no skills, stash or repo mentions), no model picker, no
- * render_ui panels and no queue: a message sent mid-run is folded into the
- * next run by the server. Questions Eva routed to the user dock above the
- * composer (`RoutedQuestionDock`).
+ * render_ui panels. A message sent mid-run is folded into the next run by
+ * the server; until then it sits read-only in the queue panel, as in sessions.
+ * Questions Eva routed to the user dock above the composer
+ * (`RoutedQuestionDock`).
  */
 export function AveChat({
   size = "popover",
@@ -52,6 +53,7 @@ function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
         messages={chat.messages}
         isLoadingMessages={chat.isLoadingMessages}
         queuedMessages={[]}
+        heldFollowUps={chat.followUps}
         streamingActivity={chat.streamingActivity}
         streamingContent={chat.streamingContent}
         isExecuting={chat.isExecuting}
@@ -67,6 +69,7 @@ function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
             <RoutedQuestionDock size={size} />
           </QueryErrorBoundary>
         }
+        hideJumpRail
       />
     </div>
   );

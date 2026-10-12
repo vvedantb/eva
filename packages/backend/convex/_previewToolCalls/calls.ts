@@ -147,7 +147,11 @@ export const create = internalMutation({
   },
   returns: v.union(v.id("previewToolCalls"), v.null()),
   handler: async (ctx, args): Promise<Id<"previewToolCalls"> | null> => {
-    const parentId = resolveChatParent(ctx.db, args.entityKind, args.entityId);
+    const parentId = await resolveChatParent(
+      ctx.db,
+      args.entityKind,
+      args.entityId,
+    );
     if (!parentId || !(await ctx.db.get(parentId))) return null;
     return await ctx.db.insert("previewToolCalls", {
       parentId,

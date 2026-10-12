@@ -197,7 +197,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
             {recapDoc.prNumber !== undefined ? (
               <DynamicLink
                 to={toInternalRepoHref(
-                  `${basePath}/reviews/${recapDoc.prNumber}/recap`,
+                  `${basePath}/reviews/${recapDoc.prNumber}/summary`,
                 )}
                 className="hover:text-foreground"
               >

@@ -5,7 +5,12 @@ import { allocateNumId, filterActiveEntities } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import type { DatabaseReader, DatabaseWriter } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { getSystemAutomation, SYSTEM_AUTOMATIONS } from "./systemAutomations";
+import {
+  automationCronspec,
+  getSystemAutomation,
+  SYSTEM_AUTOMATIONS,
+} from "./systemAutomations";
+import { automationTriggerValidator } from "../validators";
 
 /** Catalog entry joined with this repo's install state, for the Automations Hub. */
 const systemAutomationEntry = v.object({
@@ -15,6 +20,8 @@ const systemAutomationEntry = v.object({
   blurb: v.string(),
   /** This install's schedule, or the catalog default before it is installed. */
   cronSchedule: v.string(),
+  /** Cron or event; an event install carries its own label. */
+  trigger: automationTriggerValidator,
   /** True when the automation reports without touching code. */
   readOnly: v.boolean(),
   /** True while an install row exists for this repo (soft-deleted ones don't count). */
@@ -68,6 +75,10 @@ export const listSystemAutomations = authQuery({
         title: entry.title,
         blurb: entry.blurb,
         cronSchedule: install?.cronSchedule || entry.defaultCronSchedule,
+        trigger:
+          entry.trigger.kind === "event" && install?.trigger?.kind === "event"
+            ? { ...entry.trigger, label: install.trigger.label }
+            : entry.trigger,
         readOnly: entry.readOnly,
         installed: install !== undefined,
         enabled: install?.enabled === true,
@@ -130,6 +141,8 @@ export const installSystemAutomation = authMutation({
       }));
     const cronSchedule = existing?.cronSchedule || entry.defaultCronSchedule;
 
+    const revived = await ctx.db.get(id);
+    if (!revived) throw new Error("Automation not found");
     await ctx.db.patch(id, {
       deletedAt: undefined,
       enabled: true,
@@ -137,7 +150,7 @@ export const installSystemAutomation = authMutation({
       updatedAt: now,
       cronJobId: await safeReplaceCron(ctx, {
         name: `automation-${String(id)}`,
-        cronspec: cronSchedule,
+        cronspec: automationCronspec({ ...revived, enabled: true, cronSchedule }),
         handler: internal.automations.triggerAutomation,
         args: { automationId: id },
       }),

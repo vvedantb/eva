@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { GitStatus, GitStatusEntry } from "@pierre/trees";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { treeThemeVars } from "./treeTheme";
+import { TREE_UNSAFE_CSS, treeThemeVars } from "./treeTheme";
 
 interface DiffFileTreeProps {
   /** Changed file paths, in diff order. */
@@ -18,7 +18,19 @@ interface DiffFileTreeProps {
    * selections are filtered out because they are not in `files`.
    */
   onSelect: (path: string) => void;
+  /**
+   * Cursor's plain list: no git-status colours, letters or folder dots, no
+   * indent guides, a lighter selection. The cards beside it already carry the
+   * change counts.
+   */
+  quiet?: boolean;
 }
+
+const QUIET_TREE_VARS = {
+  "--trees-indent-guide-bg-override": "transparent",
+  "--trees-git-lane-width-override": "0px",
+  "--trees-font-size-override": "14px",
+};
 
 /**
  * Left-hand file tree for the Diffs tab. Renders the changed files as a
@@ -31,6 +43,7 @@ export function DiffFileTree({
   statuses,
   initialSelectedPath,
   onSelect,
+  quiet = false,
 }: DiffFileTreeProps) {
   const { resolvedTheme } = useThemeMode();
 
@@ -41,9 +54,9 @@ export function DiffFileTree({
 
   const { model } = useFileTree({
     paths: files,
-    gitStatus,
-    density: "default",
+    ...(quiet ? {} : { gitStatus }),
     flattenEmptyDirectories: true,
+    unsafeCSS: TREE_UNSAFE_CSS,
     initialExpansion: "open",
     initialSelectedPaths: initialSelectedPath ? [initialSelectedPath] : [],
     // Fires for file and directory rows; ignore paths outside the changed set
@@ -57,7 +70,11 @@ export function DiffFileTree({
   return (
     <FileTree
       model={model}
-      style={{ ...treeThemeVars, colorScheme: resolvedTheme }}
+      style={{
+        ...treeThemeVars,
+        ...(quiet ? QUIET_TREE_VARS : {}),
+        colorScheme: resolvedTheme,
+      }}
       className="h-full w-full"
     />
   );

@@ -15,6 +15,7 @@
     "lint": "oxlint -c .oxlintrc.json .",
     "typecheck": "pnpm --filter @eva/web typecheck && pnpm --filter @eva/backend typecheck && pnpm --filter @eva/backend typecheck:callback && pnpm --filter @eva/backend typecheck:annotation",
     "compiler:check": "node scripts/compiler-check.mjs",
+    "design:check": "node scripts/design-check.mjs",
     "test:oxlint-plugin": "node --test scripts/oxlint-plugin-eva/test/rules.test.mjs",
     "test:schema-narrowing": "node --test scripts/check-schema-narrowing.test.mjs",
     "check:schema-narrowing": "node scripts/check-schema-narrowing.mjs",

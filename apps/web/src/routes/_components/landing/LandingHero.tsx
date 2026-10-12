@@ -117,7 +117,7 @@ export function LandingHero() {
             {LANDING_HERO_CAPABILITIES.map((capability) => (
               <li
                 key={capability}
-                className="rounded-full border border-border bg-card/60 px-3 py-1 font-mono text-[11px] text-muted-foreground"
+                className="rounded-full border border-border bg-card/60 px-3 py-1 font-mono text-2xs text-muted-foreground"
               >
                 {capability}
               </li>

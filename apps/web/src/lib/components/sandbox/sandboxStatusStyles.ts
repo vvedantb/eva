@@ -41,6 +41,17 @@ export const SANDBOX_STATUS_STYLES: Record<
 };
 
 /**
+ * Simple view wakes the sandbox from the Preview tab, so the dot only shows
+ * when the user must act: a failed wake. Full view always shows it.
+ */
+export function showsSandboxStatusDot(
+  status: SandboxDisplayStatus,
+  simpleView: boolean,
+): boolean {
+  return !simpleView || status === "error";
+}
+
+/**
  * A sandbox whose start failed is left `closed` with the reason on the row, so
  * on status alone it is indistinguishable from one the user put to sleep. Pair
  * the two fields to tell them apart.

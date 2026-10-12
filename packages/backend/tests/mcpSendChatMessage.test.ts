@@ -5,6 +5,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { recordPullRequest } from "../convex/_pullRequests/store";
 import { canonicalPrUrl } from "../convex/mcp/sessionRef";
 import { MCP_CLAUDE_MODELS } from "../convex/mcp/toolShared";
 import {
@@ -58,7 +59,6 @@ async function fixture() {
       title: "Fix the login bug",
       status: "active",
       numId: 42,
-      prUrl: PR_URL,
       branchName: "eva/session-login",
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
@@ -77,12 +77,19 @@ async function fixture() {
       updatedAt: now,
       createdBy: ownerUserId,
     });
-    // A task's PR lives on the run that opened it, not on the task row.
-    await ctx.db.insert("agentRuns", {
+    // A task's PR names the run that opened it.
+    const runId = await ctx.db.insert("agentRuns", {
       taskId,
       status: "success",
       logs: [],
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "task", taskId, runId },
+      repoId,
       prUrl: TASK_PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -91,8 +98,23 @@ async function fixture() {
       phase: "in_progress",
       rawInput: "revamp billing",
       numId: 42,
-      prUrl: PROJECT_PR_URL,
       branchName: "eva/project-billing",
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "session", sessionId },
+      repoId,
+      prUrl: PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "project", projectId },
+      repoId,
+      prUrl: PROJECT_PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
     });
     return {
       ownerUserId,
@@ -109,6 +131,28 @@ async function fixture() {
 }
 
 describe("resolving the chat an MCP caller named", () => {
+  test("any PR a session holds reaches it, not only its main one", async () => {
+    const f = await fixture();
+    const sidePrUrl = "https://github.com/vvedantb/eva/pull/667";
+    await f.t.run(async (ctx) => {
+      await recordPullRequest(ctx, {
+        owner: { kind: "session", sessionId: f.sessionId },
+        repoId: f.repoId,
+        prUrl: sidePrUrl,
+        state: "open",
+        primary: false,
+        origin: "agent",
+      });
+    });
+    const resolved = await f.t.query(
+      internal.mcp.queries.resolveChatTargetForUser,
+      { userId: f.ownerUserId, prUrl: sidePrUrl },
+    );
+    expect(resolved?.targetId).toBe(f.sessionId);
+    // The chat's own PR is still the one it reports.
+    expect(resolved?.prUrl).toBe(PR_URL);
+  });
+
   test("the owner reaches their session by Convex id, PR url, and numId", async () => {
     const f = await fixture();
 
@@ -350,10 +394,12 @@ describe("PR links the tool accepts", () => {
 describe("what a send does to the chat", () => {
   const KINDS: ChatTargetKind[] = ["session", "task", "project"];
 
-  test("an idle session gets a user message and then a turn", () => {
+  test("an idle session chat gets a user message and then a turn", () => {
+    // A session send is addressed to one of its chats (resolved upstream by
+    // `sessionChats:resolveDeliveryChat`), so both mutations take `chatId`.
     const calls = buildChatMessageCalls({
       kind: "session",
-      id: "s1",
+      id: "c1",
       message: "keep going",
       delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
       sentViaOrchestrator: false,
@@ -364,14 +410,14 @@ describe("what a send does to the chat", () => {
       "_sessions/execution:startExecute",
     ]);
     expect(calls[0]?.args).toEqual({
-      id: "s1",
+      chatId: "c1",
       role: "user",
       content: "keep going",
       model: "claude:opus",
       sentViaOrchestrator: false,
     });
     expect(calls[1]?.args).toEqual({
-      sessionId: "s1",
+      chatId: "c1",
       message: "keep going",
       model: "claude:opus",
     });
@@ -663,12 +709,17 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
       nodeActions.indexOf("function chatDelivery"),
     );
     expect(ensure).toContain("SANDBOX_SURFACES[kind]");
-    expect(ensure).toContain("decideSandboxStartPlan");
-    expect(ensure).toContain("TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS");
-    // The Start-button mutation, not an in-place resume of the closed id.
-    expect(convexSource("mcp/orchestratorDelivery.ts")).toContain(
-      "agentTasks:startTaskSandbox",
+    // The start-and-wait loop is shared with the `/p/…` wake link
+    // (`sandboxWake.ts`), so it lives in orchestratorDelivery.
+    expect(ensure).toContain("awaitSandboxActive(");
+    const delivery = convexSource("mcp/orchestratorDelivery.ts");
+    const loop = delivery.slice(
+      delivery.indexOf("export async function awaitSandboxActive"),
     );
+    expect(loop).toContain("decideSandboxStartPlan");
+    expect(loop).toContain("TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS");
+    // The Start-button mutation, not an in-place resume of the closed id.
+    expect(delivery).toContain("agentTasks:startTaskSandbox");
   });
 
   test("turn staging does not prewarm a closed or stopping preview sandbox", () => {
@@ -787,7 +838,7 @@ describe("MCP sends are badged; composer-typed messages are not", () => {
   const sessionSend = readFileSync(
     join(
       testsDir,
-      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
+      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
     ),
     "utf8",
   );

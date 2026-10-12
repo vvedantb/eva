@@ -53,7 +53,7 @@ export function LandingOpenSource() {
               <LandingLattice className="sm:grid-cols-3">
                 {LANDING_OPEN_SOURCE_FACTS.map((fact) => (
                   <div key={fact.label} className="bg-background p-6">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                    <p className="font-mono text-2xs uppercase tracking-[0.22em] text-muted-foreground/70">
                       {fact.label}
                     </p>
                     <p className="mt-2 text-lg font-medium tracking-tight text-foreground">
@@ -64,7 +64,7 @@ export function LandingOpenSource() {
               </LandingLattice>
 
               <div className="rounded-surface border border-border bg-background p-6">
-                <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground/70">
+                <p className="font-mono text-2xs uppercase tracking-[0.22em] text-muted-foreground/70">
                   Built with
                 </p>
                 <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2.5">

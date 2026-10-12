@@ -1,10 +1,12 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
+import type { JsonValue } from "../_jev/jsonValue";
 import {
   entityAccess,
   entityRefArgs,
   entitySummary,
   withSelfDefault,
+  type EntityTarget,
 } from "./entityRef";
 import {
   confirmedDeleteArg,
@@ -15,6 +17,15 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+
+/** The chat arg `chatLog:*` takes, from a resolved target. */
+function chatSourceArg(target: EntityTarget): { [key: string]: JsonValue } {
+  if (target.kind === "session") {
+    return { kind: "session", sessionId: target.targetId };
+  }
+  if (target.kind === "task") return { kind: "task", taskId: target.targetId };
+  return { kind: "project", projectId: target.targetId };
+}
 
 /** Every public mutation below returns `null`; parsed so a drift is loud. */
 const nullReply = z.null();
@@ -432,6 +443,131 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
           ...entitySummary(target),
           comments,
           count: comments.length,
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // log_entry / read_chat_log
+  // ───────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "log_entry",
+      description: `Add one entry to a chat's Log, shown at the top of its Documents tab. Name no chat and it writes to the chat you are running in.
+
+The Log is append-only: it is how the user catches up on this chat weeks later. Log decisions (with the reason), research findings and changes, in user terms. To change an earlier decision, add a new decision and pass the old entry's id as "supersedes". The reply carries the new entry's id.`,
+      mutating: true,
+      input: {
+        ...entityRefArgs,
+        entryKind: z
+          .enum(["decision", "research", "change", "note"])
+          .describe(
+            '"decision": a settled choice. "research": a finding that shaped the work. "change": what was built or changed. "note": anything else worth keeping.',
+          ),
+        title: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe("One short sentence a reader can scan."),
+        body: z
+          .string()
+          .max(4000)
+          .optional()
+          .describe(
+            "Markdown detail: the reason for a decision, the evidence for a finding.",
+          ),
+        supersedes: z
+          .string()
+          .optional()
+          .describe(
+            "Id of the earlier entry (from read_chat_log) that this decision replaces.",
+          ),
+      },
+      handler: async ({ entryKind, title, body, supersedes, ...ref }) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("isError" in resolved) return resolved;
+        const { target } = resolved;
+        const entryId = await mcpCallAsUser(
+          ctx,
+          clerkUserId,
+          {
+            type: "mutation",
+            path: "chatLog:append",
+            args: {
+              source: chatSourceArg(target),
+              kind: entryKind,
+              author: "agent",
+              title,
+              ...(body !== undefined ? { body } : {}),
+              ...(supersedes !== undefined ? { supersedesId: supersedes } : {}),
+            },
+          },
+          z.string(),
+        );
+        return textResult({
+          ...entitySummary(target),
+          entryId,
+          status: "logged",
+        });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "read_chat_log",
+      description: `Read a chat's Log as markdown: current decisions, then every entry by day. Name no chat and it reads the chat you are running in. Use it to catch up on what was agreed earlier, or to find the id of a decision to supersede (ids are listed after the markdown).`,
+      mutating: false,
+      input: { ...entityRefArgs },
+      handler: async (ref) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("isError" in resolved) return resolved;
+        const { target } = resolved;
+        const source = chatSourceArg(target);
+        const [markdown, rows] = await Promise.all([
+          mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "query",
+              path: "chatLog:markdownForSource",
+              args: { source },
+            },
+            z.string(),
+          ),
+          mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "query",
+              path: "chatLog:listForSource",
+              args: { source },
+            },
+            z.array(
+              z
+                .object({ _id: z.string(), kind: z.string(), title: z.string() })
+                .passthrough(),
+            ),
+          ),
+        ]);
+        return textResult({
+          ...entitySummary(target),
+          markdown,
+          entries: rows.map((row) => ({
+            id: row._id,
+            kind: row.kind,
+            title: row.title,
+          })),
         });
       },
     }),

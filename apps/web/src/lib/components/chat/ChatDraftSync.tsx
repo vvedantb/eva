@@ -28,8 +28,7 @@ interface ChatDraftSyncProps {
  *
  * Pull (server → editor): watches the same `drafts` row that seeded the editor,
  * so a write from outside the composer — `useSeedChatDraft`, used by the
- * compaction banner, the Approve plan action and the design-variation picker —
- * appears live instead of only after a remount.
+ * Approve plan action and the design-variation picker — appears live instead of only after a remount.
  */
 export function ChatDraftSync({
   target,

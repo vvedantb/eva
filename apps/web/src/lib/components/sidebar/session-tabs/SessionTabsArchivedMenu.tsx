@@ -95,7 +95,7 @@ export function SessionTabsArchivedMenu({
                     }
                   />
                   <span className="truncate">{label}</span>
-                  <span className="tabular-nums text-[10px] text-muted-foreground">
+                  <span className="tabular-nums text-3xs text-muted-foreground">
                     {group.sessions.length}
                   </span>
                 </DropdownMenuSubTrigger>
@@ -130,7 +130,7 @@ export function SessionTabsArchivedMenu({
                             <span className="min-w-0 flex-1 truncate">
                               {session.title}
                             </span>
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                            <span className="shrink-0 text-3xs text-muted-foreground">
                               {subtitle}
                             </span>
                           </DynamicLink>

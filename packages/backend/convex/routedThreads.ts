@@ -10,10 +10,11 @@ import {
 import { createNotification } from "./notifications";
 import { isEntityDeleted } from "./numId";
 import {
+  drainSessionChatQueues,
   startNextQueuedProjectChatMessage,
-  startNextQueuedSessionMessage,
   startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
+import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
   DEFAULT_AI_MODEL,
@@ -132,9 +133,10 @@ async function latestUserRequest(
   ctx: QueryCtx,
   sourceId: string,
 ): Promise<string | undefined> {
-  const parentId =
-    ctx.db.normalizeId("sessions", sourceId) ??
-    ctx.db.normalizeId("agentTasks", sourceId) ??
+  const sessionId = ctx.db.normalizeId("sessions", sourceId);
+  const parentId = sessionId
+    ? (await findMainChat(ctx.db, sessionId))?._id
+    : ctx.db.normalizeId("agentTasks", sourceId) ??
     ctx.db.normalizeId("projects", sourceId);
   if (!parentId) return undefined;
   const rows = await ctx.db
@@ -374,13 +376,39 @@ function notifyEntityArgs(
   return { projectId: source.ref.id };
 }
 
+/**
+ * Where a source's transcript and queue live. A session's rows hang off its
+ * Main chat (sessions hold several chats); tasks and projects key on their own
+ * id. Undefined when the session is gone.
+ */
+async function transcriptParent(
+  ctx: MutationCtx,
+  source: SourceRecord,
+): Promise<
+  | {
+      parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+      model: Doc<"sessions">["lastModel"];
+    }
+  | undefined
+> {
+  if (source.ref.kind !== "session") {
+    return { parentId: source.ref.id, model: source.lastModel };
+  }
+  const session = await ctx.db.get(source.ref.id);
+  if (!session) return undefined;
+  const chat = await ensureMainChat(ctx, session);
+  return { parentId: chat._id, model: chat.lastModel ?? source.lastModel };
+}
+
 async function insertSystemAlert(
   ctx: MutationCtx,
   source: SourceRecord,
   content: string,
 ): Promise<Id<"messages"> | undefined> {
+  const parent = await transcriptParent(ctx, source);
+  if (!parent) return undefined;
   return await ctx.db.insert("messages", {
-    parentId: source.ref.id,
+    parentId: parent.parentId,
     role: "assistant",
     content,
     timestamp: Date.now(),
@@ -396,18 +424,20 @@ async function enqueueSourceWake(
   displayContent: string,
 ): Promise<void> {
   if (source.deleted || source.archived) return;
+  const parent = await transcriptParent(ctx, source);
+  if (!parent) return;
   const now = Date.now();
   await ctx.db.insert("queuedMessages", {
-    parentId: source.ref.id,
+    parentId: parent.parentId,
     content,
     displayContent,
     createdAt: now,
     order: now,
     userId,
-    model: source.lastModel ?? DEFAULT_AI_MODEL,
+    model: parent.model ?? DEFAULT_AI_MODEL,
   });
   if (source.ref.kind === "session") {
-    await startNextQueuedSessionMessage(ctx, source.ref.id);
+    await drainSessionChatQueues(ctx, source.ref.id);
   } else if (source.ref.kind === "task") {
     await startNextQueuedTaskChatMessage(ctx, source.ref.id);
   } else {

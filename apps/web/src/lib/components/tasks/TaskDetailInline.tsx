@@ -28,7 +28,7 @@ import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
-import { isTaskAgentActive } from "./taskAgentActivity";
+import { useTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
   SandboxWorkspace,
@@ -41,6 +41,7 @@ import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
 import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
+import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import {
   fileViewerPathParser,
   isTaskRouteSandboxTab,
@@ -122,6 +123,7 @@ export function TaskDetailInline({
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
+    sandboxStartupActivity,
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
@@ -137,6 +139,8 @@ export function TaskDetailInline({
     isCreatingPr,
     handleCreatePr,
   } = useTaskDetail(taskId, routing);
+  const isAgentActive = useTaskAgentActive(taskId, task);
+  const chatUnread = useChatUnread(taskId);
   const altHeld = useAltHeld();
 
   useEffect(() => {
@@ -186,6 +190,12 @@ export function TaskDetailInline({
       return;
     }
     setEmbeddedSandboxTab(tab);
+  };
+  // Declared here, not inline in the chat panel JSX, so it keeps its identity
+  // and does not re-render every transcript row (same as SessionDetailClient).
+  const openAgentsTab = () => {
+    handleSandboxTabChange("agents");
+    setExpandRightSignal((n) => n + 1);
   };
 
   // Auto-switch to Browser + expand sandbox panel on lock transition only
@@ -272,6 +282,12 @@ export function TaskDetailInline({
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
+        autoWakeEligible={
+          task.reviewTaskSandboxStatus === "closed" &&
+          sandboxId !== undefined &&
+          canStartSandbox &&
+          !hasActiveRun
+        }
         collapsed={collapsed}
         onToggle={onToggle}
       />
@@ -313,12 +329,10 @@ export function TaskDetailInline({
                     taskId={taskId}
                     isSandboxActive={isSandboxActive}
                     isSandboxToggling={isSandboxStarting || isSandboxStopping}
+                    sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
-                    onOpenAgentsTab={() => {
-                      handleSandboxTabChange("agents");
-                      setExpandRightSignal((n) => n + 1);
-                    }}
+                    onOpenAgentsTab={openAgentsTab}
                     onSandboxToggle={
                       canStartSandbox || isSandboxActive
                         ? (action) => {
@@ -486,6 +500,7 @@ export function TaskDetailInline({
         variant="header"
         taskId={taskId}
         task={task}
+        isAgentActive={isAgentActive}
         status={status}
         hasActiveRun={hasActiveRun}
         hasRuns={hasRuns}
@@ -542,7 +557,8 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
-        isAgentActive={isTaskAgentActive(task)}
+        isAgentActive={isAgentActive}
+        hasUnread={chatUnread}
         onSurfaceChange={handleSelectSurface}
       />
     ) : null;

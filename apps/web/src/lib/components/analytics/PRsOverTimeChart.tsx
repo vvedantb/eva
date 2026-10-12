@@ -4,7 +4,7 @@ import { Suspense, use } from "react";
 import { Widget } from "@/lib/components/Widget";
 import dayjs from "@eva/shared/dates";
 import { cssColor } from "@/lib/utils/cssColor";
-import { CHART_ANIMATION, useChartAnimation } from "./chartMotion";
+import { type CHART_ANIMATION, useChartAnimation } from "./chartMotion";
 
 /** Lazy chart.js + react-chartjs-2 so stats pages don't pay the cost up front. */
 const barChartModules = Promise.all([

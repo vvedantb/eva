@@ -4,6 +4,7 @@ import { use, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { Spinner } from "@eva/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
 import { ArtifactFrame } from "./ArtifactFrame";
@@ -43,7 +44,15 @@ function loadArtifactHtml(url: string): Promise<ArtifactHtmlResult> {
   return promise;
 }
 
-function ArtifactHtmlBody({ url, title }: { url: string; title: string }) {
+function ArtifactHtmlBody({
+  artifactId,
+  url,
+  title,
+}: {
+  artifactId: Id<"artifacts">;
+  url: string;
+  title: string;
+}) {
   const result = use(loadArtifactHtml(url));
   if (!result.ok) {
     return (
@@ -52,7 +61,7 @@ function ArtifactHtmlBody({ url, title }: { url: string; title: string }) {
       </Centered>
     );
   }
-  return <ArtifactFrame html={result.html} title={title} />;
+  return <ArtifactFrame artifactId={artifactId} html={result.html} title={title} />;
 }
 
 /** Loads an artifact's stored HTML and renders it in the bridged sandbox iframe. */
@@ -103,7 +112,11 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         </button>
       </div>
       <div className="min-h-0 w-full flex-1 overflow-hidden rounded-surface border border-border bg-white">
-        <ArtifactContent url={artifact.url} title={artifact.name} />
+        <ArtifactContent
+          artifactId={artifact._id}
+          url={artifact.url}
+          title={artifact.name}
+        />
       </div>
     </div>
   );
@@ -111,9 +124,11 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
 
 /** Artifact HTML in its bridged iframe, with loading / error / empty states. */
 export function ArtifactContent({
+  artifactId,
   url,
   title,
 }: {
+  artifactId: Id<"artifacts">;
   url: string | null;
   title: string;
 }) {
@@ -139,7 +154,12 @@ export function ArtifactContent({
         </Centered>
       }
     >
-      <ArtifactHtmlBody key={url} url={url} title={title} />
+      <ArtifactHtmlBody
+        key={url}
+        artifactId={artifactId}
+        url={url}
+        title={title}
+      />
     </ViewTransitionSuspense>
   );
 }

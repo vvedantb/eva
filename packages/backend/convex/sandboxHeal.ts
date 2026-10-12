@@ -1,28 +1,14 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { findSandboxOwnerBySandboxId } from "./_sandbox/owner";
 
 /** Proves that a sandbox is attached to an entity in the supplied repository. */
 export const isBoundToRepo = internalQuery({
   args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query("sessions")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-    if (session) return session.repoId === args.repoId;
-
-    const project = await ctx.db
-      .query("projects")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-    if (project) return project.repoId === args.repoId;
-
-    const task = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-    return task?.repoId === args.repoId;
+    const owner = await findSandboxOwnerBySandboxId(ctx.db, args.sandboxId);
+    return owner?.doc.repoId === args.repoId;
   },
 });
 

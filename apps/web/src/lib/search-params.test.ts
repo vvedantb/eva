@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalReviewTab,
   isSessionSandboxTab,
   isTaskRouteSandboxTab,
   parseDiffSearchFields,
@@ -103,17 +104,17 @@ describe("parseDiffSearchFields", () => {
     ).toEqual({
       diffFile: "apps/web/foo.tsx",
       diffView: "split",
-      prTab: "recap",
+      prTab: "summary",
     });
 
     expect(
       parseDiffSearchFields({
-        prTab: "overview",
+        prTab: "commits",
       }),
     ).toEqual({
       diffFile: undefined,
       diffView: undefined,
-      prTab: "overview",
+      prTab: "timeline",
     });
 
     expect(parseDiffSearchFields({ diffView: "nope", prTab: "junk" })).toEqual({
@@ -121,5 +122,20 @@ describe("parseDiffSearchFields", () => {
       diffView: undefined,
       prTab: undefined,
     });
+  });
+});
+
+describe("canonicalReviewTab", () => {
+  it("answers to the Pull requests tab and its spelled-out slugs", () => {
+    expect(canonicalReviewTab("prs")).toBe("prs");
+    expect(canonicalReviewTab("pulls")).toBe("prs");
+    expect(canonicalReviewTab("pull-requests")).toBe("prs");
+  });
+
+  it("still maps the slugs the three-tab layout replaced", () => {
+    expect(canonicalReviewTab("overview")).toBe("summary");
+    expect(canonicalReviewTab("commits")).toBe("timeline");
+    expect(canonicalReviewTab("changes")).toBe("diffs");
+    expect(canonicalReviewTab("nope")).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import usePresence from "@convex-dev/presence/react";
 import { api } from "@eva/backend";
@@ -102,17 +102,13 @@ export function useLiveCursors(
   }, [hasRemoteOnline]);
   /* eslint-enable no-effect/no-external-store-subscription */
 
-  const updateCursorRef = useRef(updateCursor);
-  updateCursorRef.current = updateCursor;
-
-  const sendUpdate = useCallback(
-    (x: number, y: number) => {
-      if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
-      lastPosRef.current = { x, y };
-      updateCursorRef.current({ roomId, x, y }).catch(console.error);
-    },
-    [roomId],
-  );
+  // `useMutation` returns a stable function, so no latest-ref is needed; the
+  // React Compiler memoises this on `roomId` and `updateCursor`.
+  const sendUpdate = (x: number, y: number) => {
+    if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
+    lastPosRef.current = { x, y };
+    updateCursor({ roomId, x, y }).catch(console.error);
+  };
 
   useEffect(() => {
     if (!hasRemoteOnline) return;

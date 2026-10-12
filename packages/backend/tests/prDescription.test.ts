@@ -10,8 +10,7 @@ import {
 } from "../convex/_github/prDescriptionPrompt";
 
 const EVA_URL = "https://eva.example/pr";
-const DESCRIPTION =
-  "### What changed\nAdds the toggle.\n\n### Shape\n```text\nsrc/\n└── toggle.ts  # new\n```";
+const DESCRIPTION = "### Why\nAdds the toggle.\n\n### Scope\n- `src/toggle.ts` is new.";
 
 test("insertPrDescription places the block above the footer of a task body", () => {
   const body = buildPrBody(buildTaskPrSections("Ship the toggle", []), EVA_URL);
@@ -70,18 +69,18 @@ test("stripPrDescription removes the block and leaves the static body", () => {
 });
 
 test("cleanPrDescription unwraps a whole-answer fence and bounds length", () => {
-  expect(cleanPrDescription("```markdown\n### What changed\nx\n```")).toBe(
-    "### What changed\nx",
+  expect(cleanPrDescription("```markdown\n### Why\nx\n```")).toBe(
+    "### Why\nx",
   );
-  expect(cleanPrDescription("  ### What changed\nx  ")).toBe(
-    "### What changed\nx",
+  expect(cleanPrDescription("  ### Why\nx  ")).toBe(
+    "### Why\nx",
   );
   const long = cleanPrDescription("a".repeat(10_000));
   expect(long.length).toBeLessThan(6_100);
   expect(long.endsWith("_Description truncated._")).toBe(true);
 });
 
-test("buildPrDescriptionPrompt asks for the three sections and forbids invention", () => {
+test("buildPrDescriptionPrompt asks for the template sections and forbids invention", () => {
   const prompt = buildPrDescriptionPrompt({
     prTitle: "Eva: toggle",
     context: "## Task\nShip the toggle",
@@ -92,9 +91,9 @@ test("buildPrDescriptionPrompt asks for the three sections and forbids invention
     truncated: true,
   });
 
-  expect(prompt).toContain("### What changed");
-  expect(prompt).toContain("### Shape");
-  expect(prompt).toContain("### Review notes");
+  for (const heading of ["Why", "Scope", "Tradeoffs", "Blast radius", "Verification"]) {
+    expect(prompt).toContain(`### ${heading}`);
+  }
   expect(prompt).toContain("Never invent names");
   expect(prompt).toContain("diff truncated");
   expect(prompt).toContain("## Intent (from Eva)\n## Task\nShip the toggle");
@@ -120,7 +119,7 @@ test("buildPrDescriptionPrompt omits the intent block when there is none", () =>
  * diff, so the scope chip never judges it. This reader has the diff and the
  * task description together, which is what the run's own summary does not.
  */
-test("buildPrDescriptionPrompt leads the review notes on unrequested visible changes", () => {
+test("buildPrDescriptionPrompt leads Scope on unrequested visible changes", () => {
   const prompt = buildPrDescriptionPrompt({
     prTitle: "Eva: tabs",
     context: "## Task\nAdd four tabs",

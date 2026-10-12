@@ -39,6 +39,8 @@ interface SessionItem {
   /** Set when the last wake attempt failed; the row's dot reads as an error. */
   sandboxError?: string;
   isExecuting?: boolean;
+  /** Finished reply the user has not seen (`api.sessions.list`). */
+  hasUnread?: boolean;
   updatedAt?: number;
   sandboxId?: string;
   branchName?: string;
@@ -52,6 +54,8 @@ interface SessionItem {
   linkedFrom?: RepoPathParts;
   /** Linked repos cloned beside the primary; drives the `+N` badge. */
   linkedRepoCount?: number;
+  /** Source of a "Fork session" fork; drives the row's fork glyph. */
+  forkedFromSessionId?: Id<"sessions">;
 }
 
 interface SidebarSessionRowProps<T extends SessionItem> {
@@ -123,6 +127,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 status={session.status}
                 sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
+                hasUnread={session.hasUnread === true}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
                 prUrl={session.prUrl}
@@ -130,6 +135,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 baseBranch={session.baseBranch}
                 linkedFrom={session.linkedFrom}
                 linkedRepoCount={session.linkedRepoCount}
+                forkedFromSessionId={session.forkedFromSessionId}
               />
             </SharedLayoutNavSurface>
           </m.div>

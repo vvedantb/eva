@@ -35,7 +35,9 @@ describe("a long transcript commits its backlog off the first paint", () => {
 
   test("only the rows above the last turn are gated", () => {
     const gateAt = chatBody.indexOf("{backlogReady");
-    expect(gateAt, "the backlog gate is no longer rendered").toBeGreaterThan(-1);
+    expect(gateAt, "the backlog gate is no longer rendered").toBeGreaterThan(
+      -1,
+    );
     expect(chatBody).toContain("renderMessage(message, true)");
     // The last turn is the one in the viewport — it must never be deferred.
     const lastTurnAt = chatBody.indexOf("<ChatLastTurn>");
@@ -66,7 +68,10 @@ describe("a long transcript commits its backlog off the first paint", () => {
     // It resolves its ticks by querying `[data-message-id]` from an effect
     // keyed on the tick array, so binding it before those rows exist observes
     // nothing and never retries.
-    expect(chatBody).toMatch(/backlogReady \? <ChatJumpRail/);
+    // Extra gates may join `backlogReady` (e.g. `!hideJumpRail`).
+    expect(chatBody).toMatch(
+      /backlogReady(?: &&[^?]+)? \?\s*\(?\s*<ChatJumpRail/,
+    );
   });
 
   test("turn checkpoint dialogs are built on first open", () => {

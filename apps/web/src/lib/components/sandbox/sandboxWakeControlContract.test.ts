@@ -38,6 +38,13 @@ describe("task and project headers can wake a sleeping sandbox", () => {
     );
   });
 
+  test("simple view hides the control only where auto-wake covers it", () => {
+    // Auto-wake needs idle pause "on" and no failed wake; hiding the control
+    // outside those cases leaves a slept sandbox with no way back.
+    expect(control).toContain('idlePause.mode === "on"');
+    expect(control).toContain("isActive || (!hasStartError && autoWakes)");
+  });
+
   test.each(headers)("$name renders the control, not a sleep-only button", ({
     source,
   }) => {

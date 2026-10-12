@@ -128,19 +128,21 @@ function RepoRailLiveData(props: RepoRailProps) {
  * App tiles are real Links (not buttons) so middle-click / cmd-click open a new tab.
  *
  * Live session/sandbox indicators sit behind QueryErrorBoundary so a missing
- * Convex function cannot swap the whole shell.
+ * Convex function cannot swap the whole shell. Simple view wakes sandboxes from
+ * the Preview tab, so it shows no awake counts and skips both queries.
  */
 export function RepoRail(props: RepoRailProps) {
+  const simpleView = useSimpleView();
+  const withoutCounts = (
+    <RepoRailView
+      {...props}
+      activeSessionCount={undefined}
+      activeSandboxCounts={EMPTY_SANDBOX_COUNTS}
+    />
+  );
+  if (simpleView) return withoutCounts;
   return (
-    <QueryErrorBoundary
-      fallback={
-        <RepoRailView
-          {...props}
-          activeSessionCount={undefined}
-          activeSandboxCounts={EMPTY_SANDBOX_COUNTS}
-        />
-      }
-    >
+    <QueryErrorBoundary fallback={withoutCounts}>
       <RepoRailLiveData {...props} />
     </QueryErrorBoundary>
   );
@@ -293,6 +295,9 @@ function RepoRailView({
             : `${displayName} · ${row.owner}/${row.name}`;
           const sandboxCount = activeSandboxCounts.get(row._id);
           const sandboxLabel = countLabel(sandboxCount);
+          const tileColor = repoTileColor(
+            `${row.owner}/${row.name}/${displayName}`,
+          );
 
           return (
             <ContextMenu key={row._id}>
@@ -322,10 +327,9 @@ function RepoRailView({
                         fallback={
                           <span
                             className={cn(
-                              "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold text-white",
-                              repoTileColor(
-                                `${row.owner}/${row.name}/${displayName}`,
-                              ),
+                              "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold",
+                              tileColor.bg,
+                              tileColor.text,
                             )}
                           >
                             {displayName.charAt(0).toUpperCase()}

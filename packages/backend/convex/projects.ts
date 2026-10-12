@@ -17,8 +17,6 @@ export {
   remove,
   deleteCascade,
   clearMessages,
-  updatePrUrl,
-  setProjectPrUrl,
   updateProjectSandbox,
   clearProjectSandbox,
   updateLastSandboxActivity,

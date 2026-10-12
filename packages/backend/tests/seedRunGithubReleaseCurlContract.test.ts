@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { PACKAGE_HELPER_SCRIPT } from "../convex/_sandbox_runtime/packageManager";
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
 
@@ -69,8 +70,10 @@ describe("seed run GitHub release downloads survive direct-path failures", () =>
     const calls = seedRunCommands.match(/github_release_download\s+\S+/g);
     expect(
       calls?.length,
-      "supabase, gh, rg, fd, git-lfs, and code-server each call github_release_download",
-    ).toBe(6);
+      // code-server is two calls, not one: its .deb and .rpm assets are named
+      // differently enough that the branch happens at the download, not after.
+      "supabase, gh, rg, fd, git-lfs, and code-server (deb + rpm) each call github_release_download",
+    ).toBe(7);
     expect(seedRunCommands).not.toMatch(/curl -fsSL https:\/\/github\.com/);
   });
 
@@ -86,17 +89,37 @@ describe("seed run GitHub release downloads survive direct-path failures", () =>
     );
   });
 
-  test("gh falls back to the official yum repo if the tarball fails", () => {
-    const ghLine = [...seedRunCommands.matchAll(/^.*SEEDRUN-FAILED:gh-cli.*$/gm)]
+  test("gh falls back to the official vendor repo if the tarball fails", () => {
+    const ghLine = [
+      ...seedRunCommands.matchAll(/^.*SEEDRUN-FAILED:gh-cli.*$/gm),
+    ]
       .map((match) => match[0])
       .at(0);
     if (ghLine === undefined) {
       throw new Error("the gh-cli failure marker moved");
     }
     expect(ghLine).toContain("github_release_download cli/cli");
-    expect(ghLine).toContain("cli.github.com/packages/rpm/gh-cli.repo");
-    expect(ghLine).toContain("dnf install -y gh --repo gh-cli");
+    expect(ghLine).toContain("eva_pkg_install_gh");
     expect(ghLine).toContain("exit 1");
+  });
+
+  /** The fallback has to cover both base images, not just AL2023. */
+  test("the gh repo fallback registers a repo for each package manager", () => {
+    const startAt = PACKAGE_HELPER_SCRIPT.indexOf("eva_pkg_install_gh() {");
+    expect(startAt, "eva_pkg_install_gh moved or was renamed").toBeGreaterThan(
+      -1,
+    );
+    const body = PACKAGE_HELPER_SCRIPT.slice(
+      startAt,
+      PACKAGE_HELPER_SCRIPT.indexOf("\n}", startAt),
+    );
+    expect(body, "apt path").toContain(
+      "https://cli.github.com/packages stable main",
+    );
+    expect(body, "dnf path").toContain(
+      "cli.github.com/packages/rpm/gh-cli.repo",
+    );
+    expect(body).toContain("dnf install -y gh --repo gh-cli");
   });
 
   test("OpenCode is pinned separately from the other agent CLIs", () => {

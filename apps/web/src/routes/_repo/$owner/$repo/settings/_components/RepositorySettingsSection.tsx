@@ -24,6 +24,7 @@ type RepoConfigFields = {
   defaultUse1mContext?: boolean;
   defaultFastMode?: boolean;
   sandboxReadExcluded?: boolean;
+  agentMemoryEnabled?: boolean;
 };
 
 type UpdateRepoConfig = (args: {
@@ -35,6 +36,7 @@ type UpdateRepoConfig = (args: {
   defaultUse1mContext?: boolean;
   defaultFastMode?: boolean;
   sandboxReadExcluded?: boolean;
+  agentMemoryEnabled?: boolean;
 }) => void;
 
 export function RepositorySettingsSection({
@@ -129,6 +131,19 @@ export function RepositorySettingsSection({
                 updateConfig({ repoId, sandboxReadExcluded: !nextOn })
               }
               aria-label="Readable by other sandboxes"
+            />
+          }
+        />
+        <SettingsToggleRow
+          title="Agent memory"
+          description="Agents read and update notes in .eva/memory/ so lessons carry across sessions. Notes are committed with each PR."
+          action={
+            <Switch
+              checked={repo.agentMemoryEnabled === true}
+              onCheckedChange={(nextOn) =>
+                updateConfig({ repoId, agentMemoryEnabled: nextOn })
+              }
+              aria-label="Agent memory"
             />
           }
         />

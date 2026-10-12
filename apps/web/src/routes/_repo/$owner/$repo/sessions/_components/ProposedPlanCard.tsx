@@ -1,5 +1,6 @@
 "use client";
 
+import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { useRef, useState } from "react";
 import {
   Badge,
@@ -22,7 +23,6 @@ import { MarkdownEditor } from "@/lib/components/editor/MarkdownEditor";
 import {
   buildCollapsedProposedPlanPreviewMarkdown,
   buildProposedPlanMarkdownFilename,
-  downloadPlanAsMarkdownFile,
   normalizePlanMarkdownForExport,
   proposedPlanTitle,
   stripDisplayedPlanMarkdown,
@@ -75,7 +75,7 @@ export function ProposedPlanCard({
   };
 
   const handleDownload = () => {
-    downloadPlanAsMarkdownFile(
+    downloadMarkdownFile(
       buildProposedPlanMarkdownFilename(planMarkdown),
       exportContents,
     );
@@ -118,7 +118,7 @@ export function ProposedPlanCard({
         <div className="flex min-w-0 items-center gap-2">
           <Badge
             variant="secondary"
-            className="shrink-0 rounded-md px-1.5 py-0 text-[10px] font-semibold tracking-wide uppercase"
+            className="shrink-0 rounded-md px-1.5 py-0 text-3xs font-semibold tracking-wide uppercase"
           >
             {implemented ? "Implemented" : "Plan"}
           </Badge>
