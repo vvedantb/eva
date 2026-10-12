@@ -1,7 +1,9 @@
+"use client";
+
 import { lazy, Suspense } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { m } from "motion/react";
-import { api } from "@eva/backend";
+import type { api } from "@eva/backend";
 import { motionBase, Spinner } from "@eva/ui";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";

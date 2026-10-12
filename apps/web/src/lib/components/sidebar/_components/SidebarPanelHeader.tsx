@@ -1,9 +1,11 @@
+"use client";
+
 import type { ReactNode } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { m } from "motion/react";
 import { IconChevronLeft, IconX } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
-import { api } from "@eva/backend";
+import type { api } from "@eva/backend";
 import { Button, cn, motionBase } from "@eva/ui";
 import { AutomationsSidebarOptionsMenu } from "@/lib/components/sidebar/_components/AutomationsSidebarOptionsMenu";
 import { SessionsSidebarOptionsMenu } from "@/lib/components/sidebar/_components/SessionsSidebarOptionsMenu";

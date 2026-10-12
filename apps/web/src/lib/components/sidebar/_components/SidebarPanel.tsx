@@ -1,6 +1,8 @@
+"use client";
+
 import type { RefCallback } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { api } from "@eva/backend";
+import type { api } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { OnlineTeamAvatars } from "@/lib/components/sidebar/TeamMembers";
 import { SidebarResizeHandle } from "@/lib/components/sidebar/SidebarResizeHandle";
