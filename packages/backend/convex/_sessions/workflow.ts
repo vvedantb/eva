@@ -67,10 +67,12 @@ import {
   resolveCompletionTurn,
 } from "../_chat/turnStore";
 import {
+  daemonChatTargetArgs,
   ensureMainChat,
   getSessionChatOrThrow,
   listLiveSessionChats,
   loadSessionChat,
+  resolveDaemonChatId,
   sessionChatPersistenceId,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
@@ -1116,7 +1118,7 @@ export const saveResult = internalMutation({
  */
 export const claimPendingTurn = authMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    ...daemonChatTargetArgs,
     model: v.optional(aiModelValidator),
     // When false, drain cancel/stop/usage only. Old sandboxes omit this and
     // keep acquiring the running lease (previous behaviour).
@@ -1139,7 +1141,9 @@ export const claimPendingTurn = authMutation({
       cancelRequested: boolean;
       usageRefreshRequested: boolean;
     };
-    const chat = await ctx.db.get(args.chatId);
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) return emptyClaim;
+    const chat = await ctx.db.get(chatId);
     if (!chat) return emptyClaim;
     // The owner path reads only the chat row on every 50ms poll.
     if (chat.userId !== ctx.userId) {
@@ -1207,7 +1211,7 @@ export const claimPendingTurn = authMutation({
       const claimModel = normalizeAIModel(args.model);
       if (normalizeAIModel(pendingModel) !== claimModel) {
         console.log(
-          `[sessionWorkflow] claimPendingTurn model mismatch chatId=${args.chatId} pending=${pendingModel} claim=${claimModel}`,
+          `[sessionWorkflow] claimPendingTurn model mismatch chatId=${chat._id} pending=${pendingModel} claim=${claimModel}`,
         );
         return drained;
       }
@@ -1233,7 +1237,7 @@ export const claimPendingTurn = authMutation({
     const turnLease = claim.lease;
     await ctx.db.patch(chat._id, { pendingTurn: undefined });
     console.log(
-      `[sessionWorkflow] claimPendingTurn chatId=${args.chatId} claimWaitMs=${claimWaitMs} attachments=${attachmentUrls.length}`,
+      `[sessionWorkflow] claimPendingTurn chatId=${chat._id} claimWaitMs=${claimWaitMs} attachments=${attachmentUrls.length}`,
     );
     const claimedTurn = {
       prompt,
@@ -1251,12 +1255,14 @@ export const claimPendingTurn = authMutation({
 /** Daemon patches background Agent/Task lifecycle entries (start/settle only). */
 export const updateBackgroundAgents = authMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    ...daemonChatTargetArgs,
     agents: v.array(backgroundAgentEntryValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const chat = await ctx.db.get(args.chatId);
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) return null;
+    const chat = await ctx.db.get(chatId);
     if (!chat) throw new Error("Chat not found");
     if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
       throw new Error("Not authorized");
@@ -1469,7 +1475,7 @@ export const restageOpenTurn = internalMutation({
  */
 export const openSyntheticTurn = authMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    ...daemonChatTargetArgs,
     // The daemon's own model. Optional only for daemons launched before the
     // field existed; those fall back to `chat.lastModel`, which the picker
     // can move mid-flight and may therefore mis-attribute the checkpoint.
@@ -1481,7 +1487,10 @@ export const openSyntheticTurn = authMutation({
     leaseGeneration: v.number(),
   }),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    // No placeholder can open without a chat; the daemon logs and carries on.
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) throw new Error("Chat not found");
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, chatId);
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
 
@@ -1525,7 +1534,7 @@ export const openSyntheticTurn = authMutation({
 /** Finalizes a synthetic continuation turn by messageId (never recency). */
 export const completeSyntheticTurn = authMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    ...daemonChatTargetArgs,
     messageId: v.id("messages"),
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
@@ -1537,7 +1546,9 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) return null;
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, chatId);
     const streamingEntityId = sessionChatStreamingEntityId(chat._id);
     const turnResolution = await resolveCompletionTurn(ctx, {
       entityId: chat._id,
@@ -1693,7 +1704,7 @@ export const handleStaleSyntheticTurn = internalMutation({
 /** Receives sandbox completion callback and forwards the event to the chat's active workflow. */
 export const handleCompletion = authMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    ...daemonChatTargetArgs,
     success: v.boolean(),
     result: v.union(v.string(), v.null()),
     error: v.union(v.string(), v.null()),
@@ -1706,7 +1717,9 @@ export const handleCompletion = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const completionStartedAt = Date.now();
-    const context = await loadSessionChat(ctx.db, args.chatId);
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) return null;
+    const context = await loadSessionChat(ctx.db, chatId);
     if (!context) return null;
     const { chat, session } = context;
     const activeWorkflowId = chat.activeWorkflowId;
@@ -1725,7 +1738,7 @@ export const handleCompletion = authMutation({
     }
 
     console.log(
-      `[sessionWorkflow] handleCompletion received chatId=${args.chatId} success=${args.success} workflowId=${activeWorkflowId}`,
+      `[sessionWorkflow] handleCompletion received chatId=${chat._id} success=${args.success} workflowId=${activeWorkflowId}`,
     );
 
     // One-shot providers never claimPendingTurn, so clear any leftover staged
@@ -1757,7 +1770,7 @@ export const handleCompletion = authMutation({
     });
 
     console.log(
-      `[sessionWorkflow] handleCompletion finished in ${Date.now() - completionStartedAt}ms chatId=${args.chatId}`,
+      `[sessionWorkflow] handleCompletion finished in ${Date.now() - completionStartedAt}ms chatId=${chat._id}`,
     );
 
     return null;

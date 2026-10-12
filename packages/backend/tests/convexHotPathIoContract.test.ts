@@ -23,7 +23,8 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     // else. The heavyweight session (plan, terminal tail, panes) is read only
     // once a turn is actually pending, for the sandbox-setup gate.
     const body = definitionBody("_sessions/workflow.ts", "claimPendingTurn");
-    const chatReadAt = body.indexOf("await ctx.db.get(args.chatId)");
+    // A pre-chat daemon's `sessionId` resolves through one indexed Main-chat read.
+    const chatReadAt = body.indexOf("await ctx.db.get(chatId)");
     const ownerFastPathAt = body.indexOf("chat.userId !== ctx.userId");
     const repoAccessAt = body.indexOf("hasRepoAccess(");
     const pendingGateAt = body.indexOf("if (!chat.pendingTurn) return drained;");
