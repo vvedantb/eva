@@ -187,6 +187,21 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={9} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Disable auto-archive"
+            description="Keep sessions you create open when every pull request they hold is merged or closed. You can still archive them yourself."
+            action={
+              <Switch
+                checked={flags.disableAutoArchive}
+                onCheckedChange={(checked) =>
+                  toggle("disableAutoArchive", checked)
+                }
+                aria-label="Disable auto-archive"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={10} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Simple view"
             description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
             action={
