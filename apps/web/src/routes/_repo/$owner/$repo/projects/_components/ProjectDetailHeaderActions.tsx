@@ -28,7 +28,11 @@ import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
-import { ConfirmSkipHint, requestConfirm, skipConfirmTitle } from "@/lib/confirm";
+import {
+  ConfirmSkipHint,
+  requestConfirm,
+  skipConfirmTitle,
+} from "@/lib/confirm";
 import {
   getProjectMenuFlags,
   type ProjectDetailProject,
@@ -40,7 +44,7 @@ type ProjectMenuFlags = ReturnType<typeof getProjectMenuFlags>;
 interface ProjectDetailHeaderActionsProps {
   projectId: Id<"projects">;
   project: ProjectDetailProject;
-  repoId: Id<"repos">;
+  repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
   chatTurnOpen: boolean | undefined;
   altHeld: boolean;

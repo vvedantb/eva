@@ -22,7 +22,7 @@ interface ProjectDetailSandboxContentProps {
   projectId: Id<"projects">;
   projectNumId?: number;
   project: ProjectDetailProject;
-  repoId: Id<"repos">;
+  repoId: Id<"githubRepos">;
   sandboxTab?: TaskRouteSandboxTab;
   sandbox: ProjectSandboxState;
   chatTurnOpen: boolean | undefined;

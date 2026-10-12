@@ -20,7 +20,7 @@ interface ProjectDetailMainContentProps {
   streamingActivity: string | undefined;
   sandboxStartupActivity: string | undefined;
   basePath: string;
-  repoId: Id<"repos">;
+  repoId: Id<"githubRepos">;
   selectedTaskId?: Id<"agentTasks">;
   selectedTaskStatus?: EntityResolveStatus;
   detailTab?: TaskDetailTab;

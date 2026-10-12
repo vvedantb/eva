@@ -109,9 +109,7 @@ export function ProjectPlanDialog({
               <p className="text-muted-foreground">{parsedSpec.description}</p>
             </div>
             <div className="space-y-1.5">
-              <h4 className="font-medium">
-                Tasks ({parsedSpec.tasks.length})
-              </h4>
+              <h4 className="font-medium">Tasks ({parsedSpec.tasks.length})</h4>
               {parsedSpec.tasks.map((task, i) => (
                 <div
                   key={i}
