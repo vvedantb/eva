@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { cancelTrackedWorkflow } from "./workflowManager";
 import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
+import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 import {
   getProjectConversation,
   setProjectConversation,
@@ -236,6 +237,7 @@ export async function tearDownStaleEvaluationWorkflow(
       activeWorkflowId: undefined,
       updatedAt: Date.now(),
     });
+    await scheduleArenaCheckCompletion(ctx, report);
   }
 }
 
