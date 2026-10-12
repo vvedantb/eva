@@ -16,6 +16,7 @@ import type {
   StreamLineResult,
 } from "../types.js";
 import type { ProviderAdapter } from "./types.js";
+import { isJsonObject } from "../utils.js";
 
 const isCodexAgentMessageType = (type: JsonValue | undefined): boolean =>
   type === "agent_message" || type === "agentMessage";
@@ -123,9 +124,7 @@ export function codexParseLine(event: JsonObject): CanonicalEvent[] {
   if (
     typeof event.type === "string" &&
     CODEX_ITEM_EVENT_TYPES.has(event.type) &&
-    item &&
-    typeof item === "object" &&
-    !Array.isArray(item)
+    isJsonObject(item)
   ) {
     return codexItemEvents(event.type, item);
   }

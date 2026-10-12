@@ -24,13 +24,13 @@ import {
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
-import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
+import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
-import type {
-  SandboxChatSurface,
-  UsageLimitRecoveryInputs,
+import {
+  buildSandboxChatSurface,
+  startSandboxHandler,
 } from "@/lib/components/chat/sandboxChatSurface";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -119,7 +119,10 @@ export function ProjectSandboxChatPanel({
     usageAccountLabel,
   } = useProjectChatAccounts(repo._id, project, model);
 
-  const { draftSeed, draftBundle } = useProjectChatDraft(projectId);
+  const { draftBundle, isDraftLoading } = useSandboxChatDraft({
+    kind: "projectChat",
+    projectId,
+  });
 
   // Same entityId the project-chat sandbox posts with (project id, not stream prefix).
   const activeQuestion = useQuery(api.pendingQuestions.getActive, {
@@ -260,12 +263,14 @@ export function ProjectSandboxChatPanel({
     await cancelExecution({ projectId });
   };
 
-  const chatSurface = projectChatSurface({
-    projectId,
+  // `accounts`, not `displayAccounts`: the synthetic owner row exists only
+  // for non-owners, who never see the usage-limit recovery card.
+  const chatSurface = buildSandboxChatSurface({
+    entity: { kind: "project", projectId },
     repoId: repo._id,
     model,
     isExecuting,
-    project,
+    doc: project,
     isOwner,
     messages,
     accounts,
@@ -335,7 +340,7 @@ export function ProjectSandboxChatPanel({
           />
         }
         draft={draftBundle}
-        isDraftLoading={!draftSeed.isReady}
+        isDraftLoading={isDraftLoading}
         onOpenFile={onOpenFile}
         onViewDiff={onViewDiff}
         onOpenAgentsTab={onOpenAgentsTab}
@@ -425,83 +430,4 @@ function projectOwnerAccountLabel(
     ownerProfile?.fullName?.trim() ||
     "Personal"
   );
-}
-
-/** The persisted project-chat draft, once its query has resolved. */
-function useProjectChatDraft(projectId: Id<"projects">) {
-  const draftSeed = useChatDraftSeed({
-    kind: "projectChat" as const,
-    projectId,
-  });
-  const draftBundle = draftSeed.isReady
-    ? {
-        target: { kind: "projectChat" as const, projectId },
-        initialDisplay: draftSeed.initialDisplay,
-        mentionMap: draftSeed.mentionMap,
-        skillMap: draftSeed.skillMap,
-      }
-    : undefined;
-  return { draftSeed, draftBundle };
-}
-
-function projectChatSurface({
-  projectId,
-  repoId,
-  model,
-  isExecuting,
-  project,
-  isOwner,
-  messages,
-  accounts,
-  resolveAccountId,
-  switchProviderAccount,
-  isSandboxActive,
-}: {
-  projectId: Id<"projects">;
-  repoId: Id<"githubRepos">;
-  model: AIModel;
-  isExecuting: boolean;
-  project: ProjectChatProject | undefined;
-  isOwner: boolean;
-  messages: UsageLimitRecoveryInputs["messages"] | undefined;
-  accounts: UsageLimitRecoveryInputs["accounts"];
-  resolveAccountId: UsageLimitRecoveryInputs["resolveAccountId"];
-  switchProviderAccount: UsageLimitRecoveryInputs["onSwitchAccount"];
-  isSandboxActive: boolean;
-}): SandboxChatSurface {
-  return {
-    entity: { kind: "project", projectId },
-    repoId,
-    model,
-    isExecuting,
-    isReadOnly: false,
-    // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
-    backgroundAgents: project?.backgroundAgents,
-    // Owner-only, like the account picker: project chat is owner-sticky. The
-    // account list is `accounts`, not `displayAccounts` — the synthetic owner
-    // row exists only for non-owners, who never see the card.
-    usageLimitRecovery:
-      isOwner && project
-        ? {
-            messages: messages ?? [],
-            accounts,
-            resolveAccountId,
-            currentAccountId: project.providerAccountId ?? null,
-            onSwitchAccount: switchProviderAccount,
-            isSandboxActive,
-          }
-        : undefined,
-    // No review-comment append on this send path (sessions-only), so a slash
-    // command already reaches the harness verbatim.
-  };
-}
-
-function startSandboxHandler(
-  isSandboxActive: boolean,
-  isSandboxToggling: boolean,
-  onSandboxToggle: ProjectSandboxChatPanelProps["onSandboxToggle"],
-): (() => void) | undefined {
-  return !isSandboxActive && !isSandboxToggling && onSandboxToggle
-    ? () => onSandboxToggle("start")
-    : undefined;
 }

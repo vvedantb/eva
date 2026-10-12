@@ -505,14 +505,8 @@ function parseQuestionInput(input) {
 }
 
 // callback-src/runtime/state.ts
-function isJsonObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 function nonEmptyString(value) {
   return typeof value === "string" && value ? value : void 0;
-}
-function nonEmptyTrimmedString(value) {
-  return typeof value === "string" ? value.trim() || void 0 : void 0;
 }
 function parsePriorOutput(value) {
   if (!isJsonObject(value) || typeof value.text !== "string") {
@@ -538,7 +532,7 @@ function parsePriorEdits(values) {
 function parsePriorFiles(values) {
   const files = [];
   for (const file of values) {
-    const trimmed = nonEmptyTrimmedString(file);
+    const trimmed = trimmedString(file);
     if (trimmed) {
       files.push(trimmed);
     }
@@ -599,9 +593,9 @@ function parsePriorStep(value) {
     path: typeof path3 === "string" ? path3 : void 0,
     status: "complete"
   };
-  const toolUseId = nonEmptyTrimmedString(value.toolUseId);
+  const toolUseId = trimmedString(value.toolUseId);
   if (toolUseId) step.toolUseId = toolUseId;
-  const parentToolUseId = nonEmptyTrimmedString(value.parentToolUseId);
+  const parentToolUseId = trimmedString(value.parentToolUseId);
   if (parentToolUseId) step.parentToolUseId = parentToolUseId;
   const command = nonEmptyString(value.command);
   if (command) step.command = command;
@@ -772,8 +766,14 @@ function log(msg) {
   } catch {
   }
 }
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 function asJsonObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isJsonObject(value) ? value : {};
+}
+function trimmedString(value) {
+  return typeof value === "string" ? value.trim() || void 0 : void 0;
 }
 function tryParseJson(text) {
   try {
@@ -1587,16 +1587,16 @@ function getCursorToolFields(args) {
     ])
   };
 }
-function cursorPathStep(type, label, fields) {
+function pathStep(type, label, detail, rawPath) {
   return {
     type,
     label,
-    detail: fields.path || void 0,
-    path: fields.rawPath || void 0,
+    detail: detail || void 0,
+    path: rawPath || void 0,
     status: "active"
   };
 }
-function cursorDetailStep(type, label, detail) {
+function detailStep(type, label, detail) {
   return { type, label, detail: detail || void 0, status: "active" };
 }
 function cursorShellStep(fields) {
@@ -1627,14 +1627,14 @@ function cursorMcpStep(fields) {
   };
 }
 function cursorSearchCodeStep(fields) {
-  return cursorDetailStep(
+  return detailStep(
     "search_code",
     "Searching code...",
     fields.query || fields.path
   );
 }
 var CURSOR_KNOWN_TOOL_STEPS = /* @__PURE__ */ new Map([
-  ["read", (f) => cursorPathStep("read", "Reading file...", f)],
+  ["read", (f) => pathStep("read", "Reading file...", f.path, f.rawPath)],
   [
     "write",
     (f) => {
@@ -1665,18 +1665,18 @@ var CURSOR_KNOWN_TOOL_STEPS = /* @__PURE__ */ new Map([
       status: "active"
     })
   ],
-  ["delete", (f) => cursorPathStep("edit", "Deleting file...", f)],
+  ["delete", (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)],
   [
     "glob",
-    (f) => cursorDetailStep("search_files", "Searching files...", f.query || f.path)
+    (f) => detailStep("search_files", "Searching files...", f.query || f.path)
   ],
-  ["ls", (f) => cursorDetailStep("search_files", "Searching files...", f.path)],
+  ["ls", (f) => detailStep("search_files", "Searching files...", f.path)],
   ["grep", cursorSearchCodeStep],
   ["semSearch", cursorSearchCodeStep],
   ["shell", cursorShellStep],
   [
     "task",
-    (f) => cursorDetailStep(
+    (f) => detailStep(
       "subtask",
       "Running agent...",
       pickCursorString(f.args, ["description", "prompt"])
@@ -1689,35 +1689,35 @@ var CURSOR_KNOWN_TOOL_STEPS = /* @__PURE__ */ new Map([
 var CURSOR_HEURISTIC_TOOL_STEPS = [
   {
     matches: (tool) => tool.includes("read"),
-    toStep: (f) => cursorPathStep("read", "Reading file...", f)
+    toStep: (f) => pathStep("read", "Reading file...", f.path, f.rawPath)
   },
   {
     matches: (tool) => tool.includes("write") || tool.includes("create"),
-    toStep: (f) => cursorPathStep("write", "Creating file...", f)
+    toStep: (f) => pathStep("write", "Creating file...", f.path, f.rawPath)
   },
   {
     matches: (tool) => tool.includes("edit") || tool.includes("patch") || tool.includes("apply") || tool.includes("replace"),
     toStep: (f) => ({
-      ...cursorPathStep("edit", "Editing file...", f),
+      ...pathStep("edit", "Editing file...", f.path, f.rawPath),
       edits: extractClaudeEdits(f.args)
     })
   },
   {
     matches: (tool) => tool.includes("delete") || tool.includes("remove"),
-    toStep: (f) => cursorPathStep("edit", "Deleting file...", f)
+    toStep: (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)
   },
   {
     matches: (tool) => tool.includes("glob") || tool.includes("list"),
-    toStep: (f) => cursorDetailStep("search_files", "Searching files...", f.query || f.path)
+    toStep: (f) => detailStep("search_files", "Searching files...", f.query || f.path)
   },
   // Before grep/search: every web-search name also contains "search".
   {
     matches: (tool) => tool.includes("websearch") || tool.includes("web_search"),
-    toStep: (f) => cursorDetailStep("web_search", "Searching web...", f.query)
+    toStep: (f) => detailStep("web_search", "Searching web...", f.query)
   },
   {
     matches: (tool) => tool.includes("grep") || tool.includes("search"),
-    toStep: (f, tool) => cursorDetailStep(
+    toStep: (f, tool) => detailStep(
       tool.includes("file") ? "search_files" : "search_code",
       tool.includes("file") ? "Searching files..." : "Searching code...",
       f.query || f.path
@@ -1729,7 +1729,7 @@ var CURSOR_HEURISTIC_TOOL_STEPS = [
   },
   {
     matches: (tool) => tool.includes("webfetch") || tool.includes("web_fetch") || tool.includes("fetch") && !tool.includes("search"),
-    toStep: (f) => cursorDetailStep("web_fetch", "Fetching URL...", f.query)
+    toStep: (f) => detailStep("web_fetch", "Fetching URL...", f.query)
   },
   {
     matches: (tool) => tool.includes("todo") || tool.includes("plan"),
@@ -1955,18 +1955,6 @@ function getCodexItemFields(item) {
     pathDetail: pathValue ? shortenPath(String(pathValue)) : ""
   };
 }
-function codexPathStep(type, label, fields) {
-  return {
-    type,
-    label,
-    detail: fields.pathDetail || void 0,
-    path: fields.pathValue || void 0,
-    status: "active"
-  };
-}
-function codexDetailStep(type, label, detail) {
-  return { type, label, detail: detail || void 0, status: "active" };
-}
 function codexFileChangeStep(fields) {
   const files = extractFilePaths(fields.item);
   return {
@@ -1982,16 +1970,12 @@ function codexMcpToolStep(fields) {
   const { descriptionValue } = fields;
   const normalizedDescription = descriptionValue.toLowerCase();
   if (normalizedDescription.includes("fetch_file")) {
-    return codexDetailStep("read", "Reading file...", descriptionValue);
+    return detailStep("read", "Reading file...", descriptionValue);
   }
   if (normalizedDescription.includes("search") || normalizedDescription.includes("list_repositories") || normalizedDescription.includes("list_mcp_resources")) {
-    return codexDetailStep(
-      "search_code",
-      "Searching code...",
-      descriptionValue
-    );
+    return detailStep("search_code", "Searching code...", descriptionValue);
   }
-  return codexDetailStep("tool", "Using MCP...", descriptionValue);
+  return detailStep("tool", "Using MCP...", descriptionValue);
 }
 var CODEX_ITEM_STEPS = [
   {
@@ -2004,7 +1988,7 @@ var CODEX_ITEM_STEPS = [
   },
   {
     matches: (type) => type.includes("web"),
-    toStep: (f, type) => codexDetailStep(
+    toStep: (f, type) => detailStep(
       type.includes("search") ? "web_search" : "web_fetch",
       type.includes("search") ? "Searching web..." : "Fetching URL...",
       f.queryValue || f.pathDetail
@@ -2012,11 +1996,11 @@ var CODEX_ITEM_STEPS = [
   },
   {
     matches: (type) => type.includes("read"),
-    toStep: (f) => codexPathStep("read", "Reading file...", f)
+    toStep: (f) => pathStep("read", "Reading file...", f.pathDetail, f.pathValue)
   },
   {
     matches: (type) => type.includes("grep") || type.includes("search"),
-    toStep: (f, type) => codexDetailStep(
+    toStep: (f, type) => detailStep(
       type.includes("file") ? "search_files" : "search_code",
       type.includes("file") ? "Searching files..." : "Searching code...",
       f.queryValue || f.pathDetail
@@ -2024,7 +2008,7 @@ var CODEX_ITEM_STEPS = [
   },
   {
     matches: (type) => type.includes("glob") || type.includes("list"),
-    toStep: (f) => codexDetailStep(
+    toStep: (f) => detailStep(
       "search_files",
       "Searching files...",
       f.queryValue || f.pathDetail
@@ -2032,11 +2016,11 @@ var CODEX_ITEM_STEPS = [
   },
   {
     matches: (type) => type.includes("write") || type.includes("create"),
-    toStep: (f) => codexPathStep("write", "Creating file...", f)
+    toStep: (f) => pathStep("write", "Creating file...", f.pathDetail, f.pathValue)
   },
   {
     matches: (type) => type.includes("edit") || type.includes("patch") || type.includes("apply"),
-    toStep: (f) => codexPathStep("edit", "Editing file...", f)
+    toStep: (f) => pathStep("edit", "Editing file...", f.pathDetail, f.pathValue)
   },
   {
     matches: (type) => type.includes("command") || type.includes("shell") || type.includes("bash") || type.includes("exec"),
@@ -2050,7 +2034,7 @@ var CODEX_ITEM_STEPS = [
   },
   {
     matches: (type) => type.includes("agent") || type === "collabtoolcall",
-    toStep: (f) => codexDetailStep("subtask", "Running agent...", f.descriptionValue)
+    toStep: (f) => detailStep("subtask", "Running agent...", f.descriptionValue)
   }
 ];
 function codexItemToStep(item) {
@@ -3448,7 +3432,7 @@ function extractToolResultText(content) {
       parts.push(item);
       continue;
     }
-    if (item && typeof item === "object" && !Array.isArray(item) && item.type === "text" && typeof item.text === "string") {
+    if (isJsonObject(item) && item.type === "text" && typeof item.text === "string") {
       parts.push(item.text);
     }
   }
@@ -3486,21 +3470,21 @@ function reduceTodoState(name, input) {
 }
 function parseClaudeStreamEvent(event) {
   const events = [];
-  const inner = event.event && typeof event.event === "object" && !Array.isArray(event.event) ? event.event : null;
+  const inner = isJsonObject(event.event) ? event.event : null;
   if (!inner) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
     return events;
   }
   if (inner.type === "content_block_start") {
-    const contentBlock = inner.content_block && typeof inner.content_block === "object" && !Array.isArray(inner.content_block) ? inner.content_block : null;
+    const contentBlock = isJsonObject(inner.content_block) ? inner.content_block : null;
     if (contentBlock && contentBlock.type === "text") {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta = inner.delta && typeof inner.delta === "object" && !Array.isArray(inner.delta) ? inner.delta : null;
+  const delta = isJsonObject(inner.delta) ? inner.delta : null;
   if (!delta) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
@@ -3515,15 +3499,10 @@ function parseClaudeStreamEvent(event) {
   }
   return events;
 }
-function trimmedString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function messageContentBlocks(event) {
   const content = asJsonObject(event.message).content;
   if (!Array.isArray(content)) return [];
-  return content.filter(
-    (block) => !!block && typeof block === "object" && !Array.isArray(block)
-  );
+  return content.filter(isJsonObject);
 }
 function claudeToolResultEvent(toolUseId, content, isError) {
   const resultText = content !== void 0 ? extractToolResultText(content) : "";
@@ -3643,10 +3622,10 @@ function onStreamLine(parsed) {
         "first assistant event after " + String(callbackState.firstAssistantEventAt - callbackState.activeAttemptStartedAt) + "ms"
       );
     }
-    const message = parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) ? parsed.message : null;
+    const message = isJsonObject(parsed.message) ? parsed.message : null;
     const contentBlocks = message && Array.isArray(message.content) ? message.content : [];
     for (const block of contentBlocks) {
-      if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
+      if (isJsonObject(block) && block.type === "text" && typeof block.text === "string") {
         if (callbackState.firstTextBlockAt === 0) {
           callbackState.firstTextBlockAt = Date.now();
           log(
@@ -3924,7 +3903,7 @@ function codexParseLine(event) {
     return [{ kind: "update_reasoning", text: delta }];
   }
   const item = event.item;
-  if (typeof event.type === "string" && CODEX_ITEM_EVENT_TYPES.has(event.type) && item && typeof item === "object" && !Array.isArray(item)) {
+  if (typeof event.type === "string" && CODEX_ITEM_EVENT_TYPES.has(event.type) && isJsonObject(item)) {
     return codexItemEvents(event.type, item);
   }
   if (event.type === "turn.completed") {

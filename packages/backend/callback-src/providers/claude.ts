@@ -19,7 +19,13 @@ import type {
   TodoItem,
   ToolCompleteResult,
 } from "../types.js";
-import { asJsonObject, elapsedAttemptMs, log } from "../utils.js";
+import {
+  asJsonObject,
+  elapsedAttemptMs,
+  isJsonObject,
+  log,
+  trimmedString,
+} from "../utils.js";
 import type { ProviderAdapter } from "./types.js";
 import {
   parseClaudeSdkTaxonomy,
@@ -63,9 +69,7 @@ function extractToolResultText(content: JsonValue): string {
       continue;
     }
     if (
-      item &&
-      typeof item === "object" &&
-      !Array.isArray(item) &&
+      isJsonObject(item) &&
       item.type === "text" &&
       typeof item.text === "string"
     ) {
@@ -134,12 +138,7 @@ function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
  */
 function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
-  const inner =
-    event.event &&
-    typeof event.event === "object" &&
-    !Array.isArray(event.event)
-      ? event.event
-      : null;
+  const inner = isJsonObject(event.event) ? event.event : null;
   if (!inner) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
@@ -150,24 +149,16 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
     // text → thinking → text with no message_start between) needs a paragraph
     // break so the blocks do not clump. Only text blocks — thinking/tool blocks
     // are not appended to the streamed content.
-    const contentBlock =
-      inner.content_block &&
-      typeof inner.content_block === "object" &&
-      !Array.isArray(inner.content_block)
-        ? inner.content_block
-        : null;
+    const contentBlock = isJsonObject(inner.content_block)
+      ? inner.content_block
+      : null;
     if (contentBlock && contentBlock.type === "text") {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta =
-    inner.delta &&
-    typeof inner.delta === "object" &&
-    !Array.isArray(inner.delta)
-      ? inner.delta
-      : null;
+  const delta = isJsonObject(inner.delta) ? inner.delta : null;
   if (!delta) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
@@ -183,19 +174,11 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   return events;
 }
 
-/** Trimmed string value, or undefined when missing/blank. */
-function trimmedString(value: JsonValue | undefined): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 /** Object blocks of `event.message.content`; non-object entries are skipped. */
 function messageContentBlocks(event: JsonObject): JsonObject[] {
   const content = asJsonObject(event.message).content;
   if (!Array.isArray(content)) return [];
-  return content.filter(
-    (block): block is JsonObject =>
-      !!block && typeof block === "object" && !Array.isArray(block),
-  );
+  return content.filter(isJsonObject);
 }
 
 /** Builds the `complete_tool` event for one Claude tool_result payload. */
@@ -372,19 +355,12 @@ function onStreamLine(parsed: JsonObject): StreamLineResult {
           "ms",
       );
     }
-    const message =
-      parsed.message &&
-      typeof parsed.message === "object" &&
-      !Array.isArray(parsed.message)
-        ? parsed.message
-        : null;
+    const message = isJsonObject(parsed.message) ? parsed.message : null;
     const contentBlocks =
       message && Array.isArray(message.content) ? message.content : [];
     for (const block of contentBlocks) {
       if (
-        block &&
-        typeof block === "object" &&
-        !Array.isArray(block) &&
+        isJsonObject(block) &&
         block.type === "text" &&
         typeof block.text === "string"
       ) {

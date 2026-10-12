@@ -78,11 +78,23 @@ export function log(msg: string): void {
   }
 }
 
+/** True for plain JSON objects (not null, not arrays). */
+export function isJsonObject(
+  value: JsonValue | undefined,
+): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Coerces a JSON value to an object; non-objects become `{}`. */
 export function asJsonObject(value: JsonValue | undefined): JsonObject {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
+  return isJsonObject(value) ? value : {};
+}
+
+/** Trimmed string value, or undefined when missing/blank. */
+export function trimmedString(
+  value: JsonValue | undefined,
+): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
 }
 
 /** Attempts to parse a JSON string, returning null on failure. */

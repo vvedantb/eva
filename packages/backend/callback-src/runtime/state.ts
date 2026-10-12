@@ -8,22 +8,15 @@ import type {
   TodoItem,
   UsageLimitSnapshot,
 } from "../types.js";
-
-function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { isJsonObject, trimmedString } from "../utils.js";
 
 function nonEmptyString(value: JsonValue | undefined): string | undefined {
   return typeof value === "string" && value ? value : undefined;
 }
 
-function nonEmptyTrimmedString(
+function parsePriorOutput(
   value: JsonValue | undefined,
-): string | undefined {
-  return typeof value === "string" ? value.trim() || undefined : undefined;
-}
-
-function parsePriorOutput(value: JsonValue | undefined): StepOutput | undefined {
+): StepOutput | undefined {
   if (!isJsonObject(value) || typeof value.text !== "string") {
     return undefined;
   }
@@ -49,7 +42,7 @@ function parsePriorEdits(values: JsonValue[]): ProgressStep["edits"] {
 function parsePriorFiles(values: JsonValue[]): string[] | undefined {
   const files: string[] = [];
   for (const file of values) {
-    const trimmed = nonEmptyTrimmedString(file);
+    const trimmed = trimmedString(file);
     if (trimmed) {
       files.push(trimmed);
     }
@@ -130,9 +123,9 @@ function parsePriorStep(value: JsonValue): ProgressStep | null {
     path: typeof path === "string" ? path : undefined,
     status: "complete",
   };
-  const toolUseId = nonEmptyTrimmedString(value.toolUseId);
+  const toolUseId = trimmedString(value.toolUseId);
   if (toolUseId) step.toolUseId = toolUseId;
-  const parentToolUseId = nonEmptyTrimmedString(value.parentToolUseId);
+  const parentToolUseId = trimmedString(value.parentToolUseId);
   if (parentToolUseId) step.parentToolUseId = parentToolUseId;
   const command = nonEmptyString(value.command);
   if (command) step.command = command;

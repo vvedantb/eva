@@ -191,25 +191,24 @@ function getCursorToolFields(args: JsonObject): CursorToolFields {
   };
 }
 
-function cursorPathStep(
+/** Active step with a display path and the raw path it came from. */
+function pathStep(
   type: string,
   label: string,
-  fields: CursorToolFields,
+  detail: string,
+  rawPath: string,
 ): ProgressStep {
   return {
     type,
     label,
-    detail: fields.path || undefined,
-    path: fields.rawPath || undefined,
+    detail: detail || undefined,
+    path: rawPath || undefined,
     status: "active",
   };
 }
 
-function cursorDetailStep(
-  type: string,
-  label: string,
-  detail: string,
-): ProgressStep {
+/** Active step with only a detail line. */
+function detailStep(type: string, label: string, detail: string): ProgressStep {
   return { type, label, detail: detail || undefined, status: "active" };
 }
 
@@ -244,7 +243,7 @@ function cursorMcpStep(fields: CursorToolFields): ProgressStep {
 }
 
 function cursorSearchCodeStep(fields: CursorToolFields): ProgressStep {
-  return cursorDetailStep(
+  return detailStep(
     "search_code",
     "Searching code...",
     fields.query || fields.path,
@@ -256,7 +255,7 @@ const CURSOR_KNOWN_TOOL_STEPS = new Map<
   string,
   (fields: CursorToolFields) => ProgressStep
 >([
-  ["read", (f) => cursorPathStep("read", "Reading file...", f)],
+  ["read", (f) => pathStep("read", "Reading file...", f.path, f.rawPath)],
   [
     "write",
     (f) => {
@@ -287,20 +286,19 @@ const CURSOR_KNOWN_TOOL_STEPS = new Map<
       status: "active",
     }),
   ],
-  ["delete", (f) => cursorPathStep("edit", "Deleting file...", f)],
+  ["delete", (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)],
   [
     "glob",
-    (f) =>
-      cursorDetailStep("search_files", "Searching files...", f.query || f.path),
+    (f) => detailStep("search_files", "Searching files...", f.query || f.path),
   ],
-  ["ls", (f) => cursorDetailStep("search_files", "Searching files...", f.path)],
+  ["ls", (f) => detailStep("search_files", "Searching files...", f.path)],
   ["grep", cursorSearchCodeStep],
   ["semSearch", cursorSearchCodeStep],
   ["shell", cursorShellStep],
   [
     "task",
     (f) =>
-      cursorDetailStep(
+      detailStep(
         "subtask",
         "Running agent...",
         pickCursorString(f.args, ["description", "prompt"]),
@@ -315,11 +313,11 @@ const CURSOR_KNOWN_TOOL_STEPS = new Map<
 const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
   {
     matches: (tool) => tool.includes("read"),
-    toStep: (f) => cursorPathStep("read", "Reading file...", f),
+    toStep: (f) => pathStep("read", "Reading file...", f.path, f.rawPath),
   },
   {
     matches: (tool) => tool.includes("write") || tool.includes("create"),
-    toStep: (f) => cursorPathStep("write", "Creating file...", f),
+    toStep: (f) => pathStep("write", "Creating file...", f.path, f.rawPath),
   },
   {
     matches: (tool) =>
@@ -328,29 +326,29 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
       tool.includes("apply") ||
       tool.includes("replace"),
     toStep: (f) => ({
-      ...cursorPathStep("edit", "Editing file...", f),
+      ...pathStep("edit", "Editing file...", f.path, f.rawPath),
       edits: extractClaudeEdits(f.args),
     }),
   },
   {
     matches: (tool) => tool.includes("delete") || tool.includes("remove"),
-    toStep: (f) => cursorPathStep("edit", "Deleting file...", f),
+    toStep: (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath),
   },
   {
     matches: (tool) => tool.includes("glob") || tool.includes("list"),
     toStep: (f) =>
-      cursorDetailStep("search_files", "Searching files...", f.query || f.path),
+      detailStep("search_files", "Searching files...", f.query || f.path),
   },
   // Before grep/search: every web-search name also contains "search".
   {
     matches: (tool) =>
       tool.includes("websearch") || tool.includes("web_search"),
-    toStep: (f) => cursorDetailStep("web_search", "Searching web...", f.query),
+    toStep: (f) => detailStep("web_search", "Searching web...", f.query),
   },
   {
     matches: (tool) => tool.includes("grep") || tool.includes("search"),
     toStep: (f, tool) =>
-      cursorDetailStep(
+      detailStep(
         tool.includes("file") ? "search_files" : "search_code",
         tool.includes("file") ? "Searching files..." : "Searching code...",
         f.query || f.path,
@@ -370,7 +368,7 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
       tool.includes("webfetch") ||
       tool.includes("web_fetch") ||
       (tool.includes("fetch") && !tool.includes("search")),
-    toStep: (f) => cursorDetailStep("web_fetch", "Fetching URL...", f.query),
+    toStep: (f) => detailStep("web_fetch", "Fetching URL...", f.query),
   },
   {
     matches: (tool) => tool.includes("todo") || tool.includes("plan"),
@@ -661,28 +659,6 @@ function getCodexItemFields(item: JsonObject): CodexItemFields {
   };
 }
 
-function codexPathStep(
-  type: string,
-  label: string,
-  fields: CodexItemFields,
-): ProgressStep {
-  return {
-    type,
-    label,
-    detail: fields.pathDetail || undefined,
-    path: fields.pathValue || undefined,
-    status: "active",
-  };
-}
-
-function codexDetailStep(
-  type: string,
-  label: string,
-  detail: string,
-): ProgressStep {
-  return { type, label, detail: detail || undefined, status: "active" };
-}
-
 function codexFileChangeStep(fields: CodexItemFields): ProgressStep {
   const files = extractFilePaths(fields.item);
   return {
@@ -699,20 +675,16 @@ function codexMcpToolStep(fields: CodexItemFields): ProgressStep {
   const { descriptionValue } = fields;
   const normalizedDescription = descriptionValue.toLowerCase();
   if (normalizedDescription.includes("fetch_file")) {
-    return codexDetailStep("read", "Reading file...", descriptionValue);
+    return detailStep("read", "Reading file...", descriptionValue);
   }
   if (
     normalizedDescription.includes("search") ||
     normalizedDescription.includes("list_repositories") ||
     normalizedDescription.includes("list_mcp_resources")
   ) {
-    return codexDetailStep(
-      "search_code",
-      "Searching code...",
-      descriptionValue,
-    );
+    return detailStep("search_code", "Searching code...", descriptionValue);
   }
-  return codexDetailStep("tool", "Using MCP...", descriptionValue);
+  return detailStep("tool", "Using MCP...", descriptionValue);
 }
 
 /** Codex item kinds, checked in order against the lowercased item type. */
@@ -728,7 +700,7 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   {
     matches: (type) => type.includes("web"),
     toStep: (f, type) =>
-      codexDetailStep(
+      detailStep(
         type.includes("search") ? "web_search" : "web_fetch",
         type.includes("search") ? "Searching web..." : "Fetching URL...",
         f.queryValue || f.pathDetail,
@@ -736,12 +708,13 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   },
   {
     matches: (type) => type.includes("read"),
-    toStep: (f) => codexPathStep("read", "Reading file...", f),
+    toStep: (f) =>
+      pathStep("read", "Reading file...", f.pathDetail, f.pathValue),
   },
   {
     matches: (type) => type.includes("grep") || type.includes("search"),
     toStep: (f, type) =>
-      codexDetailStep(
+      detailStep(
         type.includes("file") ? "search_files" : "search_code",
         type.includes("file") ? "Searching files..." : "Searching code...",
         f.queryValue || f.pathDetail,
@@ -750,7 +723,7 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   {
     matches: (type) => type.includes("glob") || type.includes("list"),
     toStep: (f) =>
-      codexDetailStep(
+      detailStep(
         "search_files",
         "Searching files...",
         f.queryValue || f.pathDetail,
@@ -758,12 +731,14 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   },
   {
     matches: (type) => type.includes("write") || type.includes("create"),
-    toStep: (f) => codexPathStep("write", "Creating file...", f),
+    toStep: (f) =>
+      pathStep("write", "Creating file...", f.pathDetail, f.pathValue),
   },
   {
     matches: (type) =>
       type.includes("edit") || type.includes("patch") || type.includes("apply"),
-    toStep: (f) => codexPathStep("edit", "Editing file...", f),
+    toStep: (f) =>
+      pathStep("edit", "Editing file...", f.pathDetail, f.pathValue),
   },
   {
     matches: (type) =>
@@ -782,7 +757,7 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   {
     matches: (type) => type.includes("agent") || type === "collabtoolcall",
     toStep: (f) =>
-      codexDetailStep("subtask", "Running agent...", f.descriptionValue),
+      detailStep("subtask", "Running agent...", f.descriptionValue),
   },
 ];
 

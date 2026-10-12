@@ -8,16 +8,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  CircleSpinner,
 } from "@eva/ui";
-import {
-  IconHammer,
-  IconPlayerPlay,
-  IconDots,
-  IconRefresh,
-  IconServerBolt,
-} from "@tabler/icons-react";
+import { IconHammer, IconDots } from "@tabler/icons-react";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import {
+  BusyMenuIcon,
+  SandboxCommandMenuItems,
+} from "@/lib/components/sandbox/SandboxCommandMenuItems";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
@@ -133,13 +130,21 @@ export function TaskFooterMoreMenu({
           <DropdownMenuSeparator />
         ) : null}
         <SandboxCommandMenuItems
-          visibility={visibility}
-          isRetryingStartupCommands={isRetryingStartupCommands}
-          isRunningDevServer={isRunningDevServer}
-          isRunningBackgroundCommands={isRunningBackgroundCommands}
-          onRunStartupCommands={onRunStartupCommands}
-          onRunDevServer={onRunDevServer}
-          onRunBackgroundCommands={onRunBackgroundCommands}
+          startupCommands={{
+            show: visibility.showRunStartupCommands,
+            busy: isRetryingStartupCommands,
+            onRun: onRunStartupCommands,
+          }}
+          devServer={{
+            show: visibility.showRunDevServer,
+            busy: isRunningDevServer,
+            onRun: onRunDevServer,
+          }}
+          backgroundCommands={{
+            show: visibility.showRunBackgroundCommands,
+            busy: isRunningBackgroundCommands,
+            onRun: onRunBackgroundCommands,
+          }}
         />
         {(showResolveConflicts || hasSandboxCommandItems) &&
         prLinks.hasItems ? (
@@ -157,75 +162,4 @@ export function TaskFooterMoreMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-function SandboxCommandMenuItems({
-  visibility,
-  isRetryingStartupCommands,
-  isRunningDevServer,
-  isRunningBackgroundCommands,
-  onRunStartupCommands,
-  onRunDevServer,
-  onRunBackgroundCommands,
-}: {
-  visibility: MoreMenuVisibility;
-  isRetryingStartupCommands: boolean;
-  isRunningDevServer: boolean;
-  isRunningBackgroundCommands: boolean;
-  onRunStartupCommands: () => void;
-  onRunDevServer: () => void;
-  onRunBackgroundCommands: () => void;
-}) {
-  return (
-    <>
-      {visibility.showRunStartupCommands && (
-        <DropdownMenuItem
-          onClick={onRunStartupCommands}
-          disabled={isRetryingStartupCommands}
-          title={skipConfirmTitle("Run Startup Commands")}
-        >
-          <BusyMenuIcon busy={isRetryingStartupCommands}>
-            <IconRefresh size={14} />
-          </BusyMenuIcon>
-          Run Startup Commands
-          <ConfirmSkipHint />
-        </DropdownMenuItem>
-      )}
-      {visibility.showRunDevServer ? (
-        <DropdownMenuItem
-          onClick={onRunDevServer}
-          disabled={isRunningDevServer}
-          title={skipConfirmTitle("Run Dev Server")}
-        >
-          <BusyMenuIcon busy={isRunningDevServer}>
-            <IconPlayerPlay size={14} />
-          </BusyMenuIcon>
-          Run Dev Server
-          <ConfirmSkipHint />
-        </DropdownMenuItem>
-      ) : null}
-      {visibility.showRunBackgroundCommands ? (
-        <DropdownMenuItem
-          onClick={onRunBackgroundCommands}
-          disabled={isRunningBackgroundCommands}
-        >
-          <BusyMenuIcon busy={isRunningBackgroundCommands}>
-            <IconServerBolt size={14} />
-          </BusyMenuIcon>
-          Run Background Commands
-        </DropdownMenuItem>
-      ) : null}
-    </>
-  );
-}
-
-/** Spinner while the item's action runs, else its own icon. */
-function BusyMenuIcon({
-  busy,
-  children,
-}: {
-  busy: boolean;
-  children: ReactNode;
-}) {
-  return busy ? <CircleSpinner size="sm" className="size-3.5" /> : children;
 }

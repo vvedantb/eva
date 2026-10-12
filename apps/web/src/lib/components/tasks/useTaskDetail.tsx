@@ -44,7 +44,37 @@ export type UseTaskDetailRouting =
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-detail"; project: ProjectTaskDetailRouting };
 
-/** Every query the task detail reads, in a fixed subscription order. */
+/**
+ * Read straight off the task row — never mirrored into local state. A mirror
+ * had to be re-seeded whenever the row changed, and any render that seeded it
+ * before `task` arrived took the repo default instead: that is how the
+ * Properties column showed `staging` for a task whose own base branch is
+ * `main`, until a reload happened to seed it in the right order. The picker
+ * writes through `updateTask`, whose optimistic update patches this same
+ * query, so the value still changes the instant it is picked.
+ */
+function resolveBaseBranch(
+  fromTask: string | undefined,
+  fromRepo: string | undefined,
+) {
+  return fromTask?.trim() || fromRepo?.trim() || FALLBACK_GIT_BASE_BRANCH;
+}
+
+function resolveDevServerCommandLabel(
+  fromTask: string | undefined,
+  fromRepo: string | undefined,
+) {
+  return (
+    fromTask?.trim() ||
+    fromRepo?.trim() ||
+    "Auto-detected from package.json (e.g. pnpm run dev)"
+  );
+}
+
+/**
+ * Every query the task detail reads, in a fixed subscription order. Returns
+ * only public fields: `useTaskDetail` spreads the result into its return.
+ */
 function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskResult = useQuery(api.agentTasks.get, { id: taskId });
   const task = taskResult === null ? null : (taskResult ?? undefined);
@@ -52,8 +82,8 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const isOwner = currentUserId === task?.createdBy;
   const isBlocked = useQuery(api.taskDependencies.isBlocked, { taskId });
   const runs = useQuery(api.agentRuns.listByTask, { taskId });
-  const hasActiveRun = runs?.some(
-    (run) => run.status === "queued" || run.status === "running",
+  const hasActiveRun = Boolean(
+    runs?.some((run) => run.status === "queued" || run.status === "running"),
   );
   const hasRuns = (runs?.length ?? 0) > 0;
   const isProjectTask = task?.projectId !== undefined;
@@ -80,7 +110,8 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   );
 
   return {
-    taskResult,
+    isLoading: taskResult === undefined,
+    isNotFound: taskResult === null,
     task,
     isOwner,
     isBlocked,
@@ -95,39 +126,20 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     projects,
     comments,
     taskActivity,
-    repoForTask,
+    baseBranch: resolveBaseBranch(
+      task?.baseBranch,
+      repoForTask?.defaultBaseBranch,
+    ),
+    devServerCommandLabel: resolveDevServerCommandLabel(
+      task?.devCommand,
+      repoForTask?.devCommand,
+    ),
+    sandboxId: task?.sandboxId,
+    reviewTaskSandboxStatus: task?.reviewTaskSandboxStatus,
   };
 }
 
 type TaskDetailQueries = ReturnType<typeof useTaskDetailQueries>;
-
-/**
- * Read straight off the task row — never mirrored into local state. A mirror
- * had to be re-seeded whenever the row changed, and any render that seeded it
- * before `task` arrived took the repo default instead: that is how the
- * Properties column showed `staging` for a task whose own base branch is
- * `main`, until a reload happened to seed it in the right order. The picker
- * writes through `updateTask`, whose optimistic update patches this same
- * query, so the value still changes the instant it is picked.
- */
-function resolveBaseBranch({ task, repoForTask }: TaskDetailQueries) {
-  return (
-    task?.baseBranch?.trim() ||
-    repoForTask?.defaultBaseBranch?.trim() ||
-    FALLBACK_GIT_BASE_BRANCH
-  );
-}
-
-function resolveDevServerCommandLabel({
-  task,
-  repoForTask,
-}: TaskDetailQueries) {
-  const fromTask = task?.devCommand?.trim();
-  if (fromTask) return fromTask;
-  const fromRepo = repoForTask?.devCommand?.trim();
-  if (fromRepo) return fromRepo;
-  return "Auto-detected from package.json (e.g. pnpm run dev)";
-}
 
 function deriveRunSummary({
   task,
@@ -144,7 +156,7 @@ function deriveRunSummary({
     (comments !== undefined && comments.length > 0);
   return {
     status,
-    canEditText: canEditTaskText(status, Boolean(hasActiveRun)),
+    canEditTaskText: canEditTaskText(status, hasActiveRun),
     latestPrUrl,
     latestPrError: runs?.find((r) => r.prError)?.prError,
     latestDeployment: runs?.find((r) => r.deploymentStatus),
@@ -161,94 +173,25 @@ export function useTaskDetail(
   routing?: UseTaskDetailRouting,
 ) {
   const data = useTaskDetailQueries(taskId);
-  const { task, runs, hasActiveRun } = data;
   const execution = useTaskExecutionControls(taskId);
   const sandbox = useTaskSandboxControls({
     taskId,
-    task,
+    task: data.task,
     hasRuns: data.hasRuns,
     routing,
     setExecutionError: execution.setExecutionError,
   });
-  const { activeTab, setActiveTab } = useTaskDetailTab(routing);
-  const summary = deriveRunSummary(data);
-  const modalWidthClass = "max-w-[calc(100vw-2rem)] md:max-w-6xl";
-  const layoutGridClass = "grid-cols-1 md:grid-cols-[1fr_1fr_200px]";
+  const tab = useTaskDetailTab(routing);
 
+  // Each part returns only public fields, so the spreads are the API.
   return {
-    isLoading: data.taskResult === undefined,
-    isNotFound: data.taskResult === null,
-
-    task,
-    status: summary.status,
-    runs,
-    comments: data.comments,
-    taskActivity: data.taskActivity,
-    users: data.users,
-    creatorUser: summary.creatorUser,
-    projects: data.projects,
-    streaming: data.streaming,
-
-    isOwner: data.isOwner,
-    isBlocked: data.isBlocked,
-    hasActiveRun: Boolean(hasActiveRun),
-    isProjectTask: data.isProjectTask,
-    hasRuns: data.hasRuns,
-    canEditTaskText: summary.canEditText,
-    showTabsColumn: summary.showTabsColumn,
-    isActivityBusy: Boolean(hasActiveRun),
-
-    activeRun: data.activeRun,
-    activeRunElapsed: data.activeRunElapsed,
-    latestPrUrl: summary.latestPrUrl,
-    latestPrError: summary.latestPrError,
-    latestDeployment: summary.latestDeployment,
-
-    activeTab,
-    setActiveTab,
-    baseBranch: resolveBaseBranch(data),
-    executionError: execution.executionError,
-    setExecutionError: execution.setExecutionError,
-    showStopConfirm: execution.showStopConfirm,
-    setShowStopConfirm: execution.setShowStopConfirm,
-    showResolveConfirm: execution.showResolveConfirm,
-    setShowResolveConfirm: execution.setShowResolveConfirm,
-    showStartupCommandsConfirm: sandbox.showStartupCommandsConfirm,
-    setShowStartupCommandsConfirm: sandbox.setShowStartupCommandsConfirm,
-    showRunDevServerConfirm: sandbox.showRunDevServerConfirm,
-    setShowRunDevServerConfirm: sandbox.setShowRunDevServerConfirm,
-    isStarting: execution.isStarting,
-    isStopping: execution.isStopping,
-
-    handleStartExecution: execution.handleStartExecution,
-    handleStopExecution: execution.handleStopExecution,
-    handleResolveConflicts: execution.handleResolveConflicts,
-
-    canStartSandbox: sandbox.canStartSandbox,
-    canViewSandbox: sandbox.canViewSandbox,
-    showSandbox: sandbox.showSandbox,
-    isSandboxActive: sandbox.isSandboxActive,
-    isSandboxStarting: sandbox.isSandboxStarting,
-    sandboxStartupActivity: sandbox.sandboxStartupActivity,
-    isSandboxStopping: sandbox.isSandboxStopping,
-    handleStartSandbox: sandbox.handleStartSandbox,
-    handleStopSandbox: sandbox.handleStopSandbox,
-    handleSelectSurface: sandbox.handleSelectSurface,
-    handleRetryStartupCommands: sandbox.handleRetryStartupCommands,
-    isRetryingStartupCommands: sandbox.isRetryingStartupCommands,
-    handleRunDevServer: sandbox.handleRunDevServer,
-    isRunningDevServer: sandbox.isRunningDevServer,
-    handleRunBackgroundCommands: sandbox.handleRunBackgroundCommands,
-    isRunningBackgroundCommands: sandbox.isRunningBackgroundCommands,
-    devServerCommandLabel: resolveDevServerCommandLabel(data),
-    sandboxId: task?.sandboxId,
-    reviewTaskSandboxStatus: task?.reviewTaskSandboxStatus,
-
-    canCreatePr: summary.canCreatePr,
-    isCreatingPr: execution.isCreatingPr,
-    handleCreatePr: execution.handleCreatePr,
-
-    layoutGridClass,
-    modalWidthClass,
+    ...data,
+    ...deriveRunSummary(data),
+    ...tab,
+    ...execution,
+    ...sandbox,
+    isActivityBusy: data.hasActiveRun,
+    layoutGridClass: "grid-cols-1 md:grid-cols-[1fr_1fr_200px]",
+    modalWidthClass: "max-w-[calc(100vw-2rem)] md:max-w-6xl",
   };
 }

@@ -32,13 +32,13 @@ import {
   isRunInProgress,
   taskRunStreamingEntityId,
 } from "@/lib/components/tasks/firstRunChatTurn";
-import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
+import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
-import type {
-  SandboxChatSurface,
-  UsageLimitRecoveryInputs,
+import {
+  buildSandboxChatSurface,
+  startSandboxHandler,
 } from "@/lib/components/chat/sandboxChatSurface";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -141,7 +141,10 @@ export function TaskSandboxChatPanel({
     usageAccountLabel,
   } = useTaskChatModelSettings(taskId, task, repo);
 
-  const { draftBundle, isDraftLoading } = useTaskChatDraft(taskId);
+  const { draftBundle, isDraftLoading } = useSandboxChatDraft({
+    kind: "taskChat",
+    taskId,
+  });
 
   const { blockingQuestion, handleAnswerBlockingQuestion } =
     useTaskBlockingQuestion(taskId);
@@ -280,12 +283,12 @@ export function TaskSandboxChatPanel({
     await cancelExecution({ taskId });
   };
 
-  const chatSurface = buildTaskChatSurface({
-    taskId,
+  const chatSurface = buildSandboxChatSurface({
+    entity: { kind: "task", taskId },
     repoId: repo._id,
     model,
     isExecuting,
-    task,
+    doc: task,
     isOwner,
     messages,
     accounts,
@@ -489,22 +492,6 @@ function useTaskChatModelSettings(
   };
 }
 
-function useTaskChatDraft(taskId: Id<"agentTasks">) {
-  const draftSeed = useChatDraftSeed({
-    kind: "taskChat" as const,
-    taskId,
-  });
-  const draftBundle = draftSeed.isReady
-    ? {
-        target: { kind: "taskChat" as const, taskId },
-        initialDisplay: draftSeed.initialDisplay,
-        mentionMap: draftSeed.mentionMap,
-        skillMap: draftSeed.skillMap,
-      }
-    : undefined;
-  return { draftBundle, isDraftLoading: !draftSeed.isReady };
-}
-
 function useTaskBlockingQuestion(taskId: Id<"agentTasks">) {
   // Same entityId the task-chat sandbox posts with (task id, not stream prefix).
   const activeQuestion = useQuery(api.pendingQuestions.getActive, {
@@ -527,56 +514,6 @@ function useTaskBlockingQuestion(taskId: Id<"agentTasks">) {
   };
 }
 
-function buildTaskChatSurface({
-  taskId,
-  repoId,
-  model,
-  isExecuting,
-  task,
-  isOwner,
-  messages,
-  accounts,
-  resolveAccountId,
-  switchProviderAccount,
-  isSandboxActive,
-}: {
-  taskId: Id<"agentTasks">;
-  repoId: SandboxChatSurface["repoId"];
-  model: AIModel;
-  isExecuting: boolean;
-  task: TaskChatTask;
-  isOwner: boolean;
-  messages: FunctionReturnType<typeof api.messages.listByParent> | undefined;
-  accounts: UsageLimitRecoveryInputs["accounts"];
-  resolveAccountId: UsageLimitRecoveryInputs["resolveAccountId"];
-  switchProviderAccount: UsageLimitRecoveryInputs["onSwitchAccount"];
-  isSandboxActive: boolean;
-}): SandboxChatSurface {
-  return {
-    entity: { kind: "task", taskId },
-    repoId,
-    model,
-    isExecuting,
-    isReadOnly: false,
-    // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
-    backgroundAgents: task?.backgroundAgents,
-    // Owner-only, like the account picker: task chat is owner-sticky.
-    usageLimitRecovery:
-      isOwner && task
-        ? {
-            messages: messages ?? [],
-            accounts,
-            resolveAccountId,
-            currentAccountId: task.providerAccountId ?? null,
-            onSwitchAccount: switchProviderAccount,
-            isSandboxActive,
-          }
-        : undefined,
-    // No review-comment append on this send path (sessions-only), so a slash
-    // command already reaches the harness verbatim.
-  };
-}
-
 function pickTaskChatStreaming(
   isFirstRunInProgress: boolean,
   firstRunStreaming: TaskChatStreaming,
@@ -593,14 +530,4 @@ function pickTaskChatStreaming(
       ? firstRunStreaming?.pendingQuestion
       : streaming?.pendingQuestion,
   };
-}
-
-function startSandboxHandler(
-  isSandboxActive: boolean,
-  isSandboxToggling: boolean,
-  onSandboxToggle: TaskSandboxChatPanelProps["onSandboxToggle"],
-) {
-  return !isSandboxActive && !isSandboxToggling && onSandboxToggle
-    ? () => onSandboxToggle("start")
-    : undefined;
 }

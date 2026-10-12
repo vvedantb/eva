@@ -79,3 +79,77 @@ export interface SandboxChatSurface {
   /** What the usage-limit recovery card needs, or nothing when it cannot show. */
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
 }
+
+/** The task or project doc fields a sandbox chat surface reads. */
+interface SandboxChatOwnerDoc {
+  backgroundAgents?: BackgroundAgentEntry[];
+  providerAccountId?: Id<"userProviderAccounts">;
+}
+
+/**
+ * The surface for a task or project sandbox chat. `doc` is the entity's live
+ * record (undefined while it loads). `accounts` is the viewer's own list, not
+ * a display list with a synthetic owner row: that row exists only for
+ * non-owners, who never see the recovery card.
+ */
+export function buildSandboxChatSurface({
+  entity,
+  repoId,
+  model,
+  isExecuting,
+  doc,
+  isOwner,
+  messages,
+  accounts,
+  resolveAccountId,
+  switchProviderAccount,
+  isSandboxActive,
+}: {
+  entity: ChatEntityRef;
+  repoId: Id<"githubRepos">;
+  model: AIModel;
+  isExecuting: boolean;
+  doc: SandboxChatOwnerDoc | null | undefined;
+  isOwner: boolean;
+  messages: UsageLimitRecoveryInputs["messages"] | undefined;
+  accounts: UsageLimitRecoveryInputs["accounts"];
+  resolveAccountId: UsageLimitRecoveryInputs["resolveAccountId"];
+  switchProviderAccount: UsageLimitRecoveryInputs["onSwitchAccount"];
+  isSandboxActive: boolean;
+}): SandboxChatSurface {
+  return {
+    entity,
+    repoId,
+    model,
+    isExecuting,
+    isReadOnly: false,
+    // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
+    backgroundAgents: doc?.backgroundAgents,
+    // Owner-only, like the account picker: task and project chat are
+    // owner-sticky.
+    usageLimitRecovery:
+      isOwner && doc
+        ? {
+            messages: messages ?? [],
+            accounts,
+            resolveAccountId,
+            currentAccountId: doc.providerAccountId ?? null,
+            onSwitchAccount: switchProviderAccount,
+            isSandboxActive,
+          }
+        : undefined,
+    // No review-comment append on this send path (sessions-only), so a slash
+    // command already reaches the harness verbatim.
+  };
+}
+
+/** The empty-state "Start sandbox" action, only while it can act. */
+export function startSandboxHandler(
+  isSandboxActive: boolean,
+  isSandboxToggling: boolean,
+  onSandboxToggle: ((action: "start" | "stop") => void) | undefined,
+): (() => void) | undefined {
+  return !isSandboxActive && !isSandboxToggling && onSandboxToggle
+    ? () => onSandboxToggle("start")
+    : undefined;
+}

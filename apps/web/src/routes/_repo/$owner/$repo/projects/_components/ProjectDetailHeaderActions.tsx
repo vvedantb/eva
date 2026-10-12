@@ -18,14 +18,16 @@ import {
   IconChevronDown,
   IconCalendarClock,
   IconDots,
-  IconRefresh,
   IconFileText,
   IconMessage,
-  IconServerBolt,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
+import {
+  BusyMenuIcon,
+  SandboxCommandMenuItems,
+} from "@/lib/components/sandbox/SandboxCommandMenuItems";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
 import {
@@ -244,11 +246,9 @@ function ProjectMoreMenuActionItems({
           }
           disabled={isResolvingConflicts}
         >
-          {isResolvingConflicts ? (
-            <CircleSpinner size="sm" className="size-3.5" />
-          ) : (
+          <BusyMenuIcon busy={isResolvingConflicts}>
             <IconHammer size={14} />
-          )}
+          </BusyMenuIcon>
           Resolve Conflicts
           <ConfirmSkipHint />
         </DropdownMenuItem>
@@ -256,40 +256,23 @@ function ProjectMoreMenuActionItems({
       {showResolveConflicts && hasSandboxCommandItems ? (
         <DropdownMenuSeparator />
       ) : null}
-      {showRetryStartupCommands && (
-        <DropdownMenuItem
-          title={skipConfirmTitle("Run Startup Commands")}
-          onClick={() =>
+      <SandboxCommandMenuItems
+        startupCommands={{
+          show: showRetryStartupCommands,
+          busy: isRetryingStartupCommands,
+          onRun: () =>
             requestConfirm(
               altHeld,
               () => setShowStartupCommandsConfirm(true),
               handleRetryStartupCommands,
-            )
-          }
-          disabled={isRetryingStartupCommands}
-        >
-          {isRetryingStartupCommands ? (
-            <CircleSpinner size="sm" className="size-3.5" />
-          ) : (
-            <IconRefresh size={14} />
-          )}
-          Run Startup Commands
-          <ConfirmSkipHint />
-        </DropdownMenuItem>
-      )}
-      {showRunBackgroundCommands && (
-        <DropdownMenuItem
-          onClick={handleRunBackgroundCommands}
-          disabled={isRunningBackgroundCommands}
-        >
-          {isRunningBackgroundCommands ? (
-            <CircleSpinner size="sm" className="size-3.5" />
-          ) : (
-            <IconServerBolt size={14} />
-          )}
-          Run Background Commands
-        </DropdownMenuItem>
-      )}
+            ),
+        }}
+        backgroundCommands={{
+          show: showRunBackgroundCommands,
+          busy: isRunningBackgroundCommands,
+          onRun: handleRunBackgroundCommands,
+        }}
+      />
     </>
   );
 }
