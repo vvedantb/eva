@@ -1,7 +1,7 @@
-import { v } from "convex/values";
+import { getConvexSize, v } from "convex/values";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
 
@@ -159,7 +159,9 @@ export function sessionChatPersistenceId(
 }
 
 /** `streamingActivity` / `pendingQuestions` entity id for a chat's turn. */
-export function sessionChatStreamingEntityId(chatId: Id<"sessionChats">): string {
+export function sessionChatStreamingEntityId(
+  chatId: Id<"sessionChats">,
+): string {
   return String(chatId);
 }
 
@@ -187,20 +189,158 @@ function copyChatSettings(source: ChatSettingsSource): ChatSettingsSource {
 }
 
 /**
- * Inserts the Main chat for a session that does not have one yet, carrying
- * the session's composer settings over, and repoints the session's legacy
- * chat rows onto it (`moveLegacySessionRows`, batched). Idempotent. Called by every server path
- * that needs "the chat of this session" (session create, MCP sends, system
- * alerts) and by the page-open mutation, so a session predating chats gets
- * its Main chat the first time anything touches it.
+ * Bytes and rows one `moveLegacyTranscriptPage` call may read. Heavy sessions
+ * hold transcripts far over the 16 MiB per-function read limit, so the move
+ * runs in bounded pages across mutations instead of one `collect()`.
  */
-export async function ensureMainChat(
+const LEGACY_TRANSCRIPT_PAGE_BYTES = 2 * 1024 * 1024;
+const LEGACY_TRANSCRIPT_PAGE_ROWS = 500;
+
+/**
+ * Reads the next bounded page of an index range. `full` means the page hit
+ * the budget, so more rows may remain.
+ */
+async function takeBoundedPage<
+  T extends Doc<
+    | "messages"
+    | "queuedMessages"
+    | "chatUiPanels"
+    | "chatHtmlRenders"
+    | "envVarRequests"
+  >,
+>(
+  rows: AsyncIterable<T>,
+  maxBytes: number,
+): Promise<{ page: T[]; bytes: number; full: boolean }> {
+  const page: T[] = [];
+  let bytes = 0;
+  for await (const row of rows) {
+    page.push(row);
+    bytes += getConvexSize(row);
+    if (bytes >= maxBytes || page.length >= LEGACY_TRANSCRIPT_PAGE_ROWS) {
+      return { page, bytes, full: true };
+    }
+  }
+  return { page, bytes, full: false };
+}
+
+/** Moves one bounded page of legacy rows onto the chat. */
+async function repointPage<
+  T extends Doc<
+    | "messages"
+    | "queuedMessages"
+    | "chatUiPanels"
+    | "chatHtmlRenders"
+    | "envVarRequests"
+  >,
+>(
+  ctx: MutationCtx,
+  rows: AsyncIterable<T>,
+  chatId: Id<"sessionChats">,
+  maxBytes: number,
+): Promise<{ bytes: number; full: boolean }> {
+  const { page, bytes, full } = await takeBoundedPage(rows, maxBytes);
+  for (const row of page) {
+    await ctx.db.patch(row._id, { parentId: chatId });
+  }
+  return { bytes, full };
+}
+
+/**
+ * Repoints one bounded page of a session's legacy chat rows onto its Main
+ * chat: the transcript, the queue and the inline cards (UI panels, HTML
+ * renders, env var requests). Once those are empty it links the chat owner's
+ * pre-chat composer draft. Returns true once no legacy row is left. Moved rows
+ * leave the `parentId = sessionId` range, so every call starts from the front
+ * and a rerun after a failure resumes where the last commit stopped.
+ * `chatReads` stay on the session id: the sidebar unread dot reads them there.
+ */
+export async function moveLegacyTranscriptPage(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
+): Promise<boolean> {
+  // Each table reads into what is left of the one byte budget.
+  const tables = [
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("chatUiPanels")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("chatHtmlRenders")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("envVarRequests")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+  ];
+  let budget = LEGACY_TRANSCRIPT_PAGE_BYTES;
+  for (const repoint of tables) {
+    const page = await repoint(budget);
+    if (page.full) return false;
+    budget -= page.bytes;
+  }
+
+  // `drafts` is indexed by user first; other users' pre-chat drafts are moved
+  // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
+  const chat = await ctx.db.get(chatId);
+  if (!chat) return true;
+  const drafts = await ctx.db
+    .query("drafts")
+    .withIndex("by_user_and_session", (q) =>
+      q.eq("userId", chat.userId).eq("sessionId", sessionId),
+    )
+    .collect();
+  for (const draft of drafts) {
+    if (draft.kind === "sessionChat" && draft.chatId === undefined) {
+      await ctx.db.patch(draft._id, { chatId });
+    }
+  }
+  return true;
+}
+
+/**
+ * Inserts the Main chat row for a session, carrying the session's composer
+ * settings over. Does not touch the transcript; see `ensureMainChat`.
+ */
+export async function insertMainChat(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<Doc<"sessionChats">> {
-  const existing = await findMainChat(ctx.db, session._id);
-  if (existing) return existing;
-
   const chatId = await ctx.db.insert("sessionChats", {
     sessionId: session._id,
     repoId: session.repoId,
@@ -217,91 +357,38 @@ export async function ensureMainChat(
       : {}),
     backgroundAgents: session.backgroundAgents,
   });
-
-  await moveLegacySessionRows(ctx, session, chatId);
-
   const chat = await ctx.db.get(chatId);
   if (!chat) throw new Error("Main chat was not created");
   return chat;
 }
 
-/** Rows moved per mutation, so a long legacy transcript never hits the write limits. */
-const LEGACY_MOVE_BATCH = 200;
-
 /**
- * Repoints one bounded batch of a session's legacy chat rows (keyed by the
- * session id) onto its Main chat, and schedules the next batch when rows
- * remain. Covers the transcript, the queue, the inline cards (UI panels, HTML
- * renders, env var requests) and the owner's pre-chat composer draft.
- * `chatReads` stay on the session id: the sidebar unread dot reads them there.
+ * Returns the session's Main chat, creating it for a session that predates
+ * chats. On creation, legacy message and queue rows keyed by the session id
+ * become the chat's transcript: the first bounded page moves now, and
+ * `moveLegacyTranscript` moves the rest in later mutations. Idempotent.
+ * Called by every server path that needs "the chat of this session"
+ * (session create, MCP sends, system alerts) and by the page-open mutation,
+ * so a session predating chats gets its Main chat the first time anything
+ * touches it.
  */
-export async function moveLegacySessionRows(
+export async function ensureMainChat(
   ctx: MutationCtx,
   session: Doc<"sessions">,
-  chatId: Id<"sessionChats">,
-): Promise<void> {
-  let budget = LEGACY_MOVE_BATCH;
-  const sessionId = session._id;
+): Promise<Doc<"sessionChats">> {
+  const existing = await findMainChat(ctx.db, session._id);
+  if (existing) return existing;
 
-  const messages = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", sessionId))
-    .take(budget);
-  for (const row of messages) await ctx.db.patch(row._id, { parentId: chatId });
-  budget -= messages.length;
-
-  const queued = await ctx.db
-    .query("queuedMessages")
-    .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId))
-    .take(budget);
-  for (const row of queued) await ctx.db.patch(row._id, { parentId: chatId });
-  budget -= queued.length;
-
-  const panels = await ctx.db
-    .query("chatUiPanels")
-    .withIndex("by_parent", (q) => q.eq("parentId", sessionId))
-    .take(budget);
-  for (const row of panels) await ctx.db.patch(row._id, { parentId: chatId });
-  budget -= panels.length;
-
-  const renders = await ctx.db
-    .query("chatHtmlRenders")
-    .withIndex("by_parent", (q) => q.eq("parentId", sessionId))
-    .take(budget);
-  for (const row of renders) await ctx.db.patch(row._id, { parentId: chatId });
-  budget -= renders.length;
-
-  const envRequests = await ctx.db
-    .query("envVarRequests")
-    .withIndex("by_parent", (q) => q.eq("parentId", sessionId))
-    .take(budget);
-  for (const row of envRequests) {
-    await ctx.db.patch(row._id, { parentId: chatId });
-  }
-  budget -= envRequests.length;
-
-  // `drafts` is indexed by user first; other users' pre-chat drafts are moved
-  // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
-  const drafts = await ctx.db
-    .query("drafts")
-    .withIndex("by_user_and_session", (q) =>
-      q.eq("userId", session.userId).eq("sessionId", sessionId),
-    )
-    .collect();
-  for (const draft of drafts) {
-    if (draft.kind === "sessionChat" && draft.chatId === undefined) {
-      await ctx.db.patch(draft._id, { chatId });
-    }
-  }
-
-  // A spent budget means more rows may remain (an empty extra run is harmless).
-  if (budget <= 0) {
+  const chat = await insertMainChat(ctx, session);
+  const moved = await moveLegacyTranscriptPage(ctx, session._id, chat._id);
+  if (!moved) {
     await ctx.scheduler.runAfter(
       0,
-      internal._sessionChats.mutations.moveLegacyRows,
-      { sessionId, chatId },
+      internal._sessionChats.mutations.moveLegacyTranscript,
+      { sessionId: session._id, chatId: chat._id },
     );
   }
+  return chat;
 }
 
 /**

@@ -171,7 +171,7 @@ describe("legacy session rows move onto the Main chat", () => {
       vi.useFakeTimers();
       const f = await fixture();
       await f.t.run(async (ctx) => {
-        for (let i = 0; i < 450; i++) {
+        for (let i = 0; i < 1200; i++) {
           await ctx.db.insert("messages", {
             parentId: f.sessionId,
             role: "user",
@@ -191,7 +191,7 @@ describe("legacy session rows move onto the Main chat", () => {
 
       await f.t.finishAllScheduledFunctions(vi.runAllTimers);
       expect((await rowsOn(f, f.sessionId)).messages).toBe(0);
-      expect((await rowsOn(f, chat._id)).messages).toBe(450);
+      expect((await rowsOn(f, chat._id)).messages).toBe(1200);
     },
     TIMEOUT_MS,
   );

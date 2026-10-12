@@ -3,10 +3,11 @@ import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
 import {
   findMainChat,
-  moveLegacySessionRows,
+  moveLegacyTranscriptPage,
 } from "../_sessionChats/helpers";
 
-const SESSIONS_PER_BATCH = 10;
+/** Each session may read one 2 MiB page; 5 stays well under the 16 MiB limit. */
+const SESSIONS_PER_BATCH = 5;
 const DRAFTS_PER_BATCH = 200;
 
 /**
@@ -16,7 +17,7 @@ const DRAFTS_PER_BATCH = 200;
  * chat id) hid them. This pass moves them.
  *
  * Self-scheduling by `_creationTime` cursor: first over sessions (each one's
- * leftover rows, batched by `moveLegacySessionRows`), then over `drafts`
+ * leftover rows, paged by `moveLegacyTranscriptPage`), then over `drafts`
  * (indexed by user first, so other users' drafts need a table pass). Safe to
  * re-run. Sessions without a Main chat are skipped; `ensureMainChat` moves
  * their rows when they get one.
@@ -29,14 +30,23 @@ export const moveLegacyChatRows = internalMutation({
   handler: async (ctx, args) => {
     const cursor = args.cursor;
     const base = ctx.db.query("sessions").order("asc");
-    const sessions = await (cursor === undefined
-      ? base
-      : base.filter((q) => q.gt(q.field("_creationTime"), cursor))
+    const sessions = await (
+      cursor === undefined
+        ? base
+        : base.filter((q) => q.gt(q.field("_creationTime"), cursor))
     ).take(SESSIONS_PER_BATCH);
 
     for (const session of sessions) {
       const chat = await findMainChat(ctx.db, session._id);
-      if (chat) await moveLegacySessionRows(ctx, session, chat._id);
+      if (!chat) continue;
+      const moved = await moveLegacyTranscriptPage(ctx, session._id, chat._id);
+      if (!moved) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal._sessionChats.mutations.moveLegacyTranscript,
+          { sessionId: session._id, chatId: chat._id },
+        );
+      }
     }
 
     const last = sessions[sessions.length - 1];
@@ -65,9 +75,10 @@ export const moveLegacySessionDrafts = internalMutation({
   handler: async (ctx, args) => {
     const cursor = args.cursor;
     const base = ctx.db.query("drafts").order("asc");
-    const drafts = await (cursor === undefined
-      ? base
-      : base.filter((q) => q.gt(q.field("_creationTime"), cursor))
+    const drafts = await (
+      cursor === undefined
+        ? base
+        : base.filter((q) => q.gt(q.field("_creationTime"), cursor))
     ).take(DRAFTS_PER_BATCH);
 
     for (const draft of drafts) {

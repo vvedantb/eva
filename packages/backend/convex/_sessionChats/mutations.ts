@@ -12,9 +12,34 @@ import {
   createSessionChat,
   ensureMainChat,
   getSessionChatOrThrow,
-  moveLegacySessionRows,
+  moveLegacyTranscriptPage,
   sessionChatValidator,
 } from "./helpers";
+
+/**
+ * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
+ * session's legacy transcript onto its Main chat and reschedules itself
+ * until none is left.
+ */
+export const moveLegacyTranscript = internalMutation({
+  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const done = await moveLegacyTranscriptPage(
+      ctx,
+      args.sessionId,
+      args.chatId,
+    );
+    if (!done) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._sessionChats.mutations.moveLegacyTranscript,
+        args,
+      );
+    }
+    return null;
+  },
+});
 
 /**
  * Page-open hook: gives a session predating chats its Main chat (and moves
@@ -30,19 +55,6 @@ export const ensureMain = authMutation({
       throw new Error("Not authorized");
     }
     return await ensureMainChat(ctx, session);
-  },
-});
-
-/** Next batch of `moveLegacySessionRows`; reschedules itself until the session id holds no chat rows. */
-export const moveLegacyRows = internalMutation({
-  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    const chat = await ctx.db.get(args.chatId);
-    if (!session || !chat) return null;
-    await moveLegacySessionRows(ctx, session, chat._id);
-    return null;
   },
 });
 
@@ -67,7 +79,7 @@ export const create = authMutation({
     await ensureMainChat(ctx, session);
     const inheritFrom =
       args.fromChatId !== undefined
-        ? (await ctx.db.get(args.fromChatId)) ?? undefined
+        ? ((await ctx.db.get(args.fromChatId)) ?? undefined)
         : undefined;
     return await createSessionChat(ctx, {
       session,
