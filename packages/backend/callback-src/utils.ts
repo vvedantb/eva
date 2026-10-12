@@ -16,8 +16,9 @@ import {
   CLAUDE_SYNC_TIMEOUT_MS,
   WORK_DIR,
 } from "./config.js";
+import { isJsonObject } from "./jsonGuards.js";
 import { callbackState as S } from "./runtime/state.js";
-import type { JsonValue } from "./types.js";
+import type { JsonObject, JsonValue } from "./types.js";
 
 /** Narrow JSON.parse / Response.json() payloads into JsonValue (null if invalid). */
 function narrowJsonValue(
@@ -78,7 +79,12 @@ export function log(msg: string): void {
   }
 }
 
-export { asJsonObject, isJsonObject, trimmedString } from "./jsonGuards.js";
+export { isJsonObject, trimmedString } from "./jsonGuards.js";
+
+/** Coerces a JSON value to an object; non-objects become `{}`. */
+export function asJsonObject(value: JsonValue | undefined): JsonObject {
+  return isJsonObject(value) ? value : {};
+}
 
 /** Attempts to parse a JSON string, returning null on failure. */
 export function tryParseJson(text: string): JsonValue | null {

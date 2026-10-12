@@ -474,6 +474,14 @@ import {
   writeFileSync
 } from "fs";
 
+// callback-src/jsonGuards.ts
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function trimmedString(value) {
+  return typeof value === "string" ? value.trim() || void 0 : void 0;
+}
+
 // callback-src/parse/questionInput.ts
 function parseQuestionOptions(value) {
   if (!Array.isArray(value)) return [];
@@ -502,17 +510,6 @@ function parseQuestionInput(input) {
     });
   }
   return questions.length > 0 ? questions : void 0;
-}
-
-// callback-src/jsonGuards.ts
-function isJsonObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function asJsonObject(value) {
-  return isJsonObject(value) ? value : {};
-}
-function trimmedString(value) {
-  return typeof value === "string" ? value.trim() || void 0 : void 0;
 }
 
 // callback-src/runtime/state.ts
@@ -776,6 +773,9 @@ function log(msg) {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
   } catch {
   }
+}
+function asJsonObject(value) {
+  return isJsonObject(value) ? value : {};
 }
 function tryParseJson(text) {
   try {

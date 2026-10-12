@@ -10,11 +10,6 @@ export function isJsonObject(
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Coerces a JSON value to an object; non-objects become `{}`. */
-export function asJsonObject(value: JsonValue | undefined): JsonObject {
-  return isJsonObject(value) ? value : {};
-}
-
 /** Trimmed string value, or undefined when missing/blank. */
 export function trimmedString(
   value: JsonValue | undefined,
