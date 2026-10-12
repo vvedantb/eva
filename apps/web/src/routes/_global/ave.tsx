@@ -22,7 +22,7 @@ function AveRoute() {
           Manager Ave
         </span>
       </div>
-      <AveChat />
+      <AveChat size="page" />
     </div>
   );
 }
