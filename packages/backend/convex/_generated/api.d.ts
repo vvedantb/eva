@@ -20,6 +20,7 @@ import type * as _agentTasks_queries from "../_agentTasks/queries.js";
 import type * as _agentTasks_readiness from "../_agentTasks/readiness.js";
 import type * as _agentTasks_runSummary from "../_agentTasks/runSummary.js";
 import type * as _agentTasks_sandbox from "../_agentTasks/sandbox.js";
+import type * as _agentTasks_updateTask from "../_agentTasks/updateTask.js";
 import type * as _ai_gatewayErrors from "../_ai/gatewayErrors.js";
 import type * as _arena_browserRun from "../_arena/browserRun.js";
 import type * as _auth_currentUser from "../_auth/currentUser.js";
@@ -555,6 +556,7 @@ declare const fullApi: ApiFromModules<{
   "_agentTasks/readiness": typeof _agentTasks_readiness;
   "_agentTasks/runSummary": typeof _agentTasks_runSummary;
   "_agentTasks/sandbox": typeof _agentTasks_sandbox;
+  "_agentTasks/updateTask": typeof _agentTasks_updateTask;
   "_ai/gatewayErrors": typeof _ai_gatewayErrors;
   "_arena/browserRun": typeof _arena_browserRun;
   "_auth/currentUser": typeof _auth_currentUser;

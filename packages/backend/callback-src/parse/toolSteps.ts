@@ -143,6 +143,244 @@ export function opencodeToolToStep(part: JsonObject): ProgressStep {
   return step;
 }
 
+type ToolStepRule<F> = {
+  matches: (tool: string) => boolean;
+  toStep: (fields: F, tool: string) => ProgressStep;
+};
+
+type CursorToolFields = {
+  args: JsonObject;
+  rawPath: string;
+  path: string;
+  command: string;
+  query: string;
+};
+
+function pickCursorString(args: JsonObject, keys: string[]): string {
+  for (const key of keys) {
+    const value = args[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function getCursorToolFields(args: JsonObject): CursorToolFields {
+  const rawPath = pickCursorString(args, [
+    "path",
+    "file_path",
+    "filePath",
+    "target_file",
+    "targetFile",
+    "relativePath",
+    "relative_path",
+  ]);
+  return {
+    args,
+    rawPath,
+    path: rawPath ? shortenPath(rawPath) : "",
+    command: pickCursorString(args, ["command", "cmd"]),
+    query: pickCursorString(args, [
+      "query",
+      "pattern",
+      "url",
+      "glob_pattern",
+      "globPattern",
+    ]),
+  };
+}
+
+function cursorPathStep(
+  type: string,
+  label: string,
+  fields: CursorToolFields,
+): ProgressStep {
+  return {
+    type,
+    label,
+    detail: fields.path || undefined,
+    path: fields.rawPath || undefined,
+    status: "active",
+  };
+}
+
+function cursorDetailStep(
+  type: string,
+  label: string,
+  detail: string,
+): ProgressStep {
+  return { type, label, detail: detail || undefined, status: "active" };
+}
+
+function cursorShellStep(fields: CursorToolFields): ProgressStep {
+  const { command } = fields;
+  return {
+    type: "bash",
+    label: "Running command...",
+    detail: command ? command.slice(0, 300) : undefined,
+    command: command ? capCommand(command) : undefined,
+    status: "active",
+  };
+}
+
+function cursorTasksStep(): ProgressStep {
+  return { type: "tool", label: "Updating tasks...", status: "active" };
+}
+
+function cursorMcpStep(fields: CursorToolFields): ProgressStep {
+  const server = pickCursorString(fields.args, [
+    "server",
+    "serverName",
+    "server_name",
+    "toolName",
+    "tool_name",
+  ]);
+  return {
+    type: "tool",
+    label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
+    status: "active",
+  };
+}
+
+function cursorSearchCodeStep(fields: CursorToolFields): ProgressStep {
+  return cursorDetailStep(
+    "search_code",
+    "Searching code...",
+    fields.query || fields.path,
+  );
+}
+
+/** Known Cursor SDK tool kinds, matched by exact name. */
+const CURSOR_KNOWN_TOOL_STEPS = new Map<
+  string,
+  (fields: CursorToolFields) => ProgressStep
+>([
+  ["read", (f) => cursorPathStep("read", "Reading file...", f)],
+  [
+    "write",
+    (f) => {
+      const fileText = pickCursorString(f.args, [
+        "fileText",
+        "file_text",
+        "content",
+        "contents",
+      ]);
+      return {
+        type: "write",
+        label: "Creating file...",
+        detail: f.path || undefined,
+        path: f.rawPath || undefined,
+        contentPreview: fileText ? capContentPreview(fileText) : undefined,
+        status: "active",
+      };
+    },
+  ],
+  [
+    "edit",
+    (f) => ({
+      type: "edit",
+      label: "Editing file...",
+      detail: f.path || undefined,
+      path: f.rawPath || undefined,
+      edits: extractClaudeEdits(f.args),
+      status: "active",
+    }),
+  ],
+  ["delete", (f) => cursorPathStep("edit", "Deleting file...", f)],
+  [
+    "glob",
+    (f) =>
+      cursorDetailStep("search_files", "Searching files...", f.query || f.path),
+  ],
+  ["ls", (f) => cursorDetailStep("search_files", "Searching files...", f.path)],
+  ["grep", cursorSearchCodeStep],
+  ["semSearch", cursorSearchCodeStep],
+  ["shell", cursorShellStep],
+  [
+    "task",
+    (f) =>
+      cursorDetailStep(
+        "subtask",
+        "Running agent...",
+        pickCursorString(f.args, ["description", "prompt"]),
+      ),
+  ],
+  ["createPlan", cursorTasksStep],
+  ["updateTodos", cursorTasksStep],
+  ["mcp", cursorMcpStep],
+]);
+
+/** Heuristic fallbacks for renamed/unknown tools, checked in order against the lowercased name. */
+const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
+  {
+    matches: (tool) => tool.includes("read"),
+    toStep: (f) => cursorPathStep("read", "Reading file...", f),
+  },
+  {
+    matches: (tool) => tool.includes("write") || tool.includes("create"),
+    toStep: (f) => cursorPathStep("write", "Creating file...", f),
+  },
+  {
+    matches: (tool) =>
+      tool.includes("edit") ||
+      tool.includes("patch") ||
+      tool.includes("apply") ||
+      tool.includes("replace"),
+    toStep: (f) => ({
+      ...cursorPathStep("edit", "Editing file...", f),
+      edits: extractClaudeEdits(f.args),
+    }),
+  },
+  {
+    matches: (tool) => tool.includes("delete") || tool.includes("remove"),
+    toStep: (f) => cursorPathStep("edit", "Deleting file...", f),
+  },
+  {
+    matches: (tool) => tool.includes("glob") || tool.includes("list"),
+    toStep: (f) =>
+      cursorDetailStep("search_files", "Searching files...", f.query || f.path),
+  },
+  {
+    matches: (tool) => tool.includes("grep") || tool.includes("search"),
+    toStep: (f, tool) =>
+      cursorDetailStep(
+        tool.includes("file") ? "search_files" : "search_code",
+        tool.includes("file") ? "Searching files..." : "Searching code...",
+        f.query || f.path,
+      ),
+  },
+  {
+    matches: (tool) =>
+      tool.includes("bash") ||
+      tool.includes("shell") ||
+      tool.includes("exec") ||
+      tool.includes("command") ||
+      tool.includes("terminal"),
+    toStep: cursorShellStep,
+  },
+  {
+    matches: (tool) =>
+      tool.includes("webfetch") ||
+      tool.includes("web_fetch") ||
+      (tool.includes("fetch") && !tool.includes("search")),
+    toStep: (f) => cursorDetailStep("web_fetch", "Fetching URL...", f.query),
+  },
+  {
+    matches: (tool) =>
+      tool.includes("websearch") || tool.includes("web_search"),
+    toStep: (f) => cursorDetailStep("web_search", "Searching web...", f.query),
+  },
+  {
+    matches: (tool) => tool.includes("todo") || tool.includes("plan"),
+    toStep: cursorTasksStep,
+  },
+  {
+    matches: (tool) => tool.includes("mcp"),
+    toStep: cursorMcpStep,
+  },
+];
+
 /**
  * Converts a Cursor SDK tool_call event (flat `name` + `args`) into a UI
  * progress step. Known SDK tool kinds map directly; a heuristic chain catches
@@ -152,242 +390,15 @@ export function cursorSdkToolToStep(
   name: string,
   args: JsonObject,
 ): ProgressStep {
-  const pickString = (keys: string[]): string => {
-    for (const key of keys) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return value;
-      }
-    }
-    return "";
-  };
-  const rawPath = pickString([
-    "path",
-    "file_path",
-    "filePath",
-    "target_file",
-    "targetFile",
-    "relativePath",
-    "relative_path",
-  ]);
-  const path = rawPath ? shortenPath(rawPath) : "";
-  const command = pickString(["command", "cmd"]);
-  const query = pickString([
-    "query",
-    "pattern",
-    "url",
-    "glob_pattern",
-    "globPattern",
-  ]);
-
-  switch (name) {
-    case "read":
-      return {
-        type: "read",
-        label: "Reading file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        status: "active",
-      };
-    case "write": {
-      const fileText = pickString([
-        "fileText",
-        "file_text",
-        "content",
-        "contents",
-      ]);
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        contentPreview: fileText ? capContentPreview(fileText) : undefined,
-        status: "active",
-      };
-    }
-    case "edit":
-      return {
-        type: "edit",
-        label: "Editing file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        edits: extractClaudeEdits(args),
-        status: "active",
-      };
-    case "delete":
-      return {
-        type: "edit",
-        label: "Deleting file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        status: "active",
-      };
-    case "glob":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: query || path || undefined,
-        status: "active",
-      };
-    case "ls":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: path || undefined,
-        status: "active",
-      };
-    case "grep":
-    case "semSearch":
-      return {
-        type: "search_code",
-        label: "Searching code...",
-        detail: query || path || undefined,
-        status: "active",
-      };
-    case "shell":
-      return {
-        type: "bash",
-        label: "Running command...",
-        detail: command ? command.slice(0, 300) : undefined,
-        command: command ? capCommand(command) : undefined,
-        status: "active",
-      };
-    case "task":
-      return {
-        type: "subtask",
-        label: "Running agent...",
-        detail: pickString(["description", "prompt"]) || undefined,
-        status: "active",
-      };
-    case "createPlan":
-    case "updateTodos":
-      return { type: "tool", label: "Updating tasks...", status: "active" };
-    case "mcp": {
-      const server = pickString([
-        "server",
-        "serverName",
-        "server_name",
-        "toolName",
-        "tool_name",
-      ]);
-      return {
-        type: "tool",
-        label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-        status: "active",
-      };
-    }
+  const fields = getCursorToolFields(args);
+  const known = CURSOR_KNOWN_TOOL_STEPS.get(name);
+  if (known) {
+    return known(fields);
   }
-
   const tool = name.toLowerCase();
-  if (tool.includes("read")) {
-    return {
-      type: "read",
-      label: "Reading file...",
-      detail: path || undefined,
-      path: rawPath || undefined,
-      status: "active",
-    };
-  }
-  if (tool.includes("write") || tool.includes("create")) {
-    return {
-      type: "write",
-      label: "Creating file...",
-      detail: path || undefined,
-      path: rawPath || undefined,
-      status: "active",
-    };
-  }
-  if (
-    tool.includes("edit") ||
-    tool.includes("patch") ||
-    tool.includes("apply") ||
-    tool.includes("replace")
-  ) {
-    return {
-      type: "edit",
-      label: "Editing file...",
-      detail: path || undefined,
-      path: rawPath || undefined,
-      status: "active",
-      edits: extractClaudeEdits(args),
-    };
-  }
-  if (tool.includes("delete") || tool.includes("remove")) {
-    return {
-      type: "edit",
-      label: "Deleting file...",
-      detail: path || undefined,
-      path: rawPath || undefined,
-      status: "active",
-    };
-  }
-  if (tool.includes("glob") || tool.includes("list")) {
-    return {
-      type: "search_files",
-      label: "Searching files...",
-      detail: query || path || undefined,
-      status: "active",
-    };
-  }
-  if (tool.includes("grep") || tool.includes("search")) {
-    return {
-      type: tool.includes("file") ? "search_files" : "search_code",
-      label: tool.includes("file") ? "Searching files..." : "Searching code...",
-      detail: query || path || undefined,
-      status: "active",
-    };
-  }
-  if (
-    tool.includes("bash") ||
-    tool.includes("shell") ||
-    tool.includes("exec") ||
-    tool.includes("command") ||
-    tool.includes("terminal")
-  ) {
-    return {
-      type: "bash",
-      label: "Running command...",
-      detail: command ? command.slice(0, 300) : undefined,
-      command: command ? capCommand(command) : undefined,
-      status: "active",
-    };
-  }
-  if (
-    tool.includes("webfetch") ||
-    tool.includes("web_fetch") ||
-    (tool.includes("fetch") && !tool.includes("search"))
-  ) {
-    return {
-      type: "web_fetch",
-      label: "Fetching URL...",
-      detail: query || undefined,
-      status: "active",
-    };
-  }
-  if (tool.includes("websearch") || tool.includes("web_search")) {
-    return {
-      type: "web_search",
-      label: "Searching web...",
-      detail: query || undefined,
-      status: "active",
-    };
-  }
-  if (tool.includes("todo") || tool.includes("plan")) {
-    return { type: "tool", label: "Updating tasks...", status: "active" };
-  }
-  if (tool.includes("mcp")) {
-    const server = pickString([
-      "server",
-      "serverName",
-      "server_name",
-      "toolName",
-      "tool_name",
-    ]);
-    return {
-      type: "tool",
-      label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-      status: "active",
-    };
+  const rule = CURSOR_HEURISTIC_TOOL_STEPS.find((r) => r.matches(tool));
+  if (rule) {
+    return rule.toStep(fields, tool);
   }
   return {
     type: "tool",
@@ -611,12 +622,21 @@ export function getCodexAgentMessageText(item: JsonObject): string {
   return parts.join("");
 }
 
-export function codexItemToStep(item: JsonObject): ProgressStep {
+type CodexItemFields = {
+  item: JsonObject;
+  itemType: string;
+  pathValue: string;
+  pathDetail: string;
+  queryValue: string;
+  commandValue: string;
+  descriptionValue: string;
+};
+
+function getCodexItemFields(item: JsonObject): CodexItemFields {
   const itemType =
     item && typeof item.type === "string" && item.type.trim()
       ? item.type.trim()
       : "tool";
-  const normalizedType = itemType.toLowerCase();
   const pathValue = getCodexFieldValue(item, [
     "file_path",
     "path",
@@ -624,153 +644,165 @@ export function codexItemToStep(item: JsonObject): ProgressStep {
     "target_path",
     "notebook_path",
   ]);
-  const queryValue = getCodexFieldValue(item, ["query", "pattern", "url"]);
-  const commandValue = getCodexFieldValue(item, ["command", "cmd"]);
-  const descriptionValue = getCodexFieldValue(item, [
-    "description",
-    "name",
-    "tool",
-    "skill",
-  ]);
-  const normalizedDescription = descriptionValue.toLowerCase();
-  const pathDetail = pathValue ? shortenPath(String(pathValue)) : "";
-  const itemId =
-    typeof item.id === "string" && item.id.trim() ? item.id.trim() : undefined;
-
-  const withId = (step: ProgressStep): ProgressStep => {
-    if (itemId) step.toolUseId = itemId;
-    return step;
+  return {
+    item,
+    itemType,
+    pathValue,
+    queryValue: getCodexFieldValue(item, ["query", "pattern", "url"]),
+    commandValue: getCodexFieldValue(item, ["command", "cmd"]),
+    descriptionValue: getCodexFieldValue(item, [
+      "description",
+      "name",
+      "tool",
+      "skill",
+    ]),
+    pathDetail: pathValue ? shortenPath(String(pathValue)) : "",
   };
+}
 
-  if (
-    normalizedType.includes("file_change") ||
-    normalizedType === "filechange"
-  ) {
-    const files = extractFilePaths(item);
-    return withId({
-      type: "edit",
-      label: "Editing file...",
-      detail: files[0] ? shortenPath(files[0]) : pathDetail || undefined,
-      path: files[0] || pathValue || undefined,
-      files: files.length > 0 ? files : undefined,
-      status: "active",
-    });
-  }
+function codexPathStep(
+  type: string,
+  label: string,
+  fields: CodexItemFields,
+): ProgressStep {
+  return {
+    type,
+    label,
+    detail: fields.pathDetail || undefined,
+    path: fields.pathValue || undefined,
+    status: "active",
+  };
+}
 
-  if (normalizedType === "mcp_tool_call" || normalizedType === "mcptoolcall") {
-    if (normalizedDescription.includes("fetch_file")) {
-      return withId({
-        type: "read",
-        label: "Reading file...",
-        detail: descriptionValue || undefined,
-        status: "active",
-      });
-    }
-    if (
-      normalizedDescription.includes("search") ||
-      normalizedDescription.includes("list_repositories") ||
-      normalizedDescription.includes("list_mcp_resources")
-    ) {
-      return withId({
-        type: "search_code",
-        label: "Searching code...",
-        detail: descriptionValue || undefined,
-        status: "active",
-      });
-    }
-    return withId({
-      type: "tool",
-      label: "Using MCP...",
-      detail: descriptionValue || undefined,
-      status: "active",
-    });
-  }
+function codexDetailStep(
+  type: string,
+  label: string,
+  detail: string,
+): ProgressStep {
+  return { type, label, detail: detail || undefined, status: "active" };
+}
 
-  if (normalizedType.includes("web")) {
-    return withId({
-      type: normalizedType.includes("search") ? "web_search" : "web_fetch",
-      label: normalizedType.includes("search")
-        ? "Searching web..."
-        : "Fetching URL...",
-      detail: queryValue || pathDetail || undefined,
-      status: "active",
-    });
-  }
-  if (normalizedType.includes("read")) {
-    return withId({
-      type: "read",
-      label: "Reading file...",
-      detail: pathDetail || undefined,
-      path: pathValue || undefined,
-      status: "active",
-    });
-  }
-  if (normalizedType.includes("grep") || normalizedType.includes("search")) {
-    return withId({
-      type: normalizedType.includes("file") ? "search_files" : "search_code",
-      label: normalizedType.includes("file")
-        ? "Searching files..."
-        : "Searching code...",
-      detail: queryValue || pathDetail || undefined,
-      status: "active",
-    });
-  }
-  if (normalizedType.includes("glob") || normalizedType.includes("list")) {
-    return withId({
-      type: "search_files",
-      label: "Searching files...",
-      detail: queryValue || pathDetail || undefined,
-      status: "active",
-    });
-  }
-  if (normalizedType.includes("write") || normalizedType.includes("create")) {
-    return withId({
-      type: "write",
-      label: "Creating file...",
-      detail: pathDetail || undefined,
-      path: pathValue || undefined,
-      status: "active",
-    });
+function codexFileChangeStep(fields: CodexItemFields): ProgressStep {
+  const files = extractFilePaths(fields.item);
+  return {
+    type: "edit",
+    label: "Editing file...",
+    detail: files[0] ? shortenPath(files[0]) : fields.pathDetail || undefined,
+    path: files[0] || fields.pathValue || undefined,
+    files: files.length > 0 ? files : undefined,
+    status: "active",
+  };
+}
+
+function codexMcpToolStep(fields: CodexItemFields): ProgressStep {
+  const { descriptionValue } = fields;
+  const normalizedDescription = descriptionValue.toLowerCase();
+  if (normalizedDescription.includes("fetch_file")) {
+    return codexDetailStep("read", "Reading file...", descriptionValue);
   }
   if (
-    normalizedType.includes("edit") ||
-    normalizedType.includes("patch") ||
-    normalizedType.includes("apply")
+    normalizedDescription.includes("search") ||
+    normalizedDescription.includes("list_repositories") ||
+    normalizedDescription.includes("list_mcp_resources")
   ) {
-    return withId({
-      type: "edit",
-      label: "Editing file...",
-      detail: pathDetail || undefined,
-      path: pathValue || undefined,
-      status: "active",
-    });
+    return codexDetailStep(
+      "search_code",
+      "Searching code...",
+      descriptionValue,
+    );
   }
-  if (
-    normalizedType.includes("command") ||
-    normalizedType.includes("shell") ||
-    normalizedType.includes("bash") ||
-    normalizedType.includes("exec")
-  ) {
-    return withId({
+  return codexDetailStep("tool", "Using MCP...", descriptionValue);
+}
+
+/** Codex item kinds, checked in order against the lowercased item type. */
+const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
+  {
+    matches: (type) => type.includes("file_change") || type === "filechange",
+    toStep: codexFileChangeStep,
+  },
+  {
+    matches: (type) => type === "mcp_tool_call" || type === "mcptoolcall",
+    toStep: codexMcpToolStep,
+  },
+  {
+    matches: (type) => type.includes("web"),
+    toStep: (f, type) =>
+      codexDetailStep(
+        type.includes("search") ? "web_search" : "web_fetch",
+        type.includes("search") ? "Searching web..." : "Fetching URL...",
+        f.queryValue || f.pathDetail,
+      ),
+  },
+  {
+    matches: (type) => type.includes("read"),
+    toStep: (f) => codexPathStep("read", "Reading file...", f),
+  },
+  {
+    matches: (type) => type.includes("grep") || type.includes("search"),
+    toStep: (f, type) =>
+      codexDetailStep(
+        type.includes("file") ? "search_files" : "search_code",
+        type.includes("file") ? "Searching files..." : "Searching code...",
+        f.queryValue || f.pathDetail,
+      ),
+  },
+  {
+    matches: (type) => type.includes("glob") || type.includes("list"),
+    toStep: (f) =>
+      codexDetailStep(
+        "search_files",
+        "Searching files...",
+        f.queryValue || f.pathDetail,
+      ),
+  },
+  {
+    matches: (type) => type.includes("write") || type.includes("create"),
+    toStep: (f) => codexPathStep("write", "Creating file...", f),
+  },
+  {
+    matches: (type) =>
+      type.includes("edit") || type.includes("patch") || type.includes("apply"),
+    toStep: (f) => codexPathStep("edit", "Editing file...", f),
+  },
+  {
+    matches: (type) =>
+      type.includes("command") ||
+      type.includes("shell") ||
+      type.includes("bash") ||
+      type.includes("exec"),
+    toStep: (f) => ({
       type: "bash",
       label: "Running command...",
-      detail: commandValue || descriptionValue || undefined,
-      command: commandValue ? capCommand(commandValue) : undefined,
+      detail: f.commandValue || f.descriptionValue || undefined,
+      command: f.commandValue ? capCommand(f.commandValue) : undefined,
       status: "active",
-    });
-  }
-  if (normalizedType.includes("agent") || normalizedType === "collabtoolcall") {
-    return withId({
-      type: "subtask",
-      label: "Running agent...",
-      detail: descriptionValue || undefined,
-      status: "active",
-    });
-  }
-  return withId({
-    type: "tool",
-    label: "Using " + itemType + "...",
-    detail: descriptionValue || pathDetail || queryValue || undefined,
-    status: "active",
-  });
+    }),
+  },
+  {
+    matches: (type) => type.includes("agent") || type === "collabtoolcall",
+    toStep: (f) =>
+      codexDetailStep("subtask", "Running agent...", f.descriptionValue),
+  },
+];
+
+export function codexItemToStep(item: JsonObject): ProgressStep {
+  const fields = getCodexItemFields(item);
+  const normalizedType = fields.itemType.toLowerCase();
+  const itemId =
+    typeof item.id === "string" && item.id.trim() ? item.id.trim() : undefined;
+  const rule = CODEX_ITEM_STEPS.find((r) => r.matches(normalizedType));
+  const step: ProgressStep = rule
+    ? rule.toStep(fields, normalizedType)
+    : {
+        type: "tool",
+        label: "Using " + fields.itemType + "...",
+        detail:
+          fields.descriptionValue ||
+          fields.pathDetail ||
+          fields.queryValue ||
+          undefined,
+        status: "active",
+      };
+  if (itemId) step.toolUseId = itemId;
+  return step;
 }

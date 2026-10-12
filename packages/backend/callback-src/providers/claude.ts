@@ -221,7 +221,11 @@ function parseClaudeUserEvent(event: JsonObject): CanonicalEvent[] {
     const toolUseId = trimmedString(block.tool_use_id);
     if (block.type === "tool_result" && toolUseId) {
       events.push(
-        claudeToolResultEvent(toolUseId, block.content, block.is_error === true),
+        claudeToolResultEvent(
+          toolUseId,
+          block.content,
+          block.is_error === true,
+        ),
       );
     }
   }
@@ -265,7 +269,11 @@ function pushClaudeToolUseEvents(
   // Fire-and-forget question metadata (surfaced after the turn). Skipped in
   // blocking mode, where canUseTool owns the question round-trip and driving
   // this too would double-render the question in the UI.
-  if (!BLOCKING_QUESTIONS_ENABLED && name === "AskUserQuestion" && block.input) {
+  if (
+    !BLOCKING_QUESTIONS_ENABLED &&
+    name === "AskUserQuestion" &&
+    block.input
+  ) {
     events.push({
       kind: "set_pending_question",
       data: JSON.stringify(block.input),

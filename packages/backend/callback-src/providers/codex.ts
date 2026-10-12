@@ -52,7 +52,10 @@ function codexToolCompleteEvent(
   return { kind: "mark_last_complete" };
 }
 
-function codexItemEvents(type: JsonValue | undefined, item: JsonObject): CanonicalEvent[] {
+function codexItemEvents(
+  type: JsonValue | undefined,
+  item: JsonObject,
+): CanonicalEvent[] {
   const isAgentMessage = isCodexAgentMessageType(item.type);
   if (type === "item.started" && isAgentMessage) {
     return [{ kind: "mark_message_start" }];
