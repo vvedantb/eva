@@ -527,7 +527,6 @@ import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 import type * as workflowManager from "../workflowManager.js";
 import type * as workflowWatchdog from "../workflowWatchdog.js";
-import type * as zzDevSeed from "../zzDevSeed.js";
 
 import type {
   ApiFromModules,
@@ -1055,7 +1054,6 @@ declare const fullApi: ApiFromModules<{
   validators: typeof validators;
   workflowManager: typeof workflowManager;
   workflowWatchdog: typeof workflowWatchdog;
-  zzDevSeed: typeof zzDevSeed;
 }>;
 
 /**
