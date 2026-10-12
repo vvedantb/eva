@@ -425,7 +425,9 @@ function UserTurnBubble({
                 "rounded-surface bg-muted group-[.is-user]:bg-muted"
               : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
         )}
-        style={isOtherUser ? { borderRadius: otherUserBubbleRadius() } : undefined}
+        style={
+          isOtherUser ? { borderRadius: otherUserBubbleRadius() } : undefined
+        }
       >
         <UserMessageBody message={message} repo={repo} />
       </MessageContent>
