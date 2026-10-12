@@ -1,4 +1,5 @@
-import { v } from "convex/values";
+import { getConvexSize, v } from "convex/values";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { getAIModelProvider } from "../validators";
@@ -186,20 +187,77 @@ function copyChatSettings(source: ChatSettingsSource): ChatSettingsSource {
 }
 
 /**
- * Inserts the Main chat for a session that does not have one yet, carrying
- * the session's composer settings over, and repoints the session's legacy
- * message and queue rows onto it. Idempotent. Called by every server path
- * that needs "the chat of this session" (session create, MCP sends, system
- * alerts) and by the page-open mutation, so a session predating chats gets
- * its Main chat the first time anything touches it.
+ * Bytes and rows one `moveLegacyTranscriptPage` call may read. Heavy sessions
+ * hold transcripts far over the 16 MiB per-function read limit, so the move
+ * runs in bounded pages across mutations instead of one `collect()`.
  */
-export async function ensureMainChat(
+const LEGACY_TRANSCRIPT_PAGE_BYTES = 2 * 1024 * 1024;
+const LEGACY_TRANSCRIPT_PAGE_ROWS = 500;
+
+/**
+ * Reads the next bounded page of an index range. `full` means the page hit
+ * the budget, so more rows may remain.
+ */
+async function takeBoundedPage<
+  T extends Doc<"messages"> | Doc<"queuedMessages">,
+>(
+  rows: AsyncIterable<T>,
+  maxBytes: number,
+): Promise<{ page: T[]; bytes: number; full: boolean }> {
+  const page: T[] = [];
+  let bytes = 0;
+  for await (const row of rows) {
+    page.push(row);
+    bytes += getConvexSize(row);
+    if (bytes >= maxBytes || page.length >= LEGACY_TRANSCRIPT_PAGE_ROWS) {
+      return { page, bytes, full: true };
+    }
+  }
+  return { page, bytes, full: false };
+}
+
+/**
+ * Repoints one bounded page of a session's legacy message and queue rows onto
+ * its Main chat. Returns true once no legacy row is left. Moved rows leave
+ * the `parentId = sessionId` range, so every call starts from the front and
+ * a rerun after a failure resumes where the last commit stopped.
+ */
+export async function moveLegacyTranscriptPage(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
+): Promise<boolean> {
+  const messages = await takeBoundedPage(
+    ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+    LEGACY_TRANSCRIPT_PAGE_BYTES,
+  );
+  for (const message of messages.page) {
+    await ctx.db.patch(message._id, { parentId: chatId });
+  }
+  if (messages.full) return false;
+
+  const queued = await takeBoundedPage(
+    ctx.db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId)),
+    LEGACY_TRANSCRIPT_PAGE_BYTES - messages.bytes,
+  );
+  for (const row of queued.page) {
+    await ctx.db.patch(row._id, { parentId: chatId });
+  }
+  return !queued.full;
+}
+
+/**
+ * Inserts the Main chat row for a session, carrying the session's composer
+ * settings over. Does not touch the transcript; see `ensureMainChat`.
+ */
+export async function insertMainChat(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<Doc<"sessionChats">> {
-  const existing = await findMainChat(ctx.db, session._id);
-  if (existing) return existing;
-
   const chatId = await ctx.db.insert("sessionChats", {
     sessionId: session._id,
     repoId: session.repoId,
@@ -216,25 +274,37 @@ export async function ensureMainChat(
       : {}),
     backgroundAgents: session.backgroundAgents,
   });
-
-  // Legacy rows keyed by the session id become the Main chat's transcript.
-  const legacyMessages = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", session._id))
-    .collect();
-  for (const message of legacyMessages) {
-    await ctx.db.patch(message._id, { parentId: chatId });
-  }
-  const legacyQueued = await ctx.db
-    .query("queuedMessages")
-    .withIndex("by_parent_and_order", (q) => q.eq("parentId", session._id))
-    .collect();
-  for (const queued of legacyQueued) {
-    await ctx.db.patch(queued._id, { parentId: chatId });
-  }
-
   const chat = await ctx.db.get(chatId);
   if (!chat) throw new Error("Main chat was not created");
+  return chat;
+}
+
+/**
+ * Returns the session's Main chat, creating it for a session that predates
+ * chats. On creation, legacy message and queue rows keyed by the session id
+ * become the chat's transcript: the first bounded page moves now, and
+ * `moveLegacyTranscript` moves the rest in later mutations. Idempotent.
+ * Called by every server path that needs "the chat of this session"
+ * (session create, MCP sends, system alerts) and by the page-open mutation,
+ * so a session predating chats gets its Main chat the first time anything
+ * touches it.
+ */
+export async function ensureMainChat(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<Doc<"sessionChats">> {
+  const existing = await findMainChat(ctx.db, session._id);
+  if (existing) return existing;
+
+  const chat = await insertMainChat(ctx, session);
+  const moved = await moveLegacyTranscriptPage(ctx, session._id, chat._id);
+  if (!moved) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal._sessionChats.mutations.moveLegacyTranscript,
+      { sessionId: session._id, chatId: chat._id },
+    );
+  }
   return chat;
 }
 

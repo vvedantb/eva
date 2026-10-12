@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
+import { internalMutation } from "../_generated/server";
 import { authMutation, hasRepoAccess } from "../functions";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 import {
@@ -11,8 +12,34 @@ import {
   createSessionChat,
   ensureMainChat,
   getSessionChatOrThrow,
+  moveLegacyTranscriptPage,
   sessionChatValidator,
 } from "./helpers";
+
+/**
+ * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
+ * session's legacy transcript onto its Main chat and reschedules itself
+ * until none is left.
+ */
+export const moveLegacyTranscript = internalMutation({
+  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const done = await moveLegacyTranscriptPage(
+      ctx,
+      args.sessionId,
+      args.chatId,
+    );
+    if (!done) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._sessionChats.mutations.moveLegacyTranscript,
+        args,
+      );
+    }
+    return null;
+  },
+});
 
 /**
  * Page-open hook: gives a session predating chats its Main chat (and moves
