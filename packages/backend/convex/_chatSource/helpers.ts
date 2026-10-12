@@ -36,12 +36,66 @@ export const chatSourceSummaryValidator = v.union(
 );
 type ChatSourceSummary = Infer<typeof chatSourceSummaryValidator>;
 
-type ChatSourceStoredFields = {
+export type ChatSourceStoredFields = {
   sourceKind?: "session" | "task" | "project";
   sourceSessionId?: Id<"sessions">;
   sourceTaskId?: Id<"agentTasks">;
   sourceProjectId?: Id<"projects">;
 };
+
+/**
+ * Stored source fields for a chat id with no caller check. For system writes
+ * keyed by a sandbox entity id or a message parent; null when the id is not a
+ * live session, quick task or project. A parallel chat id resolves to its
+ * session, which owns docs, artifacts and the Log.
+ */
+export async function chatSourceFieldsForEntityId(
+  db: GenericDatabaseReader<DataModel>,
+  entityId: string,
+): Promise<ChatSourceStoredFields | null> {
+  const sessionChatId = db.normalizeId("sessionChats", entityId);
+  if (sessionChatId) {
+    const chat = await db.get(sessionChatId);
+    return chat
+      ? chatSourceFieldsForEntityId(db, String(chat.sessionId))
+      : null;
+  }
+  const sessionId = db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    return (await db.get(sessionId))
+      ? { sourceKind: "session", sourceSessionId: sessionId }
+      : null;
+  }
+  const taskId = db.normalizeId("agentTasks", entityId);
+  if (taskId) {
+    return (await db.get(taskId))
+      ? { sourceKind: "task", sourceTaskId: taskId }
+      : null;
+  }
+  const projectId = db.normalizeId("projects", entityId);
+  if (projectId) {
+    return (await db.get(projectId))
+      ? { sourceKind: "project", sourceProjectId: projectId }
+      : null;
+  }
+  return null;
+}
+
+/** Inverse of the stored fields: the chat arg a row belongs to. */
+export function chatSourceArgFromFields(
+  row: ChatSourceStoredFields,
+): ChatSourceArg | null {
+  if (row.sourceKind === "session" && row.sourceSessionId) {
+    return { kind: "session", sessionId: row.sourceSessionId };
+  }
+  if (row.sourceKind === "task" && row.sourceTaskId) {
+    return { kind: "task", taskId: row.sourceTaskId };
+  }
+  if (row.sourceKind === "project" && row.sourceProjectId) {
+    return { kind: "project", projectId: row.sourceProjectId };
+  }
+  return null;
+}
 
 export type RepoCache = Map<string, Doc<"githubRepos"> | null>;
 
@@ -203,11 +257,16 @@ export function listRowsForChatSource(
   table: "artifacts",
   source: ChatSourceArg,
 ): Promise<Doc<"artifacts">[]>;
+export function listRowsForChatSource(
+  ctx: QueryCtx,
+  table: "chatLogEntries",
+  source: ChatSourceArg,
+): Promise<Doc<"chatLogEntries">[]>;
 export async function listRowsForChatSource(
   ctx: QueryCtx,
-  table: "docs" | "artifacts",
+  table: "docs" | "artifacts" | "chatLogEntries",
   source: ChatSourceArg,
-): Promise<Doc<"docs" | "artifacts">[]> {
+): Promise<Doc<"docs" | "artifacts" | "chatLogEntries">[]> {
   const query = ctx.db.query(table);
   if (source.kind === "session") {
     return query

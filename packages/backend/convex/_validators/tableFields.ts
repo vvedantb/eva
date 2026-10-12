@@ -9,6 +9,8 @@ import {
   backgroundProcessStatusValidator,
   deploymentStatusValidator,
   docKindValidator,
+  chatLogEntryKindValidator,
+  chatLogAuthorValidator,
   docVersionSourceValidator,
   errorTypeValidator,
   evaluationStatusValidator,
@@ -1517,6 +1519,28 @@ export const chatSourceFields = {
   sourceSessionId: v.optional(v.id("sessions")),
   sourceTaskId: v.optional(v.id("agentTasks")),
   sourceProjectId: v.optional(v.id("projects")),
+};
+
+/**
+ * One append-only entry in a chat's Log (Documents tab): a decision, change,
+ * research finding, answered question or note. Never edited; a changed
+ * decision is a new row that names the one it `supersedesId`.
+ */
+export const chatLogEntryFields = {
+  ...chatSourceFields,
+  // The chat's repo, for the repo Documents list. Absent only for a task with
+  // no repo of its own or through its project.
+  repoId: v.optional(v.id("githubRepos")),
+  kind: chatLogEntryKindValidator,
+  author: chatLogAuthorValidator,
+  title: v.string(),
+  body: v.optional(v.string()),
+  supersedesId: v.optional(v.id("chatLogEntries")),
+  // Assistant reply this entry came from (system change entries dedupe on it).
+  messageId: v.optional(v.id("messages")),
+  beforeSha: v.optional(v.string()),
+  afterSha: v.optional(v.string()),
+  createdAt: v.number(),
 };
 
 export const docFields = {

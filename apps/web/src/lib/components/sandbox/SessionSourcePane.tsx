@@ -88,6 +88,7 @@ export function useSourcePanelItem<T extends { _id: string }>(
   const openRow =
     openId === null ? null : (rows?.find((row) => row._id === openId) ?? null);
   return {
+    openId,
     openRow,
     open: (id: string) => void setOpenId(id),
     close: () => void setOpenId(null),

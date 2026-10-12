@@ -6,6 +6,11 @@ import {
   normalizeAIModel,
   type AIProvider,
 } from "../validators";
+import {
+  chatSourceArgFromFields,
+  chatSourceFieldsForEntityId,
+} from "../_chatSource/helpers";
+import { chatLogDigestBlock } from "../chatLog";
 
 /** Hard cap on the injected block, including its closing tag. */
 const HANDOFF_CONTEXT_LIMIT = 24_000;
@@ -291,7 +296,13 @@ export async function prependModelHandoffContext(
     incomingModel,
     fallbackPreviousProvider,
   );
-  return handoff.kind === "handoff"
-    ? `${handoff.contextBlock}\n\n${prompt}`
-    : prompt;
+  if (handoff.kind !== "handoff") return prompt;
+  // The incoming provider's own session has not seen this chat: give it the
+  // Log too, so agreed decisions survive the switch.
+  const stored = await chatSourceFieldsForEntityId(ctx.db, String(parentId));
+  const source = stored ? chatSourceArgFromFields(stored) : null;
+  const logBlock = source ? await chatLogDigestBlock(ctx, source) : "";
+  return [logBlock, handoff.contextBlock, prompt]
+    .filter((part) => part.length > 0)
+    .join("\n\n");
 }

@@ -5,6 +5,7 @@ import {
   buildReadableReposBlock,
   buildRootDirectoryInstruction,
   buildSystemPromptBlock,
+  CHAT_LOG_INSTRUCTION,
   CHAT_UI_INSTRUCTION,
   COMMUNICATION_STYLE_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
@@ -271,5 +272,5 @@ Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
 - Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh side branch, named after this one so Eva links the new PR to this chat: \`git fetch origin && git checkout --no-track -b ${branchName}-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/${branchName}-<short-slug>:refs/heads/${branchName}-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
 - Questions only: answer without unnecessary edits. No build/lint/test unless asked.
-- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
+- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
 }

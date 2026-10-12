@@ -35,6 +35,7 @@ import {
 import { ChatSourceBadge } from "@/lib/components/sandbox/ChatSourceBadge";
 import { NewDocumentDialog } from "@/lib/components/docs/NewDocumentDialog";
 import { useCreateDoc } from "@/lib/components/docs/useCreateDoc";
+import { ChatLogSidebarRows } from "@/lib/components/docs/chatLog/ChatLogSidebarRows";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
@@ -75,6 +76,7 @@ export function DocsSidebar({
     repoId,
     excludeEvaRecaps: true,
   });
+  const chatLogs = useQuery(api.chatLog.listForRepo, { repoId });
   const createDoc = useCreateDoc();
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
@@ -264,11 +266,11 @@ export function DocsSidebar({
       />
 
       <div className="flex-1">
-        {docs === undefined ? (
+        {docs === undefined || chatLogs === undefined ? (
           <div className="flex items-center justify-center py-8">
             <Spinner size="sm" />
           </div>
-        ) : filteredDocs.length === 0 ? (
+        ) : filteredDocs.length === 0 && chatLogs.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <IconFile
               size={20}
@@ -378,6 +380,11 @@ export function DocsSidebar({
                 </ListEnter>
               );
             })}
+            <ChatLogSidebarRows
+              logs={chatLogs}
+              indexOffset={filteredDocs.length}
+              onNavigate={onNavigate}
+            />
           </SharedLayoutNav>
         )}
       </div>

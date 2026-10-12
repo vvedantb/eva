@@ -46,6 +46,7 @@ import {
   connectedAccountFields,
   connectorOauthStateFields,
   docFields,
+  chatLogEntryFields,
   docCommentFields,
   docSubscriberFields,
   docVersionFields,
@@ -320,6 +321,13 @@ const schema = defineSchema({
     .index("by_source_project", ["sourceProjectId"])
     .index("by_repo_and_pr_url", ["repoId", "prUrl"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
+
+  chatLogEntries: defineTable(chatLogEntryFields)
+    .index("by_source_session", ["sourceSessionId"])
+    .index("by_source_task", ["sourceTaskId"])
+    .index("by_source_project", ["sourceProjectId"])
+    .index("by_message", ["messageId"])
+    .index("by_repo", ["repoId"]),
 
   docComments: defineTable(docCommentFields).index("by_doc", ["docId"]),
 

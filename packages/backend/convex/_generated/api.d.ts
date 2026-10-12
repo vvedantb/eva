@@ -361,6 +361,7 @@ import type * as backgroundProcesses from "../backgroundProcesses.js";
 import type * as buildWorkflow from "../buildWorkflow.js";
 import type * as changelog from "../changelog.js";
 import type * as chatHtml from "../chatHtml.js";
+import type * as chatLog from "../chatLog.js";
 import type * as chatReads from "../chatReads.js";
 import type * as chatUi from "../chatUi.js";
 import type * as composerPredictionContext from "../composerPredictionContext.js";
@@ -886,6 +887,7 @@ declare const fullApi: ApiFromModules<{
   buildWorkflow: typeof buildWorkflow;
   changelog: typeof changelog;
   chatHtml: typeof chatHtml;
+  chatLog: typeof chatLog;
   chatReads: typeof chatReads;
   chatUi: typeof chatUi;
   composerPredictionContext: typeof composerPredictionContext;

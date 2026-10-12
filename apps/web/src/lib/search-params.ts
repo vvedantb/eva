@@ -412,6 +412,20 @@ export const docModeParser = parseAsStringLiteral(docModes)
 // Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
 export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
 
+/** `?panelItem=` value that opens the chat Log instead of a doc row. */
+export const CHAT_LOG_PANEL_ITEM = "log";
+
+// Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
+export const chatLogKinds = [
+  "decision",
+  "change",
+  "research",
+  "question",
+  "note",
+] as const;
+export const chatLogKindParser =
+  parseAsStringLiteral(chatLogKinds).withOptions(searchOptions);
+
 // Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
 // Absent means the chat's primary PR.
 export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
