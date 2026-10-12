@@ -346,6 +346,7 @@ import type * as analytics from "../analytics.js";
 import type * as annotations from "../annotations.js";
 import type * as appTabSlug from "../appTabSlug.js";
 import type * as appTabs from "../appTabs.js";
+import type * as artifactState from "../artifactState.js";
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
 import type * as automationEmail from "../automationEmail.js";
@@ -866,6 +867,7 @@ declare const fullApi: ApiFromModules<{
   annotations: typeof annotations;
   appTabSlug: typeof appTabSlug;
   appTabs: typeof appTabs;
+  artifactState: typeof artifactState;
   artifacts: typeof artifacts;
   auth: typeof auth;
   automationEmail: typeof automationEmail;

@@ -1644,6 +1644,19 @@ export const artifactFields = {
   ...chatSourceFields,
 };
 
+// Persistent key/value state for one hosted artifact, read and written through
+// `window.cowork.state` in the iframe bridge. `ownerId` set = private to that
+// viewer ("user" scope); unset = shared by every member of the bound team.
+// `value` is JSON text, so artifacts can store any JSON without `v.any()`.
+export const artifactStateFields = {
+  artifactId: v.id("artifacts"),
+  ownerId: v.optional(v.id("users")),
+  key: v.string(),
+  value: v.string(),
+  updatedBy: v.id("users"),
+  updatedAt: v.number(),
+};
+
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port
 // inside the sandbox, resolved through the same auth proxy as the Preview tab.
 // `icon` is a free-text Tabler icon name (e.g. "IconBolt"); unknown names fall
