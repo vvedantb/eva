@@ -4,6 +4,7 @@ import { useElapsedSeconds } from "@eva/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
@@ -44,6 +45,9 @@ export type UseTaskDetailRouting =
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-detail"; project: ProjectTaskDetailRouting };
 
+type TaskRow = FunctionReturnType<typeof api.agentTasks.get> | undefined;
+type RepoRow = FunctionReturnType<typeof api.githubRepos.get> | undefined;
+
 /**
  * Read straight off the task row — never mirrored into local state. A mirror
  * had to be re-seeded whenever the row changed, and any render that seeded it
@@ -53,22 +57,19 @@ export type UseTaskDetailRouting =
  * writes through `updateTask`, whose optimistic update patches this same
  * query, so the value still changes the instant it is picked.
  */
-function resolveBaseBranch(
-  fromTask: string | undefined,
-  fromRepo: string | undefined,
-) {
-  return fromTask?.trim() || fromRepo?.trim() || FALLBACK_GIT_BASE_BRANCH;
-}
-
-function resolveDevServerCommandLabel(
-  fromTask: string | undefined,
-  fromRepo: string | undefined,
-) {
-  return (
-    fromTask?.trim() ||
-    fromRepo?.trim() ||
-    "Auto-detected from package.json (e.g. pnpm run dev)"
-  );
+function deriveTaskRowFields(task: TaskRow, repoForTask: RepoRow) {
+  return {
+    baseBranch:
+      task?.baseBranch?.trim() ||
+      repoForTask?.defaultBaseBranch?.trim() ||
+      FALLBACK_GIT_BASE_BRANCH,
+    devServerCommandLabel:
+      task?.devCommand?.trim() ||
+      repoForTask?.devCommand?.trim() ||
+      "Auto-detected from package.json (e.g. pnpm run dev)",
+    sandboxId: task?.sandboxId,
+    reviewTaskSandboxStatus: task?.reviewTaskSandboxStatus,
+  };
 }
 
 /**
@@ -126,16 +127,7 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     projects,
     comments,
     taskActivity,
-    baseBranch: resolveBaseBranch(
-      task?.baseBranch,
-      repoForTask?.defaultBaseBranch,
-    ),
-    devServerCommandLabel: resolveDevServerCommandLabel(
-      task?.devCommand,
-      repoForTask?.devCommand,
-    ),
-    sandboxId: task?.sandboxId,
-    reviewTaskSandboxStatus: task?.reviewTaskSandboxStatus,
+    ...deriveTaskRowFields(task, repoForTask),
   };
 }
 

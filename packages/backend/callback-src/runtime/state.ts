@@ -8,7 +8,7 @@ import type {
   TodoItem,
   UsageLimitSnapshot,
 } from "../types.js";
-import { isJsonObject, trimmedString } from "../utils.js";
+import { isJsonObject, trimmedString } from "../jsonGuards.js";
 
 function nonEmptyString(value: JsonValue | undefined): string | undefined {
   return typeof value === "string" && value ? value : undefined;
