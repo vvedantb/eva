@@ -42,7 +42,7 @@ import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
-import { resolveCredentialSourceLabel } from "./_userProviderAccounts/credentialSource";
+import { resolveMessageCredential } from "./_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
@@ -365,11 +365,11 @@ export const addMessage = authMutation({
       attachmentStorageIds: args.attachmentStorageIds,
       ...(role === "user"
         ? {
-            credentialSourceLabel: await resolveCredentialSourceLabel(
+            ...(await resolveMessageCredential(
               ctx.db,
               providerAccountId,
               task.createdBy,
-            ),
+            )),
             model: args.model,
             reasoningLevel: args.reasoningLevel,
             sentViaOrchestrator: args.sentViaOrchestrator,
@@ -520,11 +520,11 @@ export const retryLastTurnWithAccount = authMutation({
           );
 
     await ctx.db.patch(userMessage._id, {
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         providerAccountId,
         task.createdBy,
-      ),
+      )),
     });
 
     // No attachment handling needed: `buildTaskChatTurnPrompt` reads the newest

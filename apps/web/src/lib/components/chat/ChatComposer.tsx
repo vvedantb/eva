@@ -55,6 +55,7 @@ import type {
   ChatHeldFollowUp,
   ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
+import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
 
 /** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
@@ -134,6 +135,8 @@ interface ChatComposerProps {
   isDraftLoading?: boolean;
   hasPendingContext?: boolean;
   allowEmptySubmit?: boolean;
+  /** Set while the chat waits on the user; drives composer predictions. */
+  predictionTarget?: ComposerPredictionTarget;
 }
 
 export function ChatComposer({
@@ -160,6 +163,7 @@ export function ChatComposer({
   isDraftLoading,
   hasPendingContext = false,
   allowEmptySubmit = false,
+  predictionTarget,
 }: ChatComposerProps) {
   const skillItems = useSkillSlashItems(
     repo?.id,
@@ -343,6 +347,7 @@ export function ChatComposer({
       seedSkillMap={seed?.skillMap}
       messageHistory={messageHistory}
       allowEmptySubmit={allowEmptySubmit}
+      predictionTarget={predictionTarget}
       onDraftChange={(text) => {
         suggestions.noteDraft(text);
         setDraftText(text);

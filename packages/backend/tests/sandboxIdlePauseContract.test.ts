@@ -99,7 +99,6 @@ describe("idle pause wiring", () => {
 type Req = { headers: Record<string, string>; socket: { remoteAddress: string } };
 
 const countsAsActivityFactory = new Function(
-  "ACTIVITY_PING_PAGES",
   [
     extractFunctionSource("function isLoopbackRequest(req) {"),
     extractFunctionSource("function isBrowserRequest(req) {"),
@@ -114,26 +113,24 @@ function request(headers: Record<string, string>, remoteAddress = "10.0.0.1"): R
 
 /**
  * Task 262 stayed awake for hours with nobody present: a hidden tab's polls
- * counted as a human. Browser traffic now counts only through the on-screen
- * ping, except where pages cannot carry it (desktop / editor proxies).
+ * counted as a human. Session 98 later showed editor and desktop tabs had the
+ * same hole. Browser traffic now never counts by itself on any proxy; only the
+ * on-screen ping (visible + recent input) and non-browser callers do.
  */
 describe("which proxy traffic resets the idle clock", () => {
-  const counts = (pingPages: boolean, req: Req): boolean =>
-    countsAsActivityFactory(pingPages)(req);
+  const counts = (req: Req): boolean => countsAsActivityFactory()(req);
 
-  test("browser traffic does not count when pages carry the ping", () => {
-    expect(counts(true, request({ "sec-fetch-mode": "cors" }))).toBe(false);
+  test("browser traffic does not count, on any proxy", () => {
+    expect(counts(request({ "sec-fetch-mode": "cors" }))).toBe(false);
+    expect(counts(request({ "sec-fetch-mode": "navigate" }))).toBe(false);
+    expect(counts(request({ "sec-fetch-mode": "websocket" }))).toBe(false);
   });
 
   test("non-browser clients (API calls, webhooks) still count", () => {
-    expect(counts(true, request({}))).toBe(true);
-  });
-
-  test("desktop and editor proxies keep counting browser traffic", () => {
-    expect(counts(false, request({ "sec-fetch-mode": "navigate" }))).toBe(true);
+    expect(counts(request({}))).toBe(true);
   });
 
   test("the agent's own loopback browser never counts", () => {
-    expect(counts(false, request({}, "127.0.0.1"))).toBe(false);
+    expect(counts(request({}, "127.0.0.1"))).toBe(false);
   });
 });

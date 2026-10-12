@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { createNotification } from "../notifications";
 import {
   cancelSessionSandboxGraceDelete,
@@ -88,6 +89,18 @@ async function notifySessionOwnerOfPrArchive(
 }
 
 /**
+ * The session creator's experimental "Disable auto-archive" opt-out. It only
+ * blocks the PR-driven archive; a reopened PR still unarchives as before.
+ */
+async function ownerDisabledAutoArchive(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<boolean> {
+  const owner = await ctx.db.get(session.createdBy ?? session.userId);
+  return resolveExperimentalFlags(owner).disableAutoArchive;
+}
+
+/**
  * Applies the archive/unarchive side effects (sandbox stop, grace-delete,
  * owner notification) once every PR row the session holds is up to date. The
  * one place a PR state change moves a session in or out of the archive, so a
@@ -104,7 +117,10 @@ export async function reconcileSessionArchiveState(
     sessionId,
   });
   const archive = shouldArchiveSession(rows.map((row) => row.state));
-  const needsArchive = archive && session.archived !== true;
+  const needsArchive =
+    archive &&
+    session.archived !== true &&
+    !(await ownerDisabledAutoArchive(ctx, session));
   const needsUnarchive = !archive && session.archived === true;
   if (!needsArchive && !needsUnarchive) return;
 

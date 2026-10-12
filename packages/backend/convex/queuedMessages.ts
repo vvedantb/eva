@@ -97,13 +97,14 @@ export const remove = authMutation({
 });
 
 /**
- * Moves every queued message onto another model, then sends the next one if
- * nothing else holds the queue. The composer calls this when the user switches
- * provider while the queue waits out a usage limit: the new provider has no
- * reason to wait, so the queue goes now. The account is the sender's raw pick,
- * re-resolved against the owner's accounts at dequeue like any queued message.
+ * Moves every queued message onto another model and account, then sends the
+ * next one if nothing else holds the queue. The composer calls this when the
+ * user switches provider or account while the queue waits out a usage limit:
+ * the new credential has no reason to wait, so the queue goes now. The account
+ * is the sender's raw pick, re-resolved against the owner's accounts at dequeue
+ * like any queued message.
  */
-export const switchModel = authMutation({
+export const switchCredential = authMutation({
   args: {
     parentId: parentIdValidator,
     model: aiModelValidator,

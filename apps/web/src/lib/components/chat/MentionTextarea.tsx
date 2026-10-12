@@ -21,6 +21,10 @@ import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { useInlineSuggestion } from "@/lib/hooks/useInlineSuggestion";
+import {
+  useComposerPrediction,
+  type ComposerPredictionTarget,
+} from "@/lib/hooks/useComposerPrediction";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
@@ -53,6 +57,12 @@ interface MentionTextareaProps {
    */
   completionContext?: string;
   /**
+   * The chat this composer replies to, set only while it waits on the user.
+   * Used for the next-message ghost text when the per-user experimental
+   * "Composer predictions" flag is on; otherwise ignored.
+   */
+  predictionTarget?: ComposerPredictionTarget;
+  /**
    * Called when Enter would have submitted but the submit button is disabled.
    * The keystroke is still swallowed — this only lets the composer say why,
    * instead of Enter doing nothing at all on a sleeping sandbox.
@@ -80,6 +90,7 @@ export const MentionTextarea = forwardRef<
     history,
     enableAttachmentPaste,
     completionContext,
+    predictionTarget,
     onBlockedSubmit,
     onDraftChange,
     className,
@@ -95,10 +106,17 @@ export const MentionTextarea = forwardRef<
   const { items, peopleIds } = mergeMentionItems(peopleItems, dataItems);
   const navigateToData = useDataMentionNavigate(repo?.basePath ?? "", repo?.id);
   const flags = useQuery(api.auth.getExperimentalFlags);
-  const { suggestion, dismiss } = useInlineSuggestion(
+  const completion = useInlineSuggestion(
     value,
     flags?.composerAutocomplete === true ? completionContext : undefined,
   );
+  const prediction = useComposerPrediction(
+    value,
+    flags?.composerPredictions === true ? predictionTarget : undefined,
+  );
+  // Never both: a prediction needs an empty draft, a completion needs text.
+  const { suggestion, dismiss } =
+    prediction.suggestion !== undefined ? prediction : completion;
 
   // Cursor into `history` (null = editing the live draft) and the draft stashed
   // when history navigation began, so Alt+ArrowDown past the newest entry restores it.
@@ -194,7 +212,8 @@ export const MentionTextarea = forwardRef<
       renderSkillChipHoverCard={(id) =>
         isSkillTokenId(id) ? <SkillMentionHoverCardBody skillId={id} /> : null
       }
-      placeholder={placeholder}
+      // The prediction takes the placeholder's place; both would overlap.
+      placeholder={prediction.suggestion !== undefined ? "" : placeholder}
       ariaLabel={placeholder ?? "Message input"}
       onImageFiles={enableAttachmentPaste ? attachments.add : undefined}
       onLargeTextPaste={

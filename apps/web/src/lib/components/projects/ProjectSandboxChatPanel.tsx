@@ -183,9 +183,9 @@ export function ProjectSandboxChatPanel({
     });
   };
 
-  const setProviderAccountId = (next: string | null) => {
+  const setProviderAccountId = async (next: string | null) => {
     if (!isOwner) return;
-    switchProviderAccount(resolveAccountId(next) ?? null);
+    await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
   // The open durable turn is canonical, synthetic turns included; message
@@ -198,8 +198,12 @@ export function ProjectSandboxChatPanel({
     messages: messages ?? [],
     queuedMessages: queuedMessages ?? [],
     model,
+    accountId: providerAccountId,
+    accounts: displayAccounts,
+    resolveAccountId,
     isSandboxActive,
     setModel,
+    setAccount: setProviderAccountId,
   });
   const composer = sandboxComposerState({
     isSandboxActive,
@@ -367,7 +371,7 @@ export function ProjectSandboxChatPanel({
           modelOptions,
           accounts: displayAccounts,
           accountId: providerAccountId,
-          onAccountChange: setProviderAccountId,
+          onAccountChange: queueGate.setAccount,
           displayTraits,
           onTraitsChange: setTraits,
         }}

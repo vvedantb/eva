@@ -1233,6 +1233,9 @@ export const messageFields = {
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
+  // The account behind `credentialSourceLabel`; absent = Team (or a row from
+  // before this stamp). Lets a usage-limit hold release other accounts.
+  credentialAccountId: v.optional(v.id("userProviderAccounts")),
   // User rows: model chosen in the composer, snapshotted at send/dequeue so the
   // chat can show a provider icon + tooltip later. Assistant rows: the provider
   // checkpoint, stamped on successful completion — everything after the last
@@ -1697,6 +1700,19 @@ export const artifactFields = {
   // Chat that created this artifact (`create_artifact` from a sandbox token).
   // Manual uploads leave these unset. Indexes skip rows with no source.
   ...chatSourceFields,
+};
+
+// Persistent key/value state for one hosted artifact, read and written through
+// `window.cowork.state` in the iframe bridge. `ownerId` set = private to that
+// viewer ("user" scope); unset = shared by every member of the bound team.
+// `value` is JSON text, so artifacts can store any JSON without `v.any()`.
+export const artifactStateFields = {
+  artifactId: v.id("artifacts"),
+  ownerId: v.optional(v.id("users")),
+  key: v.string(),
+  value: v.string(),
+  updatedBy: v.id("users"),
+  updatedAt: v.number(),
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port

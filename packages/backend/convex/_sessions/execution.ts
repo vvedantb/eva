@@ -24,7 +24,7 @@ import {
 } from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
@@ -340,11 +340,11 @@ export const retryLastTurnWithAccount = authMutation({
     const providerAccountId = args.providerAccountId ?? undefined;
     const ownerUserId = session.createdBy ?? session.userId;
     await ctx.db.patch(userMessage._id, {
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         providerAccountId,
         ownerUserId,
-      ),
+      )),
     });
 
     await stageAndStartChatTurn(ctx, {

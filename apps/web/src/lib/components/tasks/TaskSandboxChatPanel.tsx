@@ -232,9 +232,9 @@ export function TaskSandboxChatPanel({
     });
   };
 
-  const setProviderAccountId = (next: string | null) => {
+  const setProviderAccountId = async (next: string | null) => {
     if (!isOwner || !task) return;
-    switchProviderAccount(resolveAccountId(next) ?? null);
+    await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
   // The open durable turn is canonical, synthetic turns included; message
@@ -250,8 +250,12 @@ export function TaskSandboxChatPanel({
     messages: messages ?? [],
     queuedMessages: queuedMessages ?? [],
     model,
+    accountId: providerAccountId,
+    accounts,
+    resolveAccountId,
     isSandboxActive,
     setModel,
+    setAccount: setProviderAccountId,
   });
   const composer = sandboxComposerState({
     isSandboxActive,
@@ -433,7 +437,7 @@ export function TaskSandboxChatPanel({
           modelOptions,
           accounts,
           accountId: providerAccountId,
-          onAccountChange: setProviderAccountId,
+          onAccountChange: queueGate.setAccount,
           displayTraits,
           onTraitsChange,
         }}
