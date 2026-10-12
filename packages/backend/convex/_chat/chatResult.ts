@@ -25,6 +25,7 @@ import {
 } from "../_sessions/resultTarget";
 import { normalizeAIModel } from "../_validators/aiModels";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
+import { recordTurnChange } from "../chatLog";
 
 export type ChatResultParentId =
   | Id<"sessions">
@@ -199,7 +200,15 @@ export async function applyChatTurnResult(
   }
 
   const last = await writeAssistantTurnResult(ctx, args.parentId, patch);
-  return last ? "written" : "no-target";
+  if (!last) return "no-target";
+  await recordTurnChange(
+    ctx,
+    String(args.parentId),
+    { ...last, content: patch.content },
+    patch.beforeSha,
+    patch.afterSha,
+  );
+  return "written";
 }
 
 /**

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 
 export const taskStatusValidator = v.union(
   v.literal("draft"),
@@ -72,6 +72,21 @@ export const prRecapStatusValidator = v.union(
   v.literal("pending"),
   v.literal("ready"),
   v.literal("error"),
+);
+
+export const chatLogEntryKindValidator = v.union(
+  v.literal("decision"),
+  v.literal("change"),
+  v.literal("research"),
+  v.literal("question"),
+  v.literal("note"),
+);
+export type ChatLogEntryKind = Infer<typeof chatLogEntryKindValidator>;
+
+export const chatLogAuthorValidator = v.union(
+  v.literal("agent"),
+  v.literal("user"),
+  v.literal("system"),
 );
 
 export const docKindValidator = v.union(
