@@ -27,6 +27,7 @@ import { normalizeAIModel } from "../_validators/aiModels";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 
 export type ChatResultParentId =
+  | Id<"sessionChats">
   | Id<"sessions">
   | Id<"projects">
   | Id<"agentTasks">;

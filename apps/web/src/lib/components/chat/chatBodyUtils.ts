@@ -21,7 +21,11 @@ export interface ChatRepo {
 }
 
 /** The id a chat's messages hang off: session, quick task or project. */
-export type ChatParentId = Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+export type ChatParentId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"projects">
+  | Id<"agentTasks">;
 
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without

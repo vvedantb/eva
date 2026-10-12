@@ -8,13 +8,13 @@ import type { ChatBodyMessage } from "./chatBodyUtils";
  * address the right one.
  */
 export type ChatEntityRef =
-  | { kind: "session"; sessionId: Id<"sessions"> }
+  | { kind: "session"; sessionId: Id<"sessions">; chatId: Id<"sessionChats"> }
   | { kind: "task"; taskId: Id<"agentTasks"> }
   | { kind: "project"; projectId: Id<"projects"> };
 
 interface ChatEntityKeys {
   /** Transcript owner — `api.messages.listByParent` / `queuedMessages`. */
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
   /** `api.streaming.get` entity id for that surface's chat turn. */
   streamingEntityId: string;
 }
@@ -23,9 +23,10 @@ interface ChatEntityKeys {
 export function chatEntityKeys(entity: ChatEntityRef): ChatEntityKeys {
   switch (entity.kind) {
     case "session":
+      // A session's transcript, turn and daemon all belong to one of its chats.
       return {
-        parentId: entity.sessionId,
-        streamingEntityId: entity.sessionId,
+        parentId: entity.chatId,
+        streamingEntityId: entity.chatId,
       };
     case "task":
       return {

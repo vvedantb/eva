@@ -48,9 +48,23 @@ export type TurnEntityId = Doc<"turns">["entityId"];
 
 /** Chat entities that own durable turns. */
 export type ChatTurnEntityId =
+  | Id<"sessionChats">
   | Id<"sessions">
   | Id<"agentTasks">
   | Id<"projects">;
+
+/** Open turns across every chat of a session (the parallel-chat cap reads this). */
+export async function listOpenSessionTurns(
+  ctx: QueryCtx,
+  sessionId: Id<"sessions">,
+): Promise<Doc<"turns">[]> {
+  return await ctx.db
+    .query("turns")
+    .withIndex("by_session_open", (q) =>
+      q.eq("sessionId", sessionId).eq("open", true),
+    )
+    .collect();
+}
 
 /**
  * The entity's open turn in one lane. Chat turns, runs and most one-shot
@@ -90,7 +104,12 @@ type OpenTurnFields = {
 /** Opens a durable turn and supersedes any turn the entity still has open in that lane. */
 export async function openTurn(
   ctx: MutationCtx,
-  params: OpenTurnFields & { entityId: TurnEntityId; lane?: TurnLane },
+  params: OpenTurnFields & {
+    entityId: TurnEntityId;
+    lane?: TurnLane;
+    /** Session chat turns: the session the chat belongs to. */
+    sessionId?: Id<"sessions">;
+  },
 ): Promise<Id<"turns">> {
   const now = Date.now();
   const previous = await findOpenTurn(ctx, params.entityId, params.lane);
@@ -102,6 +121,7 @@ export async function openTurn(
   return await ctx.db.insert("turns", {
     entityId: params.entityId,
     lane: params.lane,
+    sessionId: params.sessionId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
     open: true,
@@ -121,12 +141,22 @@ export async function openTurn(
   });
 }
 
-export async function openSessionTurn(
+/**
+ * Opens a session chat's turn. Chats are born durable, so there is no
+ * lifecycle marker to set; the session id rides along for the per-session
+ * cap and the sidebar projection.
+ */
+export async function openSessionChatTurn(
   ctx: MutationCtx,
-  params: OpenTurnFields & { sessionId: Id<"sessions"> },
+  params: OpenTurnFields & {
+    chatId: Id<"sessionChats">;
+    sessionId: Id<"sessions">;
+  },
 ): Promise<Id<"turns">> {
-  const { sessionId, ...turn } = params;
-  const turnId = await openTurn(ctx, { ...turn, entityId: sessionId });
+  const { chatId, sessionId, ...turn } = params;
+  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  // Marks the session as a durable-turn user so the legacy "activeWorkflowId
+  // means executing" bridge never becomes authoritative for it again.
   await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
   return turnId;
 }
@@ -395,20 +425,24 @@ export async function closeTurn(
   // The unread watermark read by `chatReads.ts`: chat turns only. Runs and
   // one-shot lanes (summary, interview) are not replies, and their owner rows
   // have no such field. Lease sweeps can close a turn after its chat was
-  // hard-deleted, and `patch` throws then.
+  // hard-deleted, and `patch` throws then. A session chat's turn stamps both
+  // the chat and its session, since the sidebar reads unread per session.
   const chatParentId =
     turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
   if (chatParentId && (await ctx.db.get(chatParentId))) {
     await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
   }
+  if (turn.sessionId !== undefined && (await ctx.db.get(turn.sessionId))) {
+    await ctx.db.patch(turn.sessionId, { lastTurnFinishedAt: finishedAt });
+  }
   // Every durable turn ends here, so this is the one place the idle-pause
   // sweep learns "the agent finished". The id's table names the surface; a
-  // run counts for its task.
+  // run counts for its task, a session chat for its session.
   const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   const run = runId ? await ctx.db.get(runId) : null;
   const activityRef = activityRefForParentId(
     ctx.db,
-    run ? run.taskId : turn.entityId,
+    run ? run.taskId : (turn.sessionId ?? turn.entityId),
   );
   if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }

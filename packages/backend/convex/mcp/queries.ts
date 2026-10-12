@@ -13,6 +13,7 @@ import {
   type PrOwnerRef,
 } from "../_pullRequests/store";
 import {
+  hasOpenChatTurn,
   openChatEntityIdsFor,
   openChatEntityIdsForRepo,
   projectIsExecuting,
@@ -699,6 +700,10 @@ export const entityIsExecuting = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { kind, id }) => {
     if (kind === "session") {
+      // One chat of a session: only its own turn counts, so parallel chats
+      // run side by side (a busy sibling does not queue this one).
+      const chatId = ctx.db.normalizeId("sessionChats", id);
+      if (chatId) return await hasOpenChatTurn(ctx.db, chatId);
       const sessionId = ctx.db.normalizeId("sessions", id);
       if (!sessionId) return false;
       const session = await ctx.db.get(sessionId);

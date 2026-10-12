@@ -29,7 +29,7 @@ const CLERK_ID = "clerk|preview-tool-calls";
 
 async function fixture() {
   const t = convexTest(schema, modules);
-  const sessionId = await t.run(async (ctx) => {
+  const { sessionId, chatId } = await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", { clerkId: CLERK_ID });
     const repoId = await ctx.db.insert("githubRepos", {
       owner: "vvedantb",
@@ -37,12 +37,23 @@ async function fixture() {
       installationId: 1,
       connectedBy: userId,
     });
-    return ctx.db.insert("sessions", {
+    const sessionId = await ctx.db.insert("sessions", {
       repoId,
       userId,
       title: "WebMCP relay",
       status: "active",
     });
+    // A session's chat content lives on its Main chat; a token naming the
+    // session itself lands there too.
+    const chatId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+    });
+    return { sessionId, chatId };
   });
   const asUser = t.withIdentity({ subject: CLERK_ID });
   const callId = await t.mutation(internal.previewToolCalls.create, {
@@ -54,7 +65,7 @@ async function fixture() {
   });
   if (callId === null) throw new Error("fixture: create returned null");
   const read = () => t.query(internal.previewToolCalls.get, { id: callId });
-  return { t, asUser, sessionId, callId, read };
+  return { t, asUser, sessionId, chatId, callId, read };
 }
 
 describe("previewToolCalls relay", () => {
@@ -63,7 +74,7 @@ describe("previewToolCalls relay", () => {
     async () => {
       const f = await fixture();
       const pending = await f.asUser.query(api.previewToolCalls.listPending, {
-        parentId: f.sessionId,
+        parentId: f.chatId,
       });
       expect(pending).toEqual([
         {
@@ -87,7 +98,7 @@ describe("previewToolCalls relay", () => {
       expect((await f.read())?.claimedBy).toBe("tab-a");
       expect(
         await f.asUser.query(api.previewToolCalls.listPending, {
-          parentId: f.sessionId,
+          parentId: f.chatId,
         }),
       ).toEqual([]);
     },
@@ -217,7 +228,7 @@ describe("previewToolCalls relay", () => {
     async () => {
       const f = await fixture();
       await f.t.run((ctx) =>
-        clearPreviewToolCallsForParent(ctx.db, f.sessionId),
+        clearPreviewToolCallsForParent(ctx.db, f.chatId),
       );
       expect(await f.read()).toBeNull();
     },

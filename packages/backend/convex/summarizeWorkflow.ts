@@ -21,6 +21,7 @@ import {
 } from "./_taskWorkflow/helpers";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
+import { listSessionChats } from "./_sessionChats/helpers";
 
 const summarizeCompleteEvent = defineEvent({
   name: "summarizeComplete",
@@ -107,10 +108,19 @@ export const getSessionData = internalQuery({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .collect();
+    // A session's transcript is spread over its chats; the summary reads
+    // them all, in time order, so parallel chats' work is covered too.
+    const chats = await listSessionChats(ctx.db, args.sessionId);
+    const messages = [];
+    for (const chat of chats) {
+      messages.push(
+        ...(await ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
+          .collect()),
+      );
+    }
+    messages.sort((a, b) => a.timestamp - b.timestamp);
 
     const conversation = messages.map((m) => m.content).join("\n\n");
 

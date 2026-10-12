@@ -394,10 +394,12 @@ describe("PR links the tool accepts", () => {
 describe("what a send does to the chat", () => {
   const KINDS: ChatTargetKind[] = ["session", "task", "project"];
 
-  test("an idle session gets a user message and then a turn", () => {
+  test("an idle session chat gets a user message and then a turn", () => {
+    // A session send is addressed to one of its chats (resolved upstream by
+    // `sessionChats:resolveDeliveryChat`), so both mutations take `chatId`.
     const calls = buildChatMessageCalls({
       kind: "session",
-      id: "s1",
+      id: "c1",
       message: "keep going",
       delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
       sentViaOrchestrator: false,
@@ -408,14 +410,14 @@ describe("what a send does to the chat", () => {
       "_sessions/execution:startExecute",
     ]);
     expect(calls[0]?.args).toEqual({
-      id: "s1",
+      chatId: "c1",
       role: "user",
       content: "keep going",
       model: "claude:opus",
       sentViaOrchestrator: false,
     });
     expect(calls[1]?.args).toEqual({
-      sessionId: "s1",
+      chatId: "c1",
       message: "keep going",
       model: "claude:opus",
     });
@@ -836,7 +838,7 @@ describe("MCP sends are badged; composer-typed messages are not", () => {
   const sessionSend = readFileSync(
     join(
       testsDir,
-      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
+      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
     ),
     "utf8",
   );

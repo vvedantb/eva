@@ -38,6 +38,8 @@ export function activityRefForParentId(
   if (db.normalizeId("sessions", parentId)) {
     return { kind: "session", entityId: parentId };
   }
+  // Session chats share their session's sandbox; callers that hold a chat
+  // pass the session id (see `sessionActivityParentId`).
   if (db.normalizeId("agentTasks", parentId)) {
     return { kind: "task", entityId: parentId };
   }
