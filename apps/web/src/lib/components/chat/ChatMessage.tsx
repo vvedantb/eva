@@ -152,8 +152,12 @@ interface ChatMessageProps {
   turnCheckpoint?: TurnCheckpointContext;
   /** Flash the row after a citation chip jumps here. */
   citeHighlight?: boolean;
-  /** Sessions: start a new chat with the transcript through this message. */
-  onFork?: () => void;
+  /**
+   * Sessions: start a new chat with the transcript through this message. Takes
+   * the id so the parent can pass one stable handler to every row — a per-row
+   * closure is a new prop each render and re-renders the whole transcript.
+   */
+  onFork?: (messageId: string) => void;
   /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
@@ -239,7 +243,7 @@ export const ChatMessage = memo(function ChatMessage({
         key: "fork",
         label: "Fork from here",
         icon: <IconGitFork className="size-4" />,
-        onClick: onFork,
+        onClick: () => onFork(message._id),
       }
     : undefined;
   const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
