@@ -84,6 +84,32 @@ export async function findMainChat(
     .first();
 }
 
+/**
+ * Target args of the daemon-facing session mutations. Daemons launched before
+ * session chats still send `sessionId`; new daemons send `chatId`.
+ */
+export const daemonChatTargetArgs = {
+  chatId: v.optional(v.id("sessionChats")),
+  sessionId: v.optional(v.id("sessions")),
+};
+
+/**
+ * The chat a daemon call targets. A legacy `sessionId` call resolves to the
+ * session's Main chat, the chat `backfillSessionChats` (`ensureMainChat`)
+ * moves the session's transcript onto. Null when that chat does not exist
+ * yet; callers no-op until the backfill creates it. Read-only, because the
+ * claim poll runs every 50ms.
+ */
+export async function resolveDaemonChatId(
+  db: DatabaseReader,
+  args: { chatId?: Id<"sessionChats">; sessionId?: Id<"sessions"> },
+): Promise<Id<"sessionChats"> | null> {
+  if (args.chatId !== undefined) return args.chatId;
+  if (args.sessionId === undefined) return null;
+  const mainChat = await findMainChat(db, args.sessionId);
+  return mainChat?._id ?? null;
+}
+
 /** The chat a session-level link (`?chat=N`) resolves to. */
 export async function findChatByNumber(
   db: DatabaseReader,

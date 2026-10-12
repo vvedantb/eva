@@ -80,7 +80,7 @@ async function createStagedTurnFixture() {
       pendingTaskStops: ["toolu_stop_me"],
       cancelRequestedAt: Date.now(),
     });
-    return { chatId, turnId };
+    return { sessionId, chatId, turnId };
   });
   return { t: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
@@ -196,6 +196,66 @@ describe("a daemon only takes the running lease when it is idle", () => {
       expect(claim.prompt).toBe(PROMPT);
       const after = await readTurnState(t, { chatId, turnId });
       expect(after.state).toBe("running");
+    },
+    TIMEOUT_MS,
+  );
+});
+
+/**
+ * Daemons launched before session chats (#922) poll with `sessionId` and no
+ * `chatId`. Rejecting them threw an ArgumentValidationError on every 50ms poll
+ * in prod; they now resolve to the session's Main chat.
+ */
+describe("a daemon that predates session chats", () => {
+  test(
+    "claims the Main chat's turn by sessionId",
+    async () => {
+      const { t, sessionId, chatId, turnId } = await createStagedTurnFixture();
+
+      const claim = await t.mutation(api._sessions.workflow.claimPendingTurn, {
+        sessionId,
+        model: MODEL,
+      });
+
+      expect(claim.prompt).toBe(PROMPT);
+      const after = await readTurnState(t, { chatId, turnId });
+      expect(after.state).toBe("running");
+      expect(after.chatPendingPrompt).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "gets an empty claim while the session has no chat yet",
+    async () => {
+      const t = convexTest(schema, modules);
+      const sessionId = await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", { clerkId: CLERK_ID });
+        const repoId = await ctx.db.insert("githubRepos", {
+          owner: "eva",
+          name: "claim-legacy-test",
+          installationId: 1,
+        });
+        return await ctx.db.insert("sessions", {
+          repoId,
+          userId,
+          title: "Not backfilled",
+          status: "active",
+        });
+      });
+      const authed = t.withIdentity({ subject: CLERK_ID });
+
+      const claim = await authed.mutation(
+        api._sessions.workflow.claimPendingTurn,
+        { sessionId, model: MODEL },
+      );
+
+      expect(claim.prompt).toBeNull();
+      // The poll stays read-only; the backfill creates the Main chat.
+      const chats = await t.run(
+        async (ctx) => await ctx.db.query("sessionChats").collect(),
+      );
+      expect(chats).toEqual([]);
     },
     TIMEOUT_MS,
   );
