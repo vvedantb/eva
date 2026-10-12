@@ -54,6 +54,7 @@ import {
   promptStashFields,
   evaluationReportFields,
   artifactFields,
+  artifactStateFields,
   repoEntityCounterFields,
   appTabFields,
   backgroundProcessFields,
@@ -83,6 +84,11 @@ const schema = defineSchema({
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"]),
+
+  artifactState: defineTable(artifactStateFields).index(
+    "by_artifact_owner_key",
+    ["artifactId", "ownerId", "key"],
+  ),
 
   projects: defineTable(projectFields)
     .index("by_repo", ["repoId"])

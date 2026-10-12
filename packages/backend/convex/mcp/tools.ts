@@ -1139,6 +1139,13 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
 Provide a self-contained HTML document (inline CSS/JS, or CDN links). Eva stores it and hosts it in a sandboxed iframe at the returned viewUrl. The link is viewable by members of the bound team while signed in to Eva.
 
+Artifacts can keep persistent state (localStorage is in-memory only and is lost on reload). Use window.cowork.state:
+- await cowork.state.ready — resolves once the saved state has loaded
+- cowork.state.get(key, opts?) / cowork.state.all(opts?) — synchronous reads after ready
+- await cowork.state.set(key, jsonValue, opts?) / await cowork.state.remove(key, opts?)
+- cowork.state.subscribe(fn) — fn(snapshot) on every change, including other viewers' writes; returns an unsubscribe function
+opts = { scope: "user" } (default, private to each viewer) or { scope: "shared" } (one copy for the whole team). Limits: 200 keys per scope, 64 KB per value.
+
 When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
 
 Do NOT use this for session walkthrough recordings, screen captures, or screenshots. For those, save the file under repo-root recordings/ or screenshots/ with agent-browser and leave it on disk — Eva attaches it to the chat message with the built-in video/image player.`,
