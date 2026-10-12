@@ -48,6 +48,7 @@ import {
   draftFields,
   promptStashFields,
   evaluationReportFields,
+  arenaScenarioFields,
   artifactFields,
   repoEntityCounterFields,
   appTabFields,
@@ -294,6 +295,7 @@ const schema = defineSchema({
   evaluationReports: defineTable(evaluationReportFields)
     .index("by_repo", ["repoId"])
     .index("by_doc", ["docId"]),
+  arenaScenarios: defineTable(arenaScenarioFields).index("by_doc", ["docId"]),
   appTabs: defineTable(appTabFields).index("by_repo", ["repoId"]),
   repoSkills: defineTable(repoSkillFields)
     .index("by_repo", ["repoId"])

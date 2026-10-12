@@ -69,6 +69,18 @@ export const evalIssueValidator = v.object({
   taskId: v.optional(v.id("agentTasks")),
 });
 
+/**
+ * One browser scenario's outcome in a testing-arena browser run. Title is
+ * copied in so the run stays readable after the scenario is edited or deleted.
+ */
+export const arenaScenarioResultValidator = v.object({
+  scenarioId: v.id("arenaScenarios"),
+  title: v.string(),
+  passed: v.boolean(),
+  notes: v.string(),
+  screenshotStorageId: v.optional(v.id("_storage")),
+});
+
 export const userFlowValidator = v.object({
   name: v.string(),
   steps: v.array(v.string()),

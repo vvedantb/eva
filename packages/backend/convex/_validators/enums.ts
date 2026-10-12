@@ -94,6 +94,15 @@ export const evaluationStatusValidator = v.union(
   v.literal("error"),
 );
 
+/** Which Testing Arena check a report holds: spec-vs-code review or browser scenarios. */
+export const evaluationKindValidator = v.union(
+  v.literal("code"),
+  v.literal("browser"),
+);
+
+/** What started a Testing Arena run. Absent on manual runs. */
+export const evaluationTriggerValidator = v.literal("pr");
+
 export const evalFixStatusValidator = v.union(
   v.literal("fixing"),
   v.literal("fix_completed"),
