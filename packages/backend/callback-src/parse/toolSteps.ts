@@ -341,6 +341,12 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
     toStep: (f) =>
       cursorDetailStep("search_files", "Searching files...", f.query || f.path),
   },
+  // Before grep/search: every web-search name also contains "search".
+  {
+    matches: (tool) =>
+      tool.includes("websearch") || tool.includes("web_search"),
+    toStep: (f) => cursorDetailStep("web_search", "Searching web...", f.query),
+  },
   {
     matches: (tool) => tool.includes("grep") || tool.includes("search"),
     toStep: (f, tool) =>
@@ -365,11 +371,6 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
       tool.includes("web_fetch") ||
       (tool.includes("fetch") && !tool.includes("search")),
     toStep: (f) => cursorDetailStep("web_fetch", "Fetching URL...", f.query),
-  },
-  {
-    matches: (tool) =>
-      tool.includes("websearch") || tool.includes("web_search"),
-    toStep: (f) => cursorDetailStep("web_search", "Searching web...", f.query),
   },
   {
     matches: (tool) => tool.includes("todo") || tool.includes("plan"),

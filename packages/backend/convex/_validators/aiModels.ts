@@ -600,6 +600,15 @@ const AI_MODEL_BY_ALIAS: ReadonlyMap<string, AIModel> = new Map(
   ),
 );
 
+// The old `switch` rejected a repeated alias at compile time; a Map would let
+// the last entry win silently, so fail on module load (tests, deploy) instead.
+if (
+  AI_MODEL_BY_ALIAS.size !==
+  AI_MODEL_ALIASES.reduce((count, [, aliases]) => count + aliases.length, 0)
+) {
+  throw new Error("AI_MODEL_ALIASES lists the same alias twice");
+}
+
 /** Normalizes a raw model string (including legacy formats) to a canonical AIModel value. */
 export function normalizeAIModel(model: string | null | undefined): AIModel {
   // "sonnet" / "claude:sonnet" and unknown strings fall back to the default.

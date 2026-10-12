@@ -44,7 +44,10 @@ import { RebuildRequiredWarning } from "./_components/RebuildRequiredWarning";
 import { BuildRow } from "./_components/BuildRow";
 import { SnapshotStatusTab } from "./_components/SnapshotStatusTab";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
 
 /** Every command box on this page is a monospace, resizable textarea. */
 const COMMAND_TEXTAREA_CLASS = "resize-y bg-background font-mono text-xs";
@@ -142,10 +145,13 @@ export function SnapshotsClient({
   const handleCancelBuild = async (buildId: Id<"snapshotBuilds">) => {
     setCancelling(true);
     try {
-      await cancelBuild({ buildId });
-    } catch (error) {
-      setCancelling(false);
-      throw error;
+      await catchMutationError(
+        cancelBuild({ buildId }),
+        "Couldn't cancel build",
+        "snapshot-build-cancel",
+      );
+    } catch {
+      // Toast already shown; the build row still shows its live status.
     }
     setCancelling(false);
   };
@@ -334,8 +340,7 @@ function SnapshotConfigurationTab({
           description={
             <>
               Branch to clone for the snapshot. Defaults to{" "}
-              <code>main</code>
-              if empty.
+              <code>main</code> if empty.
             </>
           }
         >
