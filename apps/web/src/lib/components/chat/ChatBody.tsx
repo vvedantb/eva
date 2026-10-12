@@ -623,6 +623,10 @@ function ChatBodyInner({
         });
 
   /**
+   * Every prop handed to a row must keep its identity across ChatBody renders.
+   * `ChatMessage` is memoised, and switching sessions re-renders ChatBody (the
+   * cached shells flip `isRouteActive`); one unstable prop re-renders all rows.
+   *
    * `isBacklog` marks a row the chat opened already scrolled past, which skips
    * its enter animation: nothing arrived, and 80 simultaneous enter animations
    * is the most expensive part of committing a long transcript.
@@ -677,12 +681,16 @@ function ChatBodyInner({
           backgroundAgents={backgroundAgents}
           sandboxRunning={sandboxRunning}
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-          onRetryTurn={handleRetryTurn}
+          // Only a failed turn shows Retry. `handleRetryTurn` changes with
+          // `onSend`, so handing it to every row re-rendered the transcript.
+          onRetryTurn={
+            message.errorType !== undefined ? handleRetryTurn : undefined
+          }
           precedingUser={precedingUser}
           citeHighlight={citations?.highlightedMessageId === message._id}
           onFork={
             onForkTranscript && canForkMessage(message)
-              ? () => setForkThroughId(message._id)
+              ? setForkThroughId
               : undefined
           }
           belowContent={renderChatUiPanels(

@@ -191,6 +191,12 @@ export function TaskDetailInline({
     }
     setEmbeddedSandboxTab(tab);
   };
+  // Declared here, not inline in the chat panel JSX, so it keeps its identity
+  // and does not re-render every transcript row (same as SessionDetailClient).
+  const openAgentsTab = () => {
+    handleSandboxTabChange("agents");
+    setExpandRightSignal((n) => n + 1);
+  };
 
   // Auto-switch to Browser + expand sandbox panel on lock transition only
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
@@ -326,10 +332,7 @@ export function TaskDetailInline({
                     sandboxStartupActivity={sandboxStartupActivity}
                     onOpenFile={openFile}
                     onViewDiff={openDiffs}
-                    onOpenAgentsTab={() => {
-                      handleSandboxTabChange("agents");
-                      setExpandRightSignal((n) => n + 1);
-                    }}
+                    onOpenAgentsTab={openAgentsTab}
                     onSandboxToggle={
                       canStartSandbox || isSandboxActive
                         ? (action) => {
