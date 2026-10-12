@@ -29,13 +29,11 @@ import {
   SessionReviewModal,
   useSendSessionForReview,
 } from "./_components/SessionReviewModal";
-import {
-  useSessionSend,
-  type SessionMessage,
-} from "./_components/useSessionSend";
+import { useChatSend, type SessionMessage } from "./_components/useChatSend";
+import { ChatTabsBar } from "./_components/ChatTabsBar";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
-import { useSessionModel } from "@/lib/hooks/useSessionModel";
+import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAvailableAiModels,
@@ -56,8 +54,21 @@ type QueuedSessionMessage = NonNullable<
   FunctionReturnType<typeof api.queuedMessages.listByParent>
 >[number];
 
+type ChatTurnStatus = FunctionReturnType<
+  typeof api.turns.listSessionChatStatuses
+>[number];
+
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
+  /** The chat tab this panel shows; the transcript, turn and model are its own. */
+  chat: Doc<"sessionChats">;
+  /** Every live chat of the session, for the tab strip. */
+  chats: Doc<"sessionChats">[];
+  /** Open turns across the session's chats (tab dots + the slot-wait caption). */
+  chatStatuses: ChatTurnStatus[];
+  onSelectChat: (chat: Doc<"sessionChats">) => void;
+  onCreateChat: () => void;
+  isCreatingChat: boolean;
   title: string;
   branchName?: string;
   /** Branch the sandbox worktree is on right now, reported by its daemon. */
@@ -67,7 +78,6 @@ interface ChatPanelProps {
   summary?: string[];
   messages: SessionMessage[];
   queuedMessages: QueuedSessionMessage[];
-  planContent?: string;
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
@@ -91,7 +101,7 @@ interface ChatPanelProps {
   onOpenPrdTab?: () => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
-  backgroundAgents?: Doc<"sessions">["backgroundAgents"];
+  backgroundAgents?: Doc<"sessionChats">["backgroundAgents"];
   /**
    * False while this session shell is cached-hidden. Skips chat-local
    * subscriptions that would otherwise keep a background turn warm.
@@ -99,8 +109,17 @@ interface ChatPanelProps {
   isRouteActive?: boolean;
 }
 
+/** Sessions run at most this many chats at once; mirrors the server cap. */
+const MAX_PARALLEL_CHATS = 3;
+
 export function ChatPanel({
   sessionId,
+  chat,
+  chats,
+  chatStatuses,
+  onSelectChat,
+  onCreateChat,
+  isCreatingChat,
   title,
   branchName,
   sandboxBranch,
@@ -109,7 +128,6 @@ export function ChatPanel({
   summary,
   messages,
   queuedMessages,
-  planContent,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
@@ -129,6 +147,7 @@ export function ChatPanel({
   isRouteActive = true,
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
+  const chatId = chat._id;
   const navigate = useNavigate();
   const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
@@ -143,7 +162,7 @@ export function ChatPanel({
   // always runs on the owner's credentials.
   const { options: accounts, resolveId: resolveAccountId } =
     useSessionOwnerProviderAccounts(sessionId, isRouteActive);
-  // Model + traits + account are owned by Convex.
+  // Model + traits + account are owned by Convex, per chat tab.
   const {
     model,
     setModel,
@@ -152,32 +171,22 @@ export function ChatPanel({
     providerAccountId: stickyProviderAccountId,
     setProviderAccountId: setStickyProviderAccountId,
     isSwitchingAccount,
-  } = useSessionModel(sessionId, defaultModel, isRouteActive);
-  const {
-    displayTraits,
-    executionTraits,
-    onTraitsChange,
-    providerAccountId,
-    setProviderAccountId,
-  } = useSessionSettings({
-    defaultModel,
-    model,
-    onModelChange: setModel,
-    traits,
-    onTraitsPersist: setTraits,
-    providerAccountId: stickyProviderAccountId,
-    onProviderAccountChange: (next: string | null) => {
-      void setStickyProviderAccountId(
-        next === null ? null : (resolveAccountId(next) ?? null),
-      );
-    },
-  });
+  } = useChatModel(chatId, defaultModel, isRouteActive);
+  const { displayTraits, executionTraits, onTraitsChange, providerAccountId } =
+    useSessionSettings({
+      defaultModel,
+      model,
+      onModelChange: setModel,
+      traits,
+      onTraitsPersist: setTraits,
+      providerAccountId: stickyProviderAccountId,
+    });
   // Every visible model, across providers: a session may be moved onto another
   // provider mid-conversation, and each pick carries the account it was made
   // under so credentials follow the new provider.
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
-  const draftTarget = { kind: "sessionChat" as const, sessionId };
+  const draftTarget = { kind: "sessionChat" as const, sessionId, chatId };
   const draftSeed = useChatDraftSeed(draftTarget);
   const draftBundle = draftSeed.isReady
     ? {
@@ -222,15 +231,23 @@ export function ChatPanel({
   };
 
   const queueGate = useChatQueueGate({
-    parentId: sessionId,
+    parentId: chatId,
     messages,
     queuedMessages,
     model,
+    accountId: providerAccountId,
+    accounts,
+    resolveAccountId,
     isSandboxActive,
     setModel,
+    setAccount: (next) =>
+      setStickyProviderAccountId(
+        next === null ? null : (resolveAccountId(next) ?? null),
+      ),
   });
-  const { isExecuting, handleSend, handleCancel } = useSessionSend({
+  const { isExecuting, handleSend, handleCancel } = useChatSend({
     sessionId,
+    chatId,
     model,
     executionTraits,
     reasoningLevel: displayTraits.effortLevel,
@@ -247,9 +264,10 @@ export function ChatPanel({
     api.proposedPlans.listBySession,
     isRouteActive ? { sessionId } : "skip",
   );
-  const { implementPlan, implementPlanContent, implementInNewSession } =
+  const { implementPlan, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
+      chatId,
       handleSend,
       isRouteActive,
     });
@@ -261,7 +279,7 @@ export function ChatPanel({
     isSavingDoc,
   } = useSessionPlanDocument(sessionId);
   const chatSurface: SandboxChatSurface = {
-    entity: { kind: "session", sessionId },
+    entity: { kind: "session", sessionId, chatId },
     repoId: repo._id,
     model,
     isExecuting,
@@ -284,7 +302,7 @@ export function ChatPanel({
 
   const activeQuestion = useHeldQuery(
     api.pendingQuestions.getActive,
-    isRouteActive ? { entityId: sessionId } : "skip",
+    isRouteActive ? { entityId: chatId } : "skip",
   );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const handleAnswerBlockingQuestion = async (
@@ -293,7 +311,7 @@ export function ChatPanel({
   ) => {
     await catchMutationError(
       answerPendingQuestion({
-        entityId: sessionId,
+        entityId: chatId,
         toolUseId,
         answer: JSON.stringify(answers),
       }),
@@ -314,9 +332,31 @@ export function ChatPanel({
         : (accounts.find((account) => account.id === stickyProviderAccountId)
             ?.label ?? "Selected account");
 
+  const runningChatIds = new Set<string>(
+    chatStatuses.map((status) => status.chatId),
+  );
+  const chatTabs = (
+    <ChatTabsBar
+      chats={chats}
+      activeChatId={chatId}
+      runningChatIds={runningChatIds}
+      onSelect={onSelectChat}
+      onCreate={onCreateChat}
+      isReadOnly={isReadOnly}
+      isCreating={isCreatingChat}
+    />
+  );
+  // Queued on this chat while the session's run slots are all taken: the
+  // server parked the send instead of starting it (see `startExecute`).
+  const isWaitingForSlot =
+    !isExecuting &&
+    queuedMessages.length > 0 &&
+    runningChatIds.size >= MAX_PARALLEL_CHATS;
+
   const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
     sessionId,
+    chatId,
     title,
     branchName,
     prUrl,
@@ -352,27 +392,11 @@ export function ChatPanel({
       ),
   });
 
-  const transcriptTail = sandboxStartupTail(
-    startupStreamingActivity,
-    isStartupStreaming,
-  );
+  const transcriptTail = isWaitingForSlot
+    ? `Waiting for a free slot — ${runningChatIds.size} of ${MAX_PARALLEL_CHATS} chats in this session are running.`
+    : sandboxStartupTail(startupStreamingActivity, isStartupStreaming);
 
   const capturedPlans = proposedPlans ?? [];
-  const lastAssistantMessageId = [...messages]
-    .toReversed()
-    .find(
-      (message) =>
-        message.role === "assistant" && message.isSystemAlert !== true,
-    )?._id;
-  const planContentMarkdown =
-    typeof planContent === "string" && planContent.trim().length > 0
-      ? planContent
-      : null;
-  const planContentAlreadyInChat =
-    planContentMarkdown !== null &&
-    capturedPlans.some(
-      (plan) => plan.planMarkdown.trim() === planContentMarkdown.trim(),
-    );
 
   const preInputContent = (
     <SandboxChatPreInput
@@ -432,11 +456,12 @@ export function ChatPanel({
       readOnlyMessage={readOnlyMessage}
       headerLeft={headerLeft}
       headerRight={headerRight}
+      tabs={chatTabs}
     >
       <ChatBody
         repo={{ id: repo._id, basePath }}
-        conversationId={sessionId}
-        chatParentId={sessionId}
+        conversationId={chatId}
+        chatParentId={chatId}
         isRouteActive={isRouteActive}
         messages={messages}
         queuedMessages={queuedMessages}
@@ -479,7 +504,7 @@ export function ChatPanel({
           modelOptions,
           accounts,
           accountId: providerAccountId,
-          onAccountChange: setProviderAccountId,
+          onAccountChange: queueGate.setAccount,
           displayTraits,
           onTraitsChange,
         }}
@@ -487,60 +512,33 @@ export function ChatPanel({
         onCancel={handleCancel}
         onForkTranscript={handleForkTranscript}
         afterMessage={(messageId) => {
+          // Only plans captured on a message render in the transcript, so a
+          // plan stays where it was proposed. Unanchored plan content (Edit,
+          // update_plan, a seeded implementation session) lives in the Plan tab.
           const plan = proposedPlanForMessage(capturedPlans, messageId);
-          if (plan) {
-            return (
-              <ProposedPlanCard
-                planMarkdown={plan.planMarkdown}
-                implemented={plan.implementedAt !== undefined}
-                onImplement={
-                  isReadOnly || plan.implementedAt !== undefined
-                    ? undefined
-                    : () => implementPlan(plan)
-                }
-                onImplementInNewSession={
-                  isReadOnly || plan.implementedAt !== undefined
-                    ? undefined
-                    : () => void implementInNewSession(plan.planMarkdown, plan)
-                }
-                onSave={isReadOnly ? undefined : savePlan}
-                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
-                saveAsDocumentLabel={saveAsDocumentLabel}
-                isSaving={isSaving}
-                isSavingDoc={isSavingDoc}
-                isArchived={isReadOnly}
-              />
-            );
-          }
-          if (
-            planContentMarkdown &&
-            !planContentAlreadyInChat &&
-            messageId === lastAssistantMessageId
-          ) {
-            return (
-              <ProposedPlanCard
-                planMarkdown={planContentMarkdown}
-                implemented={false}
-                onImplement={
-                  isReadOnly
-                    ? undefined
-                    : () => implementPlanContent(planContentMarkdown)
-                }
-                onImplementInNewSession={
-                  isReadOnly
-                    ? undefined
-                    : () => void implementInNewSession(planContentMarkdown)
-                }
-                onSave={isReadOnly ? undefined : savePlan}
-                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
-                saveAsDocumentLabel={saveAsDocumentLabel}
-                isSaving={isSaving}
-                isSavingDoc={isSavingDoc}
-                isArchived={isReadOnly}
-              />
-            );
-          }
-          return null;
+          if (!plan) return null;
+          return (
+            <ProposedPlanCard
+              planMarkdown={plan.planMarkdown}
+              implemented={plan.implementedAt !== undefined}
+              onImplement={
+                isReadOnly || plan.implementedAt !== undefined
+                  ? undefined
+                  : () => implementPlan(plan)
+              }
+              onImplementInNewSession={
+                isReadOnly || plan.implementedAt !== undefined
+                  ? undefined
+                  : () => void implementInNewSession(plan.planMarkdown, plan)
+              }
+              onSave={isReadOnly ? undefined : savePlan}
+              onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
+              saveAsDocumentLabel={saveAsDocumentLabel}
+              isSaving={isSaving}
+              isSavingDoc={isSavingDoc}
+              isArchived={isReadOnly}
+            />
+          );
         }}
         draft={draftBundle}
         isDraftLoading={!draftSeed.isReady}

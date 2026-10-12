@@ -8,6 +8,7 @@ import {
   type OrchestratorNotifyChild,
 } from "./orchestratorShared";
 import { requestRun } from "./_ave/threads";
+import { findMainChat } from "./_sessionChats/helpers";
 
 /** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
@@ -19,7 +20,12 @@ type ChildSummary = {
   parentId: ChildParentId;
 };
 
-type ChildParentId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+/** Where the child's messages hang off: a session's turns live on its chats. */
+type ChildParentId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
 
 async function loadChildSummary(
   ctx: MutationCtx,
@@ -28,12 +34,16 @@ async function loadChildSummary(
   if (child.kind === "session") {
     const session = await ctx.db.get(child.sessionId);
     if (!session || session.watchedByAve === undefined) return null;
+    // A session has no messages of its own; read the chat whose turn ended,
+    // else Main (sandbox-start failures name only the session).
+    const chatId =
+      child.chatId ?? (await findMainChat(ctx.db, session._id))?._id;
     return {
       threadId: session.watchedByAve,
       kindLabel: "session",
       title: session.title,
       repoId: session.repoId,
-      parentId: session._id,
+      parentId: chatId ?? session._id,
     };
   }
   if (child.kind === "project") {

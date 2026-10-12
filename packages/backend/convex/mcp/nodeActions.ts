@@ -72,6 +72,7 @@ const internalTokenClaims = z.object({
   repoId: z.string(),
   entityId: z.string().optional(),
   entityKind: z.enum(["session", "task", "project"]).optional(),
+  chatId: z.string().optional(),
 });
 
 type OauthTokens = {
@@ -199,6 +200,7 @@ export const verifyAccessToken = internalAction({
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
       entityKind: v.optional(chatEntityKindValidator),
+      chatId: v.optional(v.string()),
     }),
     v.null(),
   ),
@@ -234,6 +236,7 @@ export const verifyAccessToken = internalAction({
           scopedRepoId: undefined,
           entityId: undefined,
           entityKind: undefined,
+          chatId: undefined,
         };
       }
       // OAuth payload missing sub — fall through to internal token
@@ -269,6 +272,9 @@ export const verifyAccessToken = internalAction({
           : {}),
         ...(claims.data.entityKind !== undefined
           ? { entityKind: claims.data.entityKind }
+          : {}),
+        ...(claims.data.chatId !== undefined
+          ? { chatId: claims.data.chatId }
           : {}),
       };
     } catch (err) {
@@ -900,6 +906,35 @@ const projectDocSchema = z.object({
   lastChatModel: z.string().optional(),
 });
 
+/** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
+const deliveryChatSchema = z.object({
+  chatId: z.string(),
+  title: z.string(),
+  number: z.number(),
+  activeWorkflowId: z.string().optional(),
+  lastModel: z.string().optional(),
+});
+
+/** One row of `sessionChats:listForSession`, as much as the fleet tools read. */
+const sessionChatRowSchema = z.object({
+  _id: z.string(),
+  title: z.string(),
+  number: z.number(),
+  isMain: z.boolean(),
+  archived: z.boolean().optional(),
+  lastModel: z.string().optional(),
+});
+
+/** A session's open chats; its transcript is the Main chat's. */
+async function loadSessionChatsAsUser(clerkUserId: string, sessionId: string) {
+  const rows = z.array(sessionChatRowSchema).parse(
+    await runAsUser("query", clerkUserId, "sessionChats:listForSession", {
+      sessionId,
+    }),
+  );
+  return rows.filter((row) => row.archived !== true);
+}
+
 /** Slim projection of a `sessions` document. */
 const sessionDocSchema = z.object({
   _id: z.string(),
@@ -1121,16 +1156,25 @@ export const orchestratorGetAgentState = internalAction({
     ctx,
     { clerkUserId, kind, id, transcriptTail },
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
-    const streamingEntityId =
-      kind === "session"
-        ? id
-        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
-
     // The access check runs first, on its own. `messages:listByParent` *throws*
     // "Not authorized" while the entity read merely returns null, so in a
     // Promise.all the raw throw won the race and the agent saw a stack instead
     // of the sentence below.
     const hit = await readChatDocAsUser(clerkUserId, kind, id);
+
+    // A session's transcript is its Main chat's (parallel chats keep their
+    // own); the streaming row is that chat's too.
+    const sessionChats =
+      kind === "session"
+        ? await loadSessionChatsAsUser(clerkUserId, id)
+        : [];
+    const mainChat = sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
+    const transcriptParentId =
+      kind === "session" ? (mainChat?._id ?? id) : id;
+    const streamingEntityId =
+      kind === "session"
+        ? transcriptParentId
+        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
 
     // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
     // never sets `activeWorkflowId`, so that field alone is not "is executing".
@@ -1144,9 +1188,9 @@ export const orchestratorGetAgentState = internalAction({
         entityId: streamingEntityId,
       }),
       runAsUser("query", clerkUserId, "messages:listByParent", {
-        parentId: id,
+        parentId: transcriptParentId,
       }),
-      listQueuedAsUser(clerkUserId, id),
+      listQueuedAsUser(clerkUserId, transcriptParentId),
     ]);
 
     const streaming = streamingStateSchema.parse(rawStreaming);
@@ -1189,7 +1233,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        model: session.lastModel,
+        model: mainChat?.lastModel ?? session.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
@@ -1306,30 +1350,16 @@ async function ensureEntitySandboxActive(
  * message at once when the chat itself is free.
  */
 function chatDelivery(
-  hit: ChatDocHit,
+  storedModel: string | undefined,
   queuedAhead: number,
   requestedModel: string | undefined,
   isExecuting: boolean,
 ): AgentDelivery {
   const isBusy = isExecuting || queuedAhead > 0;
-  if (hit.kind === "session") {
-    return resolveAgentDelivery({
-      isBusy,
-      requestedModel,
-      storedModel: hit.doc.lastModel,
-    });
-  }
-  if (hit.kind === "task") {
-    return resolveAgentDelivery({
-      isBusy,
-      requestedModel,
-      storedModel: hit.doc.lastChatModel ?? hit.doc.model,
-    });
-  }
   return resolveAgentDelivery({
     isBusy,
     requestedModel,
-    storedModel: hit.doc.lastChatModel ?? hit.doc.model,
+    storedModel,
   });
 }
 
@@ -1340,6 +1370,10 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
+    /** Session only: which chat (number or exact title). Absent = Main. */
+    chat: v.optional(v.string()),
+    /** The caller's own chat: a daemon must not message the chat it runs in. */
+    excludeChatId: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
     /**
      * Stamps the "via MCP" chat badge. True for every MCP send — master
@@ -1351,12 +1385,58 @@ export const orchestratorSendMessage = internalAction({
   returns: v.object({
     delivered: v.union(v.literal("started"), v.literal("queued")),
     model: v.string(),
+    /** Session only: the chat the message landed in. */
+    chat: v.optional(v.object({ title: v.string(), number: v.number() })),
   }),
   handler: async (
     ctx,
-    { clerkUserId, kind, id, message, model, aveThreadId, sentViaOrchestrator },
+    {
+      clerkUserId,
+      kind,
+      id,
+      message,
+      model,
+      chat,
+      excludeChatId,
+      aveThreadId,
+      sentViaOrchestrator,
+    },
   ) => {
-    const hit = await readChatDocAsUser(clerkUserId, kind, id);
+    // A session message lands in one of its chats: the named one, else Main.
+    // From here on `targetId` is that chat; the session id is only kept for
+    // the sandbox wake and the Ave watch pointer.
+    let targetId = id;
+    let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
+    let storedModel: string | undefined;
+    if (kind === "session") {
+      const raw = await runAsUser(
+        "query",
+        clerkUserId,
+        "sessionChats:resolveDeliveryChat",
+        { sessionId: id, ...(chat !== undefined ? { chat } : {}) },
+      );
+      if (raw === null) {
+        throw new Error(
+          chat === undefined
+            ? `No session ${id} found, or you do not have access.`
+            : `Session ${id} has no open chat named "${chat}".`,
+        );
+      }
+      deliveryChat = deliveryChatSchema.parse(raw);
+      if (deliveryChat.chatId === excludeChatId) {
+        throw new Error(
+          "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+        );
+      }
+      targetId = deliveryChat.chatId;
+      storedModel = deliveryChat.lastModel;
+    } else {
+      const hit = await readChatDocAsUser(clerkUserId, kind, id);
+      storedModel =
+        hit.kind === "session"
+          ? hit.doc.lastModel
+          : (hit.doc.lastChatModel ?? hit.doc.model);
+    }
 
     if (kind === "task") {
       await ensureEntitySandboxActive(clerkUserId, kind, id);
@@ -1367,16 +1447,18 @@ export const orchestratorSendMessage = internalAction({
     // its sandbox reports ready. Starting a turn then would run this message
     // ahead of the one the child was created with (observed live: "probe
     // second message" answered while "probe first message" sat queued).
-    const queuedAhead = (await listQueuedAsUser(clerkUserId, id)).length;
+    const queuedAhead = (await listQueuedAsUser(clerkUserId, targetId)).length;
 
+    // For a session this is the named chat's own turn, not any sibling's:
+    // parallel chats run side by side, so a busy sibling must not queue it.
     const isExecuting: boolean = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind, id },
+      { kind, id: targetId },
     );
-    const delivery = chatDelivery(hit, queuedAhead, model, isExecuting);
+    const delivery = chatDelivery(storedModel, queuedAhead, model, isExecuting);
     for (const call of buildChatMessageCalls({
       kind,
-      id,
+      id: targetId,
       message,
       delivery,
       sentViaOrchestrator,
@@ -1387,7 +1469,13 @@ export const orchestratorSendMessage = internalAction({
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
     const delivered: "queued" | "started" =
       delivery.action === "queue" ? "queued" : "started";
-    return { delivered, model: delivery.model };
+    return {
+      delivered,
+      model: delivery.model,
+      ...(deliveryChat !== undefined
+        ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
+        : {}),
+    };
   },
 });
 
@@ -1400,10 +1488,11 @@ export const orchestratorStopAgent = internalAction({
   returns: v.object({ buildRunning: v.boolean() }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     if (kind === "session") {
+      // Every chat of the session: a stop means the whole agent goes quiet.
       await runAsUser(
         "mutation",
         clerkUserId,
-        "_sessions/execution:cancelExecution",
+        "_sessions/execution:cancelSessionExecution",
         { sessionId: id },
       );
       return { buildRunning: false };
@@ -1743,6 +1832,7 @@ export const handleMcpRequest = internalAction({
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
     entityKind: v.optional(chatEntityKindValidator),
+    chatId: v.optional(v.string()),
     body: v.string(),
   },
   returns: v.object({
@@ -1751,7 +1841,7 @@ export const handleMcpRequest = internalAction({
   }),
   handler: async (
     ctx,
-    { clerkUserId, scopedRepoId, entityId, entityKind, body },
+    { clerkUserId, scopedRepoId, entityId, entityKind, chatId, body },
   ) => {
     try {
       const parsedBody = JSON.parse(body);
@@ -1769,6 +1859,7 @@ export const handleMcpRequest = internalAction({
         scopedRepoId,
         entityId,
         entityKind,
+        chatId,
       };
       const tools = buildTools(credentials, ctx);
       let supabase: EvaTool[] = [];

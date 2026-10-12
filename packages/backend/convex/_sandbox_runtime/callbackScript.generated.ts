@@ -123,6 +123,7 @@ var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
 var QUESTION_ANSWERING_ENTITY_FIELDS = /* @__PURE__ */ new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId"
 ]);
@@ -1933,6 +1934,7 @@ function resetTurnCheckpoint() {
 }
 var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId"
 ]);
@@ -2342,7 +2344,7 @@ function trackClaudeToolResult(toolUseId, resultText, isError) {
   });
 }
 function canFlushBackgroundShells() {
-  return PROVIDER === "claude" && ENTITY_ID_FIELD === "sessionId" && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
+  return PROVIDER === "claude" && (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
 }
 async function flushBackgroundShellQueue() {
   if (!canFlushBackgroundShells()) return;
@@ -5523,7 +5525,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
     ENABLE_TOOL_SEARCH: "auto"
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId") {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};
@@ -9019,6 +9021,7 @@ var DEBOUNCE_MS = 300;
 function resolveBranchTarget(field, id) {
   if (typeof id !== "string" || id.length === 0) return null;
   if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "chatId") return { kind: "sessionChat", chatId: id };
   if (field === "taskId") return { kind: "task", taskId: id };
   if (field === "projectId") return { kind: "project", projectId: id };
   return null;

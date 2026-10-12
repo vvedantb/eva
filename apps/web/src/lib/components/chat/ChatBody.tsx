@@ -327,7 +327,7 @@ function ChatBodyInner({
     // Settlement is observed, not awaited: the composer only empties once this
     // resolves, and holding the user's text on screen until the mutation
     // round-trips would undo the optimistic clear every surface relies on.
-    // Same contract as useSessionSend's `review?.clear()`: the pending context
+    // Same contract as useChatSend's `review?.clear()`: the pending context
     // is consumed only once the send has actually succeeded, so a rejected send
     // leaves the chips attached for the retry. And only the exact items that
     // went into this prompt are dropped — `clear()` also threw away anything
@@ -358,6 +358,14 @@ function ChatBodyInner({
   // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
+
+  // Composer predictions read the chat only while it waits on the user and is
+  // on screen — hidden cached shells must not each spend a model call.
+  const lastMessageId = messages.at(-1)?._id;
+  const predictionTarget =
+    chatParentId && isRouteActive && !isExecuting && lastMessageId
+      ? { parentId: chatParentId, lastMessageId }
+      : undefined;
 
   // Opening a long chat used to commit every settled turn in one blocking
   // render — ~1s of locked main thread on a heavy transcript. Only the last
@@ -615,6 +623,10 @@ function ChatBodyInner({
         });
 
   /**
+   * Every prop handed to a row must keep its identity across ChatBody renders.
+   * `ChatMessage` is memoised, and switching sessions re-renders ChatBody (the
+   * cached shells flip `isRouteActive`); one unstable prop re-renders all rows.
+   *
    * `isBacklog` marks a row the chat opened already scrolled past, which skips
    * its enter animation: nothing arrived, and 80 simultaneous enter animations
    * is the most expensive part of committing a long transcript.
@@ -669,12 +681,16 @@ function ChatBodyInner({
           backgroundAgents={backgroundAgents}
           sandboxRunning={sandboxRunning}
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-          onRetryTurn={handleRetryTurn}
+          // Only a failed turn shows Retry. `handleRetryTurn` changes with
+          // `onSend`, so handing it to every row re-rendered the transcript.
+          onRetryTurn={
+            message.errorType !== undefined ? handleRetryTurn : undefined
+          }
           precedingUser={precedingUser}
           citeHighlight={citations?.highlightedMessageId === message._id}
           onFork={
             onForkTranscript && canForkMessage(message)
-              ? () => setForkThroughId(message._id)
+              ? setForkThroughId
               : undefined
           }
           belowContent={renderChatUiPanels(
@@ -813,6 +829,7 @@ function ChatBodyInner({
                 isDraftLoading={isDraftLoading}
                 hasPendingContext={hasComposerContext}
                 allowEmptySubmit={allowEmptySubmit}
+                predictionTarget={predictionTarget}
               />
             </m.div>
           )}

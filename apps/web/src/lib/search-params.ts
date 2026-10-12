@@ -412,6 +412,20 @@ export const docModeParser = parseAsStringLiteral(docModes)
 // Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
 export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
 
+/** `?panelItem=` value that opens the chat Log instead of a doc row. */
+export const CHAT_LOG_PANEL_ITEM = "log";
+
+// Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
+export const chatLogKinds = [
+  "decision",
+  "change",
+  "research",
+  "question",
+  "note",
+] as const;
+export const chatLogKindParser =
+  parseAsStringLiteral(chatLogKinds).withOptions(searchOptions);
+
 // Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
 // Absent means the chat's primary PR.
 export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
@@ -473,6 +487,15 @@ export const pullRequestListStateParser = parseAsStringLiteral(
   .withOptions(searchOptions);
 
 export const previewPortParser = parseAsInteger.withOptions(searchOptions);
+
+/**
+ * Active chat tab of a session (`?chat=2`), by the chat's per-session number.
+ * Absent means Main, so every pre-existing session link still opens Main. A
+ * query param rather than a path segment because the chat axis is orthogonal
+ * to the `$sandboxTab` / `review/*` / `pr/*` segments that already hang off
+ * `$numId`, and nesting one inside the other would break every existing link.
+ */
+export const chatParser = parseAsInteger.withOptions(tabOptions);
 
 export const branchParser = parseAsString
   .withDefault("main")

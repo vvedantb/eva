@@ -1,7 +1,7 @@
+import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { chatRefValidator, type ChatRef } from "./_validators/shapes";
 
 // Leaf module for the orchestrator-notify hook surface. The turn-finish call
 // sites (`_taskWorkflow/helpers.ts`, `_taskWorkflow/publicMutations.ts`) import
@@ -10,10 +10,21 @@ import { chatRefValidator, type ChatRef } from "./_validators/shapes";
 // the "use node" action chunk and break the prod push.
 
 /** Identifies the finished child a master session is being woken about. */
-export const orchestratorNotifyChildValidator = chatRefValidator;
+export const orchestratorNotifyChildValidator = v.union(
+  v.object({
+    kind: v.literal("session"),
+    sessionId: v.id("sessions"),
+    /** The chat whose turn ended; absent means the session's Main chat. */
+    chatId: v.optional(v.id("sessionChats")),
+  }),
+  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
+);
 
 /** The `child` payload of `notifyOrchestratorOfChild`, for hook call sites. */
-export type OrchestratorNotifyChild = ChatRef;
+export type OrchestratorNotifyChild = Infer<
+  typeof orchestratorNotifyChildValidator
+>;
 
 /**
  * Schedules a master wake-up for a finished quick-task run. No-op when the task

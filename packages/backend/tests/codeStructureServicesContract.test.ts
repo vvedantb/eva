@@ -651,7 +651,7 @@ test("composer last-* patches share composerTraitFields", () => {
     );
   }
   for (const path of [
-    "../../apps/web/src/lib/hooks/useSessionModel.ts",
+    "../../apps/web/src/lib/hooks/useChatModel.ts",
     "../../apps/web/src/lib/components/tasks/TaskSandboxChatPanel.tsx",
     "../../apps/web/src/lib/components/projects/useProjectTraits.ts",
   ] as const) {
@@ -707,7 +707,7 @@ test("implementation prompts share buildTypecheckCommand", () => {
 
 test("session and task trait writes share toRunTraitArgs", () => {
   for (const path of [
-    "../../apps/web/src/lib/hooks/useSessionModel.ts",
+    "../../apps/web/src/lib/hooks/useChatModel.ts",
     "../../apps/web/src/lib/components/tasks/TaskSandboxChatPanel.tsx",
     "../../apps/web/src/lib/components/projects/useProjectTraits.ts",
   ] as const) {

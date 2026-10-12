@@ -1315,11 +1315,16 @@ html[data-blur-pid] [data-pii] {
     transparent calc(var(--beam-spread) * 2);
 }
 
+/* Brand purple→blue, same as the spinners and the session-row Drive grid.
+ * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `brand-colors.ts`. */
 .beam-colorful {
+  --eva-purple: 139 63 184;
+  --eva-blue: 59 125 216;
   --beam-stops:
-    transparent 0%, rgb(var(--chart-4) / 0.9) calc(var(--beam-spread) * 0.5),
-    rgb(var(--chart-2) / 0.95) var(--beam-spread),
-    rgb(var(--chart-5) / 0.75) calc(var(--beam-spread) * 1.5),
+    transparent 0%,
+    rgb(var(--eva-purple) / 0.9) calc(var(--beam-spread) * 0.5),
+    color-mix(in oklab, rgb(var(--eva-purple)), rgb(var(--eva-blue))) var(--beam-spread),
+    rgb(var(--eva-blue) / 0.95) calc(var(--beam-spread) * 1.5),
     transparent calc(var(--beam-spread) * 2);
 }
 

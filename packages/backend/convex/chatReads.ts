@@ -1,11 +1,19 @@
 import { v } from "convex/values";
-import type { DatabaseReader } from "./_generated/server";
+import type { DatabaseReader, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
 
-type ChatEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
-type ChatEntity = Doc<"sessions"> | Doc<"agentTasks"> | Doc<"projects">;
+type ChatEntityId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
+type ChatEntity =
+  | Doc<"sessionChats">
+  | Doc<"sessions">
+  | Doc<"agentTasks">
+  | Doc<"projects">;
 
 /** Chats the user "owns": creator, owner or project member. Shared chats they never opened stay quiet. */
 export function isOwnChat(
@@ -116,6 +124,30 @@ export const isUnread = authQuery({
   },
 });
 
+/** Upserts the user's read row for one chat entity, skipping repeat calls past its watermark. */
+async function upsertReadRow(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  entity: ChatEntity,
+): Promise<void> {
+  // A task with no repo is never unread (see `hasUnreadFor`); nothing to store.
+  if (entity.repoId === undefined) return;
+  const row = await getReadRow(ctx.db, userId, entity._id);
+  const lastReadAt = Date.now();
+  if (!row) {
+    await ctx.db.insert("chatReads", {
+      userId,
+      parentId: entity._id,
+      repoId: entity.repoId,
+      lastReadAt,
+    });
+    return;
+  }
+  // Already past the watermark: skip, so repeat calls on mount do not churn.
+  if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return;
+  await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
+}
+
 export const markRead = authMutation({
   args: { parentId: chatTurnEntityIdValidator },
   returns: v.null(),
@@ -123,22 +155,13 @@ export const markRead = authMutation({
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const entity = await ctx.db.get(args.parentId);
     if (!entity) return null;
-    // A task with no repo is never unread (see `hasUnreadFor`); nothing to store.
-    if (entity.repoId === undefined) return null;
-    const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
-    const lastReadAt = Date.now();
-    if (!row) {
-      await ctx.db.insert("chatReads", {
-        userId: ctx.userId,
-        parentId: args.parentId,
-        repoId: entity.repoId,
-        lastReadAt,
-      });
-      return null;
-    }
-    // Already past the watermark: skip, so repeat calls on mount do not churn.
-    if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return null;
-    await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
+    await upsertReadRow(ctx, ctx.userId, entity);
+    // The sidebar keys a session's unread dot by the session id, so reading
+    // one of its chats also reads the session.
+    const chatId = ctx.db.normalizeId("sessionChats", args.parentId);
+    const chat = chatId ? await ctx.db.get(chatId) : null;
+    const session = chat ? await ctx.db.get(chat.sessionId) : null;
+    if (session) await upsertReadRow(ctx, ctx.userId, session);
     return null;
   },
 });

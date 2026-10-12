@@ -119,6 +119,18 @@ export const evalIssueValidator = v.object({
   taskId: v.optional(v.id("agentTasks")),
 });
 
+/**
+ * One browser scenario's outcome in a testing-arena browser run. Title is
+ * copied in so the run stays readable after the scenario is edited or deleted.
+ */
+export const arenaScenarioResultValidator = v.object({
+  scenarioId: v.id("arenaScenarios"),
+  title: v.string(),
+  passed: v.boolean(),
+  notes: v.string(),
+  screenshotStorageId: v.optional(v.id("_storage")),
+});
+
 export const userFlowValidator = v.object({
   name: v.string(),
   steps: v.array(v.string()),
@@ -266,11 +278,13 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("blurPid"),
   v.literal("voiceDictation"),
   v.literal("composerAutocomplete"),
+  v.literal("composerPredictions"),
   v.literal("simpleView"),
   v.literal("replyChime"),
   v.literal("notificationBell"),
   v.literal("disablePageMotion"),
   v.literal("viewVercelDeployment"),
+  v.literal("disableAutoArchive"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -279,11 +293,13 @@ export const experimentalFlagsFields = {
   blurPid: v.optional(v.boolean()),
   voiceDictation: v.optional(v.boolean()),
   composerAutocomplete: v.optional(v.boolean()),
+  composerPredictions: v.optional(v.boolean()),
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
   notificationBell: v.optional(v.boolean()),
   disablePageMotion: v.optional(v.boolean()),
   viewVercelDeployment: v.optional(v.boolean()),
+  disableAutoArchive: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -294,11 +310,13 @@ export const resolvedExperimentalFlagsValidator = v.object({
   blurPid: v.boolean(),
   voiceDictation: v.boolean(),
   composerAutocomplete: v.boolean(),
+  composerPredictions: v.boolean(),
   simpleView: v.boolean(),
   replyChime: v.boolean(),
   notificationBell: v.boolean(),
   disablePageMotion: v.boolean(),
   viewVercelDeployment: v.boolean(),
+  disableAutoArchive: v.boolean(),
 });
 
 /**

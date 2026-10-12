@@ -1,5 +1,6 @@
 "use client";
 
+import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useConvex } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
@@ -36,7 +37,6 @@ import { entityPathSegment } from "@/lib/numId";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import {
   buildProposedPlanMarkdownFilename,
-  downloadPlanAsMarkdownFile,
   normalizePlanMarkdownForExport,
   proposedPlanTitle,
 } from "./planExport";
@@ -89,7 +89,7 @@ export function SessionPrdPlanView({
 
   const handleDownload = () => {
     if (!planContent.trim()) return;
-    downloadPlanAsMarkdownFile(
+    downloadMarkdownFile(
       buildProposedPlanMarkdownFilename(planContent),
       normalizePlanMarkdownForExport(planContent),
     );

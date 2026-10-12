@@ -127,6 +127,20 @@ Interactive panels (optional): when a result is mostly numbers, a checklist, a c
 
 Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.`;
 
+/**
+ * Keeps the chat's Log (Documents tab) current, so someone returning weeks
+ * later can catch up without reading the chat. Answered questions and commits
+ * are logged by Eva itself.
+ */
+export const CHAT_LOG_INSTRUCTION = `
+
+## Chat log (Documents tab):
+This chat keeps a Log so the user can catch up later without reading the chat. Before you finish a turn, call eva MCP \`log_entry\` once for each of these that happened in the turn:
+- kind "decision": an approach, scope or design choice that you or the user settled. Put the reason in "body". If it replaces an earlier decision, pass that entry's id as "supersedes" (call \`read_chat_log\` to find it).
+- kind "research": a finding that shaped the work: what you looked at, and what you concluded.
+- kind "change": what you built or changed, in user terms. One entry for each change, not one for each file.
+Keep each title to one short sentence. Skip routine turns (a plain question answered, no decision taken). Never repeat an entry that is already logged. Eva logs answered questions and the commit range of each turn by itself. If you are unsure what was agreed earlier in this chat, call \`read_chat_log\`.`;
+
 /** One linked repo, as the prompt needs to describe it to the agent. */
 export type LinkedRepoPromptRow = {
   owner: string;

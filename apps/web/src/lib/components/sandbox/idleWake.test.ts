@@ -6,7 +6,11 @@ import {
 } from "./idleWake";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { isSandboxLifecycleAlert } from "@/lib/components/chat/chatBodyUtils";
-import { sandboxPausedAlertText } from "@eva/shared";
+import {
+  SANDBOX_ENGAGED_WINDOW_MS,
+  isSandboxUserEngaged,
+  sandboxPausedAlertText,
+} from "@eva/shared";
 
 /**
  * Auto-wake fires when a visible sandbox tab of a paused sandbox mounts. A
@@ -76,5 +80,35 @@ describe("isSandboxLifecycleAlert", () => {
     expect(
       isSandboxLifecycleAlert({ isSystemAlert: false, content: "Sandbox stopped" }),
     ).toBe(false);
+  });
+});
+
+/**
+ * Session 98 stayed awake overnight: a tab left visible on an unattended screen
+ * held presence. Engagement needs a visible tab AND input inside the window.
+ */
+describe("isSandboxUserEngaged", () => {
+  const now = 1_000_000_000;
+
+  test("a visible tab with recent input is engaged", () => {
+    expect(
+      isSandboxUserEngaged({ visible: true, lastInputAt: now - 60_000, now }),
+    ).toBe(true);
+  });
+
+  test("a visible tab with no input for the window is not engaged", () => {
+    expect(
+      isSandboxUserEngaged({
+        visible: true,
+        lastInputAt: now - SANDBOX_ENGAGED_WINDOW_MS,
+        now,
+      }),
+    ).toBe(false);
+  });
+
+  test("a hidden tab is never engaged", () => {
+    expect(isSandboxUserEngaged({ visible: false, lastInputAt: now, now })).toBe(
+      false,
+    );
   });
 });

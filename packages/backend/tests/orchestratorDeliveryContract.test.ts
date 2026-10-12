@@ -36,8 +36,24 @@ describe("sentViaOrchestrator survives queueing", () => {
   test("both enqueue mutations accept and persist it", () => {
     for (const source of [sessionExecution, taskChat]) {
       expect(source).toContain("sentViaOrchestrator: v.optional(v.boolean())");
-      expect(source).toContain("sentViaOrchestrator: args.sentViaOrchestrator");
     }
+    expect(taskChat).toContain("sentViaOrchestrator: args.sentViaOrchestrator");
+    // Session chats enqueue through one shared helper: the mutation threads
+    // the flag into it and the helper writes it onto the queued row.
+    const enqueue = sessionExecution.slice(
+      sessionExecution.indexOf("export const enqueueMessage ="),
+    );
+    expect(enqueue).toContain("sentViaOrchestrator,\n      ...settings");
+    expect(enqueue).toContain("enqueueChatMessage(ctx, {");
+    expect(enqueue).toContain("sentViaOrchestrator,\n    });");
+    const helper = sessionExecution.slice(
+      sessionExecution.indexOf("async function enqueueChatMessage("),
+      sessionExecution.indexOf("export const retryEmptyStalledSessionTurn ="),
+    );
+    expect(helper).toContain('ctx.db.insert("queuedMessages"');
+    expect(helper).toContain(
+      "sentViaOrchestrator: params.sentViaOrchestrator",
+    );
   });
 
   test("both drains copy it onto the started user message", () => {
@@ -87,7 +103,8 @@ describe("queued work counts as busy", () => {
       nodeActions.indexOf("function chatDelivery("),
       nodeActions.indexOf("export const orchestratorSendMessage"),
     );
-    expect(delivery.match(/^\s+isBusy,$/gm)?.length).toBe(3);
+    // Session, quick task and project chats share one resolveAgentDelivery call.
+    expect(delivery.match(/^\s+isBusy,$/gm)?.length).toBe(1);
   });
 });
 

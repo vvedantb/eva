@@ -9,12 +9,16 @@ import {
   backgroundProcessStatusValidator,
   deploymentStatusValidator,
   docKindValidator,
+  chatLogEntryKindValidator,
+  chatLogAuthorValidator,
   docVersionSourceValidator,
   errorTypeValidator,
   evaluationStatusValidator,
   evalFixStatusValidator,
   notificationTypeValidator,
   notificationUrgencyValidator,
+  evaluationKindValidator,
+  evaluationTriggerValidator,
   phaseValidator,
   prRecapOriginValidator,
   prRecapStatusValidator,
@@ -22,6 +26,9 @@ import {
   reactionTargetValidator,
   roleUserValidator,
   roleValidator,
+  routedAuthorKindValidator,
+  routedSourceKindValidator,
+  routedThreadStatusValidator,
   runModeValidator,
   runStatusValidator,
   sandboxProviderKindValidator,
@@ -48,6 +55,7 @@ import {
   customThemeValidator,
   envVarEntryValidator,
   evalIssueValidator,
+  arenaScenarioResultValidator,
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
@@ -249,6 +257,7 @@ export type TurnState = Infer<typeof turnStateValidator>;
 
 /** Chat entities that own durable turns; the id's table picks the surface. */
 export const chatTurnEntityIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("agentTasks"),
   v.id("projects"),
@@ -259,6 +268,7 @@ export const chatTurnEntityIdValidator = v.union(
  * one-shot agents work on (automation runs, docs, evaluation reports).
  */
 export const turnEntityIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("agentTasks"),
   v.id("projects"),
@@ -284,6 +294,10 @@ export const turnFields = {
   // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
   lane: v.optional(turnLaneValidator),
+  // The session a chat turn belongs to, so one indexed scan answers "how many
+  // chats of this session are running" (the parallel-chat cap) and "is any
+  // chat of this session executing" (the sidebar).
+  sessionId: v.optional(v.id("sessions")),
   streamingEntityId: v.string(),
   state: turnStateValidator,
   open: v.boolean(),
@@ -449,6 +463,45 @@ const prSummaryFields = {
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   prCount: v.optional(v.number()),
+};
+
+/**
+ * One chat thread inside a session. The session owns the sandbox, branch,
+ * PR and preview; the chat owns the transcript, the warm daemon, the open
+ * turn and the model settings. Every session has a Main chat (number 1);
+ * further chats run in parallel on the same checkout, each with its own
+ * daemon and provider transcript (`sessionClaudeUuid(chat._id)`).
+ */
+export const sessionChatFields = {
+  sessionId: v.id("sessions"),
+  repoId: v.id("githubRepos"),
+  /** Session owner, mirrored so the 50ms daemon claim poll skips the repo access read. */
+  userId: v.id("users"),
+  title: v.string(),
+  /** Per-session sequence; 1 is Main. Stable for links (`?chat=2`). */
+  number: v.number(),
+  isMain: v.boolean(),
+  /** Closed by the user. Main can never be archived. */
+  archived: v.optional(v.boolean()),
+  createdBy: v.optional(v.id("users")),
+  updatedAt: v.optional(v.number()),
+  activeWorkflowId: v.optional(v.string()),
+  /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
+  lastTurnFinishedAt: v.optional(v.number()),
+  // Composer settings, sticky per chat (see the matching session comments
+  // for each field's contract).
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  provider: v.optional(aiProviderValidator),
+  lastModel: v.optional(aiModelValidator),
+  lastReasoningLevel: v.optional(reasoningLevelValidator),
+  lastThinkingEnabled: v.optional(v.boolean()),
+  lastUse1mContext: v.optional(v.boolean()),
+  lastFastMode: v.optional(v.boolean()),
+  // A Main chat backfilled from an existing session keeps the session id as
+  // its provider-transcript seed so it resumes the conversation Claude
+  // already holds instead of starting cold. New chats hash their own id.
+  claudePersistenceSeed: v.optional(v.id("sessions")),
+  ...chatDaemonEntityFields,
 };
 
 export const agentTaskFields = {
@@ -1158,7 +1211,12 @@ export const messageFields = {
   finishedAt: v.optional(v.number()),
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   // Client-generated id (crypto.randomUUID) set when a user message is sent
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
@@ -1189,6 +1247,9 @@ export const messageFields = {
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),
+  // The account behind `credentialSourceLabel`; absent = Team (or a row from
+  // before this stamp). Lets a usage-limit hold release other accounts.
+  credentialAccountId: v.optional(v.id("userProviderAccounts")),
   // User rows: model chosen in the composer, snapshotted at send/dequeue so the
   // chat can show a provider icon + tooltip later. Assistant rows: the provider
   // checkpoint, stamped on successful completion — everything after the last
@@ -1268,7 +1329,12 @@ export const aveMessageFields = {
 };
 
 export const queuedMessageFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
@@ -1459,6 +1525,28 @@ export const chatSourceFields = {
   sourceProjectId: v.optional(v.id("projects")),
 };
 
+/**
+ * One append-only entry in a chat's Log (Documents tab): a decision, change,
+ * research finding, answered question or note. Never edited; a changed
+ * decision is a new row that names the one it `supersedesId`.
+ */
+export const chatLogEntryFields = {
+  ...chatSourceFields,
+  // The chat's repo, for the repo Documents list. Absent only for a task with
+  // no repo of its own or through its project.
+  repoId: v.optional(v.id("githubRepos")),
+  kind: chatLogEntryKindValidator,
+  author: chatLogAuthorValidator,
+  title: v.string(),
+  body: v.optional(v.string()),
+  supersedesId: v.optional(v.id("chatLogEntries")),
+  // Assistant reply this entry came from (system change entries dedupe on it).
+  messageId: v.optional(v.id("messages")),
+  beforeSha: v.optional(v.string()),
+  afterSha: v.optional(v.string()),
+  createdAt: v.number(),
+};
+
 export const docFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1500,6 +1588,9 @@ export const docFields = {
   activeWorkflowId: v.optional(v.string()),
   testGenStatus: v.optional(evaluationStatusValidator),
   testPrUrl: v.optional(v.string()),
+  // Testing Arena: set when browser scenarios run on every PR. Holds the user
+  // who turned it on — PR runs launch with their credentials.
+  arenaPrRunsUserId: v.optional(v.id("users")),
   contentUpdatedAt: v.optional(v.number()),
   lastParsedAt: v.optional(v.number()),
   /** Set on create going forward; optional so legacy docs need no backfill. */
@@ -1567,6 +1658,8 @@ export const draftFields = {
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),
   sessionId: v.optional(v.id("sessions")),
+  // One draft per session chat tab; `sessionId` stays for the index and repo scope.
+  chatId: v.optional(v.id("sessionChats")),
   content: v.string(),
   updatedAt: v.number(),
 };
@@ -1584,6 +1677,9 @@ export const promptStashFields = {
 export const evaluationReportFields = {
   repoId: v.id("githubRepos"),
   docId: v.id("docs"),
+  /** Absent on reports from before browser runs existed: those are "code". */
+  kind: v.optional(evaluationKindValidator),
+  trigger: v.optional(evaluationTriggerValidator),
   status: evaluationStatusValidator,
   // Severity-ranked issues flagged against the document.
   issues: v.optional(v.array(evalIssueValidator)),
@@ -1595,6 +1691,23 @@ export const evaluationReportFields = {
   prUrl: v.optional(v.string()),
   // Branch the evaluation ran against, so an opt-in fix uses the same base.
   branchName: v.optional(v.string()),
+  // Browser runs: one entry per scenario, filled when the run completes.
+  scenarioResults: v.optional(v.array(arenaScenarioResultValidator)),
+  // PR-triggered runs: the commit tested and the GitHub check run reporting it.
+  prNumber: v.optional(v.number()),
+  headSha: v.optional(v.string()),
+  checkRunId: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+// A stored, repeatable browser test for one Testing Arena doc. `instructions`
+// is plain English: the steps to take and the outcome that counts as a pass.
+export const arenaScenarioFields = {
+  repoId: v.id("githubRepos"),
+  docId: v.id("docs"),
+  title: v.string(),
+  instructions: v.string(),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
@@ -1617,6 +1730,7 @@ export const draftTarget = v.union(
   v.object({
     kind: v.literal("sessionChat"),
     sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
   }),
 );
 
@@ -1637,6 +1751,19 @@ export const artifactFields = {
   // Chat that created this artifact (`create_artifact` from a sandbox token).
   // Manual uploads leave these unset. Indexes skip rows with no source.
   ...chatSourceFields,
+};
+
+// Persistent key/value state for one hosted artifact, read and written through
+// `window.cowork.state` in the iframe bridge. `ownerId` set = private to that
+// viewer ("user" scope); unset = shared by every member of the bound team.
+// `value` is JSON text, so artifacts can store any JSON without `v.any()`.
+export const artifactStateFields = {
+  artifactId: v.id("artifacts"),
+  ownerId: v.optional(v.id("users")),
+  key: v.string(),
+  value: v.string(),
+  updatedBy: v.id("users"),
+  updatedAt: v.number(),
 };
 
 // A user-defined sandbox tab for an app (a `githubRepos` row). Points at a port
@@ -1722,7 +1849,12 @@ export const agentUsageLimitFields = {
  * client boundary (`@eva/shared/generativeUi`).
  */
 export const chatUiPanelFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the panel appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.optional(v.string()),
@@ -1738,7 +1870,12 @@ export const chatUiPanelFields = {
  * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
  */
 export const chatHtmlRenderFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the page appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.string(),
@@ -1765,7 +1902,12 @@ export const envVarRequestScopeValidator = v.union(
  * lands here.
  */
 export const envVarRequestFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   /** The assistant turn the card appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   key: v.string(),
@@ -1793,7 +1935,12 @@ export const envVarRequestFields = {
  * because their shape is the previewed app's business, not the database's.
  */
 export const previewToolCallFields = {
-  parentId: v.union(v.id("sessions"), v.id("projects"), v.id("agentTasks")),
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
   kind: v.union(v.literal("list"), v.literal("invoke")),
   /** Invoke only: the page tool to run. */
   name: v.optional(v.string()),
@@ -1918,4 +2065,57 @@ export const teamEnvVarFields = {
   teamId: v.id("teams"),
   vars: v.array(envVarEntryValidator),
   updatedAt: v.number(),
+};
+
+/** Team-scoped routing directory — what a person owns and should be asked. */
+export const workProfileFields = {
+  teamId: v.id("teams"),
+  userId: v.id("users"),
+  role: v.optional(roleUserValidator),
+  headline: v.string(),
+  owns: v.string(),
+  askMeAbout: v.string(),
+  updatedAt: v.number(),
+};
+
+/** One routed question thread: one topic, one source entity, many teammates. */
+export const routedThreadFields = {
+  teamId: v.id("teams"),
+  repoId: v.id("githubRepos"),
+  sourceKind: routedSourceKindValidator,
+  sourceId: v.string(),
+  sourceNumId: v.optional(v.number()),
+  sourceTitle: v.string(),
+  topicKey: v.string(),
+  title: v.string(),
+  status: routedThreadStatusValidator,
+  lastMessageAt: v.number(),
+  lastPreview: v.string(),
+  createdAt: v.number(),
+  resolvedAt: v.optional(v.number()),
+};
+
+/** One teammate on a routed thread. Denormalises the thread's clock so the
+ *  Manager Ave question dock is one indexed scan, newest first. */
+export const routedParticipantFields = {
+  threadId: v.id("routedThreads"),
+  userId: v.id("users"),
+  teamId: v.id("teams"),
+  lastMessageAt: v.number(),
+  /** True while Eva is still waiting on this person specifically. */
+  needsReply: v.boolean(),
+  addedAt: v.number(),
+  repliedAt: v.optional(v.number()),
+};
+
+export const routedMessageFields = {
+  threadId: v.id("routedThreads"),
+  authorKind: routedAuthorKindValidator,
+  authorUserId: v.optional(v.id("users")),
+  body: v.string(),
+  /** Why Eva is asking — source work + agent briefing. Absent on older rows. */
+  context: v.optional(v.string()),
+  createdAt: v.number(),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  mirroredMessageId: v.optional(v.id("messages")),
 };

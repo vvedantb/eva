@@ -58,6 +58,10 @@ export const mintSandboxSessionTokens = internalAction({
     // session/task/project without the agent passing an id.
     entityId: v.optional(v.string()),
     entityKind: v.optional(chatEntityKindValidator),
+    // The session chat a session daemon runs. `entityId` stays the session so
+    // session-level tools (dev server, browser, PRs) keep resolving; chat
+    // content (panels, questions, env var cards) lands on this row instead.
+    chatId: v.optional(v.string()),
   },
   returns: v.object({
     sandboxToken: v.string(),
@@ -100,6 +104,7 @@ export const mintSandboxSessionTokens = internalAction({
             ...(args.entityKind !== undefined
               ? { entityKind: args.entityKind }
               : {}),
+            ...(args.chatId !== undefined ? { chatId: args.chatId } : {}),
           })
             .setProtectedHeader({ alg: "HS256" })
             .setExpirationTime(`${expiresIn}s`)

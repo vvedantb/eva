@@ -46,6 +46,7 @@ export const ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
  */
 const QUESTION_ANSWERING_ENTITY_FIELDS = new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId",
 ]);

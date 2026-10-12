@@ -5,6 +5,7 @@ import type {
   resolvedExperimentalFlagsValidator,
 } from "../_validators/shapes";
 
+// Derived from the validators so a new flag is declared once, in shapes.ts.
 export type ExperimentalFlagKey = Infer<typeof experimentalFlagKeyValidator>;
 
 export type ResolvedExperimentalFlags = Infer<
@@ -21,10 +22,12 @@ export function resolveExperimentalFlags(
     blurPid: flags?.blurPid ?? false,
     voiceDictation: flags?.voiceDictation ?? false,
     composerAutocomplete: flags?.composerAutocomplete ?? false,
+    composerPredictions: flags?.composerPredictions ?? false,
     simpleView: flags?.simpleView ?? false,
     replyChime: flags?.replyChime ?? false,
     notificationBell: flags?.notificationBell ?? false,
     disablePageMotion: flags?.disablePageMotion ?? false,
     viewVercelDeployment: flags?.viewVercelDeployment ?? false,
+    disableAutoArchive: flags?.disableAutoArchive ?? false,
   };
 }

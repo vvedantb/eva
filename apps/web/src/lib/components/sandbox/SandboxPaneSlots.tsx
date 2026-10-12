@@ -25,6 +25,7 @@ import {
   isSimpleViewHiddenSandboxTab,
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
+import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
 
 interface SandboxPaneSlotsProps {
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
@@ -84,7 +85,7 @@ interface SandboxPaneSlotsProps {
   /**
    * The sandbox is closed and the host would allow a Start: no last-start
    * error, not read-only, no run or build owning it. Combined
-   * here with the setting and tab visibility to auto-wake.
+   * here with the setting and recent input on a visible tab to auto-wake.
    */
   autoWakeEligible?: boolean;
 }
@@ -128,14 +129,17 @@ export function SandboxPaneSlots({
       ? "preview"
       : activeTab;
   const entityId = sandboxOwnerParentId(owner);
-  // Idle pause: a VM tab in the foreground keeps the sandbox awake (presence
-  // beacon, always on). With the setting fully on, the same visible tab wakes
-  // a paused sandbox, and the external links become Eva wake links so they
-  // outlive a pause.
+  // Idle pause: a VM tab in the foreground AND in use keeps the sandbox awake
+  // (presence beacon, always on). With the setting fully on, the same tab
+  // wakes a paused sandbox, and the external links become Eva wake links so
+  // they outlive a pause. "In use" (recent input) stops an unattended visible
+  // tab from holding or re-waking the sandbox indefinitely.
   const currentUserId = useQuery(api.auth.me);
   const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
+  const engaged = useUserEngaged();
   const beaconActive =
     presenceEnabled &&
+    engaged &&
     isActive &&
     isSandboxVmTab(resolvedTab) &&
     currentUserId !== undefined &&
@@ -239,6 +243,7 @@ export function SandboxPaneSlots({
       {idlePause?.mode === "on" &&
       autoWakeEligible &&
       presenceEnabled &&
+      engaged &&
       !isActive &&
       !isSandboxStarting &&
       onStartSandbox &&

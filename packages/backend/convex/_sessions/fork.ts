@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { internalMutation } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import {
   getSessionWithAccess,
   internalAuthMutation,
@@ -8,6 +8,7 @@ import {
 } from "../functions";
 import { sessionStatusValidator } from "../validators";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
+import { ensureMainChat, findMainChat } from "../_sessionChats/helpers";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
 
@@ -98,16 +99,18 @@ export const createForkedSession = internalAuthMutation({
     const repoGroup = source.repoGroupId
       ? await ctx.db.get(source.repoGroupId)
       : null;
+    // Composer picks live on the chat; the fork's Main chat inherits Main's.
+    const picks = (await findMainChat(ctx.db, source._id)) ?? source;
     const { sessionId, numId } = await createSession(
       ctx,
       {
         repoId: source.repoId,
         title: `Fork · ${source.title}`,
-        model: source.lastModel,
-        reasoningLevel: source.lastReasoningLevel,
-        thinkingEnabled: source.lastThinkingEnabled,
-        use1mContext: source.lastUse1mContext,
-        fastMode: source.lastFastMode,
+        model: picks.lastModel,
+        reasoningLevel: picks.lastReasoningLevel,
+        thinkingEnabled: picks.lastThinkingEnabled,
+        use1mContext: picks.lastUse1mContext,
+        fastMode: picks.lastFastMode,
         baseBranch:
           args.stackOnSource && source.branchName
             ? source.branchName
@@ -135,6 +138,24 @@ export const createForkedSession = internalAuthMutation({
 });
 
 /**
+ * The Main chats a fork copies between. Only Main is copied: the forked disk
+ * holds Main's persisted conversation (its `claudePersistenceSeed`), and
+ * parallel chats are separate threads. `ensureMainChat` also moves a legacy
+ * source's session-keyed rows onto its Main chat before the copy reads them.
+ */
+async function forkMainChats(
+  ctx: MutationCtx,
+  args: { sourceSessionId: Id<"sessions">; sessionId: Id<"sessions"> },
+): Promise<{ from: Id<"sessionChats">; to: Id<"sessionChats"> }> {
+  const source = await ctx.db.get(args.sourceSessionId);
+  const fork = await ctx.db.get(args.sessionId);
+  if (!source || !fork) throw new Error("Session not found");
+  const from = await ensureMainChat(ctx, source);
+  const to = await ensureMainChat(ctx, fork);
+  return { from: from._id, to: to._id };
+}
+
+/**
  * Copies one page of the source transcript into the fork, in order. Rows copy
  * verbatim — `model` checkpoints stay truthful because the forked disk holds
  * the agent's thread, `afterSha` checkpoints exist in the forked git, storage
@@ -155,9 +176,10 @@ export const copyForkMessages = internalMutation({
     pairs: v.array(forkMessagePairValidator),
   }),
   handler: async (ctx, args) => {
+    const chats = await forkMainChats(ctx, args);
     const page = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sourceSessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", chats.from))
       .paginate({
         cursor: args.cursor,
         numItems: args.numItems ?? FORK_COPY_PAGE,
@@ -173,7 +195,7 @@ export const copyForkMessages = internalMutation({
       } = message;
       const to = await ctx.db.insert("messages", {
         ...fields,
-        parentId: args.sessionId,
+        parentId: chats.to,
       });
       pairs.push({ from: _id, to });
     }
@@ -195,6 +217,7 @@ export const copyForkCards = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const chats = await forkMainChats(ctx, args);
     const copies = new Map(args.pairs.map((pair) => [pair.from, pair.to]));
     const remap = (messageId: Id<"messages"> | undefined) =>
       messageId === undefined ? undefined : copies.get(messageId);
@@ -220,27 +243,27 @@ export const copyForkCards = internalMutation({
     }
     const panels = await ctx.db
       .query("chatUiPanels")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sourceSessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", chats.from))
       .collect();
     for (const panel of panels) {
       const { _id, _creationTime, messageId, ...fields } = panel;
       const copy = remap(messageId);
       await ctx.db.insert("chatUiPanels", {
         ...fields,
-        parentId: args.sessionId,
+        parentId: chats.to,
         ...(copy ? { messageId: copy } : {}),
       });
     }
     const renders = await ctx.db
       .query("chatHtmlRenders")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sourceSessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", chats.from))
       .collect();
     for (const render of renders) {
       const { _id, _creationTime, messageId, ...fields } = render;
       const copy = remap(messageId);
       await ctx.db.insert("chatHtmlRenders", {
         ...fields,
-        parentId: args.sessionId,
+        parentId: chats.to,
         ...(copy ? { messageId: copy } : {}),
       });
     }

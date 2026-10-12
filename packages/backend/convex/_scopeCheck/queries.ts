@@ -12,13 +12,17 @@ import type { Doc, Id } from "../_generated/dataModel";
 const RECENT_MESSAGE_LIMIT = 60;
 
 /**
- * The repo a chat's diff lives in. `messages.parentId` spans three tables, so
+ * The repo a chat's diff lives in. `messages.parentId` spans four tables, so
  * normalizeId is the only way to tell which one an id belongs to.
  */
 async function resolveRepoId(
   ctx: QueryCtx,
   parentId: Doc<"messages">["parentId"],
 ): Promise<Id<"githubRepos"> | null> {
+  const chatId = ctx.db.normalizeId("sessionChats", parentId);
+  if (chatId !== null) {
+    return (await ctx.db.get(chatId))?.repoId ?? null;
+  }
   const sessionId = ctx.db.normalizeId("sessions", parentId);
   if (sessionId !== null) {
     return (await ctx.db.get(sessionId))?.repoId ?? null;

@@ -3,11 +3,11 @@ import { internalMutation, internalQuery } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
 import {
+  daemonEntityTableValidator,
   sandboxEntityTableValidator,
   type SandboxEntityTable,
 } from "../_validators/enums";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
-import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 
 const emptyDaemonEntitySnapshot = {
@@ -78,7 +78,7 @@ export const releaseDaemonLaunchLease = internalMutation({
  */
 export const setDaemonClaimPause = internalMutation({
   args: {
-    entityTable: sandboxEntityTableValidator,
+    entityTable: daemonEntityTableValidator,
     entityId: v.string(),
     paused: v.boolean(),
   },
@@ -87,14 +87,17 @@ export const setDaemonClaimPause = internalMutation({
     const claimPausedUntil = args.paused
       ? Date.now() + DAEMON_CLAIM_PAUSE_MS
       : undefined;
+    if (args.entityTable === "sessionChats") {
+      const id = ctx.db.normalizeId("sessionChats", args.entityId);
+      if (!id) return null;
+      if (!(await ctx.db.get(id))) return null;
+      await ctx.db.patch(id, { claimPausedUntil });
+      return null;
+    }
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       if (!id) return null;
-      const session = await ctx.db.get(id);
-      if (!session) return null;
-      // Both copies: the claim poll reads the compact row, and the session doc
-      // is what a lazily-created row inherits from.
-      await syncSessionDaemonState(ctx, session, { claimPausedUntil });
+      if (!(await ctx.db.get(id))) return null;
       await ctx.db.patch(id, { claimPausedUntil });
       return null;
     }
@@ -114,7 +117,7 @@ export const setDaemonClaimPause = internalMutation({
 /** Reads daemon-relevant fields for mid-turn respawn deferral decisions. */
 export const readDaemonEntitySnapshot = internalQuery({
   args: {
-    entityTable: sandboxEntityTableValidator,
+    entityTable: daemonEntityTableValidator,
     entityId: v.string(),
   },
   returns: v.object({
@@ -123,6 +126,17 @@ export const readDaemonEntitySnapshot = internalQuery({
     syntheticTurnMessageId: v.optional(v.id("messages")),
   }),
   handler: async (ctx, args) => {
+    if (args.entityTable === "sessionChats") {
+      const id = ctx.db.normalizeId("sessionChats", args.entityId);
+      if (!id) return emptyDaemonEntitySnapshot;
+      const doc = await ctx.db.get(id);
+      if (!doc) return emptyDaemonEntitySnapshot;
+      return {
+        pendingTurn: doc.pendingTurn,
+        activeWorkflow: doc.activeWorkflowId,
+        syntheticTurnMessageId: doc.syntheticTurnMessageId,
+      };
+    }
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       if (!id) return emptyDaemonEntitySnapshot;
@@ -165,11 +179,19 @@ export const readDaemonEntitySnapshot = internalQuery({
  */
 export const isEntitySandboxStopRequested = internalQuery({
   args: {
-    entityTable: sandboxEntityTableValidator,
+    entityTable: daemonEntityTableValidator,
     entityId: v.string(),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    if (args.entityTable === "sessionChats") {
+      // A chat shares its session's sandbox; a closed chat needs no daemon.
+      const chatId = ctx.db.normalizeId("sessionChats", args.entityId);
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      if (!chat || chat.archived === true) return true;
+      const session = await ctx.db.get(chat.sessionId);
+      return !session || isSandboxClosingStatus(session.status);
+    }
     if (args.entityTable === "sessions") {
       const id = ctx.db.normalizeId("sessions", args.entityId);
       const doc = id ? await ctx.db.get(id) : null;
@@ -269,14 +291,23 @@ export const listActiveSandboxEntities = internalQuery({
  */
 export const reconcileStoppedSandboxStatus = internalMutation({
   args: {
-    entityTable: sandboxEntityTableValidator,
+    entityTable: daemonEntityTableValidator,
     entityId: v.string(),
     sandboxId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.entityTable === "sessions") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
+    if (args.entityTable === "sessionChats" || args.entityTable === "sessions") {
+      // A chat shares its session's sandbox, so its status lives on the session.
+      const chatId =
+        args.entityTable === "sessionChats"
+          ? ctx.db.normalizeId("sessionChats", args.entityId)
+          : null;
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      const id =
+        args.entityTable === "sessionChats"
+          ? (chat?.sessionId ?? null)
+          : ctx.db.normalizeId("sessions", args.entityId);
       if (!id) return null;
       const doc = await ctx.db.get(id);
       if (!doc) return null;

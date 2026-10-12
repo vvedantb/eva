@@ -10,6 +10,7 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { artifactFields } from "./validators";
+import { deleteAllArtifactState } from "./artifactState";
 import {
   callerCanSeeChatSource,
   chatSourceArgValidator,
@@ -226,6 +227,7 @@ export const remove = authMutation({
       throw new Error("Not authorized: you are not a member of this team.");
     }
     await ctx.storage.delete(artifact.htmlStorageId);
+    await deleteAllArtifactState(ctx, args.id);
     await ctx.db.delete(args.id);
     return null;
   },

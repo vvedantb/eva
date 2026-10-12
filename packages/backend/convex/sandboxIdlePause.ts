@@ -23,6 +23,7 @@ import {
   sessionIsExecuting,
   taskIsExecuting,
 } from "./_chat/turnProjection";
+import { listLiveSessionChats } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
@@ -316,10 +317,11 @@ async function hasPendingWork(
     .withIndex("by_entity", (q) => q.eq("entityId", entityId))
     .first();
   if (streaming && isStreamingRowFresh(streaming, Date.now())) return true;
-  const sessionId = ctx.db.normalizeId("sessions", entityId);
+  // A session chat's turn streams under the chat id and queues on it too.
+  const chatId = ctx.db.normalizeId("sessionChats", entityId);
   const taskId = ctx.db.normalizeId("agentTasks", entityId);
   const projectId = ctx.db.normalizeId("projects", entityId);
-  const parentId = sessionId ?? taskId ?? projectId;
+  const parentId = chatId ?? taskId ?? projectId;
   if (!parentId) return false;
   const queued = await ctx.db
     .query("queuedMessages")
@@ -328,8 +330,16 @@ async function hasPendingWork(
     .first();
   if (queued === null) return false;
   // A queue waiting out a usage limit sends nothing for hours, so it must not
-  // keep the VM billing; its resume drain wakes the sandbox again.
-  return (await usageLimitHoldFor(ctx, parentId, queued)) === null;
+  // keep the VM billing; its resume drain wakes the sandbox again. The raw
+  // account pick stands in for the dequeue-time resolve: a message on another
+  // account is not held, so the drain has already sent it.
+  const hold = await usageLimitHoldFor(
+    ctx,
+    parentId,
+    queued,
+    queued.providerAccountId,
+  );
+  return hold === null;
 }
 
 async function inspectSession(
@@ -338,16 +348,23 @@ async function inspectSession(
 ): Promise<Candidate | null> {
   const session = await ctx.db.get(sessionId);
   if (!session) return null;
-  const daemonState = await ctx.db
-    .query("sessionDaemonStates")
-    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-    .first();
+  // A session's turns, staged prompts and queues live on its chats, so any
+  // live chat with work keeps the sandbox awake.
+  const chats = await listLiveSessionChats(ctx.db, sessionId);
+  let chatBusy = false;
+  for (const chat of chats) {
+    if (chat.pendingTurn !== undefined) chatBusy = true;
+    else if (await hasPendingWork(ctx, String(chat._id))) chatBusy = true;
+    if (chatBusy) break;
+  }
   const busy =
     sessionIsExecuting(
       session,
       await openChatEntityIdsFor(ctx.db, sessionId),
     ) ||
-    daemonState?.pendingTurn !== undefined ||
+    chatBusy ||
+    // Streaming rows keyed by the session itself: a session that predates
+    // chats and has not been opened (so has no Main chat row) yet.
     (await hasPendingWork(ctx, String(sessionId)));
   return await finishCandidate(
     ctx,

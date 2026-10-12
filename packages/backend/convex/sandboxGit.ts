@@ -4,6 +4,7 @@ import {
   patchSandboxOwner,
   resolveSandboxOwnerOrThrow,
   sandboxOwnerValidator,
+  type SandboxOwner,
 } from "./_sandbox/owner";
 
 /** Git's own ref-name ceiling is well under this; the cap is just a guard. */
@@ -19,15 +20,34 @@ const BRANCH_MAX_CHARS = 255;
  * every sidebar each time the watcher polls.
  */
 export const reportBranch = authMutation({
-  args: { target: sandboxOwnerValidator, branch: v.string() },
+  args: {
+    target: v.union(
+      ...sandboxOwnerValidator.members,
+      v.object({
+        kind: v.literal("sessionChat"),
+        chatId: v.id("sessionChats"),
+      }),
+    ),
+    branch: v.string(),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const branch = args.branch.trim().slice(0, BRANCH_MAX_CHARS);
     if (branch.length === 0) return null;
+    const target = args.target;
+    // Session daemons run per chat; the branch belongs to the session.
+    let ownerTarget: SandboxOwner;
+    if (target.kind === "sessionChat") {
+      const chat = await ctx.db.get(target.chatId);
+      if (!chat) throw new Error("Session not found");
+      ownerTarget = { kind: "session", sessionId: chat.sessionId };
+    } else {
+      ownerTarget = target;
+    }
     const owner = await resolveSandboxOwnerOrThrow(
       ctx.db,
       ctx.userId,
-      args.target,
+      ownerTarget,
     );
     // One filesystem can be reported by several daemon processes, so the
     // unchanged case must cost nothing.

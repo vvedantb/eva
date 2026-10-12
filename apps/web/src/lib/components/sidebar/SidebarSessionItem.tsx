@@ -156,7 +156,7 @@ function SessionPrIcon({
  * (replaces sandbox status — awaiting a reply already implies sandbox active).
  * Otherwise the sandbox status color dot (simple view: error only).
  */
-function SessionStatusLeading({
+export function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,

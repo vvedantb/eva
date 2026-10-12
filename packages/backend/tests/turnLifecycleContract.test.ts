@@ -16,7 +16,7 @@ test("the schema supports one indexed open turn and lease reconciliation", () =>
 
 test("a turn is persisted before its workflow is launched", () => {
   const execution = source("../convex/_sessions/execution.ts");
-  const openAt = execution.indexOf("await openSessionTurn(");
+  const openAt = execution.indexOf("await openSessionChatTurn(");
   const startAt = execution.indexOf(
     "internal.sessionWorkflow.sessionExecuteWorkflow",
   );

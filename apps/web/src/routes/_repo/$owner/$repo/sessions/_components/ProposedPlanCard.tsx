@@ -1,5 +1,6 @@
 "use client";
 
+import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { useRef, useState } from "react";
 import {
   Badge,
@@ -22,7 +23,6 @@ import { MarkdownEditor } from "@/lib/components/editor/MarkdownEditor";
 import {
   buildCollapsedProposedPlanPreviewMarkdown,
   buildProposedPlanMarkdownFilename,
-  downloadPlanAsMarkdownFile,
   normalizePlanMarkdownForExport,
   proposedPlanTitle,
   stripDisplayedPlanMarkdown,
@@ -75,7 +75,7 @@ export function ProposedPlanCard({
   };
 
   const handleDownload = () => {
-    downloadPlanAsMarkdownFile(
+    downloadMarkdownFile(
       buildProposedPlanMarkdownFilename(planMarkdown),
       exportContents,
     );

@@ -17,6 +17,7 @@ import {
   guarded,
   mcpCallAsUser,
   mcpGetContext,
+  queueParentId,
   textResult,
   truncateForAgent,
   type McpCredentials,
@@ -171,7 +172,7 @@ export function tabQueueTools(
       {
         type: "query",
         path: "queuedMessages:listByParent",
-        args: { parentId: target.targetId },
+        args: { parentId: queueParentId(target, credentials) },
       },
       z.array(queuedMessageRow),
     );
@@ -411,7 +412,10 @@ If a message starts running between your list and this call, the reorder fails; 
             {
               type: "mutation",
               path: "queuedMessages:reorder",
-              args: { parentId: target.targetId, orderedIds: nextIds },
+              args: {
+                parentId: queueParentId(target, credentials),
+                orderedIds: nextIds,
+              },
             },
             nullReply,
           );

@@ -20,6 +20,7 @@ const DEBOUNCE_MS = 300;
 
 export type BranchTarget =
   | { kind: "session"; sessionId: string }
+  | { kind: "sessionChat"; chatId: string }
   | { kind: "task"; taskId: string }
   | { kind: "project"; projectId: string };
 
@@ -34,6 +35,7 @@ export function resolveBranchTarget(
 ): BranchTarget | null {
   if (typeof id !== "string" || id.length === 0) return null;
   if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "chatId") return { kind: "sessionChat", chatId: id };
   if (field === "taskId") return { kind: "task", taskId: id };
   if (field === "projectId") return { kind: "project", projectId: id };
   return null;

@@ -232,14 +232,14 @@ export function TaskSandboxChatPanel({
     });
   };
 
-  const setProviderAccountId = (next: string | null) => {
+  const setProviderAccountId = async (next: string | null) => {
     if (!isOwner || !task) return;
-    switchProviderAccount(resolveAccountId(next) ?? null);
+    await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
   // The open durable turn is canonical, synthetic turns included; message
   // shape only covers the first render while it loads (same rule as
-  // useSessionSend). The first run counts too: its bubble is on screen here,
+  // useChatSend). The first run counts too: its bubble is on screen here,
   // so the composer shows Working and Stop for it like any other turn.
   const isExecuting =
     isFirstRunInProgress ||
@@ -250,8 +250,12 @@ export function TaskSandboxChatPanel({
     messages: messages ?? [],
     queuedMessages: queuedMessages ?? [],
     model,
+    accountId: providerAccountId,
+    accounts,
+    resolveAccountId,
     isSandboxActive,
     setModel,
+    setAccount: setProviderAccountId,
   });
   const composer = sandboxComposerState({
     isSandboxActive,
@@ -263,7 +267,7 @@ export function TaskSandboxChatPanel({
   // A thrown send rolls the whole turn back (no placeholder, no workflow) and
   // the composer has already cleared, so the prompt only exists here. The toast
   // owns the failure and hands the text back through the same `drafts` row the
-  // composer reads (same contract as useSessionSend).
+  // composer reads (same contract as useChatSend).
   const raiseSendFailure = (errorMessage: string, draftContent: string) => {
     toast.error("Couldn't send your message", {
       id: "task-chat-send",
@@ -433,7 +437,7 @@ export function TaskSandboxChatPanel({
           modelOptions,
           accounts,
           accountId: providerAccountId,
-          onAccountChange: setProviderAccountId,
+          onAccountChange: queueGate.setAccount,
           displayTraits,
           onTraitsChange,
         }}

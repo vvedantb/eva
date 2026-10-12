@@ -233,6 +233,63 @@ describe("wake-ups and watches", () => {
   );
 
   test(
+    "a session wake-up quotes the reply of the chat whose turn ended",
+    async () => {
+      const f = await fixture();
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      const thread = await liveThread(f);
+      if (!thread) throw new Error("no thread");
+      await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
+        sessionId: f.sessionId,
+        aveThreadId: thread._id,
+      });
+      const { mainChatId, sideChatId } = await f.t.run(async (ctx) => {
+        const chat = (title: string, number: number) =>
+          ctx.db.insert("sessionChats", {
+            sessionId: f.sessionId,
+            repoId: f.repoId,
+            userId: f.ownerUserId,
+            title,
+            number,
+            isMain: number === 1,
+          });
+        return {
+          mainChatId: await chat("Main", 1),
+          sideChatId: await chat("Side", 2),
+        };
+      });
+      await f.t.run(async (ctx) => {
+        await ctx.db.insert("messages", {
+          parentId: mainChatId,
+          role: "assistant",
+          content: "Main reply.",
+          timestamp: Date.now(),
+        });
+        await ctx.db.insert("messages", {
+          parentId: sideChatId,
+          role: "assistant",
+          content: "Side chat fixed the bug.",
+          timestamp: Date.now(),
+        });
+      });
+      await f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
+        child: { kind: "session", sessionId: f.sessionId, chatId: sideChatId },
+        status: "completed",
+      });
+      await f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
+        child: { kind: "session", sessionId: f.sessionId },
+        status: "completed",
+      });
+      const notifications = (await rows(f))
+        .filter((r) => r.orchestratorNotification === true)
+        .map((r) => r.content.split("\n\n")[1]);
+      // Without a chat id (sandbox-start failure) the Main chat is read.
+      expect(notifications).toEqual(["Side chat fixed the bug.", "Main reply."]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a watched project's chat finishing wakes Ave too",
     async () => {
       const f = await fixture();

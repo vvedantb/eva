@@ -12,11 +12,11 @@ import {
   getAIModelProvider,
   normalizeAIModel,
   reasoningLevelValidator,
-  sandboxEntityTableValidator,
+  daemonEntityTableValidator,
   turnEntityIdValidator,
   turnLaneValidator,
   usesChatDaemon,
-  type SandboxEntityTable,
+  type DaemonEntityTable,
 } from "../validators";
 import {
   execHandle,
@@ -138,7 +138,9 @@ function previewActivityParams(sandboxId: string): {
   };
 }
 
+// A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("projects"),
   v.id("agentTasks"),
@@ -1493,7 +1495,7 @@ type PrewarmEntityDaemonBaseParams = {
 };
 
 type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
-  entityTable: SandboxEntityTable;
+  entityTable: DaemonEntityTable;
 };
 
 /** Shared implementation for prewarmEntityDaemon and prewarmSessionDaemon. */
@@ -1842,7 +1844,7 @@ export const prewarmEntityDaemon = internalAction({
     sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
     streamingEntityId: v.optional(v.string()),
     skipPrewarm: v.optional(v.boolean()),
-    entityTable: sandboxEntityTableValidator,
+    entityTable: daemonEntityTableValidator,
   },
   returns: v.object({ prewarmed: v.boolean() }),
   handler: async (ctx, args): Promise<{ prewarmed: boolean }> =>
@@ -1977,10 +1979,14 @@ export const killEntityDaemon = internalAction({
  * skips the boot entirely. No-op if a daemon is already alive for this session.
  * Best-effort: any failure is swallowed (the normal path still works).
  */
+/**
+ * Warms the daemon of one session chat. Chats of a session share the sandbox
+ * but each runs its own agent process, keyed by the chat id.
+ */
 export const prewarmSessionDaemon = internalAction({
   args: {
     sandboxId: v.string(),
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     repoId: v.id("githubRepos"),
     userId: v.id("users"),
     model: v.optional(v.string()),
@@ -1995,19 +2001,19 @@ export const prewarmSessionDaemon = internalAction({
   },
   returns: v.object({ prewarmed: v.boolean() }),
   handler: async (ctx, args): Promise<{ prewarmed: boolean }> => {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: args.sessionId,
+    const context = await ctx.runQuery(internal.sessionChats.getInternal, {
+      chatId: args.chatId,
     });
     const skipPrewarm =
-      session === null ||
-      session === undefined ||
-      isSandboxClosingStatus(session.status);
+      context === null ||
+      context.chat.archived === true ||
+      isSandboxClosingStatus(context.session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,
       userId: args.userId,
-      entityId: String(args.sessionId),
-      entityIdField: "sessionId",
+      entityId: String(args.chatId),
+      entityIdField: "chatId",
       completionMutation: "sessionWorkflow:handleCompletion",
       ...SESSION_DAEMON_MUTATIONS,
       model: args.model,
@@ -2020,7 +2026,7 @@ export const prewarmSessionDaemon = internalAction({
       credentialOwnerUserId: args.credentialOwnerUserId,
       sessionPersistenceId: args.sessionPersistenceId,
       skipPrewarm,
-      entityTable: "sessions",
+      entityTable: "sessionChats",
     });
   },
 });

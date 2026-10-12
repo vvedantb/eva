@@ -3,7 +3,9 @@
  * web app can read the same reset time the workflow schedules its retry for.
  * `recovery.ts` re-exports both, so its importers are unaffected; a dependency
  * added here would put the whole workflow module graph in the browser bundle.
+ * (`aiModels` is already browser-safe: the web app imports it directly.)
  */
+import { getAIModelProvider, normalizeAIModel } from "../_validators/aiModels";
 
 /**
  * Checks whether an error message indicates a Claude API usage limit.
@@ -83,19 +85,28 @@ export function parseUsageLimitResetTime(errorMsg: string): number | null {
  */
 export const USAGE_LIMIT_QUEUE_RESUME_DELAY_MS = 8 * 60 * 1000;
 
+/** Same label `resolveCredentialSourceLabel` stamps for the shared credential. */
+const TEAM_CREDENTIAL_LABEL = "Team";
+
 /** A chat queue waiting out a usage limit. */
 export interface UsageLimitHold {
   /** When the held queue sends (ms since epoch). */
   resumeAt: number;
   /** Model stamp of the turn that ran out; undefined on a legacy turn. */
   model: string | undefined;
+  /**
+   * The credential that ran out: an account id, null for Team, or undefined
+   * when the turn predates the `credentialAccountId` stamp (holds every
+   * account, as before).
+   */
+  accountId: string | null | undefined;
 }
 
 /**
  * Whether a chat's queue is waiting out a usage limit: the newest real turn
  * failed on one and its reset (plus the resume delay) is still ahead. Returns
- * the failed turn's model so callers only hold messages on that provider — a
- * message moved to another provider has no reason to wait.
+ * the failed turn's model and account so callers only hold messages on that
+ * credential — see `isHeldByUsageLimit`.
  */
 export function findUsageLimitHold(
   messagesNewestFirst: ReadonlyArray<{
@@ -104,6 +115,8 @@ export function findUsageLimitHold(
     errorType?: string;
     limitResetAt?: number;
     model?: string;
+    credentialSourceLabel?: string;
+    credentialAccountId?: string;
   }>,
   now: number,
 ): UsageLimitHold | null {
@@ -122,8 +135,42 @@ export function findUsageLimitHold(
       if (resumeAt <= now) return null;
       continue;
     }
-    if (message.role === "user") return { resumeAt, model: message.model };
+    if (message.role === "user") {
+      return {
+        resumeAt,
+        model: message.model,
+        accountId:
+          message.credentialAccountId ??
+          (message.credentialSourceLabel === TEAM_CREDENTIAL_LABEL
+            ? null
+            : undefined),
+      };
+    }
     break;
   }
-  return resumeAt === undefined ? null : { resumeAt, model: undefined };
+  return resumeAt === undefined
+    ? null
+    : { resumeAt, model: undefined, accountId: undefined };
+}
+
+/**
+ * Whether `hold` blocks a turn on `model` and `accountId` (null = Team). Only
+ * the credential that ran out waits: another provider, or another account on
+ * the same provider, sends now. An unstamped field on the failed turn matches
+ * everything, so a legacy turn keeps holding the way it always did.
+ */
+export function isHeldByUsageLimit(
+  hold: UsageLimitHold | null,
+  model: string,
+  accountId: string | null,
+): boolean {
+  if (hold === null) return false;
+  if (
+    hold.model !== undefined &&
+    getAIModelProvider(normalizeAIModel(hold.model)) !==
+      getAIModelProvider(normalizeAIModel(model))
+  ) {
+    return false;
+  }
+  return hold.accountId === undefined || hold.accountId === accountId;
 }

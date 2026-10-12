@@ -183,14 +183,14 @@ export function ProjectSandboxChatPanel({
     });
   };
 
-  const setProviderAccountId = (next: string | null) => {
+  const setProviderAccountId = async (next: string | null) => {
     if (!isOwner) return;
-    switchProviderAccount(resolveAccountId(next) ?? null);
+    await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
   // The open durable turn is canonical, synthetic turns included; message
   // shape only covers the first render while it loads (same rule as
-  // useSessionSend).
+  // useChatSend).
   const isExecuting = chatTurnOpen ?? isAssistantTurnInProgress(messages ?? []);
 
   const queueGate = useChatQueueGate({
@@ -198,8 +198,12 @@ export function ProjectSandboxChatPanel({
     messages: messages ?? [],
     queuedMessages: queuedMessages ?? [],
     model,
+    accountId: providerAccountId,
+    accounts: displayAccounts,
+    resolveAccountId,
     isSandboxActive,
     setModel,
+    setAccount: setProviderAccountId,
   });
   const composer = sandboxComposerState({
     isSandboxActive,
@@ -211,7 +215,7 @@ export function ProjectSandboxChatPanel({
   // A thrown send rolls the whole turn back (no placeholder, no workflow) and
   // the composer has already cleared, so the prompt only exists here. The toast
   // owns the failure and hands the text back through the same `drafts` row the
-  // composer reads (same contract as useSessionSend).
+  // composer reads (same contract as useChatSend).
   const raiseSendFailure = (errorMessage: string, draftContent: string) => {
     toast.error("Couldn't send your message", {
       id: "project-chat-send",
@@ -367,7 +371,7 @@ export function ProjectSandboxChatPanel({
           modelOptions,
           accounts: displayAccounts,
           accountId: providerAccountId,
-          onAccountChange: setProviderAccountId,
+          onAccountChange: queueGate.setAccount,
           displayTraits,
           onTraitsChange: setTraits,
         }}

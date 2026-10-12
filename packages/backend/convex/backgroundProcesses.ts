@@ -6,7 +6,11 @@ import {
   getSessionWithAccess,
   hasRepoAccess,
 } from "./functions";
-import { internalMutation, internalQuery } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type DatabaseReader,
+} from "./_generated/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { backgroundProcessFields } from "./validators";
 import { backgroundProcessStatusValidator } from "./_validators/enums";
@@ -57,24 +61,40 @@ export const listRunning = authQuery({
 });
 
 /**
+ * The daemon reports under its own entity id. A chat daemon's id resolves to
+ * the chat's session — background shells belong to the sandbox, which every
+ * chat of the session shares.
+ */
+async function resolveOwningSessionId(
+  db: DatabaseReader,
+  id: Id<"sessions"> | Id<"sessionChats">,
+): Promise<Id<"sessions"> | null> {
+  const chatId = db.normalizeId("sessionChats", String(id));
+  if (chatId) return (await db.get(chatId))?.sessionId ?? null;
+  return db.normalizeId("sessions", String(id));
+}
+
+/**
  * Upsert a background Bash registration from the sandbox runner.
  * Idempotent on (sessionId, key) for HTTP retries.
  */
 export const register = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    sessionId: v.union(v.id("sessions"), v.id("sessionChats")),
     key: v.string(),
     command: v.string(),
     shellId: v.optional(v.string()),
   },
   returns: v.id("backgroundProcesses"),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
+    const sessionId = await resolveOwningSessionId(ctx.db, args.sessionId);
+    if (!sessionId) throw new Error("Session not found");
+    const session = await getSessionWithAccess(ctx.db, sessionId, ctx.userId);
     const command = args.command.slice(0, COMMAND_MAX_CHARS);
     const existing = await ctx.db
       .query("backgroundProcesses")
       .withIndex("by_session_and_key", (q) =>
-        q.eq("sessionId", args.sessionId).eq("key", args.key),
+        q.eq("sessionId", session._id).eq("key", args.key),
       )
       .unique();
     if (existing) {
@@ -87,7 +107,7 @@ export const register = authMutation({
       return existing._id;
     }
     return await ctx.db.insert("backgroundProcesses", {
-      sessionId: args.sessionId,
+      sessionId: session._id,
       key: args.key,
       command,
       shellId: args.shellId,
@@ -100,12 +120,13 @@ export const register = authMutation({
 /** Agent KillShell'd its own shell — mark the matching running row exited. */
 export const markExitedByShellId = authMutation({
   args: {
-    sessionId: v.id("sessions"),
+    sessionId: v.union(v.id("sessions"), v.id("sessionChats")),
     shellId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
+    const sessionId = await resolveOwningSessionId(ctx.db, args.sessionId);
+    const session = sessionId ? await ctx.db.get(sessionId) : null;
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw new Error("Not authorized");
@@ -113,7 +134,7 @@ export const markExitedByShellId = authMutation({
     const rows = await ctx.db
       .query("backgroundProcesses")
       .withIndex("by_session_and_status", (q) =>
-        q.eq("sessionId", args.sessionId).eq("status", "running"),
+        q.eq("sessionId", session._id).eq("status", "running"),
       )
       .collect();
     const exitedAt = Date.now();
