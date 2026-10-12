@@ -229,9 +229,16 @@ export async function createSessionChat(
 ): Promise<Doc<"sessionChats">> {
   const { session } = params;
   const chats = await listSessionChats(ctx.db, session._id);
+  // `number` stays unique for `?chat=N` links; the default title reuses the
+  // lowest label no open tab holds, so open/close/open reads "Chat 2" again.
   const number = chats.reduce((max, chat) => Math.max(max, chat.number), 0) + 1;
   const source: ChatSettingsSource = params.inheritFrom ?? session;
-  const title = params.title?.trim() || `Chat ${number}`;
+  const openTitles = new Set(
+    chats.filter((chat) => chat.archived !== true).map((chat) => chat.title),
+  );
+  let label = 2;
+  while (openTitles.has(`Chat ${label}`)) label += 1;
+  const title = params.title?.trim() || `Chat ${label}`;
   const chatId = await ctx.db.insert("sessionChats", {
     sessionId: session._id,
     repoId: session.repoId,
