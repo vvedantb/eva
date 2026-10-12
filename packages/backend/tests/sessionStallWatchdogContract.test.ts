@@ -93,48 +93,51 @@ describe("session chat adapter (_chat/surfaceAdapters.ts)", () => {
     expect(body).not.toContain("scheduleCheck");
   });
 
-  test("handleStaleSession finalizes via the shared implementation with the session's own timeout alert", () => {
-    const handler = definitionBody(workflowWatchdog, "handleStaleSession");
-    expect(handler).toContain("tearDownStaleSessionWorkflow(");
+  test("handleStaleSessionChat finalizes via the shared implementation with the chat's own timeout alert", () => {
+    const handler = definitionBody(workflowWatchdog, "handleStaleSessionChat");
+    expect(handler).toContain("finalizeStaleChatTurn(");
     expect(handler).toContain("sessionChatAdapter.alerts.timeout");
-    // The lease reconciler reuses the same teardown for a stalled summary.
+    // The session-level teardown (the summary lane) cancels the workflow and
+    // alerts in the Main chat; the lease reconciler reuses it for a stalled summary.
     const teardownAt = workflowWatchdog.indexOf(
       "export async function tearDownStaleSessionWorkflow(",
     );
     expect(teardownAt).toBeGreaterThan(-1);
-    expect(
-      workflowWatchdog.slice(
-        teardownAt,
-        workflowWatchdog.indexOf("\n}", teardownAt),
-      ),
-    ).toContain("finalizeStaleChatTurn(");
+    const teardown = workflowWatchdog.slice(
+      teardownAt,
+      workflowWatchdog.indexOf("\n}", teardownAt),
+    );
+    expect(teardown).toContain("cancelStaleWorkflow(");
+    expect(teardown).toContain("ensureMainChat(");
   });
 
-  test("a stopped sandbox closes the session and skips the interrupt via a direct kill", () => {
+  test("a stopped sandbox closes the chat's session, and a live non-Claude daemon is killed by name", () => {
     const adapter = adapterBody(
       surfaceAdapters,
       "sessionChatAdapter",
       "const taskChatAdapter:",
     );
     // The UI must reflect the stop — users cannot see the provider dashboard.
-    expect(adapter).toContain('patch.status = "closed"');
-    expect(adapter).toContain("The session is now closed");
-    // Sessions have no daemon-owning workflow field, so they always kill the
-    // sandbox process directly rather than a named entity daemon.
-    expect(adapter).toContain("killSandboxProcess");
-    expect(adapter).not.toContain("killEntityDaemon");
+    // The sandbox is the session's, so its status is what flips.
+    expect(adapter).toContain('status: "closed"');
+    // The dead turn's staged prompt must not block the next one.
+    expect(adapter).toContain("pendingTurn: undefined");
+    // A Claude daemon is interrupted in place; any other daemon is killed by
+    // its chat-scoped pidfile so a sibling chat's daemon survives.
+    expect(adapter).toContain("cancelRequestedAt: Date.now()");
+    expect(adapter).toContain("killEntityDaemon");
+    expect(adapter).toContain('entityIdField: "chatId"');
   });
 
-  test("release drains the session's own queue and clears its own extra summary row", () => {
+  test("release drains the chat's own queue, then its siblings', and clears no extra streaming rows", () => {
     const adapter = adapterBody(
       surfaceAdapters,
       "sessionChatAdapter",
       "const taskChatAdapter:",
     );
-    expect(adapter).toContain("startNextQueuedSessionMessage(ctx, id)");
-    // Only sessions carry a separate summary streaming row alongside the
-    // turn's own.
-    expect(adapter).toContain("sessionSummaryStreamingEntityId(id)");
+    expect(adapter).toContain("drainSessionChatQueues(ctx, chat.sessionId, id)");
+    // The summary streaming row belongs to the session, not to any chat.
+    expect(adapter).toContain("extraStreamingClears: () => []");
   });
 });
 

@@ -36,7 +36,11 @@ export const create = internalMutation({
   },
   returns: v.union(v.id("chatUiPanels"), v.null()),
   handler: async (ctx, args): Promise<Id<"chatUiPanels"> | null> => {
-    const parentId = resolveChatParent(ctx.db, args.entityKind, args.entityId);
+    const parentId = await resolveChatParent(
+      ctx.db,
+      args.entityKind,
+      args.entityId,
+    );
     if (!parentId) return null;
     const messageId = await latestChatMessageId(ctx.db, parentId);
     return await ctx.db.insert("chatUiPanels", {

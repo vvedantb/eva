@@ -4,17 +4,19 @@ import { api, normalizeAIModel, type Id } from "@eva/backend";
 import { useMutation } from "convex/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
-import { useSessionModel } from "@/lib/hooks/useSessionModel";
+import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 
 /**
- * Sends an annotation as chat display text + rich agent prompt.
- * Queues with displayContent when a turn is already running.
+ * Sends an annotation as chat display text + rich agent prompt into the
+ * active chat tab. Queues with displayContent when that chat's turn is
+ * already running.
  */
 export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
+  chatId: Id<"sessionChats">,
   isRouteActive = true,
 ): (display: string, full: string) => Promise<void> {
   const { repo } = useRepo();
@@ -24,7 +26,7 @@ export function useSessionAnnotationSend(
     model,
     traits,
     providerAccountId: stickyProviderAccountId,
-  } = useSessionModel(sessionId, defaultModel, isRouteActive);
+  } = useChatModel(chatId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,
@@ -39,11 +41,11 @@ export function useSessionAnnotationSend(
 
   const messages = useHeldQuery(
     api.messages.listByParent,
-    isRouteActive ? { parentId: sessionId } : "skip",
+    isRouteActive ? { parentId: chatId } : "skip",
   );
   const turnStatus = useHeldQuery(
-    api.turns.getSessionStatus,
-    isRouteActive ? { sessionId } : "skip",
+    api.turns.getChatStatus,
+    isRouteActive ? { entityId: chatId } : "skip",
   );
   const addMessage = useMutation(api.sessions.addMessage);
   const startExecution = useMutation(api.sessionWorkflow.startExecute);
@@ -59,7 +61,7 @@ export function useSessionAnnotationSend(
     const reasoningLevel = displayTraits.effortLevel;
     if (isExecuting) {
       await enqueueMessage({
-        sessionId,
+        chatId,
         message: full,
         displayContent: display,
         model,
@@ -71,7 +73,7 @@ export function useSessionAnnotationSend(
     }
     await Promise.all([
       addMessage({
-        id: sessionId,
+        chatId,
         role: "user",
         content: display,
         providerAccountId: accountId,
@@ -79,7 +81,7 @@ export function useSessionAnnotationSend(
         reasoningLevel,
       }),
       startExecution({
-        sessionId,
+        chatId,
         message: full,
         model,
         ...executionTraits,
@@ -90,7 +92,7 @@ export function useSessionAnnotationSend(
       const errorMessage =
         error instanceof Error ? error.message : "Failed to send annotation";
       await addMessage({
-        id: sessionId,
+        chatId,
         role: "assistant",
         content: `Error: ${errorMessage}`,
       });

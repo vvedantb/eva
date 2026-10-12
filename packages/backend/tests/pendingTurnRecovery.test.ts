@@ -126,13 +126,14 @@ describe("isPendingTurnLive", () => {
 describe("the stall teardown frees the handoff slot", () => {
   const adapters = readSource("_chat/surfaceAdapters.ts");
 
-  test("session release clears pendingTurn on the session and the mirror", () => {
+  test("session chat release clears pendingTurn on the chat row", () => {
     const release = adapters.slice(
-      adapters.indexOf('kind: "session"'),
+      adapters.indexOf('kind: "sessionChat"'),
       adapters.indexOf('kind: "taskChat"'),
     );
     expect(release).toContain("pendingTurn: undefined");
-    expect(release).toContain("syncSessionDaemonState(ctx, session, {");
+    // The daemon polls the chat row itself; there is no mirror to sync.
+    expect(release).not.toContain("syncSessionDaemonState");
   });
 });
 

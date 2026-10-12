@@ -62,7 +62,7 @@ export function useChatQueueGate({
   setModel,
   setAccount,
 }: {
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
   messages: ReadonlyArray<ChatBodyMessage>;
   queuedMessages: ReadonlyArray<ChatBodyQueuedMessage>;
   model: AIModel;

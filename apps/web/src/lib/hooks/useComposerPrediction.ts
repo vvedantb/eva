@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
+import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
 import type { InlineSuggestion } from "@/lib/hooks/useInlineSuggestion";
 
 export interface ComposerPredictionTarget {
   /** The chat the prediction reads. */
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+  parentId: ChatParentId;
   /** Newest message in the chat; a new one asks for a fresh prediction. */
   lastMessageId: string;
 }

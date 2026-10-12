@@ -444,7 +444,12 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
           internal.envVarRequests.create,
           {
             entityKind: target.kind,
-            entityId: target.targetId,
+            // The caller's own session: the card lands in the chat it runs
+            // in, not the session's Main chat.
+            entityId:
+              target.targetId === credentials.entityId
+                ? (credentials.chatId ?? target.targetId)
+                : target.targetId,
             key,
             reason,
             scope,

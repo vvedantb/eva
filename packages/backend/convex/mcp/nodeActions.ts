@@ -74,7 +74,14 @@ const internalTokenClaims = z.object({
   repoId: z.string(),
   entityId: z.string().optional(),
   entityKind: z.enum(["session", "task", "project"]).optional(),
+  chatId: z.string().optional(),
 });
+
+const mcpEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
 
 type OauthTokens = {
   access_token: string;
@@ -198,9 +205,8 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(
-        v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-      ),
+      entityKind: v.optional(mcpEntityKindValidator),
+      chatId: v.optional(v.string()),
     }),
     v.null(),
   ),
@@ -234,6 +240,7 @@ export const verifyAccessToken = internalAction({
           scopedRepoId: undefined,
           entityId: undefined,
           entityKind: undefined,
+          chatId: undefined,
         };
       }
       // OAuth payload missing sub — fall through to internal token
@@ -269,6 +276,9 @@ export const verifyAccessToken = internalAction({
           : {}),
         ...(claims.data.entityKind !== undefined
           ? { entityKind: claims.data.entityKind }
+          : {}),
+        ...(claims.data.chatId !== undefined
+          ? { chatId: claims.data.chatId }
           : {}),
       };
     } catch (err) {
@@ -1340,6 +1350,41 @@ const projectDocSchema = z.object({
   lastChatModel: z.string().optional(),
 });
 
+/** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
+const deliveryChatSchema = z.object({
+  chatId: z.string(),
+  title: z.string(),
+  number: z.number(),
+  activeWorkflowId: z.string().optional(),
+  lastModel: z.string().optional(),
+});
+
+/** One row of `sessionChats:listForSession`, as much as the fleet tools read. */
+const sessionChatRowSchema = z.object({
+  _id: z.string(),
+  title: z.string(),
+  number: z.number(),
+  isMain: z.boolean(),
+  archived: z.boolean().optional(),
+  lastModel: z.string().optional(),
+});
+
+/** A session's open chats; its transcript is the Main chat's. */
+async function loadSessionChatsAsUser(
+  convexUrl: string,
+  clerkUserId: string,
+  sessionId: string,
+) {
+  const rows = z
+    .array(sessionChatRowSchema)
+    .parse(
+      await runQueryAsUser(convexUrl, clerkUserId, "sessionChats:listForSession", {
+        sessionId,
+      }),
+    );
+  return rows.filter((row) => row.archived !== true);
+}
+
 /** Slim projection of a `sessions` document. */
 const sessionDocSchema = z.object({
   _id: z.string(),
@@ -1568,11 +1613,6 @@ export const orchestratorGetAgentState = internalAction({
     { clerkUserId, kind, id, transcriptTail },
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
     const convexUrl = getEvaConvexCloudUrl();
-    const streamingEntityId =
-      kind === "session"
-        ? id
-        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
-
     // The access check runs first, on its own. `messages:listByParent` *throws*
     // "Not authorized" while the entity read merely returns null, so in a
     // Promise.all the raw throw won the race and the agent saw a stack instead
@@ -1587,6 +1627,20 @@ export const orchestratorGetAgentState = internalAction({
       throw new Error(`No ${kind} ${id} found, or you do not have access.`);
     }
 
+    // A session's transcript is its Main chat's (parallel chats keep their
+    // own); the streaming row is that chat's too.
+    const sessionChats =
+      kind === "session"
+        ? await loadSessionChatsAsUser(convexUrl, clerkUserId, id)
+        : [];
+    const mainChat = sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
+    const transcriptParentId =
+      kind === "session" ? (mainChat?._id ?? id) : id;
+    const streamingEntityId =
+      kind === "session"
+        ? transcriptParentId
+        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
+
     // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
     // never sets `activeWorkflowId`, so that field alone is not "is executing".
     const isExecuting: boolean = await ctx.runQuery(
@@ -1599,10 +1653,10 @@ export const orchestratorGetAgentState = internalAction({
         entityId: streamingEntityId,
       }),
       runQueryAsUser(convexUrl, clerkUserId, "messages:listByParent", {
-        parentId: id,
+        parentId: transcriptParentId,
       }),
       runQueryAsUser(convexUrl, clerkUserId, "queuedMessages:listByParent", {
-        parentId: id,
+        parentId: transcriptParentId,
       }),
     ]);
 
@@ -1646,7 +1700,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        model: session.lastModel,
+        model: mainChat?.lastModel ?? session.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
@@ -1762,11 +1816,11 @@ function chatDelivery(
 ): AgentDelivery {
   const isBusy = isExecuting || queuedAhead > 0;
   if (kind === "session") {
-    const session = sessionDocSchema.parse(rawDoc);
+    const chat = deliveryChatSchema.parse(rawDoc);
     return resolveAgentDelivery({
       isBusy,
       requestedModel,
-      storedModel: session.lastModel,
+      storedModel: chat.lastModel,
     });
   }
   if (kind === "task") {
@@ -1792,6 +1846,10 @@ export const orchestratorSendMessage = internalAction({
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
+    /** Session only: which chat (number or exact title). Absent = Main. */
+    chat: v.optional(v.string()),
+    /** The caller's own chat: a daemon must not message the chat it runs in. */
+    excludeChatId: v.optional(v.string()),
     aveThreadId: v.optional(v.string()),
     /**
      * Stamps the "via MCP" chat badge. True for every MCP send — master
@@ -1803,6 +1861,8 @@ export const orchestratorSendMessage = internalAction({
   returns: v.object({
     delivered: v.union(v.literal("started"), v.literal("queued")),
     model: v.string(),
+    /** Session only: the chat the message landed in. */
+    chat: v.optional(v.object({ title: v.string(), number: v.number() })),
   }),
   handler: async (
     ctx,
@@ -1812,19 +1872,50 @@ export const orchestratorSendMessage = internalAction({
       id,
       message,
       model,
+      chat,
+      excludeChatId,
       aveThreadId,
       sentViaOrchestrator,
     },
   ) => {
     const convexUrl = getEvaConvexCloudUrl();
-    const rawDoc = await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      CHAT_DOC_QUERY[kind],
-      { id },
-    );
-    if (rawDoc === null) {
-      throw new Error(`No ${kind} ${id} found, or you do not have access.`);
+    // A session message lands in one of its chats: the named one, else Main.
+    // From here on `targetId` is that chat; the session id is only kept for
+    // the sandbox wake and the Ave watch pointer.
+    let targetId = id;
+    let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
+    let rawDoc: unknown;
+    if (kind === "session") {
+      rawDoc = await runQueryAsUser(
+        convexUrl,
+        clerkUserId,
+        "sessionChats:resolveDeliveryChat",
+        { sessionId: id, ...(chat !== undefined ? { chat } : {}) },
+      );
+      if (rawDoc === null) {
+        throw new Error(
+          chat === undefined
+            ? `No session ${id} found, or you do not have access.`
+            : `Session ${id} has no open chat named "${chat}".`,
+        );
+      }
+      deliveryChat = deliveryChatSchema.parse(rawDoc);
+      if (deliveryChat.chatId === excludeChatId) {
+        throw new Error(
+          "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+        );
+      }
+      targetId = deliveryChat.chatId;
+    } else {
+      rawDoc = await runQueryAsUser(
+        convexUrl,
+        clerkUserId,
+        CHAT_DOC_QUERY[kind],
+        { id },
+      );
+      if (rawDoc === null) {
+        throw new Error(`No ${kind} ${id} found, or you do not have access.`);
+      }
     }
 
     if (kind === "task") {
@@ -1843,18 +1934,20 @@ export const orchestratorSendMessage = internalAction({
           convexUrl,
           clerkUserId,
           "queuedMessages:listByParent",
-          { parentId: id },
+          { parentId: targetId },
         ),
       ).length;
 
+    // For a session this is the named chat's own turn, not any sibling's:
+    // parallel chats run side by side, so a busy sibling must not queue it.
     const isExecuting: boolean = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind, id },
+      { kind, id: targetId },
     );
     const delivery = chatDelivery(kind, rawDoc, queuedAhead, model, isExecuting);
     for (const call of buildChatMessageCalls({
       kind,
-      id,
+      id: targetId,
       message,
       delivery,
       sentViaOrchestrator,
@@ -1865,7 +1958,13 @@ export const orchestratorSendMessage = internalAction({
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
     const delivered: "queued" | "started" =
       delivery.action === "queue" ? "queued" : "started";
-    return { delivered, model: delivery.model };
+    return {
+      delivered,
+      model: delivery.model,
+      ...(deliveryChat !== undefined
+        ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
+        : {}),
+    };
   },
 });
 
@@ -1879,10 +1978,11 @@ export const orchestratorStopAgent = internalAction({
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     const convexUrl = getEvaConvexCloudUrl();
     if (kind === "session") {
+      // Every chat of the session: a stop means the whole agent goes quiet.
       await runMutationAsUser(
         convexUrl,
         clerkUserId,
-        "_sessions/execution:cancelExecution",
+        "_sessions/execution:cancelSessionExecution",
         { sessionId: id },
       );
       return { buildRunning: false };
@@ -2253,9 +2353,8 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    entityKind: v.optional(mcpEntityKindValidator),
+    chatId: v.optional(v.string()),
     body: v.string(),
   },
   returns: v.object({
@@ -2264,7 +2363,7 @@ export const handleMcpRequest = internalAction({
   }),
   handler: async (
     ctx,
-    { clerkUserId, scopedRepoId, entityId, entityKind, body },
+    { clerkUserId, scopedRepoId, entityId, entityKind, chatId, body },
   ) => {
     try {
       const parsedBody = JSON.parse(body);
@@ -2282,6 +2381,7 @@ export const handleMcpRequest = internalAction({
         scopedRepoId,
         entityId,
         entityKind,
+        chatId,
       };
       const tools = buildTools(credentials, ctx);
       let supabase: EvaTool[] = [];

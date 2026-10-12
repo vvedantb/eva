@@ -5,7 +5,7 @@ import schema from "../convex/schema";
 import {
   acquireTurnLease,
   graceExpiredTurnLease,
-  openSessionTurn,
+  openSessionChatTurn,
   openTurn,
   renewTurnLease,
   findOpenTurn,
@@ -54,21 +54,31 @@ async function createSessionFixture() {
       title: "Lifecycle test",
       status: "active",
     });
+    // A session's turn belongs to one of its chats.
+    const chatId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+    });
     const placeholderMessageId = await ctx.db.insert("messages", {
-      parentId: sessionId,
+      parentId: chatId,
       role: "assistant",
       content: "",
       timestamp: Date.now(),
     });
-    const turnId = await openSessionTurn(ctx, {
+    const turnId = await openSessionChatTurn(ctx, {
+      chatId,
       sessionId,
-      streamingEntityId: String(sessionId),
+      streamingEntityId: String(chatId),
       placeholderMessageId,
       prompt: "hi",
       model: "claude:sonnet",
       repoId,
     });
-    return { sessionId, placeholderMessageId, turnId };
+    return { sessionId, chatId, placeholderMessageId, turnId };
   });
   return { t, ...ids };
 }
@@ -123,13 +133,13 @@ describe("turn lifecycle integration", () => {
   });
 
   test("queued workflow start rollback closes its Turn and removes its placeholder", async () => {
-    const { t, sessionId, placeholderMessageId, turnId } =
+    const { t, chatId, placeholderMessageId, turnId } =
       await createSessionFixture();
 
     await t.run(
       async (ctx) =>
         await rollbackQueuedChatStart(ctx, {
-          entityId: sessionId,
+          entityId: chatId,
           turnId,
           placeholderMessageId,
         }),
@@ -412,8 +422,8 @@ describe("turn lifecycle integration", () => {
   });
 
   test("a streaming touch within 2s does not rewrite lastUpdatedAt", async () => {
-    const { t, sessionId } = await createSessionFixture();
-    const entityId = String(sessionId);
+    const { t, chatId } = await createSessionFixture();
+    const entityId = String(chatId);
     const stamped = await t.run(async (ctx) => {
       const lastUpdatedAt = Date.now();
       await ctx.db.insert("streamingActivity", {
@@ -585,6 +595,14 @@ describe("task chat turns share the session turn lifecycle", () => {
         title: "Pick",
         status: "active",
       });
+      const chatId = await ctx.db.insert("sessionChats", {
+        sessionId,
+        repoId,
+        userId,
+        title: "Main",
+        number: 1,
+        isMain: true,
+      });
       const projectId = await ctx.db.insert("projects", {
         repoId,
         userId,
@@ -603,7 +621,7 @@ describe("task chat turns share the session turn lifecycle", () => {
         agent: (owner: { kind: string }) => owner.kind,
       };
       return [
-        ...[sessionId, taskId, projectId, runId, "not-an-id"].map((entityId) =>
+        ...[chatId, taskId, projectId, runId, "not-an-id"].map((entityId) =>
           turnAdapterForEntity(ctx.db, { entityId }, visit),
         ),
         turnAdapterForEntity(
@@ -619,7 +637,7 @@ describe("task chat turns share the session turn lifecycle", () => {
       ];
     });
     expect(kinds).toEqual([
-      "session",
+      "sessionChat",
       "taskChat",
       "projectChat",
       "run",
@@ -707,11 +725,11 @@ describe("quick-task run as a turn owner", () => {
  */
 describe("lane turns stay apart from chat turns", () => {
   test("a summary turn is not the session's chat turn", async () => {
-    const { t, sessionId } = await createSessionFixture();
+    const { t, sessionId, chatId } = await createSessionFixture();
     const result = await t.run(async (ctx) => {
       const session = await ctx.db.get(sessionId);
       if (!session) throw new Error("missing session");
-      const chatTurn = await findOpenTurn(ctx, sessionId);
+      const chatTurn = await findOpenTurn(ctx, chatId);
       const summaryTurnId = await openTurn(ctx, {
         entityId: sessionId,
         lane: "summary",
@@ -721,7 +739,7 @@ describe("lane turns stay apart from chat turns", () => {
       });
       return {
         chatTurnId: chatTurn?._id,
-        chatTurnAfter: (await findOpenTurn(ctx, sessionId))?._id,
+        chatTurnAfter: (await findOpenTurn(ctx, chatId))?._id,
         summaryTurn: await findOpenTurn(ctx, sessionId, "summary"),
         summaryTurnId,
         hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),

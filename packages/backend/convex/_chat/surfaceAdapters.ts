@@ -4,15 +4,18 @@ import { internal } from "../_generated/api";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import {
+  drainSessionChatQueues,
   startNextQueuedProjectChatMessage,
-  startNextQueuedSessionMessage,
   startNextQueuedTaskChatMessage,
 } from "../_queues/helpers";
 import type { WorkflowId } from "@convex-dev/workflow";
-import { syncSessionDaemonState } from "../_sessions/daemonState";
 import { STALL_ALERT_TEXT } from "./stallRetry";
-import { sessionSummaryStreamingEntityId } from "./agentStreamIds";
 import type { TurnLane } from "../validators";
+import {
+  loadSessionChat,
+  sessionChatStreamingEntityId,
+  type SessionChatContext,
+} from "../_sessionChats/helpers";
 
 /** Streaming entityId prefix for project chat workflows. */
 export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
@@ -23,7 +26,10 @@ export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
 export type ChatAlert = { text: string; detail?: string };
 
 /** Every chat entity id. The table, not a label, decides the surface. */
-export type ChatEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+export type ChatEntityId =
+  | Id<"sessionChats">
+  | Id<"agentTasks">
+  | Id<"projects">;
 
 /**
  * Everything the shared stall-watchdog logic (`_chat/stallWatchdog.ts`) needs
@@ -35,7 +41,7 @@ export type ChatEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
  * instead of writing table-specific patches itself.
  */
 export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
-  kind: "session" | "taskChat" | "projectChat";
+  kind: "sessionChat" | "taskChat" | "projectChat";
   /** Console-log prefix, e.g. "session", "task-chat", "project-chat". */
   logLabel: string;
   /** Console-log key for the id, e.g. "sessionId". */
@@ -111,69 +117,66 @@ const timeoutAlert: ChatAlert = {
 };
 
 const sessionChatAdapter: ChatSurfaceAdapter<
-  Id<"sessions">,
-  Doc<"sessions">
+  Id<"sessionChats">,
+  SessionChatContext
 > = {
-  kind: "session",
-  logLabel: "session",
-  idLogLabel: "sessionId",
-  parseId: (db, raw) => db.normalizeId("sessions", raw),
-  getEntity: (ctx, id) => ctx.db.get(id),
-  activeWorkflowId: (session) => session.activeWorkflowId,
-  streamingEntityId: (id) => String(id),
+  kind: "sessionChat",
+  logLabel: "session-chat",
+  idLogLabel: "chatId",
+  parseId: (db, raw) => db.normalizeId("sessionChats", raw),
+  getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
+  activeWorkflowId: ({ chat }) => chat.activeWorkflowId,
+  streamingEntityId: (id) => sessionChatStreamingEntityId(id),
   parseStreamingEntityId: (db, streamingEntityId) =>
-    db.normalizeId("sessions", streamingEntityId),
-  extraStreamingClears: (id) => [sessionSummaryStreamingEntityId(id)],
-  syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
-  sandboxId: (session) => session.sandboxId,
-  repoId: (session) => session.repoId,
-  interrupt: async (ctx, session) => {
-    if (getAIModelProvider(normalizeAIModel(session.lastModel)) === "claude") {
-      const cancelRequestedAt = Date.now();
-      await ctx.db.patch(session._id, { cancelRequestedAt });
-      await syncSessionDaemonState(ctx, session, { cancelRequestedAt });
+    db.normalizeId("sessionChats", streamingEntityId),
+  extraStreamingClears: () => [],
+  syntheticTurnMessageId: ({ chat }) => chat.syntheticTurnMessageId,
+  sandboxId: ({ session }) => session.sandboxId,
+  repoId: ({ session }) => session.repoId,
+  interrupt: async (ctx, { chat, session }) => {
+    if (getAIModelProvider(normalizeAIModel(chat.lastModel)) === "claude") {
+      await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
     } else if (session.sandboxId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
         sandboxId: session.sandboxId,
         repoId: session.repoId,
+        entityIdField: "chatId",
+        entityId: String(chat._id),
       });
     }
   },
   release: async (ctx, id, opts) => {
-    const patch: {
-      activeWorkflowId: undefined;
-      syntheticTurnMessageId: undefined;
-      pendingTurn: undefined;
-      updatedAt: number;
-      status?: "closed";
-    } = {
+    // The dead turn's prompt is still sitting in the handoff slot whenever no
+    // daemon claimed it, and nothing else ever empties that slot: claim and
+    // saveResult are both paths this turn never reached. Left behind, the
+    // orphan blocks `ensurePendingTurn` for every later turn, so the chat
+    // opens turns no daemon can claim and stalls each one out forever.
+    // Cleared before `drainQueue` restages the next message.
+    await ctx.db.patch(id, {
       activeWorkflowId: undefined,
       syntheticTurnMessageId: undefined,
-      // The dead turn's prompt is still sitting in the handoff slot whenever no
-      // daemon claimed it, and nothing else ever empties that slot: claim and
-      // saveResult are both paths this turn never reached. Left behind, the
-      // orphan blocks `ensurePendingTurn` for every later turn, so the session
-      // opens turns no daemon can claim and stalls each one out forever.
-      // Cleared before `drainQueue` restages the next message.
       pendingTurn: undefined,
       updatedAt: Date.now(),
-    };
+    });
     if (opts.sandboxStopped) {
       // Surfaces the stop in the UI — users cannot see the provider
       // dashboard, and an "active" session with a dead VM just looks
       // frozen. "closed" is also what stops page-open prewarm from
       // silently resurrecting the VM (see prewarmDaemon's status guard).
-      patch.status = "closed";
-    }
-    await ctx.db.patch(id, patch);
-    // The daemon polls the mirror row, not the session, so an uncleared copy
-    // there hands a dead turn's prompt to the next warm process.
-    const session = await ctx.db.get(id);
-    if (session) {
-      await syncSessionDaemonState(ctx, session, { pendingTurn: undefined });
+      const chat = await ctx.db.get(id);
+      if (chat) {
+        await ctx.db.patch(chat.sessionId, {
+          status: "closed",
+          updatedAt: Date.now(),
+        });
+      }
     }
   },
-  drainQueue: (ctx, id) => startNextQueuedSessionMessage(ctx, id),
+  drainQueue: async (ctx, id) => {
+    const chat = await ctx.db.get(id);
+    if (!chat) return false;
+    return await drainSessionChatQueues(ctx, chat.sessionId, id);
+  },
   finalizeOrphanTurn: async (ctx, id) => {
     await ctx.db.patch(id, {
       syntheticTurnMessageId: undefined,
@@ -184,7 +187,7 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     await ctx.scheduler.runAfter(
       0,
       internal._sessions.execution.retryEmptyStalledSessionTurn,
-      { sessionId: id, turnId, sandboxStopped: false },
+      { chatId: id, turnId, sandboxStopped: false },
     );
   },
   alerts: {
@@ -453,8 +456,8 @@ export function turnAdapterForEntity<R>(
     const owner = laneOwner(db, turn.entityId, turn.lane);
     return owner ? visit.agent(owner) : null;
   }
-  const sessionId = sessionChatAdapter.parseId(db, turn.entityId);
-  if (sessionId) return visit.chat(sessionChatAdapter, sessionId);
+  const chatId = sessionChatAdapter.parseId(db, turn.entityId);
+  if (chatId) return visit.chat(sessionChatAdapter, chatId);
   const taskId = taskChatAdapter.parseId(db, turn.entityId);
   if (taskId) return visit.chat(taskChatAdapter, taskId);
   const projectId = projectChatAdapter.parseId(db, turn.entityId);
@@ -464,8 +467,28 @@ export function turnAdapterForEntity<R>(
 }
 
 /**
- * Records a workflow as the active workflow for a session and schedules the
- * 2-hour backstop. The turn lease (`turns.reconcile`) is the stall check.
+ * Records a workflow as the active workflow for a session chat and schedules
+ * the 2-hour backstop. The turn lease (`turns.reconcile`) is the stall check.
+ */
+export async function trackSessionChatWorkflow(
+  ctx: MutationCtx,
+  chatId: Id<"sessionChats">,
+  workflowId: WorkflowId,
+  timeoutMs: number = RUN_TIMEOUT_MS,
+): Promise<void> {
+  const id = String(workflowId);
+  await ctx.db.patch(chatId, { activeWorkflowId: id });
+  await ctx.scheduler.runAfter(
+    timeoutMs,
+    internal.workflowWatchdog.handleStaleSessionChat,
+    { chatId, workflowId: id },
+  );
+}
+
+/**
+ * Records a session-level workflow (the summary) as the session's active
+ * workflow and schedules the 2-hour backstop. Chat turns track on their chat
+ * (`trackSessionChatWorkflow`); this slot is only for work on the session row.
  */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,

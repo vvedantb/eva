@@ -46,12 +46,20 @@ export type ChatSourceStoredFields = {
 /**
  * Stored source fields for a chat id with no caller check. For system writes
  * keyed by a sandbox entity id or a message parent; null when the id is not a
- * live session, quick task or project.
+ * live session, quick task or project. A parallel chat id resolves to its
+ * session, which owns docs, artifacts and the Log.
  */
 export async function chatSourceFieldsForEntityId(
   db: GenericDatabaseReader<DataModel>,
   entityId: string,
 ): Promise<ChatSourceStoredFields | null> {
+  const sessionChatId = db.normalizeId("sessionChats", entityId);
+  if (sessionChatId) {
+    const chat = await db.get(sessionChatId);
+    return chat
+      ? chatSourceFieldsForEntityId(db, String(chat.sessionId))
+      : null;
+  }
   const sessionId = db.normalizeId("sessions", entityId);
   if (sessionId) {
     return (await db.get(sessionId))

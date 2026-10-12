@@ -86,7 +86,7 @@ describe("every turn start clears the streaming row first", () => {
   test("the shared session stager clears before staging the placeholder", () => {
     const body = functionBody(
       sessionExecution,
-      "async function stageAndStartSessionTurn(",
+      "async function stageAndStartChatTurn(",
     );
     const clearAt = body.indexOf("clearStreamingActivity(");
     const placeholderAt = body.indexOf('ctx.db.insert("messages"');
@@ -99,7 +99,7 @@ describe("every turn start clears the streaming row first", () => {
     "%s stages through that helper rather than its own placeholder",
     (name) => {
       const body = definitionBody(sessionExecution, name);
-      expect(body).toContain("stageAndStartSessionTurn(ctx, {");
+      expect(body).toContain("stageAndStartChatTurn(ctx, {");
       expect(body).not.toContain('ctx.db.insert("messages"');
     },
   );
@@ -120,7 +120,7 @@ describe("every turn start clears the streaming row first", () => {
   });
 
   test.each([
-    "sessionQueueConfig",
+    "sessionChatQueueConfig",
     "projectChatQueueConfig",
     "taskChatQueueConfig",
   ])("%s inserts a user-role message when a queued turn starts", (name) => {
@@ -128,18 +128,25 @@ describe("every turn start clears the streaming row first", () => {
     expect(body).toContain('role: "user"');
   });
 
+  // A session drains per chat: the finished chat first, then its siblings.
   test.each([
-    ["startNextQueuedSessionMessage", "sessionQueueConfig"],
-    ["startNextQueuedProjectChatMessage", "projectChatQueueConfig"],
-    ["startNextQueuedTaskChatMessage", "taskChatQueueConfig"],
-  ])("%s still delegates to the shared dequeue with %s", (name, configName) => {
-    const body = functionBody(queueHelpers, `export function ${name}(`);
-    const idArg =
-      name === "startNextQueuedSessionMessage"
-        ? "sessionId"
-        : name === "startNextQueuedProjectChatMessage"
-          ? "projectId"
-          : "taskId";
+    [
+      "export async function drainSessionChatQueues(",
+      "finishedChatId",
+      "sessionChatQueueConfig",
+    ],
+    [
+      "export function startNextQueuedProjectChatMessage(",
+      "projectId",
+      "projectChatQueueConfig",
+    ],
+    [
+      "export function startNextQueuedTaskChatMessage(",
+      "taskId",
+      "taskChatQueueConfig",
+    ],
+  ])("%s still delegates to the shared dequeue with %s", (header, idArg, configName) => {
+    const body = functionBody(queueHelpers, header);
     // Formatting-agnostic, and later arguments (the dequeue reason) may follow.
     expect(body).toMatch(
       new RegExp(

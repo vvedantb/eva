@@ -32,7 +32,11 @@ export const create = internalMutation({
   },
   returns: v.union(v.id("chatHtmlRenders"), v.null()),
   handler: async (ctx, args): Promise<Id<"chatHtmlRenders"> | null> => {
-    const parentId = resolveChatParent(ctx.db, args.entityKind, args.entityId);
+    const parentId = await resolveChatParent(
+      ctx.db,
+      args.entityKind,
+      args.entityId,
+    );
     if (!parentId) return null;
     const messageId = await latestChatMessageId(ctx.db, parentId);
     const bodyId = await ctx.db.insert("chatHtmlRenderBodies", {

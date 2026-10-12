@@ -424,7 +424,11 @@ function buildSdkOptionsFromParts(
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
     ENABLE_TOOL_SEARCH: "auto",
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId") {
+  if (
+    CLAIM_MUTATION ||
+    ENTITY_ID_FIELD === "sessionId" ||
+    ENTITY_ID_FIELD === "chatId"
+  ) {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
 

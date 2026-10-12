@@ -28,6 +28,7 @@ import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { recordTurnChange } from "../chatLog";
 
 export type ChatResultParentId =
+  | Id<"sessionChats">
   | Id<"sessions">
   | Id<"projects">
   | Id<"agentTasks">;

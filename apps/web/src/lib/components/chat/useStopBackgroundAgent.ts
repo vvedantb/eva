@@ -26,7 +26,7 @@ export function useStopBackgroundAgent(
   return async (toolUseId: string) => {
     const request =
       entity.kind === "session"
-        ? stopSessionAgent({ sessionId: entity.sessionId, toolUseId })
+        ? stopSessionAgent({ chatId: entity.chatId, toolUseId })
         : entity.kind === "task"
           ? stopTaskAgent({ taskId: entity.taskId, toolUseId })
           : stopProjectAgent({ projectId: entity.projectId, toolUseId });

@@ -24,7 +24,7 @@ import {
   skipConfirmTitle,
   useAltHeld,
 } from "@/lib/confirm";
-import type { SessionMessage } from "./useSessionSend";
+import type { SessionMessage } from "./useChatSend";
 
 interface PublishRecoveryBannerProps {
   sessionId: Id<"sessions">;

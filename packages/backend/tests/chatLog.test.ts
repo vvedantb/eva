@@ -239,6 +239,41 @@ describe("chat log", () => {
   );
 
   test(
+    "a turn in a parallel session chat lands in the session's Log",
+    async () => {
+      const f = await fixture();
+      await f.t.run(async (ctx) => {
+        const session = await ctx.db.get(f.sessionId);
+        if (!session) throw new Error("session missing");
+        const chatId = await ctx.db.insert("sessionChats", {
+          sessionId: f.sessionId,
+          repoId: session.repoId,
+          userId: session.userId,
+          title: "Chat 2",
+          number: 2,
+          isMain: false,
+        });
+        const messageId = await ctx.db.insert("messages", {
+          parentId: chatId,
+          role: "assistant",
+          content: "Built it in a parallel chat.",
+          timestamp: Date.now(),
+        });
+        const message = await ctx.db.get(messageId);
+        if (!message) throw new Error("message missing");
+        await recordTurnChange(ctx, String(chatId), message, "aaa", "bbb");
+      });
+      const rows = await f.asUser.query(api.chatLog.listForSource, {
+        source: { kind: "session", sessionId: f.sessionId },
+      });
+      expect(rows.map((row) => row.title)).toEqual([
+        "Built it in a parallel chat.",
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "the repo Documents list shows one Log per chat, newest first",
     async () => {
       const f = await fixture();
