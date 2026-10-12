@@ -2,6 +2,7 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { deleteChatLogEntries } from "../chatLog";
 
 const STEPS = [
   "projects",
@@ -73,6 +74,10 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(d._id);
             deleted++;
           }
+          deleted += await deleteChatLogEntries(ctx, {
+            kind: "project",
+            projectId: project._id,
+          });
           await ctx.db.delete(project._id);
           deleted++;
         }
@@ -128,6 +133,11 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(s._id);
             deleted++;
           }
+
+          deleted += await deleteChatLogEntries(ctx, {
+            kind: "task",
+            taskId: task._id,
+          });
         }
         break;
       }
@@ -186,6 +196,10 @@ export const deleteRepoStep = internalMutation({
             deleted++;
           }
 
+          deleted += await deleteChatLogEntries(ctx, {
+            kind: "session",
+            sessionId: session._id,
+          });
           await ctx.db.delete(session._id);
           deleted++;
         }

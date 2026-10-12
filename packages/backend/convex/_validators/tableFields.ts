@@ -1473,6 +1473,9 @@ export const chatSourceFields = {
  */
 export const chatLogEntryFields = {
   ...chatSourceFields,
+  // The chat's repo, for the repo Documents list. Absent only for a task with
+  // no repo of its own or through its project.
+  repoId: v.optional(v.id("githubRepos")),
   kind: chatLogEntryKindValidator,
   author: chatLogAuthorValidator,
   title: v.string(),

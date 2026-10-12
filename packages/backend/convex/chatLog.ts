@@ -2,16 +2,20 @@ import { v } from "convex/values";
 import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { authMutation, authQuery } from "./functions";
+import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { chatLogEntryFields, chatLogEntryKindValidator } from "./validators";
 import type { ChatLogEntryKind } from "./validators";
 import {
   callerCanSeeChatSource,
+  chatSourceArgFromFields,
   chatSourceArgValidator,
   chatSourceFieldsForEntityId,
+  chatSourceSummaryValidator,
   listRowsForChatSource,
+  resolveChatSource,
   type ChatSourceArg,
   type ChatSourceStoredFields,
+  type RepoCache,
 } from "./_chatSource/helpers";
 import { renderChatLogMarkdown } from "@eva/shared/chatLog";
 
@@ -67,6 +71,26 @@ async function loadRows(
   });
 }
 
+/** The chat's repo; a quick task without one falls back to its project's. */
+async function repoIdForSource(
+  ctx: QueryCtx,
+  source: ChatSourceStoredFields,
+): Promise<Id<"githubRepos"> | undefined> {
+  if (source.sourceSessionId) {
+    return (await ctx.db.get(source.sourceSessionId))?.repoId;
+  }
+  if (source.sourceProjectId) {
+    return (await ctx.db.get(source.sourceProjectId))?.repoId;
+  }
+  if (!source.sourceTaskId) return undefined;
+  const task = await ctx.db.get(source.sourceTaskId);
+  if (!task) return undefined;
+  if (task.repoId) return task.repoId;
+  return task.projectId
+    ? (await ctx.db.get(task.projectId))?.repoId
+    : undefined;
+}
+
 async function insertEntry(
   ctx: MutationCtx,
   source: ChatSourceStoredFields,
@@ -82,8 +106,10 @@ async function insertEntry(
   },
 ): Promise<Id<"chatLogEntries">> {
   const body = entry.body ? clip(entry.body, BODY_LIMIT) : "";
+  const repoId = await repoIdForSource(ctx, source);
   return ctx.db.insert("chatLogEntries", {
     ...source,
+    ...(repoId ? { repoId } : {}),
     kind: entry.kind,
     author: entry.author,
     title: clip(entry.title, TITLE_LIMIT) || "Untitled",
@@ -117,6 +143,75 @@ function storedFields(source: ChatSourceArg): ChatSourceStoredFields {
   }
   return { sourceKind: "project", sourceProjectId: source.projectId };
 }
+
+/** Deletes every entry for one chat (repo deletion). Returns the count. */
+export async function deleteChatLogEntries(
+  ctx: MutationCtx,
+  source: ChatSourceArg,
+): Promise<number> {
+  const rows = await listRowsForChatSource(ctx, "chatLogEntries", source);
+  for (const row of rows) await ctx.db.delete(row._id);
+  return rows.length;
+}
+
+/** Newest entries scanned for the repo list; older-only chats drop off. */
+const REPO_LOG_SCAN_LIMIT = 1_000;
+
+const repoChatLogValidator = v.object({
+  source: chatSourceSummaryValidator,
+  entryCount: v.number(),
+  decisionCount: v.number(),
+  latestTitle: v.string(),
+  updatedAt: v.number(),
+});
+
+/**
+ * One row per chat with a Log in this repo, newest activity first. Feeds the
+ * repo Documents list; built from the entries, never stored as a doc.
+ */
+export const listForRepo = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(repoChatLogValidator),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const recent = await ctx.db
+      .query("chatLogEntries")
+      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
+      .order("desc")
+      .take(REPO_LOG_SCAN_LIMIT);
+    const chats = new Map<string, Doc<"chatLogEntries">[]>();
+    for (const row of recent) {
+      const key = String(
+        row.sourceSessionId ?? row.sourceTaskId ?? row.sourceProjectId,
+      );
+      const group = chats.get(key);
+      if (group) group.push(row);
+      else chats.set(key, [row]);
+    }
+    const cache: RepoCache = new Map();
+    const result = [];
+    // Map order follows the scan: the chat with the newest entry comes first.
+    for (const group of chats.values()) {
+      const newest = group[0];
+      if (!newest) continue;
+      const arg = chatSourceArgFromFields(newest);
+      if (!arg || !(await callerCanSeeChatSource(ctx, arg))) continue;
+      const source = await resolveChatSource(ctx, newest, cache);
+      if (!source) continue;
+      const replaced = new Set(group.map((row) => row.supersedesId));
+      result.push({
+        source,
+        entryCount: group.length,
+        decisionCount: group.filter(
+          (row) => row.kind === "decision" && !replaced.has(row._id),
+        ).length,
+        latestTitle: newest.title,
+        updatedAt: newest.createdAt,
+      });
+    }
+    return result;
+  },
+});
 
 /** Every entry for one chat, oldest first. */
 export const listForSource = authQuery({

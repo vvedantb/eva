@@ -309,7 +309,8 @@ const schema = defineSchema({
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"])
-    .index("by_message", ["messageId"]),
+    .index("by_message", ["messageId"])
+    .index("by_repo", ["repoId"]),
 
   docComments: defineTable(docCommentFields).index("by_doc", ["docId"]),
 

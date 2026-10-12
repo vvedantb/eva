@@ -237,6 +237,59 @@ describe("chat log", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "the repo Documents list shows one Log per chat, newest first",
+    async () => {
+      const f = await fixture();
+      const session = { kind: "session" as const, sessionId: f.sessionId };
+      const decisionId = await f.asUser.mutation(api.chatLog.append, {
+        source: session,
+        kind: "decision",
+        author: "agent",
+        title: "Use a table",
+      });
+      await f.asUser.mutation(api.chatLog.append, {
+        source: session,
+        kind: "decision",
+        author: "agent",
+        title: "Use an append-only table",
+        supersedesId: decisionId,
+      });
+      await f.asUser.mutation(api.chatLog.append, {
+        source: { kind: "task", taskId: f.taskId },
+        kind: "note",
+        author: "user",
+        title: "Task note",
+      });
+
+      const repoId = await f.t.run(
+        async (ctx) => (await ctx.db.get(f.sessionId))?.repoId,
+      );
+      if (!repoId) throw new Error("repo missing");
+      const logs = await f.asUser.query(api.chatLog.listForRepo, { repoId });
+      expect(
+        logs.map((log) => ({
+          kind: log.source?.kind,
+          entryCount: log.entryCount,
+          decisionCount: log.decisionCount,
+          latestTitle: log.latestTitle,
+        })),
+      ).toEqual([
+        { kind: "task", entryCount: 1, decisionCount: 0, latestTitle: "Task note" },
+        {
+          kind: "session",
+          entryCount: 2,
+          decisionCount: 1,
+          latestTitle: "Use an append-only table",
+        },
+      ]);
+      expect(
+        await f.asStranger.query(api.chatLog.listForRepo, { repoId }),
+      ).toEqual([]);
+    },
+    TIMEOUT_MS,
+  );
 });
 
 describe("chat log markdown", () => {
