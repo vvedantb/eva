@@ -3,6 +3,7 @@
 import { useRef, useSyncExternalStore } from "react";
 
 import { bindRuntimeAnimation } from "../utils/runtimeVisibility";
+import { EVA_BLUE, EVA_PURPLE } from "./brand-colors";
 import { quantizedSnapshot, subscribeQuantized } from "../utils/sharedClock";
 
 /* ─────────────────────────────────────────────────────────
@@ -61,11 +62,14 @@ const PATTERNS: Record<
   Orbit: { delays: orbit, dur: 950, round: false },
 };
 
-/** Same violet→sky→cyan sweep as composer `BorderBeam` `colorful`. */
+/**
+ * Brand purple→blue sweep, matching the spinners and the composer
+ * `BorderBeam` `colorful`. Blue leads, as on `CircleSpinner`'s arc.
+ */
 const COLORFUL_COLUMNS = [
-  "rgb(var(--chart-4))",
-  "rgb(var(--chart-2))",
-  "rgb(var(--chart-5))",
+  EVA_PURPLE,
+  `color-mix(in oklab, ${EVA_PURPLE}, ${EVA_BLUE})`,
+  EVA_BLUE,
 ] as const;
 
 /** Started on attach, cancelled on detach. `undefined` for a gap cell. */
