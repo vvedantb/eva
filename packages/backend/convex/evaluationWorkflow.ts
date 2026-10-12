@@ -18,8 +18,10 @@ import { buildPrBody } from "./prBody";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { buildRootDirectoryInstruction } from "./prompts";
+import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 
-const evalCompleteEvent = defineEvent({
+/** Agent-turn completion for a report. Shared by code reviews and browser runs. */
+export const evalCompleteEvent = defineEvent({
   name: "evalComplete",
   validator: workflowCompleteValidator,
 });
@@ -434,6 +436,7 @@ export const saveWorkflowFailure = internalMutation({
       activeWorkflowId: undefined,
       updatedAt: Date.now(),
     });
+    await scheduleArenaCheckCompletion(ctx, report);
     return null;
   },
 });
@@ -649,7 +652,9 @@ export const startEvaluation = authMutation({
       .withIndex("by_doc", (q) => q.eq("docId", args.docId))
       .collect();
     const active = existing.find(
-      (r) => r.status === "pending" || r.status === "running",
+      (r) =>
+        (r.kind ?? "code") === "code" &&
+        (r.status === "pending" || r.status === "running"),
     );
     if (active) return active._id;
 
@@ -657,6 +662,7 @@ export const startEvaluation = authMutation({
     const reportId = await ctx.db.insert("evaluationReports", {
       repoId: args.repoId,
       docId: args.docId,
+      kind: "code",
       status: "pending",
       issues: [],
       branchName: args.branchName,

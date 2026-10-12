@@ -463,7 +463,15 @@ const prWebhookSchema = z.object({
     title: nullableString,
     merge_commit_sha: nullableString,
     head: z
-      .object({ ref: nullableString, sha: nullableString })
+      .object({
+        ref: nullableString,
+        sha: nullableString,
+        // Fork PRs carry the fork here; their branch is not in the base repo.
+        repo: z
+          .object({ full_name: nullableString })
+          .nullable()
+          .catch(null),
+      })
       .nullable()
       .catch(null),
     user: loginObject,
@@ -632,6 +640,42 @@ http.route({
             prUrl,
             action,
             draft: draft ?? undefined,
+          },
+        );
+      }
+
+      // Testing Arena: browser runs on every new commit of a ready PR, for
+      // docs that opted in. Fork PRs are skipped: the sandbox clones the base
+      // repo, which does not have the fork's branch.
+      const ARENA_ACTIONS = new Set([
+        "opened",
+        "reopened",
+        "synchronize",
+        "ready_for_review",
+      ]);
+      const repository = parsed.data.repository;
+      const headSha = pullRequest.head?.sha;
+      const prNumber = pullRequest.number;
+      if (
+        ARENA_ACTIONS.has(action) &&
+        draft !== true &&
+        repository?.name &&
+        repository.owner?.login &&
+        branchName &&
+        headSha &&
+        prNumber !== null &&
+        pullRequest.head?.repo?.full_name ===
+          `${repository.owner.login}/${repository.name}`
+      ) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.arenaBrowserWorkflow.startPrRuns,
+          {
+            owner: repository.owner.login,
+            name: repository.name,
+            prNumber,
+            headRef: branchName,
+            headSha,
           },
         );
       }

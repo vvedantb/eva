@@ -67,6 +67,18 @@ export function buildEvaDocUrl(
   return `${getEvaBaseUrl()}/${repoOwner}/${segment}/docs/${docNumId}/${docTab}`;
 }
 
+/** Builds a link to a doc's Testing Arena tab (path uses per-repo numId). */
+export function buildEvaArenaUrl(
+  repoOwner: string,
+  repoName: string,
+  docNumId: number,
+  arenaTab: "code" | "browser",
+  rootDirectory?: string,
+): string {
+  const segment = repoPath(repoName, rootDirectory);
+  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/testing-arena/${docNumId}/${arenaTab}`;
+}
+
 /** Builds a link to a PR under Reviews (keyed by GitHub PR number). */
 export function buildEvaReviewUrl(
   repoOwner: string,
