@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "./_taskWorkflow/startRun";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -10,7 +11,6 @@ import {
 } from "./validators";
 import { allocateNumId } from "./numId";
 import { ensureSubscribed } from "./taskSubscribers";
-import { workflow } from "./workflowManager";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
 import { resolveCredentialSourceLabel } from "./_userProviderAccounts/credentialSource";
@@ -185,29 +185,21 @@ export const autoStartTask = internalMutation({
     });
 
     try {
-      const workflowId = await workflow.start(
-        ctx,
-        internal.taskWorkflow.taskExecutionWorkflow,
-        {
-          runId,
-          taskId: args.taskId,
-          repoId: task.repoId,
-          installationId: repo.installationId,
-          baseBranch: await resolveTaskWorkflowBaseBranchForTask(
-            ctx.db,
-            task,
-            repo,
-          ),
-          isFirstTaskOnBranch: true,
-          model: task.model ?? repo.defaultModel,
-          providerAccountId: task.providerAccountId,
-          credentialOwnerUserId: task.createdBy,
-          userId: args.userId,
-        },
-      );
-
-      await ctx.db.patch(args.taskId, {
-        activeWorkflowId: String(workflowId),
+      await startTaskRunWorkflow(ctx, {
+        runId,
+        taskId: args.taskId,
+        repoId: task.repoId,
+        installationId: repo.installationId,
+        baseBranch: await resolveTaskWorkflowBaseBranchForTask(
+          ctx.db,
+          task,
+          repo,
+        ),
+        isFirstTaskOnBranch: true,
+        model: task.model ?? repo.defaultModel,
+        providerAccountId: task.providerAccountId,
+        credentialOwnerUserId: task.createdBy,
+        userId: args.userId,
       });
     } catch (error) {
       const message =

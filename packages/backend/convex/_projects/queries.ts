@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
@@ -16,6 +17,7 @@ import {
   getProjectDetails,
   buildProjectBranchName,
 } from "./helpers";
+import { unreadLookupForRepo } from "../chatReads";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Builds a project's detail payload (conversation history + optional generated
@@ -48,10 +50,16 @@ export const list = authQuery({
         .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
         .collect(),
     );
+    const hasUnread = await unreadLookupForRepo(
+      ctx.db,
+      ctx.userId,
+      args.repoId,
+    );
     return await Promise.all(
       projects.map(async (project) => ({
         ...project,
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
+        hasUnread: await hasUnread(project),
       })),
     );
   },
@@ -230,7 +238,16 @@ export const getProjectPrCreationData = internalQuery({
       projectTitle: project.title,
       projectDescription: project.description,
       rootDirectory: repo.rootDirectory ?? "",
-      existingPrUrl: project.prUrl ?? null,
+      // Only a live PR on the current branch counts: a merged one belongs to
+      // an earlier branch version, and the next cycle needs its own PR.
+      existingPrUrl:
+        (
+          await findLivePullRequestOnBranch(
+            ctx.db,
+            project.repoId,
+            branchName,
+          )
+        )?.prUrl ?? null,
       completedTasks,
     };
   },

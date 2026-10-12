@@ -8,22 +8,63 @@ import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
+import {
+  openChatEntityIdsForRepo,
+  taskIsExecuting,
+} from "../_chat/turnProjection";
+import { unreadLookupForRepo } from "../chatReads";
 
-/** Validator for a task document enriched with its latest run start time. */
+/** Validator for a task document enriched with its latest run and busy state. */
 export const agentTaskWithLastRunValidator = v.object({
   ...agentTaskValidator.fields,
   lastRunStartedAt: v.optional(v.number()),
+  /** Main run or chat turn (synthetic turns too): `taskIsExecuting`. */
+  isExecuting: v.boolean(),
+  /** Unread chat reply for this user (`chatReads.ts`). Autonomous runs do not count. */
+  hasUnread: v.boolean(),
 });
 
-/** Enriches each task with the start time of its most recent run. */
-async function enrichTasksWithLastRun(
-  db: QueryCtx["db"],
-  tasks: Array<Doc<"agentTasks">>,
-) {
+function repoIdsOf(
+  tasks: ReadonlyArray<Doc<"agentTasks">>,
+): Set<Id<"githubRepos">> {
   const repoIds = new Set<Id<"githubRepos">>();
   for (const task of tasks) {
     if (task.repoId) repoIds.add(task.repoId);
   }
+  return repoIds;
+}
+
+/** Open chat turns across every repo the tasks belong to, one query per repo. */
+async function openChatEntityIdsForRepos(
+  db: QueryCtx["db"],
+  tasks: ReadonlyArray<Doc<"agentTasks">>,
+): Promise<ReadonlySet<string>> {
+  const sets = await Promise.all(
+    [...repoIdsOf(tasks)].map((repoId) => openChatEntityIdsForRepo(db, repoId)),
+  );
+  return new Set(sets.flatMap((set) => [...set]));
+}
+
+/** Enriches each task with its most recent run start and its busy state. */
+async function enrichTasksWithLastRun(
+  db: QueryCtx["db"],
+  userId: Id<"users">,
+  tasks: Array<Doc<"agentTasks">>,
+) {
+  const repoIds = repoIdsOf(tasks);
+  const openChatEntityIds = await openChatEntityIdsForRepos(db, tasks);
+  const unreadLookups = new Map<
+    string,
+    (task: Doc<"agentTasks">) => Promise<boolean>
+  >();
+  await Promise.all(
+    [...repoIds].map(async (repoId) => {
+      unreadLookups.set(
+        String(repoId),
+        await unreadLookupForRepo(db, userId, repoId),
+      );
+    }),
+  );
   const summaryGroups = await Promise.all(
     [...repoIds].map((repoId) =>
       db
@@ -39,10 +80,15 @@ async function enrichTasksWithLastRun(
   return Promise.all(
     tasks.map(async (task) => {
       const summary = summariesByTask.get(String(task._id));
+      const isExecuting = taskIsExecuting(task, openChatEntityIds);
+      const unreadLookup = unreadLookups.get(String(task.repoId));
+      const hasUnread = unreadLookup ? await unreadLookup(task) : false;
       if (summary) {
         return {
           ...task,
           lastRunStartedAt: summary.lastRunStartedAt,
+          isExecuting,
+          hasUnread,
         };
       }
       // Migration-safe fallback for tasks whose summary row is not backfilled.
@@ -54,6 +100,8 @@ async function enrichTasksWithLastRun(
       return {
         ...task,
         lastRunStartedAt: latestRun?.startedAt,
+        isExecuting,
+        hasUnread,
       };
     }),
   );
@@ -76,7 +124,7 @@ export const listByProject = authQuery({
     const sorted = tasks.sort(
       (a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0),
     );
-    return enrichTasksWithLastRun(ctx.db, sorted);
+    return enrichTasksWithLastRun(ctx.db, ctx.userId, sorted);
   },
 });
 
@@ -236,8 +284,8 @@ const orchestratorTaskValidator = v.object({
   updatedAt: v.number(),
   model: v.optional(aiModelValidator),
   lastChatModel: v.optional(aiModelValidator),
-  activeWorkflowId: v.optional(v.string()),
-  activeChatWorkflowId: v.optional(v.string()),
+  /** Main run or chat turn: one sandbox-busy status (`taskIsExecuting`). */
+  isExecuting: v.boolean(),
 });
 
 /** Slim projection of {@link getActiveTasks} for the orchestrator fleet list. */
@@ -248,6 +296,7 @@ export const getActiveTasksSlim = authQuery({
     ctx,
   ): Promise<Array<Infer<typeof orchestratorTaskValidator>>> => {
     const tasks = await activeTasksForUser(ctx, ctx.userId);
+    const openChatEntityIds = await openChatEntityIdsForRepos(ctx.db, tasks);
     return tasks.map((task) => ({
       _id: task._id,
       _creationTime: task._creationTime,
@@ -258,8 +307,7 @@ export const getActiveTasksSlim = authQuery({
       updatedAt: task.updatedAt,
       model: task.model,
       lastChatModel: task.lastChatModel,
-      activeWorkflowId: task.activeWorkflowId,
-      activeChatWorkflowId: task.activeChatWorkflowId,
+      isExecuting: taskIsExecuting(task, openChatEntityIds),
     }));
   },
 });
@@ -292,7 +340,7 @@ export const getAllTasks = authQuery({
       ),
     );
     const tasks = taskArrays.flat().sort((a, b) => a.createdAt - b.createdAt);
-    return enrichTasksWithLastRun(ctx.db, tasks);
+    return enrichTasksWithLastRun(ctx.db, ctx.userId, tasks);
   },
 });
 

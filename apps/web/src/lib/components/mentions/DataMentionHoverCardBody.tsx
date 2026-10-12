@@ -42,7 +42,7 @@ export function DataMentionHoverCardBody({
       entity.content?.trim() || entity.description?.trim() || "No content yet.";
     return (
       <MentionContentPreview title={entity.label}>
-        <pre className="whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-relaxed text-foreground">
+        <pre className="whitespace-pre-wrap wrap-break-word font-mono text-2xs leading-relaxed text-foreground">
           {preview}
         </pre>
       </MentionContentPreview>

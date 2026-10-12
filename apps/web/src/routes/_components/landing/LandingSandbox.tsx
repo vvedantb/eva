@@ -59,10 +59,10 @@ export function LandingSandbox() {
                     key={group.label}
                     className="flex flex-col gap-1 bg-background px-5 py-3.5 sm:flex-row sm:items-baseline sm:gap-5"
                   >
-                    <p className="w-24 shrink-0 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
+                    <p className="w-24 shrink-0 font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground/70">
                       {group.label}
                     </p>
-                    <p className="text-pretty text-[13px] leading-relaxed text-foreground">
+                    <p className="text-pretty text-2sm leading-relaxed text-foreground">
                       {group.items}
                     </p>
                   </div>
@@ -92,7 +92,7 @@ function SandboxTerminal() {
           <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-border" />
         </span>
-        <p className="font-mono text-[11px] text-muted-foreground">
+        <p className="font-mono text-2xs text-muted-foreground">
           acme/web â€” sandbox
         </p>
         <span className="ml-auto flex items-center gap-1.5">
@@ -100,7 +100,7 @@ function SandboxTerminal() {
             className="landing-pulse-dot size-1.5 rounded-full bg-success"
             aria-hidden
           />
-          <span className="text-[10px] text-muted-foreground">running</span>
+          <span className="text-3xs text-muted-foreground">running</span>
         </span>
       </div>
 

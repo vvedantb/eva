@@ -1,20 +1,16 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { isDiffView, isReviewTab } from "@/lib/search-params";
+import { isDiffView, reviewPathFromSearch } from "@/lib/search-params";
 
 export const Route = createFileRoute(
   "/_repo/$owner/$repo/sessions/$numId/review/",
 )({
   beforeLoad: ({ params, search }) => {
     const prTab =
-      "prTab" in search &&
-      typeof search.prTab === "string" &&
-      isReviewTab(search.prTab)
-        ? search.prTab
-        : "diffs";
+      reviewPathFromSearch(search).kind;
 
-    if (prTab === "overview") {
+    if (prTab === "summary") {
       throw redirect({
-        to: "/$owner/$repo/sessions/$numId/review/overview",
+        to: "/$owner/$repo/sessions/$numId/review/summary",
         params: {
           owner: params.owner,
           repo: params.repo,
@@ -29,9 +25,9 @@ export const Route = createFileRoute(
       });
     }
 
-    if (prTab === "recap") {
+    if (prTab === "timeline") {
       throw redirect({
-        to: "/$owner/$repo/sessions/$numId/review/recap",
+        to: "/$owner/$repo/sessions/$numId/review/timeline",
         params: {
           owner: params.owner,
           repo: params.repo,

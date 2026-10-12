@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { CountPop } from "@/lib/components/ui/CountPop";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 
 /**
  * The same unread signal the changelog popup gates on, on the "What's New" link
@@ -13,12 +13,5 @@ import { CountPop } from "@/lib/components/ui/CountPop";
 export function ChangelogUnreadDot() {
   const changelog = useQuery(api.changelog.getLatestChangelog);
 
-  return (
-    <CountPop
-      label={changelog?.show === true ? "unread" : null}
-      className="ml-auto size-1.5 shrink-0 rounded-full bg-primary"
-    >
-      <span className="sr-only">Unread</span>
-    </CountPop>
-  );
+  return <UnreadDot show={changelog?.show === true} className="ml-auto" />;
 }

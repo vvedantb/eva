@@ -19,8 +19,34 @@ export function isLegacySessionExecuting(
   );
 }
 
-/** One indexed query per list subscription, never one turn lookup per row. */
-export async function openSessionIdsForRepo(
+/**
+ * The same bridge for task and project chats, keyed on
+ * `chatTurnLifecycleVersion`. A workflow turn sets `activeChatWorkflowId`; a
+ * daemon-minted (synthetic) turn sets only `syntheticTurnMessageId`.
+ */
+export function isLegacyChatExecuting(
+  entity: Pick<
+    Doc<"agentTasks"> | Doc<"projects">,
+    | "activeChatWorkflowId"
+    | "syntheticTurnMessageId"
+    | "chatTurnLifecycleVersion"
+  >,
+): boolean {
+  return (
+    entity.chatTurnLifecycleVersion === undefined &&
+    (entity.activeChatWorkflowId !== undefined ||
+      entity.syntheticTurnMessageId !== undefined)
+  );
+}
+
+/**
+ * Every chat entity in one repo with a turn open. One indexed query per list
+ * subscription, never one turn lookup per row. Ids are unique across tables,
+ * so one set serves sessions, tasks and projects alike. A session chat's turn
+ * is filed under both the chat and its session, so a session row lights up
+ * while any of its chats runs.
+ */
+export async function openChatEntityIdsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<ReadonlySet<string>> {
@@ -28,21 +54,49 @@ export async function openSessionIdsForRepo(
     .query("turns")
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
-  return new Set(turns.map((turn) => turn.entityId));
+  // A lane turn (summary, interview) is a one-shot agent, not a chat turn.
+  const ids = new Set<string>();
+  for (const turn of turns) {
+    if (turn.lane !== undefined) continue;
+    ids.add(String(turn.entityId));
+    if (turn.sessionId !== undefined) ids.add(String(turn.sessionId));
+  }
+  return ids;
 }
 
-/** True while one named session has a turn open. */
-export async function sessionHasOpenTurn(
+/** True while one named chat entity has a turn open. */
+export async function hasOpenChatTurn(
   db: DatabaseReader,
-  sessionId: Id<"sessions">,
+  entityId: Doc<"turns">["entityId"],
 ): Promise<boolean> {
+  const sessionId = db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    // A session runs through its chats: any chat's open turn counts.
+    const chatTurn = await db
+      .query("turns")
+      .withIndex("by_session_open", (q) =>
+        q.eq("sessionId", sessionId).eq("open", true),
+      )
+      .first();
+    if (chatTurn !== null) return true;
+  }
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("surface", "session").eq("entityId", String(sessionId)).eq("open", true),
+      q.eq("entityId", entityId).eq("lane", undefined).eq("open", true),
     )
     .first();
   return turn !== null;
+}
+
+/** The open-turn set for one entity, in the shape the projections take. */
+export async function openChatEntityIdsFor(
+  db: DatabaseReader,
+  entityId: Doc<"turns">["entityId"],
+): Promise<ReadonlySet<string>> {
+  return new Set(
+    (await hasOpenChatTurn(db, entityId)) ? [String(entityId)] : [],
+  );
 }
 
 /**
@@ -58,20 +112,48 @@ export function sessionIsExecuting(
     | "syntheticTurnMessageId"
     | "turnLifecycleVersion"
   >,
-  openSessionIds: ReadonlySet<string>,
+  openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
-    openSessionIds.has(String(session._id)) || isLegacySessionExecuting(session)
+    openChatEntityIds.has(String(session._id)) ||
+    isLegacySessionExecuting(session)
   );
 }
 
-/** A quick task runs its main workflow and its sandbox chat independently. */
+/** Whether a task or project chat has a turn open, synthetic turns included. */
+export function chatTurnIsOpen(
+  entity: Pick<
+    Doc<"agentTasks"> | Doc<"projects">,
+    | "_id"
+    | "activeChatWorkflowId"
+    | "syntheticTurnMessageId"
+    | "chatTurnLifecycleVersion"
+  >,
+  openChatEntityIds: ReadonlySet<string>,
+): boolean {
+  return (
+    openChatEntityIds.has(String(entity._id)) || isLegacyChatExecuting(entity)
+  );
+}
+
+/**
+ * One "sandbox busy" status for a quick task: its main run and its chat turn
+ * share one sandbox, and the queue already treats them as exclusive.
+ */
 export function taskIsExecuting(
-  task: Pick<Doc<"agentTasks">, "activeWorkflowId" | "activeChatWorkflowId">,
+  task: Pick<
+    Doc<"agentTasks">,
+    | "_id"
+    | "activeWorkflowId"
+    | "activeChatWorkflowId"
+    | "syntheticTurnMessageId"
+    | "chatTurnLifecycleVersion"
+  >,
+  openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
     task.activeWorkflowId !== undefined ||
-    task.activeChatWorkflowId !== undefined
+    chatTurnIsOpen(task, openChatEntityIds)
   );
 }
 
@@ -79,12 +161,18 @@ export function taskIsExecuting(
 export function projectIsExecuting(
   project: Pick<
     Doc<"projects">,
-    "activeWorkflowId" | "activeBuildWorkflowId" | "activeChatWorkflowId"
+    | "_id"
+    | "activeWorkflowId"
+    | "activeBuildWorkflowId"
+    | "activeChatWorkflowId"
+    | "syntheticTurnMessageId"
+    | "chatTurnLifecycleVersion"
   >,
+  openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
     project.activeWorkflowId !== undefined ||
     project.activeBuildWorkflowId !== undefined ||
-    project.activeChatWorkflowId !== undefined
+    chatTurnIsOpen(project, openChatEntityIds)
   );
 }

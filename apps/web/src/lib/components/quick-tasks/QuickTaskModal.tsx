@@ -699,7 +699,7 @@ export function QuickTaskModal({
                   <Badge
                     key={tag}
                     variant="secondary"
-                    className="text-[10px] h-8 gap-0.5 pr-0.5 sm:h-5"
+                    className="text-3xs h-8 gap-0.5 pr-0.5 sm:h-5"
                   >
                     {tag}
                     <button

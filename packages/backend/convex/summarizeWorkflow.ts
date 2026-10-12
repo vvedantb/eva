@@ -1,11 +1,17 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackSessionWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -14,6 +20,8 @@ import {
   sendCompletionEvent,
 } from "./_taskWorkflow/helpers";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
+import { listSessionChats } from "./_sessionChats/helpers";
 
 const summarizeCompleteEvent = defineEvent({
   name: "summarizeComplete",
@@ -44,23 +52,30 @@ export const summarizeSessionWorkflow = workflow.define({
       repoId: sessionData.repoId,
       sessionPersistenceId: args.sessionId,
       sessionPersistenceKind: "sessions",
-      streamingEntityId: `summary:${args.sessionId}`,
+      streamingEntityId: sessionSummaryStreamingEntityId(args.sessionId),
       ephemeral: false,
     });
 
-    await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-      sandboxId,
-      entityId: args.sessionId,
-      streamingEntityId: `summary:${args.sessionId}`,
-      prompt: sessionData.prompt,
-      userId: args.userId,
-      completionMutation: "summarizeWorkflow:handleCompletion",
-      entityIdField: "sessionId",
-      model: "haiku",
-      allowedTools: "",
-      repoId: sessionData.repoId,
-      sessionPersistenceId: args.sessionId,
-    });
+    await launchAgentStep(
+      step,
+      {
+        sandboxId,
+        entityId: args.sessionId,
+        streamingEntityId: sessionSummaryStreamingEntityId(args.sessionId),
+        prompt: sessionData.prompt,
+        userId: args.userId,
+        completionMutation: "summarizeWorkflow:handleCompletion",
+        entityIdField: "sessionId",
+        model: "haiku",
+        allowedTools: "",
+        repoId: sessionData.repoId,
+        sessionPersistenceId: args.sessionId,
+      },
+      {
+        entityId: args.sessionId,
+        lane: "summary",
+      },
+    );
 
     const result = await step.awaitEvent(summarizeCompleteEvent);
 
@@ -93,10 +108,19 @@ export const getSessionData = internalQuery({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .collect();
+    // A session's transcript is spread over its chats; the summary reads
+    // them all, in time order, so parallel chats' work is covered too.
+    const chats = await listSessionChats(ctx.db, args.sessionId);
+    const messages = [];
+    for (const chat of chats) {
+      messages.push(
+        ...(await ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
+          .collect()),
+      );
+    }
+    messages.sort((a, b) => a.timestamp - b.timestamp);
 
     const conversation = messages.map((m) => m.content).join("\n\n");
 
@@ -128,7 +152,10 @@ export const saveResult = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await clearStreamingActivity(ctx, `summary:${args.sessionId}`);
+    await clearStreamingActivity(
+      ctx,
+      sessionSummaryStreamingEntityId(args.sessionId),
+    );
 
     let summary: string[] = ["No summary available"];
 
@@ -159,11 +186,24 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session || !session.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.sessionId,
+        lane: "summary",
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
     if (session.userId !== ctx.userId) throw new Error("Not authorized");
 
     await sendCompletionEvent(

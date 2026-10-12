@@ -50,7 +50,7 @@ export function WelcomeBanner({ onDismiss }: { onDismiss: () => void }) {
                   <p className="text-xs font-medium text-foreground">
                     {section.label}
                   </p>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="text-2xs leading-relaxed text-muted-foreground">
                     {section.shortDesc}
                   </p>
                 </div>

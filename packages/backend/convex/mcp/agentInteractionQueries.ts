@@ -6,6 +6,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess } from "../functions";
+import { listSessionChats } from "../_sessionChats/helpers";
 import { entityVisible } from "../numId";
 import { createNotification } from "../notifications";
 import { notificationUrgencyValidator } from "../validators";
@@ -38,11 +39,17 @@ type ChatHit =
  * table in turn is a lookup rather than a guess.
  */
 async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
-  const sessionId = ctx.db.normalizeId("sessions", id);
+  // A session's questions are keyed by the chat that asked them.
+  const chatId = ctx.db.normalizeId("sessionChats", id);
+  const sessionId =
+    chatId !== null
+      ? ((await ctx.db.get(chatId))?.sessionId ?? null)
+      : ctx.db.normalizeId("sessions", id);
   if (sessionId) {
     const doc = entityVisible(await ctx.db.get(sessionId));
     return doc ? { kind: "session", doc } : null;
   }
+  if (chatId) return null;
   const taskId = ctx.db.normalizeId("agentTasks", id);
   if (taskId) {
     const doc = entityVisible(await ctx.db.get(taskId));
@@ -54,6 +61,20 @@ async function findChat(ctx: QueryCtx, id: string): Promise<ChatHit | null> {
     return doc ? { kind: "project", doc } : null;
   }
   return null;
+}
+
+/**
+ * The `pendingQuestions.entityId` values one named chat covers. A session's
+ * questions are keyed by its chats, so naming the session fans out to them.
+ */
+async function questionEntityIds(
+  ctx: QueryCtx,
+  entityId: string,
+): Promise<string[]> {
+  const sessionId = ctx.db.normalizeId("sessions", entityId);
+  if (!sessionId) return [entityId];
+  const chats = await listSessionChats(ctx.db, sessionId);
+  return chats.map((chat) => String(chat._id));
 }
 
 /** A chat's repo. A project's child task inherits its project's repo. */
@@ -104,11 +125,15 @@ export const listPendingQuestionsForUser = internalQuery({
       const row = questionId ? await ctx.db.get(questionId) : null;
       rows = row ? [row] : [];
     } else if (args.entityId !== undefined) {
-      const entityId = args.entityId;
-      rows = await ctx.db
-        .query("pendingQuestions")
-        .withIndex("by_entity", (q) => q.eq("entityId", entityId))
-        .take(PENDING_SCAN_LIMIT);
+      rows = [];
+      for (const entityId of await questionEntityIds(ctx, args.entityId)) {
+        rows.push(
+          ...(await ctx.db
+            .query("pendingQuestions")
+            .withIndex("by_entity", (q) => q.eq("entityId", entityId))
+            .take(PENDING_SCAN_LIMIT)),
+        );
+      }
     } else {
       rows = await ctx.db.query("pendingQuestions").take(PENDING_SCAN_LIMIT);
     }
@@ -116,9 +141,6 @@ export const listPendingQuestionsForUser = internalQuery({
     const result = [];
     for (const row of rows) {
       if (row.answer !== undefined) continue;
-      if (args.entityId !== undefined && row.entityId !== args.entityId) {
-        continue;
-      }
       const hit = await findChat(ctx, row.entityId);
       if (!hit) continue;
       const repoId = await chatRepoId(ctx, hit);

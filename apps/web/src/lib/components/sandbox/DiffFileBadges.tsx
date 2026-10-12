@@ -40,7 +40,7 @@ export function FileStatusChip({ status }: { status: GitStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+        "inline-flex shrink-0 rounded border px-1.5 py-0.5 text-3xs font-medium",
         meta.className,
       )}
     >

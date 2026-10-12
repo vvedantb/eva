@@ -4,6 +4,7 @@ import {
   auditSeverityValidator,
   findingSeverityValidator,
   fontFamilyValidator,
+  interactionModeValidator,
   letterSpacingValidator,
   logLevelValidator,
   radiusValidator,
@@ -37,6 +38,45 @@ export const turnCheckpointArgs = {
   beforeShas: v.optional(v.array(repoShaValidator)),
   afterShas: v.optional(v.array(repoShaValidator)),
 };
+
+/**
+ * The durable-turn lease a daemon presents with every completion it posts
+ * while it holds one. Every chat completion receiver accepts these, or a
+ * fenced completion fails validation and the reply is lost.
+ */
+export const turnLeaseFenceArgs = {
+  turnId: v.optional(v.string()),
+  leaseGeneration: v.optional(v.number()),
+};
+
+/** Fields every daemon claim returns, whether or not it hands over a prompt. */
+const daemonClaimDrainFields = {
+  attachmentUrls: v.array(v.string()),
+  stopTaskToolUseIds: v.array(v.string()),
+  cancelRequested: v.boolean(),
+  usageRefreshRequested: v.boolean(),
+  interactionMode: v.optional(interactionModeValidator),
+};
+
+/**
+ * What a chat daemon's `claimPendingTurn` returns on every surface: an empty
+ * claim (drains only, no prompt) or a durable claim that carries the lease.
+ * The empty claim keeps the `legacy` tag so every daemon bundle parses it.
+ */
+export const daemonClaimResultValidator = v.union(
+  v.object({
+    prompt: v.null(),
+    turnLifecycle: v.literal("legacy"),
+    ...daemonClaimDrainFields,
+  }),
+  v.object({
+    prompt: v.string(),
+    turnLifecycle: v.literal("durable"),
+    turnId: v.id("turns"),
+    leaseGeneration: v.number(),
+    ...daemonClaimDrainFields,
+  }),
+);
 
 export const workflowCompleteValidator = v.object({
   success: v.boolean(),
@@ -228,11 +268,13 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("blurPid"),
   v.literal("voiceDictation"),
   v.literal("composerAutocomplete"),
+  v.literal("composerPredictions"),
   v.literal("simpleView"),
   v.literal("replyChime"),
   v.literal("notificationBell"),
   v.literal("disablePageMotion"),
   v.literal("viewVercelDeployment"),
+  v.literal("disableAutoArchive"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -241,11 +283,13 @@ export const experimentalFlagsFields = {
   blurPid: v.optional(v.boolean()),
   voiceDictation: v.optional(v.boolean()),
   composerAutocomplete: v.optional(v.boolean()),
+  composerPredictions: v.optional(v.boolean()),
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
   notificationBell: v.optional(v.boolean()),
   disablePageMotion: v.optional(v.boolean()),
   viewVercelDeployment: v.optional(v.boolean()),
+  disableAutoArchive: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -256,11 +300,13 @@ export const resolvedExperimentalFlagsValidator = v.object({
   blurPid: v.boolean(),
   voiceDictation: v.boolean(),
   composerAutocomplete: v.boolean(),
+  composerPredictions: v.boolean(),
   simpleView: v.boolean(),
   replyChime: v.boolean(),
   notificationBell: v.boolean(),
   disablePageMotion: v.boolean(),
   viewVercelDeployment: v.boolean(),
+  disableAutoArchive: v.boolean(),
 });
 
 /**

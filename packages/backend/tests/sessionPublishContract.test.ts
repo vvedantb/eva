@@ -665,8 +665,10 @@ describe("a callback-published session still opens its first pull request", () =
   });
 
   test("a published branch recovers only a missing session PR", () => {
+    // The primary repo's own PR, so a side-branch PR the agent opened never
+    // stands in for the session's draft.
     expect(sessionWorkflow).toContain(
-      "pushedCommits || (branchPublished && data.prUrl === undefined)",
+      "pushedCommits || (branchPublished && data.primaryPrUrl === undefined)",
     );
   });
 });

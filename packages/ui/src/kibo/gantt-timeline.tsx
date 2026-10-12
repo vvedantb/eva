@@ -126,7 +126,7 @@ export const GanttToday: FC<GanttTodayProps> = ({ className }) => {
     >
       <div
         className={cn(
-          "group pointer-events-auto sticky top-0 z-1 flex select-auto flex-col flex-nowrap items-center justify-center whitespace-nowrap rounded-b-md bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground",
+          "group pointer-events-auto sticky top-0 z-1 flex select-auto flex-col flex-nowrap items-center justify-center whitespace-nowrap rounded-b-md bg-primary px-2 py-0.5 text-3xs font-medium text-primary-foreground",
           className,
         )}
       >

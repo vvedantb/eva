@@ -5,9 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./chatLog": "./src/chatLog.ts",
     "./dates": "./src/utils/dates.ts",
     "./duration": "./src/utils/duration.ts",
     "./generativeUi": "./src/generativeUi/index.ts",
+    "./htmlRender": "./src/htmlRender.ts",
     "./modelPricing": "./src/modelPricing.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./resultEvent": "./src/resultEvent.ts",

@@ -4,12 +4,19 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { listAutomationsForRepo } from "../_automations/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { prStateValidator } from "../validators";
-import { latestTaskPrUrl } from "../_agentTasks/prUrl";
+import { prOriginValidator, prStateValidator } from "../validators";
 import {
-  openSessionIdsForRepo,
+  findPullRequestByUrl,
+  listOwnerPullRequests,
+  sessionRepoPullRequest,
+  taskPrUrl,
+  type PrOwnerRef,
+} from "../_pullRequests/store";
+import {
+  hasOpenChatTurn,
+  openChatEntityIdsFor,
+  openChatEntityIdsForRepo,
   projectIsExecuting,
-  sessionHasOpenTurn,
   sessionIsExecuting,
   taskIsExecuting,
 } from "../_chat/turnProjection";
@@ -140,38 +147,28 @@ async function findById(
 }
 
 /**
- * Finds the chat that opened a pull request. Sessions and projects hold their
- * `prUrl` directly; a quick task's PR belongs to one of its runs, so that
- * lookup goes through `agentRuns` and hands back the owning task.
+ * Finds the chat a pull request is linked to, through its `pullRequests` row,
+ * so any PR an owner holds resolves — a linked repo's, a side-branch PR the
+ * agent opened, or an earlier PR of a task or project.
  */
 async function findByPrUrl(
   ctx: QueryCtx,
   prUrl: string,
   kinds: readonly ("session" | "task" | "project")[],
 ): Promise<ChatTargetHit | null> {
-  for (const kind of kinds) {
-    if (kind === "session") {
-      const doc = await ctx.db
-        .query("sessions")
-        .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-        .first();
-      if (doc) return { kind, doc };
-    } else if (kind === "task") {
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-        .first();
-      const doc = run ? await ctx.db.get(run.taskId) : null;
-      if (doc) return { kind, doc };
-    } else {
-      const doc = await ctx.db
-        .query("projects")
-        .withIndex("by_pr_url", (q) => q.eq("prUrl", prUrl))
-        .first();
-      if (doc) return { kind, doc };
-    }
+  const row = await findPullRequestByUrl(ctx.db, prUrl);
+  if (!row || !kinds.includes(row.owner.kind)) return null;
+  const owner = row.owner;
+  if (owner.kind === "session") {
+    const doc = await ctx.db.get(owner.sessionId);
+    return doc ? { kind: "session", doc } : null;
   }
-  return null;
+  if (owner.kind === "task") {
+    const doc = await ctx.db.get(owner.taskId);
+    return doc ? { kind: "task", doc } : null;
+  }
+  const doc = await ctx.db.get(owner.projectId);
+  return doc ? { kind: "project", doc } : null;
 }
 
 /**
@@ -322,8 +319,7 @@ export const resolveChatTargetForUser = internalQuery({
       // A project tracks a phase where the other two track a status; both
       // answer the same "where is this up to" question for the caller.
       status: hit.kind === "project" ? hit.doc.phase : hit.doc.status,
-      // Quick tasks keep their PR on the run that opened it, not on the task.
-      prUrl: hit.kind === "task" ? undefined : hit.doc.prUrl,
+      prUrl: hit.doc.prUrl,
       branchName: hit.kind === "task" ? undefined : hit.doc.branchName,
       repoId,
       repoOwner: repo.owner,
@@ -374,7 +370,10 @@ const listedEntityValidator = v.object({
   sandboxStatus: v.string(),
   isExecuting: v.boolean(),
   archived: v.optional(v.boolean()),
+  /** The primary PR (else the newest) — see `prUrls` for the rest. */
   prUrl: v.optional(v.string()),
+  /** Every PR linked to the entity, only when it holds more than one. */
+  prUrls: v.optional(v.array(v.string())),
   branchName: v.optional(v.string()),
   updatedAt: v.number(),
   repoId: v.id("githubRepos"),
@@ -595,13 +594,11 @@ export const listEntitiesForUser = internalQuery({
       const repo = await ctx.db.get(repoId);
       if (!repo) continue;
       const columns = repoColumns(repo);
+      const openChatEntityIds = await openChatEntityIdsForRepo(ctx.db, repoId);
 
       for (const kind of kinds) {
         if (kind === "session") {
-          const [docs, openSessionIds] = await Promise.all([
-            scanSessions(ctx, repoId, args.status, take),
-            openSessionIdsForRepo(ctx.db, repoId),
-          ]);
+          const docs = await scanSessions(ctx, repoId, args.status, take);
           for (const doc of docs) {
             rows.push({
               kind,
@@ -612,7 +609,7 @@ export const listEntitiesForUser = internalQuery({
               // columns read the same field rather than inventing a second.
               status: doc.status,
               sandboxStatus: doc.status,
-              isExecuting: sessionIsExecuting(doc, openSessionIds),
+              isExecuting: sessionIsExecuting(doc, openChatEntityIds),
               archived: doc.archived,
               prUrl: doc.prUrl,
               branchName: doc.branchName,
@@ -634,7 +631,7 @@ export const listEntitiesForUser = internalQuery({
               title: doc.title,
               status: doc.status,
               sandboxStatus: doc.reviewTaskSandboxStatus ?? "closed",
-              isExecuting: taskIsExecuting(doc),
+              isExecuting: taskIsExecuting(doc, openChatEntityIds),
               updatedAt: doc.updatedAt,
               ...columns,
             });
@@ -651,7 +648,7 @@ export const listEntitiesForUser = internalQuery({
             title: doc.title,
             status: doc.phase,
             sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
-            isExecuting: projectIsExecuting(doc),
+            isExecuting: projectIsExecuting(doc, openChatEntityIds),
             prUrl: doc.prUrl,
             branchName: doc.branchName,
             updatedAt: doc.updatedAt ?? doc._creationTime,
@@ -664,13 +661,21 @@ export const listEntitiesForUser = internalQuery({
     rows.sort((a, b) => b.updatedAt - a.updatedAt);
     const page = rows.slice(0, limit);
 
-    // Only the page that is actually returned pays for the run lookup.
+    // Only the page that is actually returned pays for the PR lookups.
     const entities = await Promise.all(
       page.map(async (row) => {
-        if (row.kind !== "task") return row;
-        const taskId = ctx.db.normalizeId("agentTasks", row.id);
-        if (!taskId) return row;
-        return { ...row, prUrl: await latestTaskPrUrl(ctx, taskId) };
+        const owner = chatTargetOwner(ctx, row.kind, row.id);
+        if (owner === null) return row;
+        const prs = await listOwnerPullRequests(ctx.db, owner);
+        const withTaskPr =
+          owner.kind === "task" && row.prUrl === undefined
+            ? await taskPrUrlById(ctx, owner.taskId)
+            : row.prUrl;
+        return {
+          ...row,
+          prUrl: withTaskPr,
+          ...(prs.length > 1 ? { prUrls: prs.map((pr) => pr.prUrl) } : {}),
+        };
       }),
     );
 
@@ -695,27 +700,28 @@ export const entityIsExecuting = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { kind, id }) => {
     if (kind === "session") {
+      // One chat of a session: only its own turn counts, so parallel chats
+      // run side by side (a busy sibling does not queue this one).
+      const chatId = ctx.db.normalizeId("sessionChats", id);
+      if (chatId) return await hasOpenChatTurn(ctx.db, chatId);
       const sessionId = ctx.db.normalizeId("sessions", id);
       if (!sessionId) return false;
       const session = await ctx.db.get(sessionId);
       if (!session) return false;
-      return sessionIsExecuting(
-        session,
-        (await sessionHasOpenTurn(ctx.db, sessionId))
-          ? new Set([String(sessionId)])
-          : new Set(),
-      );
+      return sessionIsExecuting(session, await openChatEntityIdsFor(ctx.db, sessionId));
     }
     if (kind === "task") {
       const taskId = ctx.db.normalizeId("agentTasks", id);
       if (!taskId) return false;
       const task = await ctx.db.get(taskId);
-      return task ? taskIsExecuting(task) : false;
+      return task ? taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId)) : false;
     }
     const projectId = ctx.db.normalizeId("projects", id);
     if (!projectId) return false;
     const project = await ctx.db.get(projectId);
-    return project ? projectIsExecuting(project) : false;
+    return project
+      ? projectIsExecuting(project, await openChatEntityIdsFor(ctx.db, projectId))
+      : false;
   },
 });
 
@@ -914,6 +920,72 @@ export const getDocument = internalQuery({
   },
 });
 
+/** The pull-request owner a listed row names, or null for a malformed id. */
+function chatTargetOwner(
+  ctx: QueryCtx,
+  kind: "session" | "task" | "project",
+  id: string,
+): PrOwnerRef | null {
+  if (kind === "session") {
+    const sessionId = ctx.db.normalizeId("sessions", id);
+    return sessionId ? { kind, sessionId } : null;
+  }
+  if (kind === "task") {
+    const taskId = ctx.db.normalizeId("agentTasks", id);
+    return taskId ? { kind, taskId } : null;
+  }
+  const projectId = ctx.db.normalizeId("projects", id);
+  return projectId ? { kind, projectId } : null;
+}
+
+/** A task's PR: its own summary, or its project's for a project task. */
+async function taskPrUrlById(
+  ctx: QueryCtx,
+  taskId: Id<"agentTasks">,
+): Promise<string | undefined> {
+  const task = await ctx.db.get(taskId);
+  return task ? await taskPrUrl(ctx.db, task) : undefined;
+}
+
+/** One pull request linked to a chat, as reported over MCP. */
+export const mcpPullRequestValidator = v.object({
+  url: v.string(),
+  number: v.number(),
+  state: prStateValidator,
+  branch: v.optional(v.string()),
+  /** The chat's own PR — the one Eva opened for its branch. */
+  primary: v.boolean(),
+  /** "eva" when Eva's flow opened it; "agent" for one opened on a side branch. */
+  openedBy: prOriginValidator,
+});
+
+/** Every PR a chat holds, primary first, then newest first. */
+export function toMcpPullRequests(
+  rows: readonly Doc<"pullRequests">[],
+): Infer<typeof mcpPullRequestValidator>[] {
+  return [...rows]
+    .sort((a, b) => Number(b.primary) - Number(a.primary))
+    .map((pr) => ({
+      url: pr.prUrl,
+      number: pr.prNumber,
+      state: pr.state,
+      branch: pr.headBranch,
+      primary: pr.primary,
+      openedBy: pr.origin,
+    }));
+}
+
+/** `get_agent_state`'s PR list; takes plain strings like the action holds. */
+export const chatPullRequests = internalQuery({
+  args: { kind: chatTargetKindValidator, id: v.string() },
+  returns: v.array(mcpPullRequestValidator),
+  handler: async (ctx, { kind, id }) => {
+    const owner = chatTargetOwner(ctx, kind, id);
+    if (owner === null) return [];
+    return toMcpPullRequests(await listOwnerPullRequests(ctx.db, owner));
+  },
+});
+
 /** One extra repo cloned into a session's sandbox, as reported over MCP. */
 export const mcpLinkedRepoValidator = v.object({
   repo: v.string(),
@@ -941,13 +1013,20 @@ export const sessionLinkedRepos = internalQuery({
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", id))
       .collect();
-    return links.map((link) => ({
-      repo: `${link.owner}/${link.name}`,
-      path: link.path,
-      branch: link.branchName,
-      prUrl: link.prUrl,
-      prState: link.prState,
-    }));
+    const prs = await listOwnerPullRequests(ctx.db, {
+      kind: "session",
+      sessionId: id,
+    });
+    return links.map((link) => {
+      const pr = sessionRepoPullRequest(prs, link._id);
+      return {
+        repo: `${link.owner}/${link.name}`,
+        path: link.path,
+        branch: link.branchName,
+        prUrl: pr?.prUrl,
+        prState: pr?.state,
+      };
+    });
   },
 });
 

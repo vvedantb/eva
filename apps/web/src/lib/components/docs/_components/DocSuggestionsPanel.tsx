@@ -163,13 +163,13 @@ function SuggestionRow({
         />
         {userId ? <UserInitials userId={userId} size="sm" /> : null}
         <SuggestionAuthorName userId={userId} />
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-3xs text-muted-foreground">
           {KIND_LABEL[suggestion.kind]}
         </span>
         {suggestion.createdAt !== null && (
           <RelativeDateTime
             at={suggestion.createdAt}
-            className="ml-auto text-[10px] text-muted-foreground"
+            className="ml-auto text-3xs text-muted-foreground"
           />
         )}
       </div>

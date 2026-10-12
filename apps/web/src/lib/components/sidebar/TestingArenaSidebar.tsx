@@ -165,7 +165,7 @@ export function TestingArenaSidebar({
                         <MarqueeOnHover className="min-w-0 flex-1">
                           {doc.title}
                         </MarqueeOnHover>
-                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
                           {compactRelativeTime(doc.updatedAt)}
                         </span>
                       </Link>

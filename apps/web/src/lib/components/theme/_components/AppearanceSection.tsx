@@ -75,7 +75,7 @@ export function AppearanceSection({
                 // transparent one to hold their size.
                 "relative flex h-full w-full flex-col items-center rounded-surface border font-medium motion-press active:scale-[0.96]",
                 compact
-                  ? "gap-1 p-2 text-[11px]"
+                  ? "gap-1 p-2 text-2xs"
                   : "gap-2 p-3 text-xs sm:gap-3 sm:p-4 sm:text-sm",
                 isActive
                   ? "border-border bg-primary/8 text-primary"

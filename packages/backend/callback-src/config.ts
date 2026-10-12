@@ -81,8 +81,6 @@ export const DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 /** Internal process-isolation handoff used by the Cursor daemon. */
 export const CURSOR_TURN_WORKER_PROMPT_FILE =
   process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-export const CURSOR_TURN_WORKER_LIFECYCLE =
-  process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
 export const CURSOR_TURN_WORKER_TURN_ID =
   process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
 const parsedCursorWorkerLeaseGeneration = Number(

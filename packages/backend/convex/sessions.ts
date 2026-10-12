@@ -13,7 +13,6 @@ export {
   listLinkedReposInternal,
   getSessionRepoInternal,
   patchSessionRepo,
-  findSessionRepoByPrUrl,
 } from "./_sessions/repos";
 
 export {
@@ -21,9 +20,6 @@ export {
   addMessage,
   updateStatus,
   update,
-  setModel,
-  setProviderAccountId,
-  setTraits,
   updateSummary,
   archive,
   unarchive,
@@ -58,9 +54,9 @@ export {
 export {
   getInternal,
   getBySandboxInternal,
-  setPrUrl,
-  setPrState,
-  clearPrUrlIfMatches,
+  recordSessionPr,
+  setSessionPrState,
+  detachForeignMergedPr,
   updateDeploymentStatus,
   applyGeneratedTitle,
   getTitleContext,

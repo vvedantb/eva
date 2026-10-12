@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AveChat } from "@/lib/components/ave/AveChat";
 import { AveMark } from "@/lib/components/ave/AveMark";
-import { AveNewChatButton } from "@/lib/components/ave/AveResetChatDialog";
 
 export const Route = createFileRoute("/_global/ave")({
   staticData: { title: "Manager Ave" },
@@ -22,7 +21,6 @@ function AveRoute() {
         <span className="flex-1 truncate text-sm font-semibold">
           Manager Ave
         </span>
-        <AveNewChatButton />
       </div>
       <AveChat />
     </div>

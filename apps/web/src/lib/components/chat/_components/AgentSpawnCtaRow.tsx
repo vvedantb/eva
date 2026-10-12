@@ -117,7 +117,7 @@ export function AgentSpawnCtaRow({
         <button
           type="button"
           onClick={onOpen}
-          className="motion-press mt-2 flex w-full items-center gap-2 rounded-surface border border-border bg-muted/30 px-2.5 py-1.5 text-left text-[13px] hover:bg-accent/50 active:scale-[0.99]"
+          className="motion-press mt-2 flex w-full items-center gap-2 rounded-surface border border-border bg-muted/30 px-2.5 py-1.5 text-left text-2sm hover:bg-accent/50 active:scale-[0.99]"
         >
           <span
             aria-hidden

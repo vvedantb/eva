@@ -3,7 +3,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { SANDBOX_STATUS_STYLES } from "@/lib/components/sandbox/sandboxStatusStyles";
+import {
+  SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
+} from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 
 /** Primary project tabs. `work` is the index route, so it owns every deep link. */
 export type ProjectMainTab = "overview" | "work" | "sandbox";
@@ -20,6 +25,7 @@ export function ProjectMainTabs({
   isSandboxActive = false,
   isSandboxStarting = false,
   isSandboxStopping = false,
+  hasUnread = false,
 }: {
   /** Project base path, e.g. `/owner/repo/projects/3` (pre-internal form). */
   projectHref: string;
@@ -31,18 +37,28 @@ export function ProjectMainTabs({
   isSandboxActive?: boolean;
   isSandboxStarting?: boolean;
   isSandboxStopping?: boolean;
+  /**
+   * The project chat has an unseen reply. The chat lives on the sandbox tab,
+   * so the dot shows only while another tab is open.
+   */
+  hasUnread?: boolean;
 }) {
   const navigate = useNavigate();
+  const simpleView = useSimpleView();
 
   // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
   // can still read true while the sandbox is on its way up or down.
-  const sandboxStatus = isSandboxStopping
+  const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
       ? "starting"
       : isSandboxActive
         ? "active"
         : null;
+  const sandboxStatus =
+    liveStatus && showsSandboxStatusDot(liveStatus, simpleView)
+      ? liveStatus
+      : null;
 
   return (
     <Tabs
@@ -77,6 +93,7 @@ export function ProjectMainTabs({
                 aria-label={SANDBOX_STATUS_STYLES[sandboxStatus].label}
               />
             ) : null}
+            <UnreadDot show={hasUnread && activeTab !== "sandbox"} />
           </TabsTrigger>
         ) : null}
       </TabsList>

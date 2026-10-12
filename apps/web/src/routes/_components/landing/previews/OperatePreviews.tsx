@@ -42,7 +42,7 @@ export function AutomationsPreview() {
               <p className="truncate text-[11.5px] font-medium text-foreground">
                 {automation.name}
               </p>
-              <p className="truncate font-mono text-[10px] text-muted-foreground">
+              <p className="truncate font-mono text-3xs text-muted-foreground">
                 {automation.schedule}
               </p>
             </div>
@@ -55,7 +55,7 @@ export function AutomationsPreview() {
 
       <div className="mt-3 rounded-md border border-border bg-muted/25 p-3">
         <MockLabel>Next run</MockLabel>
-        <p className="mt-1.5 text-[11px] text-foreground">
+        <p className="mt-1.5 text-2xs text-foreground">
           Type coverage audit —{" "}
           <span className="text-muted-foreground">in 41 minutes</span>
         </p>
@@ -119,13 +119,13 @@ export function SnapshotsPreview() {
             )}
             <p
               className={cn(
-                "min-w-0 flex-1 truncate text-[11px]",
+                "min-w-0 flex-1 truncate text-2xs",
                 step.done ? "text-muted-foreground" : "text-foreground",
               )}
             >
               {step.label}
             </p>
-            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+            <span className="shrink-0 font-mono text-3xs text-muted-foreground">
               {step.time}
             </span>
           </div>
@@ -152,7 +152,7 @@ export function SkillsPreview() {
     >
       <div className="flex items-center gap-2 px-0.5">
         <IconFolder size={13} className="text-muted-foreground" aria-hidden />
-        <p className="font-mono text-[11px] text-foreground">.agents/skills</p>
+        <p className="font-mono text-2xs text-foreground">.agents/skills</p>
       </div>
 
       <div className="mt-2 space-y-0.5 border-l border-border pl-3.5">
@@ -166,7 +166,7 @@ export function SkillsPreview() {
               className="shrink-0 text-muted-foreground"
               aria-hidden
             />
-            <p className="shrink-0 font-mono text-[11px] text-foreground">
+            <p className="shrink-0 font-mono text-2xs text-foreground">
               {file.name}
             </p>
             <p className="min-w-0 flex-1 truncate text-[10.5px] text-muted-foreground">

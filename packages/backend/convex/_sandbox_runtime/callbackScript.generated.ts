@@ -7,6 +7,8 @@ import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
 import { existsSync } from "fs";
 
 // callback-src/evaMcp.ts
+var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
+var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
 function buildEvaMcpServers({
   auth,
   baseUrl
@@ -20,15 +22,56 @@ function buildEvaMcpServers({
     }
   };
 }
+function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
+  const auth = env[authKey];
+  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
+  delete env[authKey];
+  delete env[urlKey];
+  if (!auth || !url) return { servers: {}, handoff: {} };
+  return {
+    servers: {
+      [name]: {
+        type: "http",
+        url,
+        headers: { Authorization: \`Bearer \${auth}\` }
+      }
+    },
+    handoff: {
+      [authKey]: auth,
+      [urlKey]: url
+    }
+  };
+}
 function consumeEvaMcpEnvironment(env) {
-  const auth = env.EVA_MCP_AUTH;
-  const baseUrl = env.EVA_MCP_BASE_URL;
-  const servers = buildEvaMcpServers({ auth, baseUrl });
+  const eva = buildEvaMcpServers({
+    auth: env.EVA_MCP_AUTH,
+    baseUrl: env.EVA_MCP_BASE_URL
+  });
+  const evaAuth = env.EVA_MCP_AUTH;
+  const evaBase = env.EVA_MCP_BASE_URL;
   delete env.EVA_MCP_AUTH;
   delete env.EVA_MCP_BASE_URL;
+  const linear = takeBearerServer(
+    env,
+    "linear",
+    "LINEAR_MCP_AUTH",
+    "LINEAR_MCP_URL",
+    LINEAR_MCP_DEFAULT_URL
+  );
+  const figma = takeBearerServer(
+    env,
+    "figma",
+    "FIGMA_MCP_AUTH",
+    "FIGMA_MCP_URL",
+    FIGMA_MCP_DEFAULT_URL
+  );
   return {
-    servers,
-    workerHandoffEnv: auth && baseUrl ? { EVA_MCP_AUTH: auth, EVA_MCP_BASE_URL: baseUrl } : {}
+    servers: { ...eva, ...linear.servers, ...figma.servers },
+    workerHandoffEnv: {
+      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
+      ...linear.handoff,
+      ...figma.handoff
+    }
   };
 }
 var consumed = consumeEvaMcpEnvironment(process.env);
@@ -78,7 +121,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
 
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-09-01";
+var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
   return {
     inputPerMillion,
@@ -94,11 +137,13 @@ var CLAUDE_PRICING_PER_MILLION = {
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
   "claude-mythos-5": anthropicRow(10, 1, 12.5, 50),
+  "claude-opus-5-5": anthropicRow(4, 0.2, 5, 20),
   "claude-opus-5": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-8": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-7": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-6": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-5": anthropicRow(5, 0.5, 6.25, 25),
+  "claude-sonnet-5-5": anthropicRow(2, 0.2, 2.5, 10),
   "claude-sonnet-5": anthropicRow(2, 0.2, 2.5, 10),
   "claude-sonnet-4-6": anthropicRow(3, 0.3, 3.75, 15),
   "claude-sonnet-4-5": anthropicRow(3, 0.3, 3.75, 15),
@@ -158,7 +203,6 @@ var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD !== void 0 &
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-var CURSOR_TURN_WORKER_LIFECYCLE = process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
 var CURSOR_TURN_WORKER_TURN_ID = process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
 var parsedCursorWorkerLeaseGeneration = Number(
   process.env.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION
@@ -879,8 +923,8 @@ function releaseTurnLeaseForCompletion() {
 function getCurrentTurnLease() {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
-function canSendTurnHeartbeat(input) {
-  return input.claimMutation === void 0 || input.ownership.status === "owned";
+function canSendTurnHeartbeat(ownership) {
+  return ownership.status === "owned";
 }
 function appendCurrentTurnLease(args) {
   const identity = getCurrentTurnLease();
@@ -1048,6 +1092,7 @@ async function callHarnessSkillCatalogReport(provider, cliVersion, skills) {
 }
 async function callStreamingHeartbeatTouchOnce(entityId) {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -1062,10 +1107,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
     noteHeartbeatResponse(response2, identity);
     return response2;
   }
-  const response = identity === null ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
-    entityId,
-    touchOnly: true
-  }) : await callConvex("mutation", "turns:heartbeatFromCallback", {
+  const response = await callConvex("mutation", "turns:heartbeatFromCallback", {
     entityId,
     touchOnly: true,
     turnId: identity.turnId,
@@ -1076,6 +1118,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
 }
 async function callStreamingHeartbeatOnce(entityId, currentActivity, currentContent, pendingQuestion) {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -1098,17 +1141,18 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
     entityId,
     touchOnly: false,
     currentActivity,
-    currentContent
+    currentContent,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration
   };
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const path3 = identity === null ? "turns:legacyHeartbeatFromCallback" : "turns:heartbeatFromCallback";
-  if (identity !== null) {
-    args.turnId = identity.turnId;
-    args.leaseGeneration = identity.leaseGeneration;
-  }
-  const response = await callConvex("mutation", path3, args);
+  const response = await callConvex(
+    "mutation",
+    "turns:heartbeatFromCallback",
+    args
+  );
   noteHeartbeatResponse(response, identity);
   return response;
 }
@@ -2142,40 +2186,22 @@ function readClaimedTurn(result) {
   const payload = unwrapConvexMutationPayload(result);
   if (!payload || typeof payload.prompt !== "string") return null;
   const lifecycle = payload.turnLifecycle;
-  if (lifecycle !== void 0 && lifecycle !== "legacy" && lifecycle !== "durable") {
-    throw new Error("Claimed turn returned an invalid lifecycle discriminator");
-  }
+  if (lifecycle !== "durable") return null;
   const attachmentUrls = Array.isArray(payload.attachmentUrls) ? payload.attachmentUrls.filter(
     (url) => typeof url === "string"
   ) : [];
   const interactionMode = "default";
   const turnLease = readTurnLeaseIdentity(result);
-  if (lifecycle === "durable" && turnLease === null) {
+  if (turnLease === null) {
     throw new Error("Durable claimed turn did not include a lease identity");
   }
-  if (lifecycle === "legacy" && turnLease !== null) {
-    throw new Error("Legacy claimed turn unexpectedly included a lease identity");
-  }
-  if (turnLease !== null) {
-    return {
-      lifecycle: "durable",
-      prompt: payload.prompt,
-      attachmentUrls,
-      interactionMode,
-      turnLease
-    };
-  }
-  return {
-    lifecycle: "legacy",
-    prompt: payload.prompt,
-    attachmentUrls,
-    interactionMode,
-    turnLease: null
-  };
+  return { prompt: payload.prompt, attachmentUrls, interactionMode, turnLease };
 }
 function startClaimedTurn(turn) {
   if (claimedTurnLifecycleStatus() === "active") {
-    throw new Error("Cannot start a claimed turn while another claim is active");
+    throw new Error(
+      "Cannot start a claimed turn while another claim is active"
+    );
   }
   beginTurnOwnership("claim", turn.turnLease);
   beginTurnCheckpoint();
@@ -2185,10 +2211,8 @@ function appendClaimedTurnCompletion(args) {
   if (ownership.status !== "owned" || ownership.owner !== "claim") {
     throw new Error("Cannot complete a claimed turn before it starts");
   }
-  if (ownership.turnLease !== null) {
-    args.turnId = ownership.turnLease.turnId;
-    args.leaseGeneration = ownership.turnLease.leaseGeneration;
-  }
+  args.turnId = ownership.turnLease.turnId;
+  args.leaseGeneration = ownership.turnLease.leaseGeneration;
 }
 function finishClaimedTurn() {
   endTurnOwnership();
@@ -2762,7 +2786,7 @@ function trackClaudeToolResult(toolUseId, resultText, isError) {
   });
 }
 function canFlushBackgroundShells() {
-  return PROVIDER === "claude" && ENTITY_ID_FIELD === "sessionId" && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
+  return PROVIDER === "claude" && (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
 }
 async function flushBackgroundShellQueue() {
   if (!canFlushBackgroundShells()) return;
@@ -4553,10 +4577,7 @@ var heartbeatInterval = null;
 var activeFlush = null;
 var flushRequested = false;
 function ownsHeartbeatLease() {
-  return canSendTurnHeartbeat({
-    claimMutation: CLAIM_MUTATION,
-    ownership: getTurnOwnership()
-  });
+  return canSendTurnHeartbeat(getTurnOwnership());
 }
 function buildStreamingPayload() {
   return serializeSteps(
@@ -5653,7 +5674,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
     ENABLE_TOOL_SEARCH: "auto"
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId") {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};
@@ -6058,8 +6079,6 @@ var DAEMON_PID_FILE = daemonPaths.pid;
 var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
@@ -6580,12 +6599,13 @@ async function ensureSyntheticTurn() {
       entityMutationArgs({ model: MODEL })
     );
     const messageId = readSyntheticTurnMessageId(result);
-    if (messageId === null) {
-      log("daemon: openSyntheticTurn returned no messageId");
+    const syntheticLease = readTurnLeaseIdentity(result);
+    if (messageId === null || syntheticLease === null) {
+      log("daemon: openSyntheticTurn returned no messageId or lease");
       return;
     }
     resetTurnState();
-    beginTurnOwnership("provider", readTurnLeaseIdentity(result));
+    beginTurnOwnership("provider", syntheticLease);
     beginTurnCheckpoint();
     if (!supervisor.startTurn({ kind: "synthetic", messageId })) {
       log("daemon: synthetic turn opened after lifecycle moved; ignoring");
@@ -8925,8 +8945,6 @@ function cursorAgentStartupActivity(sessionMode) {
 var IDLE_EXIT_MS3 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 var WATCHDOG_TICK_MS2 = 5e3;
 var TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1e3;
 var CANCEL_SETTLE_TIMEOUT_MS2 = 3e4;
@@ -8958,20 +8976,10 @@ function readCursorTurnWorkerClaim() {
     throw new Error("Cursor turn worker prompt file is missing");
   }
   const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
-  if (CURSOR_TURN_WORKER_LIFECYCLE === "legacy") {
-    return {
-      lifecycle: "legacy",
-      prompt,
-      attachmentUrls: [],
-      interactionMode: "default",
-      turnLease: null
-    };
-  }
-  if (CURSOR_TURN_WORKER_LIFECYCLE !== "durable" || !CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
+  if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
   return {
-    lifecycle: "durable",
     prompt,
     attachmentUrls: [],
     interactionMode: "default",
@@ -9004,17 +9012,11 @@ function buildCursorTurnWorkerEnv(baseEnv, mcpHandoffEnv, turn, promptFile) {
     ...baseEnv,
     ...mcpHandoffEnv,
     EVA_CURSOR_TURN_WORKER_PROMPT_FILE: promptFile,
-    EVA_CURSOR_TURN_WORKER_LIFECYCLE: turn.lifecycle
-  };
-  if (turn.lifecycle === "durable") {
-    workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID = turn.turnLease.turnId;
-    workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION = String(
+    EVA_CURSOR_TURN_WORKER_TURN_ID: turn.turnLease.turnId,
+    EVA_CURSOR_TURN_WORKER_LEASE_GENERATION: String(
       turn.turnLease.leaseGeneration
-    );
-  } else {
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID;
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION;
-  }
+    )
+  };
   return workerEnv;
 }
 function spawnCursorTurnWorker(turn, promptFile) {

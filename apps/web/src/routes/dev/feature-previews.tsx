@@ -191,12 +191,8 @@ function IgnoreWhitespacePreview() {
       </div>
       <div className="mt-8 border-y border-border">
         <DiffsToolbar
-          fileCount={3}
-          additions={4}
-          deletions={1}
-          viewedCount={1}
-          filter=""
-          onFilterChange={() => {}}
+          scopedCommit={null}
+          onClearScope={() => {}}
           diffView="unified"
           onDiffViewChange={() => {}}
           wrapLines={false}
@@ -208,6 +204,8 @@ function IgnoreWhitespacePreview() {
           onCollapseAll={() => {}}
           isLoading={false}
           onRefresh={() => {}}
+          treeOpen
+          onTreeOpenChange={() => {}}
         />
       </div>
       <div className="mx-10 mt-6 max-w-2xl rounded-lg border border-border bg-card p-4">
@@ -362,7 +360,7 @@ function ThreadFindPreview() {
                 : "rounded-lg border border-border bg-card px-3 py-2 text-sm"
             }
           >
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {message.role === "user" ? "You" : "Eva"}
             </p>
             <p className="mt-1 leading-6">{message.text}</p>
@@ -395,7 +393,7 @@ function MessageForkPreview() {
                   : "rounded-lg border border-border bg-card px-3 py-2 text-sm"
               }
             >
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 {message.role === "user" ? "You" : "Eva"}
                 {included ? "" : " · stays on original"}
               </p>

@@ -28,6 +28,7 @@ export function SessionRepoBadges({ sessionId }: SessionRepoBadgesProps) {
     <div className="flex min-w-0 shrink-0 items-center gap-1">
       {repos.map((repo) => {
         const label = repoDisplayLabel(repo);
+        const tile = repoTileColor(`${repo.owner}/${repo.name}/${label}`);
         return (
           <span
             key={repo.repoId}
@@ -40,8 +41,9 @@ export function SessionRepoBadges({ sessionId }: SessionRepoBadgesProps) {
               fallback={
                 <span
                   className={cn(
-                    "flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white",
-                    repoTileColor(`${repo.owner}/${repo.name}/${label}`),
+                    "flex size-3.5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold",
+                    tile.bg,
+                    tile.text,
                   )}
                 >
                   {label.charAt(0).toUpperCase()}

@@ -308,6 +308,12 @@ export const startBuild = authMutation({
         buildId,
         repoSnapshotId: config._id,
         appRepoId: effectiveAppRepoId,
+        // The Snapshots page promises "Rebuild Now always rebuilds the base
+        // Image". Without this, an app WITH Stop Commands only re-seeded on top
+        // of the existing base, so a toolchain or base-image change (the move to
+        // the managed Ubuntu image) never reached it. Scheduled builds stay
+        // seed-only to keep the nightly run cheap.
+        forceImageRebuild: true,
       },
     );
     await ctx.db.patch(buildId, { workflowId });

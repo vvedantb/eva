@@ -2,7 +2,7 @@
 name: preflight
 description: >-
   Run repo health checks that used to live in husky hooks (typecheck, React
-  Compiler bailouts, lint). Use when the user says preflight, /preflight, run
+  Compiler bailouts, design-system drift, lint). Use when the user says preflight, /preflight, run
   checks before push, or asks to typecheck the monorepo occasionally.
 disable-model-invocation: true
 ---
@@ -25,13 +25,19 @@ pnpm typecheck
 pnpm compiler:check
 ```
 
-3. **Lint** (whole tree; former lint-staged scope was staged files only):
+3. **Design-system drift**:
+
+```bash
+pnpm design:check
+```
+
+4. **Lint** (whole tree; former lint-staged scope was staged files only):
 
 ```bash
 pnpm lint
 ```
 
-4. **Commit hygiene** (manual — hooks are off):
+5. **Commit hygiene** (manual — hooks are off):
    - No `Co-authored-by: Cursor` / `Made-with: Cursor` in commit messages
    - No stray lone `@` line in the message (PowerShell here-string leak)
 

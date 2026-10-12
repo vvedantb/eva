@@ -58,6 +58,7 @@ export function PreviewPanelNavBar({
   onAnnotationModeChange,
   showAnnotationToggle,
   popOut,
+  externalHrefForPath,
 }: {
   previewInfo: PreviewInfo | null;
   isLoading: boolean;
@@ -81,6 +82,8 @@ export function PreviewPanelNavBar({
   showAnnotationToggle: boolean;
   /** Sessions on desktop only: toggles the floating mini-player. */
   popOut?: { active: boolean; onToggle: () => void };
+  /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
+  externalHrefForPath?: (path: string) => string;
 }) {
   const { iframeRef } = useWebPreview();
   const frame = iframeElement ?? null;
@@ -182,6 +185,7 @@ export function PreviewPanelNavBar({
         isLoading={isLoading}
         onRefresh={onRefresh}
         trailing={toolsMenu}
+        externalHrefForPath={externalHrefForPath}
       />
       {snapshot.dialog}
       {webMcp.dialog}
