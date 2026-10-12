@@ -11,14 +11,23 @@ import type { Id } from "./_generated/dataModel";
 
 /** Identifies the finished child a master session is being woken about. */
 export const orchestratorNotifyChildValidator = v.union(
-  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+  v.object({
+    kind: v.literal("session"),
+    sessionId: v.id("sessions"),
+    /** The chat whose turn ended; absent means the session's Main chat. */
+    chatId: v.optional(v.id("sessionChats")),
+  }),
   v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
   v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
 );
 
 /** The `child` payload of `notifyOrchestratorOfChild`, for hook call sites. */
 export type OrchestratorNotifyChild =
-  | { kind: "session"; sessionId: Id<"sessions"> }
+  | {
+      kind: "session";
+      sessionId: Id<"sessions">;
+      chatId?: Id<"sessionChats">;
+    }
   | { kind: "task"; taskId: Id<"agentTasks"> }
   | { kind: "project"; projectId: Id<"projects"> };
 

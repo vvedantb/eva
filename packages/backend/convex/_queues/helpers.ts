@@ -660,10 +660,10 @@ const sessionChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: ({ session }) =>
+  orchestratorNotifyChild: ({ session }, id) =>
     session.watchedByAve === undefined
       ? undefined
-      : { kind: "session", sessionId: session._id },
+      : { kind: "session", sessionId: session._id, chatId: id },
   defaultStartErrorMessage: "Failed to start queued message.",
 };
 

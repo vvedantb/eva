@@ -685,11 +685,11 @@ export async function cancelChatExecution(
   if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
     await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
   } else if (session.sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
+    // One-shot providers run under the sandbox-wide /tmp/run-design.pid, not
+    // a per-chat daemon pidfile, so only the process kill stops them.
+    await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
       sandboxId: session.sandboxId,
       repoId: session.repoId,
-      entityIdField: "chatId",
-      entityId: String(chat._id),
     });
   }
 

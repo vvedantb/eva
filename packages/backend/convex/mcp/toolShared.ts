@@ -48,6 +48,21 @@ export interface McpCredentials {
   aveThreadId?: string;
 }
 
+/**
+ * The queue a chat tool acts on. A session daemon's own session means its own
+ * chat; any other id passes through (the server maps a session to Main).
+ */
+export function queueParentId(
+  target: { kind: string; targetId: string },
+  credentials: McpCredentials,
+): string {
+  const ownSession =
+    target.kind === "session" && target.targetId === credentials.entityId;
+  return ownSession && credentials.chatId
+    ? credentials.chatId
+    : target.targetId;
+}
+
 export interface RepoInfo {
   id: string;
   owner: string;

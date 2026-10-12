@@ -196,6 +196,7 @@ var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
 var QUESTION_ANSWERING_ENTITY_FIELDS = /* @__PURE__ */ new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId"
 ]);
@@ -2164,6 +2165,7 @@ function currentBranch() {
 }
 var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId"
 ]);
@@ -9528,6 +9530,7 @@ var DEBOUNCE_MS = 300;
 function resolveBranchTarget(field, id) {
   if (typeof id !== "string" || id.length === 0) return null;
   if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "chatId") return { kind: "sessionChat", chatId: id };
   if (field === "taskId") return { kind: "task", taskId: id };
   if (field === "projectId") return { kind: "project", projectId: id };
   return null;

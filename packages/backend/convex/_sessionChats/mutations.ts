@@ -79,7 +79,7 @@ export const create = authMutation({
     await ensureMainChat(ctx, session);
     const inheritFrom =
       args.fromChatId !== undefined
-        ? (await ctx.db.get(args.fromChatId)) ?? undefined
+        ? ((await ctx.db.get(args.fromChatId)) ?? undefined)
         : undefined;
     return await createSessionChat(ctx, {
       session,

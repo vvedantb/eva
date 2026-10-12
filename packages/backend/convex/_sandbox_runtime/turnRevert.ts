@@ -198,14 +198,14 @@ export const revertSessionToTurn = action({
 
     if (pushed) {
       await ctx.runMutation(internal.sessionWorkflow.postSystemAlert, {
-        sessionId: args.sessionId,
+        chatId: context.chatId,
         content: `Restored workspace to before turn ${context.turnNumber} (commit ${shortSha})`,
       });
     } else {
       // The restore commit(s) exist locally either way; the next turn's
       // persistTurnWork (or PublishRecoveryBanner) will push them.
       await ctx.runMutation(internal.sessionWorkflow.postSystemAlert, {
-        sessionId: args.sessionId,
+        chatId: context.chatId,
         content: `Restored workspace to before turn ${context.turnNumber} (commit ${shortSha}), but the push failed`,
         errorDetail: pushErrors.join("; ") || "Push failed",
       });

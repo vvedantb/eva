@@ -159,7 +159,9 @@ export function sessionChatPersistenceId(
 }
 
 /** `streamingActivity` / `pendingQuestions` entity id for a chat's turn. */
-export function sessionChatStreamingEntityId(chatId: Id<"sessionChats">): string {
+export function sessionChatStreamingEntityId(
+  chatId: Id<"sessionChats">,
+): string {
   return String(chatId);
 }
 
@@ -199,7 +201,13 @@ const LEGACY_TRANSCRIPT_PAGE_ROWS = 500;
  * the budget, so more rows may remain.
  */
 async function takeBoundedPage<
-  T extends Doc<"messages"> | Doc<"queuedMessages">,
+  T extends Doc<
+    | "messages"
+    | "queuedMessages"
+    | "chatUiPanels"
+    | "chatHtmlRenders"
+    | "envVarRequests"
+  >,
 >(
   rows: AsyncIterable<T>,
   maxBytes: number,
@@ -216,38 +224,113 @@ async function takeBoundedPage<
   return { page, bytes, full: false };
 }
 
+/** Moves one bounded page of legacy rows onto the chat. */
+async function repointPage<
+  T extends Doc<
+    | "messages"
+    | "queuedMessages"
+    | "chatUiPanels"
+    | "chatHtmlRenders"
+    | "envVarRequests"
+  >,
+>(
+  ctx: MutationCtx,
+  rows: AsyncIterable<T>,
+  chatId: Id<"sessionChats">,
+  maxBytes: number,
+): Promise<{ bytes: number; full: boolean }> {
+  const { page, bytes, full } = await takeBoundedPage(rows, maxBytes);
+  for (const row of page) {
+    await ctx.db.patch(row._id, { parentId: chatId });
+  }
+  return { bytes, full };
+}
+
 /**
- * Repoints one bounded page of a session's legacy message and queue rows onto
- * its Main chat. Returns true once no legacy row is left. Moved rows leave
- * the `parentId = sessionId` range, so every call starts from the front and
- * a rerun after a failure resumes where the last commit stopped.
+ * Repoints one bounded page of a session's legacy chat rows onto its Main
+ * chat: the transcript, the queue and the inline cards (UI panels, HTML
+ * renders, env var requests). Once those are empty it links the chat owner's
+ * pre-chat composer draft. Returns true once no legacy row is left. Moved rows
+ * leave the `parentId = sessionId` range, so every call starts from the front
+ * and a rerun after a failure resumes where the last commit stopped.
+ * `chatReads` stay on the session id: the sidebar unread dot reads them there.
  */
 export async function moveLegacyTranscriptPage(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
   chatId: Id<"sessionChats">,
 ): Promise<boolean> {
-  const messages = await takeBoundedPage(
-    ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-    LEGACY_TRANSCRIPT_PAGE_BYTES,
-  );
-  for (const message of messages.page) {
-    await ctx.db.patch(message._id, { parentId: chatId });
+  // Each table reads into what is left of the one byte budget.
+  const tables = [
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("chatUiPanels")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("chatHtmlRenders")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("envVarRequests")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+  ];
+  let budget = LEGACY_TRANSCRIPT_PAGE_BYTES;
+  for (const repoint of tables) {
+    const page = await repoint(budget);
+    if (page.full) return false;
+    budget -= page.bytes;
   }
-  if (messages.full) return false;
 
-  const queued = await takeBoundedPage(
-    ctx.db
-      .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId)),
-    LEGACY_TRANSCRIPT_PAGE_BYTES - messages.bytes,
-  );
-  for (const row of queued.page) {
-    await ctx.db.patch(row._id, { parentId: chatId });
+  // `drafts` is indexed by user first; other users' pre-chat drafts are moved
+  // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
+  const chat = await ctx.db.get(chatId);
+  if (!chat) return true;
+  const drafts = await ctx.db
+    .query("drafts")
+    .withIndex("by_user_and_session", (q) =>
+      q.eq("userId", chat.userId).eq("sessionId", sessionId),
+    )
+    .collect();
+  for (const draft of drafts) {
+    if (draft.kind === "sessionChat" && draft.chatId === undefined) {
+      await ctx.db.patch(draft._id, { chatId });
+    }
   }
-  return !queued.full;
+  return true;
 }
 
 /**

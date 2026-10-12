@@ -17,6 +17,10 @@ export const reportBranch = authMutation({
   args: {
     target: v.union(
       v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+      v.object({
+        kind: v.literal("sessionChat"),
+        chatId: v.id("sessionChats"),
+      }),
       v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
       v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
     ),
@@ -28,8 +32,13 @@ export const reportBranch = authMutation({
     if (branch.length === 0) return null;
     const target = args.target;
 
-    if (target.kind === "session") {
-      const session = await ctx.db.get(target.sessionId);
+    if (target.kind === "session" || target.kind === "sessionChat") {
+      // Session daemons run per chat; the branch belongs to the session.
+      const sessionId =
+        target.kind === "session"
+          ? target.sessionId
+          : (await ctx.db.get(target.chatId))?.sessionId;
+      const session = sessionId ? await ctx.db.get(sessionId) : null;
       if (!session) throw new Error("Session not found");
       if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
         throw new Error("Not authorized");
@@ -37,7 +46,7 @@ export const reportBranch = authMutation({
       // One filesystem can be reported by several daemon processes, so the
       // unchanged case must cost nothing.
       if (session.sandboxBranch === branch) return null;
-      await ctx.db.patch(target.sessionId, { sandboxBranch: branch });
+      await ctx.db.patch(session._id, { sandboxBranch: branch });
       return null;
     }
 

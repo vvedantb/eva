@@ -720,6 +720,41 @@ describe("quick-task run as a turn owner", () => {
 });
 
 /**
+ * Before parallel chats a session's chat turn was keyed by the session id. No
+ * surface owns that id any more, so the watchdog must still close the turn, or
+ * it stays open forever and fills `listExpired`'s batch.
+ */
+describe("expired turns with no owning surface", () => {
+  test("a lane-less turn keyed by a session id is closed", async () => {
+    vi.useFakeTimers();
+    try {
+      const { t, sessionId } = await createSessionFixture();
+      const turnId = await t.run(async (ctx) => {
+        const session = await ctx.db.get(sessionId);
+        if (!session) throw new Error("fixture: session missing");
+        const id = await openTurn(ctx, {
+          entityId: sessionId,
+          streamingEntityId: String(sessionId),
+          model: "claude:sonnet",
+          repoId: session.repoId,
+        });
+        await ctx.db.patch(id, { leaseExpiresAt: Date.now() - 1 });
+        return id;
+      });
+      await t.mutation(internal.turns.finalizeExpired, {
+        turnId,
+        cause: "process_dead",
+      });
+      const turn = await t.run(async (ctx) => ctx.db.get(turnId));
+      expect(turn?.open).toBe(false);
+      expect(turn?.state).toBe("error");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+/**
  * A one-shot agent on a chat row (session summary, project interview) has a
  * lane, so its turn never reads as, or is superseded by, the chat's turn.
  */

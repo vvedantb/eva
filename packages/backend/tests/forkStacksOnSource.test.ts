@@ -10,7 +10,7 @@ import schema from "../convex/schema";
  * base — and it never queues the old transcript as a `<forked_thread>` first
  * message, because the forked disk already holds the agent's conversation and
  * `copyForkMessages` copies the chat rows afterwards. The Plan tab and
- * interaction mode come along with the composer traits.
+ * interaction mode come along with the source Main chat's composer traits.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -44,15 +44,25 @@ async function fixture() {
       planContent: "# Seed plan",
       lastInteractionMode: "plan",
     });
+    // Composer picks live on the chat; the session's `lastModel` is stale.
+    const mainChatId = await ctx.db.insert("sessionChats", {
+      sessionId: id,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+      lastModel: "claude:sonnet",
+    });
     await ctx.db.insert("messages", {
-      parentId: id,
+      parentId: mainChatId,
       role: "user",
       content: "Seed the invoices table",
       timestamp: 1_000,
       userId,
     });
     await ctx.db.insert("messages", {
-      parentId: id,
+      parentId: mainChatId,
       role: "assistant",
       content: "Seeded 12 invoices.",
       timestamp: 2_000,
@@ -73,32 +83,44 @@ async function createFork(stackOnSource: boolean) {
       stackOnSource,
     },
   );
-  return await t.run(async (ctx) => ({
-    sourceId,
-    fork: await ctx.db.get(sessionId),
-    messages: await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", sessionId))
-      .collect(),
-    queued: await ctx.db
-      .query("queuedMessages")
-      .withIndex("by_parent_and_created", (q) => q.eq("parentId", sessionId))
-      .collect(),
-  }));
+  return await t.run(async (ctx) => {
+    const mainChat = await ctx.db
+      .query("sessionChats")
+      .withIndex("by_session_and_number", (q) =>
+        q.eq("sessionId", sessionId).eq("number", 1),
+      )
+      .first();
+    const chatId = mainChat?._id ?? sessionId;
+    return {
+      sourceId,
+      fork: await ctx.db.get(sessionId),
+      mainChat,
+      messages: await ctx.db
+        .query("messages")
+        .withIndex("by_parent", (q) => q.eq("parentId", chatId))
+        .collect(),
+      queued: await ctx.db
+        .query("queuedMessages")
+        .withIndex("by_parent_and_created", (q) => q.eq("parentId", chatId))
+        .collect(),
+    };
+  });
 }
 
 describe("createForkedSession", () => {
   test(
     "stacks on the source branch and carries no replayed first message",
     async () => {
-      const { sourceId, fork, messages, queued } = await createFork(true);
+      const { sourceId, fork, mainChat, messages, queued } =
+        await createFork(true);
+      expect(mainChat?.lastModel).toBe("claude:sonnet");
       expect(fork).toMatchObject({
         baseBranch: "eva/session-source",
         forkedFromSessionId: sourceId,
         forkSourceSandboxId: "sbx_source",
         planContent: "# Seed plan",
         lastInteractionMode: "plan",
-        lastModel: "claude:opus",
+        lastModel: "claude:sonnet",
       });
       expect(fork?.branchName).not.toBe("eva/session-source");
       expect(queued).toEqual([]);
