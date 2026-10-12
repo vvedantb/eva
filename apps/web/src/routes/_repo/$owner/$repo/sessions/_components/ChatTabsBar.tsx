@@ -52,6 +52,17 @@ export function ChatTabsBar({
   );
   const openChats = chats.filter((chat) => chat.archived !== true);
 
+  // Closing the selected tab moves to its left neighbour, like browser tabs.
+  // Main is first and cannot close, so a neighbour always exists.
+  const handleClose = (chat: Doc<"sessionChats">) => {
+    if (chat._id === activeChatId) {
+      const index = openChats.findIndex((open) => open._id === chat._id);
+      const neighbour = openChats[index - 1] ?? openChats[index + 1];
+      if (neighbour) onSelect(neighbour);
+    }
+    void closeChat(chat._id);
+  };
+
   return (
     <>
       <div
@@ -102,7 +113,7 @@ export function ChatTabsBar({
                       aria-label={`Close ${chat.title}`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        void closeChat(chat._id);
+                        handleClose(chat);
                       }}
                     >
                       <IconX className="size-3.5" />
@@ -120,7 +131,7 @@ export function ChatTabsBar({
                     <ContextMenuSeparator />
                     <ContextMenuItem
                       className="text-warning"
-                      onSelect={() => void closeChat(chat._id)}
+                      onSelect={() => handleClose(chat)}
                     >
                       <IconX size={16} />
                       Close chat

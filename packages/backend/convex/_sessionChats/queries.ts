@@ -11,7 +11,7 @@ import {
   sessionChatValidator,
 } from "./helpers";
 
-/** Chats of one session in tab order (Main first), closed ones included so a link to one still resolves. */
+/** Chats of one session in tab order (Main first), closed ones included. */
 export const listForSession = authQuery({
   args: { sessionId: v.id("sessions") },
   returns: v.array(sessionChatValidator),
@@ -56,7 +56,7 @@ export const get = authQuery({
 
 /**
  * Resolves the chat a session link opens: `?chat=N`, or Main when the param
- * is absent. Null when the session has no Main chat yet — the page then calls
+ * is absent or names a closed chat. Null when the session has no Main chat yet — the page then calls
  * `ensureMain` and this query re-fires.
  */
 export const resolveForSession = authQuery({
@@ -73,7 +73,9 @@ export const resolveForSession = authQuery({
       args.number !== undefined
         ? await findChatByNumber(ctx.db, args.sessionId, args.number)
         : null;
-    return requested ?? (await findMainChat(ctx.db, args.sessionId));
+    // A closed chat has no tab and no composer, so its link opens Main.
+    if (requested && requested.archived !== true) return requested;
+    return await findMainChat(ctx.db, args.sessionId);
   },
 });
 
