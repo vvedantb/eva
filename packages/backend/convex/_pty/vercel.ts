@@ -3,6 +3,10 @@
 import type { Sandbox } from "@vercel/sandbox";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { ensureEvaEnvInteractiveHookScript } from "../_sandbox/vercelEnvFile";
+import {
+  PACKAGE_HELPER_SCRIPT,
+  pkgInstall,
+} from "../_sandbox_runtime/packageManager";
 import { tmuxSessionName } from "./consoleSessionName";
 
 /** Browser WebSockets cannot set headers — pass the interactive token as a query param. */
@@ -19,7 +23,7 @@ export async function ensureVercelSharedTerminal(
 ): Promise<{ sessionName: string; isNewPty: boolean; initialOutput: string }> {
   const sessionName = tmuxSessionName(ptyInstanceId);
   await handle.exec(
-    "command -v tmux >/dev/null 2>&1 || sudo dnf install -y tmux >/dev/null 2>&1",
+    `${PACKAGE_HELPER_SCRIPT}\ncommand -v tmux >/dev/null 2>&1 || ${pkgInstall("tmux")}`,
     { cwd: "/", timeoutSeconds: 120 },
   );
   // Login/interactive bash (and new Console panes) should see repo secrets.

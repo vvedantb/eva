@@ -74,12 +74,13 @@ const htmlFactory = new Function(
   [
     'const NOVNC_CDN_RFB = "https://cdn.example.test/rfb.js";',
     "function injectHtml(html) { return html; }",
+    "function injectVisibilityPing(html) { return html; }",
     extractFunctionSource("function stripModuleCrossorigin(html) {"),
     extractFunctionSource("function rewriteNovncModuleImports(html) {"),
     tabSkipRegexSource,
     extractFunctionSource("function prefixTabPath(value, tabPrefix) {"),
     extractFunctionSource("function rewriteTabHtml(html, tabPrefix) {"),
-    extractFunctionSource("function rewriteHtml(html, injects, tabPrefix) {"),
+    extractFunctionSource("function rewriteHtml(html, injects, tabPrefix, pings) {"),
     "return rewriteHtml;",
   ].join("\n\n"),
 );

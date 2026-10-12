@@ -33,7 +33,7 @@ const buttonVariants = cva(
         // be to click, so on desktop these stay exactly the 32px targets they
         // always were. `xs`/`icon-xs` keep the ungated utility they shipped with.
         // (`.hit-target` must not override Tailwind `absolute` — see globals.css.)
-        xs: "h-7 rounded-md px-2 text-[11px] hit-target [&_svg]:size-3.5",
+        xs: "h-7 rounded-md px-2 text-2xs hit-target [&_svg]:size-3.5",
         sm: "h-8 rounded-lg px-3 text-xs max-sm:hit-target",
         lg: "h-11 rounded-lg px-6",
         icon: "h-10 w-10",

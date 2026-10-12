@@ -75,6 +75,14 @@ export const RESPONSE_LENGTH_INSTRUCTION =
   "\n\nResponse length: Hyper-concise — 1–3 short bullet lines max. Outcomes only; no process, paths, jargon, or code.";
 
 /**
+ * Writing style for every chat reply: ASD-STE100 Simplified Technical English,
+ * applied loosely. Full STE bans non-dictionary words, which would strip the
+ * domain terms (workflow, lease, commit) a dev reader needs, so those stay.
+ */
+export const COMMUNICATION_STYLE_INSTRUCTION =
+  "\n\nWriting style: follow ASD-STE100 Simplified Technical English about 80% of the way. One idea per sentence, about 20 words or fewer. Active voice, simple present or past tense. One word for one meaning; literal verbs, no idioms. Numbered steps for sequences, bullets for conditions. Keep technical names and domain terms, and keep the reason behind each decision.";
+
+/**
  * Ask before inventing a visual, and name every visual you changed.
  *
  * A trophy icon and a `green.1` alert wash nobody requested rode along inside a
@@ -108,13 +116,30 @@ Name every visible change you made, however small, and separately flag the ones 
 - This overrides the reply-length limit: these lines are always in scope.`;
 
 /**
- * Nudge towards `render_ui`. Appended to the shared chat-turn prompt, so
- * sessions, quick tasks and project chat all get it — the tool is available on
- * every sandbox token, and without a prompt line agents never reach for it.
+ * Nudge towards `render_ui` and `render_html`. Appended to the shared
+ * chat-turn prompt, so sessions, quick tasks and project chat all get it — both
+ * tools are on every sandbox token, and without a prompt line agents never
+ * reach for them.
  */
 export const CHAT_UI_INSTRUCTION = `
 
-Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.`;
+Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.
+
+Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.`;
+
+/**
+ * Keeps the chat's Log (Documents tab) current, so someone returning weeks
+ * later can catch up without reading the chat. Answered questions and commits
+ * are logged by Eva itself.
+ */
+export const CHAT_LOG_INSTRUCTION = `
+
+## Chat log (Documents tab):
+This chat keeps a Log so the user can catch up later without reading the chat. Before you finish a turn, call eva MCP \`log_entry\` once for each of these that happened in the turn:
+- kind "decision": an approach, scope or design choice that you or the user settled. Put the reason in "body". If it replaces an earlier decision, pass that entry's id as "supersedes" (call \`read_chat_log\` to find it).
+- kind "research": a finding that shaped the work: what you looked at, and what you concluded.
+- kind "change": what you built or changed, in user terms. One entry for each change, not one for each file.
+Keep each title to one short sentence. Skip routine turns (a plain question answered, no decision taken). Never repeat an entry that is already logged. Eva logs answered questions and the commit range of each turn by itself. If you are unsure what was agreed earlier in this chat, call \`read_chat_log\`.`;
 
 /** One linked repo, as the prompt needs to describe it to the agent. */
 export type LinkedRepoPromptRow = {

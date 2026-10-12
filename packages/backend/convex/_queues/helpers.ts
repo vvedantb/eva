@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { internal } from "../_generated/api";
@@ -23,19 +23,40 @@ import {
   TASK_CHAT_STREAM_PREFIX,
   trackAgentTaskChatWorkflow,
   trackProjectChatWorkflow,
-  trackSessionWorkflow,
+  trackSessionChatWorkflow,
 } from "../_chat/surfaceAdapters";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  activityRefForParentId,
+  touchUserActivity,
+} from "../_sandbox/activity";
 import type { OrchestratorNotifyChild } from "../orchestratorShared";
+import {
+  findUsageLimitHold,
+  isHeldByUsageLimit,
+  type UsageLimitHold,
+} from "../_taskWorkflow/usageLimitReset";
+import { requestSessionSandboxStart } from "../_sessions/sandbox";
+import { wakeTaskSandboxForQueue } from "../_agentTasks/sandbox";
+import { wakeProjectSandboxForQueue } from "../_projects/sandbox";
 import {
   bindTurnWorkflow,
   closeTurn,
-  findOpenSessionTurn,
-  openSessionTurn,
+  findOpenTurn,
+  openChatTurn,
+  openSessionChatTurn,
+  type ChatTurnEntityId,
 } from "../_chat/turnStore";
+import {
+  listLiveSessionChats,
+  loadSessionChat,
+  sessionChatHasFreeSlot,
+  sessionChatStreamingEntityId,
+  type SessionChatContext,
+} from "../_sessionChats/helpers";
 
 const QUEUE_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
@@ -48,6 +69,22 @@ const QUEUE_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
  * the turn's own completion drains the queue instead.
  */
 const BACKGROUND_AGENT_DRAIN_DELAY_MS = 15 * 1000;
+
+/** Where a chat's sandbox is, as the queue sees it. */
+type QueueSandboxState = "awake" | "asleep" | "transitioning";
+
+/**
+ * One mapping for all three surfaces' sandbox status. Unset (a task or project
+ * that never previewed) is asleep. Stopping counts as transitioning: a start
+ * now would race the stop, so the message waits for the next wake.
+ */
+function sandboxStateFromStatus(
+  status: "active" | "starting" | "stopping" | "closed" | undefined,
+): QueueSandboxState {
+  if (status === "active") return "awake";
+  if (status === "starting" || status === "stopping") return "transitioning";
+  return "asleep";
+}
 
 /** Outcome of a queue config's pre-start guard: `ok: false` aborts before anything is cleared or inserted. */
 type ChatQueueGuardResult<TPrepared> =
@@ -62,13 +99,27 @@ type ChatQueueGuardResult<TPrepared> =
  * below never calls `ctx.db.patch`/`ctx.db.insert` on the entity table
  * itself.
  */
-type ChatQueueConfig<
-  TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
-  TEntity,
-  TPrepared,
-> = {
+/** Chat surfaces the queue serves; a session queues per chat tab. */
+type ChatQueueId = Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+
+type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
   hasActiveWorkflow: (entity: TEntity) => boolean;
+  /**
+   * Whether the surface may start a turn right now even though it is idle.
+   * Session chats share a per-session cap on concurrently running chats
+   * (`MAX_PARALLEL_CHATS`); task and project chats have no such limit.
+   */
+  hasCapacity: (ctx: MutationCtx, entity: TEntity) => Promise<boolean>;
+  /** The sandbox owner's id for the idle-pause activity clock (a chat's session). */
+  activityParentId: (entity: TEntity, id: TId) => string;
+  /**
+   * Where the chat's sandbox is. Only quiet drains read it: a message queued
+   * while Eva sleeps wakes her, and the sandbox-ready drain sends it.
+   */
+  sandboxState: (entity: TEntity) => QueueSandboxState;
+  /** Starts the sleeping sandbox (`sandboxState` returned "asleep"). */
+  wakeSandbox: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
   /** Backgrounded Agent/Task subagents, which outlive the turn that spawned them. */
   backgroundAgents: (entity: TEntity) => BackgroundAgentEntry[] | undefined;
   /** The daemon-minted continuation turn, if one is open. */
@@ -80,6 +131,16 @@ type ChatQueueConfig<
    */
   fallbackProvider: (entity: TEntity) => AIProvider | undefined;
   /**
+   * The account `next` runs on (undefined = Team), re-resolved at dequeue
+   * rather than trusted from enqueue time. Resolved before the usage-limit
+   * hold, which only holds the credential that ran out.
+   */
+  turnAccountId: (
+    ctx: MutationCtx,
+    entity: TEntity,
+    next: Doc<"queuedMessages">,
+  ) => Promise<Id<"userProviderAccounts"> | undefined>;
+  /**
    * Validates the entity/message can start a workflow, returning any extra
    * data (e.g. session's repo + narrowed mode/model) the insert/start steps
    * need. Runs BEFORE the streaming row is cleared, matching current
@@ -89,6 +150,7 @@ type ChatQueueConfig<
     ctx: MutationCtx,
     entity: TEntity,
     next: Doc<"queuedMessages">,
+    providerAccountId: Id<"userProviderAccounts"> | undefined,
   ) => Promise<ChatQueueGuardResult<TPrepared>>;
   insertUserMessage: (
     ctx: MutationCtx,
@@ -135,16 +197,15 @@ type ChatQueueConfig<
  * starts the queued message on top of work the user is still waiting on — the
  * "queued message ran while a subagent was working" bug.
  */
-async function isSurfaceBusy<
-  TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
-  TEntity,
-  TPrepared,
->(
+async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   ctx: MutationCtx,
   entity: TEntity,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<boolean> {
   if (config.hasActiveWorkflow(entity)) {
+    return true;
+  }
+  if (!(await config.hasCapacity(ctx, entity))) {
     return true;
   }
   if (
@@ -173,7 +234,7 @@ async function isSurfaceBusy<
  * duplicates; `drainQueueAfterBackgroundAgents` re-checks and no-ops.
  */
 async function scheduleDrainAtBackgroundAgentExpiry<
-  TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  TId extends ChatQueueId,
   TEntity,
   TPrepared,
 >(
@@ -203,19 +264,58 @@ async function scheduleDrainAtBackgroundAgentExpiry<
 }
 
 /**
+ * The usage-limit hold on `next`, if any: the chat's newest turn ran out of
+ * usage on the credential `next` would run on. A message moved to another
+ * provider or another account is not held — that is how switching either one
+ * sends the queue now.
+ */
+export async function usageLimitHoldFor(
+  ctx: QueryCtx,
+  parentId: ChatQueueId,
+  next: Doc<"queuedMessages">,
+  providerAccountId: Id<"userProviderAccounts"> | undefined,
+): Promise<UsageLimitHold | null> {
+  const recent = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .order("desc")
+    .take(20);
+  const hold = findUsageLimitHold(recent, Date.now());
+  return isHeldByUsageLimit(
+    hold,
+    next.model ?? DEFAULT_AI_MODEL,
+    providerAccountId ?? null,
+  )
+    ? hold
+    : null;
+}
+
+/**
  * Dequeues and starts the next pending message for one chat surface. Single
  * implementation shared by sessions, project chat, and task chat — the three
  * exported `startNextQueuedX` functions below are thin `config` bindings so a
  * fix here reaches all three surfaces by construction.
+ *
+ * `trigger: "quiet"` is for the drains that are NOT a turn ending (sandbox
+ * ready, enqueue, a usage-limit resume, a provider switch):
+ * - they never wake a watching orchestrator. An empty queue there means
+ *   "nothing was waiting", not "the child just went idle"; notifying, merely
+ *   starting a watched chat's sandbox woke its master with a spurious
+ *   "finished: completed" carrying the tail of an older reply.
+ * - they only start a turn on an awake sandbox. A sleeping one is woken
+ *   instead, and its sandbox-ready drain sends the message. A turn-ended drain
+ *   skips this: the turn just ran there, and the task chat workflow starts its
+ *   own sandbox when a follow-up outlives the first run.
  */
 async function startNextQueuedChatMessage<
-  TId extends Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  TId extends ChatQueueId,
   TEntity,
   TPrepared,
 >(
   ctx: MutationCtx,
   id: TId,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
+  trigger: "turn-ended" | "quiet",
 ): Promise<boolean> {
   const entity = await config.getEntity(ctx, id);
   if (!entity) return false;
@@ -232,7 +332,10 @@ async function startNextQueuedChatMessage<
    * child went idle". Hooking that single fact keeps mid-queue turns silent
    * without every completion mutation remembering to check.
    */
-  const watchedChild = config.orchestratorNotifyChild(entity, id);
+  const watchedChild =
+    trigger === "turn-ended"
+      ? config.orchestratorNotifyChild(entity, id)
+      : undefined;
   async function notifyWatchingOrchestrator(status: string): Promise<void> {
     if (!watchedChild) return;
     await ctx.scheduler.runAfter(
@@ -252,9 +355,41 @@ async function startNextQueuedChatMessage<
     return false;
   }
 
+  // The last turn ran out of usage: sending now would only fail again, so the
+  // queue waits for the reset. Every drain that lands here books the resume —
+  // duplicates are harmless, since the first to run starts the turn and makes
+  // the rest find the surface busy.
+  const providerAccountId = await config.turnAccountId(
+    ctx,
+    entity,
+    nextMessage,
+  );
+  const hold = await usageLimitHoldFor(ctx, id, nextMessage, providerAccountId);
+  if (hold !== null) {
+    await ctx.scheduler.runAt(
+      hold.resumeAt,
+      internal._queues.helpers.drainQueueQuietly,
+      { parentId: id },
+    );
+    // The turn that hit the limit failed and nothing runs until the reset.
+    await notifyWatchingOrchestrator("error");
+    return false;
+  }
+
+  if (trigger === "quiet") {
+    const sandbox = config.sandboxState(entity);
+    if (sandbox === "asleep") await config.wakeSandbox(ctx, entity);
+    if (sandbox !== "awake") return false;
+  }
+
   await ctx.db.delete(nextMessage._id);
 
-  const guard = await config.prepareGuard(ctx, entity, nextMessage);
+  const guard = await config.prepareGuard(
+    ctx,
+    entity,
+    nextMessage,
+    providerAccountId,
+  );
   if (!guard.ok) {
     await config.recordError(ctx, id, guard.error);
     // The queued turn is consumed and cannot run, so the child is idle again —
@@ -273,6 +408,19 @@ async function startNextQueuedChatMessage<
 
   const now = Date.now();
   await config.insertUserMessage(ctx, id, entity, nextMessage, guard.data, now);
+  // A dequeued follow-up is the user's message landing: restart the idle clock.
+  const activityRef = activityRefForParentId(
+    ctx.db,
+    config.activityParentId(entity, id),
+  );
+  if (activityRef) {
+    await touchUserActivity(
+      ctx,
+      activityRef,
+      { source: "chat", userId: nextMessage.userId },
+      now,
+    );
+  }
   // After the user row exists, so detection sees the turn it is deciding about.
   await maybeInsertModelHandoffAlert(
     ctx,
@@ -307,10 +455,10 @@ type SessionQueuePrepared = {
 };
 
 /** Reverts the durable rows created immediately before a queued workflow start. */
-export async function rollbackQueuedSessionStart(
+export async function rollbackQueuedChatStart(
   ctx: MutationCtx,
   params: {
-    sessionId: Id<"sessions">;
+    entityId: ChatTurnEntityId;
     turnId: Id<"turns">;
     placeholderMessageId: Id<"messages">;
   },
@@ -323,27 +471,99 @@ export async function rollbackQueuedSessionStart(
   }
   const placeholder = await ctx.db.get(params.placeholderMessageId);
   if (
-    placeholder?.parentId === params.sessionId &&
+    placeholder?.parentId === params.entityId &&
     placeholder.finishedAt === undefined
   ) {
     await ctx.db.delete(params.placeholderMessageId);
   }
 }
 
-const sessionQueueConfig: ChatQueueConfig<
-  Id<"sessions">,
-  Doc<"sessions">,
+/** Binds the entity's open turn to the workflow the queue just started. */
+async function bindOpenTurnWorkflow(
+  ctx: MutationCtx,
+  entityId: ChatTurnEntityId,
+  workflowId: WorkflowId,
+): Promise<void> {
+  const turn = await findOpenTurn(ctx, entityId);
+  if (turn) await bindTurnWorkflow(ctx, turn._id, String(workflowId));
+}
+
+/**
+ * Opens the placeholder and durable turn for a queued task or project chat
+ * message, then starts its workflow with the turn id. The workflow restages
+ * `pendingTurn` with this turn id and prewarms the daemon itself.
+ */
+async function startQueuedEntityChatTurn(
+  ctx: MutationCtx,
+  params: {
+    entityId: Id<"agentTasks"> | Id<"projects">;
+    streamingEntityId: string;
+    next: Doc<"queuedMessages">;
+    sandboxId: string | undefined;
+    repoId: Id<"githubRepos">;
+  },
+  start: (turnId: Id<"turns">) => Promise<WorkflowId>,
+): Promise<WorkflowId> {
+  const placeholderMessageId = await ctx.db.insert("messages", {
+    parentId: params.entityId,
+    role: "assistant",
+    content: "",
+    timestamp: Date.now(),
+    activityLog: "",
+  });
+  const turnId = await openChatTurn(ctx, {
+    entityId: params.entityId,
+    streamingEntityId: params.streamingEntityId,
+    placeholderMessageId,
+    prompt: params.next.content,
+    attachmentStorageIds: params.next.attachmentStorageIds,
+    model: normalizeAIModel(params.next.model ?? DEFAULT_AI_MODEL),
+    sandboxId: params.sandboxId,
+    repoId: params.repoId,
+  });
+  try {
+    return await start(turnId);
+  } catch (error) {
+    await rollbackQueuedChatStart(ctx, {
+      entityId: params.entityId,
+      turnId,
+      placeholderMessageId,
+    });
+    throw error;
+  }
+}
+
+const sessionChatQueueConfig: ChatQueueConfig<
+  Id<"sessionChats">,
+  SessionChatContext,
   SessionQueuePrepared
 > = {
-  getEntity: (ctx, id) => ctx.db.get(id),
-  hasActiveWorkflow: (session) => session.activeWorkflowId !== undefined,
-  backgroundAgents: (session) => session.backgroundAgents,
-  syntheticTurnMessageId: (session) => session.syntheticTurnMessageId,
-  streamingEntityId: (id) => String(id),
-  fallbackProvider: (session) => session.provider,
-  prepareGuard: async (ctx, session, next) => {
+  getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
+  hasActiveWorkflow: ({ chat }) => chat.activeWorkflowId !== undefined,
+  // One slot check for both the send path and the dequeue, so the cap cannot
+  // drift between them.
+  hasCapacity: (ctx, context) => sessionChatHasFreeSlot(ctx.db, context),
+  activityParentId: ({ session }) => String(session._id),
+  sandboxState: ({ session }) => sandboxStateFromStatus(session.status),
+  wakeSandbox: (ctx, { session }) => requestSessionSandboxStart(ctx, session),
+  backgroundAgents: ({ chat }) => chat.backgroundAgents,
+  syntheticTurnMessageId: ({ chat }) => chat.syntheticTurnMessageId,
+  streamingEntityId: (id) => sessionChatStreamingEntityId(id),
+  fallbackProvider: ({ chat }) => chat.provider,
+  // The queued model may belong to another provider than the stored pick.
+  turnAccountId: (ctx, { session }, next) =>
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId: next.providerAccountId,
+      ownerUserId: session.createdBy ?? session.userId,
+      model: next.model,
+      changePolicy: "owner-pool",
+    }),
+  prepareGuard: async (ctx, { session, chat }, next, providerAccountId) => {
     if (!next.model) {
       return { ok: false, error: "Error: Failed to start queued message." };
+    }
+    if (chat.archived === true) {
+      return { ok: false, error: "Error: This chat is closed." };
     }
     const repo = await ctx.db.get(session.repoId);
     if (!repo) {
@@ -352,17 +572,9 @@ const sessionQueueConfig: ChatQueueConfig<
         error: "Error: Repository not found for queued message.",
       };
     }
-    // Re-resolved here rather than trusted from enqueue time: the queued model
-    // may belong to another provider than the stored pick.
-    const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
-      requestedAccountId: next.providerAccountId,
-      ownerUserId: session.createdBy ?? session.userId,
-      model: next.model,
-      changePolicy: "owner-pool",
-    });
     return { ok: true, data: { repo, model: next.model, providerAccountId } };
   },
-  insertUserMessage: async (ctx, id, session, next, prepared, now) => {
+  insertUserMessage: async (ctx, id, { session }, next, prepared, now) => {
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
@@ -370,18 +582,18 @@ const sessionQueueConfig: ChatQueueConfig<
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
         session.createdBy ?? session.userId,
-      ),
+      )),
       model: prepared.model,
       reasoningLevel: next.reasoningLevel,
       orchestratorNotification: next.orchestratorNotification,
       sentViaOrchestrator: next.sentViaOrchestrator,
     });
   },
-  startWorkflow: async (ctx, id, session, next, prepared) => {
+  startWorkflow: async (ctx, id, { session }, next, prepared) => {
     const placeholderMessageId = await ctx.db.insert("messages", {
       parentId: id,
       role: "assistant",
@@ -389,9 +601,10 @@ const sessionQueueConfig: ChatQueueConfig<
       timestamp: Date.now(),
       activityLog: "",
     });
-    const turnId = await openSessionTurn(ctx, {
-      sessionId: id,
-      streamingEntityId: String(id),
+    const turnId = await openSessionChatTurn(ctx, {
+      chatId: id,
+      sessionId: session._id,
+      streamingEntityId: sessionChatStreamingEntityId(id),
       placeholderMessageId,
       prompt: next.content,
       attachmentStorageIds: next.attachmentStorageIds,
@@ -404,7 +617,7 @@ const sessionQueueConfig: ChatQueueConfig<
         ctx,
         internal.sessionWorkflow.sessionExecuteWorkflow,
         {
-          sessionId: id,
+          chatId: id,
           message: next.content,
           model: prepared.model,
           // Normalised, not forwarded raw: the composer enqueues model defaults
@@ -425,8 +638,8 @@ const sessionQueueConfig: ChatQueueConfig<
         },
       );
     } catch (error) {
-      await rollbackQueuedSessionStart(ctx, {
-        sessionId: id,
+      await rollbackQueuedChatStart(ctx, {
+        entityId: id,
         turnId,
         placeholderMessageId,
       });
@@ -434,10 +647,9 @@ const sessionQueueConfig: ChatQueueConfig<
     }
   },
   onStarted: async (ctx, id, workflowId, now) => {
-    const turn = await findOpenSessionTurn(ctx, id);
-    if (turn) await bindTurnWorkflow(ctx, turn._id, String(workflowId));
+    await bindOpenTurnWorkflow(ctx, id, workflowId);
     await ctx.db.patch(id, { updatedAt: now });
-    await trackSessionWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
+    await trackSessionChatWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
   },
   recordError: async (ctx, id, content) => {
     await ctx.db.insert("messages", {
@@ -448,28 +660,11 @@ const sessionQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: (session, id) =>
+  orchestratorNotifyChild: ({ session }, id) =>
     session.watchedByAve === undefined
       ? undefined
-      : { kind: "session", sessionId: id },
+      : { kind: "session", sessionId: session._id, chatId: id },
   defaultStartErrorMessage: "Failed to start queued message.",
-};
-
-/**
- * `sessionQueueConfig` with the orchestrator wake-up suppressed, for the one
- * drain that is NOT a turn ending: `sandboxReady` (`_sessions/sandbox.ts`)
- * drains after a sandbox start/resume, where an empty queue means "nothing was
- * waiting" rather than "the child just went idle". Left on the notifying config,
- * merely starting a watched session's sandbox woke its master with a spurious
- * "finished: completed" carrying the tail of an older reply.
- */
-const sessionSandboxReadyQueueConfig: ChatQueueConfig<
-  Id<"sessions">,
-  Doc<"sessions">,
-  SessionQueuePrepared
-> = {
-  ...sessionQueueConfig,
-  orchestratorNotifyChild: () => undefined,
 };
 
 type ChatQueuePrepared = {
@@ -483,26 +678,31 @@ const projectChatQueueConfig: ChatQueueConfig<
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
   hasActiveWorkflow: (project) => project.activeChatWorkflowId !== undefined,
+  hasCapacity: async () => true,
+  activityParentId: (_project, id) => String(id),
+  sandboxState: (project) =>
+    sandboxStateFromStatus(project.reviewProjectSandboxStatus),
+  wakeSandbox: wakeProjectSandboxForQueue,
   backgroundAgents: (project) => project.backgroundAgents,
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
   streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
   fallbackProvider: (project) => getAIModelProvider(project.model),
-  prepareGuard: async (ctx, project, next) => ({
+  // Owner-only, and a collaborator's stored override is dropped rather than
+  // resolved: raising here would strand the whole queue on one bad row.
+  turnAccountId: (ctx, project, next) =>
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId:
+        next.userId === project.userId ? next.providerAccountId : undefined,
+      ownerUserId: project.userId,
+      currentAccountId: project.providerAccountId,
+      model: next.model,
+      senderUserId: next.userId,
+      changePolicy: "owner-only",
+      ownerNoun: "project owner",
+    }),
+  prepareGuard: async (_ctx, _project, _next, providerAccountId) => ({
     ok: true,
-    data: {
-      // Owner-only, and a collaborator's stored override is dropped rather than
-      // resolved: raising here would strand the whole queue on one bad row.
-      providerAccountId: await resolveTurnProviderAccountId(ctx.db, {
-        requestedAccountId:
-          next.userId === project.userId ? next.providerAccountId : undefined,
-        ownerUserId: project.userId,
-        currentAccountId: project.providerAccountId,
-        model: next.model,
-        senderUserId: next.userId,
-        changePolicy: "owner-only",
-        ownerNoun: "project owner",
-      }),
-    },
+    data: { providerAccountId },
   }),
   insertUserMessage: async (ctx, id, project, next, prepared, now) => {
     await ctx.db.insert("messages", {
@@ -512,42 +712,56 @@ const projectChatQueueConfig: ChatQueueConfig<
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
         project.userId,
-      ),
+      )),
       model: next.model,
       reasoningLevel: next.reasoningLevel,
     });
   },
-  startWorkflow: (ctx, id, project, next, prepared) =>
-    workflow.start(
+  startWorkflow: async (ctx, id, project, next, prepared) => {
+    return await startQueuedEntityChatTurn(
       ctx,
-      internal.projectChatWorkflow.projectChatExecuteWorkflow,
       {
-        projectId: id,
-        message: next.content,
-        model: next.model ?? DEFAULT_AI_MODEL,
-        // Normalised, not forwarded raw: the composer enqueues model defaults
-        // explicitly (e.g. reasoning "high"), and the workflow feeds these
-        // straight into prewarmEntityDaemon — a raw default yields a different
-        // opts sig from the page-open prewarm and kills its daemon.
-        ...launchTraitsFromStored(
-          normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+        entityId: id,
+        streamingEntityId: `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+        next,
+        sandboxId: project.sandboxId,
+        repoId: project.repoId,
+      },
+      (turnId) =>
+        workflow.start(
+          ctx,
+          internal.projectChatWorkflow.projectChatExecuteWorkflow,
           {
-            reasoningLevel: next.reasoningLevel,
-            thinkingEnabled: next.thinkingEnabled,
-            use1mContext: next.use1mContext,
-            fastMode: next.fastMode,
+            projectId: id,
+            message: next.content,
+            model: next.model ?? DEFAULT_AI_MODEL,
+            // Normalised, not forwarded raw: the composer enqueues model defaults
+            // explicitly (e.g. reasoning "high"), and the workflow feeds these
+            // straight into prewarmEntityDaemon — a raw default yields a different
+            // opts sig from the page-open prewarm and kills its daemon.
+            ...launchTraitsFromStored(
+              normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+              {
+                reasoningLevel: next.reasoningLevel,
+                thinkingEnabled: next.thinkingEnabled,
+                use1mContext: next.use1mContext,
+                fastMode: next.fastMode,
+              },
+            ),
+            providerAccountId: prepared.providerAccountId,
+            credentialOwnerUserId: project.userId,
+            userId: next.userId,
+            turnId,
           },
         ),
-        providerAccountId: prepared.providerAccountId,
-        credentialOwnerUserId: project.userId,
-        userId: next.userId,
-      },
-    ),
+    );
+  },
   onStarted: async (ctx, id, workflowId, now) => {
+    await bindOpenTurnWorkflow(ctx, id, workflowId);
     await ctx.db.patch(id, { updatedAt: now });
     await trackProjectChatWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
   },
@@ -579,26 +793,30 @@ const taskChatQueueConfig: ChatQueueConfig<
   hasActiveWorkflow: (task) =>
     task.activeChatWorkflowId !== undefined ||
     task.activeWorkflowId !== undefined,
+  hasCapacity: async () => true,
+  activityParentId: (_task, id) => String(id),
+  sandboxState: (task) => sandboxStateFromStatus(task.reviewTaskSandboxStatus),
+  wakeSandbox: wakeTaskSandboxForQueue,
   backgroundAgents: (task) => task.backgroundAgents,
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
   fallbackProvider: (task) => getAIModelProvider(task.model),
-  prepareGuard: async (ctx, task, next) => ({
+  // Owner-only, and a collaborator's stored override is dropped rather than
+  // resolved: raising here would strand the whole queue on one bad row.
+  turnAccountId: (ctx, task, next) =>
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId:
+        next.userId === task.createdBy ? next.providerAccountId : undefined,
+      ownerUserId: task.createdBy,
+      currentAccountId: task.providerAccountId,
+      model: next.model,
+      senderUserId: next.userId,
+      changePolicy: "owner-only",
+      ownerNoun: "task owner",
+    }),
+  prepareGuard: async (_ctx, _task, _next, providerAccountId) => ({
     ok: true,
-    data: {
-      // Owner-only, and a collaborator's stored override is dropped rather than
-      // resolved: raising here would strand the whole queue on one bad row.
-      providerAccountId: await resolveTurnProviderAccountId(ctx.db, {
-        requestedAccountId:
-          next.userId === task.createdBy ? next.providerAccountId : undefined,
-        ownerUserId: task.createdBy,
-        currentAccountId: task.providerAccountId,
-        model: next.model,
-        senderUserId: next.userId,
-        changePolicy: "owner-only",
-        ownerNoun: "task owner",
-      }),
-    },
+    data: { providerAccountId },
   }),
   insertUserMessage: async (ctx, id, task, next, prepared, now) => {
     await ctx.db.insert("messages", {
@@ -608,43 +826,59 @@ const taskChatQueueConfig: ChatQueueConfig<
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
+      ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
         task.createdBy,
-      ),
+      )),
       model: next.model,
       reasoningLevel: next.reasoningLevel,
       sentViaOrchestrator: next.sentViaOrchestrator,
     });
   },
-  startWorkflow: (ctx, id, task, next, prepared) =>
-    workflow.start(
+  startWorkflow: async (ctx, id, task, next, prepared) => {
+    const repoId = task.repoId;
+    if (!repoId) throw new Error("Task is not associated with a repo");
+    return await startQueuedEntityChatTurn(
       ctx,
-      internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow,
       {
-        taskId: id,
-        message: next.content,
-        model: next.model ?? DEFAULT_AI_MODEL,
-        // Normalised, not forwarded raw: the composer enqueues model defaults
-        // explicitly (e.g. reasoning "high"), and the workflow feeds these
-        // straight into prewarmEntityDaemon — a raw default yields a different
-        // opts sig from the page-open prewarm and kills its daemon.
-        ...launchTraitsFromStored(
-          normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+        entityId: id,
+        streamingEntityId: `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+        next,
+        sandboxId: task.sandboxId,
+        repoId,
+      },
+      (turnId) =>
+        workflow.start(
+          ctx,
+          internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow,
           {
-            reasoningLevel: next.reasoningLevel,
-            thinkingEnabled: next.thinkingEnabled,
-            use1mContext: next.use1mContext,
-            fastMode: next.fastMode,
+            taskId: id,
+            message: next.content,
+            model: next.model ?? DEFAULT_AI_MODEL,
+            // Normalised, not forwarded raw: the composer enqueues model defaults
+            // explicitly (e.g. reasoning "high"), and the workflow feeds these
+            // straight into prewarmEntityDaemon — a raw default yields a different
+            // opts sig from the page-open prewarm and kills its daemon.
+            ...launchTraitsFromStored(
+              normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
+              {
+                reasoningLevel: next.reasoningLevel,
+                thinkingEnabled: next.thinkingEnabled,
+                use1mContext: next.use1mContext,
+                fastMode: next.fastMode,
+              },
+            ),
+            providerAccountId: prepared.providerAccountId,
+            credentialOwnerUserId: task.createdBy,
+            userId: next.userId,
+            turnId,
           },
         ),
-        providerAccountId: prepared.providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: next.userId,
-      },
-    ),
+    );
+  },
   onStarted: async (ctx, id, workflowId, now) => {
+    await bindOpenTurnWorkflow(ctx, id, workflowId);
     await ctx.db.patch(id, { updatedAt: now });
     await trackAgentTaskChatWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
   },
@@ -658,34 +892,45 @@ const taskChatQueueConfig: ChatQueueConfig<
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
   orchestratorNotifyChild: (task, id) =>
-    task.watchedByAve === undefined
-      ? undefined
-      : { kind: "task", taskId: id },
+    task.watchedByAve === undefined ? undefined : { kind: "task", taskId: id },
   defaultStartErrorMessage: "Failed to start queued chat message.",
 };
 
-/** Dequeues and starts the next pending message for a session, launching its workflow. */
-export function startNextQueuedSessionMessage(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-): Promise<boolean> {
-  return startNextQueuedChatMessage(ctx, sessionId, sessionQueueConfig);
-}
-
 /**
- * Dequeues after a sandbox start/resume. Identical to
- * `startNextQueuedSessionMessage` except it never wakes a watching orchestrator
- * — see `sessionSandboxReadyQueueConfig`.
+ * The drain every session-chat turn ending calls. Drains the chat that just
+ * finished first (its own queue has priority on the slot it just freed), then
+ * offers the remaining slots to sibling chats with queued messages — the only
+ * place a message parked by the parallel-chat cap is released. Returns whether
+ * the finished chat started a turn.
  */
-export function startNextQueuedSessionMessageAfterSandboxReady(
+export async function drainSessionChatQueues(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
+  finishedChatId?: Id<"sessionChats">,
+  trigger: "turn-ended" | "quiet" = "turn-ended",
 ): Promise<boolean> {
-  return startNextQueuedChatMessage(
-    ctx,
-    sessionId,
-    sessionSandboxReadyQueueConfig,
-  );
+  let started = false;
+  if (finishedChatId !== undefined) {
+    started = await startNextQueuedChatMessage(
+      ctx,
+      finishedChatId,
+      sessionChatQueueConfig,
+      trigger,
+    );
+  }
+  const siblings = await listLiveSessionChats(ctx.db, sessionId);
+  for (const chat of siblings) {
+    if (chat._id === finishedChatId) continue;
+    // Siblings are never "the turn that ended": a quiet drain cannot wake a
+    // watching master with a spurious completion.
+    await startNextQueuedChatMessage(
+      ctx,
+      chat._id,
+      sessionChatQueueConfig,
+      "quiet",
+    );
+  }
+  return started;
 }
 
 /** Dequeues and starts the next pending chat message for a project. */
@@ -693,7 +938,12 @@ export function startNextQueuedProjectChatMessage(
   ctx: MutationCtx,
   projectId: Id<"projects">,
 ): Promise<boolean> {
-  return startNextQueuedChatMessage(ctx, projectId, projectChatQueueConfig);
+  return startNextQueuedChatMessage(
+    ctx,
+    projectId,
+    projectChatQueueConfig,
+    "turn-ended",
+  );
 }
 
 /** Dequeues and starts the next pending chat message for an agent task. */
@@ -701,8 +951,74 @@ export function startNextQueuedTaskChatMessage(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<boolean> {
-  return startNextQueuedChatMessage(ctx, taskId, taskChatQueueConfig);
+  return startNextQueuedChatMessage(
+    ctx,
+    taskId,
+    taskChatQueueConfig,
+    "turn-ended",
+  );
 }
+
+/**
+ * A drain that is not a turn ending — sandbox ready, a fresh enqueue, a
+ * usage-limit resume, a provider switch. Never wakes a watching orchestrator,
+ * and wakes a sleeping sandbox rather than starting a turn on it (see
+ * `startNextQueuedChatMessage`).
+ */
+export async function drainChatQueueQuietly(
+  ctx: MutationCtx,
+  parentId: Id<"sessions"> | ChatQueueId,
+): Promise<boolean> {
+  const sessionId = ctx.db.normalizeId("sessions", parentId);
+  if (sessionId) {
+    // A session's quiet drain offers every chat its message: sandbox-ready
+    // and enqueue both land here.
+    await drainSessionChatQueues(ctx, sessionId, undefined, "quiet");
+    return false;
+  }
+  const chatId = ctx.db.normalizeId("sessionChats", parentId);
+  if (chatId) {
+    return startNextQueuedChatMessage(
+      ctx,
+      chatId,
+      sessionChatQueueConfig,
+      "quiet",
+    );
+  }
+  const taskId = ctx.db.normalizeId("agentTasks", parentId);
+  if (taskId) {
+    return startNextQueuedChatMessage(
+      ctx,
+      taskId,
+      taskChatQueueConfig,
+      "quiet",
+    );
+  }
+  const projectId = ctx.db.normalizeId("projects", parentId);
+  if (projectId) {
+    return startNextQueuedChatMessage(
+      ctx,
+      projectId,
+      projectChatQueueConfig,
+      "quiet",
+    );
+  }
+  return false;
+}
+
+/**
+ * Scheduled quiet drain: resumes a queue held by a usage limit
+ * (`usageLimitHoldFor`), and drains after a sandbox start (scheduled by the
+ * sandbox modules, which cannot import these helpers without a cycle).
+ */
+export const drainQueueQuietly = internalMutation({
+  args: { parentId: queuedMessageFields.parentId },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await drainChatQueueQuietly(ctx, args.parentId);
+    return null;
+  },
+});
 
 /**
  * Retry drain for the releases the surfaces cannot signal themselves: the last
@@ -717,9 +1033,10 @@ export const drainQueueAfterBackgroundAgents = internalMutation({
   args: { parentId: queuedMessageFields.parentId },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const sessionId = ctx.db.normalizeId("sessions", args.parentId);
-    if (sessionId) {
-      await startNextQueuedSessionMessage(ctx, sessionId);
+    const chatId = ctx.db.normalizeId("sessionChats", args.parentId);
+    if (chatId) {
+      const chat = await ctx.db.get(chatId);
+      if (chat) await drainSessionChatQueues(ctx, chat.sessionId, chatId);
       return null;
     }
     const taskId = ctx.db.normalizeId("agentTasks", args.parentId);
@@ -742,7 +1059,7 @@ export const drainQueueAfterBackgroundAgents = internalMutation({
  */
 export async function scheduleQueueDrainAfterBackgroundAgents(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  parentId: ChatQueueId,
   mergedAgents: BackgroundAgentEntry[],
 ): Promise<void> {
   if (runningBackgroundAgents(mergedAgents, Date.now()).length > 0) {

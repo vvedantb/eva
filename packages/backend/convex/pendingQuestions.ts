@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { DatabaseWriter } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { authQuery, authMutation } from "./functions";
+import { recordAnsweredQuestion } from "./chatLog";
 
 /**
  * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
@@ -127,6 +128,13 @@ export const claimAnswer = authMutation({
       return { answer: null };
     }
     const claimed = existing.answer;
+    // The row is deleted next; the Log keeps the question and answer.
+    await recordAnsweredQuestion(
+      ctx,
+      args.entityId,
+      existing.payload,
+      claimed,
+    );
     await ctx.db.delete(existing._id);
     return { answer: claimed };
   },

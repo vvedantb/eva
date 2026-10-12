@@ -77,7 +77,7 @@ export function LandingSectionHeading({
 }) {
   return (
     <div className={cn("max-w-2xl", className)}>
-      <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-primary">
+      <p className="font-mono text-2xs uppercase tracking-[0.28em] text-primary">
         {eyebrow}
       </p>
       <h2 className="landing-display mt-5 text-balance text-3xl font-semibold leading-[1.1] tracking-tight text-foreground sm:text-4xl">

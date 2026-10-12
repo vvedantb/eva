@@ -67,7 +67,7 @@ export function BuildingProjectsBadge({
                   className="flex items-center gap-1.5"
                 >
                   <CircleSpinner size="sm" className="size-[11px]" />
-                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                  <span className="text-2xs font-medium text-muted-foreground tabular-nums">
                     {buildingProjects.length}
                   </span>
                 </CountPop>
@@ -76,7 +76,7 @@ export function BuildingProjectsBadge({
                   className="flex items-center gap-1.5"
                 >
                   <StatusDot />
-                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                  <span className="text-2xs font-medium text-muted-foreground tabular-nums">
                     {sandboxProjects.length}
                   </span>
                 </CountPop>
@@ -89,10 +89,10 @@ export function BuildingProjectsBadge({
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <IconFolder size={15} className="text-primary" />
-                  <h3 className="text-[13px] font-semibold tracking-tight text-foreground">
+                  <h3 className="text-2sm font-semibold tracking-tight text-foreground">
                     Active projects
                   </h3>
-                  <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+                  <span className="ml-auto flex items-center gap-1.5 text-2xs text-muted-foreground tabular-nums">
                     {summaryParts.map((part, i) => (
                       <span key={part} className="flex items-center gap-1.5">
                         {i > 0 && (
@@ -171,10 +171,10 @@ function Section({ label, count, glyph, children }: SectionProps) {
         <span className="flex h-3 w-3 items-center justify-center">
           {glyph}
         </span>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <span className="text-3xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {label}
         </span>
-        <span className="ml-auto text-[10px] text-muted-foreground/70 tabular-nums">
+        <span className="ml-auto text-3xs text-muted-foreground/70 tabular-nums">
           {count}
         </span>
       </div>
@@ -196,7 +196,7 @@ function ProjectRow({ title, to }: ProjectRowProps) {
     >
       <div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-[background-color,translate] hover:bg-background hover:translate-x-0.5">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] leading-tight text-foreground">
+          <p className="truncate text-2sm leading-tight text-foreground">
             {title}
           </p>
         </div>

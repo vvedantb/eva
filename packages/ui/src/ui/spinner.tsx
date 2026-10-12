@@ -1,10 +1,6 @@
 import { cn } from "../utils/cn";
 import { bindRuntimeAnimation } from "../utils/runtimeVisibility";
-
-// Eva logo colours (matches public/icon.svg). Both spinners are brand-only —
-// no currentColor — so they read the same on every surface and theme.
-const PURPLE = "#8B3FB8";
-const BLUE = "#3B7DD8";
+import { EVA_BLUE as BLUE, EVA_PURPLE as PURPLE } from "./brand-colors";
 
 // Eva logo geometry (matches public/icon.svg), used by the mark Spinner.
 const PURPLE_MARK = "0,256 217,237 256,64 295,237 512,256";

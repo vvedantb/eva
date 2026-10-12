@@ -36,11 +36,31 @@ export interface McpCredentials {
   entityId?: string;
   entityKind?: "session" | "task" | "project";
   /**
+   * The session chat a session daemon runs in. Chat content (panels, HTML,
+   * preview tool calls, env var cards) lands here; `entityId` is the session.
+   */
+  chatId?: string;
+  /**
    * Set only by Manager Ave's own server-side run (`mcp/aveRun.ts`) — no token
    * path can carry it. Unlocks `send_agent_message` and makes the tools that
    * start or message agents register a watch on this thread.
    */
   aveThreadId?: string;
+}
+
+/**
+ * The queue a chat tool acts on. A session daemon's own session means its own
+ * chat; any other id passes through (the server maps a session to Main).
+ */
+export function queueParentId(
+  target: { kind: string; targetId: string },
+  credentials: McpCredentials,
+): string {
+  const ownSession =
+    target.kind === "session" && target.targetId === credentials.entityId;
+  return ownSession && credentials.chatId
+    ? credentials.chatId
+    : target.targetId;
 }
 
 export interface RepoInfo {

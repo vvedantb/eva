@@ -35,7 +35,7 @@ export function UsageWindowRow({ usageWindow, now }: UsageWindowRowProps) {
       <UsageBar utilization={utilization} tone={tone} />
       {resetsAt !== undefined && (
         <p
-          className="text-[11px] text-muted-foreground"
+          className="text-2xs text-muted-foreground"
           title={formatExactDateTime(resetsAt)}
         >
           {resetsInLabel(resetsAt, now)}

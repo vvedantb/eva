@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "./_taskWorkflow/startRun";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
@@ -169,32 +170,24 @@ export const startTaskForBuild = internalMutation({
     });
 
     // Start the task execution workflow
-    const workflowId = await workflow.start(
-      ctx,
-      internal.taskWorkflow.taskExecutionWorkflow,
-      {
-        runId,
-        taskId: args.taskId,
-        repoId: task.repoId,
-        installationId: args.installationId,
-        projectId: args.projectId,
-        branchName:
-          project.branchName ??
-          buildProjectBranchName(args.projectId, project.branchVersion),
-        baseBranch:
-          project.baseBranch ??
-          repo.defaultBaseBranch ??
-          FALLBACK_GIT_BASE_BRANCH,
-        isFirstTaskOnBranch,
-        model: task.model ?? repo.defaultModel,
-        providerAccountId: task.providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: args.userId,
-      },
-    );
-
-    await ctx.db.patch(args.taskId, {
-      activeWorkflowId: String(workflowId),
+    await startTaskRunWorkflow(ctx, {
+      runId,
+      taskId: args.taskId,
+      repoId: task.repoId,
+      installationId: args.installationId,
+      projectId: args.projectId,
+      branchName:
+        project.branchName ??
+        buildProjectBranchName(args.projectId, project.branchVersion),
+      baseBranch:
+        project.baseBranch ??
+        repo.defaultBaseBranch ??
+        FALLBACK_GIT_BASE_BRANCH,
+      isFirstTaskOnBranch,
+      model: task.model ?? repo.defaultModel,
+      providerAccountId: task.providerAccountId,
+      credentialOwnerUserId: task.createdBy,
+      userId: args.userId,
     });
 
     return null;

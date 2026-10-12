@@ -160,7 +160,7 @@ function TaskStepRow({ step }: { readonly step: ComposerTaskStep }) {
       >
         {step.step}
       </span>
-      <span className="ml-auto w-12 shrink-0 text-right text-[10px] text-muted-foreground/45 tabular-nums">
+      <span className="ml-auto w-12 shrink-0 text-right text-3xs text-muted-foreground/45 tabular-nums">
         {step.durationMs !== undefined
           ? formatTaskDuration(step.durationMs)
           : step.status === "inProgress"

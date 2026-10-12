@@ -93,7 +93,7 @@ export function SlideOutlinePanel({
                         : "bg-secondary text-foreground",
                     )}
                   >
-                    <span className="font-mono text-[10px] tabular-nums opacity-60">
+                    <span className="font-mono text-3xs tabular-nums opacity-60">
                       {slideNumber}
                     </span>
                   </span>
@@ -106,7 +106,7 @@ export function SlideOutlinePanel({
                     >
                       {entry.title}
                     </span>
-                    <span className="mt-0.5 block font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                    <span className="mt-0.5 block font-mono text-3xs tabular-nums text-muted-foreground/70">
                       {entry.id}
                     </span>
                   </span>

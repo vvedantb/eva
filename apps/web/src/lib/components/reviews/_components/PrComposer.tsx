@@ -73,7 +73,7 @@ export function PrComposer({
           {pending > 0 ? (
             <span
               aria-hidden
-              className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground"
+              className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-3xs font-semibold tabular-nums text-primary-foreground"
             >
               {pending}
             </span>

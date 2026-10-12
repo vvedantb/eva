@@ -11,6 +11,7 @@ import { requireRunningSandbox } from "./_pty/ptyErrors";
 import { sandboxOwnerKey } from "./_sandbox/owner";
 import { runActionEffect } from "./_effect/action";
 import { getActionRepoWithAccess } from "./functions";
+import { internal } from "./_generated/api";
 import {
   connectVercelInteractive,
   ensureVercelSharedTerminal,
@@ -54,7 +55,7 @@ export const connectPty = action({
 
         const resolved = await resolveOwner(ctx, args.owner);
         await getActionRepoWithAccess(ctx, resolved.repoId);
-        return resolved;
+        return { ...resolved, clerkUserId: identity.subject };
       }).pipe(
         // Never open a terminal against a stopping/closed sandbox: the setup
         // exec (ensureVercelSharedTerminal) would lazily resume a stopped
@@ -64,6 +65,12 @@ export const connectPty = action({
         Effect.flatMap(requireRunningSandbox),
         Effect.flatMap((resolved) =>
           Effect.promise(async () => {
+            // Opening a terminal is a human interaction for the idle-pause sweep.
+            await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+              sandboxId: resolved.sandboxId,
+              source: "terminal",
+              clerkUserId: resolved.clerkUserId,
+            });
             await resolveSandboxCredentials(ctx, resolved.repoId);
 
             const handle = await getSandboxHandle(

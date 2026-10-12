@@ -8,6 +8,7 @@ import { tablerDeepImports } from "./vite/deepImports";
 import { tablerIconData } from "./vite/tablerIconData";
 import { originHints } from "./vite/originHints";
 import { convexDevProxy } from "./vite/convexDevProxy";
+import { redline } from "@vvedantb/redline/vite";
 
 function agentLoginPlugin(): Plugin {
   let env: Record<string, string>;
@@ -84,6 +85,9 @@ export default defineConfig({
         "(_components|_utils|Client\\.tsx|Panel\\.tsx|\\.test\\.tsx?)",
       autoCodeSplitting: true,
     }),
+    // Redline tags JSX with data-redline-source before the React transform.
+    // Dev-only by default (off for vite build).
+    redline(),
     // React Compiler for both dev and build so local runtime matches production
     // memoization. `compiler: true` runs oxc-transform-react (Rust) in-process —
     // no Babel pass. Bailouts surface as build warnings; `pnpm compiler:check`

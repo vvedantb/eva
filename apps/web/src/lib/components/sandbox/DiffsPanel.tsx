@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useLocalStorage } from "usehooks-ts";
 import { useQuery } from "@tanstack/react-query";
@@ -84,7 +84,8 @@ export function DiffsPanel({
   "use no memo";
   const { resolvedTheme } = useThemeMode();
   const { owner, name } = useRepo();
-  const { diffView, setDiffView, diffFile, setDiffFile } = useDiffSearchParams();
+  const { diffView, setDiffView, diffFile, setDiffFile } =
+    useDiffSearchParams();
   // Split view puts two code columns into a phone-width pane, so below `md` the
   // diff is always unified, whatever the URL says.
   const isNarrow = useMediaQuery("(max-width: 767px)");
@@ -102,7 +103,10 @@ export function DiffsPanel({
     "eva:pr-diff-ignore-ws",
     false,
   );
-  const [treeOpen, setTreeOpen] = useLocalStorage("eva:pr-diff-tree-open", true);
+  const [treeOpen, setTreeOpen] = useLocalStorage(
+    "eva:pr-diff-tree-open",
+    true,
+  );
   const review = usePendingReviewComments();
 
   const [fileFilter, setFileFilter] = useState("");
@@ -114,9 +118,19 @@ export function DiffsPanel({
   // State, not a ref: each file body needs it as its IntersectionObserver root.
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // The file set (`filesKey`) whose remembered file was already scrolled to.
+  const initialScrollKeyRef = useRef<string | null>(null);
   const setFileRef = (path: string) => (el: HTMLDivElement | null) => {
-    if (el) fileRefs.current.set(path, el);
-    else fileRefs.current.delete(path);
+    if (!el) {
+      fileRefs.current.delete(path);
+      return;
+    }
+    fileRefs.current.set(path, el);
+    // On first load with a remembered file, scroll to it once per file set.
+    if (path === diffFile && initialScrollKeyRef.current !== filesKey) {
+      el.scrollIntoView({ block: "start" });
+      initialScrollKeyRef.current = filesKey;
+    }
   };
 
   const source = ((): DiffSource => {
@@ -157,7 +171,9 @@ export function DiffsPanel({
   };
 
   const rawEntries = source.status === "ready" ? source.entries : [];
-  const fileEntries = ignoreWhitespace ? applyIgnoreWhitespace(rawEntries) : rawEntries;
+  const fileEntries = ignoreWhitespace
+    ? applyIgnoreWhitespace(rawEntries)
+    : rawEntries;
   const filePaths = fileEntries.map((entry) => entry.path);
   const scopedCommit = commits.find((entry) => entry.sha === commit);
   const query = fileFilter.trim().toLowerCase();
@@ -177,11 +193,19 @@ export function DiffsPanel({
   // Viewed, so a returning reviewer lands on what is left.
   if (source.status === "ready" && filesKey !== seededFilesKey) {
     setSeededFilesKey(filesKey);
-    setOpenPaths(filePaths.filter((path) => !viewedPaths.includes(path)));
+    const unviewed = filePaths.filter((path) => !viewedPaths.includes(path));
+    // A remembered file opens even when it is marked Viewed.
+    setOpenPaths(
+      diffFile && !unviewed.includes(diffFile)
+        ? [...unviewed, diffFile]
+        : unviewed,
+    );
   }
 
   const ensureOpen = (path: string) => {
-    setOpenPaths((current) => (current.includes(path) ? current : [...current, path]));
+    setOpenPaths((current) =>
+      current.includes(path) ? current : [...current, path],
+    );
   };
 
   const handleSelect = (path: string) => {
@@ -190,7 +214,9 @@ export function DiffsPanel({
     // Below `md` the tree and the diff are separate panes.
     setShowContentSignal((n) => n + 1);
     requestAnimationFrame(() => {
-      fileRefs.current.get(path)?.scrollIntoView({ block: "start", behavior: "smooth" });
+      fileRefs.current
+        .get(path)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   };
 
@@ -203,22 +229,6 @@ export function DiffsPanel({
     });
   };
 
-  // On first load with a remembered file, expand and scroll to it once.
-  const didInitialScrollRef = useRef(false);
-  useEffect(() => {
-    didInitialScrollRef.current = false;
-  }, [filesKey]);
-  useEffect(() => {
-    if (didInitialScrollRef.current) return;
-    if (source.status !== "ready" || !diffFile) return;
-    ensureOpen(diffFile);
-    const el = fileRefs.current.get(diffFile);
-    if (el) {
-      el.scrollIntoView({ block: "start" });
-      didInitialScrollRef.current = true;
-    }
-  }, [source.status, diffFile, filesKey]);
-
   if (!prUrl) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -226,7 +236,8 @@ export function DiffsPanel({
         <div className="max-w-md space-y-1">
           <p className="text-sm font-medium">No pull request yet</p>
           <p className="text-sm text-muted-foreground">
-            Once a pull request is opened for this work, its diff will appear here.
+            Once a pull request is opened for this work, its diff will appear
+            here.
           </p>
         </div>
       </div>
@@ -243,12 +254,16 @@ export function DiffsPanel({
       {source.status === "loading" ? (
         <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
           <Spinner size="sm" />
-          {commit === null ? "Loading pull request diff…" : "Loading commit diff…"}
+          {commit === null
+            ? "Loading pull request diff…"
+            : "Loading commit diff…"}
         </div>
       ) : source.status === "error" ? (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
           <IconAlertTriangle className="h-8 w-8 text-muted-foreground/60" />
-          <p className="text-sm text-muted-foreground">Could not load the diff.</p>
+          <p className="text-sm text-muted-foreground">
+            Could not load the diff.
+          </p>
         </div>
       ) : fileEntries.length === 0 ? (
         <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
@@ -273,13 +288,19 @@ export function DiffsPanel({
             className="flex flex-col gap-4 p-4"
           >
             {visibleEntries.map((entry) => (
-              <div key={entry.path} ref={setFileRef(entry.path)} className="scroll-mt-4">
+              <div
+                key={entry.path}
+                ref={setFileRef(entry.path)}
+                className="scroll-mt-4"
+              >
                 <DiffFileAccordionItem
                   entry={entry}
                   diffView={effectiveDiffView}
                   resolvedTheme={resolvedTheme}
                   viewed={isViewed(entry.path)}
-                  onViewedChange={(viewed) => handleViewedChange(entry.path, viewed)}
+                  onViewedChange={(viewed) =>
+                    handleViewedChange(entry.path, viewed)
+                  }
                   wrapLines={wrapLines}
                   repoId={repoId}
                   refs={source.refs}
@@ -373,14 +394,20 @@ export function DiffsPanel({
                 source.status === "loading" ||
                 (source.status === "ready" && source.refreshing)
               }
-              onRefresh={commit === null ? refresh : () => void commitQuery.refetch()}
+              onRefresh={
+                commit === null ? refresh : () => void commitQuery.refetch()
+              }
               treeOpen={treeOpen}
               onTreeOpenChange={setTreeOpen}
             />,
             controlsSlot,
           )}
       <div className="flex min-h-0 flex-1">
-        {commit === null ? body : <NoPendingReviewComments>{body}</NoPendingReviewComments>}
+        {commit === null ? (
+          body
+        ) : (
+          <NoPendingReviewComments>{body}</NoPendingReviewComments>
+        )}
       </div>
     </div>
   );

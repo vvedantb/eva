@@ -8,7 +8,7 @@ Design record: `plan.md` (sections 2.x). Where the code and the plan differ, thi
 
 - One session, several connected repos, cloned side by side so the agent can read and edit across them.
 - One **primary** repo keeps everything it owns today: the URL, `numId`, Vercel credentials, seeded snapshot, sandbox-wide env vars, startup commands, dev server, deployment tracking.
-- Extra repos are **linked**: whole clones in the same sandbox, each on its own branch, each with its own optional PR.
+- Extra repos are **linked**: whole clones in the same sandbox, each on its own branch, each with its own optional PR (a `pullRequests` row naming the `sessionRepos` row, see [`pull-requests.md`](./pull-requests.md)).
 - Saved **codebase groups** prefill the selection and give the group a seeded snapshot so fresh sandboxes skip the clone + install cost.
 
 Monorepo "apps" (`rootDirectory`, `parentRepoId`) are not multi-repo — siblings share one checkout, and that machinery is untouched.
@@ -30,14 +30,14 @@ Monorepo "apps" (`rootDirectory`, `parentRepoId`) are not multi-repo — sibling
 
 | Table / field | Purpose |
 |---|---|
-| `sessionRepos` (new) | One row per linked repo per session: `sessionId`, `repoId`, `owner`, `name`, `installationId`, `path`, `branchName`, `baseBranch`, `prUrl`, `prState`, `installDependencies`, `clonedAt`, `devPort`, `devCommand`. Indexes `by_session`, `by_repo`, `by_pr_url`. |
+| `sessionRepos` (new) | One row per linked repo per session: `sessionId`, `repoId`, `owner`, `name`, `installationId`, `path`, `branchName`, `baseBranch`, `installDependencies`, `clonedAt`, `devPort`, `devCommand`. Indexes `by_session`, `by_repo`. Its PR is a `pullRequests` row with `owner.sessionRepoId`; the old `prUrl`/`prState` fields are deprecated and cleared by `backfillPullRequests`. |
 | `repoGroups` (new) | Saved selection: `name`, `createdBy`, `teamId`, `primaryRepoId`, `linkedRepoIds`, `installDependencies`, `seededSnapshotName`, `seededFingerprint`, `createdAt`, `updatedAt`. Indexes `by_created_by`, `by_team`. |
 | `sessions.repoGroupId` | Provenance only. `sessionRepos` rows are the source of truth, so editing a group later never rewrites an existing session. |
 | `sessions.linkedRepoCount` | Denormalised count, so sidebar rows and resume paths detect a multi-repo session without a join. |
 | `sandboxGitCredentials.installationIds` | Every installation this sandbox may mint a token for. `installationId` stays the primary's; rows written before linked repos existed fall back to `[installationId]`. |
 | `messages.beforeShas` / `afterShas` | Multi-repo turn checkpoints: `{ path, sha }` per checked-out repo. Supersede the scalar `beforeSha`/`afterSha`, which stay primary-only. |
 
-A table (not an array on `sessions`) because Convex cannot index inside arrays, and the GitHub webhook must find a session from a linked PR URL.
+A table (not an array on `sessions`) because Convex cannot index inside arrays.
 
 Group visibility: `teamId` is copied from the primary repo at create time, so teammates of that repo's team see and can use the group. Otherwise it is creator-only. Access checks require the caller to have access to every member repo.
 
@@ -110,10 +110,9 @@ Per harness:
 ## Publish, PRs and archive
 
 - Primary: unchanged. The turn workflow pushes the primary branch, then opens or updates its draft PR.
-- Linked: `internal.sandbox.pushLinkedRepoBranches` fetches each row's base, counts `origin/<base>..<branch>`, and pushes only when that is greater than 0. Missing clone directories and per-repo push failures are logged and skipped, so one repo cannot fail the whole publish. `internal.github.createDraftSessionRepoPr` opens one draft PR per row, idempotently, with a body that cross-links every sibling PR already known plus the Eva session URL, and stores `prUrl`/`prState` on the row.
-- **Gap:** both actions are implemented and exported (`sandbox.ts`, `github.ts`) but **nothing calls them** — `sessionExecuteWorkflow` still only pushes the primary and opens the primary's PR. Until they are wired in, linked-repo commits stay in the sandbox. *This is the one part of plan 2.7 that is not live.*
-- Webhook (`githubWebhook.ts`): a PR URL that matches no session falls back to `sessionRepos.by_pr_url` and updates `prState` there. Both paths then run one reconcile.
-- Archive rule (`_sessions/prArchive.ts:shouldArchiveSession`): archive when **every** PR the session opened (primary plus linked) is `merged` or `closed`. Rows that never opened a PR are ignored; if no PR exists at all the session does not archive. Unarchive is the same rule inverted, so a reopened linked PR brings the session back.
+- Linked: `internal.sandbox.pushLinkedRepoBranches` fetches each row's base, counts `origin/<base>..<branch>`, and pushes only when that is greater than 0. Missing clone directories and per-repo push failures are logged and skipped, so one repo cannot fail the whole publish. `internal.github.createDraftSessionRepoPr` opens one draft PR per row, idempotently, with a body that cross-links every sibling PR already known plus the Eva session URL, and records it as a `pullRequests` row. `sessionExecuteWorkflow` runs both after the primary's push.
+- Webhook (`githubWebhook.ts:handlePullRequestEvent`): every PR event updates its `pullRequests` row, then re-runs the session's archive reconcile.
+- Archive rule (`_sessions/prArchive.ts:shouldArchiveSession`): archive when **every** PR the session holds (primary, linked, and any side-branch PR the agent opened) is `merged` or `closed`. If no PR exists at all the session does not archive. Unarchive is the same rule inverted, so a reopened PR brings the session back.
 - Sandbox deletion and the 48h grace are unchanged — one sandbox per session.
 - Deployment tracking stays primary-only on purpose: the primary owns the Vercel project.
 
@@ -168,7 +167,7 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 
 - `create_session` gains `linkedRepos?: string[]` (same `name` / `owner/name` grammar as `repoName`) and `group?: string` (saved group name). They are mutually exclusive, and a named group's saved primary must match `repoName` — the error names the primary to pass instead. Unknown or ambiguous group names are rejected with the caller's group list. The result includes the resolved `linkedRepos` (`repo`, `path`).
 - `list_repos` returns saved groups alongside repos, so a caller can discover a `group` name. Groups whose primary repo has been deleted are dropped.
-- `get_agent_state` and `list_entities` include a session's `linkedRepos` with `repo`, `path`, `branch`, `prUrl` and `prState`.
+- `get_agent_state` and `list_entities` include a session's `linkedRepos` with `repo`, `path`, `branch`, `prUrl` and `prState`. Every PR a chat holds is also listed on its own (`pullRequests` / `prUrls`).
 - `create_task`, projects and automations stay single-repo.
 
 ## Key files
@@ -188,7 +187,7 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 | Agent runtime config | `callback-src/config.ts`, `callback-src/linkedRepos.ts`, `callback-src/providers/*` |
 | Prompt block | `convex/prompts/shared.ts` (`buildLinkedReposSection`) |
 | Publish (not yet wired) | `_sandbox_runtime/execution.ts` (`pushLinkedRepoBranches`), `_github/prFlow.ts` (`createDraftSessionRepoPr`) |
-| PR state + archive | `githubWebhook.ts`, `_sessions/prArchive.ts` |
+| PR state + archive | `githubWebhook.ts`, `_pullRequests/store.ts`, `_sessions/prArchive.ts` |
 | Checkpoints / revert | `callback-src/runtime/turnCheckpoint.ts`, `_sandbox_runtime/turnRevert.ts` |
 | Repo deletion cascade | `_migrations/deleteRepos.ts` |
 | Composer / header / files UI | `apps/web/src/routes/_repo/$owner/$repo/sessions/_components/CodebasesPicker.tsx`, `SessionRepoBadges.tsx`, `../FilesPanel.tsx` |

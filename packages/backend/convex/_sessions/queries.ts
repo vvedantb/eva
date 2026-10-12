@@ -4,6 +4,7 @@ import type { DatabaseReader } from "../_generated/server";
 import { authQuery, hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
+import { findMainChat } from "../_sessionChats/helpers";
 import {
   deploymentStatusValidator,
   entityNumIdFields,
@@ -14,9 +15,10 @@ import {
 } from "../validators";
 import { sessionValidator } from "./helpers";
 import {
-  openSessionIdsForRepo,
+  openChatEntityIdsForRepo,
   sessionIsExecuting,
 } from "../_chat/turnProjection";
+import { unreadLookupForRepo } from "../chatReads";
 
 /** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
@@ -68,6 +70,11 @@ const sessionListItemValidator = v.object({
    */
   isExecuting: v.boolean(),
   /**
+   * A turn finished after this user last read the chat, and the chat is theirs
+   * or they opened it before. One `chatReads` read per list, not per row.
+   */
+  hasUnread: v.boolean(),
+  /**
    * Set only on rows this repo sees through a linked checkout rather than as
    * the session's own repo: the identity of the session's PRIMARY repo, so the
    * sidebar can badge the row and link to it under the right app.
@@ -83,6 +90,7 @@ const sessionListItemValidator = v.object({
 function toSessionListItem(
   session: Doc<"sessions">,
   openSessionIds: ReadonlySet<string>,
+  hasUnread: boolean,
   linkedFrom?: { owner: string; name: string; rootDirectory?: string },
 ) {
   return {
@@ -115,6 +123,7 @@ function toSessionListItem(
     deploymentStatus: session.deploymentStatus,
     deploymentUrl: session.deploymentUrl,
     isExecuting: sessionIsExecuting(session, openSessionIds),
+    hasUnread,
   };
 }
 
@@ -194,13 +203,53 @@ async function openIdsIncludingLinked(
     repoIds.set(String(row.session.repoId), row.session.repoId);
   }
   const sets = await Promise.all(
-    [...repoIds.values()].map((id) => openSessionIdsForRepo(db, id)),
+    [...repoIds.values()].map((id) => openChatEntityIdsForRepo(db, id)),
   );
   const merged = new Set<string>(ownOpenIds);
   for (const set of sets) {
     for (const id of set) merged.add(id);
   }
   return merged;
+}
+
+/**
+ * Adds the sessions that link this repo, then maps everything to list rows.
+ * Shared by `list` and `listArchived`, which differ only in `archived`.
+ */
+async function toSessionListItems(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+  sessions: Doc<"sessions">[],
+  archived: boolean,
+) {
+  const linked = await gatherLinkedSessions(
+    db,
+    repoId,
+    archived,
+    new Set(sessions.map((session) => String(session._id))),
+  );
+  const openSessionIds = await openIdsIncludingLinked(
+    db,
+    await openChatEntityIdsForRepo(db, repoId),
+    linked,
+  );
+  const linkedFromBySession = new Map(
+    linked.map((row) => [String(row.session._id), row.linkedFrom]),
+  );
+  const hasUnread = await unreadLookupForRepo(db, userId, repoId);
+  return Promise.all(
+    [...sessions, ...linked.map((row) => row.session)]
+      .sort(byMostRecentlyUpdated)
+      .map(async (session) =>
+        toSessionListItem(
+          session,
+          openSessionIds,
+          await hasUnread(session),
+          linkedFromBySession.get(String(session._id)),
+        ),
+      ),
+  );
 }
 
 /** Lists all non-archived sessions for a repo, sorted by most recently updated. */
@@ -222,30 +271,13 @@ export const list = authQuery({
           .collect(),
       ),
     );
-    const sessions = sessionGroups.flat();
-    const linked = await gatherLinkedSessions(
+    return toSessionListItems(
       ctx.db,
+      ctx.userId,
       args.repoId,
+      sessionGroups.flat(),
       false,
-      new Set(sessions.map((session) => String(session._id))),
     );
-    const openSessionIds = await openIdsIncludingLinked(
-      ctx.db,
-      await openSessionIdsForRepo(ctx.db, args.repoId),
-      linked,
-    );
-    const linkedFromBySession = new Map(
-      linked.map((row) => [String(row.session._id), row.linkedFrom]),
-    );
-    return [...sessions, ...linked.map((row) => row.session)]
-      .sort(byMostRecentlyUpdated)
-      .map((session) =>
-        toSessionListItem(
-          session,
-          openSessionIds,
-          linkedFromBySession.get(String(session._id)),
-        ),
-      );
   },
 });
 
@@ -264,29 +296,7 @@ export const listArchived = authQuery({
           .eq("deletedAt", undefined),
       )
       .collect();
-    const linked = await gatherLinkedSessions(
-      ctx.db,
-      args.repoId,
-      true,
-      new Set(sessions.map((session) => String(session._id))),
-    );
-    const openSessionIds = await openIdsIncludingLinked(
-      ctx.db,
-      await openSessionIdsForRepo(ctx.db, args.repoId),
-      linked,
-    );
-    const linkedFromBySession = new Map(
-      linked.map((row) => [String(row.session._id), row.linkedFrom]),
-    );
-    return [...sessions, ...linked.map((row) => row.session)]
-      .sort(byMostRecentlyUpdated)
-      .map((session) =>
-        toSessionListItem(
-          session,
-          openSessionIds,
-          linkedFromBySession.get(String(session._id)),
-        ),
-      );
+    return toSessionListItems(ctx.db, ctx.userId, args.repoId, sessions, true);
   },
 });
 
@@ -301,7 +311,9 @@ export const getFirstMessagePreview = authQuery({
     const session = await ctx.db.get(args.id);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    return await firstUserMessagePreview(ctx.db, args.id);
+    const mainChat = await findMainChat(ctx.db, args.id);
+    if (!mainChat) return null;
+    return await firstUserMessagePreview(ctx.db, mainChat._id);
   },
 });
 

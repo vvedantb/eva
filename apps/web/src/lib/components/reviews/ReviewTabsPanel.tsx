@@ -19,7 +19,14 @@ import type { PrOverview } from "./_components/prOverviewMeta";
 import { PrComposer } from "./_components/PrComposer";
 import { ReviewHeader } from "./_components/ReviewHeader";
 import { ReviewTabNav } from "./_components/ReviewTabNav";
-import { REVIEW_TAB_ORDER } from "./_components/reviewTabMeta";
+import {
+  PullRequestsTab,
+  type ReviewPullRequest,
+} from "./_components/PullRequestsTab";
+import {
+  REVIEW_TAB_ORDER,
+  SINGLE_PR_REVIEW_TABS,
+} from "./_components/reviewTabMeta";
 
 interface ReviewTabsPanelProps {
   repoId: Id<"githubRepos">;
@@ -38,6 +45,15 @@ interface ReviewTabsPanelProps {
    * standalone page also has a title block, read from its own query.
    */
   refresh?: { run: () => void; running: boolean };
+  /**
+   * Every PR the chat holds, for the Pull requests tab, and which one the
+   * other tabs show. Sandbox surfaces only — absent, the tab is not offered.
+   */
+  pullRequests?: {
+    items: readonly ReviewPullRequest[];
+    selectedId: Id<"pullRequests"> | undefined;
+    onSelect: (id: Id<"pullRequests">) => void;
+  };
 }
 
 /**
@@ -47,7 +63,8 @@ interface ReviewTabsPanelProps {
  * - a two-line header (`ReviewHeader`) — state, branches, actions; then the
  *   title — ending in the tab row, as Cursor keeps it,
  * - three tabs — Summary, Timeline, Code — each its own scroll box, all kept
- *   mounted so drafts, scroll and expanded files survive a switch,
+ *   mounted so drafts, scroll and expanded files survive a switch, plus Pull
+ *   requests on a sandbox surface, which picks the PR the other three show,
  * - one floating composer (`PrComposer`) for comments and the review.
  *
  * Deliberately does not mount `PendingReviewCommentsProvider`: the sandbox
@@ -62,7 +79,9 @@ export function ReviewTabsPanel({
   onTabChange,
   placeholder,
   refresh,
+  pullRequests,
 }: ReviewTabsPanelProps) {
+  const tabs = pullRequests === undefined ? SINGLE_PR_REVIEW_TABS : REVIEW_TAB_ORDER;
   const recapDoc = useQuery(
     api.docs.getRecapByPrUrl,
     prUrl ? { repoId, prUrl } : "skip",
@@ -85,6 +104,7 @@ export function ReviewTabsPanel({
 
   const nav = (
     <ReviewTabNav
+      tabs={tabs}
       activeTab={activeTab}
       onTabChange={onTabChange}
       controlsRef={setCodeControlsSlot}
@@ -122,13 +142,19 @@ export function ReviewTabsPanel({
         )}
 
         <div className="relative min-h-0 flex-1 overflow-hidden">
-          {REVIEW_TAB_ORDER.map((tab) => (
+          {tabs.map((tab) => (
             <div
               key={tab}
               className={cn("absolute inset-0", activeTab !== tab && "invisible")}
               inert={activeTab !== tab}
             >
-              {tab === "diffs" ? (
+              {tab === "prs" && pullRequests !== undefined ? (
+                <PullRequestsTab
+                  items={pullRequests.items}
+                  selectedId={pullRequests.selectedId}
+                  onSelect={pullRequests.onSelect}
+                />
+              ) : tab === "diffs" ? (
                 <DiffsPanel
                   prUrl={prUrl}
                   repoId={repoId}

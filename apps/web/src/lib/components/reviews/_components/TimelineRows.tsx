@@ -78,7 +78,7 @@ function When({ at }: { at: number | string | null }) {
   return (
     <RelativeDateTime
       at={typeof at === "number" ? at : new Date(at).getTime()}
-      className="text-[11px]"
+      className="text-2xs"
     />
   );
 }
@@ -117,7 +117,7 @@ export function TimelineCommit({
         <div className="truncate text-xs font-semibold text-foreground transition-colors group-hover:text-primary">
           {headline}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 text-2xs text-muted-foreground">
           <code className="font-mono">{shortSha(commit.sha)}</code>
           {commit.authorLogin === null ? null : <span>{commit.authorLogin}</span>}
           <When at={commit.committedAt} />
@@ -173,7 +173,7 @@ export function TimelineConversation({
             <span className="block text-xs font-semibold">
               {events.length} {events.length === 1 ? "comment" : "comments"}
             </span>
-            <span className="flex gap-1 truncate text-[11px] text-muted-foreground">
+            <span className="flex gap-1 truncate text-2xs text-muted-foreground">
               <span>
                 {authors.length} {authors.length === 1 ? "author" : "authors"}
               </span>
@@ -271,7 +271,7 @@ export function TimelineVerdict({
           <span className="text-muted-foreground">{verdictAction(review.state)}</span>
           <span className="sr-only">{reviewStateMeta(review.state).label}</span>
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 flex items-center gap-2 text-2xs text-muted-foreground">
           <When at={review.submittedAt} />
           {stale ? <span>· before the latest push</span> : null}
         </div>
@@ -317,7 +317,7 @@ export function TimelineLifecycle({
           <span className="font-semibold text-foreground">{actor ?? "Someone"}</span>
           <span className="text-muted-foreground">{LIFECYCLE[kind].label}</span>
         </div>
-        <div className="mt-0.5 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 text-2xs text-muted-foreground">
           <When at={at} />
         </div>
       </div>

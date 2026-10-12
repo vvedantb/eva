@@ -155,6 +155,27 @@ export function isSessionSandboxTab(s: string): s is SandboxTab {
   return sandboxTabs.some((tab) => tab === s);
 }
 
+/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
+const NON_VM_SANDBOX_TABS = new Set([
+  "review",
+  "agents",
+  "prd",
+  "designs",
+  "artifacts",
+  "documents",
+]);
+
+/**
+ * True for a tab that talks to the sandbox VM itself (preview, browser,
+ * editor, computer, files, and any custom tab slug). The idle-pause presence
+ * beacon and wake-on-tab-open key off this, so a user reading the Review tab
+ * neither keeps a sandbox awake nor wakes a paused one.
+ */
+export function isSandboxVmTab(tab: string): boolean {
+  const id = sandboxTabIdFromParam(tab);
+  return id.length > 0 && !NON_VM_SANDBOX_TABS.has(id);
+}
+
 /** Old Computer-tab URL segment; redirect to `computer`. */
 export function isLegacyDesktopSandboxTab(s: string): boolean {
   return s === "desktop";
@@ -200,8 +221,12 @@ export function isTaskRouteSandboxTab(s: string): s is TaskRouteSandboxTab {
  * The five slugs this replaced (`overview`, `commits`, `checks`, `recap`, and
  * `diffs`) are in links pasted into tasks and PR comments, so
  * `canonicalReviewTab` still answers to every one of them.
+ *
+ * `prs` lists every pull request a session, quick task or project holds, and
+ * picks which one the other three tabs show. Sandbox surfaces only: the
+ * standalone page is already one pull request.
  */
-const reviewTabs = ["summary", "timeline", "diffs"] as const;
+const reviewTabs = ["summary", "timeline", "diffs", "prs"] as const;
 export type ReviewTab = (typeof reviewTabs)[number];
 export const REVIEW_DEFAULT_TAB: ReviewTab = "summary";
 
@@ -221,6 +246,7 @@ export function canonicalReviewTab(s: string): ReviewTab | undefined {
     return "summary";
   }
   if (s === "commits") return "timeline";
+  if (s === "pulls" || s === "pull-requests") return "prs";
   return isReviewTab(s) ? s : undefined;
 }
 
@@ -386,6 +412,24 @@ export const docModeParser = parseAsStringLiteral(docModes)
 // Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
 export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
 
+/** `?panelItem=` value that opens the chat Log instead of a doc row. */
+export const CHAT_LOG_PANEL_ITEM = "log";
+
+// Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
+export const chatLogKinds = [
+  "decision",
+  "change",
+  "research",
+  "question",
+  "note",
+] as const;
+export const chatLogKindParser =
+  parseAsStringLiteral(chatLogKinds).withOptions(searchOptions);
+
+// Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
+// Absent means the chat's primary PR.
+export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
+
 const docCommentFilters = ["open", "resolved"] as const;
 export const docCommentFilterParser = parseAsStringLiteral(docCommentFilters)
   .withDefault("open")
@@ -443,6 +487,15 @@ export const pullRequestListStateParser = parseAsStringLiteral(
   .withOptions(searchOptions);
 
 export const previewPortParser = parseAsInteger.withOptions(searchOptions);
+
+/**
+ * Active chat tab of a session (`?chat=2`), by the chat's per-session number.
+ * Absent means Main, so every pre-existing session link still opens Main. A
+ * query param rather than a path segment because the chat axis is orthogonal
+ * to the `$sandboxTab` / `review/*` / `pr/*` segments that already hang off
+ * `$numId`, and nesting one inside the other would break every existing link.
+ */
+export const chatParser = parseAsInteger.withOptions(tabOptions);
 
 export const branchParser = parseAsString
   .withDefault("main")

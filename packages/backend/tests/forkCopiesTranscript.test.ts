@@ -9,7 +9,8 @@ import schema from "../convex/schema";
  * it as a `<forked_thread>` prompt: the forked disk already holds the agent's
  * persisted conversation, so the chat must match what the agent remembers.
  * `copyForkMessages` pages through the source in order; `copyForkCards` then
- * re-anchors plan cards and `render_ui` panels on the copies.
+ * re-anchors plan cards, `render_ui` panels and `render_html` pages on the
+ * copies.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -45,11 +46,43 @@ async function fixture() {
       forkedFromSessionId: sourceId,
       forkSourceSandboxId: "sbx_source",
     });
+    // The fork's Main chat is made by `createSession`; the copy finds it.
+    const forkChatId = await ctx.db.insert("sessionChats", {
+      sessionId: forkId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+    });
+    const sourceChatId = await ctx.db.insert("sessionChats", {
+      sessionId: sourceId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+    });
+    // A parallel chat is its own thread and stays behind.
+    const sideChatId = await ctx.db.insert("sessionChats", {
+      sessionId: sourceId,
+      repoId,
+      userId,
+      title: "Chat 2",
+      number: 2,
+      isMain: false,
+    });
+    await ctx.db.insert("messages", {
+      parentId: sideChatId,
+      role: "user",
+      content: "Side question",
+      timestamp: 1_500,
+    });
     const attachment = await ctx.storage.store(new Blob(["invoices.csv"]));
     const messageIds: Id<"messages">[] = [];
     messageIds.push(
       await ctx.db.insert("messages", {
-        parentId: sourceId,
+        parentId: sourceChatId,
         role: "user",
         content: "Seed the invoices table",
         timestamp: 1_000,
@@ -60,7 +93,7 @@ async function fixture() {
     );
     messageIds.push(
       await ctx.db.insert("messages", {
-        parentId: sourceId,
+        parentId: sourceChatId,
         role: "assistant",
         content: "Seeded 12 invoices.",
         timestamp: 2_000,
@@ -73,7 +106,7 @@ async function fixture() {
     );
     messageIds.push(
       await ctx.db.insert("messages", {
-        parentId: sourceId,
+        parentId: sourceChatId,
         role: "assistant",
         content: "Sandbox stopped",
         timestamp: 3_000,
@@ -91,14 +124,34 @@ async function fixture() {
       updatedAt: 2_400,
     });
     const panelId = await ctx.db.insert("chatUiPanels", {
-      parentId: sourceId,
+      parentId: sourceChatId,
       messageId: messageIds[1],
       prompt: "metric row",
       spec: "{}",
       elementCount: 1,
       createdAt: 2_200,
     });
-    return { sourceId, forkId, messageIds, planId, panelId };
+    const bodyId = await ctx.db.insert("chatHtmlRenderBodies", {
+      html: "<p>chart</p>",
+    });
+    await ctx.db.insert("chatHtmlRenders", {
+      parentId: sourceChatId,
+      messageId: messageIds[1],
+      title: "Chart",
+      height: 320,
+      bodyId,
+      createdAt: 2_300,
+    });
+    return {
+      sourceId,
+      forkId,
+      sourceChatId,
+      forkChatId,
+      messageIds,
+      planId,
+      panelId,
+      bodyId,
+    };
   });
   return { t, ...ids };
 }
@@ -138,16 +191,16 @@ describe("fork session transcript copy", () => {
       const { source, fork, queued } = await f.t.run(async (ctx) => ({
         source: await ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", f.sourceId))
+          .withIndex("by_parent", (q) => q.eq("parentId", f.sourceChatId))
           .collect(),
         fork: await ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", f.forkId))
+          .withIndex("by_parent", (q) => q.eq("parentId", f.forkChatId))
           .collect(),
         queued: await ctx.db
           .query("queuedMessages")
           .withIndex("by_parent_and_created", (q) =>
-            q.eq("parentId", f.forkId),
+            q.eq("parentId", f.forkChatId),
           )
           .collect(),
       }));
@@ -171,26 +224,30 @@ describe("fork session transcript copy", () => {
         expect(copy.clientId).toBeUndefined();
         expect(copy.pendingQuestion).toBeUndefined();
       }
-      expect(fork.every((row) => row.parentId === f.forkId)).toBe(true);
+      expect(fork.every((row) => row.parentId === f.forkChatId)).toBe(true);
     },
     TIMEOUT_MS,
   );
 
   test(
-    "re-anchors plan cards and panels on the copied messages",
+    "re-anchors plan cards, panels and HTML pages on the copied messages",
     async () => {
       const f = await fixture();
       const { pairs } = await copyAll(f, 40);
       const assistantCopy = pairs[1]?.to;
 
-      const { plans, panels } = await f.t.run(async (ctx) => ({
+      const { plans, panels, renders } = await f.t.run(async (ctx) => ({
         plans: await ctx.db
           .query("proposedPlans")
           .withIndex("by_session", (q) => q.eq("sessionId", f.forkId))
           .collect(),
         panels: await ctx.db
           .query("chatUiPanels")
-          .withIndex("by_parent", (q) => q.eq("parentId", f.forkId))
+          .withIndex("by_parent", (q) => q.eq("parentId", f.forkChatId))
+          .collect(),
+        renders: await ctx.db
+          .query("chatHtmlRenders")
+          .withIndex("by_parent", (q) => q.eq("parentId", f.forkChatId))
           .collect(),
       }));
       expect(plans).toHaveLength(1);
@@ -207,6 +264,13 @@ describe("fork session transcript copy", () => {
         messageId: assistantCopy,
         prompt: "metric row",
         elementCount: 1,
+      });
+      // The page body is shared with the source, not copied.
+      expect(renders).toHaveLength(1);
+      expect(renders[0]).toMatchObject({
+        messageId: assistantCopy,
+        title: "Chart",
+        bodyId: f.bodyId,
       });
     },
     TIMEOUT_MS,

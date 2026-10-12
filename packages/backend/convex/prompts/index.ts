@@ -7,7 +7,9 @@ export {
   buildReadableReposBlock,
   buildSystemPromptBlock,
   buildLinkedReposSection,
+  CHAT_LOG_INSTRUCTION,
   CHAT_UI_INSTRUCTION,
+  COMMUNICATION_STYLE_INSTRUCTION,
   RESPONSE_LENGTH_INSTRUCTION,
   VISUAL_CHANGE_INSTRUCTION,
 } from "./shared";

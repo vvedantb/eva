@@ -14,6 +14,7 @@ import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
@@ -21,6 +22,7 @@ import {
   SessionHoverCardBody,
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -76,6 +78,8 @@ interface SidebarSessionItemProps {
   sandboxError?: string;
   /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
+  /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
+  hasUnread?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
@@ -111,7 +115,7 @@ function LinkedRepoCountBadge({ count }: { count?: number }) {
   if (!count) return null;
   return (
     <span
-      className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-[10px] font-medium tabular-nums text-muted-foreground"
+      className="shrink-0 rounded-full bg-sidebar-accent px-1.5 py-px text-3xs font-medium tabular-nums text-muted-foreground"
       title={`${count} linked ${count === 1 ? "repository" : "repositories"}`}
     >
       +{count}
@@ -123,7 +127,7 @@ function LinkedRepoCountBadge({ count }: { count?: number }) {
 function LinkedFromHint({ linkedFrom }: { linkedFrom?: SessionLinkedFrom }) {
   if (!linkedFrom) return null;
   return (
-    <span className="shrink-0 truncate text-[10px] text-muted-foreground/70">
+    <span className="shrink-0 truncate text-3xs text-muted-foreground/70">
       via {repoDisplayLabel(linkedFrom)}
     </span>
   );
@@ -149,10 +153,10 @@ function SessionPrIcon({
 
 /**
  * Leading mark: Drive pixel grid while the assistant turn is in flight
- * (replaces sandbox status â€” awaiting a reply already implies sandbox active).
- * Otherwise the sandbox status color dot.
+ * (replaces sandbox status — awaiting a reply already implies sandbox active).
+ * Otherwise the sandbox status color dot (simple view: error only).
  */
-function SessionStatusLeading({
+export function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
@@ -186,7 +190,7 @@ export function TitleRegeneratingHint({
   if (!show) return null;
   return (
     <span
-      className={cn("shrink-0 text-[11px] text-muted-foreground", className)}
+      className={cn("shrink-0 text-2xs text-muted-foreground", className)}
     >
       Regenerating…
     </span>
@@ -204,6 +208,7 @@ export function SidebarSessionItem({
   status,
   sandboxError,
   isExecuting = false,
+  hasUnread = false,
   isSelected,
   onNavigate,
   prUrl,
@@ -214,6 +219,7 @@ export function SidebarSessionItem({
   forkedFromSessionId,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
+  const simpleView = useSimpleView();
   const { settings } = useSessionsSidebarSettings();
   const isFolder = settings.layout === "folder";
   const displayStatus = sandboxDisplayStatus({ status, sandboxError });
@@ -232,19 +238,23 @@ export function SidebarSessionItem({
       : "text-sidebar-foreground/80 hover:text-sidebar-foreground",
   );
 
-  const statusLeading = (
+  const showLeading =
+    isExecuting || showsSandboxStatusDot(displayStatus, simpleView);
+  // Executing wins: the leading "Working" grid says more than the dot would.
+  const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
+  const statusLeading = showLeading ? (
     <SessionStatusLeading
       label={statusLabel}
       dotClassName={statusStyle.dot}
       isExecuting={isExecuting}
     />
-  );
+  ) : null;
 
   const link = (
     <DynamicLink
       to={href}
       onClick={onNavigate}
-      className="block rounded-menu-item px-4 py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+      className="block rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
     >
       {isFolder ? (
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -254,8 +264,14 @@ export function SidebarSessionItem({
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
+            {unreadDot}
           </div>
-          <div className="flex min-w-0 items-center gap-2 pl-4 opacity-60">
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2 opacity-60",
+              showLeading && "pl-4",
+            )}
+          >
             <div className="min-w-0 flex-1">
               {linkedFrom ? (
                 <LinkedFromHint linkedFrom={linkedFrom} />
@@ -267,7 +283,7 @@ export function SidebarSessionItem({
               <SessionPrIcon prUrl={prUrl} prState={prState} />
               <RelativeDateTime
                 at={activityAt}
-                className="shrink-0 text-[11px] text-muted-foreground"
+                className="shrink-0 text-2xs text-muted-foreground"
               />
             </div>
           </div>
@@ -283,8 +299,9 @@ export function SidebarSessionItem({
           <SessionPrIcon prUrl={prUrl} prState={prState} />
           <RelativeDateTime
             at={activityAt}
-            className="shrink-0 text-[11px] text-muted-foreground"
+            className="shrink-0 text-2xs text-muted-foreground"
           />
+          {unreadDot}
         </div>
       )}
     </DynamicLink>

@@ -1,13 +1,21 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import { aiModelValidator, automationFields } from "../validators";
+import {
+  aiModelValidator,
+  automationFields,
+  automationTriggerValidator,
+} from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId, entityVisible } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import type { Doc } from "../_generated/dataModel";
 import { listAutomationsForRepo, resolveAutomationRepoId } from "./helpers";
 import { resolveCanonicalRepoId } from "../_githubRepos/helpers";
-import { resolveAutomationDoc } from "./systemAutomations";
+import {
+  automationCronspec,
+  getSystemAutomation,
+  resolveAutomationDoc,
+} from "./systemAutomations";
 
 /** Return validator for a full automation document. */
 const automationDoc = v.object({
@@ -119,6 +127,7 @@ export const update = authMutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     cronSchedule: v.optional(v.string()),
+    trigger: v.optional(automationTriggerValidator),
     model: v.optional(aiModelValidator),
     enabled: v.optional(v.boolean()),
     readOnly: v.optional(v.boolean()),
@@ -150,12 +159,25 @@ export const update = authMutation({
           "A system automation's title, prompt and mode are managed by eva",
         );
       }
+      // Only an event preset's label is the install's to change.
+      const catalogTrigger = getSystemAutomation(automation.systemKey)?.trigger;
+      if (
+        args.trigger !== undefined &&
+        (catalogTrigger === undefined ||
+          catalogTrigger.kind !== args.trigger.kind ||
+          (catalogTrigger.kind === "event" &&
+            args.trigger.kind === "event" &&
+            catalogTrigger.event !== args.trigger.event))
+      ) {
+        throw new Error("A system automation's trigger is managed by eva");
+      }
     }
 
     const patch: Partial<Doc<"automations">> = { updatedAt: Date.now() };
     if (args.title !== undefined) patch.title = args.title;
     if (args.description !== undefined) patch.description = args.description;
     if (args.cronSchedule !== undefined) patch.cronSchedule = args.cronSchedule;
+    if (args.trigger !== undefined) patch.trigger = args.trigger;
     if (args.model !== undefined) patch.model = args.model;
     if (args.enabled !== undefined) patch.enabled = args.enabled;
     if (args.readOnly !== undefined) patch.readOnly = args.readOnly;
@@ -178,13 +200,10 @@ export const update = authMutation({
       );
     }
 
-    const newSchedule = args.cronSchedule ?? automation.cronSchedule;
-    const newEnabled = args.enabled ?? automation.enabled;
-
     const cronName = `automation-${String(args.id)}`;
     patch.cronJobId = await safeReplaceCron(ctx, {
       name: cronName,
-      cronspec: newEnabled && newSchedule ? newSchedule : null,
+      cronspec: automationCronspec({ ...automation, ...patch }),
       handler: internal.automations.triggerAutomation,
       args: { automationId: args.id },
     });

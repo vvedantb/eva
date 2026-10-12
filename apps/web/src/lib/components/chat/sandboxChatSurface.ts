@@ -8,13 +8,13 @@ import type { ChatBodyMessage } from "./chatBodyUtils";
  * address the right one.
  */
 export type ChatEntityRef =
-  | { kind: "session"; sessionId: Id<"sessions"> }
+  | { kind: "session"; sessionId: Id<"sessions">; chatId: Id<"sessionChats"> }
   | { kind: "task"; taskId: Id<"agentTasks"> }
   | { kind: "project"; projectId: Id<"projects"> };
 
 interface ChatEntityKeys {
   /** Transcript owner — `api.messages.listByParent` / `queuedMessages`. */
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
   /** `api.streaming.get` entity id for that surface's chat turn. */
   streamingEntityId: string;
 }
@@ -23,9 +23,10 @@ interface ChatEntityKeys {
 export function chatEntityKeys(entity: ChatEntityRef): ChatEntityKeys {
   switch (entity.kind) {
     case "session":
+      // A session's transcript, turn and daemon all belong to one of its chats.
       return {
-        parentId: entity.sessionId,
-        streamingEntityId: entity.sessionId,
+        parentId: entity.chatId,
+        streamingEntityId: entity.chatId,
       };
     case "task":
       return {
@@ -68,21 +69,13 @@ export interface UsageLimitRecoveryInputs {
 export interface SandboxChatSurface {
   entity: ChatEntityRef;
   repoId: Id<"githubRepos">;
-  /** The chat's current model — only Claude is offered `/compact`. */
+  /** The chat's current model. */
   model: AIModel;
   /** A running turn owns the context; never interrupt it with an offer. */
   isExecuting: boolean;
   /** The chat cannot be written to at all — hides per-agent stop buttons. */
   isReadOnly: boolean;
-  /**
-   * Whether `/compact` cannot be sent right now. Separate from `isReadOnly`:
-   * sessions wake their sandbox on send (so a stopped sandbox still qualifies),
-   * while task and project chats can only send while the sandbox runs.
-   */
-  compactionReadOnly: boolean;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   /** What the usage-limit recovery card needs, or nothing when it cannot show. */
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
-  /** Sends a harness slash command as a plain user message. */
-  onSendCommand: (command: string) => void;
 }

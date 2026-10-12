@@ -3,20 +3,26 @@ import { Button, Surface, cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconArrowRight,
+  IconBolt,
   IconBook,
   IconBug,
   IconCheck,
   IconClock,
   IconEye,
   IconFileText,
+  IconMessageCircle,
   IconMoon,
   IconRadioactive,
   IconSitemap,
   IconSparkles,
   IconTestPipe,
+  IconTicket,
+  IconTool,
 } from "@tabler/icons-react";
+import type { AutomationTrigger } from "@eva/backend";
 import type { Icon } from "@tabler/icons-react";
 import { describeCron } from "@/lib/components/CronScheduleCard";
+import { describeTrigger } from "./trigger";
 
 /**
  * Per-entry glyph for the card's icon tile. Keyed by catalog key so the backend
@@ -29,6 +35,9 @@ const ENTRY_ICONS: Record<string, Icon> = {
   "generate-docs": IconBook,
   "improve-code-structure": IconSitemap,
   "thermo-nuclear-code-review": IconRadioactive,
+  "ci-autofix": IconTool,
+  "review-responder": IconMessageCircle,
+  "issue-to-task": IconTicket,
   "memory-dreaming": IconMoon,
 };
 
@@ -39,6 +48,8 @@ interface SystemAutomationCardProps {
   blurb: string;
   /** Cron expression in UTC; shown in the reader's local time. */
   cronSchedule: string;
+  /** Event presets show what fires them instead of a schedule. */
+  trigger: AutomationTrigger;
   readOnly: boolean;
   installed: boolean;
   /** Per-repo URL id once installed; null otherwise. */
@@ -58,6 +69,7 @@ export function SystemAutomationCard({
   title,
   blurb,
   cronSchedule,
+  trigger,
   readOnly,
   installed,
   numId,
@@ -66,6 +78,7 @@ export function SystemAutomationCard({
   onUninstall,
 }: SystemAutomationCardProps) {
   const schedule = describeCron(cronSchedule);
+  const eventText = describeTrigger(trigger);
   const EntryIcon = ENTRY_ICONS[entryKey] ?? IconSparkles;
   // Plain `string`: `<Link to>` is a union of known route paths.
   const href: string = `${basePath}/automations/${numId}`;
@@ -104,12 +117,18 @@ export function SystemAutomationCard({
 
         {/* Pre-install the schedule is only a seed value, so showing a clock
             time would read as a fixed property of the automation. */}
-        {(installed || readOnly) && (
+        {(installed || readOnly || eventText !== null) && (
           <div className="flex flex-wrap items-center gap-1.5">
-            {installed && (
-              <Chip icon={IconClock}>
-                {schedule.valid ? schedule.text : cronSchedule}
-              </Chip>
+            {/* An event trigger is fixed by the catalog, so unlike a
+                schedule it is shown before install too. */}
+            {eventText !== null ? (
+              <Chip icon={IconBolt}>{eventText}</Chip>
+            ) : (
+              installed && (
+                <Chip icon={IconClock}>
+                  {schedule.valid ? schedule.text : cronSchedule}
+                </Chip>
+              )
             )}
             {readOnly && <Chip icon={IconEye}>Report only</Chip>}
           </div>
@@ -127,7 +146,7 @@ export function SystemAutomationCard({
               exit={{ opacity: 0 }}
               transition={motionFast}
             >
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-success">
+              <span className="flex items-center gap-1.5 text-2xs font-medium text-success">
                 <IconCheck size={13} />
                 Installed
               </span>
@@ -135,7 +154,7 @@ export function SystemAutomationCard({
                 {numId !== null && (
                   <Link
                     to={href}
-                    className="max-sm:hit-target flex items-center gap-1 rounded-menu-item px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="max-sm:hit-target flex items-center gap-1 rounded-menu-item px-2 py-1 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     Open
                     <IconArrowRight size={12} />
@@ -155,7 +174,7 @@ export function SystemAutomationCard({
               exit={{ opacity: 0 }}
               transition={motionFast}
             >
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 Not installed
               </span>
               <Button size="sm" onClick={onInstall}>
@@ -172,7 +191,7 @@ export function SystemAutomationCard({
 /** Small metadata pill in the card body. */
 function Chip({ icon: ChipIcon, children }: { icon: Icon; children: string }) {
   return (
-    <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+    <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
       <ChipIcon size={12} className="shrink-0" />
       {children}
     </span>

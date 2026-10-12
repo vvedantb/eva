@@ -3,8 +3,9 @@
 import { v } from "convex/values";
 import { z } from "zod";
 import { action } from "./_generated/server";
-import { resolveAllEnvVars } from "./envVarResolver";
+import { internal } from "./_generated/api";
 import { getActionRepoWithAccess } from "./functions";
+import { resolveConnectorToken } from "./_connectors/resolve";
 
 const LINEAR_API_URL = "https://api.linear.app/graphql";
 
@@ -46,12 +47,21 @@ export const fetchIssues = action({
       throw new Error("Not authenticated");
     }
     await getActionRepoWithAccess(ctx, args.repoId);
-    const envVars = await resolveAllEnvVars(ctx, args.repoId);
-    const apiKey = envVars.LINEAR_API_KEY;
+    const userId = await ctx.runQuery(internal.auth.getUserIdFromIdentity, {});
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+    const picked = await resolveConnectorToken(
+      ctx,
+      userId,
+      "linear",
+      args.repoId,
+    );
+    const apiKey = picked?.token;
 
     if (!apiKey) {
       throw new Error(
-        "LINEAR_API_KEY not found in team or repo environment variables. Please add it to your team or repo env vars.",
+        "Connect Linear in Settings → Connections, or add LINEAR_API_KEY to team or repo env vars.",
       );
     }
 

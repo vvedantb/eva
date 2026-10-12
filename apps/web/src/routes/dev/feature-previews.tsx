@@ -360,7 +360,7 @@ function ThreadFindPreview() {
                 : "rounded-lg border border-border bg-card px-3 py-2 text-sm"
             }
           >
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {message.role === "user" ? "You" : "Eva"}
             </p>
             <p className="mt-1 leading-6">{message.text}</p>
@@ -393,7 +393,7 @@ function MessageForkPreview() {
                   : "rounded-lg border border-border bg-card px-3 py-2 text-sm"
               }
             >
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 {message.role === "user" ? "You" : "Eva"}
                 {included ? "" : " · stays on original"}
               </p>

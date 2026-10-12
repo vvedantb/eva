@@ -33,6 +33,9 @@ function oldIsRetryableGitNetworkError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     oldIsSandboxExecTimeout(message) ||
+    // Added on main by #918 (retry git push on GitHub 500).
+    lower.includes("internal server error") ||
+    lower.includes("status code 500") ||
     lower.includes("status code 502") ||
     lower.includes("status code 503") ||
     lower.includes("status code 504") ||
@@ -77,6 +80,9 @@ function oldIsMissingRemoteRefError(message: string): boolean {
 const NETWORK_MESSAGES = [
   "Sandbox exec (60s) timed out after 60000ms",
   "command execution timeout",
+  // GitHub answered a push with a 500 (#918): retried, not surfaced.
+  "To https://github.com/e/e.git\n ! [remote rejected] refs/heads/eva/x -> eva/x (Internal Server Error)\nerror: failed to push some refs to 'https://github.com/e/e.git'",
+  "fatal: unable to access: status code 500",
   "fatal: unable to access 'https://github.com/e/e.git/': The requested URL returned error: status code 502",
   "unexpected status code 503 from origin",
   "status code 504 while fetching",

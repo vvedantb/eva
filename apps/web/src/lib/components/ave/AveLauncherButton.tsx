@@ -3,6 +3,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
 import { IconX } from "@tabler/icons-react";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
+import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import {
   LAUNCHER_POSITION_STYLE,
@@ -89,6 +90,7 @@ export function AveLauncherButton({
               <AveMark className="size-full" />
               <QueryErrorBoundary>
                 <AveActiveDot />
+                <AveQuestionsBadge />
               </QueryErrorBoundary>
             </span>
             <span

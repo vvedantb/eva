@@ -78,7 +78,7 @@ export function MetricElement({
         {value}
       </span>
       {delta ? (
-        <span className="text-[11px] text-muted-foreground">{delta}</span>
+        <span className="text-2xs text-muted-foreground">{delta}</span>
       ) : null}
     </div>
   );

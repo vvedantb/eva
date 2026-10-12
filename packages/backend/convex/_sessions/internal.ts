@@ -1,20 +1,22 @@
 import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { DEFAULT_SESSION_TITLE, sessionValidator } from "./helpers";
-import { deploymentStatusValidator, repoShaValidator } from "../validators";
 import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+  deploymentStatusValidator,
+  prStateValidator,
+  repoShaValidator,
+} from "../validators";
+import {
+  detachPullRequest,
+  findPrimaryPullRequest,
+  findPullRequestByUrl,
+  recordPullRequest,
+  setPullRequestState,
+} from "../_pullRequests/store";
+import { reconcileSessionArchiveState } from "./prArchive";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
-import { findOpenSessionTurn } from "../_chat/turnStore";
-
-const prStateValidator = v.union(
-  v.literal("draft"),
-  v.literal("open"),
-  v.literal("merged"),
-  v.literal("closed"),
-);
+import { hasOpenChatTurn } from "../_chat/turnProjection";
+import { findMainChat } from "../_sessionChats/helpers";
 
 /** Retrieves a session by ID for internal use (no auth check). */
 export const getInternal = internalQuery({
@@ -60,70 +62,80 @@ export const updateDeploymentStatus = internalMutation({
   },
 });
 
-/** Sets the pull request URL on a session (internal use). */
-export const setPrUrl = internalMutation({
+/**
+ * Records a PR Eva opened for this session (the primary repo's draft, or one
+ * linked repo's), then re-checks the archive rule against every PR it holds.
+ */
+export const recordSessionPr = internalMutation({
   args: {
-    id: v.id("sessions"),
+    sessionId: v.id("sessions"),
+    sessionRepoId: v.optional(v.id("sessionRepos")),
+    repoId: v.id("githubRepos"),
     prUrl: v.string(),
-    prState: v.optional(prStateValidator),
+    prState: prStateValidator,
+    headBranch: v.string(),
+    baseBranch: v.string(),
+    title: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
+    await recordPullRequest(ctx, {
+      owner: {
+        kind: "session",
+        sessionId: args.sessionId,
+        ...(args.sessionRepoId !== undefined
+          ? { sessionRepoId: args.sessionRepoId }
+          : {}),
+      },
+      repoId: args.repoId,
       prUrl: args.prUrl,
-      ...(args.prState !== undefined && { prState: args.prState }),
-      updatedAt: Date.now(),
+      state: args.prState,
+      // Only the primary repo's own PR drives the session's chrome.
+      primary: args.sessionRepoId === undefined,
+      origin: "eva",
+      headBranch: args.headBranch,
+      baseBranch: args.baseBranch,
+      title: args.title,
     });
+    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    await reconcileSessionArchiveState(ctx, args.sessionId);
     return null;
   },
 });
 
-/** Sets only the PR state on a session (internal use). */
-export const setPrState = internalMutation({
+/** Sets one of the session's PRs to a new state, then re-checks the archive rule. */
+export const setSessionPrState = internalMutation({
   args: {
-    id: v.id("sessions"),
+    sessionId: v.id("sessions"),
+    prUrl: v.string(),
     prState: prStateValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.id);
-    if (!session) return null;
-    const isTerminal = args.prState === "merged" || args.prState === "closed";
-    await ctx.db.patch(args.id, {
-      prState: args.prState,
-      ...(isTerminal
-        ? { archived: true }
-        : { archived: false, prStateOnArchive: undefined }),
-      updatedAt: Date.now(),
-    });
-    if (isTerminal) {
-      await scheduleSessionSandboxGraceDelete(ctx, {
-        ...session,
-        archived: true,
-        prState: args.prState,
-      });
-    } else {
-      await cancelSessionSandboxGraceDelete(ctx, args.id);
-    }
+    const row = await findPullRequestByUrl(ctx.db, args.prUrl);
+    if (!row) return null;
+    await setPullRequestState(ctx, row, { state: args.prState });
+    await ctx.db.patch(args.sessionId, { updatedAt: Date.now() });
+    await reconcileSessionArchiveState(ctx, args.sessionId);
     return null;
   },
 });
 
-/** Detaches a foreign-auto-merged PR from its session so the session stays writable. No-op if the session's PR has since changed. */
-export const clearPrUrlIfMatches = internalMutation({
-  args: { id: v.id("sessions"), expectedPrUrl: v.string() },
+/**
+ * Detaches a foreign-auto-merged PR from its session so the session stays
+ * writable. No-op when the row has since moved on from merged.
+ */
+export const detachForeignMergedPr = internalMutation({
+  args: { pullRequestId: v.id("pullRequests") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.id);
-    if (!session || session.prUrl !== args.expectedPrUrl) return null;
-    await ctx.db.patch(args.id, {
-      prUrl: undefined,
-      prState: undefined,
-      prStateOnArchive: undefined,
-      archived: false,
-      updatedAt: Date.now(),
-    });
-    await cancelSessionSandboxGraceDelete(ctx, args.id);
+    const row = await ctx.db.get(args.pullRequestId);
+    if (!row || row.state !== "merged" || row.owner.kind !== "session") {
+      return null;
+    }
+    await detachPullRequest(ctx, row);
+    await ctx.db.patch(row.owner.sessionId, { updatedAt: Date.now() });
+    await reconcileSessionArchiveState(ctx, row.owner.sessionId);
     return null;
   },
 });
@@ -183,11 +195,15 @@ export const getTitleContext = internalQuery({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
-    const newestFirst = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
-      .order("desc")
-      .take(TITLE_CONTEXT_MESSAGE_LIMIT);
+    // The title follows the session's own conversation: the Main chat.
+    const mainChat = await findMainChat(ctx.db, args.sessionId);
+    const newestFirst = mainChat
+      ? await ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", mainChat._id))
+          .order("desc")
+          .take(TITLE_CONTEXT_MESSAGE_LIMIT)
+      : [];
     return {
       title: session.title,
       prUrl: session.prUrl,
@@ -235,10 +251,16 @@ export const applyRegeneratedTitle = internalMutation({
       titleRegeneration: undefined,
       ...(shouldApply ? { title, updatedAt: Date.now() } : {}),
     });
-    if (shouldApply && session.prUrl) {
+    const primaryPr = shouldApply
+      ? await findPrimaryPullRequest(ctx.db, {
+          kind: "session",
+          sessionId: session._id,
+        })
+      : null;
+    if (primaryPr && title !== undefined) {
       await schedulePrTitleSync(ctx, {
-        repoId: session.repoId,
-        prUrl: session.prUrl,
+        repoId: primaryPr.repoId,
+        prUrl: primaryPr.prUrl,
         title,
       });
     }
@@ -261,8 +283,10 @@ const revertContextValidator = v.union(
     beforeSha: v.string(),
     /** Multi-repo checkpoint, when the turn recorded one (see messageFields.beforeShas). */
     beforeShas: v.optional(v.array(repoShaValidator)),
-    /** 1-based position of this reply among the session's real assistant turns. */
+    /** 1-based position of this reply among its chat's real assistant turns. */
     turnNumber: v.number(),
+    /** The chat the turn ran in; the restore alert lands there. */
+    chatId: v.id("sessionChats"),
   }),
   v.object({ status: v.literal("not_running"), repoId: v.id("githubRepos") }),
   v.object({ status: v.literal("turn_open"), repoId: v.id("githubRepos") }),
@@ -281,7 +305,11 @@ export const getRevertContext = internalQuery({
     if (!session) throw new Error("Session not found");
     const messageId = ctx.db.normalizeId("messages", args.messageId);
     const message = messageId === null ? null : await ctx.db.get(messageId);
-    if (!message || message.parentId !== args.sessionId) {
+    // Session messages hang off one of the session's chats.
+    const chatId =
+      message === null ? null : ctx.db.normalizeId("sessionChats", message.parentId);
+    const chat = chatId === null ? null : await ctx.db.get(chatId);
+    if (!message || !chat || chat.sessionId !== args.sessionId) {
       throw new Error("Message not found");
     }
     const repoId = session.repoId;
@@ -295,12 +323,13 @@ export const getRevertContext = internalQuery({
     ) {
       return { status: "not_running", repoId };
     }
-    if ((await findOpenSessionTurn(ctx, args.sessionId)) !== null) {
+    // Any chat's open turn blocks: all chats share the session's worktree.
+    if (await hasOpenChatTurn(ctx.db, args.sessionId)) {
       return { status: "turn_open", repoId };
     }
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.sessionId))
+      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
       .collect();
     const turnNumber = messages.filter(
       (row) =>
@@ -316,6 +345,7 @@ export const getRevertContext = internalQuery({
       beforeSha: message.beforeSha,
       beforeShas: message.beforeShas,
       turnNumber,
+      chatId: chat._id,
     };
   },
 });

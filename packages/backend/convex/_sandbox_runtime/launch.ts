@@ -19,6 +19,7 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import {
   CLAUDE_CLI_INSTALL_DIR,
   CODEX_CLI_INSTALL_DIR,
+  EVA_ENV_FILE,
 } from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
@@ -60,7 +61,6 @@ const OPENCODE_FALLBACK_VERSION = "1.18.16";
 const EVA_TOOLING_PREP_TIMEOUT_SECONDS = 30;
 const CALLBACK_READY_POLL_ATTEMPTS = 60;
 const CALLBACK_READY_POLL_INTERVAL_MS = 1000;
-const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 
 /** Cap for a runner log tail quoted into a thrown error (and thus a chat row). */
 const RUNNER_LOG_TAIL_MAX_CHARS = 2_000;

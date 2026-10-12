@@ -28,4 +28,5 @@ export {
   getDaemonPrewarmData,
   enqueueMessage,
   cancelExecution,
+  cancelSessionExecution,
 } from "./_sessions/execution";

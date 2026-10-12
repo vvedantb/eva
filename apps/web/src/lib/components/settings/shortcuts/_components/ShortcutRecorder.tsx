@@ -79,11 +79,11 @@ export function ShortcutRecorder({
         )}
       </Button>
       {recorder.isRecording ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           Esc or tap cancels · Backspace resets
         </p>
       ) : null}
-      {rejected ? <p className="text-[11px] text-warning">{rejected}</p> : null}
+      {rejected ? <p className="text-2xs text-warning">{rejected}</p> : null}
     </div>
   );
 }

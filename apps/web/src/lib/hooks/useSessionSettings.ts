@@ -21,7 +21,6 @@ export function useSessionSettings(overrides: {
   traits?: StoredModelTraits;
   onTraitsPersist?: (partial: Partial<StoredModelTraits>) => void;
   providerAccountId?: string | null;
-  onProviderAccountChange?: (providerAccountId: string | null) => void;
 }) {
   const model = normalizeAIModel(
     overrides.model ?? overrides.defaultModel ?? DEFAULT_AI_MODEL,
@@ -45,10 +44,6 @@ export function useSessionSettings(overrides: {
     overrides.onTraitsPersist?.(partial);
   };
 
-  const setProviderAccountId = (next: string | null) => {
-    overrides.onProviderAccountChange?.(next);
-  };
-
   return {
     model,
     storedTraits,
@@ -57,6 +52,5 @@ export function useSessionSettings(overrides: {
     onTraitsChange,
     providerAccountId,
     setModel,
-    setProviderAccountId,
   };
 }

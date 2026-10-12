@@ -1,6 +1,7 @@
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { TurnState } from "../validators";
+import type { TurnLane, TurnState } from "../validators";
 import {
   canTransitionTurn,
   isTerminalTurnState,
@@ -10,6 +11,11 @@ import {
   turnLeaseExpiry,
   type TerminalTurnState,
 } from "./turnLease";
+import {
+  activityRefForParentId,
+  touchAgentFinished,
+} from "../_sandbox/activity";
+import { chatParentIdOf } from "./chatParent";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -37,44 +43,85 @@ export type CompletionTurnResolution =
   | { status: "legacy" }
   | { status: "stale" };
 
-export async function findOpenSessionTurn(
+/** Every durable turn owner. The id's table picks the surface. */
+export type TurnEntityId = Doc<"turns">["entityId"];
+
+/** Chat entities that own durable turns. */
+export type ChatTurnEntityId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
+
+/** Open turns across every chat of a session (the parallel-chat cap reads this). */
+export async function listOpenSessionTurns(
   ctx: QueryCtx,
   sessionId: Id<"sessions">,
+): Promise<Doc<"turns">[]> {
+  return await ctx.db
+    .query("turns")
+    .withIndex("by_session_open", (q) =>
+      q.eq("sessionId", sessionId).eq("open", true),
+    )
+    .collect();
+}
+
+/**
+ * The entity's open turn in one lane. Chat turns, runs and most one-shot
+ * agents have no lane; a summary or interview turn on a chat row has one.
+ */
+export async function findOpenTurn(
+  ctx: QueryCtx,
+  entityId: TurnEntityId,
+  lane?: TurnLane,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q
-        .eq("surface", "session")
-        .eq("entityId", String(sessionId))
-        .eq("open", true),
+      q.eq("entityId", entityId).eq("lane", lane).eq("open", true),
     )
     .first();
 }
 
-export async function openSessionTurn(
+export async function findOpenSessionTurn(
+  ctx: QueryCtx,
+  sessionId: Id<"sessions">,
+): Promise<Doc<"turns"> | null> {
+  return await findOpenTurn(ctx, sessionId);
+}
+
+type OpenTurnFields = {
+  streamingEntityId: string;
+  /** Chat turns only: runs and one-shot agents have no placeholder message. */
+  placeholderMessageId?: Id<"messages">;
+  prompt?: string;
+  attachmentStorageIds?: Id<"_storage">[];
+  model: Doc<"turns">["model"];
+  sandboxId?: string;
+  repoId: Id<"githubRepos">;
+};
+
+/** Opens a durable turn and supersedes any turn the entity still has open in that lane. */
+export async function openTurn(
   ctx: MutationCtx,
-  params: {
-    sessionId: Id<"sessions">;
-    streamingEntityId: string;
-    placeholderMessageId: Id<"messages">;
-    prompt: string;
-    attachmentStorageIds?: Id<"_storage">[];
-    model: Doc<"turns">["model"];
-    sandboxId?: string;
-    repoId: Id<"githubRepos">;
+  params: OpenTurnFields & {
+    entityId: TurnEntityId;
+    lane?: TurnLane;
+    /** Session chat turns: the session the chat belongs to. */
+    sessionId?: Id<"sessions">;
   },
 ): Promise<Id<"turns">> {
   const now = Date.now();
-  const previous = await findOpenSessionTurn(ctx, params.sessionId);
+  const previous = await findOpenTurn(ctx, params.entityId, params.lane);
   if (previous) {
     await closeTurn(ctx, previous, "cancelled", {
       error: "Superseded by a newer turn",
     });
   }
-  const turnId = await ctx.db.insert("turns", {
-    surface: "session",
-    entityId: String(params.sessionId),
+  return await ctx.db.insert("turns", {
+    entityId: params.entityId,
+    lane: params.lane,
+    sessionId: params.sessionId,
     streamingEntityId: params.streamingEntityId,
     state: "staged",
     open: true,
@@ -92,8 +139,75 @@ export async function openSessionTurn(
     sandboxId: params.sandboxId,
     repoId: params.repoId,
   });
-  await ctx.db.patch(params.sessionId, { turnLifecycleVersion: 2 });
+}
+
+/**
+ * Opens a session chat's turn. Chats are born durable, so there is no
+ * lifecycle marker to set; the session id rides along for the per-session
+ * cap and the sidebar projection.
+ */
+export async function openSessionChatTurn(
+  ctx: MutationCtx,
+  params: OpenTurnFields & {
+    chatId: Id<"sessionChats">;
+    sessionId: Id<"sessions">;
+  },
+): Promise<Id<"turns">> {
+  const { chatId, sessionId, ...turn } = params;
+  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  // Marks the session as a durable-turn user so the legacy "activeWorkflowId
+  // means executing" bridge never becomes authoritative for it again.
+  await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
   return turnId;
+}
+
+/**
+ * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
+ * user (`chatTurnLifecycleVersion`), as `openSessionTurn` does for sessions.
+ */
+export async function openChatTurn(
+  ctx: MutationCtx,
+  params: OpenTurnFields & { entityId: Id<"agentTasks"> | Id<"projects"> },
+): Promise<Id<"turns">> {
+  const turnId = await openTurn(ctx, params);
+  await ctx.db.patch(params.entityId, { chatTurnLifecycleVersion: 2 });
+  return turnId;
+}
+
+/**
+ * Leases a just-opened daemon-minted (synthetic) turn: the daemon that asked
+ * for it is already running, so it owns the lease from the first heartbeat.
+ */
+export async function leaseSyntheticTurn(
+  ctx: MutationCtx,
+  turnId: Id<"turns">,
+): Promise<TurnLeaseIdentity> {
+  const turn = await ctx.db.get(turnId);
+  if (!turn) throw new Error("Synthetic turn was not created");
+  const lease = await acquireTurnLease(ctx, turn, "running");
+  if (!lease) throw new Error("Synthetic turn lease was not acquired");
+  return lease;
+}
+
+/**
+ * The durable side of a daemon claim for a staged turn. `drop`: the turn is
+ * closed or another daemon already runs it, so the caller clears the stale
+ * `pendingTurn`. `busy`: the turn cannot take a lease now; leave it staged.
+ */
+export async function claimStagedTurn(
+  ctx: MutationCtx,
+  turnId: Id<"turns">,
+): Promise<
+  | { status: "leased"; lease: TurnLeaseIdentity }
+  | { status: "drop" }
+  | { status: "busy" }
+> {
+  const turn = await ctx.db.get(turnId);
+  if (!turn || !turn.open || turn.state === "running") {
+    return { status: "drop" };
+  }
+  const lease = await acquireTurnLease(ctx, turn, "running");
+  return lease === null ? { status: "busy" } : { status: "leased", lease };
 }
 
 export async function bindTurnWorkflow(
@@ -174,9 +288,7 @@ export async function renewTurnLease(
   if (turn.leaseGeneration !== params.leaseGeneration) {
     return { status: "terminal", reason: "superseded" };
   }
-  const sessionId = ctx.db.normalizeId("sessions", turn.entityId);
-  if (!sessionId) return { status: "terminal", reason: "unknown_turn" };
-  const current = await findOpenSessionTurn(ctx, sessionId);
+  const current = await findOpenTurn(ctx, turn.entityId, turn.lane);
   if (!current || current._id !== turn._id) {
     return { status: "terminal", reason: "superseded" };
   }
@@ -218,6 +330,17 @@ export async function renewTurnLease(
     leaseExpiresAt,
     silentSince: undefined,
   });
+  // A live turn keeps the sandbox's hard runtime cap ahead of it, or the
+  // provider kills it mid-work with no snapshot. Only on a written renewal
+  // (the throttle above), so at most once per half lease; two lease lengths
+  // keep the deadline ahead through a delayed renewal.
+  if (turn.sandboxId !== undefined) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.extendSandboxDeadline, {
+      sandboxId: turn.sandboxId,
+      repoId: turn.repoId,
+      durationMs: durationMs * 2,
+    });
+  }
   return { status: "renewed", leaseExpiresAt, durationMs };
 }
 
@@ -253,13 +376,14 @@ export async function graceExpiredTurnLease(
 export async function resolveCompletionTurn(
   ctx: MutationCtx,
   params: {
-    sessionId: Id<"sessions">;
+    entityId: TurnEntityId;
+    lane?: TurnLane;
     turnId?: string;
     leaseGeneration?: number;
     placeholderMessageId?: Id<"messages">;
   },
 ): Promise<CompletionTurnResolution> {
-  const current = await findOpenSessionTurn(ctx, params.sessionId);
+  const current = await findOpenTurn(ctx, params.entityId, params.lane);
   if (params.turnId === undefined || params.leaseGeneration === undefined) {
     return current ? { status: "stale" } : { status: "legacy" };
   }
@@ -269,7 +393,7 @@ export async function resolveCompletionTurn(
   if (
     !turn ||
     !turn.open ||
-    turn.entityId !== String(params.sessionId) ||
+    turn.entityId !== params.entityId ||
     turn.leaseGeneration !== params.leaseGeneration ||
     !current ||
     current._id !== turn._id ||
@@ -287,33 +411,90 @@ export async function closeTurn(
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  if (!turn.open || !canTransitionTurn(turn.state, state)) return;
+  // Re-read: a caller's copy can be stale when an earlier step in the same
+  // mutation already closed the turn.
+  const current = await ctx.db.get(turn._id);
+  if (!current?.open || !canTransitionTurn(current.state, state)) return;
+  const finishedAt = Date.now();
   await ctx.db.patch(turn._id, {
     state,
     open: false,
-    finishedAt: Date.now(),
+    finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
+  // The unread watermark read by `chatReads.ts`: chat turns only. Runs and
+  // one-shot lanes (summary, interview) are not replies, and their owner rows
+  // have no such field. Lease sweeps can close a turn after its chat was
+  // hard-deleted, and `patch` throws then. A session chat's turn stamps both
+  // the chat and its session, since the sidebar reads unread per session.
+  const chatParentId =
+    turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
+  if (chatParentId && (await ctx.db.get(chatParentId))) {
+    await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
+  }
+  if (turn.sessionId !== undefined && (await ctx.db.get(turn.sessionId))) {
+    await ctx.db.patch(turn.sessionId, { lastTurnFinishedAt: finishedAt });
+  }
+  // Every durable turn ends here, so this is the one place the idle-pause
+  // sweep learns "the agent finished". The id's table names the surface; a
+  // run counts for its task, a session chat for its session.
+  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  const run = runId ? await ctx.db.get(runId) : null;
+  const activityRef = activityRefForParentId(
+    ctx.db,
+    run ? run.taskId : (turn.sessionId ?? turn.entityId),
+  );
+  if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }
 
-export async function closeOpenSessionTurn(
+export async function closeOpenTurn(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  entityId: TurnEntityId,
   state: TerminalTurnState,
-  patch: { error?: string } = {},
+  patch: { error?: string; lane?: TurnLane } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, entityId, patch.lane);
   if (turn) await closeTurn(ctx, turn, state, patch);
 }
 
 export async function closeTurnForWorkflow(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  entityId: TurnEntityId,
   workflowId: string,
   state: TerminalTurnState,
   patch: { error?: string } = {},
 ): Promise<void> {
-  const turn = await findOpenSessionTurn(ctx, sessionId);
+  const turn = await findOpenTurn(ctx, entityId);
   if (!turn || turn.workflowId !== workflowId) return;
   await closeTurn(ctx, turn, state, patch);
+}
+
+/**
+ * The fence check every one-shot agent completion runs first. False: the
+ * completion holds no current lease, so the caller drops it. True: the caller
+ * handles it; the turn is closed here, since
+ * the agent's work is over once it reports (the workflow's own steps after
+ * that are covered by the 2-hour backstop, as before).
+ */
+export async function settleAgentTurnCompletion(
+  ctx: MutationCtx,
+  params: {
+    entityId: TurnEntityId;
+    lane?: TurnLane;
+    turnId?: string;
+    leaseGeneration?: number;
+    success: boolean;
+    error: string | null;
+  },
+): Promise<boolean> {
+  // Every one-shot agent launches under a turn and always sends its lease.
+  const resolution = await resolveCompletionTurn(ctx, params);
+  if (resolution.status !== "current") return false;
+  await closeTurn(
+    ctx,
+    resolution.turn,
+    params.success ? "done" : "error",
+    params.success ? {} : { error: params.error ?? "Agent failed" },
+  );
+  return true;
 }

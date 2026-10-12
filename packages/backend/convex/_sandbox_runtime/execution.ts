@@ -12,6 +12,8 @@ import {
   getAIModelProvider,
   normalizeAIModel,
   reasoningLevelValidator,
+  turnEntityIdValidator,
+  turnLaneValidator,
   usesChatDaemon,
 } from "../validators";
 import {
@@ -123,14 +125,40 @@ import {
 import { vercelAppListenPort } from "./vercelAppPorts";
 import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
+import { createHmac } from "node:crypto";
+import { previewActivityHmacMessage } from "./callbackAuth";
+import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
+
+/**
+ * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
+ * the deployment has no `ENCRYPTION_KEY` or no reachable site URL, which
+ * simply disables the heartbeat (the sweep then relies on tab presence).
+ */
+function previewActivityParams(sandboxId: string): {
+  activityUrl: string;
+  activityHmac: string;
+} {
+  const secret = process.env.ENCRYPTION_KEY;
+  const siteUrl = resolvePublicConvexSiteUrl(process.env);
+  if (!secret || !siteUrl) return { activityUrl: "", activityHmac: "" };
+  return {
+    activityUrl: `${siteUrl}/api/preview/activity`,
+    activityHmac: createHmac("sha256", secret)
+      .update(previewActivityHmacMessage(sandboxId))
+      .digest("hex"),
+  };
+}
 
 const sessionPersistenceKindValidator = v.union(
+  v.literal("sessionChats"),
   v.literal("sessions"),
   v.literal("projects"),
   v.literal("agentTasks"),
 );
 
+// A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("projects"),
   v.id("agentTasks"),
@@ -1012,6 +1040,7 @@ async function buildPreviewUrl(
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort ?? args.port,
+          ...previewActivityParams(args.sandboxId),
         },
         fixedVercelProxyPort,
       );
@@ -1069,6 +1098,16 @@ export const getPreviewUrl = action({
           throw new Error("Not authenticated");
         }
         await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+        // A Preview/custom-tab open is a human interaction for the idle-pause
+        // sweep. Readiness polls repeat every 3s, but the touch is throttled
+        // server-side so the steady state is read-only.
+        if (args.checkReady || args.navigationSync) {
+          await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+            sandboxId: args.sandboxId,
+            source: "preview-tab",
+            clerkUserId: identity.subject,
+          });
+        }
         return await buildPreviewUrl(ctx, args, identity.subject);
       }),
       `sandbox.getPreviewUrl sandbox=${args.sandboxId} port=${args.port}`,
@@ -1757,7 +1796,7 @@ type PrewarmEntityDaemonBaseParams = {
 };
 
 type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
-  entityTable: "sessions" | "agentTasks" | "projects";
+  entityTable: "sessionChats" | "sessions" | "agentTasks" | "projects";
 };
 
 /** Shared implementation for prewarmEntityDaemon and prewarmSessionDaemon. */
@@ -1917,6 +1956,24 @@ async function runPrewarmEntityDaemon(
       return null;
     };
 
+    // The alive classification above is a point-in-time read. A Stop can land
+    // while this prewarm waits on the launch lease (up to minutes), and every
+    // later exec — or ensureSandboxRunning — would lazily resume the stopped VM
+    // (task 262: stopped 12:47:11, prewarm resumed it 8s later). Poll the
+    // user's stop intent before each step that can wake the sandbox.
+    const stopRequested = () =>
+      ctx.runQuery(internal.sandboxDaemon.isEntitySandboxStopRequested, {
+        entityTable: args.entityTable,
+        entityId: entityIdStr,
+      });
+    const skipIfStopped = async (): Promise<boolean> => {
+      if (!(await stopRequested())) return false;
+      console.log(
+        `[sandbox][execution] prewarmEntityDaemon: stop requested — skipping entityId=${entityIdStr} after ${Date.now() - startedAt}ms`,
+      );
+      return true;
+    };
+
     const initialReady = await settleIfReady(await probeAliveState());
     if (initialReady !== null) return initialReady;
 
@@ -1942,6 +1999,7 @@ async function runPrewarmEntityDaemon(
       const waitDeadline = Date.now() + PREWARM_LAUNCH_LEASE_WAIT_MS;
       while (!leased && Date.now() < waitDeadline) {
         await sleep(PREWARM_LAUNCH_LEASE_POLL_MS);
+        if (await skipIfStopped()) return { prewarmed: false };
         const waitedReady = await settleIfReady(await probeAliveState());
         if (waitedReady !== null) return waitedReady;
         leased = await claimLease();
@@ -1999,6 +2057,7 @@ async function runPrewarmEntityDaemon(
         if (deferred !== null) return deferred;
       }
 
+      if (await skipIfStopped()) return { prewarmed: false };
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
       });
@@ -2091,6 +2150,7 @@ export const prewarmEntityDaemon = internalAction({
     ),
     skipPrewarm: v.optional(v.boolean()),
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -2105,8 +2165,8 @@ export const prewarmEntityDaemon = internalAction({
  * Pushes the sandbox's hard session deadline out by `durationMs`. Vercel's
  * `timeout` is a hard per-session runtime cap — turns that outlive it are
  * killed mid-work with no snapshot (filesystem rolls back to the pre-turn
- * snapshot on the next resume). The stall watchdog schedules this on every
- * not-stale tick of an active turn. Best-effort: a failed extension must
+ * snapshot on the next resume). A durable turn's lease renewal schedules
+ * this (`renewTurnLease`) for every turn, quick-task runs included. Best-effort: a failed extension must
  * never fail the turn, and it must not resume a stopped sandbox (getting a
  * handle does not exec; extendTimeout on a stopped sandbox errors harmlessly).
  */
@@ -2229,10 +2289,14 @@ export const killEntityDaemon = internalAction({
  * skips the boot entirely. No-op if a daemon is already alive for this session.
  * Best-effort: any failure is swallowed (the normal path still works).
  */
+/**
+ * Warms the daemon of one session chat. Chats of a session share the sandbox
+ * but each runs its own agent process, keyed by the chat id.
+ */
 export const prewarmSessionDaemon = internalAction({
   args: {
     sandboxId: v.string(),
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     repoId: v.id("githubRepos"),
     userId: v.id("users"),
     model: v.optional(v.string()),
@@ -2247,19 +2311,19 @@ export const prewarmSessionDaemon = internalAction({
   },
   returns: v.object({ prewarmed: v.boolean() }),
   handler: async (ctx, args): Promise<{ prewarmed: boolean }> => {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: args.sessionId,
+    const context = await ctx.runQuery(internal.sessionChats.getInternal, {
+      chatId: args.chatId,
     });
     const skipPrewarm =
-      session === null ||
-      session === undefined ||
-      isSandboxClosingStatus(session.status);
+      context === null ||
+      context.chat.archived === true ||
+      isSandboxClosingStatus(context.session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,
       userId: args.userId,
-      entityId: String(args.sessionId),
-      entityIdField: "sessionId",
+      entityId: String(args.chatId),
+      entityIdField: "chatId",
       completionMutation: "sessionWorkflow:handleCompletion",
       ...SESSION_DAEMON_MUTATIONS,
       model: args.model,
@@ -2273,129 +2337,184 @@ export const prewarmSessionDaemon = internalAction({
       sessionPersistenceId: args.sessionPersistenceId,
       activeWorkflowField: "activeWorkflowId",
       skipPrewarm,
-      entityTable: "sessions",
+      entityTable: "sessionChats",
     });
   },
 });
 
-/** Launches an AI agent script on an existing sandbox with streaming and token setup. */
-export const launchOnExistingSandbox = internalAction({
-  args: {
-    sandboxId: v.string(),
-    entityId: v.string(),
-    prompt: v.string(),
-    userId: v.id("users"),
-    completionMutation: v.string(),
-    entityIdField: v.string(),
-    model: v.optional(v.string()),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-    allowedTools: v.optional(v.string()),
-    systemPrompt: v.optional(v.string()),
-    repoId: v.id("githubRepos"),
-    streamingEntityId: v.optional(v.string()),
-    runId: v.optional(v.string()),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    requireTaskCommit: v.optional(v.boolean()),
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    /** Entity owner for personal-credential decrypt; defaults to `userId`. */
-    credentialOwnerUserId: v.optional(v.id("users")),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    turnId: v.optional(v.id("turns")),
-    turnLeaseGeneration: v.optional(v.number()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const launchStartedAt = Date.now();
-    console.log(
-      `[sandbox][execution] launchOnExistingSandbox started entityId=${args.entityId} sandboxId=${args.sandboxId} repoId=${args.repoId}`,
-    );
-    const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+/** Arguments of every agent launch on an existing sandbox. */
+const launchArgs = {
+  sandboxId: v.string(),
+  entityId: v.string(),
+  prompt: v.string(),
+  userId: v.id("users"),
+  completionMutation: v.string(),
+  entityIdField: v.string(),
+  model: v.optional(v.string()),
+  reasoningLevel: v.optional(reasoningLevelValidator),
+  thinkingEnabled: v.optional(v.boolean()),
+  use1mContext: v.optional(v.boolean()),
+  fastMode: v.optional(v.boolean()),
+  allowedTools: v.optional(v.string()),
+  systemPrompt: v.optional(v.string()),
+  repoId: v.id("githubRepos"),
+  streamingEntityId: v.optional(v.string()),
+  runId: v.optional(v.string()),
+  sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
+  requireTaskCommit: v.optional(v.boolean()),
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  /** Entity owner for personal-credential decrypt; defaults to `userId`. */
+  credentialOwnerUserId: v.optional(v.id("users")),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+};
 
-    // Download any user-attached input images into the sandbox and point the
-    // agent at them via a prompt note (the CLI providers read files by path).
-    let prompt = args.prompt;
-    if (args.attachmentStorageIds && args.attachmentStorageIds.length > 0) {
-      const paths = await materializeAttachmentsToSandbox(
-        ctx,
-        sandbox,
-        args.attachmentStorageIds,
-      );
-      prompt += buildAttachmentPromptNote(paths);
-    }
+const launchArgsValidator = v.object({
+  ...launchArgs,
+  turnId: v.optional(v.id("turns")),
+  turnLeaseGeneration: v.optional(v.number()),
+});
 
-    await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
-    console.log(
-      `[sandbox][execution] cleaned prior runner in ${Date.now() - launchStartedAt}ms entityId=${args.entityId}`,
-    );
+async function launchAgentOnSandbox(
+  ctx: ActionCtx,
+  args: Infer<typeof launchArgsValidator>,
+): Promise<void> {
+  const launchStartedAt = Date.now();
+  console.log(
+    `[sandbox][execution] launchOnExistingSandbox started entityId=${args.entityId} sandboxId=${args.sandboxId} repoId=${args.repoId}`,
+  );
+  const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-    const extraEnvVars: Record<string, string> = {};
-    if (args.streamingEntityId) {
-      extraEnvVars.STREAMING_ENTITY_ID = args.streamingEntityId;
-      const existing = await ctx.runQuery(internal.streaming.internalGet, {
-        entityId: args.streamingEntityId,
-      });
-      if (existing) {
-        extraEnvVars.PRIOR_STEPS = existing.currentActivity;
-      }
-    }
-    if (args.runId) {
-      extraEnvVars.RUN_ID = args.runId;
-    }
-    if (args.requireTaskCommit === true) {
-      extraEnvVars.REQUIRE_TASK_COMMIT = "true";
-    }
-    if (args.turnId !== undefined && args.turnLeaseGeneration !== undefined) {
-      extraEnvVars.TURN_ID = String(args.turnId);
-      extraEnvVars.TURN_LEASE_GENERATION = String(args.turnLeaseGeneration);
-    }
-    // Session-wide trait overrides. Only non-default values are sent from the UI;
-    // the runner maps effort to each provider's native control (see config.ts).
-    Object.assign(
-      extraEnvVars,
-      buildTraitEnvVars({
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-      }),
-    );
-    extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
-
-    const normalizedModel = normalizeAIModel(args.model);
-    const claudeSessionId =
-      getAIModelProvider(normalizedModel) === "claude" &&
-      args.sessionPersistenceId
-        ? sessionClaudeUuid(args.sessionPersistenceId)
-        : undefined;
-
-    await signAndLaunchScript(
+  // Download any user-attached input images into the sandbox and point the
+  // agent at them via a prompt note (the CLI providers read files by path).
+  let prompt = args.prompt;
+  if (args.attachmentStorageIds && args.attachmentStorageIds.length > 0) {
+    const paths = await materializeAttachmentsToSandbox(
       ctx,
       sandbox,
-      args.userId,
-      prompt,
-      args.completionMutation,
-      args.entityIdField,
-      args.entityId,
-      args.repoId,
-      {
-        model: normalizedModel,
-        allowedTools: args.allowedTools,
-        systemPrompt: args.systemPrompt,
-        extraEnvVars:
-          Object.keys(extraEnvVars).length > 0 ? extraEnvVars : undefined,
-        claudeSessionId,
-        providerAccountId: args.providerAccountId,
-        credentialOwnerUserId: args.credentialOwnerUserId,
-        enableMcp: true,
-      },
+      args.attachmentStorageIds,
     );
-    console.log(
-      `[sandbox][execution] launchOnExistingSandbox finished in ${Date.now() - launchStartedAt}ms entityId=${args.entityId} sandboxId=${args.sandboxId}`,
-    );
+    prompt += buildAttachmentPromptNote(paths);
+  }
 
+  await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
+  console.log(
+    `[sandbox][execution] cleaned prior runner in ${Date.now() - launchStartedAt}ms entityId=${args.entityId}`,
+  );
+
+  const extraEnvVars: Record<string, string> = {};
+  if (args.streamingEntityId) {
+    extraEnvVars.STREAMING_ENTITY_ID = args.streamingEntityId;
+    const existing = await ctx.runQuery(internal.streaming.internalGet, {
+      entityId: args.streamingEntityId,
+    });
+    if (existing) {
+      extraEnvVars.PRIOR_STEPS = existing.currentActivity;
+    }
+  }
+  if (args.runId) {
+    extraEnvVars.RUN_ID = args.runId;
+  }
+  if (args.requireTaskCommit === true) {
+    extraEnvVars.REQUIRE_TASK_COMMIT = "true";
+  }
+  if (args.turnId !== undefined && args.turnLeaseGeneration !== undefined) {
+    extraEnvVars.TURN_ID = String(args.turnId);
+    extraEnvVars.TURN_LEASE_GENERATION = String(args.turnLeaseGeneration);
+  }
+  // Session-wide trait overrides. Only non-default values are sent from the UI;
+  // the runner maps effort to each provider's native control (see config.ts).
+  Object.assign(
+    extraEnvVars,
+    buildTraitEnvVars({
+      reasoningLevel: args.reasoningLevel,
+      thinkingEnabled: args.thinkingEnabled,
+      use1mContext: args.use1mContext,
+      fastMode: args.fastMode,
+    }),
+  );
+  extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
+
+  const normalizedModel = normalizeAIModel(args.model);
+  const claudeSessionId =
+    getAIModelProvider(normalizedModel) === "claude" &&
+    args.sessionPersistenceId
+      ? sessionClaudeUuid(args.sessionPersistenceId)
+      : undefined;
+
+  await signAndLaunchScript(
+    ctx,
+    sandbox,
+    args.userId,
+    prompt,
+    args.completionMutation,
+    args.entityIdField,
+    args.entityId,
+    args.repoId,
+    {
+      model: normalizedModel,
+      allowedTools: args.allowedTools,
+      systemPrompt: args.systemPrompt,
+      extraEnvVars:
+        Object.keys(extraEnvVars).length > 0 ? extraEnvVars : undefined,
+      claudeSessionId,
+      providerAccountId: args.providerAccountId,
+      credentialOwnerUserId: args.credentialOwnerUserId,
+      enableMcp: true,
+    },
+  );
+  console.log(
+    `[sandbox][execution] launchOnExistingSandbox finished in ${Date.now() - launchStartedAt}ms entityId=${args.entityId} sandboxId=${args.sandboxId}`,
+  );
+}
+
+/** Launches an AI agent script on an existing sandbox with streaming and token setup. */
+export const launchOnExistingSandbox = internalAction({
+  args: launchArgsValidator.fields,
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await launchAgentOnSandbox(ctx, args);
+    return null;
+  },
+});
+
+/**
+ * Launches a one-shot agent (automation, PR recap, summary, doc or project
+ * interview, evaluation, test generation) under its own durable turn: opens
+ * the turn already leased, then launches with the lease so the callback
+ * heartbeats and completes fenced. A launch that throws closes the turn, so
+ * the reconciler never tears down a workflow that handled the failure itself.
+ */
+export const launchAgentTurn = internalAction({
+  args: {
+    ...launchArgs,
+    turnEntityId: turnEntityIdValidator,
+    turnLane: v.optional(turnLaneValidator),
+    workflowId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { turnEntityId, turnLane, workflowId, ...launch }) => {
+    const lease = await ctx.runMutation(internal.turns.openAgentTurnLease, {
+      entityId: turnEntityId,
+      lane: turnLane,
+      streamingEntityId: launch.streamingEntityId ?? launch.entityId,
+      model: launch.model,
+      sandboxId: launch.sandboxId,
+      repoId: launch.repoId,
+      workflowId,
+    });
+    try {
+      await launchAgentOnSandbox(ctx, {
+        ...launch,
+        turnId: lease.turnId,
+        turnLeaseGeneration: lease.leaseGeneration,
+      });
+    } catch (error) {
+      await ctx.runMutation(internal.turns.closeAgentTurn, {
+        turnId: lease.turnId,
+        error: "Agent launch failed",
+      });
+      throw error;
+    }
     return null;
   },
 });
