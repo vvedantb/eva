@@ -105,6 +105,15 @@ async function readLegacyExecuting(
   userId: Id<"users">,
   entityId: ChatTurnEntityId,
 ): Promise<boolean | null> {
+  // Session chats are born on the durable turn model: no legacy fields.
+  const chatId = ctx.db.normalizeId("sessionChats", entityId);
+  if (chatId) {
+    const chat = await ctx.db.get(chatId);
+    if (!chat || !(await hasRepoAccess(ctx.db, chat.repoId, userId))) {
+      return null;
+    }
+    return false;
+  }
   const sessionId = ctx.db.normalizeId("sessions", entityId);
   if (sessionId) {
     const session = await ctx.db.get(sessionId);

@@ -62,6 +62,7 @@ function currentBranch(): string {
 /** Surfaces whose completion path both accepts and persists the shas. */
 const CHECKPOINTED_ENTITY_ID_FIELDS = new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId",
 ]);

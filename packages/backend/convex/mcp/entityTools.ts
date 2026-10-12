@@ -17,6 +17,7 @@ import {
   errorResult,
   mcpGetContext,
   mcpListUserRepos,
+  queueParentId,
   textResult,
   type McpCredentials,
 } from "./toolShared";
@@ -406,7 +407,12 @@ A message the chat dequeued in the same instant is already running and cannot be
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.mcpCancelQueuedMessages,
-          { clerkUserId, id: target.targetId, queuedMessageId, all },
+          {
+            clerkUserId,
+            id: queueParentId(target, credentials),
+            queuedMessageId,
+            all,
+          },
         );
 
         return textResult({

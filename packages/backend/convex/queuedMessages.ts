@@ -1,9 +1,25 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { aiModelValidator, queuedMessageFields } from "./validators";
 import { drainChatQueueQuietly } from "./_queues/helpers";
+import { findMainChat } from "./_sessionChats/helpers";
+import type { DatabaseReader } from "./_generated/server";
 
 const parentIdValidator = queuedMessageFields.parentId;
+type QueueParentId = Infer<typeof parentIdValidator>;
+
+/**
+ * A session's queue lives on its chats. A bare session id (an MCP caller
+ * naming the session) reads its Main chat's queue.
+ */
+async function resolveQueueParent(
+  db: DatabaseReader,
+  parentId: QueueParentId,
+): Promise<QueueParentId> {
+  const sessionId = db.normalizeId("sessions", parentId);
+  if (!sessionId) return parentId;
+  return (await findMainChat(db, sessionId))?._id ?? parentId;
+}
 
 const queuedMessageValidator = v.object({
   _id: v.id("queuedMessages"),
@@ -16,7 +32,8 @@ export const listByParent = authQuery({
   args: { parentId: parentIdValidator },
   returns: v.array(queuedMessageValidator),
   handler: async (ctx, args) => {
-    const parent = await ctx.db.get(args.parentId);
+    const parentId = await resolveQueueParent(ctx.db, args.parentId);
+    const parent = await ctx.db.get(parentId);
     if (!parent || !parent.repoId) {
       return [];
     }
@@ -25,7 +42,7 @@ export const listByParent = authQuery({
     }
     return await ctx.db
       .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", args.parentId))
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", parentId))
       .order("asc")
       .collect();
   },
@@ -112,7 +129,8 @@ export const switchCredential = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const parent = await ctx.db.get(args.parentId);
+    const parentId = await resolveQueueParent(ctx.db, args.parentId);
+    const parent = await ctx.db.get(parentId);
     if (!parent || !parent.repoId) {
       throw new Error("Queued message parent not found");
     }
@@ -122,7 +140,7 @@ export const switchCredential = authMutation({
 
     const queued = await ctx.db
       .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", args.parentId))
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", parentId))
       .collect();
     for (const message of queued) {
       await ctx.db.patch(message._id, {
@@ -130,7 +148,7 @@ export const switchCredential = authMutation({
         providerAccountId: args.providerAccountId,
       });
     }
-    await drainChatQueueQuietly(ctx, args.parentId);
+    await drainChatQueueQuietly(ctx, parentId);
     return null;
   },
 });
@@ -148,7 +166,8 @@ export const reorder = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const parent = await ctx.db.get(args.parentId);
+    const parentId = await resolveQueueParent(ctx.db, args.parentId);
+    const parent = await ctx.db.get(parentId);
     if (!parent || !parent.repoId) {
       throw new Error("Queued message parent not found");
     }
@@ -159,13 +178,13 @@ export const reorder = authMutation({
     let index = 0;
     for (const id of args.orderedIds) {
       const queuedMessage = await ctx.db.get(id);
-      if (!queuedMessage || queuedMessage.parentId !== args.parentId) {
+      if (!queuedMessage || queuedMessage.parentId !== parentId) {
         throw new Error("Queued message does not belong to this parent");
       }
       await ctx.db.patch(id, { order: index });
       index += 1;
     }
-    await ctx.db.patch(args.parentId, { updatedAt: Date.now() });
+    await ctx.db.patch(parentId, { updatedAt: Date.now() });
     return null;
   },
 });
