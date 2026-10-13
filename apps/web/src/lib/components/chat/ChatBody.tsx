@@ -13,6 +13,10 @@ import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
 import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
+import {
+  ChatEarlierTurnsLoader,
+  type TranscriptScrollAnchor,
+} from "@/lib/components/chat/_components/ChatEarlierTurnsLoader";
 import { useSeenOnce } from "@/lib/components/chat/useSeenOnce";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
@@ -26,7 +30,10 @@ import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
 import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
-import { collectThreadFindDocuments } from "@/lib/components/chat/threadFind";
+import {
+  collectThreadFindDocuments,
+  findThreadMatches,
+} from "@/lib/components/chat/threadFind";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
 import {
   canForkMessage,
@@ -53,7 +60,12 @@ import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
-import { useDeferredValue, useState, type ReactNode } from "react";
+import {
+  startTransition,
+  useDeferredValue,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
@@ -64,8 +76,8 @@ import {
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
-  buildJumpRailTicks,
   buildMessageHistory,
+  buildPrecedingUserTurns,
   findDayBoundaryIds,
   findNewMessageIds,
   type ChatParentId,
@@ -73,12 +85,13 @@ import {
   findLastUserMessageIndex,
   findLastAssistantMessageId,
   findStreamingTargetMessage,
-  findPrecedingUserTurn,
+  findTurnWindowStart,
   firstNameFromUser,
   isOtherUserChatMessage,
   otherUserIdsInChat,
   parsePendingQuestion,
   SANDBOX_CHAT_COPY,
+  TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
@@ -98,6 +111,22 @@ export type { ChatBodyMessage };
 export interface ChatSendOptions {
   draftContent?: string;
 }
+
+/**
+ * The rendered slice of a long transcript: it runs from `firstId` to the end.
+ * `key` is the chat it belongs to, so a reused shell starts a fresh window.
+ */
+interface TranscriptWindow {
+  key: string;
+  firstId: string | undefined;
+  /** Set by a scroll-up load: where to hold the reader once the rows mount. */
+  anchor?: TranscriptScrollAnchor;
+  /** Set by a jump to a turn that was not rendered: scroll there on mount. */
+  scrollTo?: { messageId: string };
+}
+
+/** Each jump scrolls once: later renders of its row must not scroll again. */
+const scrolledJumps = new WeakSet<{ messageId: string }>();
 
 /** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
 interface InlineCard {
@@ -459,9 +488,6 @@ function ChatBodyInner({
 
   const lastUserMessageIndex = findLastUserMessageIndex(displayMessages);
 
-  const jumpRailMessages = hideJumpRail
-    ? []
-    : buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
   const dayBoundaryIds = findDayBoundaryIds(displayMessages);
   const findDocuments = collectThreadFindDocuments(
@@ -504,6 +530,106 @@ function ChatBodyInner({
   // Seen state lives here, not in the divider: the pill is a sibling and needs
   // it. It is keyed by the boundary id, so a new boundary starts unseen.
   const newDivider = useSeenOnce(newBoundaryId);
+
+  // A long chat renders only its last TRANSCRIPT_TURN_WINDOW turns; older ones
+  // load as the reader scrolls up (ChatEarlierTurnsLoader). Committing every
+  // turn made opening a 450-message chat block for 1–2 s, and every row is
+  // work on each streamed token. The window is pinned to its first row and
+  // only grows: new turns append below it, so nothing above the reader ever
+  // unmounts mid-read. It also grows to hold the NEW divider, a jump-rail
+  // target and the first find match, which all need their row in the DOM.
+  const windowKey = chatParentId ?? conversationId;
+  const [transcriptWindow, setTranscriptWindow] = useState<TranscriptWindow>({
+    key: windowKey,
+    firstId: undefined,
+  });
+  const ownWindow =
+    transcriptWindow.key === windowKey ? transcriptWindow : undefined;
+  const pinnedIndex =
+    ownWindow?.firstId === undefined
+      ? -1
+      : displayMessages.findIndex(
+          (message) => message._id === ownWindow.firstId,
+        );
+  const newBoundaryIndex =
+    newBoundaryId === undefined
+      ? -1
+      : displayMessages.findIndex((message) => message._id === newBoundaryId);
+  // An unknown pin (an optimistic row that took its server id) falls back to
+  // the default window.
+  const baseWindowStart =
+    pinnedIndex >= 0
+      ? pinnedIndex
+      : findTurnWindowStart(displayMessages, TRANSCRIPT_TURN_WINDOW);
+  const windowStart =
+    newBoundaryIndex >= 0
+      ? Math.min(baseWindowStart, newBoundaryIndex)
+      : baseWindowStart;
+  const windowFirstId = displayMessages[windowStart]?._id;
+  // Pinning during render is React's "adjust state when a prop changes"
+  // pattern: it re-renders before commit, and settles once the pin matches.
+  if (windowFirstId !== undefined && ownWindow?.firstId !== windowFirstId) {
+    setTranscriptWindow({
+      ...ownWindow,
+      key: windowKey,
+      firstId: windowFirstId,
+    });
+  }
+
+  /** Grows the window up to `index`, when that row is above it. */
+  const extendWindowTo = (
+    index: number,
+    extra: Pick<TranscriptWindow, "anchor" | "scrollTo">,
+  ) => {
+    const firstId = displayMessages[index]?._id;
+    if (firstId === undefined || index >= windowStart) return;
+    setTranscriptWindow({ key: windowKey, firstId, ...extra });
+  };
+
+  const loadEarlierTurns = (anchor: TranscriptScrollAnchor | undefined) => {
+    // Transition priority: a batch of heavy turns must not freeze the scroll
+    // that asked for it.
+    startTransition(() => {
+      extendWindowTo(
+        findTurnWindowStart(
+          displayMessages,
+          TRANSCRIPT_TURN_WINDOW,
+          windowStart,
+        ),
+        { anchor },
+      );
+    });
+  };
+
+  // Rail ticks are user rows: the window starts at the tick's own turn.
+  const revealMessage = (messageId: string) => {
+    startTransition(() => {
+      extendWindowTo(
+        displayMessages.findIndex((message) => message._id === messageId),
+        { scrollTo: { messageId } },
+      );
+    });
+  };
+
+  // Urgent, in the bar's own input event: the rows must be in the DOM by the
+  // time the bar's deferred query paints and jumps, which counts DOM matches.
+  // Every match lies at or below the first one, so its turn is enough.
+  const revealFirstFindMatch = (query: string) => {
+    const first = findThreadMatches(findDocuments, query)[0];
+    if (!first) return;
+    const index = displayMessages.findIndex(
+      (message) => message._id === first.messageId,
+    );
+    if (index < 0) return;
+    extendWindowTo(findTurnWindowStart(displayMessages, 1, index + 1), {});
+  };
+
+  const scrollToJumpTarget = (node: HTMLDivElement | null) => {
+    const target = ownWindow?.scrollTo;
+    if (!node || !target || scrolledJumps.has(target)) return;
+    scrolledJumps.add(target);
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const jumpToNewDivider = () => {
     newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
     newDivider.markSeen();
@@ -635,6 +761,8 @@ function ChatBodyInner({
    * intrinsic-size estimate fits a chat turn, so the scroll height grew from
    * 19k to 36k px as the user scrolled up through them.)
    */
+  const precedingUserTurns = buildPrecedingUserTurns(displayMessages);
+
   const renderMessage = (message: ChatBodyMessage, isBacklog = false) => {
     const isStreamingTarget = message._id === streamingTargetId;
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
@@ -642,13 +770,18 @@ function ChatBodyInner({
       isOtherUser && message.userId
         ? firstNameByUserId.get(message.userId)
         : undefined;
-    const precedingUser =
-      message.role === "assistant"
-        ? findPrecedingUserTurn(displayMessages, message._id)
-        : undefined;
+    const precedingUser = precedingUserTurns.get(message._id);
 
     return (
-      <div key={message._id} className="flex flex-col gap-3">
+      <div
+        key={message._id}
+        ref={
+          ownWindow?.scrollTo?.messageId === message._id
+            ? scrollToJumpTarget
+            : undefined
+        }
+        className="flex flex-col gap-3"
+      >
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
         ) : null}
@@ -705,11 +838,17 @@ function ChatBodyInner({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-chat-pane="">
       {preConversationContent}
-      <ThreadFindBar documents={findDocuments} />
+      <ThreadFindBar
+        documents={findDocuments}
+        onQueryChange={revealFirstFindMatch}
+        scopeKey={windowFirstId}
+      />
       <Conversation className="flex-1 min-h-0">
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
-          scrollClassName="[container-type:size]"
+          // No native scroll anchoring: ChatEarlierTurnsLoader holds the
+          // reader's place itself, and two corrections would add up.
+          scrollClassName="[container-type:size] [overflow-anchor:none]"
         >
           {displayMessages.length === 0 ? (
             transcriptTail ? (
@@ -738,9 +877,17 @@ function ChatBodyInner({
             displayMessages.map((message) => renderMessage(message))
           ) : (
             <>
+              {backlogReady &&
+              (windowStart > 0 || ownWindow?.anchor !== undefined) ? (
+                <ChatEarlierTurnsLoader
+                  key={windowFirstId}
+                  anchor={ownWindow?.anchor}
+                  onReach={windowStart > 0 ? loadEarlierTurns : undefined}
+                />
+              ) : null}
               {backlogReady
                 ? displayMessages
-                    .slice(0, lastUserMessageIndex)
+                    .slice(windowStart, lastUserMessageIndex)
                     .map((message) => renderMessage(message, true))
                 : null}
               <ChatLastTurn>
@@ -767,7 +914,11 @@ function ChatBodyInner({
             array, so binding it before those rows exist would observe nothing
             and never retry. */}
         {backlogReady && !hideJumpRail ? (
-          <ChatJumpRail messages={jumpRailMessages} />
+          <ChatJumpRail
+            messages={displayMessages}
+            renderedFromId={windowFirstId}
+            onRevealMessage={revealMessage}
+          />
         ) : null}
         {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
