@@ -21,6 +21,7 @@ import {
 import {
   setupBranch,
   checkoutSessionBranch,
+  getUserCheckedOutBranch,
   createSandboxAndPrepareRepo,
   fetchBranchRefs,
   forcePushBranchToOrigin,
@@ -415,6 +416,15 @@ async function resumeReusedSandbox(
     owner: opts.repoOwner,
     name: opts.repoName,
   });
+  // Respect a branch the user switched to; only fresh sandboxes are forced
+  // onto the session branch (their disk never held the user's checkout).
+  const userBranch = await getUserCheckedOutBranch(handle, opts.branchName);
+  if (userBranch) {
+    logSession(
+      `resumeReusedSandbox keeping user branch ${userBranch} (session branch=${opts.branchName})`,
+    );
+    return;
+  }
   await checkoutSessionBranchWithRetry(
     handle,
     opts.branchName,

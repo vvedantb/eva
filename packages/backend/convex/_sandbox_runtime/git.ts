@@ -869,6 +869,39 @@ export async function recoverUnresolvedGitIndex(
   );
 }
 
+/**
+ * Returns the branch the user moved a reused sandbox to, or null when the
+ * resume should check out the session branch. A local session branch proves
+ * the startup checkout once ran, so being elsewhere was a deliberate switch;
+ * without it (the eva/65 failed-checkout shape) HEAD is just where setup left it.
+ */
+export async function getUserCheckedOutBranch(
+  sandbox: SandboxHandle,
+  branchName: string,
+): Promise<string | null> {
+  const workspaceDir = workspaceDirShell();
+  const quotedLocalHeadRef = quote([`refs/heads/${branchName}`]);
+  // One line, `<current>|<exists|missing>`: detached HEAD prints an empty
+  // current branch, which a newline-separated form would lose to trim().
+  const [currentBranch = "", localBranchState = ""] = (
+    await execGitCommand(
+      sandbox,
+      `cd ${workspaceDir} && echo "$(git branch --show-current)|$( (git show-ref --verify --quiet ${quotedLocalHeadRef} && echo exists) || echo missing)"`,
+      10,
+    )
+  )
+    .trim()
+    .split("|");
+  if (
+    currentBranch === "" ||
+    currentBranch === branchName ||
+    localBranchState !== "exists"
+  ) {
+    return null;
+  }
+  return currentBranch;
+}
+
 /** Checks out a session branch, creating it from a remote or base ref if needed. */
 export async function checkoutSessionBranch(
   sandbox: SandboxHandle,
