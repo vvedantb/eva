@@ -62,7 +62,7 @@ export function ChatEarlierTurnsLoader({
   anchor: TranscriptScrollAnchor | undefined;
   onReach: ((anchor: TranscriptScrollAnchor | undefined) => void) | undefined;
 }) {
-  const { scrollRef } = useStickToBottomContext();
+  const { scrollRef, state } = useStickToBottomContext();
 
   const observe = (node: HTMLDivElement | null) => {
     const viewport = scrollRef.current;
@@ -77,7 +77,24 @@ export function ChatEarlierTurnsLoader({
     if (!onReach) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
+        // A hidden transcript (a cached session shell) has a zero-size
+        // viewport, and IntersectionObserver counts a zero-area edge touch as
+        // intersecting. Without this, every switch away re-rendered the hidden
+        // chat, re-observed, and loaded 25 more turns into it.
+        const reached = entries.some(
+          (entry) =>
+            entry.isIntersecting && (entry.rootBounds?.height ?? 0) > 0,
+        );
+        if (!reached) return;
+        // Still locked to the bottom: nobody is reading up here. The marker
+        // only passes through view while stick-to-bottom springs down from
+        // where the backlog commit left the scroll — on open, and each time
+        // a cached session is shown again. Loading then added 25 turns per
+        // visit and froze the page for ~1 s each time. Scrolling up releases
+        // the lock; a chat too short to scroll still loads.
+        const canScroll =
+          viewport.scrollHeight - viewport.clientHeight > PRELOAD_MARGIN_PX;
+        if (canScroll && !state.escapedFromLock) return;
         observer.disconnect();
         onReach(captureAnchor(viewport));
       },

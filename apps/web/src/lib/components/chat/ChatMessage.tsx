@@ -288,7 +288,10 @@ export const ChatMessage = memo(function ChatMessage({
     message.content.trim().length > 0;
   /* wrap-anywhere: without it a long unbreakable token is silently clipped by
      MessageContent's overflow-hidden. */
-  const turnProse = <Markdown>{message.content}</Markdown>;
+  // Settled text: "static" skips Streamdown's streaming pass (repair of
+  // unclosed syntax plus a post-mount transition re-render), which on a long
+  // chat re-rendered every reply at once about two seconds after opening.
+  const turnProse = <Markdown mode="static">{message.content}</Markdown>;
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
