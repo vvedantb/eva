@@ -11,7 +11,7 @@ export interface ComposerElement {
 /**
  * Whether a composer is the one the user is actually looking at.
  *
- * Several composers stay mounted at once: the sessions layout keeps up to three
+ * Several composers stay mounted at once: the sessions layout keeps up to five
  * session shells alive under `display: none` / `aria-hidden`, and Manager Ave's
  * panel never unmounts. Anything listening on `document` (type-to-focus, the
  * chat shortcuts) therefore fires once per mounted composer unless it asks

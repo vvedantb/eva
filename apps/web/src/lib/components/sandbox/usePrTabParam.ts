@@ -1,6 +1,6 @@
 "use client";
 
-import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { canonicalReviewTab, type ReviewTab } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
@@ -29,18 +29,20 @@ function reviewSubPath(tab: ReviewTab, diffView: string): string {
  */
 export function usePrTabParam() {
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const search = useSearch({ strict: false });
-
-  const pathTab = prTabFromPathname(pathname);
-
-  const searchTabValue = "prTab" in search ? search.prTab : undefined;
-  const searchTab: ReviewTab | undefined =
-    typeof searchTabValue === "string"
-      ? canonicalReviewTab(searchTabValue)
-      : undefined;
-
-  const prTab = pathTab ?? searchTab;
+  const router = useRouter();
+  // Select the tab itself (a string), not the pathname/search: those change on
+  // every navigation and re-rendered each kept-alive Review panel with them.
+  const prTab = useRouterState({
+    select: (s): ReviewTab | undefined => {
+      const pathTab = prTabFromPathname(s.location.pathname);
+      if (pathTab !== undefined) return pathTab;
+      const search = s.location.search;
+      const searchTabValue = "prTab" in search ? search.prTab : undefined;
+      return typeof searchTabValue === "string"
+        ? canonicalReviewTab(searchTabValue)
+        : undefined;
+    },
+  });
 
   /**
    * Switches tab. `pr` also picks which of the chat's pull requests the tabs
@@ -49,7 +51,9 @@ export function usePrTabParam() {
    */
   const setPrTab = (tab: ReviewTab, pr?: string) => {
     const withPr = pr === undefined ? {} : { pr };
-    if (pathTab !== undefined) {
+    // Read at call time so this handler stays stable across navigations.
+    const pathname = router.state.location.pathname;
+    if (prTabFromPathname(pathname) !== undefined) {
       const reviewBase = pathname.replace(/\/review\/.*$/, "/review");
       const viewMatch = pathname.match(/\/review\/diffs\/(unified|split)/);
       const view = viewMatch?.[1] ?? "unified";
