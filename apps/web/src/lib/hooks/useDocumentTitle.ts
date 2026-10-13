@@ -124,7 +124,7 @@ export function useDocumentTitle() {
  * on unmount. `document.title` is external state no React tree owns, which is
  * why the effect lives here rather than being pushed into render.
  *
- * `enabled` exists because up to three session shells stay mounted (hidden) at
+ * `enabled` exists because up to five session shells stay mounted (hidden) at
  * once — see `sessions/route.tsx`. Only the one matching the URL may publish,
  * or a background session would name the tab.
  */

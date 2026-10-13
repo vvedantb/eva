@@ -882,7 +882,13 @@ function ChatBodyInner({
                 <ChatEarlierTurnsLoader
                   key={windowFirstId}
                   anchor={ownWindow?.anchor}
-                  onReach={windowStart > 0 ? loadEarlierTurns : undefined}
+                  // Only the chat on screen grows its window: a hidden cached
+                  // shell has no reader scrolling up.
+                  onReach={
+                    windowStart > 0 && isRouteActive
+                      ? loadEarlierTurns
+                      : undefined
+                  }
                 />
               ) : null}
               {backlogReady

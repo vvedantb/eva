@@ -1,6 +1,6 @@
 "use client";
 
-import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { isDiffView, type DiffView } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
@@ -13,23 +13,25 @@ const DIFF_VIEW_PATH = /\/review\/diffs\/(unified|split)\/?$/;
  */
 export function useDiffSearchParams() {
   const navigate = useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const search = useSearch({ strict: false });
-
-  const diffFileValue = "diffFile" in search ? search.diffFile : undefined;
-  const diffFile = typeof diffFileValue === "string" ? diffFileValue : "";
-
-  const pathMatch = pathname.match(DIFF_VIEW_PATH);
-  const pathView: DiffView | undefined =
-    pathMatch !== null && isDiffView(pathMatch[1]) ? pathMatch[1] : undefined;
-
-  const searchViewValue = "diffView" in search ? search.diffView : undefined;
-  const searchView: DiffView | undefined =
-    typeof searchViewValue === "string" && isDiffView(searchViewValue)
-      ? searchViewValue
-      : undefined;
-
-  const diffView: DiffView = pathView ?? searchView ?? "unified";
+  const router = useRouter();
+  // Primitive selections: the whole pathname/search object changes on every
+  // navigation, which re-rendered each kept-alive diff consumer with it.
+  const diffFile = useRouterState({
+    select: (s) => {
+      const search = s.location.search;
+      const value = "diffFile" in search ? search.diffFile : undefined;
+      return typeof value === "string" ? value : "";
+    },
+  });
+  const diffView = useRouterState({
+    select: (s): DiffView => {
+      const pathMatch = s.location.pathname.match(DIFF_VIEW_PATH);
+      if (pathMatch !== null && isDiffView(pathMatch[1])) return pathMatch[1];
+      const search = s.location.search;
+      const value = "diffView" in search ? search.diffView : undefined;
+      return typeof value === "string" && isDiffView(value) ? value : "unified";
+    },
+  });
 
   const setDiffFile = (path: string) => {
     void navigate({
@@ -40,7 +42,9 @@ export function useDiffSearchParams() {
   };
 
   const setDiffView = (view: DiffView) => {
-    if (pathMatch !== null) {
+    // Read at call time so this handler stays stable across navigations.
+    const pathname = router.state.location.pathname;
+    if (DIFF_VIEW_PATH.test(pathname)) {
       const nextPath = pathname.replace(
         DIFF_VIEW_PATH,
         `/review/diffs/${view}`,

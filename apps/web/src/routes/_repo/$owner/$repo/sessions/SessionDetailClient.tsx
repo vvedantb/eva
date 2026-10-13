@@ -99,7 +99,7 @@ export function SessionDetailClient({
     api.streaming.get,
     isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
   );
-  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
+  // Names the browser tab. Gated on `isRouteActive`: up to five session shells
   // stay mounted at once, and a hidden one must not title the tab.
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
@@ -243,12 +243,11 @@ export function SessionDetailClient({
   const handleCreateChat = async () => {
     if (isCreatingChat) return;
     setIsCreatingChat(true);
+    // Built above the `try`: a conditional inside it trips the compiler lint.
+    const createArgs = { sessionId, ...(chatId ? { fromChatId: chatId } : {}) };
     try {
       const created = await withMutationToast(
-        createChat({
-          sessionId,
-          ...(chatId ? { fromChatId: chatId } : {}),
-        }),
+        createChat(createArgs),
         "New chat opened",
         "Couldn't open a new chat",
         "session-chat-create",
