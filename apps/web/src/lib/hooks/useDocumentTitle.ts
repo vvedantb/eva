@@ -17,6 +17,9 @@ const FALLBACK_TITLE = "Eva - Your New Coworker";
 // that number to document-level state). Both are read through
 // `useSyncExternalStore` so a publish re-renders only the title hook.
 let entityTitle: string | null = null;
+// Which publisher owns `entityTitle`, so a late cleanup cannot clear a title
+// that a newer publisher already set (see `useEntityDocumentTitle`).
+let entityOwner: object | null = null;
 let unreadCount = 0;
 const listeners = new Set<() => void>();
 
@@ -39,12 +42,8 @@ function readUnreadCount(): number {
   return unreadCount;
 }
 
-/**
- * Names the entity the user has open (session, project, task, doc, PR,
- * automation). Pass `null` to clear. Prefer {@link useEntityDocumentTitle},
- * which clears on unmount for you.
- */
-export function setEntityDocumentTitle(title: string | null) {
+function setEntityTitle(title: string | null, owner: object | null) {
+  entityOwner = owner;
   if (entityTitle === title) return;
   entityTitle = title;
   notify();
@@ -127,6 +126,10 @@ export function useDocumentTitle() {
  * `enabled` exists because up to five session shells stay mounted (hidden) at
  * once — see `sessions/route.tsx`. Only the one matching the URL may publish,
  * or a background session would name the tab.
+ *
+ * Cleanup clears only the title this effect set. Publishers do not hand over
+ * in one commit: a session shell turns inactive one deferred render after the
+ * next shell turns active, so an unconditional clear would blank the new title.
  */
 export function useEntityDocumentTitle(
   title: string | null | undefined,
@@ -134,9 +137,10 @@ export function useEntityDocumentTitle(
 ) {
   useEffect(() => {
     if (!enabled || title === null || title === undefined) return;
-    setEntityDocumentTitle(title);
+    const owner = {};
+    setEntityTitle(title, owner);
     return () => {
-      setEntityDocumentTitle(null);
+      if (entityOwner === owner) setEntityTitle(null, null);
     };
   }, [title, enabled]);
 }
