@@ -914,11 +914,8 @@ async function prepareSessionSandboxInternal(
                 shouldAbort: () => sessionStopRequested(ctx, args.sessionId),
               }),
           );
-          await runLoggedSessionStep(
-            "reuseSessionSandbox.setupBranch",
-            sandboxDetails,
-            () => setupBranch(handle, args.branchName, args.baseBranch),
-          );
+          // No setupBranch here: resumeReusedSandbox already owns the branch
+          // step, and a `checkout -B` would undo a branch the user switched to.
           await runLoggedSessionStep(
             "reuseSessionSandbox.copyConfigFiles",
             sandboxDetails,
