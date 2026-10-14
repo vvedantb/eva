@@ -10,6 +10,10 @@ import { useStickToBottomContext } from "use-stick-to-bottom";
 import { cn, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
+import {
+  buildJumpRailTicks,
+  type ChatBodyMessage,
+} from "@/lib/components/chat/chatBodyUtils";
 
 /** Matches t3code `TIMELINE_MINIMAP_ITEM_SPACING` — compact rail, not full-height. */
 const ITEM_SPACING_PX = 8;
@@ -17,15 +21,16 @@ const MIN_VISIBLE_TICKS = 2;
 /** `dvh`, not `vh` — mobile browser chrome makes `100vh` taller than the visible area. */
 const MAX_HEIGHT_CSS = "calc(100dvh - 18rem)";
 
-interface ChatJumpRailMessage {
-  id: string;
-  content: string;
-  /** Plain-text preview of the assistant reply that follows this user turn. */
-  reply?: string;
-}
-
 interface ChatJumpRailProps {
-  messages: ChatJumpRailMessage[];
+  /** The whole transcript — ticks cover every user turn, rendered or not. */
+  messages: ChatBodyMessage[];
+  /**
+   * First row the transcript renders. The rail only observes rendered rows, so
+   * a window that grows upwards has to re-observe.
+   */
+  renderedFromId: string | undefined;
+  /** Renders an older turn that is outside the transcript window, then scrolls to it. */
+  onRevealMessage: (messageId: string) => void;
 }
 
 interface Tick {
@@ -71,16 +76,24 @@ function resolveIndexFromPointer(input: {
  * (one per user message). Hover scrubbing shows a floating preview of the user
  * turn + assistant reply; click jumps to that message. Must render inside
  * `<Conversation>` (StickToBottom) so it can read the shared scroll viewport
- * and resolve `[data-message-id]` targets within it.
+ * and resolve `[data-message-id]` targets within it. Turns above the rendered
+ * window have no row yet; jumping to one asks the transcript to render it.
  */
-export function ChatJumpRail({ messages }: ChatJumpRailProps) {
-  const { scrollRef } = useStickToBottomContext();
+export function ChatJumpRail({
+  messages,
+  renderedFromId,
+  onRevealMessage,
+}: ChatJumpRailProps) {
+  const { scrollRef, stopScroll } = useStickToBottomContext();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [inViewIds, setInViewIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
 
-  const ticks: Tick[] = messages.map((message) => {
+  // Built here from the transcript, not handed in: `messages` keeps its
+  // identity while a turn streams, so the compiler keeps `ticks` too and the
+  // observer below is not rebuilt on every token.
+  const ticks: Tick[] = buildJumpRailTicks(messages).map((message) => {
     const userText = toPreview(message.content);
     const assistantText = message.reply ? toPreview(message.reply) : "";
     return {
@@ -92,7 +105,14 @@ export function ChatJumpRail({ messages }: ChatJumpRailProps) {
 
   useEffect(() => {
     const viewport = scrollRef.current;
-    if (!viewport || ticks.length < MIN_VISIBLE_TICKS) return;
+    // Re-runs when the window grows upwards: the new rows need observing too.
+    if (
+      !viewport ||
+      renderedFromId === undefined ||
+      ticks.length < MIN_VISIBLE_TICKS
+    ) {
+      return;
+    }
 
     const targets = ticks
       .map((tick) =>
@@ -117,14 +137,21 @@ export function ChatJumpRail({ messages }: ChatJumpRailProps) {
 
     for (const target of targets) observer.observe(target);
     return () => observer.disconnect();
-  }, [scrollRef, ticks]);
+  }, [scrollRef, ticks, renderedFromId]);
 
   const scrollToTick = (id: string) => {
     const viewport = scrollRef.current;
     const target = viewport?.querySelector<HTMLElement>(
       `[data-message-id="${id}"]`,
     );
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    // Rendering the older turns grows the content; a reader still stuck to the
+    // bottom would be pulled back down to it instead of reaching the turn.
+    stopScroll();
+    onRevealMessage(id);
   };
 
   const resolveHoverIndexFromPointer = (event: MouseEvent<HTMLElement>) => {

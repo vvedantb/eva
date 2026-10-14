@@ -31,6 +31,7 @@ import {
   useSourceDocuments,
 } from "@/lib/components/docs/SessionDocumentsPanel";
 import { FilesPanel } from "./FilesPanel";
+import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
@@ -273,12 +274,9 @@ export function SandboxPanel({
       }
     >
       <div className="h-full overflow-hidden">
-        <div
-          className={
-            activeTab === "prd"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        <KeepAlivePane
+          active={activeTab === "prd"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           {planContent ? (
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
@@ -326,13 +324,10 @@ export function SandboxPanel({
               </div>
             </div>
           )}
-        </div>
-        <div
-          className={
-            activeTab === "designs"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={activeTab === "designs"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <DesignVariationsPanel
             previewUrl={previewUrl}
@@ -346,29 +341,22 @@ export function SandboxPanel({
               void seedChatDraft(designVariationPrompt(letter, label));
             }}
           />
-        </div>
-        <div
-          className={
-            activeTab === "artifacts"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={activeTab === "artifacts"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <SessionArtifactsPanel source={artifactSource} />
-        </div>
-        <div
-          className={
-            activeTab === "documents"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={activeTab === "documents"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <SessionDocumentsPanel source={artifactSource} />
-        </div>
-        <div
-          className={
-            !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={!simpleView && activeTab === "files"}
+          className="h-full min-h-0"
         >
           <FilesPanel
             sandboxId={sandboxId}
@@ -380,18 +368,17 @@ export function SandboxPanel({
             activeRoot={filesRoot}
             onRootChange={setFilesRoot}
           />
-        </div>
-        <div
-          className={
-            !simpleView && activeTab === "agents" ? "h-full min-h-0" : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={!simpleView && activeTab === "agents"}
+          className="h-full min-h-0"
         >
           <SandboxAgentsPanel
             entity={{ kind: "session", sessionId, chatId }}
             agents={agents}
             isReadOnly={isArchived === true}
           />
-        </div>
+        </KeepAlivePane>
         <SandboxPaneSlots
           activeTab={activeTab}
           panes={panes}

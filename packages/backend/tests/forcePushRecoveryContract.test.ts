@@ -93,7 +93,7 @@ describe("the automatic publish only replaces the sandbox's own old history", ()
   );
   const push = functionBody(
     sandboxGit,
-    "export async function pushBranchToOrigin(",
+    "async function publishCheckedOutBranch(",
   );
 
   test("the replace is offered only when the remote tip is in the local reflog, and only for eva/ branches", () => {

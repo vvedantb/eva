@@ -139,6 +139,8 @@ export function MarkdownMentionText({
 
   return (
     <Markdown
+      // Sent messages are complete text; see `turnProse` in ChatMessage.
+      mode="static"
       className={className}
       remarkPlugins={REMARK_PLUGINS}
       components={{

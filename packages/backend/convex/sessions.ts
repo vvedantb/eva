@@ -46,8 +46,6 @@ export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 export {
   getForkSource,
   createForkedSession,
-  copyForkMessages,
-  copyForkCards,
   settleForkSource,
 } from "./_sessions/fork";
 

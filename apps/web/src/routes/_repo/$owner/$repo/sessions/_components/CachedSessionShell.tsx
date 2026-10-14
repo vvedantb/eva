@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
 import { chatParser } from "@/lib/search-params";
@@ -64,6 +64,13 @@ function CachedSessionShellInner({
   const simpleView = useSimpleView();
   const session = useSessionByNumId(numId, repoId);
   const urlSandboxTab = useSessionRouteSandboxTab();
+  // What the session tree is told. Turning active is immediate; turning
+  // inactive is deferred, so the shell being hidden (already `display: none`
+  // via the parent) re-renders after the next session paints instead of in the
+  // same blocking commit. URL-following logic below keeps the live
+  // `isActiveRoute`, so a lagging shell never adopts the new session's URL.
+  const deferredActive = useDeferredValue(isActiveRoute);
+  const isTreeActive = isActiveRoute || deferredActive;
   const [sandboxTab, setSandboxTab] = useState(urlSandboxTab);
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
@@ -78,14 +85,23 @@ function CachedSessionShellInner({
   // `?chat=N` picks the chat tab. Frozen the same way as the sandbox tab:
   // only the visible shell follows the URL, so a hidden session keeps the
   // chat it was left on. Render-phase sync, like the layout's cache promotion.
-  const [urlChat, setUrlChat] = useQueryState("chat", chatParser);
+  const [urlChat] = useQueryState("chat", chatParser);
   const [chatNumber, setChatNumber] = useState(urlChat);
   if (isActiveRoute && chatNumber !== urlChat) {
     setChatNumber(urlChat);
   }
+  // Written through the (stable) router, not the nuqs setter: that setter
+  // changes identity on every navigation, and this handler is a prop of the
+  // whole session tree, so it re-rendered every cached shell on each switch.
   const onChatChange = (number: number | null) => {
-    // Main is the absent param, so plain session links keep opening Main.
-    void setUrlChat(number === null || number === 1 ? null : number);
+    void navigate({
+      to: ".",
+      // Main is the absent param, so plain session links keep opening Main.
+      search: (prev) => ({
+        ...prev,
+        chat: number === null || number === 1 ? undefined : number,
+      }),
+    });
   };
 
   // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
@@ -162,7 +178,7 @@ function CachedSessionShellInner({
             onSandboxTabChange={onSandboxTabChange}
             onOpenFile={openFile}
             onViewDiff={simpleView ? undefined : openDiffs}
-            isRouteActive={isActiveRoute}
+            isRouteActive={isTreeActive}
           />
         )}
       </EntityNumIdGate>

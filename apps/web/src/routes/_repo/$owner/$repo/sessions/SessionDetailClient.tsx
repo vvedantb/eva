@@ -16,7 +16,6 @@ import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewComme
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
 import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
-import { isSessionPrReadOnly } from "./_utils/sessionReadOnly";
 import {
   catchMutationError,
   withMutationToast,
@@ -99,7 +98,7 @@ export function SessionDetailClient({
     api.streaming.get,
     isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
   );
-  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
+  // Names the browser tab. Gated on `isRouteActive`: up to five session shells
   // stay mounted at once, and a hidden one must not title the tab.
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
@@ -137,7 +136,7 @@ export function SessionDetailClient({
   // re-fired this on every patch to the doc (status flips, updatedAt, PR
   // state…), and a burst of prewarms can race the server's alive-check into
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
-  const sessionPrState = session?.prState;
+  const sessionArchived = session?.archived === true;
   /* eslint-disable no-effect/no-event-handler --
      Prewarms the sandbox daemon for the session the route landed on; the
      trigger is navigation plus server-side status, not a click. */
@@ -146,38 +145,39 @@ export function SessionDetailClient({
     if (!isRouteActive) return;
     if (!sandboxId || !chatId) return;
     if (sandboxStatus === "closed" || sandboxStatus === "stopping") return;
-    // Don't prewarm (which resumes the VM) when the PR is already terminal —
-    // auto-stop below owns teardown for merged/closed sessions.
-    if (isSessionPrReadOnly(sessionPrState)) return;
+    // Don't prewarm (which resumes the VM) an archived session — auto-stop
+    // below owns its teardown.
+    if (sessionArchived) return;
     void prewarmDaemon({ chatId });
   }, [
     isRouteActive,
     chatId,
     sandboxId,
     sandboxStatus,
-    sessionPrState,
+    sessionArchived,
     prewarmDaemon,
   ]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Recover sandboxes left running after a PR merge/close (webhook may have
-  // only patched prState before auto-stop existed, or the stop raced).
-  const prAutoStopKey = useRef<string | null>(null);
+  // Recover sandboxes left running in an archived session (the archive's own
+  // stop may have raced). A merged PR the owner kept live (Disable
+  // auto-archive) is not archived, so its sandbox stays up.
+  const archiveAutoStopKey = useRef<string | null>(null);
   /* eslint-disable no-effect/no-event-handler --
-     The PR closing is a GitHub webhook landing in Convex, so the teardown has
+     The auto-archive is a GitHub webhook landing in Convex, so the teardown has
      to follow the live query. The key ref keeps it to one call per state. */
   useEffect(() => {
     if (session === null || session === undefined) return;
-    if (!isSessionPrReadOnly(session.prState)) {
-      prAutoStopKey.current = null;
+    if (session.archived !== true) {
+      archiveAutoStopKey.current = null;
       return;
     }
     if (session.status !== "active" && session.status !== "starting") {
       return;
     }
-    const key = `${sessionId}:${session.prState}:${session.status}`;
-    if (prAutoStopKey.current === key) return;
-    prAutoStopKey.current = key;
+    const key = `${sessionId}:${session.status}`;
+    if (archiveAutoStopKey.current === key) return;
+    archiveAutoStopKey.current = key;
     void stopSandboxMutation({ sessionId });
   }, [session, sessionId, stopSandboxMutation]);
   /* eslint-enable no-effect/no-event-handler */
@@ -243,12 +243,11 @@ export function SessionDetailClient({
   const handleCreateChat = async () => {
     if (isCreatingChat) return;
     setIsCreatingChat(true);
+    // Built above the `try`: a conditional inside it trips the compiler lint.
+    const createArgs = { sessionId, ...(chatId ? { fromChatId: chatId } : {}) };
     try {
       const created = await withMutationToast(
-        createChat({
-          sessionId,
-          ...(chatId ? { fromChatId: chatId } : {}),
-        }),
+        createChat(createArgs),
         "New chat opened",
         "Couldn't open a new chat",
         "session-chat-create",
@@ -298,9 +297,9 @@ export function SessionDetailClient({
   }
 
   const isSandboxActive = session.status === "active";
+  // `archived` is the one lock: a merged/closed PR locks the session only
+  // through auto-archive, which the owner can turn off.
   const isArchived = session.archived === true;
-  // Archive + PR terminal states share the same UI gates; PR reopen clears lock.
-  const isReadOnly = isArchived || isSessionPrReadOnly(session.prState);
 
   const chatPanel = (sandboxCollapsed?: boolean) => (
     <ChatPanel
@@ -334,7 +333,7 @@ export function SessionDetailClient({
       isSandboxStopping={isSandboxStopping || isStopPending}
       onSandboxToggle={handleSandboxToggle}
       isArchived={isArchived}
-      isReadOnly={isReadOnly}
+      isReadOnly={isArchived}
       deploymentStatus={session.deploymentStatus}
       sandboxCollapsed={sandboxCollapsed}
       isRouteActive={isRouteActive}
@@ -385,12 +384,12 @@ export function SessionDetailClient({
                       messages={messages ?? []}
                       backgroundAgents={activeChat.backgroundAgents}
                       streamingActivity={streaming?.currentActivity}
-                      isArchived={isReadOnly}
+                      isArchived={isArchived}
                       activeTab={activeSandboxTab}
                       onTabChange={onSandboxTabChange}
                       agentBrowsingAt={session.agentBrowsingAt}
                       onStartSandbox={
-                        isReadOnly || isSandboxStopping || isStopPending
+                        isArchived || isSandboxStopping || isStopPending
                           ? undefined
                           : () => {
                               void handleSandboxToggle("start");
@@ -401,7 +400,7 @@ export function SessionDetailClient({
                         session.status === "closed" &&
                         session.sandboxId !== undefined &&
                         session.sandboxError === undefined &&
-                        !isReadOnly
+                        !isArchived
                       }
                       collapsed={rightPanelCollapsed}
                       onToggle={onToggleRightPanel}

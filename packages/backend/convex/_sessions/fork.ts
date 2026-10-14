@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
-import { internalMutation, type MutationCtx } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 import {
   getSessionWithAccess,
   internalAuthMutation,
@@ -8,21 +7,9 @@ import {
 } from "../functions";
 import { sessionStatusValidator } from "../validators";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
-import { ensureMainChat, findMainChat } from "../_sessionChats/helpers";
+import { findMainChat } from "../_sessionChats/helpers";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
-
-/**
- * Messages copied per mutation. `activityLog` can run to tens of KB a row, so
- * a page stays well under the transaction write limit.
- */
-const FORK_COPY_PAGE = 40;
-
-/** A copied message: the source row id and its copy in the fork. */
-const forkMessagePairValidator = v.object({
-  from: v.id("messages"),
-  to: v.id("messages"),
-});
 
 /** What `forkSession` needs to know about the source before touching its sandbox. */
 export const getForkSource = internalAuthQuery({
@@ -73,9 +60,9 @@ export const getForkSource = internalAuthQuery({
  * was ever pushed, or the branch was deleted after its PR merged — and the
  * fork then uses the source's own base, the only valid PR base left.
  *
- * The transcript is copied afterwards by `copyForkMessages` pages, so the
- * fork never carries a first message of its own: the forked disk already
- * holds the agent's persisted conversation, which its first turn resumes.
+ * The transcript is not copied: the forked disk already holds the agent's
+ * persisted conversation, which the fork's first turn resumes. The fork's
+ * Main chat opens with one "Forked from" system alert instead.
  */
 export const createForkedSession = internalAuthMutation({
   args: {
@@ -133,141 +120,19 @@ export const createForkedSession = internalAuthMutation({
         ? { lastInteractionMode: source.lastInteractionMode }
         : {}),
     });
+    const mainChat = await findMainChat(ctx.db, sessionId);
+    if (!mainChat) throw new Error("Fork main chat not found");
+    await ctx.db.insert("messages", {
+      parentId: mainChat._id,
+      role: "assistant",
+      content:
+        source.numId === undefined
+          ? `Forked from ${source.title}`
+          : `Forked from session #${source.numId} · ${source.title}`,
+      timestamp: Date.now(),
+      isSystemAlert: true,
+    });
     return { sessionId, numId };
-  },
-});
-
-/**
- * The Main chats a fork copies between. Only Main is copied: the forked disk
- * holds Main's persisted conversation (its `claudePersistenceSeed`), and
- * parallel chats are separate threads. `ensureMainChat` also moves a legacy
- * source's session-keyed rows onto its Main chat before the copy reads them.
- */
-async function forkMainChats(
-  ctx: MutationCtx,
-  args: { sourceSessionId: Id<"sessions">; sessionId: Id<"sessions"> },
-): Promise<{ from: Id<"sessionChats">; to: Id<"sessionChats"> }> {
-  const source = await ctx.db.get(args.sourceSessionId);
-  const fork = await ctx.db.get(args.sessionId);
-  if (!source || !fork) throw new Error("Session not found");
-  const from = await ensureMainChat(ctx, source);
-  const to = await ensureMainChat(ctx, fork);
-  return { from: from._id, to: to._id };
-}
-
-/**
- * Copies one page of the source transcript into the fork, in order. Rows copy
- * verbatim — `model` checkpoints stay truthful because the forked disk holds
- * the agent's thread, `afterSha` checkpoints exist in the forked git, storage
- * ids are safe to share because nothing deletes message media — except:
- * - `clientId`, the optimistic-update key, so a copy never matches a pending
- *   local row;
- * - `pendingQuestion`, a live round-trip that ended with the source's turn.
- */
-export const copyForkMessages = internalMutation({
-  args: {
-    sourceSessionId: v.id("sessions"),
-    sessionId: v.id("sessions"),
-    cursor: v.union(v.string(), v.null()),
-    numItems: v.optional(v.number()),
-  },
-  returns: v.object({
-    cursor: v.union(v.string(), v.null()),
-    pairs: v.array(forkMessagePairValidator),
-  }),
-  handler: async (ctx, args) => {
-    const chats = await forkMainChats(ctx, args);
-    const page = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chats.from))
-      .paginate({
-        cursor: args.cursor,
-        numItems: args.numItems ?? FORK_COPY_PAGE,
-      });
-    const pairs: Array<{ from: Id<"messages">; to: Id<"messages"> }> = [];
-    for (const message of page.page) {
-      const {
-        _id,
-        _creationTime,
-        clientId: _clientId,
-        pendingQuestion: _pendingQuestion,
-        ...fields
-      } = message;
-      const to = await ctx.db.insert("messages", {
-        ...fields,
-        parentId: chats.to,
-      });
-      pairs.push({ from: _id, to });
-    }
-    return { cursor: page.isDone ? null : page.continueCursor, pairs };
-  },
-});
-
-/**
- * Copies the cards anchored to messages — plan cards, `render_ui` panels and
- * `render_html` pages (whose body row is shared, not copied) —
- * once every message page is in, so their `messageId` can point at the copy.
- * Turn and implementation links are the source's and are dropped.
- */
-export const copyForkCards = internalMutation({
-  args: {
-    sourceSessionId: v.id("sessions"),
-    sessionId: v.id("sessions"),
-    pairs: v.array(forkMessagePairValidator),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const chats = await forkMainChats(ctx, args);
-    const copies = new Map(args.pairs.map((pair) => [pair.from, pair.to]));
-    const remap = (messageId: Id<"messages"> | undefined) =>
-      messageId === undefined ? undefined : copies.get(messageId);
-    const plans = await ctx.db
-      .query("proposedPlans")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sourceSessionId))
-      .collect();
-    for (const plan of plans) {
-      const {
-        _id,
-        _creationTime,
-        turnId: _turnId,
-        implementationSessionId: _implementationSessionId,
-        messageId,
-        ...fields
-      } = plan;
-      const copy = remap(messageId);
-      await ctx.db.insert("proposedPlans", {
-        ...fields,
-        sessionId: args.sessionId,
-        ...(copy ? { messageId: copy } : {}),
-      });
-    }
-    const panels = await ctx.db
-      .query("chatUiPanels")
-      .withIndex("by_parent", (q) => q.eq("parentId", chats.from))
-      .collect();
-    for (const panel of panels) {
-      const { _id, _creationTime, messageId, ...fields } = panel;
-      const copy = remap(messageId);
-      await ctx.db.insert("chatUiPanels", {
-        ...fields,
-        parentId: chats.to,
-        ...(copy ? { messageId: copy } : {}),
-      });
-    }
-    const renders = await ctx.db
-      .query("chatHtmlRenders")
-      .withIndex("by_parent", (q) => q.eq("parentId", chats.from))
-      .collect();
-    for (const render of renders) {
-      const { _id, _creationTime, messageId, ...fields } = render;
-      const copy = remap(messageId);
-      await ctx.db.insert("chatHtmlRenders", {
-        ...fields,
-        parentId: chats.to,
-        ...(copy ? { messageId: copy } : {}),
-      });
-    }
-    return null;
   },
 });
 

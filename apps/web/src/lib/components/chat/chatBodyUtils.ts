@@ -473,24 +473,53 @@ export function findLastAssistantMessageId(
 }
 
 /**
- * Model / account snapshot for an assistant row: walks back to the preceding
- * user turn (where send/dequeue stores model + credentialSourceLabel).
+ * Model / account snapshot for each assistant row: the user turn directly
+ * before it (where send/dequeue stores model + credentialSourceLabel), skipping
+ * system alerts. An assistant row that follows another assistant row has none.
+ *
+ * One pass for the whole transcript — looking each row up separately was
+ * O(n²), and it re-ran on every streamed token.
  */
-export function findPrecedingUserTurn(
-  messages: ReadonlyArray<ChatBodyMessage>,
-  assistantMessageId: string,
-): ChatBodyMessage | undefined {
-  const index = messages.findIndex(
-    (message) => message._id === assistantMessageId,
-  );
-  if (index < 0) return undefined;
-  for (let i = index - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.isSystemAlert) continue;
-    if (message.role === "user") return message;
-    if (message.role === "assistant") return undefined;
+export function buildPrecedingUserTurns<
+  T extends Pick<ChatBodyMessage, "_id" | "role" | "isSystemAlert">,
+>(messages: ReadonlyArray<T>): Map<string, T> {
+  const byAssistantId = new Map<string, T>();
+  let previous: T | undefined;
+  for (const message of messages) {
+    if (message.isSystemAlert) continue;
+    if (message.role === "assistant" && previous?.role === "user") {
+      byAssistantId.set(message._id, previous);
+    }
+    previous = message;
   }
-  return undefined;
+  return byAssistantId;
+}
+
+/** User turns a chat renders when it opens; older turns load on scroll. */
+export const TRANSCRIPT_TURN_WINDOW = 25;
+
+/**
+ * Index of the row that starts the window of `turns` user turns ending before
+ * `endIndex`. Zero when no older turn is left, so the window then covers the
+ * whole transcript, including any rows before the first user turn.
+ */
+export function findTurnWindowStart(
+  messages: ReadonlyArray<Pick<ChatBodyMessage, "role" | "isSystemAlert">>,
+  turns: number,
+  endIndex: number = messages.length,
+): number {
+  let seen = 0;
+  let start = 0;
+  for (let i = endIndex - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "user" || message.isSystemAlert) continue;
+    // One turn past the window means older turns exist: start at the window's
+    // first user row. Otherwise the window runs to the top.
+    if (seen === turns) return start;
+    seen++;
+    start = i;
+  }
+  return 0;
 }
 
 /**

@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
 import { CachedSessionShell } from "./_components/CachedSessionShell";
 
 /** Cap mounted session shells so Preview iframes / PTYs stay bounded. */
-const MAX_CACHED_SESSIONS = 3;
+const MAX_CACHED_SESSIONS = 5;
 
 /**
  * One cached shell's identity. Repo is captured at cache time because bare

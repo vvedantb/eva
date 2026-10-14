@@ -296,7 +296,7 @@ describe("an empty turn publishes nothing", () => {
   test("the push gates on commits origin lacks, not a dirty tree", () => {
     const body = functionBody(
       sandboxGit,
-      "export async function pushBranchToOrigin(",
+      "async function publishCheckedOutBranch(",
     );
     const gateAt = body.indexOf(
       "git rev-list --count HEAD --not ${exclusion}",
@@ -351,7 +351,7 @@ describe("session branch publication reconciles concurrent remote work", () => {
 
     const push = functionBody(
       sandboxGit,
-      "export async function pushBranchToOrigin(",
+      "async function publishCheckedOutBranch(",
     );
     const syncAt = push.indexOf("synchronizeBranchForPublish(");
     const gateAt = push.indexOf("git rev-list --count HEAD --not");
@@ -418,7 +418,20 @@ describe("a turn that pushed nothing opens no pull request", () => {
   const PR_STEP = /internal\.[A-Za-z_.]*(?:PullRequest|SessionPr)[A-Za-z]*/;
 
   const pushBody = () =>
-    functionBody(sandboxGit, "export async function pushBranchToOrigin(");
+    functionBody(sandboxGit, "async function publishCheckedOutBranch(");
+
+  test("a sandbox on a chat side branch publishes that branch, not the chat's", () => {
+    const body = functionBody(
+      sandboxGit,
+      "export async function pushBranchToOrigin(",
+    );
+    const sideAt = body.indexOf("isChatSideBranch(currentBranch, branchName)");
+    const sidePushAt = body.indexOf("publishCheckedOutBranch(sandbox, owner, name, currentBranch");
+    expect(sideAt, "the side-branch check is gone").toBeGreaterThan(-1);
+    expect(sidePushAt).toBeGreaterThan(sideAt);
+    // The chat branch did not move: no draft PR for it.
+    expect(body).toContain("return { pushed: false, published: false };");
+  });
 
   test("pushBranchToOrigin reports which of the two paths it took", () => {
     const body = pushBody();
@@ -438,7 +451,7 @@ describe("a turn that pushed nothing opens no pull request", () => {
    */
   test("the logged step's value is returned, not just awaited", () => {
     expect(
-      pushBody(),
+      functionBody(sandboxGit, "export async function pushBranchToOrigin("),
       "an awaited-but-unreturned step drops the outcome",
     ).toContain("return await runLoggedGitStep(");
   });
@@ -538,7 +551,7 @@ describe("a callback-published session still opens its first pull request", () =
     );
     const body = functionBody(
       sandboxGit,
-      "export async function pushBranchToOrigin(",
+      "async function publishCheckedOutBranch(",
     );
     expect(body).toContain(
       "`refs/heads/${branchName}:refs/heads/${branchName}`",
@@ -655,7 +668,7 @@ describe("a callback-published session still opens its first pull request", () =
   test("the post-completion push reports an already-published branch", () => {
     const body = functionBody(
       sandboxGit,
-      "export async function pushBranchToOrigin(",
+      "async function publishCheckedOutBranch(",
     );
     expect(body).toContain("refs/remotes/origin/${branchName}");
     expect(body).toContain("{ pushed: false, published: remoteExists }");
