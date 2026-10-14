@@ -1,8 +1,6 @@
 "use client";
 
 import type { RefCallback } from "react";
-import type { FunctionReturnType } from "convex/server";
-import type { api } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { OnlineTeamAvatars } from "@/lib/components/sidebar/TeamMembers";
 import { SidebarResizeHandle } from "@/lib/components/sidebar/SidebarResizeHandle";
@@ -13,9 +11,8 @@ import { type ContextSidebarMode } from "@/lib/components/sidebar/contextSidebar
 import {
   type SidebarPanelFlags,
   type SidebarRepoRoute,
+  type RepoDoc,
 } from "@/lib/components/sidebar/sidebarPanelState";
-
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
 
 interface SidebarPanelProps {
   panelKey: string;

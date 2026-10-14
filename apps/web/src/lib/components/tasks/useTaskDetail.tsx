@@ -7,43 +7,14 @@ import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
-import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import {
-  canEditTaskText,
-  type TaskDetailTab,
-} from "./_components/task-detail-constants";
+import { canEditTaskText } from "./_components/task-detail-constants";
 import { taskRunStreamingEntityId } from "./firstRunChatTurn";
 import {
+  type UseTaskDetailRouting,
   useTaskDetailTab,
   useTaskExecutionControls,
   useTaskSandboxControls,
 } from "./useTaskDetailControls";
-
-type QuickTaskDetailRouting = {
-  detailTab: TaskDetailTab;
-  onDetailTabChange: (tab: TaskDetailTab) => void;
-  onOpenSandboxView: (sandboxTab: TaskRouteSandboxTab) => void;
-};
-
-type QuickTaskSandboxRouting = {
-  sandboxTab: TaskRouteSandboxTab;
-  onSandboxTabChange: (tab: TaskRouteSandboxTab) => void;
-  onExitSandboxView: () => void;
-  /** Opens Files tab with `?file=` set (chat file chips). */
-  onOpenFile: (path: string) => void;
-  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
-  onViewDiff: (repoRelativePath?: string) => void;
-};
-
-type ProjectTaskDetailRouting = {
-  detailTab: TaskDetailTab;
-  onDetailTabChange: (tab: TaskDetailTab) => void;
-};
-
-export type UseTaskDetailRouting =
-  | { mode: "quick-detail"; quick: QuickTaskDetailRouting }
-  | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
-  | { mode: "project-detail"; project: ProjectTaskDetailRouting };
 
 type TaskRow = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 type RepoRow = FunctionReturnType<typeof api.githubRepos.get> | undefined;

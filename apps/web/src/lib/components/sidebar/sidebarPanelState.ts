@@ -1,3 +1,5 @@
+import type { api } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
 import { decodeRepoParam, KNOWN_REPO_SUB_PAGES } from "@/lib/utils/repoUrl";
 import { type ContextSidebarMode } from "@/lib/components/sidebar/contextSidebarModes";
 import {
@@ -33,6 +35,11 @@ export interface SidebarRepoRoute {
   isRepoRoute: boolean;
 }
 
+/** The repo the sidebar is scoped to, as `githubRepos.getByOwnerAndName` returns it. */
+export type RepoDoc = FunctionReturnType<
+  typeof api.githubRepos.getByOwnerAndName
+>;
+
 const NON_REPO_ROUTE: SidebarRepoRoute = {
   repoBasePath: null,
   owner: null,
@@ -40,6 +47,21 @@ const NON_REPO_ROUTE: SidebarRepoRoute = {
   appName: undefined,
   isRepoRoute: false,
 };
+
+const NON_REPO_ROUTES = new Set([
+  "home",
+  "sign-in",
+  "sign-up",
+  "setup",
+  "teams",
+  "inbox",
+  "artifacts",
+  "sessions",
+  "automations",
+  "api",
+  "settings",
+  "testing",
+]);
 
 /** Reads the repo (and optional app) the sidebar is scoped to from the URL. */
 export function parseSidebarRepoRoute(pathname: string): SidebarRepoRoute {
@@ -49,24 +71,10 @@ export function parseSidebarRepoRoute(pathname: string): SidebarRepoRoute {
   }
   const o = segments[0];
   const n = segments[1];
-  const nonRepoRoutes = new Set([
-    "home",
-    "sign-in",
-    "sign-up",
-    "setup",
-    "teams",
-    "inbox",
-    "artifacts",
-    "sessions",
-    "automations",
-    "api",
-    "settings",
-    "testing",
-  ]);
   // Guard non-repo routes before the repo-route heuristic below, otherwise
   // sub-paths like /teams/{id}/members are misread as /owner/repo/appName
   // (because "members" isn't a KNOWN_SUB_PAGE) and the repo nav renders.
-  if (nonRepoRoutes.has(o)) {
+  if (NON_REPO_ROUTES.has(o)) {
     return { ...NON_REPO_ROUTE };
   }
   if (segments.length >= 3 && !KNOWN_SUB_PAGES.has(segments[2])) {
@@ -153,10 +161,8 @@ export function getSidebarPanelFlags(
   input: SidebarPanelInput,
 ): SidebarPanelFlags {
   const { isRepoRoute, useChromeSessionTabs, contextSidebarMode } = input;
-  const {
-    isGlobalAutomationsLanding,
-    ...globalFlags
-  } = getGlobalPanelFlags(input);
+  const { isGlobalAutomationsLanding, ...globalFlags } =
+    getGlobalPanelFlags(input);
   const {
     isGlobalSessionsLanding,
     showGlobalSessionsPanel,

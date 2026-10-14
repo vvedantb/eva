@@ -1,16 +1,15 @@
 "use client";
 
 import { lazy, Suspense } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { m } from "motion/react";
-import type { api } from "@eva/backend";
 import { motionBase, Spinner } from "@eva/ui";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
 import { type ContextSidebarMode } from "@/lib/components/sidebar/contextSidebarModes";
-import { type SidebarPanelFlags } from "@/lib/components/sidebar/sidebarPanelState";
-
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
+import {
+  type SidebarPanelFlags,
+  type RepoDoc,
+} from "@/lib/components/sidebar/sidebarPanelState";
 
 /** Panel bodies load on demand so unused modes stay off the shell chunk. */
 const SettingsSidebar = lazy(() =>

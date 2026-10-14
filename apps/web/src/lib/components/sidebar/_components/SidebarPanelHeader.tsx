@@ -1,11 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { m } from "motion/react";
 import { IconChevronLeft, IconX } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
-import type { api } from "@eva/backend";
 import { Button, cn, motionBase } from "@eva/ui";
 import { AutomationsSidebarOptionsMenu } from "@/lib/components/sidebar/_components/AutomationsSidebarOptionsMenu";
 import { SessionsSidebarOptionsMenu } from "@/lib/components/sidebar/_components/SessionsSidebarOptionsMenu";
@@ -14,10 +12,9 @@ import {
   getContextSidebarTitle,
   getFlatPanelTitle,
   type SidebarPanelFlags,
+  type RepoDoc,
 } from "@/lib/components/sidebar/sidebarPanelState";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
 
 interface SidebarPanelHeaderProps {
   panelKey: string;

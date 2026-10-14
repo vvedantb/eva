@@ -10,7 +10,33 @@ import { useState } from "react";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import type { TaskDetailTab } from "./_components/task-detail-constants";
-import type { UseTaskDetailRouting } from "./useTaskDetail";
+import type { TaskRouteSandboxTab } from "@/lib/search-params";
+
+type QuickTaskDetailRouting = {
+  detailTab: TaskDetailTab;
+  onDetailTabChange: (tab: TaskDetailTab) => void;
+  onOpenSandboxView: (sandboxTab: TaskRouteSandboxTab) => void;
+};
+
+type QuickTaskSandboxRouting = {
+  sandboxTab: TaskRouteSandboxTab;
+  onSandboxTabChange: (tab: TaskRouteSandboxTab) => void;
+  onExitSandboxView: () => void;
+  /** Opens Files tab with `?file=` set (chat file chips). */
+  onOpenFile: (path: string) => void;
+  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
+  onViewDiff: (repoRelativePath?: string) => void;
+};
+
+type ProjectTaskDetailRouting = {
+  detailTab: TaskDetailTab;
+  onDetailTabChange: (tab: TaskDetailTab) => void;
+};
+
+export type UseTaskDetailRouting =
+  | { mode: "quick-detail"; quick: QuickTaskDetailRouting }
+  | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
+  | { mode: "project-detail"; project: ProjectTaskDetailRouting };
 
 const PREVIEW_SANDBOX_ALLOWED_STATUSES = [
   "code_review",
