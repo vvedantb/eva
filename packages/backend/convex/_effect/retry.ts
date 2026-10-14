@@ -6,7 +6,7 @@
  * `Effect.runPromise` rejects with a `FiberFailure` wrapper, not with the value
  * the effect failed with. Every caller in this codebase catches errors and asks
  * questions about them — `instanceof SandboxProviderError`,
- * `message.includes("is not ahead of")`, `isRetryableGitNetworkError(...)` — so a
+ * `message.includes("is not ahead of")`, `classifyGitFailure(...)._tag` — so a
  * wrapper would silently reclassify every failure. `runPromiseRethrowing`
  * squashes the cause instead, which hands back the original error object
  * (failures and defects alike).

@@ -12,8 +12,9 @@
  *
  * PRECEDENCE (first match wins)
  * 1. missing remote ref — the remote gave a definitive answer, so it is a
- *    handled outcome rather than something to retry. fetchBranchRefs already
- *    asked this question before any retry logic saw the error.
+ *    handled outcome rather than something to retry. Both fetch callers end
+ *    up treating it as a missing ref; a message that also looks transient is
+ *    not retried first (the old code retried it, with the same final outcome).
  * 2. transient network/auth/timeout — retryable everywhere it is asked about,
  *    so an error that also looks like (3) still earns its retries.
  * 3. non-fast-forward push — only ever asked together with (2), so ordering

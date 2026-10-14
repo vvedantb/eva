@@ -108,8 +108,9 @@ export async function waitForPullRequestHead(params: {
         schedule: retryAfterDelays(PR_READY_RETRY_DELAYS_MS),
         while: (failure) => failure._tag !== "GitHubBranchNotAhead",
       }),
-      // Only the sentinel survives, and it is thrown as itself: it carries the
-      // message, and its cause is Eva rather than GitHub.
+      // Only the not-ahead failure survives. Eva's own sentinel has no cause
+      // and is thrown as itself; a GitHub answer with the same meaning is
+      // thrown as the Octokit error it came from, so callers keep its status.
       Effect.catchIf(
         (failure) => failure._tag !== "GitHubBranchNotAhead",
         () =>
@@ -118,6 +119,11 @@ export async function waitForPullRequestHead(params: {
               `GitHub did not report ${params.branchName} as ready for a pull request after branch push: ${lastError}`,
             ),
           ),
+      ),
+      Effect.mapError((failure) =>
+        failure instanceof GitHubBranchNotAhead
+          ? originalGitHubError(failure)
+          : failure,
       ),
     ),
   );
