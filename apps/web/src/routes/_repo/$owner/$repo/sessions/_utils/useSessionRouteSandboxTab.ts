@@ -1,4 +1,4 @@
-import { useParams, useRouterState } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import { sandboxTabIdFromParam } from "@/lib/search-params";
 
 /** Matches `/sessions/$numId/review…` (diffs or recap). */
@@ -11,17 +11,19 @@ const SESSION_REVIEW_PATH = /\/sessions\/[^/]+\/review(?:\/|$)/;
  * under nested `/review/…` routes (no `$sandboxTab` param).
  */
 export function useSessionRouteSandboxTab(): string {
-  const params = useParams({ strict: false });
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-
-  if (SESSION_REVIEW_PATH.test(pathname)) {
-    return "review";
-  }
-
-  const sandboxTab = params.sandboxTab;
-  if (typeof sandboxTab === "string" && sandboxTab.length > 0) {
-    return sandboxTabIdFromParam(sandboxTab);
-  }
-
-  return "preview";
+  // One primitive selection: every kept-alive session shell calls this, and a
+  // pathname/params subscription re-rendered all of them on each navigation.
+  return useRouterState({
+    select: (s) => {
+      if (SESSION_REVIEW_PATH.test(s.location.pathname)) return "review";
+      for (const match of s.matches) {
+        const sandboxTab =
+          "sandboxTab" in match.params ? match.params.sandboxTab : undefined;
+        if (typeof sandboxTab === "string" && sandboxTab.length > 0) {
+          return sandboxTabIdFromParam(sandboxTab);
+        }
+      }
+      return "preview";
+    },
+  });
 }

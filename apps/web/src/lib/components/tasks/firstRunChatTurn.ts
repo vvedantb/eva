@@ -147,7 +147,7 @@ export function buildFirstRunChatTurn({
         : task.title,
       timestamp: task.createdAt,
       userId: task.createdBy,
-      // Snapshots stored on the run; findPrecedingUserTurn reads them off the
+      // Snapshots stored on the run; buildPrecedingUserTurns reads them off the
       // user turn to show the model icon under the assistant reply.
       ...(run.model !== undefined ? { model: run.model } : {}),
       ...(run.credentialSourceLabel !== undefined

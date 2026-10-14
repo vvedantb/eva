@@ -5,7 +5,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useAuth } from "@clerk/clerk-react";
-import { NuqsAdapter } from "nuqs/adapters/tanstack-router";
+import { NuqsAdapter } from "@/lib/nuqsTanstackAdapter";
 import { Analytics } from "@vercel/analytics/react";
 import { TooltipProvider } from "@eva/ui";
 import { ClientProvider } from "@/lib/components/ClientProvider";

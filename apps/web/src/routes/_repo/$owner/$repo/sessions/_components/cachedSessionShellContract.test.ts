@@ -84,7 +84,7 @@ describe("a passive RepoProvider stays inert", () => {
   });
 
   /**
-   * The not-found screen is the other thing a hidden shell must not do: three
+   * The not-found screen is the other thing a hidden shell must not do: five
    * session shells stay mounted at once, so a background repo the viewer cannot
    * read would otherwise explain itself over the session they are looking at.
    */
@@ -92,7 +92,7 @@ describe("a passive RepoProvider stays inert", () => {
     expect(
       repoContext.replace(/\s+/g, " "),
       "a hidden shell would render RepoNotFound over the visible session",
-    ).toContain("return passive ? PENDING");
+    ).toContain("repo === null ? passive ? PENDING");
   });
 
   test("passive defaults to false, so routed trees keep canonicalizing", () => {
