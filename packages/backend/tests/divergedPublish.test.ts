@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  isChatSideBranch,
   isEvaOwnedBranch,
   parseGitNameOnlyList,
   publishErrorNeedsForcePush,
@@ -81,5 +82,16 @@ describe("rewrittenBranchIsOwnHistory", () => {
   test("no reflog or no tip means merge, not force", () => {
     expect(rewrittenBranchIsOwnHistory(oldTip, [])).toBe(false);
     expect(rewrittenBranchIsOwnHistory("", [oldTip])).toBe(false);
+  });
+});
+
+describe("isChatSideBranch", () => {
+  test("matches only <chat branch>-<slug> of an eva/ chat branch", () => {
+    expect(isChatSideBranch("eva/session-abc-main", "eva/session-abc")).toBe(true);
+    expect(isChatSideBranch("eva/session-abc", "eva/session-abc")).toBe(false);
+    expect(isChatSideBranch("eva/session-abc-", "eva/session-abc")).toBe(false);
+    expect(isChatSideBranch("eva/session-abcd", "eva/session-abc")).toBe(false);
+    expect(isChatSideBranch("main", "eva/session-abc")).toBe(false);
+    expect(isChatSideBranch("feature-x", "feature")).toBe(false);
   });
 });

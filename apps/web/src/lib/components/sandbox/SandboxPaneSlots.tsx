@@ -18,6 +18,7 @@ import { PrPanel } from "./PrPanel";
 import { SandboxPaneBoundary } from "./SandboxPaneBoundary";
 import { PreviewPaneTabs } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPaneTabs";
 import { ConsoleDock } from "./ConsoleDock";
+import { KeepAlivePane } from "./KeepAlivePane";
 import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
@@ -77,7 +78,7 @@ interface SandboxPaneSlotsProps {
   stickyTerminalHistoryTail?: string;
   onStickyTerminalHistoryTailChange?: (tail: string) => void;
   /**
-   * Whether this host is the one on screen. Sessions keep up to three shells
+   * Whether this host is the one on screen. Sessions keep up to five shells
    * mounted and every host may collapse its rail; only a visible host may hold the
    * idle-pause presence beacon or auto-wake. Defaults to true.
    */
@@ -287,7 +288,7 @@ export function SandboxPaneSlots({
           )}
         </SandboxPaneBoundary>
       </div>
-      <div className={resolvedTab === "editor" ? "h-full" : "hidden"}>
+      <KeepAlivePane active={resolvedTab === "editor"} className="h-full">
         <SandboxPaneBoundary label="Editor">
           <EditorPanel
             cacheKey={cacheKey}
@@ -298,13 +299,10 @@ export function SandboxPaneSlots({
             wake={wake}
           />
         </SandboxPaneBoundary>
-      </div>
-      <div
-        className={
-          resolvedTab === "browser" || resolvedTab === "computer"
-            ? "h-full"
-            : "hidden"
-        }
+      </KeepAlivePane>
+      <KeepAlivePane
+        active={resolvedTab === "browser" || resolvedTab === "computer"}
+        className="h-full"
       >
         <SandboxPaneBoundary
           label={resolvedTab === "browser" ? "Browser" : "Computer"}
@@ -321,8 +319,8 @@ export function SandboxPaneSlots({
             wake={wake}
           />
         </SandboxPaneBoundary>
-      </div>
-      <div className={resolvedTab === "review" ? "h-full" : "hidden"}>
+      </KeepAlivePane>
+      <KeepAlivePane active={resolvedTab === "review"} className="h-full">
         <SandboxPaneBoundary label="Review">
           <PrPanel
             owner={owner}
@@ -331,15 +329,16 @@ export function SandboxPaneSlots({
             isActive={resolvedTab === "review"}
           />
         </SandboxPaneBoundary>
-      </div>
+      </KeepAlivePane>
       {simpleView
         ? null
         : customTabs?.map((tab) => {
             const slug = slugifyAppTabName(tab.name);
             return (
-              <div
+              <KeepAlivePane
                 key={tab._id}
-                className={resolvedTab === slug ? "h-full" : "hidden"}
+                active={resolvedTab === slug}
+                className="h-full"
               >
                 <SandboxPaneBoundary label={tab.name}>
                   <CustomTabPanel
@@ -357,7 +356,7 @@ export function SandboxPaneSlots({
                     wake={wake}
                   />
                 </SandboxPaneBoundary>
-              </div>
+              </KeepAlivePane>
             );
           })}
     </>

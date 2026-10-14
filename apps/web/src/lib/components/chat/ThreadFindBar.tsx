@@ -43,10 +43,19 @@ export function ThreadFindBar({
   documents,
   defaultOpen = false,
   defaultQuery = "",
+  onQueryChange,
+  scopeKey = "",
 }: {
   documents: ReadonlyArray<ThreadFindDocument>;
   defaultOpen?: boolean;
   defaultQuery?: string;
+  /**
+   * Called with each new query, in the same event, so a windowed transcript
+   * can render the rows its matches live in before the bar paints and jumps.
+   */
+  onQueryChange?: (query: string) => void;
+  /** Changes when the transcript renders more rows, so highlights repaint. */
+  scopeKey?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState(defaultQuery);
@@ -99,8 +108,10 @@ export function ThreadFindBar({
       }
       const selected = window.getSelection()?.toString().trim() ?? "";
       if (selected.length > 0) {
-        setQuery(selected.slice(0, FIND_QUERY_MAX_LENGTH));
+        const nextQuery = selected.slice(0, FIND_QUERY_MAX_LENGTH);
+        setQuery(nextQuery);
         setActiveIndex(0);
+        onQueryChange?.(nextQuery);
       }
       setOpen(true);
     };
@@ -137,10 +148,11 @@ export function ThreadFindBar({
             an effect: changing the key re-runs the ref callback, and its
             cleanup unregisters the highlights when the bar closes. The match
             count is part of the key because the old effect's deps left out
-            `documents` — a match that streamed in was counted but not painted. */}
+            `documents` — a match that streamed in was counted but not painted.
+            `scopeKey` repaints the rows a windowed transcript renders later. */}
         <span
           hidden
-          key={`paint:${matchCount}:${safeIndex}:${deferredQuery}`}
+          key={`paint:${matchCount}:${safeIndex}:${deferredQuery}:${scopeKey}`}
           ref={(node) => {
             const scope = findScope(node);
             if (!scope) return;
@@ -173,8 +185,13 @@ export function ThreadFindBar({
             type="text"
             value={query}
             onChange={(event) => {
-              setQuery(event.target.value.slice(0, FIND_QUERY_MAX_LENGTH));
+              const nextQuery = event.target.value.slice(
+                0,
+                FIND_QUERY_MAX_LENGTH,
+              );
+              setQuery(nextQuery);
               setActiveIndex(0);
+              onQueryChange?.(nextQuery);
             }}
             onKeyDown={(event) => {
               // Escape is handled by the window listener above so that it also

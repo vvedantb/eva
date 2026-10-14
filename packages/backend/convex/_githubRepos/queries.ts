@@ -102,7 +102,7 @@ export const listActiveSandboxCounts = authQuery({
   },
 });
 
-/** Counts active sessions (status active, not archived, PR still open) the user can see. */
+/** Counts active sessions (status active, not archived) the user can see. */
 export const countActiveSessions = authQuery({
   args: {},
   returns: v.number(),
@@ -118,12 +118,7 @@ export const countActiveSessions = authQuery({
             )
             .take(64),
         );
-        return sessions.filter(
-          (s) =>
-            s.archived !== true &&
-            s.prState !== "merged" &&
-            s.prState !== "closed",
-        ).length;
+        return sessions.filter((s) => s.archived !== true).length;
       }),
     );
     return perRepo.reduce((total, n) => total + n, 0);

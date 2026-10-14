@@ -3,7 +3,6 @@
 import { ConvexError, v } from "convex/values";
 import type { FunctionReturnType } from "convex/server";
 import { api, internal } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
 import { authAction } from "../functions";
 import { isMissingGithubBranchError } from "../_github/deploymentSnapshot";
 import { getInstallationOctokit } from "../githubAuth";
@@ -12,9 +11,6 @@ import { isSandboxGoneError } from "./sandboxErrors";
 import { errorText } from "../_shared/errors";
 
 type ForkSource = FunctionReturnType<typeof internal.sessions.getForkSource>;
-type ForkCopyPage = FunctionReturnType<
-  typeof internal.sessions.copyForkMessages
->;
 
 const TURN_OPEN = "Wait for the current turn to finish, then fork.";
 const NO_SANDBOX =
@@ -50,12 +46,12 @@ async function branchExistsOnGitHub(
 
 /**
  * "Fork session": a new session stacked on the source — its branch is cut
- * from the source branch and its PR targets it — with a copy of the source's
- * transcript, whose first sandbox is a Vercel fork (`Sandbox.fork`) of the
- * source sandbox, so local DBs (Supabase volume, Convex local backend),
- * untracked seed files and the agent's own persisted conversation come along.
- * The transcript is copied here, page by page, before the caller navigates: a
- * message sent into the fork can never land in the middle of the copy.
+ * from the source branch and its PR targets it — whose first sandbox is a
+ * Vercel fork (`Sandbox.fork`) of the source sandbox, so local DBs (Supabase
+ * volume, Convex local backend), untracked seed files and the agent's own
+ * persisted conversation come along. The chat transcript is not copied: the
+ * fork's chat opens with a "Forked from" alert, and the agent still resumes
+ * the source thread from the forked disk.
  *
  * A Vercel fork restores from the source's current snapshot, not its live
  * disk, and stopping is what writes that snapshot — so a running source is
@@ -115,25 +111,6 @@ export const forkSession = authAction({
           stackOnSource,
         },
       );
-      const pairs: Array<{ from: Id<"messages">; to: Id<"messages"> }> = [];
-      let cursor: string | null = null;
-      do {
-        const page: ForkCopyPage = await ctx.runMutation(
-          internal.sessions.copyForkMessages,
-          {
-            sourceSessionId: args.sessionId,
-            sessionId: fork.sessionId,
-            cursor,
-          },
-        );
-        pairs.push(...page.pairs);
-        cursor = page.cursor;
-      } while (cursor !== null);
-      await ctx.runMutation(internal.sessions.copyForkCards, {
-        sourceSessionId: args.sessionId,
-        sessionId: fork.sessionId,
-        pairs,
-      });
       return { numId: fork.numId };
     } catch (error) {
       // No fork session exists to restart the source later — do it now.

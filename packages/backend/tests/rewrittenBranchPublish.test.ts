@@ -1,16 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { quote } from "shell-quote";
-import type {
-  SandboxExecResult,
-  SandboxHandle,
-} from "../convex/_sandbox/provider";
-import { workspaceDirShell } from "../convex/_sandbox_runtime/helpers";
+import type { SandboxHandle } from "../convex/_sandbox/provider";
 import { pushBranchToOrigin } from "../convex/_sandbox_runtime/git";
 import { publishErrorNeedsForcePush } from "../convex/_sandbox_runtime/divergedPublish";
+import { git, localGitSandboxHandle } from "./_helpers/localGitSandbox";
 
 /**
  * Two prod shapes that look alike by file counts and must be treated in
@@ -41,27 +36,6 @@ let root: string;
 let origin: string;
 let sandboxRepo: string;
 
-const gitEnv = {
-  ...process.env,
-  HOME: undefined,
-  GIT_CONFIG_NOSYSTEM: "1",
-  GIT_CONFIG_GLOBAL: "/dev/null",
-  GIT_TERMINAL_PROMPT: "0",
-  GIT_AUTHOR_NAME: "eva-test",
-  GIT_AUTHOR_EMAIL: "eva-test@example.com",
-  GIT_COMMITTER_NAME: "eva-test",
-  GIT_COMMITTER_EMAIL: "eva-test@example.com",
-};
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, {
-    cwd,
-    env: gitEnv,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-}
-
 function commitFiles(cwd: string, subject: string, files: string[]): string {
   for (const file of files) {
     mkdirSync(join(cwd, file, ".."), { recursive: true });
@@ -83,58 +57,10 @@ function isAncestor(cwd: string, ancestor: string, descendant: string): boolean 
 
 /** Runs the sandbox's shell commands against the temp clone. */
 function sandboxHandle(): SandboxHandle {
-  const outOfScope = (member: string): never => {
-    throw new Error(`fake sandbox: ${member} is out of scope for this test`);
-  };
-  return {
-    id: "sbx-rewritten-publish",
-    state: "running",
-    errorReason: null,
-    classifyForReconcile: () => Promise.resolve("alive"),
-    exec: (cmd: string): Promise<SandboxExecResult> => {
-      // The commands quote the URL the way git.ts does, so match that form.
-      const local = cmd
-        .replaceAll(workspaceDirShell(), quote([sandboxRepo]))
-        .replaceAll(quote([REMOTE_URL]), quote([origin]));
-      try {
-        const output = execFileSync("bash", ["-c", local], {
-          env: gitEnv,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        return Promise.resolve({ exitCode: 0, output });
-      } catch (error) {
-        const failure =
-          error instanceof Error &&
-          "status" in error &&
-          typeof error.status === "number" &&
-          "stderr" in error &&
-          typeof error.stderr === "string" &&
-          "stdout" in error &&
-          typeof error.stdout === "string"
-            ? {
-                exitCode: error.status,
-                output: `${error.stdout}${error.stderr}`,
-              }
-            : { exitCode: 1, output: String(error) };
-        return Promise.resolve(failure);
-      }
-    },
-    refresh: () => outOfScope("refresh"),
-    stop: () => outOfScope("stop"),
-    start: () => outOfScope("start"),
-    writeFile: () => outOfScope("writeFile"),
-    execDetached: () => outOfScope("execDetached"),
-    extendTimeout: () => outOfScope("extendTimeout"),
-    delete: () => outOfScope("delete"),
-    previewUrl: () => outOfScope("previewUrl"),
-    createSnapshot: () => outOfScope("createSnapshot"),
-    git: {
-      branches: () => outOfScope("git.branches"),
-      clone: () => outOfScope("git.clone"),
-      checkoutBranch: () => outOfScope("git.checkoutBranch"),
-    },
-  };
+  return localGitSandboxHandle({
+    workspace: sandboxRepo,
+    remote: { url: REMOTE_URL, path: origin },
+  });
 }
 
 /**

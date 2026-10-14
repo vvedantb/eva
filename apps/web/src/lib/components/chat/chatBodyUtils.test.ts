@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import type { ActivityStep } from "@eva/ui";
 import {
+  buildPrecedingUserTurns,
   collectQuestionSteps,
+  findTurnWindowStart,
   findDayBoundaryIds,
   findHandoffBoundaryIds,
   findNewMessageIds,
@@ -49,6 +51,56 @@ const alert = (label: string, content = "Handed off"): TestMessage => ({
   content,
   isSystemAlert: true,
   label,
+});
+
+const withIds = (messages: TestMessage[]) =>
+  messages.map((message) => ({ ...message, _id: message.label }));
+
+describe("buildPrecedingUserTurns", () => {
+  test("maps each reply to the user turn before it, across system alerts", () => {
+    const turns = buildPrecedingUserTurns(
+      withIds([
+        user("u1"),
+        alert("handoff"),
+        finished("a1"),
+        finished("a2"),
+        user("u2"),
+        placeholder("a3"),
+      ]),
+    );
+    expect(turns.get("a1")?.label).toBe("u1");
+    // A second reply in one turn has no user turn directly before it.
+    expect(turns.has("a2")).toBe(false);
+    expect(turns.get("a3")?.label).toBe("u2");
+    expect(turns.has("handoff")).toBe(false);
+  });
+});
+
+describe("findTurnWindowStart", () => {
+  const transcript = [
+    alert("intro"),
+    user("u1"),
+    finished("a1"),
+    user("u2"),
+    finished("a2"),
+    alert("stopped"),
+    user("u3"),
+    finished("a3"),
+  ];
+
+  test("starts at the user row that opens the last N turns", () => {
+    expect(findTurnWindowStart(transcript, 2)).toBe(3);
+  });
+
+  test("counts back from an earlier end to load the turns above a window", () => {
+    expect(findTurnWindowStart(transcript, 1, 6)).toBe(3);
+  });
+
+  test("covers the whole transcript when it has fewer turns", () => {
+    // Index 0, not the first user row: the rows before it must stay visible.
+    expect(findTurnWindowStart(transcript, 3)).toBe(0);
+    expect(findTurnWindowStart(transcript, 25)).toBe(0);
+  });
 });
 
 describe("findStreamingTargetMessage", () => {

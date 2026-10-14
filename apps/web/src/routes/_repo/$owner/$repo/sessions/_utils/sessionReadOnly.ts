@@ -1,22 +1,14 @@
 export type SessionPrState = "draft" | "open" | "merged" | "closed";
 
-/** PR terminal states — session is hard-locked until GitHub reopens the PR. */
-export function isSessionPrReadOnly(
-  prState: SessionPrState | undefined,
-): boolean {
-  return prState === "merged" || prState === "closed";
-}
-
 /**
- * Session still in play for sidebar badges: not manually archived, and PR is
- * still draft/open (or no PR yet).
+ * `archived` is the one session lock. A merged/closed PR locks the session
+ * only through the server's auto-archive, so the owner's "Disable
+ * auto-archive" flag (or a manual unarchive) keeps it live and writable.
  */
 export function isSessionSidebarActive(session: {
   archived?: boolean;
-  prState?: SessionPrState;
 }): boolean {
-  if (session.archived === true) return false;
-  return !isSessionPrReadOnly(session.prState);
+  return session.archived !== true;
 }
 
 /**
@@ -35,21 +27,19 @@ export function canSendSessionForReview(session: {
 }
 
 /**
- * Banner copy for session read-only. PR closed/merged wins over archive so the
- * user sees why the session locked (reopen on GitHub unlocks again).
+ * Banner copy for an archived session. A merged/closed PR names the reason
+ * the session locked (reopen on GitHub unlocks again); a live session has none.
  */
 export function getSessionReadOnlyMessage(args: {
   isArchived: boolean;
   prState: SessionPrState | undefined;
 }): string | undefined {
+  if (!args.isArchived) return undefined;
   if (args.prState === "merged") {
     return "This PR has been merged, so this session is now read-only.";
   }
   if (args.prState === "closed") {
     return "This PR has been closed, so this session is now read-only.";
   }
-  if (args.isArchived) {
-    return "This session is archived and read-only";
-  }
-  return undefined;
+  return "This session is archived and read-only";
 }

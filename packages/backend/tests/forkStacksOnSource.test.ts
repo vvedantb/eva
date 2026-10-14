@@ -8,9 +8,10 @@ import schema from "../convex/schema";
  * `createForkedSession` (fix #882): the fork stacks on the source — its base
  * is the source branch when that branch is on GitHub, else the source's own
  * base — and it never queues the old transcript as a `<forked_thread>` first
- * message, because the forked disk already holds the agent's conversation and
- * `copyForkMessages` copies the chat rows afterwards. The Plan tab and
- * interaction mode come along with the source Main chat's composer traits.
+ * message, because the forked disk already holds the agent's conversation. The
+ * chat rows are not copied either: the fork's Main chat holds one "Forked
+ * from" system alert. The Plan tab and interaction mode come along with the
+ * source Main chat's composer traits.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -109,7 +110,7 @@ async function createFork(stackOnSource: boolean) {
 
 describe("createForkedSession", () => {
   test(
-    "stacks on the source branch and carries no replayed first message",
+    "stacks on the source branch and opens with only a Forked from alert",
     async () => {
       const { sourceId, fork, mainChat, messages, queued } =
         await createFork(true);
@@ -124,7 +125,12 @@ describe("createForkedSession", () => {
       });
       expect(fork?.branchName).not.toBe("eva/session-source");
       expect(queued).toEqual([]);
-      expect(messages).toEqual([]);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatchObject({
+        role: "assistant",
+        content: "Forked from session #1 · Seed the invoices table",
+        isSystemAlert: true,
+      });
     },
     TIMEOUT_MS,
   );
