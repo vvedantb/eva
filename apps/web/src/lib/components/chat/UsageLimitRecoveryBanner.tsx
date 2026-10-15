@@ -8,7 +8,7 @@ import {
   type Id,
 } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { motionFast } from "@eva/ui";
+import { getProviderLabel, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
@@ -79,9 +79,13 @@ export function UsageLimitRecoveryBanner({
   if (showsCard) {
     const { accounts, resolveAccountId, onSwitchAccount, isSandboxActive } =
       recovery;
+    // Every provider can run out, so the card names the one that did rather
+    // than saying "Claude" at a Cursor or Codex limit.
+    const provider = getAIModelProvider(surface.model);
+    const providerLabel = getProviderLabel(provider);
     const candidates = usageLimitRetryCandidates({
       accounts,
-      provider: getAIModelProvider(surface.model),
+      provider,
       currentAccountId,
     }).flatMap<ResolvedCandidate>((candidate) => {
       if (candidate.accountId === null) {
@@ -148,7 +152,7 @@ export function UsageLimitRecoveryBanner({
           />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
-              {ownerLabel} Claude account is out of usage
+              {ownerLabel} {providerLabel} account is out of usage
             </p>
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
@@ -160,8 +164,8 @@ export function UsageLimitRecoveryBanner({
         </div>
         {candidates.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No other Claude account is shared with you. Ask a teammate to share
-            theirs in Settings → Accounts, or wait for the reset.
+            No other {providerLabel} account is shared with you. Ask a teammate
+            to share theirs in Settings → Accounts, or wait for the reset.
           </p>
         ) : (
           <div className="flex flex-col gap-1">

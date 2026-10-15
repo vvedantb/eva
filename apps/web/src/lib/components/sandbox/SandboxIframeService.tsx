@@ -14,6 +14,10 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import {
+  SandboxAsleepState,
+  type SandboxWake,
+} from "@/lib/components/sandbox/SandboxAsleepState";
 
 export type SandboxIframeServiceState =
   | "idle"
@@ -91,6 +95,13 @@ interface SandboxIframeServiceProps {
    * the next signal instead of instantly restarting.
    */
   autoStartKey?: number;
+  /**
+   * Replaces the raw sandbox URL behind "Open in a new tab". With idle pause on
+   * this is the Eva wake link, which survives the sandbox being paused.
+   */
+  externalHref?: string;
+  /** Wakes the sandbox from the inactive state (same button as Preview). */
+  wake?: SandboxWake;
 }
 
 /**
@@ -122,6 +133,8 @@ export function SandboxIframeService({
   loadFailedError,
   iframeAllow,
   autoStartKey,
+  externalHref,
+  wake,
 }: SandboxIframeServiceProps) {
   // Scope the cache key by sandboxId — Vercel signed URLs embed the sandbox
   // ID in the domain, so a URL cached against a destroyed sandbox would
@@ -250,6 +263,9 @@ export function SandboxIframeService({
     }
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     Reads sessionStorage and kicks off a readiness poll against the sandbox;
+     the sandbox can also go down without any local event. */
   // Hydrate from sessionStorage cache when the sandbox is up; clear on stop.
   // Desktop (ensureStartedBeforeReady) must NOT paint a cached URL immediately —
   // a stale noVNC URL loads the HTML chrome while the RFB WebSocket is dead
@@ -293,6 +309,7 @@ export function SandboxIframeService({
     start,
     autoStartKey,
   ]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
@@ -321,10 +338,11 @@ export function SandboxIframeService({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-3">
-        <Icon className="w-12 h-12 opacity-50" />
-        <p className="text-sm">{inactiveLabel}</p>
-      </div>
+      <SandboxAsleepState
+        icon={Icon}
+        label={inactiveLabel}
+        wake={isActive ? undefined : wake}
+      />
     );
   }
 
@@ -364,7 +382,7 @@ export function SandboxIframeService({
           </Button>
           <Button size="icon" variant="ghost" className="size-8" asChild>
             <a
-              href={stripPreviewGrant(url)}
+              href={externalHref ?? stripPreviewGrant(url)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open in a new tab"

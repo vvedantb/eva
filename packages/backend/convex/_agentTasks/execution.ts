@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
 import { internal } from "../_generated/api";
 import {
   aiModelValidator,
@@ -11,7 +12,6 @@ import {
   hasActiveRun,
   isFirstTaskOnBranch,
 } from "../functions";
-import { workflow } from "../workflowManager";
 import { buildProjectBranchName } from "../_projects/helpers";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
@@ -135,28 +135,22 @@ export const startExecution = authMutation({
       updatedAt: Date.now(),
       pendingChangeRequestCommentId: undefined,
     });
-    let workflowIdString = "";
     try {
-      const workflowId = await workflow.start(
-        ctx,
-        internal.taskWorkflow.taskExecutionWorkflow,
-        {
-          runId,
-          taskId: args.id,
-          repoId: task.repoId,
-          installationId: repo.installationId,
-          projectId: task.projectId,
-          branchName,
-          baseBranch,
-          isFirstTaskOnBranch: firstOnBranch,
-          model: task.model ?? repo.defaultModel,
-          providerAccountId: task.providerAccountId,
-          credentialOwnerUserId: task.createdBy,
-          userId: ctx.userId,
-          mode: args.mode,
-        },
-      );
-      workflowIdString = String(workflowId);
+      await startTaskRunWorkflow(ctx, {
+        runId,
+        taskId: args.id,
+        repoId: task.repoId,
+        installationId: repo.installationId,
+        projectId: task.projectId,
+        branchName,
+        baseBranch,
+        isFirstTaskOnBranch: firstOnBranch,
+        model: task.model ?? repo.defaultModel,
+        providerAccountId: task.providerAccountId,
+        credentialOwnerUserId: task.createdBy,
+        userId: ctx.userId,
+        mode: args.mode,
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to start workflow";
@@ -173,10 +167,6 @@ export const startExecution = authMutation({
       });
       throw error;
     }
-
-    await ctx.db.patch(args.id, {
-      activeWorkflowId: workflowIdString,
-    });
 
     return {
       runId,

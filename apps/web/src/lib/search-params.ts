@@ -155,6 +155,27 @@ export function isSessionSandboxTab(s: string): s is SandboxTab {
   return sandboxTabs.some((tab) => tab === s);
 }
 
+/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
+const NON_VM_SANDBOX_TABS = new Set([
+  "review",
+  "agents",
+  "prd",
+  "designs",
+  "artifacts",
+  "documents",
+]);
+
+/**
+ * True for a tab that talks to the sandbox VM itself (preview, browser,
+ * editor, computer, files, and any custom tab slug). The idle-pause presence
+ * beacon and wake-on-tab-open key off this, so a user reading the Review tab
+ * neither keeps a sandbox awake nor wakes a paused one.
+ */
+export function isSandboxVmTab(tab: string): boolean {
+  const id = sandboxTabIdFromParam(tab);
+  return id.length > 0 && !NON_VM_SANDBOX_TABS.has(id);
+}
+
 /** Old Computer-tab URL segment; redirect to `computer`. */
 export function isLegacyDesktopSandboxTab(s: string): boolean {
   return s === "desktop";
@@ -192,24 +213,40 @@ export function isTaskRouteSandboxTab(s: string): s is TaskRouteSandboxTab {
  * (`/reviews/$prNumber/$reviewTab`) and the sandbox Review tab
  * (`…/review/$tab`). One union so the two surfaces cannot drift apart.
  *
- * The ids are URL slugs and outlive their labels: `overview` is presented as
- * "Activity" and `diffs` as "Changes" (see `REVIEW_TAB_META`). Renaming the
- * slugs would break every link anybody has pasted into a task or a PR comment
- * for the sake of two words nothing renders, so the labels moved and the slugs
- * stayed. `canonicalReviewTab` accepts the label-shaped spellings too.
+ * Three tabs, as t3code lays a pull request out: Summary (metadata, recap,
+ * description, checks, comments), Timeline (everything that happened, in
+ * order), and Code. Code keeps the `diffs` slug because its layout segment
+ * (`…/review/diffs/unified|split`) is nested under it on every sandbox surface.
+ *
+ * The five slugs this replaced (`overview`, `commits`, `checks`, `recap`, and
+ * `diffs`) are in links pasted into tasks and PR comments, so
+ * `canonicalReviewTab` still answers to every one of them.
+ *
+ * `prs` lists every pull request a session, quick task or project holds, and
+ * picks which one the other three tabs show. Sandbox surfaces only: the
+ * standalone page is already one pull request.
  */
-const reviewTabs = ["overview", "commits", "checks", "diffs", "recap"] as const;
+const reviewTabs = ["summary", "timeline", "diffs", "prs"] as const;
 export type ReviewTab = (typeof reviewTabs)[number];
-export const REVIEW_DEFAULT_TAB: ReviewTab = "overview";
+export const REVIEW_DEFAULT_TAB: ReviewTab = "summary";
 
 export function isReviewTab(s: string): s is ReviewTab {
   return reviewTabs.some((tab) => tab === s);
 }
 
-/** Slugs a tab used to answer to, or is labelled as, redirected to canonical. */
+/** Slugs a tab used to answer to, or is labelled as, mapped to canonical. */
 export function canonicalReviewTab(s: string): ReviewTab | undefined {
-  if (s === "diff" || s === "changes") return "diffs";
-  if (s === "activity") return "overview";
+  if (s === "diff" || s === "changes" || s === "code") return "diffs";
+  if (
+    s === "overview" ||
+    s === "activity" ||
+    s === "checks" ||
+    s === "recap"
+  ) {
+    return "summary";
+  }
+  if (s === "commits") return "timeline";
+  if (s === "pulls" || s === "pull-requests") return "prs";
   return isReviewTab(s) ? s : undefined;
 }
 
@@ -221,8 +258,8 @@ export function isDiffView(s: string): s is DiffView {
 }
 
 export type ReviewPathTarget =
-  | { kind: "overview" }
-  | { kind: "recap" }
+  | { kind: "summary" }
+  | { kind: "timeline" }
   | { kind: "diffs"; diffView: DiffView };
 
 /**
@@ -233,10 +270,12 @@ export function reviewPathFromSearch(search: {
   prTab?: unknown;
   diffView?: unknown;
 }): ReviewPathTarget {
-  if (typeof search.prTab === "string" && isReviewTab(search.prTab)) {
-    if (search.prTab === "overview") return { kind: "overview" };
-    if (search.prTab === "recap") return { kind: "recap" };
-  }
+  const tab =
+    typeof search.prTab === "string"
+      ? canonicalReviewTab(search.prTab)
+      : undefined;
+  if (tab === "summary") return { kind: "summary" };
+  if (tab === "timeline") return { kind: "timeline" };
   const diffView =
     typeof search.diffView === "string" && isDiffView(search.diffView)
       ? search.diffView
@@ -303,8 +342,8 @@ export function parseDiffSearchFields(search: {
         ? search.diffView
         : undefined,
     prTab:
-      typeof search.prTab === "string" && isReviewTab(search.prTab)
-        ? search.prTab
+      typeof search.prTab === "string"
+        ? canonicalReviewTab(search.prTab)
         : undefined,
   };
 }
@@ -370,6 +409,27 @@ export const docModeParser = parseAsStringLiteral(docModes)
   .withDefault("editing")
   .withOptions(searchOptions);
 
+// Row (doc / artifact id) open inline in a sandbox Documents or Artifacts tab.
+export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
+
+/** `?panelItem=` value that opens the chat Log instead of a doc row. */
+export const CHAT_LOG_PANEL_ITEM = "log";
+
+// Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
+export const chatLogKinds = [
+  "decision",
+  "change",
+  "research",
+  "question",
+  "note",
+] as const;
+export const chatLogKindParser =
+  parseAsStringLiteral(chatLogKinds).withOptions(searchOptions);
+
+// Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
+// Absent means the chat's primary PR.
+export const reviewPullRequestParser = parseAsString.withOptions(searchOptions);
+
 const docCommentFilters = ["open", "resolved"] as const;
 export const docCommentFilterParser = parseAsStringLiteral(docCommentFilters)
   .withDefault("open")
@@ -427,6 +487,15 @@ export const pullRequestListStateParser = parseAsStringLiteral(
   .withOptions(searchOptions);
 
 export const previewPortParser = parseAsInteger.withOptions(searchOptions);
+
+/**
+ * Active chat tab of a session (`?chat=2`), by the chat's per-session number.
+ * Absent means Main, so every pre-existing session link still opens Main. A
+ * query param rather than a path segment because the chat axis is orthogonal
+ * to the `$sandboxTab` / `review/*` / `pr/*` segments that already hang off
+ * `$numId`, and nesting one inside the other would break every existing link.
+ */
+export const chatParser = parseAsInteger.withOptions(tabOptions);
 
 export const branchParser = parseAsString
   .withDefault("main")

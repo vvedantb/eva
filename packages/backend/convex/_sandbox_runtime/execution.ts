@@ -12,6 +12,8 @@ import {
   getAIModelProvider,
   normalizeAIModel,
   reasoningLevelValidator,
+  turnEntityIdValidator,
+  turnLaneValidator,
   usesChatDaemon,
 } from "../validators";
 import {
@@ -28,6 +30,7 @@ import {
   restartUnresponsiveSandbox,
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
+import { pollPreviewReadiness } from "./previewPoll";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import {
   buildDaemonAliveCheckCmd,
@@ -120,14 +123,40 @@ import {
 import { vercelAppListenPort } from "./vercelAppPorts";
 import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
+import { createHmac } from "node:crypto";
+import { previewActivityHmacMessage } from "./callbackAuth";
+import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
+
+/**
+ * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
+ * the deployment has no `ENCRYPTION_KEY` or no reachable site URL, which
+ * simply disables the heartbeat (the sweep then relies on tab presence).
+ */
+function previewActivityParams(sandboxId: string): {
+  activityUrl: string;
+  activityHmac: string;
+} {
+  const secret = process.env.ENCRYPTION_KEY;
+  const siteUrl = resolvePublicConvexSiteUrl(process.env);
+  if (!secret || !siteUrl) return { activityUrl: "", activityHmac: "" };
+  return {
+    activityUrl: `${siteUrl}/api/preview/activity`,
+    activityHmac: createHmac("sha256", secret)
+      .update(previewActivityHmacMessage(sandboxId))
+      .digest("hex"),
+  };
+}
 
 const sessionPersistenceKindValidator = v.union(
+  v.literal("sessionChats"),
   v.literal("sessions"),
   v.literal("projects"),
   v.literal("agentTasks"),
 );
 
+// A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
+  v.id("sessionChats"),
   v.id("sessions"),
   v.id("projects"),
   v.id("agentTasks"),
@@ -139,31 +168,6 @@ const sessionPersistenceIdValidator = v.union(
 // release. Losers then re-check alive / optsmismatch instead of giving up.
 const PREWARM_LAUNCH_LEASE_WAIT_MS = 90_000;
 const PREWARM_LAUNCH_LEASE_POLL_MS = 500;
-
-/**
- * True when the sandbox being created belongs to a master (orchestrator)
- * session, which boots from the Vercel managed image instead of the repo
- * snapshot. Looked up lazily: only session-persisted flows can be one, so
- * task/project/ephemeral paths never pay the query.
- */
-async function isOrchestratorSandboxSession(
-  ctx: ActionCtx,
-  args: {
-    sessionPersistenceId?: Infer<typeof sessionPersistenceIdValidator>;
-    sessionPersistenceKind?: Infer<typeof sessionPersistenceKindValidator>;
-  },
-): Promise<boolean> {
-  if (
-    args.sessionPersistenceKind !== "sessions" ||
-    args.sessionPersistenceId === undefined
-  ) {
-    return false;
-  }
-  const session = await ctx.runQuery(internal.sessions.getInternal, {
-    id: args.sessionPersistenceId,
-  });
-  return session?.isOrchestrator === true;
-}
 
 /** Checks whether a sandbox is healthy, starting it if stopped. */
 export const validateSandbox = internalAction({
@@ -870,9 +874,37 @@ export const runStopCommands = internalAction({
   },
 });
 
+const previewUrlArgs = {
+  sandboxId: v.string(),
+  port: v.number(),
+  checkReady: v.optional(v.boolean()),
+  navigationSync: v.optional(v.boolean()),
+  customTabPort: v.optional(v.number()),
+  repoId: v.id("githubRepos"),
+};
+
+const previewUrlResult = v.object({
+  url: v.string(),
+  port: v.number(),
+  ready: v.boolean(),
+});
+
+interface PreviewUrlRequest {
+  sandboxId: string;
+  port: number;
+  checkReady?: boolean;
+  navigationSync?: boolean;
+  customTabPort?: number;
+  repoId: Id<"githubRepos">;
+}
+
 /**
- * Returns a signed preview URL for a sandbox port, optionally checking
- * readiness.
+ * Builds a signed preview URL for a sandbox port, optionally checking
+ * readiness. Access is the caller's job: the public action below gates on the
+ * signed-in identity plus the sandbox↔repo binding, and the MCP path resolves
+ * the chat as its user first, so the sandbox id it passes came off a document
+ * that user can already read. `subject` is who the short-lived grant is minted
+ * for.
  *
  * `customTabPort` serves a user-defined tab (e.g. Supabase Studio on 54323).
  * Vercel exposes only four ports and the proxy owns the public one, so tabs do
@@ -880,211 +912,215 @@ export const runStopCommands = internalAction({
  * target, no clobbering) and the URL points at the proxy's `/__tab/<port>/`
  * prefix, which forwards to that in-sandbox port.
  */
-export const getPreviewUrl = action({
-  args: {
-    sandboxId: v.string(),
-    port: v.number(),
-    checkReady: v.optional(v.boolean()),
-    navigationSync: v.optional(v.boolean()),
-    customTabPort: v.optional(v.number()),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.object({
-    url: v.string(),
-    port: v.number(),
-    ready: v.boolean(),
-  }),
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
+async function buildPreviewUrl(
+  ctx: ActionCtx,
+  args: PreviewUrlRequest,
+  subject: string,
+): Promise<{ url: string; port: number; ready: boolean }> {
+  const customTabPort = args.customTabPort;
+  if (customTabPort !== undefined) {
+    // 3000/6080/8080 are the proxy's own exposed slots, never an upstream.
+    const reserved =
+      customTabPort === VERCEL_PREVIEW_PROXY_PORT ||
+      customTabPort === 6080 ||
+      customTabPort === 8080;
+    if (
+      !Number.isInteger(customTabPort) ||
+      customTabPort <= 0 ||
+      customTabPort > 65535 ||
+      reserved
+    ) {
+      throw new Error(
+        `Invalid custom tab port: ${customTabPort} (must be 1-65535 and not a reserved proxy port 3000/6080/8080)`,
+      );
     }
+  }
+  const responsePort = customTabPort ?? args.port;
 
-    const customTabPort = args.customTabPort;
-    if (customTabPort !== undefined) {
-      // 3000/6080/8080 are the proxy's own exposed slots, never an upstream.
-      const reserved =
-        customTabPort === VERCEL_PREVIEW_PROXY_PORT ||
-        customTabPort === 6080 ||
-        customTabPort === 8080;
-      if (
-        !Number.isInteger(customTabPort) ||
-        customTabPort <= 0 ||
-        customTabPort > 65535 ||
-        reserved
-      ) {
-        throw new Error(
-          `Invalid custom tab port: ${customTabPort} (must be 1-65535 and not a reserved proxy port 3000/6080/8080)`,
-        );
-      }
-    }
-    const responsePort = customTabPort ?? args.port;
+  // Validates that the repo has Vercel sandbox credentials configured;
+  // throws before touching the sandbox if it does not.
+  await resolveSandboxCredentials(ctx, args.repoId);
+  const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-    await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+  // Services listen on internal ports and the auth proxy owns the exposed
+  // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
+  // the upstream service port for readiness, not the proxy port.
+  const upstreamPort =
+    args.port === 6080
+      ? VERCEL_DESKTOP_INTERNAL_PORT
+      : args.port === 8080
+        ? VERCEL_EDITOR_INTERNAL_PORT
+        : vercelAppListenPort(args.port);
 
-    // Validates that the repo has Vercel sandbox credentials configured;
-    // throws before touching the sandbox if it does not.
-    await resolveSandboxCredentials(ctx, args.repoId);
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
-    // Services listen on internal ports and the auth proxy owns the exposed
-    // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
-    // the upstream service port for readiness, not the proxy port.
-    const upstreamPort =
-      args.port === 6080
-        ? VERCEL_DESKTOP_INTERNAL_PORT
-        : args.port === 8080
-          ? VERCEL_EDITOR_INTERNAL_PORT
-          : vercelAppListenPort(args.port);
-
-    let ready = true;
-    if (args.checkReady) {
-      // Never probe or restart the dev server on a sandbox that is not
-      // running. Every exec goes through the SDK's withResume: on a
-      // stopped sandbox it RESUMES it, and on a stopping/snapshotting one it
-      // waits the stop out and then revives it — so the preview poll loop was
-      // waking sandboxes the user had just stopped. Report not-ready without
-      // touching the VM; polling recovers once the sandbox is started again.
-      // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
-      if (handle.state !== "running") {
-        return { url: "", port: responsePort, ready: false };
-      }
-      // Background daemons (e.g. `npx convex dev`) only relaunch on sandbox
-      // start/resume. If they die while status stays active, Preview would
-      // keep loading a frontend with a dead backend — the app port can serve
-      // while a backend daemon is down, so this heal must NOT be gated on the
-      // readiness probe. It IS rate-limited: the poll fires every ~2s per
-      // open page and each heal execs a pid check per background command
-      // inside the sandbox, which flooded prod logs and burned action time.
-      // sandboxHeal.claim grants the slot to one caller per interval across
-      // all concurrent viewers.
-      // Custom tabs never heal or claim: both the background-daemon heal and
-      // the recovery below are about the app's dev server, and a stopped
-      // Supabase must not restart it.
-      const healClaimed =
-        customTabPort === undefined
-          ? await ctx.runMutation(internal.sandboxHeal.claim, {
-              sandboxId: args.sandboxId,
-            })
-          : false;
-      if (healClaimed) {
-        try {
+  let ready = true;
+  if (args.checkReady) {
+    // Ordering rules live in `pollPreviewReadiness`; this only binds them to
+    // this sandbox. Background daemons (e.g. `npx convex dev`) only relaunch
+    // on sandbox start/resume, so a dead one leaves Preview loading a
+    // frontend with a dead backend until the heal restarts it.
+    // (handle.state is fresh: getSandboxHandle fetches with resume:false.)
+    const poll = await pollPreviewReadiness(
+      {
+        sandboxRunning: handle.state === "running",
+        customTabPort,
+        port: args.port,
+      },
+      {
+        claimHeal: () =>
+          ctx.runMutation(internal.sandboxHeal.claim, {
+            sandboxId: args.sandboxId,
+          }),
+        healBackgroundCommands: async () => {
           await ctx.runAction(internal.sandbox.runBackgroundCommands, {
             sandboxId: args.sandboxId,
             repoId: args.repoId,
             onlyRestartDead: true,
           });
-        } catch (e) {
+        },
+        // A custom tab's readiness is its own port, not the app's dev server.
+        probeReady: () =>
+          probePreviewReady(handle, customTabPort ?? upstreamPort),
+        scheduleRecovery: async () => {
+          await ctx.scheduler.runAfter(
+            0,
+            internal.sandbox.ensureSessionPreviewServices,
+            {
+              sandboxId: args.sandboxId,
+              repoId: args.repoId,
+              expectedPort: upstreamPort,
+            },
+          );
+        },
+        onHealFailed: (e) =>
           console.warn(
             `[sandbox] preview background heal failed sandbox=${args.sandboxId}: ${errorMessage(e, "heal failed")}`,
-          );
-        }
-      }
-      // A custom tab's readiness is its own port, not the app's dev server.
-      ready = await probePreviewReady(handle, customTabPort ?? upstreamPort);
-      // Preview never launches the app inline: Lifecycle owns Console
-      // (`launchPreviewDevServer` → tmux) as the single launcher. But nothing
-      // watches the dev server after launch — an OOM kill or a lazily-resumed
-      // VM (exec on a stopped sandbox restores no services) leaves the app
-      // port dead while the sandbox runs, and only this poll notices. So on a
-      // claimed heal with a failed probe, schedule recovery THROUGH the
-      // Console launcher (visible in Console, port-busy idempotent). Reusing
-      // the heal claim rate-limits recovery attempts to one per interval.
-      // Desktop (6080) and editor (8080) have their own lifecycles.
-      if (!ready && healClaimed && args.port !== 6080 && args.port !== 8080) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.sandbox.ensureSessionPreviewServices,
-          {
-            sandboxId: args.sandboxId,
-            repoId: args.repoId,
-            expectedPort: upstreamPort,
-          },
+          ),
+      },
+    );
+    if (poll.kind === "sandbox-not-running") {
+      return { url: "", port: responsePort, ready: false };
+    }
+    ready = poll.ready;
+  }
+
+  // Always front the service with the in-sandbox auth proxy so open-in-new-tab
+  // is gated the same way for Preview, Computer, and Editor.
+  //
+  // Vercel exposes a fixed 4-port set. Map:
+  //   app/dev → proxy on 3000 (upstream = listen port; 54321 left for Supabase)
+  //   editor  → proxy on 8080  (upstream 18080)
+  //   desktop → proxy on 6080  (upstream 16080)
+  const previewPublicJwk = getPreviewGrantPublicJwk();
+  const isVercelDesktopOrEditor = args.port === 6080 || args.port === 8080;
+  const fixedVercelProxyPort = isVercelDesktopOrEditor
+    ? args.port
+    : VERCEL_PREVIEW_PROXY_PORT;
+  // Public route port: on Vercel app/dev previews this is always 3000, never
+  // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
+  let previewPort = fixedVercelProxyPort ?? args.port;
+  // Same upstream mapping used for the readiness probe above.
+  const proxyTargetPort = upstreamPort;
+  const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
+  // The proxy fronts the app, so a custom tab gates it on the sandbox being
+  // up rather than on `ready` (which describes the tab's own port).
+  const proxyUsable =
+    customTabPort === undefined ? ready : handle.state === "running";
+  if (proxyUsable && shouldStartPreviewProxy) {
+    try {
+      previewPort = await ensurePreviewNavigationProxy(
+        handle,
+        proxyTargetPort,
+        {
+          publicKeyJwk: previewPublicJwk,
+          sandboxId: args.sandboxId,
+          repoId: args.repoId,
+          webAppUrl: process.env.WEB_APP_URL ?? "",
+          inject: args.navigationSync === true,
+          // Browser-facing port for /preview-auth (public proxy, not listen).
+          authPort: fixedVercelProxyPort ?? args.port,
+          ...previewActivityParams(args.sandboxId),
+        },
+        fixedVercelProxyPort,
+      );
+    } catch (e) {
+      const proxyErrorMessage = errorMessage(e, "proxy startup failed");
+      console.warn(
+        `[sandbox] preview navigation proxy unavailable for sandbox=${args.sandboxId} port=${args.port}: ${proxyErrorMessage}`,
+      );
+      // Vercel only exposes a fixed, small port set (VERCEL_DEFAULT_EXPOSED_PORTS).
+      // If the reserved proxy port fails to start while a preview grant
+      // key is configured, silently falling back to the unproxied service
+      // port would serve with no auth gate at all. Fail loudly instead.
+      if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
+        throw new Error(
+          `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
         );
       }
     }
+  }
 
-    // Always front the service with the in-sandbox auth proxy so open-in-new-tab
-    // is gated the same way for Preview, Computer, and Editor.
-    //
-    // Vercel exposes a fixed 4-port set. Map:
-    //   app/dev → proxy on 3000 (upstream = listen port; 54321 left for Supabase)
-    //   editor  → proxy on 8080  (upstream 18080)
-    //   desktop → proxy on 6080  (upstream 16080)
-    const previewPublicJwk = getPreviewGrantPublicJwk();
-    const isVercelDesktopOrEditor = args.port === 6080 || args.port === 8080;
-    const fixedVercelProxyPort = isVercelDesktopOrEditor
-      ? args.port
-      : VERCEL_PREVIEW_PROXY_PORT;
-    // Public route port: on Vercel app/dev previews this is always 3000, never
-    // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
-    let previewPort = fixedVercelProxyPort ?? args.port;
-    // Same upstream mapping used for the readiness probe above.
-    const proxyTargetPort = upstreamPort;
-    const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
-    // The proxy fronts the app, so a custom tab gates it on the sandbox being
-    // up rather than on `ready` (which describes the tab's own port).
-    const proxyUsable =
-      customTabPort === undefined ? ready : handle.state === "running";
-    if (proxyUsable && shouldStartPreviewProxy) {
-      try {
-        previewPort = await ensurePreviewNavigationProxy(
-          handle,
-          proxyTargetPort,
-          {
-            publicKeyJwk: previewPublicJwk,
-            sandboxId: args.sandboxId,
-            repoId: args.repoId,
-            webAppUrl: process.env.WEB_APP_URL ?? "",
-            inject: args.navigationSync === true,
-            // Browser-facing port for /preview-auth (public proxy, not listen).
-            authPort: fixedVercelProxyPort ?? args.port,
-          },
-          fixedVercelProxyPort,
-        );
-      } catch (e) {
-        const proxyErrorMessage = errorMessage(e, "proxy startup failed");
-        console.warn(
-          `[sandbox] preview navigation proxy unavailable for sandbox=${args.sandboxId} port=${args.port}: ${proxyErrorMessage}`,
-        );
-        // Vercel only exposes a fixed, small port set (VERCEL_DEFAULT_EXPOSED_PORTS).
-        // If the reserved proxy port fails to start while a preview grant
-        // key is configured, silently falling back to the unproxied service
-        // port would serve with no auth gate at all. Fail loudly instead.
-        if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
-          throw new Error(
-            `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
-          );
-        }
-      }
+  const signedPreview = await handle.previewUrl(previewPort, 86400);
+  const parsedUrl = new URL(signedPreview.url);
+  parsedUrl.protocol = "https:";
+
+  // Append a fresh short-lived grant so the in-app iframe (and the authed
+  // user's "open in new tab") loads without a login round-trip. The proxy
+  // exchanges it for a session cookie on first load. Only when gating is
+  // configured — otherwise the URL stays a plain proxied URL.
+  if (previewPublicJwk && proxyUsable) {
+    const grant = await signPreviewGrant({
+      sandboxId: args.sandboxId,
+      // Grant must match AUTH_PORT (public proxy on Vercel app previews).
+      port: fixedVercelProxyPort ?? args.port,
+      sub: subject,
+    });
+    parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
+  }
+
+  // Custom tabs are served by the same proxy under its per-port prefix.
+  if (customTabPort !== undefined) {
+    parsedUrl.pathname = `${PREVIEW_TAB_PREFIX}/${customTabPort}/`;
+  }
+
+  const url = parsedUrl.toString();
+  return { url, port: responsePort, ready };
+}
+
+/** Preview URL for the signed-in web app (Preview pane, open-in-new-tab). */
+export const getPreviewUrl = action({
+  args: previewUrlArgs,
+  returns: previewUrlResult,
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
     }
-
-    const signedPreview = await handle.previewUrl(previewPort, 86400);
-    const parsedUrl = new URL(signedPreview.url);
-    parsedUrl.protocol = "https:";
-
-    // Append a fresh short-lived grant so the in-app iframe (and the authed
-    // user's "open in new tab") loads without a login round-trip. The proxy
-    // exchanges it for a session cookie on first load. Only when gating is
-    // configured — otherwise the URL stays a plain proxied URL.
-    if (previewPublicJwk && proxyUsable) {
-      const grant = await signPreviewGrant({
+    await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+    // A Preview/custom-tab open is a human interaction for the idle-pause
+    // sweep. Readiness polls repeat every 3s, but the touch is throttled
+    // server-side so the steady state is read-only.
+    if (args.checkReady || args.navigationSync) {
+      await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
         sandboxId: args.sandboxId,
-        // Grant must match AUTH_PORT (public proxy on Vercel app previews).
-        port: fixedVercelProxyPort ?? args.port,
-        sub: identity.subject,
+        source: "preview-tab",
+        clerkUserId: identity.subject,
       });
-      parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);
     }
-
-    // Custom tabs are served by the same proxy under its per-port prefix.
-    if (customTabPort !== undefined) {
-      parsedUrl.pathname = `${PREVIEW_TAB_PREFIX}/${customTabPort}/`;
-    }
-
-    const url = parsedUrl.toString();
-    return { url, port: responsePort, ready };
+    return await buildPreviewUrl(ctx, args, identity.subject);
   },
+});
+
+/**
+ * Preview URL for a caller whose access has already been established — the MCP
+ * `get_preview_url` tool, which resolves the chat as its user and so reads the
+ * sandbox id off a document that user can see. There is no identity on an
+ * internal action, so the caller must not reach this with an unchecked id.
+ */
+export const previewUrlForAuthorizedSandbox = internalAction({
+  args: { ...previewUrlArgs, clerkUserId: v.string() },
+  returns: previewUrlResult,
+  handler: async (ctx, { clerkUserId, ...args }) =>
+    await buildPreviewUrl(ctx, args, clerkUserId),
 });
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
@@ -1163,15 +1199,11 @@ export const prepareSandbox = internalAction({
     console.log(
       `[sandbox] prepareSandbox: resolving context for repo=${args.repoOwner}/${args.repoName} repoId=${args.repoId} ephemeral=${args.ephemeral ?? false}`,
     );
-    // A master session whose sandbox died resumes through here, so the image
-    // override has to be resolved on this path too — otherwise it would fall
-    // back to a repo snapshot (or bare node24) instead of the managed image.
-    const isOrchestrator = await isOrchestratorSandboxSession(ctx, args);
-    const { client, sandboxEnvVars, snapshotName, image } =
-      await resolveSandboxContext(ctx, args.repoId, { isOrchestrator });
+    const { client, sandboxEnvVars, snapshotName } =
+      await resolveSandboxContext(ctx, args.repoId);
     const existingSandboxId = args.existingSandboxId;
     console.log(
-      `[sandbox] prepareSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
+      `[sandbox] prepareSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
     );
     let sandbox: SandboxHandle | undefined;
     let deleteSandboxOnFailure = false;
@@ -1204,10 +1236,6 @@ export const prepareSandbox = internalAction({
             attachRunSandbox,
             emitProgress,
             { mode: "none" },
-            undefined,
-            isOrchestrator,
-            image,
-            isOrchestrator,
           );
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = true;
@@ -1224,9 +1252,6 @@ export const prepareSandbox = internalAction({
             snapshotName,
             emitProgress,
             { mode: "none" },
-            isOrchestrator,
-            image,
-            isOrchestrator,
           );
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = prepared.isNew;
@@ -1351,14 +1376,11 @@ export const createOrResumeSandbox = internalAction({
     console.log(
       `[sandbox] createOrResumeSandbox: resolving context for repo=${args.repoOwner}/${args.repoName} repoId=${args.repoId} ephemeral=${args.ephemeral ?? false}`,
     );
-    // Same reason as prepareSandbox: a master session resuming after its
-    // sandbox died must land on the managed image, not a repo snapshot.
-    const isOrchestrator = await isOrchestratorSandboxSession(ctx, args);
-    const { client, sandboxEnvVars, snapshotName, image } =
-      await resolveSandboxContext(ctx, args.repoId, { isOrchestrator });
+    const { client, sandboxEnvVars, snapshotName } =
+      await resolveSandboxContext(ctx, args.repoId);
     const existingSandboxId = args.existingSandboxId;
     console.log(
-      `[sandbox] createOrResumeSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
+      `[sandbox] createOrResumeSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
     );
 
     let sandbox: SandboxHandle | undefined;
@@ -1393,10 +1415,6 @@ export const createOrResumeSandbox = internalAction({
             attachRunSandbox,
             emitProgress,
             { mode: "none" },
-            undefined,
-            isOrchestrator,
-            image,
-            isOrchestrator,
           );
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = true;
@@ -1414,9 +1432,6 @@ export const createOrResumeSandbox = internalAction({
             snapshotName,
             emitProgress,
             { mode: "none" },
-            isOrchestrator,
-            image,
-            isOrchestrator,
           );
           sandbox = prepared.sandbox;
           deleteSandboxOnFailure = prepared.isNew;
@@ -1728,15 +1743,10 @@ function buildDaemonOptsSig(
   providerAccountCredentialRevision: number | undefined,
   streamingEntityId: string,
   traits: TraitEnvInput,
-  noWrites?: boolean,
 ): string {
   const fastMode =
     traits.fastMode === undefined ? "" : traits.fastMode ? "1" : "0";
-  // `noWrites` is a suffix appended only when set, rather than another `|`
-  // field: a new field would change the signature of every writing session too
-  // and kill+respawn every warm daemon in the fleet on deploy, for no gain.
-  const readOnly = noWrites === true ? "|nowrites" : "";
-  return `${normalizedModel}|${allowedTools ?? ""}|${traits.reasoningLevel ?? ""}|${traits.thinkingEnabled === false ? "0" : ""}|${traits.use1mContext === true ? "1" : ""}|${fastMode}|${providerAccountId ?? ""}|${providerAccountCredentialRevision ?? ""}|${streamingEntityId}${readOnly}`;
+  return `${normalizedModel}|${allowedTools ?? ""}|${traits.reasoningLevel ?? ""}|${traits.thinkingEnabled === false ? "0" : ""}|${traits.use1mContext === true ? "1" : ""}|${fastMode}|${providerAccountId ?? ""}|${providerAccountCredentialRevision ?? ""}|${streamingEntityId}`;
 }
 
 function buildTraitEnvVars(traits: TraitEnvInput): Record<string, string> {
@@ -1773,23 +1783,16 @@ type PrewarmEntityDaemonBaseParams = {
   use1mContext?: boolean;
   fastMode?: boolean;
   allowedTools?: string;
-  noWrites?: boolean;
   providerAccountId?: Id<"userProviderAccounts">;
   credentialOwnerUserId?: Id<"users">;
   sessionPersistenceId?: Infer<typeof sessionPersistenceIdValidator>;
   streamingEntityId?: string;
   activeWorkflowField: "activeWorkflowId" | "activeChatWorkflowId";
   skipPrewarm?: boolean;
-  /**
-   * Manager Ave never runs repo services. Passing this through to
-   * `ensureSandboxRunning` keeps a lastModel prewarm from holding the launch
-   * lease across a 30s+ dockerd poll on the Ubuntu image (no `dnf`).
-   */
-  skipDocker?: boolean;
 };
 
 type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
-  entityTable: "sessions" | "agentTasks" | "projects";
+  entityTable: "sessionChats" | "sessions" | "agentTasks" | "projects";
 };
 
 /** Shared implementation for prewarmEntityDaemon and prewarmSessionDaemon. */
@@ -1860,7 +1863,6 @@ async function runPrewarmEntityDaemon(
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
       },
-      args.noWrites,
     );
     const probeAliveState = async (): Promise<string> => {
       const alive = await execHandle(
@@ -1950,6 +1952,24 @@ async function runPrewarmEntityDaemon(
       return null;
     };
 
+    // The alive classification above is a point-in-time read. A Stop can land
+    // while this prewarm waits on the launch lease (up to minutes), and every
+    // later exec — or ensureSandboxRunning — would lazily resume the stopped VM
+    // (task 262: stopped 12:47:11, prewarm resumed it 8s later). Poll the
+    // user's stop intent before each step that can wake the sandbox.
+    const stopRequested = () =>
+      ctx.runQuery(internal.sandboxDaemon.isEntitySandboxStopRequested, {
+        entityTable: args.entityTable,
+        entityId: entityIdStr,
+      });
+    const skipIfStopped = async (): Promise<boolean> => {
+      if (!(await stopRequested())) return false;
+      console.log(
+        `[sandbox][execution] prewarmEntityDaemon: stop requested — skipping entityId=${entityIdStr} after ${Date.now() - startedAt}ms`,
+      );
+      return true;
+    };
+
     const initialReady = await settleIfReady(await probeAliveState());
     if (initialReady !== null) return initialReady;
 
@@ -1975,6 +1995,7 @@ async function runPrewarmEntityDaemon(
       const waitDeadline = Date.now() + PREWARM_LAUNCH_LEASE_WAIT_MS;
       while (!leased && Date.now() < waitDeadline) {
         await sleep(PREWARM_LAUNCH_LEASE_POLL_MS);
+        if (await skipIfStopped()) return { prewarmed: false };
         const waitedReady = await settleIfReady(await probeAliveState());
         if (waitedReady !== null) return waitedReady;
         leased = await claimLease();
@@ -2032,9 +2053,9 @@ async function runPrewarmEntityDaemon(
         if (deferred !== null) return deferred;
       }
 
+      if (await skipIfStopped()) return { prewarmed: false };
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
-        skipDocker: args.skipDocker === true,
       });
 
       const claudeSessionId =
@@ -2055,7 +2076,6 @@ async function runPrewarmEntityDaemon(
         {
           model: normalizedModel,
           allowedTools: args.allowedTools,
-          noWrites: args.noWrites,
           claimMutation: args.claimMutation,
           openSyntheticTurnMutation: args.openSyntheticTurnMutation,
           completeSyntheticTurnMutation: args.completeSyntheticTurnMutation,
@@ -2116,8 +2136,6 @@ export const prewarmEntityDaemon = internalAction({
     use1mContext: v.optional(v.boolean()),
     fastMode: v.optional(v.boolean()),
     allowedTools: v.optional(v.string()),
-    /** Read-only turn: translated per SDK in the callback. See `sessionTurnTools`. */
-    noWrites: v.optional(v.boolean()),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
@@ -2128,6 +2146,7 @@ export const prewarmEntityDaemon = internalAction({
     ),
     skipPrewarm: v.optional(v.boolean()),
     entityTable: v.union(
+      v.literal("sessionChats"),
       v.literal("sessions"),
       v.literal("agentTasks"),
       v.literal("projects"),
@@ -2142,8 +2161,8 @@ export const prewarmEntityDaemon = internalAction({
  * Pushes the sandbox's hard session deadline out by `durationMs`. Vercel's
  * `timeout` is a hard per-session runtime cap — turns that outlive it are
  * killed mid-work with no snapshot (filesystem rolls back to the pre-turn
- * snapshot on the next resume). The stall watchdog schedules this on every
- * not-stale tick of an active turn. Best-effort: a failed extension must
+ * snapshot on the next resume). A durable turn's lease renewal schedules
+ * this (`renewTurnLease`) for every turn, quick-task runs included. Best-effort: a failed extension must
  * never fail the turn, and it must not resume a stopped sandbox (getting a
  * handle does not exec; extendTimeout on a stopped sandbox errors harmlessly).
  */
@@ -2266,10 +2285,14 @@ export const killEntityDaemon = internalAction({
  * skips the boot entirely. No-op if a daemon is already alive for this session.
  * Best-effort: any failure is swallowed (the normal path still works).
  */
+/**
+ * Warms the daemon of one session chat. Chats of a session share the sandbox
+ * but each runs its own agent process, keyed by the chat id.
+ */
 export const prewarmSessionDaemon = internalAction({
   args: {
     sandboxId: v.string(),
-    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     repoId: v.id("githubRepos"),
     userId: v.id("users"),
     model: v.optional(v.string()),
@@ -2278,27 +2301,25 @@ export const prewarmSessionDaemon = internalAction({
     use1mContext: v.optional(v.boolean()),
     fastMode: v.optional(v.boolean()),
     allowedTools: v.optional(v.string()),
-    /** Read-only turn: translated per SDK in the callback. See `sessionTurnTools`. */
-    noWrites: v.optional(v.boolean()),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     credentialOwnerUserId: v.optional(v.id("users")),
     sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
   },
   returns: v.object({ prewarmed: v.boolean() }),
   handler: async (ctx, args): Promise<{ prewarmed: boolean }> => {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: args.sessionId,
+    const context = await ctx.runQuery(internal.sessionChats.getInternal, {
+      chatId: args.chatId,
     });
     const skipPrewarm =
-      session === null ||
-      session === undefined ||
-      isSandboxClosingStatus(session.status);
+      context === null ||
+      context.chat.archived === true ||
+      isSandboxClosingStatus(context.session.status);
     return runPrewarmEntityDaemon(ctx, {
       sandboxId: args.sandboxId,
       repoId: args.repoId,
       userId: args.userId,
-      entityId: String(args.sessionId),
-      entityIdField: "sessionId",
+      entityId: String(args.chatId),
+      entityIdField: "chatId",
       completionMutation: "sessionWorkflow:handleCompletion",
       ...SESSION_DAEMON_MUTATIONS,
       model: args.model,
@@ -2307,139 +2328,189 @@ export const prewarmSessionDaemon = internalAction({
       use1mContext: args.use1mContext,
       fastMode: args.fastMode,
       allowedTools: args.allowedTools,
-      noWrites: args.noWrites,
       providerAccountId: args.providerAccountId,
       credentialOwnerUserId: args.credentialOwnerUserId,
       sessionPersistenceId: args.sessionPersistenceId,
       activeWorkflowField: "activeWorkflowId",
       skipPrewarm,
-      skipDocker: session?.isOrchestrator === true,
-      entityTable: "sessions",
+      entityTable: "sessionChats",
     });
   },
 });
 
-/** Launches an AI agent script on an existing sandbox with streaming and token setup. */
-export const launchOnExistingSandbox = internalAction({
-  args: {
-    sandboxId: v.string(),
-    entityId: v.string(),
-    prompt: v.string(),
-    userId: v.id("users"),
-    completionMutation: v.string(),
-    entityIdField: v.string(),
-    model: v.optional(v.string()),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-    allowedTools: v.optional(v.string()),
-    /** Read-only turn: translated per SDK in the callback. See `sessionTurnTools`. */
-    noWrites: v.optional(v.boolean()),
-    systemPrompt: v.optional(v.string()),
-    repoId: v.id("githubRepos"),
-    streamingEntityId: v.optional(v.string()),
-    runId: v.optional(v.string()),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    requireTaskCommit: v.optional(v.boolean()),
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    /** Entity owner for personal-credential decrypt; defaults to `userId`. */
-    credentialOwnerUserId: v.optional(v.id("users")),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-    turnId: v.optional(v.id("turns")),
-    turnLeaseGeneration: v.optional(v.number()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const launchStartedAt = Date.now();
-    console.log(
-      `[sandbox][execution] launchOnExistingSandbox started entityId=${args.entityId} sandboxId=${args.sandboxId} repoId=${args.repoId}`,
-    );
-    const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+/** Arguments of every agent launch on an existing sandbox. */
+const launchArgs = {
+  sandboxId: v.string(),
+  entityId: v.string(),
+  prompt: v.string(),
+  userId: v.id("users"),
+  completionMutation: v.string(),
+  entityIdField: v.string(),
+  model: v.optional(v.string()),
+  reasoningLevel: v.optional(reasoningLevelValidator),
+  thinkingEnabled: v.optional(v.boolean()),
+  use1mContext: v.optional(v.boolean()),
+  fastMode: v.optional(v.boolean()),
+  allowedTools: v.optional(v.string()),
+  systemPrompt: v.optional(v.string()),
+  repoId: v.id("githubRepos"),
+  streamingEntityId: v.optional(v.string()),
+  runId: v.optional(v.string()),
+  sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
+  requireTaskCommit: v.optional(v.boolean()),
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  /** Entity owner for personal-credential decrypt; defaults to `userId`. */
+  credentialOwnerUserId: v.optional(v.id("users")),
+  attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+};
 
-    // Download any user-attached input images into the sandbox and point the
-    // agent at them via a prompt note (the CLI providers read files by path).
-    let prompt = args.prompt;
-    if (args.attachmentStorageIds && args.attachmentStorageIds.length > 0) {
-      const paths = await materializeAttachmentsToSandbox(
-        ctx,
-        sandbox,
-        args.attachmentStorageIds,
-      );
-      prompt += buildAttachmentPromptNote(paths);
-    }
+const launchArgsValidator = v.object({
+  ...launchArgs,
+  turnId: v.optional(v.id("turns")),
+  turnLeaseGeneration: v.optional(v.number()),
+});
 
-    await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
-    console.log(
-      `[sandbox][execution] cleaned prior runner in ${Date.now() - launchStartedAt}ms entityId=${args.entityId}`,
-    );
+async function launchAgentOnSandbox(
+  ctx: ActionCtx,
+  args: Infer<typeof launchArgsValidator>,
+): Promise<void> {
+  const launchStartedAt = Date.now();
+  console.log(
+    `[sandbox][execution] launchOnExistingSandbox started entityId=${args.entityId} sandboxId=${args.sandboxId} repoId=${args.repoId}`,
+  );
+  const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
-    const extraEnvVars: Record<string, string> = {};
-    if (args.streamingEntityId) {
-      extraEnvVars.STREAMING_ENTITY_ID = args.streamingEntityId;
-      const existing = await ctx.runQuery(internal.streaming.internalGet, {
-        entityId: args.streamingEntityId,
-      });
-      if (existing) {
-        extraEnvVars.PRIOR_STEPS = existing.currentActivity;
-      }
-    }
-    if (args.runId) {
-      extraEnvVars.RUN_ID = args.runId;
-    }
-    if (args.requireTaskCommit === true) {
-      extraEnvVars.REQUIRE_TASK_COMMIT = "true";
-    }
-    if (args.turnId !== undefined && args.turnLeaseGeneration !== undefined) {
-      extraEnvVars.TURN_ID = String(args.turnId);
-      extraEnvVars.TURN_LEASE_GENERATION = String(args.turnLeaseGeneration);
-    }
-    // Session-wide trait overrides. Only non-default values are sent from the UI;
-    // the runner maps effort to each provider's native control (see config.ts).
-    Object.assign(
-      extraEnvVars,
-      buildTraitEnvVars({
-        reasoningLevel: args.reasoningLevel,
-        thinkingEnabled: args.thinkingEnabled,
-        use1mContext: args.use1mContext,
-        fastMode: args.fastMode,
-      }),
-    );
-    extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
-
-    const normalizedModel = normalizeAIModel(args.model);
-    const claudeSessionId =
-      getAIModelProvider(normalizedModel) === "claude" &&
-      args.sessionPersistenceId
-        ? sessionClaudeUuid(args.sessionPersistenceId)
-        : undefined;
-
-    await signAndLaunchScript(
+  // Download any user-attached input images into the sandbox and point the
+  // agent at them via a prompt note (the CLI providers read files by path).
+  let prompt = args.prompt;
+  if (args.attachmentStorageIds && args.attachmentStorageIds.length > 0) {
+    const paths = await materializeAttachmentsToSandbox(
       ctx,
       sandbox,
-      args.userId,
-      prompt,
-      args.completionMutation,
-      args.entityIdField,
-      args.entityId,
-      args.repoId,
-      {
-        model: normalizedModel,
-        allowedTools: args.allowedTools,
-        noWrites: args.noWrites,
-        systemPrompt: args.systemPrompt,
-        extraEnvVars:
-          Object.keys(extraEnvVars).length > 0 ? extraEnvVars : undefined,
-        claudeSessionId,
-        providerAccountId: args.providerAccountId,
-        credentialOwnerUserId: args.credentialOwnerUserId,
-        enableMcp: true,
-      },
+      args.attachmentStorageIds,
     );
-    console.log(
-      `[sandbox][execution] launchOnExistingSandbox finished in ${Date.now() - launchStartedAt}ms entityId=${args.entityId} sandboxId=${args.sandboxId}`,
-    );
+    prompt += buildAttachmentPromptNote(paths);
+  }
 
+  await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
+  console.log(
+    `[sandbox][execution] cleaned prior runner in ${Date.now() - launchStartedAt}ms entityId=${args.entityId}`,
+  );
+
+  const extraEnvVars: Record<string, string> = {};
+  if (args.streamingEntityId) {
+    extraEnvVars.STREAMING_ENTITY_ID = args.streamingEntityId;
+    const existing = await ctx.runQuery(internal.streaming.internalGet, {
+      entityId: args.streamingEntityId,
+    });
+    if (existing) {
+      extraEnvVars.PRIOR_STEPS = existing.currentActivity;
+    }
+  }
+  if (args.runId) {
+    extraEnvVars.RUN_ID = args.runId;
+  }
+  if (args.requireTaskCommit === true) {
+    extraEnvVars.REQUIRE_TASK_COMMIT = "true";
+  }
+  if (args.turnId !== undefined && args.turnLeaseGeneration !== undefined) {
+    extraEnvVars.TURN_ID = String(args.turnId);
+    extraEnvVars.TURN_LEASE_GENERATION = String(args.turnLeaseGeneration);
+  }
+  // Session-wide trait overrides. Only non-default values are sent from the UI;
+  // the runner maps effort to each provider's native control (see config.ts).
+  Object.assign(
+    extraEnvVars,
+    buildTraitEnvVars({
+      reasoningLevel: args.reasoningLevel,
+      thinkingEnabled: args.thinkingEnabled,
+      use1mContext: args.use1mContext,
+      fastMode: args.fastMode,
+    }),
+  );
+  extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
+
+  const normalizedModel = normalizeAIModel(args.model);
+  const claudeSessionId =
+    getAIModelProvider(normalizedModel) === "claude" &&
+    args.sessionPersistenceId
+      ? sessionClaudeUuid(args.sessionPersistenceId)
+      : undefined;
+
+  await signAndLaunchScript(
+    ctx,
+    sandbox,
+    args.userId,
+    prompt,
+    args.completionMutation,
+    args.entityIdField,
+    args.entityId,
+    args.repoId,
+    {
+      model: normalizedModel,
+      allowedTools: args.allowedTools,
+      systemPrompt: args.systemPrompt,
+      extraEnvVars:
+        Object.keys(extraEnvVars).length > 0 ? extraEnvVars : undefined,
+      claudeSessionId,
+      providerAccountId: args.providerAccountId,
+      credentialOwnerUserId: args.credentialOwnerUserId,
+      enableMcp: true,
+    },
+  );
+  console.log(
+    `[sandbox][execution] launchOnExistingSandbox finished in ${Date.now() - launchStartedAt}ms entityId=${args.entityId} sandboxId=${args.sandboxId}`,
+  );
+}
+
+/** Launches an AI agent script on an existing sandbox with streaming and token setup. */
+export const launchOnExistingSandbox = internalAction({
+  args: launchArgsValidator.fields,
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await launchAgentOnSandbox(ctx, args);
+    return null;
+  },
+});
+
+/**
+ * Launches a one-shot agent (automation, PR recap, summary, doc or project
+ * interview, evaluation, test generation) under its own durable turn: opens
+ * the turn already leased, then launches with the lease so the callback
+ * heartbeats and completes fenced. A launch that throws closes the turn, so
+ * the reconciler never tears down a workflow that handled the failure itself.
+ */
+export const launchAgentTurn = internalAction({
+  args: {
+    ...launchArgs,
+    turnEntityId: turnEntityIdValidator,
+    turnLane: v.optional(turnLaneValidator),
+    workflowId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { turnEntityId, turnLane, workflowId, ...launch }) => {
+    const lease = await ctx.runMutation(internal.turns.openAgentTurnLease, {
+      entityId: turnEntityId,
+      lane: turnLane,
+      streamingEntityId: launch.streamingEntityId ?? launch.entityId,
+      model: launch.model,
+      sandboxId: launch.sandboxId,
+      repoId: launch.repoId,
+      workflowId,
+    });
+    try {
+      await launchAgentOnSandbox(ctx, {
+        ...launch,
+        turnId: lease.turnId,
+        turnLeaseGeneration: lease.leaseGeneration,
+      });
+    } catch (error) {
+      await ctx.runMutation(internal.turns.closeAgentTurn, {
+        turnId: lease.turnId,
+        error: "Agent launch failed",
+      });
+      throw error;
+    }
     return null;
   },
 });

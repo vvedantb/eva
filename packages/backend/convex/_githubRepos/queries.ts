@@ -98,7 +98,7 @@ export const listActiveSandboxCounts = authQuery({
   },
 });
 
-/** Counts active sessions (status active, not archived, PR still open) the user can see. */
+/** Counts active sessions (status active, not archived) the user can see. */
 export const countActiveSessions = authQuery({
   args: {},
   returns: v.number(),
@@ -114,15 +114,7 @@ export const countActiveSessions = authQuery({
             )
             .take(64),
         );
-        return sessions.filter(
-          (s) =>
-            s.archived !== true &&
-            s.prState !== "merged" &&
-            s.prState !== "closed" &&
-            // The orchestrator is always active, so counting it made the rail
-            // badge read "1" with no actual work in flight.
-            s.isOrchestrator !== true,
-        ).length;
+        return sessions.filter((s) => s.archived !== true).length;
       }),
     );
     return perRepo.reduce((total, n) => total + n, 0);

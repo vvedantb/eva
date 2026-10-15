@@ -12,6 +12,10 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import {
+  SandboxAsleepState,
+  type SandboxWake,
+} from "@/lib/components/sandbox/SandboxAsleepState";
 
 type PanelState = "loading" | "running" | "error";
 
@@ -31,6 +35,9 @@ interface CustomTabPanelProps {
    */
   previewPort: number;
   repoId: Id<"githubRepos">;
+  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
+  externalHref?: string;
+  wake?: SandboxWake;
 }
 
 const MAX_ATTEMPTS = 40;
@@ -56,6 +63,8 @@ export function CustomTabPanel({
   isForeground = true,
   previewPort,
   repoId,
+  externalHref,
+  wake,
 }: CustomTabPanelProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [state, setState] = useState<PanelState>("loading");
@@ -84,6 +93,9 @@ export function CustomTabPanel({
     pollTimer.current = undefined;
   };
 
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+     The reset also cancels the in-flight poll and bumps a generation counter,
+     so it has to happen as a side effect rather than during render. */
   // Clear cached URL when the sandbox / port identity changes (not on tab hide).
   useEffect(() => {
     generation.current += 1;
@@ -94,6 +106,7 @@ export function CustomTabPanel({
     setState("loading");
     return stopPolling;
   }, [isActive, sandboxId, port, previewPort, retryNonce]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
 
   // Poll only while the sandbox is up and this tab is foreground; keep iframe
   // state when the user switches away.
@@ -180,9 +193,10 @@ export function CustomTabPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-        Wake Eva up to use {name}.
-      </div>
+      <SandboxAsleepState
+        label={`Wake Eva up to use ${name}.`}
+        wake={isActive ? undefined : wake}
+      />
     );
   }
 
@@ -210,7 +224,7 @@ export function CustomTabPanel({
           </Button>
           <Button size="icon" variant="ghost" className="size-8" asChild>
             <a
-              href={stripPreviewGrant(url)}
+              href={externalHref ?? stripPreviewGrant(url)}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Open ${name} in a new tab`}

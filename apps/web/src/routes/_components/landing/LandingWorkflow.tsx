@@ -22,7 +22,7 @@ export function LandingWorkflow() {
               href={`#${pillar.id}`}
               className="motion-base group bg-background p-6 hover:bg-muted/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              <p className="font-mono text-[11px] tracking-[0.28em] text-primary">
+              <p className="font-mono text-2xs tracking-[0.28em] text-primary">
                 {pillar.step}
               </p>
               <p className="mt-3 text-base font-medium text-foreground">

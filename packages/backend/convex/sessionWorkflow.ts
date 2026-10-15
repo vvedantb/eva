@@ -7,6 +7,7 @@ export {
   addAssistantPlaceholder,
   getSessionData,
   updateSandboxId,
+  clearSessionClosedStatus,
   saveResult,
   handleCompletion,
   claimPendingTurn,
@@ -27,4 +28,5 @@ export {
   getDaemonPrewarmData,
   enqueueMessage,
   cancelExecution,
+  cancelSessionExecution,
 } from "./_sessions/execution";

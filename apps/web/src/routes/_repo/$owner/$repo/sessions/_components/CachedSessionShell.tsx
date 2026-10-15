@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryState } from "nuqs";
+import { chatParser } from "@/lib/search-params";
 import { RepoProvider, RepoGate, useRepo } from "@/lib/contexts/RepoContext";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import { useSessionByNumId } from "@/lib/useResolveByNumId";
@@ -22,25 +24,20 @@ interface CachedSessionShellProps {
   repoParam: string;
   /** True when this shell matches the URL `$numId` (visible). */
   isActiveRoute: boolean;
-  /**
-   * Mounted inside Manager Ave's popover, which already titles the surface.
-   * Hides the session-chat title so "Manager Ave" is not painted twice.
-   */
-  embedded?: boolean;
 }
 
 /**
  * One kept-alive session detail tree. While `isActiveRoute` is false the shell
- * stays mounted (parent uses `hidden`) and freezes its sandbox tab so the
- * active session's URL does not rewrite sibling caches. Each shell carries its
- * own passive RepoProvider so shells from other apps stay resolvable.
+ * stays mounted (parent uses `hidden`) and freezes its sandbox tab and chat
+ * tab so the active session's URL does not rewrite sibling caches. Each shell
+ * carries its own passive RepoProvider so shells from other apps stay
+ * resolvable.
  */
 export function CachedSessionShell({
   numId,
   owner,
   repoParam,
   isActiveRoute,
-  embedded = false,
 }: CachedSessionShellProps) {
   return (
     <RepoProvider owner={owner} repoParam={repoParam} passive>
@@ -50,7 +47,6 @@ export function CachedSessionShell({
           owner={owner}
           repoParam={repoParam}
           isActiveRoute={isActiveRoute}
-          embedded={embedded}
         />
       </RepoGate>
     </RepoProvider>
@@ -62,19 +58,51 @@ function CachedSessionShellInner({
   owner,
   repoParam,
   isActiveRoute,
-  embedded = false,
 }: CachedSessionShellProps) {
   const navigate = useNavigate();
   const { basePath, repoId } = useRepo();
   const simpleView = useSimpleView();
   const session = useSessionByNumId(numId, repoId);
   const urlSandboxTab = useSessionRouteSandboxTab();
+  // What the session tree is told. Turning active is immediate; turning
+  // inactive is deferred, so the shell being hidden (already `display: none`
+  // via the parent) re-renders after the next session paints instead of in the
+  // same blocking commit. URL-following logic below keeps the live
+  // `isActiveRoute`, so a lagging shell never adopts the new session's URL.
+  const deferredActive = useDeferredValue(isActiveRoute);
+  const isTreeActive = isActiveRoute || deferredActive;
   const [sandboxTab, setSandboxTab] = useState(urlSandboxTab);
 
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
+     Cached shells stay mounted while hidden: only the one on the live route may
+     follow the URL, so this cannot just mirror the prop during render. */
   useEffect(() => {
     if (!isActiveRoute) return;
     setSandboxTab(urlSandboxTab);
   }, [isActiveRoute, urlSandboxTab]);
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
+
+  // `?chat=N` picks the chat tab. Frozen the same way as the sandbox tab:
+  // only the visible shell follows the URL, so a hidden session keeps the
+  // chat it was left on. Render-phase sync, like the layout's cache promotion.
+  const [urlChat] = useQueryState("chat", chatParser);
+  const [chatNumber, setChatNumber] = useState(urlChat);
+  if (isActiveRoute && chatNumber !== urlChat) {
+    setChatNumber(urlChat);
+  }
+  // Written through the (stable) router, not the nuqs setter: that setter
+  // changes identity on every navigation, and this handler is a prop of the
+  // whole session tree, so it re-rendered every cached shell on each switch.
+  const onChatChange = (number: number | null) => {
+    void navigate({
+      to: ".",
+      // Main is the absent param, so plain session links keep opening Main.
+      search: (prev) => ({
+        ...prev,
+        chat: number === null || number === 1 ? undefined : number,
+      }),
+    });
+  };
 
   // Typed routes + the cached `repoParam` (`repo--app`), not slash-form
   // `basePath`. `navigate({ to })` matches the route tree before the
@@ -144,12 +172,13 @@ function CachedSessionShellInner({
         {(sessionDoc) => (
           <SessionDetailClient
             sessionId={sessionDoc._id}
+            chatNumber={chatNumber}
+            onChatChange={onChatChange}
             activeSandboxTab={sandboxTab}
             onSandboxTabChange={onSandboxTabChange}
             onOpenFile={openFile}
             onViewDiff={simpleView ? undefined : openDiffs}
-            isRouteActive={isActiveRoute}
-            hideTitle={embedded}
+            isRouteActive={isTreeActive}
           />
         )}
       </EntityNumIdGate>

@@ -33,6 +33,11 @@ export const toggleCodeServer = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+      sandboxId: args.sandboxId,
+      source: "services",
+      clerkUserId: identity.subject,
+    });
 
     console.log(
       `[code-server] ${args.action} requested for sandbox ${args.sandboxId}`,
@@ -154,6 +159,11 @@ export const toggleDesktopServer = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+      sandboxId: args.sandboxId,
+      source: "services",
+      clerkUserId: identity.subject,
+    });
 
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
     if (!handle.desktop) {
@@ -311,6 +321,12 @@ export async function authorizedRunningHandle(
   if (!identity) throw new Error("Not authenticated");
 
   await assertActionSandboxAccess(ctx, repoId, sandboxId);
+  // File browsing/editing is a human interaction for the idle-pause sweep.
+  await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+    sandboxId,
+    source: "files",
+    clerkUserId: identity.subject,
+  });
 
   const handle = await getSandboxHandle(ctx, repoId, sandboxId);
   return handle.state === "running" ? handle : null;

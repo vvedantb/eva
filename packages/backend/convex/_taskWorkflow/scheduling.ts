@@ -1,7 +1,7 @@
 import { v } from "convex/values";
+import { startTaskRunWorkflow } from "./startRun";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { workflow } from "../workflowManager";
 import { hasActiveRun, isFirstTaskOnBranch } from "../functions";
 import { isDaytonaNetworkIssue, buildQuickTaskRetryDelayMs } from "./recovery";
 import { buildProjectBranchName } from "../_projects/helpers";
@@ -9,6 +9,7 @@ import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import { normalizeAIModel } from "../validators";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
+import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -173,27 +174,19 @@ export const executeScheduledTask = internalMutation({
       repo,
     );
 
-    const workflowId = await workflow.start(
-      ctx,
-      internal.taskWorkflow.taskExecutionWorkflow,
-      {
-        runId,
-        taskId: args.taskId,
-        repoId: task.repoId,
-        installationId: repo.installationId,
-        projectId: task.projectId,
-        branchName,
-        baseBranch,
-        isFirstTaskOnBranch: firstOnBranch,
-        model: task.model,
-        providerAccountId: task.providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: task.createdBy,
-      },
-    );
-
-    await ctx.db.patch(args.taskId, {
-      activeWorkflowId: String(workflowId),
+    await startTaskRunWorkflow(ctx, {
+      runId,
+      taskId: args.taskId,
+      repoId: task.repoId,
+      installationId: repo.installationId,
+      projectId: task.projectId,
+      branchName,
+      baseBranch,
+      isFirstTaskOnBranch: firstOnBranch,
+      model: task.model,
+      providerAccountId: task.providerAccountId,
+      credentialOwnerUserId: task.createdBy,
+      userId: task.createdBy,
     });
 
     return runId;
@@ -221,6 +214,11 @@ export const clearActiveWorkflow = internalMutation({
 
     if (!activeRun) {
       await ctx.db.patch(args.taskId, { activeWorkflowId: undefined });
+      // The run is the only thing the task chat queue waits on while a task is
+      // running, and nothing else drains it at this point — a follow-up typed
+      // during the run would sit there forever. The drain re-checks the task
+      // itself, so a chat turn already in flight keeps the queue where it is.
+      await startNextQueuedTaskChatMessage(ctx, args.taskId);
     }
 
     return null;

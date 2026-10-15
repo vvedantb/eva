@@ -1,6 +1,6 @@
 import { components } from "./_generated/api";
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation, type QueryCtx } from "./_generated/server";
 import { Presence } from "@convex-dev/presence";
 import { authQuery, authMutation } from "./functions";
 import { getCurrentUserId } from "./_auth/currentUser";
@@ -11,6 +11,19 @@ import {
 } from "./_users/lastSeen";
 
 const presence = new Presence(components.presence);
+
+/**
+ * The presence user id of one user online in `roomId`, or null when nobody is.
+ * Server-side helper for sweeps (no room token needed); never expose it
+ * directly to clients.
+ */
+export async function firstPresentUserInRoom(
+  ctx: QueryCtx,
+  roomId: string,
+): Promise<string | null> {
+  const members = await presence.listRoom(ctx, roomId, true, 1);
+  return members[0]?.userId ?? null;
+}
 
 /** Must match ClientProvider's usePresence room — the only heartbeat that owns lastSeenAt. */
 const LAST_SEEN_ROOM_ID = "platform";

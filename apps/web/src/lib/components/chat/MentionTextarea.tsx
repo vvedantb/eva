@@ -4,7 +4,7 @@ import { forwardRef, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { usePromptInputController, usePromptInputAttachments } from "@eva/ui";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { attachPastedTextIfLarge } from "@/lib/components/attachments/attachmentMeta";
 import {
@@ -16,22 +16,25 @@ import {
   isSkillTokenId,
   mergeMentionItems,
 } from "@/lib/components/mentions";
+import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { useInlineSuggestion } from "@/lib/hooks/useInlineSuggestion";
+import {
+  useComposerPrediction,
+  type ComposerPredictionTarget,
+} from "@/lib/hooks/useComposerPrediction";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export type MentionTextareaHandle = MentionEditorHandle;
 
 interface MentionTextareaProps {
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
-  repoId: Id<"githubRepos">;
+  /** Absent (Manager Ave): no people/data mentions and no skills link. */
+  repo?: ChatRepo;
   /** `/` menu entries — repo skills plus installed Eva skills. */
   skillItems?: SlashItem[];
-  skillsSettingsHref?: string;
   placeholder?: string;
   initialMentionMap?: Map<string, string>;
   initialSkillMap?: Map<string, string>;
@@ -54,6 +57,12 @@ interface MentionTextareaProps {
    */
   completionContext?: string;
   /**
+   * The chat this composer replies to, set only while it waits on the user.
+   * Used for the next-message ghost text when the per-user experimental
+   * "Composer predictions" flag is on; otherwise ignored.
+   */
+  predictionTarget?: ComposerPredictionTarget;
+  /**
    * Called when Enter would have submitted but the submit button is disabled.
    * The keystroke is still swallowed — this only lets the composer say why,
    * instead of Enter doing nothing at all on a sleeping sandbox.
@@ -73,16 +82,15 @@ export const MentionTextarea = forwardRef<
   MentionTextareaProps
 >(function MentionTextarea(
   {
-    repoBasePath,
-    repoId,
+    repo,
     skillItems = [],
-    skillsSettingsHref,
     placeholder,
     initialMentionMap,
     initialSkillMap,
     history,
     enableAttachmentPaste,
     completionContext,
+    predictionTarget,
     onBlockedSubmit,
     onDraftChange,
     className,
@@ -93,15 +101,22 @@ export const MentionTextarea = forwardRef<
   const controller = usePromptInputController();
   const attachments = usePromptInputAttachments();
   const value = controller.textInput.value;
-  const peopleItems = usePeopleMentionItems(repoId);
-  const dataItems = useDataMentionItems(repoId);
+  const peopleItems = usePeopleMentionItems(repo?.id);
+  const dataItems = useDataMentionItems(repo?.id);
   const { items, peopleIds } = mergeMentionItems(peopleItems, dataItems);
-  const navigateToData = useDataMentionNavigate(repoBasePath, repoId);
+  const navigateToData = useDataMentionNavigate(repo?.basePath ?? "", repo?.id);
   const flags = useQuery(api.auth.getExperimentalFlags);
-  const { suggestion, dismiss } = useInlineSuggestion(
+  const completion = useInlineSuggestion(
     value,
     flags?.composerAutocomplete === true ? completionContext : undefined,
   );
+  const prediction = useComposerPrediction(
+    value,
+    flags?.composerPredictions === true ? predictionTarget : undefined,
+  );
+  // Never both: a prediction needs an empty draft, a completion needs text.
+  const { suggestion, dismiss } =
+    prediction.suggestion !== undefined ? prediction : completion;
 
   // Cursor into `history` (null = editing the live draft) and the draft stashed
   // when history navigation began, so Alt+ArrowDown past the newest entry restores it.
@@ -156,9 +171,13 @@ export const MentionTextarea = forwardRef<
   // Enter key that should send; a phone Return key should insert a newline.
   const isCoarsePointer = useMediaQuery("(pointer: coarse)");
 
+  const skillsSettingsHref = repo
+    ? `${repo.basePath}/settings/skills`
+    : undefined;
+
   const handleSkillChipClick = (_skillId: string) => {
-    if (simpleView) return;
-    navigate({ to: `${repoBasePath}/settings/skills` });
+    if (simpleView || !skillsSettingsHref) return;
+    navigate({ to: skillsSettingsHref });
   };
 
   return (
@@ -186,14 +205,15 @@ export const MentionTextarea = forwardRef<
       renderMentionChipHoverCard={(id) =>
         peopleIds.has(id) ? (
           <UserProfileHoverCardBody userId={id} />
-        ) : (
-          <DataMentionHoverCardBody entityId={id} repoId={repoId} />
-        )
+        ) : repo ? (
+          <DataMentionHoverCardBody entityId={id} repoId={repo.id} />
+        ) : null
       }
       renderSkillChipHoverCard={(id) =>
         isSkillTokenId(id) ? <SkillMentionHoverCardBody skillId={id} /> : null
       }
-      placeholder={placeholder}
+      // The prediction takes the placeholder's place; both would overlap.
+      placeholder={prediction.suggestion !== undefined ? "" : placeholder}
       ariaLabel={placeholder ?? "Message input"}
       onImageFiles={enableAttachmentPaste ? attachments.add : undefined}
       onLargeTextPaste={

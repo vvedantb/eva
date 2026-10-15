@@ -1,8 +1,14 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { Skeleton, cn } from "@eva/ui";
-import { IconChevronRight } from "@tabler/icons-react";
+import { CenteredSpinner, cn } from "@eva/ui";
+import { Link } from "@tanstack/react-router";
+import { useQueryState } from "nuqs";
+import {
+  IconArrowUpRight,
+  IconChevronLeft,
+  IconChevronRight,
+} from "@tabler/icons-react";
 import {
   forwardRef,
   type ComponentPropsWithoutRef,
@@ -10,6 +16,7 @@ import {
   type ReactNode,
 } from "react";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { sourcePanelItemParser } from "@/lib/search-params";
 
 /**
  * Sandbox Artifacts / Documents chrome.
@@ -26,13 +33,17 @@ const CARD_SHADOW_HOVER =
 export function SessionSourcePane({
   title,
   count,
-  viewAll,
+  viewAllHref,
+  actions,
   loading,
   children,
 }: {
   title: string;
   count?: number;
-  viewAll: ReactNode;
+  /** Full page for this kind of row ("View all"). */
+  viewAllHref: string;
+  /** Extra header controls, before "View all". */
+  actions?: ReactNode;
   loading: boolean;
   children: ReactNode;
 }) {
@@ -40,47 +51,88 @@ export function SessionSourcePane({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-balance text-foreground">
+          <p className="truncate text-2sm font-medium tracking-[-0.01em] text-balance text-foreground">
             {title}
           </p>
           {count !== undefined ? (
-            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+            <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
               {count}
             </span>
           ) : null}
         </div>
-        {viewAll}
+        <div className="flex shrink-0 items-center gap-1">
+          {actions}
+          <Link to={viewAllHref} className={sessionSourceViewAllClass}>
+            View all
+            <IconArrowUpRight size={14} />
+          </Link>
+        </div>
       </div>
       <div className="scrollbar scroll-fade min-h-0 flex-1 overflow-y-auto bg-muted/40">
-        {loading ? (
-          <div
-            className="flex flex-col gap-1.5 p-2"
-            aria-busy="true"
-            aria-label="Loading"
-          >
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "flex items-start gap-2.5 rounded-surface bg-card p-2.5",
-                  CARD_SHADOW,
-                )}
-              >
-                <Skeleton className="size-9 shrink-0 rounded-md" />
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <Skeleton className="h-3.5 w-2/3" />
-                  <Skeleton className="mt-1.5 h-3 w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          children
-        )}
+        {loading ? <CenteredSpinner label="Loading" /> : children}
       </div>
     </div>
   );
 }
+
+/**
+ * The row open inside a sandbox pane (`?panelItem=<id>`), matched against
+ * that pane's own rows: an id carried in the URL to another chat or tab finds
+ * nothing and the pane falls back to its list. A row deleted elsewhere does
+ * the same.
+ */
+export function useSourcePanelItem<T extends { _id: string }>(
+  rows: T[] | undefined,
+) {
+  const [openId, setOpenId] = useQueryState("panelItem", sourcePanelItemParser);
+  const openRow =
+    openId === null ? null : (rows?.find((row) => row._id === openId) ?? null);
+  return {
+    openId,
+    openRow,
+    open: (id: string) => void setOpenId(id),
+    close: () => void setOpenId(null),
+  };
+}
+
+/** A row opened inside the pane: back to the list, its title, then the body. */
+export function SessionSourceDetail({
+  backLabel,
+  onBack,
+  title,
+  actions,
+  children,
+}: {
+  backLabel: string;
+  onBack: () => void;
+  title: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label={`Back to ${backLabel.toLowerCase()}`}
+          title={`Back to ${backLabel.toLowerCase()}`}
+          className={sessionSourceViewAllClass}
+        >
+          <IconChevronLeft size={14} />
+          {backLabel}
+        </button>
+        {title}
+        {actions}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Read-only title text for `SessionSourceDetail`. */
+export const sessionSourceDetailTitleClass =
+  "min-w-0 flex-1 truncate px-1.5 py-1 text-2sm font-medium tracking-[-0.01em] text-foreground";
 
 export const sessionSourceViewAllClass =
   "hit-target motion-press inline-flex shrink-0 items-center gap-0.5 rounded-md py-1 pl-2 pr-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.96]";
@@ -99,7 +151,7 @@ export function SessionSourceEmpty({
       <span className="mb-3 flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
         {icon}
       </span>
-      <p className="text-[13px] font-medium tracking-[-0.01em] text-balance text-foreground">
+      <p className="text-2sm font-medium tracking-[-0.01em] text-balance text-foreground">
         {title}
       </p>
       <p className="mt-1 max-w-[16rem] text-pretty text-xs leading-relaxed text-muted-foreground">
@@ -152,10 +204,10 @@ export const SessionSourceRow = forwardRef<
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground">
+            <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground">
               {title}
             </MarqueeOnHover>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
               {timeLabel}
             </span>
             {trailing}
@@ -169,7 +221,7 @@ export const SessionSourceRow = forwardRef<
         <IconChevronRight
           size={14}
           aria-hidden
-          className="mt-1.5 shrink-0 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[var(--motion-fast)] ease-[var(--motion-ease-out)] group-hover:translate-x-0.5 group-hover:opacity-100"
+          className="mt-1.5 shrink-0 text-muted-foreground opacity-0 transition-[opacity,translate] duration-[var(--motion-fast)] group-hover:translate-x-0.5 group-hover:opacity-100"
         />
       </div>
     </div>

@@ -19,8 +19,15 @@ import { IconLayoutGrid } from "@tabler/icons-react";
  */
 interface TablerIconByNameProps {
   name: string;
+  /**
+   * `filled` resolves `${name}Filled`. Icons without one render the outline at
+   * a bolder stroke, so an active state still reads.
+   */
+  variant?: "default" | "filled";
   className?: string;
 }
+
+const BOLD_FALLBACK_STROKE_WIDTH = 2.75;
 
 interface IconProps {
   className?: string;
@@ -56,10 +63,15 @@ const SVG_ATTRS: Record<
 function iconFromData(
   variant: "outline" | "filled",
   nodes: [string, Record<string, string | number>][],
+  strokeWidth?: number,
 ): ComponentType<IconProps> {
+  const attrs =
+    strokeWidth === undefined
+      ? SVG_ATTRS[variant]
+      : { ...SVG_ATTRS[variant], strokeWidth };
   return function TablerDataIcon({ className }: IconProps) {
     return (
-      <svg {...SVG_ATTRS[variant]} className={className}>
+      <svg {...attrs} className={className}>
         {nodes.map(([tag, attrs], index) =>
           createElement(tag, { ...attrs, key: index }),
         )}
@@ -77,24 +89,34 @@ const lazyIcons = new Map<
   LazyExoticComponent<ComponentType<IconProps>>
 >();
 
-function lazyIconFor(name: string) {
-  const cached = lazyIcons.get(name);
+function lazyIconFor(name: string, variant: "default" | "filled") {
+  const key = `${variant}:${name}`;
+  const cached = lazyIcons.get(key);
   if (cached) {
     return cached;
   }
 
   const Icon = lazy(async () => {
     const { default: icons } = await import("virtual:tabler-icon-data");
+    const filled = variant === "filled" ? icons[`${name}Filled`] : undefined;
+    if (filled) return { default: iconFromData(filled[0], filled[1]) };
     const spec = icons[name];
-    return { default: spec ? iconFromData(spec[0], spec[1]) : IconLayoutGrid };
+    if (!spec) return { default: IconLayoutGrid };
+    const strokeWidth =
+      variant === "filled" ? BOLD_FALLBACK_STROKE_WIDTH : undefined;
+    return { default: iconFromData(spec[0], spec[1], strokeWidth) };
   });
 
-  lazyIcons.set(name, Icon);
+  lazyIcons.set(key, Icon);
   return Icon;
 }
 
-export function TablerIconByName({ name, className }: TablerIconByNameProps) {
-  const Icon = lazyIconFor(name);
+export function TablerIconByName({
+  name,
+  variant = "default",
+  className,
+}: TablerIconByNameProps) {
+  const Icon = lazyIconFor(name, variant);
 
   // The fallback doubles as the unknown-name placeholder, so the icon slot keeps
   // its size and only swaps shape once the data lands (first render only).

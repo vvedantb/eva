@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
@@ -13,15 +13,10 @@ import {
   SelectValue,
   SelectLabel,
   SelectGroup,
-  Input,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
   Badge,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
   motionFast,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -29,11 +24,9 @@ import {
   IconUserPlus,
   IconFolder,
   IconFolderPlus,
-  IconTags,
   IconGitBranch,
   IconInfoCircle,
   IconBrandVercelFilled,
-  IconChevronDown,
 } from "@tabler/icons-react";
 import { getUserInitials } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -55,6 +48,7 @@ import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
 import {
   FieldsSection,
   FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
 import {
@@ -70,6 +64,7 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
+import { LabelsField } from "@/lib/components/labels/LabelsField";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 
@@ -84,8 +79,8 @@ interface StatusFieldsSectionProps {
   isBlocked: boolean | undefined;
   users: FunctionReturnType<typeof api.users.listAll> | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
+  /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
   baseBranch: string;
-  setBaseBranch: (v: string) => void;
   /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   latestDeployment: RunDoc | undefined;
   hasActiveRun: boolean;
@@ -104,7 +99,6 @@ export function StatusFieldsSection({
   users,
   projects,
   baseBranch,
-  setBaseBranch,
   latestDeployment,
   hasActiveRun: _hasActiveRun,
   hasRuns,
@@ -188,39 +182,7 @@ export function StatusFieldsSection({
       );
     }
   });
-  const [tagDraft, setTagDraft] = useState("");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const tagDraftRef = useRef<HTMLInputElement>(null);
-
-  const addTag = async (raw: string) => {
-    const value = raw.trim();
-    if (!value || !task) return;
-    const current = task.tags ?? [];
-    if (current.includes(value)) return;
-    await updateTask({ id: taskId, tags: [...current, value] });
-  };
-
-  const removeTag = async (tag: string) => {
-    if (!task) return;
-    const next = (task.tags ?? []).filter((t) => t !== tag);
-    await updateTask({ id: taskId, tags: next });
-  };
-
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if ((e.key === "Enter" || e.key === ",") && tagDraft.trim()) {
-      e.preventDefault();
-      void addTag(tagDraft);
-      setTagDraft("");
-    }
-    if (
-      e.key === "Backspace" &&
-      tagDraft === "" &&
-      (task?.tags?.length ?? 0) > 0
-    ) {
-      const tags = task?.tags ?? [];
-      void removeTag(tags[tags.length - 1]);
-    }
-  };
 
   const projectOptions = projects ?? [];
   const hasSelectedProject =
@@ -462,7 +424,7 @@ export function StatusFieldsSection({
             onTraitsChange={(partial) =>
               updateTask({ id: taskId, ...toRunTraitArgs(partial) })
             }
-            className="px-0"
+            className={`px-0 ${FIELD_TEXT_CLASS}`}
           />
           {modelLockReason ? (
             <Tooltip>
@@ -491,13 +453,12 @@ export function StatusFieldsSection({
                 <BranchSelect
                   value={baseBranch}
                   onValueChange={(val) => {
-                    setBaseBranch(val);
                     updateTask({ id: taskId, baseBranch: val });
                   }}
-                  className="h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent text-[13px] [&>svg:last-child]:hidden"
+                  className={`h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent [&>svg:last-child]:hidden ${FIELD_TEXT_CLASS}`}
                 />
               ) : (
-                <div className="flex items-center gap-1.5 text-[13px]">
+                <div className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}>
                   <IconGitBranch size={14} className="text-muted-foreground" />
                   <span>{baseBranch}</span>
                   <Tooltip>
@@ -521,7 +482,7 @@ export function StatusFieldsSection({
           {viewVercelDeployment && latestDeployment?.deploymentStatus ? (
             <m.div
               key="vercel-deployment"
-              className={`${FIELD_ROW_CLASS} gap-1.5 text-[13px]`}
+              className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -544,94 +505,11 @@ export function StatusFieldsSection({
       </FieldsSection>
 
       <FieldsSection title="Labels">
-        {/* No row-level `onClick` to focus the input: a click handler on a
-            non-interactive element has no keyboard equivalent, and the input
-            already fills the rest of the row, so it is directly clickable. */}
-        <div
-          className={`${FIELD_ROW_CLASS} group/tags flex-wrap gap-1 cursor-text`}
-        >
-          <IconTags size={14} className="text-muted-foreground shrink-0" />
-          <AnimatePresence initial={false} mode="popLayout">
-            {task?.tags?.map((tag) => (
-              <m.span
-                key={tag}
-                className="inline-flex"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={motionFast}
-              >
-                <Badge
-                  variant="outline"
-                  className="text-xs h-8 gap-0.5 pr-0.5 group/tag sm:h-5"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    aria-label={`Remove label ${tag}`}
-                    className="ml-0.5 rounded-sm px-0.5 opacity-50 transition-opacity hover:opacity-100 max-sm:flex max-sm:h-full max-sm:min-w-6 max-sm:items-center max-sm:justify-center max-sm:px-1"
-                    onClick={() => void removeTag(tag)}
-                  >
-                    ×
-                  </button>
-                </Badge>
-              </m.span>
-            ))}
-          </AnimatePresence>
-          <Input
-            ref={tagDraftRef}
-            value={tagDraft}
-            placeholder={
-              (task?.tags?.length ?? 0) === 0 ? "Tags" : "Add tag..."
-            }
-            className="h-7 border-0 shadow-none bg-transparent px-0 focus-visible:ring-0 text-[13px] min-w-16 flex-1 placeholder:text-muted-foreground"
-            onChange={(e) => setTagDraft(e.target.value)}
-            onBlur={() => {
-              if (tagDraft.trim()) {
-                void addTag(tagDraft);
-                setTagDraft("");
-              }
-            }}
-            onKeyDown={handleTagKeyDown}
-          />
-          {allTags.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Choose from existing labels"
-                  className="rounded-sm p-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground max-sm:flex max-sm:size-10 max-sm:items-center max-sm:justify-center max-sm:p-0"
-                >
-                  <IconChevronDown size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="max-h-56 overflow-y-auto"
-              >
-                {(() => {
-                  const tagSet = new Set(task?.tags ?? []);
-                  return allTags.map((tag) => (
-                    <DropdownMenuCheckboxItem
-                      key={tag}
-                      checked={tagSet.has(tag)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          void addTag(tag);
-                        } else {
-                          void removeTag(tag);
-                        }
-                      }}
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      {tag}
-                    </DropdownMenuCheckboxItem>
-                  ));
-                })()}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        <LabelsField
+          tags={task?.tags}
+          allTags={allTags}
+          onChange={(tags) => updateTask({ id: taskId, tags })}
+        />
       </FieldsSection>
 
       <FieldsSection title="Project">

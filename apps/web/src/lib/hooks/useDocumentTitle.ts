@@ -17,6 +17,9 @@ const FALLBACK_TITLE = "Eva - Your New Coworker";
 // that number to document-level state). Both are read through
 // `useSyncExternalStore` so a publish re-renders only the title hook.
 let entityTitle: string | null = null;
+// Which publisher owns `entityTitle`, so a late cleanup cannot clear a title
+// that a newer publisher already set (see `useEntityDocumentTitle`).
+let entityOwner: object | null = null;
 let unreadCount = 0;
 const listeners = new Set<() => void>();
 
@@ -31,7 +34,7 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
-function readEntityTitle(): string | null {
+export function readEntityTitle(): string | null {
   return entityTitle;
 }
 
@@ -39,15 +42,24 @@ function readUnreadCount(): number {
   return unreadCount;
 }
 
-/**
- * Names the entity the user has open (session, project, task, doc, PR,
- * automation). Pass `null` to clear. Prefer {@link useEntityDocumentTitle},
- * which clears on unmount for you.
- */
-export function setEntityDocumentTitle(title: string | null) {
+function setEntityTitle(title: string | null, owner: object | null) {
+  entityOwner = owner;
   if (entityTitle === title) return;
   entityTitle = title;
   notify();
+}
+
+/**
+ * Names the tab after `title` and returns the matching clear. The clear is a
+ * no-op once a newer publish owns the title, so publishers may release in any
+ * order (see `useEntityDocumentTitle`).
+ */
+export function publishEntityTitle(title: string): () => void {
+  const owner = {};
+  setEntityTitle(title, owner);
+  return () => {
+    if (entityOwner === owner) setEntityTitle(null, null);
+  };
 }
 
 /** Mirrors the notification badge into the tab title, e.g. "(3) …". */
@@ -124,9 +136,13 @@ export function useDocumentTitle() {
  * on unmount. `document.title` is external state no React tree owns, which is
  * why the effect lives here rather than being pushed into render.
  *
- * `enabled` exists because up to three session shells stay mounted (hidden) at
+ * `enabled` exists because up to five session shells stay mounted (hidden) at
  * once — see `sessions/route.tsx`. Only the one matching the URL may publish,
  * or a background session would name the tab.
+ *
+ * Cleanup clears only the title this effect set. Publishers do not hand over
+ * in one commit: a session shell turns inactive one deferred render after the
+ * next shell turns active, so an unconditional clear would blank the new title.
  */
 export function useEntityDocumentTitle(
   title: string | null | undefined,
@@ -134,9 +150,6 @@ export function useEntityDocumentTitle(
 ) {
   useEffect(() => {
     if (!enabled || title === null || title === undefined) return;
-    setEntityDocumentTitle(title);
-    return () => {
-      setEntityDocumentTitle(null);
-    };
+    return publishEntityTitle(title);
   }, [title, enabled]);
 }

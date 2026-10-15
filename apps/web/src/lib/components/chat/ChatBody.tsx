@@ -3,67 +3,162 @@ import {
   ConversationContent,
   ConversationScrollButton,
   motionBase,
-  type ModelOption,
-  type ModelAccount,
 } from "@eva/ui";
 import {
   ChatEmptyState,
-  ChatTranscriptSkeleton,
+  ChatTranscriptLoading,
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
+import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
+import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
+import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
+import {
+  ChatEarlierTurnsLoader,
+  type TranscriptScrollAnchor,
+} from "@/lib/components/chat/_components/ChatEarlierTurnsLoader";
+import { useSeenOnce } from "@/lib/components/chat/useSeenOnce";
 import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
-import { ChatComposer } from "@/lib/components/chat/ChatComposer";
+import {
+  ChatComposer,
+  type ChatModelPicker,
+  type LocalChatDraft,
+} from "@/lib/components/chat/ChatComposer";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
+import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
+import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
+import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
+import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
+import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
+import {
+  collectThreadFindDocuments,
+  findThreadMatches,
+} from "@/lib/components/chat/threadFind";
+import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import {
+  canForkMessage,
+  collectForkPrefix,
+  forkThreadTitle,
+  formatForkPrompt,
+} from "@eva/shared";
+import { tokenizedToDisplayText } from "@/lib/components/mentions";
+import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
+import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
+import { appendWebMcpToPrompt } from "@/lib/components/sandbox/previewWebMcp";
+import {
+  PendingCitationsProvider,
+  usePendingCitations,
+} from "@/lib/contexts/PendingCitationsContext";
+import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
+import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
+import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
+import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
+import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
-import { useState, type ReactNode } from "react";
+import {
+  startTransition,
+  useDeferredValue,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   api,
-  type AIModel,
   type BackgroundAgentEntry,
+  type Doc,
   type Id,
-  type StoredModelTraits,
-  type resolveTraitsForDisplay,
 } from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
-  buildJumpRailTicks,
   buildMessageHistory,
+  buildPrecedingUserTurns,
+  findDayBoundaryIds,
+  findNewMessageIds,
+  type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findLastAssistantMessageId,
   findStreamingTargetMessage,
-  findPrecedingUserTurn,
+  findTurnWindowStart,
   firstNameFromUser,
   isOtherUserChatMessage,
   otherUserIdsInChat,
   parsePendingQuestion,
   SANDBOX_CHAT_COPY,
+  TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
   type ChatBodyMessage,
   type ChatBodyQueuedMessage,
+  type ChatHeldFollowUp,
+  type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
 export type { ChatBodyMessage };
 
+/**
+ * Extra context ChatBody hands its surface's send handler. The prompt the
+ * handler receives has the pending citation / preview-snapshot / WebMCP blocks
+ * appended to it, so a failure cannot offer it back to the user to re-edit —
+ * `draftContent` is the text they actually typed, and is what the failure toast
+ * restores.
+ */
+export interface ChatSendOptions {
+  draftContent?: string;
+}
+
+/**
+ * The rendered slice of a long transcript: it runs from `firstId` to the end.
+ * `key` is the chat it belongs to, so a reused shell starts a fresh window.
+ */
+interface TranscriptWindow {
+  key: string;
+  firstId: string | undefined;
+  /** Set by a scroll-up load: where to hold the reader once the rows mount. */
+  anchor?: TranscriptScrollAnchor;
+  /** Set by a jump to a turn that was not rendered: scroll there on mount. */
+  scrollTo?: { messageId: string };
+}
+
+/** Each jump scrolls once: later renders of its row must not scroll again. */
+const scrolledJumps = new WeakSet<{ messageId: string }>();
+
+/** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
+interface InlineCard {
+  _id: string;
+  messageId?: string;
+  createdAt: number;
+  card:
+    | { kind: "panel"; spec: string }
+    | { kind: "html"; render: Doc<"chatHtmlRenders"> }
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
+}
+
 interface ChatBodyProps {
-  repoId: Id<"githubRepos">;
-  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
-  repoBasePath: string;
+  /**
+   * The codebase this chat belongs to. Absent for Manager Ave, which has none:
+   * skills, the prompt stash and repo mentions switch off.
+   */
+  repo?: ChatRepo;
   /** Conversation id (session / agent task / project) — scopes the typing-presence room. */
   conversationId: string;
   /**
    * The same chat, typed as the id its messages hang off. Used to load the
-   * agent-composed UI panels (`render_ui`) that belong to this transcript.
+   * agent-composed UI panels (`render_ui`) and HTML pages (`render_html`)
+   * that belong to this transcript.
+   * Absent (Manager Ave): no panels are loaded.
    */
-  chatParentId: Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+  chatParentId?: ChatParentId;
+  /**
+   * Cached session shells stay mounted but hidden. False stops mark-read and
+   * the "NEW" divider anchor, so a hidden chat never clears its own dot.
+   */
+  isRouteActive?: boolean;
   messages: ChatBodyMessage[];
   /**
    * True while the transcript query is still in flight. Panels collapse Convex's
@@ -72,6 +167,10 @@ interface ChatBodyProps {
    */
   isLoadingMessages?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
+  /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
+  queueLabel?: string;
+  /** Read-only follow-ups the server holds for the next turn (Manager Ave). */
+  heldFollowUps?: ChatHeldFollowUp[];
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
@@ -104,26 +203,12 @@ interface ChatBodyProps {
   disabledReason?: string;
   /**
    * Wakes the sandbox. Set only when it is stopped and not already toggling;
-   * gives the empty state its button and the blocked-send toast its action.
+   * gives the empty state its button. Sending also wakes it (the message
+   * queues until Eva is up), so this is the explicit alternative.
    */
   onStartSandbox?: () => void;
-  model: AIModel;
-  setModel: (model: AIModel) => void;
-  modelOptions: ReadonlyArray<ModelOption<AIModel>>;
-  /**
-   * The user's own provider accounts. When non-empty, the model picker nests
-   * Team + account submenus under each provider; the chosen account's
-   * credentials run the turn (see `accountId`/`onAccountChange`).
-   */
-  accounts?: ReadonlyArray<ModelAccount>;
-  accountId?: string | null;
-  onAccountChange?: (accountId: string | null) => void;
-  /**
-   * Model trait controls (reasoning effort, thinking toggle, Fast, 1M context). When
-   * provided, trait pills appear above the model list for capable models.
-   */
-  displayTraits?: ReturnType<typeof resolveTraitsForDisplay>;
-  onTraitsChange?: (partial: Partial<StoredModelTraits>) => void;
+  /** Model, account and trait controls. Absent: no picker (fixed model). */
+  modelPicker?: ChatModelPicker;
   /**
    * Called with the tokenized content and any uploaded image attachment storage
    * ids. Caller decides whether to send or enqueue.
@@ -131,16 +216,18 @@ interface ChatBodyProps {
   onSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => Promise<void>;
   onCancel: () => Promise<void>;
   /** Optional slot inserted above the conversation (session summary accordion). */
   preConversationContent?: React.ReactNode;
-  /** Optional slot inserted above the queued messages panel (session startup streaming). */
-  beforeQueuedContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
-  /** Replaces the default empty-state component when there are zero messages. */
-  emptyStateOverride?: React.ReactNode;
+  /**
+   * Live block at the end of the transcript (session sandbox startup). Takes
+   * the empty state's place when there are no messages yet.
+   */
+  transcriptTail?: React.ReactNode;
   /** Leading control on the composer's under-input bar (e.g. the sandbox branch chip). */
   underCardLeading?: React.ReactNode;
   /**
@@ -153,6 +240,8 @@ interface ChatBodyProps {
    * available. Use `isDraftLoading` to render a placeholder while waiting.
    */
   draft?: ChatDraftSeed;
+  /** localStorage-backed draft, for chats with no Convex draft row (Ave). */
+  localDraft?: LocalChatDraft;
   /**
    * When true, renders a disabled placeholder in place of the real input while
    * the draft query is in flight. This prevents the PromptInputProvider from
@@ -182,16 +271,34 @@ interface ChatBodyProps {
   turnCheckpoint?: TurnCheckpointContext;
   allowEmptySubmit?: boolean;
   afterMessage?: (messageId: string) => ReactNode;
+  /** Sessions: create a new chat from the transcript through this message. */
+  onForkTranscript?: (input: {
+    throughMessageId: string;
+    title: string;
+    prompt: string;
+  }) => Promise<void>;
+  /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
+  hideJumpRail?: boolean;
 }
 
-export function ChatBody({
-  repoId,
-  repoBasePath,
+export function ChatBody(props: ChatBodyProps) {
+  return (
+    <PendingCitationsProvider>
+      <ChatBodyInner {...props} />
+    </PendingCitationsProvider>
+  );
+}
+
+function ChatBodyInner({
+  repo,
   conversationId,
   chatParentId,
+  isRouteActive = true,
   messages,
   isLoadingMessages = false,
   queuedMessages,
+  queueLabel,
+  heldFollowUps,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
@@ -205,22 +312,15 @@ export function ChatBody({
   emptyStateDescription = "",
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
-  model,
-  setModel,
-  modelOptions,
-  accounts,
-  accountId,
-  onAccountChange,
-  displayTraits,
-  onTraitsChange,
+  modelPicker,
   onSend,
   onCancel,
   preConversationContent,
-  beforeQueuedContent,
   preInputContent,
-  emptyStateOverride,
+  transcriptTail,
   underCardLeading,
   draft,
+  localDraft,
   isDraftLoading,
   onOpenFile,
   onViewDiff,
@@ -231,13 +331,91 @@ export function ChatBody({
   turnCheckpoint,
   allowEmptySubmit,
   afterMessage,
+  onForkTranscript,
+  hideJumpRail = false,
 }: ChatBodyProps) {
+  const citations = usePendingCitations();
+  const snapshots = usePendingPreviewSnapshots();
+  const webmcp = usePendingWebMcp();
+  const sendWithPendingContext = async (
+    content: string,
+    attachmentStorageIds?: Id<"_storage">[],
+  ) => {
+    const sentCitations = citations?.items ?? [];
+    const sentSnapshots = snapshots?.items ?? [];
+    const sentWebMcp = webmcp?.items ?? [];
+    const withCitations = appendCitationsToPrompt(content, sentCitations);
+    const withSnapshots = appendSnapshotsToPrompt(
+      withCitations,
+      sentSnapshots.map((item) => item.snapshot),
+    );
+    const withWebMcp = appendWebMcpToPrompt(
+      withSnapshots,
+      sentWebMcp.map((item) => item.discovery),
+    );
+    // Settlement is observed, not awaited: the composer only empties once this
+    // resolves, and holding the user's text on screen until the mutation
+    // round-trips would undo the optimistic clear every surface relies on.
+    // Same contract as useChatSend's `review?.clear()`: the pending context
+    // is consumed only once the send has actually succeeded, so a rejected send
+    // leaves the chips attached for the retry. And only the exact items that
+    // went into this prompt are dropped — `clear()` also threw away anything
+    // cited while the send was in flight, which was never sent.
+    void onSend(withWebMcp, attachmentStorageIds, {
+      draftContent: content,
+    }).then(
+      () => {
+        for (const citation of sentCitations) citations?.remove(citation.id);
+        for (const item of sentSnapshots) snapshots?.remove(item.id);
+        for (const item of sentWebMcp) webmcp?.remove(item.id);
+      },
+      () => {
+        // The send handler already raised the failure toast (with the typed
+        // text behind "Restore draft"); the chips are all we own here, and they
+        // stay so the retry carries the same context.
+      },
+    );
+  };
+  const hasComposerContext =
+    (hasPendingContext ?? false) ||
+    (citations?.items.length ?? 0) > 0 ||
+    (snapshots?.items.length ?? 0) > 0 ||
+    (webmcp?.items.length ?? 0) > 0;
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
   // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
+
+  // Composer predictions read the chat only while it waits on the user and is
+  // on screen — hidden cached shells must not each spend a model call.
+  const lastMessageId = messages.at(-1)?._id;
+  const predictionTarget =
+    chatParentId && isRouteActive && !isExecuting && lastMessageId
+      ? { parentId: chatParentId, lastMessageId }
+      : undefined;
+
+  // Opening a long chat used to commit every settled turn in one blocking
+  // render — ~1s of locked main thread on a heavy transcript. Only the last
+  // turn is ever in the viewport (ChatLastTurn pads it to `100cqh`), so the
+  // backlog above it renders one pass later, at transition priority.
+  //
+  // Deferring "the transcript has rows" rather than mount — a chat whose
+  // messages arrive after mount would otherwise have spent its deferred pass
+  // on the loading spinner and then commit the whole backlog in the render
+  // that first has data.
+  const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+
+  // Streamed prose and the tool timeline arrive in the same Convex patch, but
+  // they cost wildly different amounts to render: the prose grows by a few
+  // characters, while the activity payload is a JSON blob capped at 600 KB
+  // that fans out into the timeline, the composer's todo badge, the sub-agent
+  // row and the question cards. Deferring the activity splits them across two
+  // passes — the text the user is reading commits at full priority, and the
+  // timeline re-renders at transition priority, where React can abandon a long
+  // render when the next token lands instead of holding the frame.
+  const deferredStreamingActivity = useDeferredValue(streamingActivity);
 
   const lastMessage = displayMessages[displayMessages.length - 1];
   // The oldest unfinished Working bubble owns the session-scoped streaming
@@ -255,6 +433,7 @@ export function ChatBody({
   // Submit-in-flight only — not turn execution. Blocking AskUserQuestion leaves
   // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
+  const [forkThroughId, setForkThroughId] = useState<string | null>(null);
   const pendingQuestionRaw =
     streamingPendingQuestion ??
     streamingTarget?.pendingQuestion ??
@@ -309,8 +488,21 @@ export function ChatBody({
 
   const lastUserMessageIndex = findLastUserMessageIndex(displayMessages);
 
-  const jumpRailMessages = buildJumpRailTicks(displayMessages);
   const handoffBoundaryIds = findHandoffBoundaryIds(displayMessages);
+  const dayBoundaryIds = findDayBoundaryIds(displayMessages);
+  const findDocuments = collectThreadFindDocuments(
+    displayMessages.map((message) => ({
+      id: message._id,
+      text: tokenizedToDisplayText(
+        message.content.trim().length > 0
+          ? message.content
+          : message._id === streamingTargetId
+            ? (streamingContent ?? "")
+            : "",
+      ),
+      skip: message.isSystemAlert === true,
+    })),
+  );
 
   const currentUserId = useQuery(api.auth.me);
 
@@ -325,14 +517,167 @@ export function ChatBody({
       lastUserMessage === undefined ||
       !isOtherUserChatMessage(lastUserMessage, currentUserId),
   });
-
-  // Agent-composed UI panels (`render_ui`). One query per chat covers all three
-  // surfaces, since every one of them renders through this component.
-  const chatUiPanels = useQuery(api.chatUi.listByParent, {
+  const { newSinceAt } = useChatReadState({
     parentId: chatParentId,
+    active: isRouteActive,
   });
+  const newMessageIds = findNewMessageIds(
+    displayMessages,
+    newSinceAt,
+    currentUserId,
+  );
+  const newBoundaryId = newMessageIds[0];
+  // Seen state lives here, not in the divider: the pill is a sibling and needs
+  // it. It is keyed by the boundary id, so a new boundary starts unseen.
+  const newDivider = useSeenOnce(newBoundaryId);
+
+  // A long chat renders only its last TRANSCRIPT_TURN_WINDOW turns; older ones
+  // load as the reader scrolls up (ChatEarlierTurnsLoader). Committing every
+  // turn made opening a 450-message chat block for 1–2 s, and every row is
+  // work on each streamed token. The window is pinned to its first row and
+  // only grows: new turns append below it, so nothing above the reader ever
+  // unmounts mid-read. It also grows to hold the NEW divider, a jump-rail
+  // target and the first find match, which all need their row in the DOM.
+  const windowKey = chatParentId ?? conversationId;
+  const [transcriptWindow, setTranscriptWindow] = useState<TranscriptWindow>({
+    key: windowKey,
+    firstId: undefined,
+  });
+  const ownWindow =
+    transcriptWindow.key === windowKey ? transcriptWindow : undefined;
+  const pinnedIndex =
+    ownWindow?.firstId === undefined
+      ? -1
+      : displayMessages.findIndex(
+          (message) => message._id === ownWindow.firstId,
+        );
+  const newBoundaryIndex =
+    newBoundaryId === undefined
+      ? -1
+      : displayMessages.findIndex((message) => message._id === newBoundaryId);
+  // An unknown pin (an optimistic row that took its server id) falls back to
+  // the default window.
+  const baseWindowStart =
+    pinnedIndex >= 0
+      ? pinnedIndex
+      : findTurnWindowStart(displayMessages, TRANSCRIPT_TURN_WINDOW);
+  const windowStart =
+    newBoundaryIndex >= 0
+      ? Math.min(baseWindowStart, newBoundaryIndex)
+      : baseWindowStart;
+  const windowFirstId = displayMessages[windowStart]?._id;
+  // Pinning during render is React's "adjust state when a prop changes"
+  // pattern: it re-renders before commit, and settles once the pin matches.
+  if (windowFirstId !== undefined && ownWindow?.firstId !== windowFirstId) {
+    setTranscriptWindow({
+      ...ownWindow,
+      key: windowKey,
+      firstId: windowFirstId,
+    });
+  }
+
+  /** Grows the window up to `index`, when that row is above it. */
+  const extendWindowTo = (
+    index: number,
+    extra: Pick<TranscriptWindow, "anchor" | "scrollTo">,
+  ) => {
+    const firstId = displayMessages[index]?._id;
+    if (firstId === undefined || index >= windowStart) return;
+    setTranscriptWindow({ key: windowKey, firstId, ...extra });
+  };
+
+  const loadEarlierTurns = (anchor: TranscriptScrollAnchor | undefined) => {
+    // Transition priority: a batch of heavy turns must not freeze the scroll
+    // that asked for it.
+    startTransition(() => {
+      extendWindowTo(
+        findTurnWindowStart(
+          displayMessages,
+          TRANSCRIPT_TURN_WINDOW,
+          windowStart,
+        ),
+        { anchor },
+      );
+    });
+  };
+
+  // Rail ticks are user rows: the window starts at the tick's own turn.
+  const revealMessage = (messageId: string) => {
+    startTransition(() => {
+      extendWindowTo(
+        displayMessages.findIndex((message) => message._id === messageId),
+        { scrollTo: { messageId } },
+      );
+    });
+  };
+
+  // Urgent, in the bar's own input event: the rows must be in the DOM by the
+  // time the bar's deferred query paints and jumps, which counts DOM matches.
+  // Every match lies at or below the first one, so its turn is enough.
+  const revealFirstFindMatch = (query: string) => {
+    const first = findThreadMatches(findDocuments, query)[0];
+    if (!first) return;
+    const index = displayMessages.findIndex(
+      (message) => message._id === first.messageId,
+    );
+    if (index < 0) return;
+    extendWindowTo(findTurnWindowStart(displayMessages, 1, index + 1), {});
+  };
+
+  const scrollToJumpTarget = (node: HTMLDivElement | null) => {
+    const target = ownWindow?.scrollTo;
+    if (!node || !target || scrolledJumps.has(target)) return;
+    scrolledJumps.add(target);
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const jumpToNewDivider = () => {
+    newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    newDivider.markSeen();
+  };
+
+  // Agent-posted inline cards: composed panels (`render_ui`), HTML pages
+  // (`render_html`) and secret requests (`request_env_var`). One query each
+  // per chat covers all three surfaces, since every one of them renders
+  // through this component.
+  const chatUiPanels = useQuery(
+    api.chatUi.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const htmlRenders = useQuery(
+    api.chatHtml.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const envVarRequests = useQuery(
+    api.envVarRequests.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const panelPlacement = placeChatUiPanels(
-    chatUiPanels ?? [],
+    [
+      ...(chatUiPanels ?? []).map(
+        (panel): InlineCard => ({
+          _id: panel._id,
+          messageId: panel.messageId,
+          createdAt: panel.createdAt,
+          card: { kind: "panel", spec: panel.spec },
+        }),
+      ),
+      ...(htmlRenders ?? []).map(
+        (render): InlineCard => ({
+          _id: render._id,
+          messageId: render.messageId,
+          createdAt: render.createdAt,
+          card: { kind: "html", render },
+        }),
+      ),
+      ...(envVarRequests ?? []).map(
+        (request): InlineCard => ({
+          _id: request._id,
+          messageId: request.messageId,
+          createdAt: request.createdAt,
+          card: { kind: "envVarRequest", request },
+        }),
+      ),
+    ],
     new Set(displayMessages.map((message) => message._id)),
   );
 
@@ -357,7 +702,10 @@ export function ChatBody({
     isArchived || isExecuting
       ? undefined
       : (content: string, attachmentStorageIds?: Id<"_storage">[]) => {
-          void onSend(content, attachmentStorageIds);
+          // `onSend` rejects on a failed send so the composer can keep the
+          // pending chips. The surface has already toasted by then, so swallow
+          // it here rather than leaving an unhandled rejection.
+          void onSend(content, attachmentStorageIds).catch(() => {});
         };
 
   // A panel button sends its text through the normal send path, so it queues
@@ -368,7 +716,8 @@ export function ChatBody({
     isArchived || isInputDisabled
       ? undefined
       : (message: string) => {
-          void onSend(message);
+          // See `handleRetryTurn`: the rejection is already surfaced as a toast.
+          void onSend(message).catch(() => {});
         };
 
   // Undefined rather than an empty array: the caller slots this into a wrapper
@@ -376,31 +725,73 @@ export function ChatBody({
   const renderChatUiPanels = (panels: typeof panelPlacement.trailing) =>
     panels.length === 0
       ? undefined
-      : panels.map((panel) => (
-          <ChatUiPanel
-            key={panel._id}
-            spec={panel.spec}
-            onReply={handlePanelReply}
-          />
-        ));
+      : panels.map(({ _id, card }) => {
+          switch (card.kind) {
+            case "panel":
+              return (
+                <ChatUiPanel
+                  key={_id}
+                  spec={card.spec}
+                  onReply={handlePanelReply}
+                />
+              );
+            case "html":
+              return <ChatHtmlFrame key={_id} render={card.render} />;
+            case "envVarRequest":
+              return (
+                <EnvVarRequestCard
+                  key={_id}
+                  request={card.request}
+                  onReply={handlePanelReply}
+                />
+              );
+          }
+        });
 
-  const renderMessage = (message: ChatBodyMessage) => {
+  /**
+   * Every prop handed to a row must keep its identity across ChatBody renders.
+   * `ChatMessage` is memoised, and switching sessions re-renders ChatBody (the
+   * cached shells flip `isRouteActive`); one unstable prop re-renders all rows.
+   *
+   * `isBacklog` marks a row the chat opened already scrolled past, which skips
+   * its enter animation: nothing arrived, and 80 simultaneous enter animations
+   * is the most expensive part of committing a long transcript.
+   *
+   * (`content-visibility: auto` on these rows was tried and reverted — no
+   * intrinsic-size estimate fits a chat turn, so the scroll height grew from
+   * 19k to 36k px as the user scrolled up through them.)
+   */
+  const precedingUserTurns = buildPrecedingUserTurns(displayMessages);
+
+  const renderMessage = (message: ChatBodyMessage, isBacklog = false) => {
     const isStreamingTarget = message._id === streamingTargetId;
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const senderFirstName =
       isOtherUser && message.userId
         ? firstNameByUserId.get(message.userId)
         : undefined;
-    const precedingUser =
-      message.role === "assistant"
-        ? findPrecedingUserTurn(displayMessages, message._id)
-        : undefined;
+    const precedingUser = precedingUserTurns.get(message._id);
 
     return (
-      <div key={message._id} className="flex flex-col gap-3">
+      <div
+        key={message._id}
+        ref={
+          ownWindow?.scrollTo?.messageId === message._id
+            ? scrollToJumpTarget
+            : undefined
+        }
+        className="flex flex-col gap-3"
+      >
+        {dayBoundaryIds.has(message._id) ? (
+          <ChatDayDivider timestamp={message.timestamp} />
+        ) : null}
+        {message._id === newBoundaryId ? (
+          <ChatNewDivider ref={newDivider.ref} />
+        ) : null}
         <ChatMessage
           message={message}
-          repoBasePath={repoBasePath}
+          animateIn={!isBacklog}
+          repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
           {...(expandedByMessageId[message._id] !== undefined
@@ -413,7 +804,9 @@ export function ChatBody({
           turnModel={precedingUser?.model}
           turnReasoningLevel={precedingUser?.reasoningLevel}
           turnCredentialSourceLabel={precedingUser?.credentialSourceLabel}
-          streamingActivity={isStreamingTarget ? streamingActivity : undefined}
+          streamingActivity={
+            isStreamingTarget ? deferredStreamingActivity : undefined
+          }
           streamingContent={isStreamingTarget ? streamingContent : undefined}
           onOpenFile={onOpenFile}
           onViewDiff={onViewDiff}
@@ -421,8 +814,18 @@ export function ChatBody({
           backgroundAgents={backgroundAgents}
           sandboxRunning={sandboxRunning}
           turnCheckpoint={simpleView ? undefined : turnCheckpoint}
-          onRetryTurn={handleRetryTurn}
+          // Only a failed turn shows Retry. `handleRetryTurn` changes with
+          // `onSend`, so handing it to every row re-rendered the transcript.
+          onRetryTurn={
+            message.errorType !== undefined ? handleRetryTurn : undefined
+          }
           precedingUser={precedingUser}
+          citeHighlight={citations?.highlightedMessageId === message._id}
+          onFork={
+            onForkTranscript && canForkMessage(message)
+              ? setForkThroughId
+              : undefined
+          }
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
           )}
@@ -433,22 +836,34 @@ export function ChatBody({
   };
 
   return (
-    <>
+    <div className="relative flex min-h-0 flex-1 flex-col" data-chat-pane="">
       {preConversationContent}
+      <ThreadFindBar
+        documents={findDocuments}
+        onQueryChange={revealFirstFindMatch}
+        scopeKey={windowFirstId}
+      />
       <Conversation className="flex-1 min-h-0">
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
-          scrollClassName="[container-type:size]"
+          // No native scroll anchoring: ChatEarlierTurnsLoader holds the
+          // reader's place itself, and two corrections would add up.
+          scrollClassName="[container-type:size] [overflow-anchor:none]"
         >
           {displayMessages.length === 0 ? (
-            (emptyStateOverride ??
-            (isLoadingMessages ? (
-              <ChatTranscriptSkeleton />
+            transcriptTail ? (
+              // Bottom-anchored like a live last turn, so the tail sits in the
+              // same spot above the composer whether or not messages exist.
+              <div className="flex min-h-[calc(100cqh-1.5rem)] flex-col justify-end">
+                {transcriptTail}
+              </div>
+            ) : isLoadingMessages ? (
+              <ChatTranscriptLoading />
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}
                 description={emptyStateDescription}
-                {...(isInputDisabled && onStartSandbox
+                {...(onStartSandbox
                   ? {
                       action: {
                         label: SANDBOX_CHAT_COPY.wakeAction,
@@ -457,23 +872,61 @@ export function ChatBody({
                     }
                   : {})}
               />
-            )))
+            )
           ) : lastUserMessageIndex < 0 ? (
-            displayMessages.map(renderMessage)
+            displayMessages.map((message) => renderMessage(message))
           ) : (
             <>
-              {displayMessages
-                .slice(0, lastUserMessageIndex)
-                .map(renderMessage)}
+              {backlogReady &&
+              (windowStart > 0 || ownWindow?.anchor !== undefined) ? (
+                <ChatEarlierTurnsLoader
+                  key={windowFirstId}
+                  anchor={ownWindow?.anchor}
+                  // Only the chat on screen grows its window: a hidden cached
+                  // shell has no reader scrolling up.
+                  onReach={
+                    windowStart > 0 && isRouteActive
+                      ? loadEarlierTurns
+                      : undefined
+                  }
+                />
+              ) : null}
+              {backlogReady
+                ? displayMessages
+                    .slice(windowStart, lastUserMessageIndex)
+                    .map((message) => renderMessage(message, true))
+                : null}
               <ChatLastTurn>
-                {displayMessages.slice(lastUserMessageIndex).map(renderMessage)}
+                {displayMessages
+                  .slice(lastUserMessageIndex)
+                  .map((message) => renderMessage(message))}
               </ChatLastTurn>
             </>
           )}
+          {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
         </ConversationContent>
+        {newBoundaryId ? (
+          <ChatNewMessagesPill
+            key={newBoundaryId}
+            count={newMessageIds.length}
+            visible={newDivider.status === "above"}
+            onJump={jumpToNewDivider}
+          />
+        ) : null}
         <ConversationScrollButton resetKey={conversationId} />
-        <ChatJumpRail messages={jumpRailMessages} />
+        {/* Mounted with the backlog: the rail resolves its ticks by querying
+            `[data-message-id]` from an effect keyed on the (memoised) tick
+            array, so binding it before those rows exist would observe nothing
+            and never retry. */}
+        {backlogReady && !hideJumpRail ? (
+          <ChatJumpRail
+            messages={displayMessages}
+            renderedFromId={windowFirstId}
+            onRevealMessage={revealMessage}
+          />
+        ) : null}
+        {isArchived ? null : <AssistantCiteToolbar />}
       </Conversation>
       {isArchived ? null : (
         <AnimatePresence mode="wait" initial={false}>
@@ -503,40 +956,72 @@ export function ChatBody({
               transition={motionBase}
             >
               <ChatComposer
-                repoId={repoId}
-                repoBasePath={repoBasePath}
+                repo={repo}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
+                queueLabel={queueLabel}
+                heldFollowUps={heldFollowUps}
                 messageHistory={messageHistory}
                 isExecuting={isExecuting}
                 isInputDisabled={isInputDisabled}
                 disabledReason={disabledReason}
                 onStartSandbox={onStartSandbox}
                 placeholder={placeholder}
-                model={model}
-                setModel={setModel}
-                modelOptions={modelOptions}
-                accounts={accounts}
-                accountId={accountId}
-                onAccountChange={onAccountChange}
-                displayTraits={displayTraits}
-                onTraitsChange={onTraitsChange}
-                onSend={onSend}
+                modelPicker={modelPicker}
+                onSend={sendWithPendingContext}
                 onCancel={onCancel}
-                beforeQueuedContent={beforeQueuedContent}
-                preInputContent={preInputContent}
-                streamingActivity={streamingActivity}
+                preInputContent={
+                  <>
+                    <PendingCitationChips />
+                    <PendingSnapshotChips />
+                    <PendingWebMcpChips />
+                    {preInputContent}
+                  </>
+                }
+                streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}
                 draft={draft}
+                localDraft={localDraft}
                 isDraftLoading={isDraftLoading}
-                hasPendingContext={hasPendingContext}
+                hasPendingContext={hasComposerContext}
                 allowEmptySubmit={allowEmptySubmit}
+                predictionTarget={predictionTarget}
               />
             </m.div>
           )}
         </AnimatePresence>
       )}
-    </>
+      <MessageForkDialog
+        prefix={
+          forkThroughId
+            ? collectForkPrefix(
+                displayMessages.map((message) => ({
+                  id: message._id,
+                  role: message.role,
+                  content: message.content,
+                  isSystemAlert: message.isSystemAlert,
+                })),
+                forkThroughId,
+              )
+            : null
+        }
+        open={forkThroughId !== null}
+        onOpenChange={(open) => {
+          if (!open) setForkThroughId(null);
+        }}
+        onConfirm={
+          onForkTranscript
+            ? async (prefix) => {
+                await onForkTranscript({
+                  throughMessageId: prefix.throughMessageId,
+                  title: forkThreadTitle(prefix),
+                  prompt: formatForkPrompt(prefix),
+                });
+              }
+            : undefined
+        }
+      />
+    </div>
   );
 }

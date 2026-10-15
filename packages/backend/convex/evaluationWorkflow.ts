@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -6,7 +8,11 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackEvaluationWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -18,8 +24,10 @@ import { buildPrBody } from "./prBody";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { buildRootDirectoryInstruction } from "./prompts";
+import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 
-const evalCompleteEvent = defineEvent({
+/** Agent-turn completion for a report. Shared by code reviews and browser runs. */
+export const evalCompleteEvent = defineEvent({
   name: "evalComplete",
   validator: workflowCompleteValidator,
 });
@@ -73,17 +81,23 @@ export const evaluationWorkflow = workflow.define({
         baseBranch: args.branchName,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: String(args.reportId),
-        prompt: docData.prompt,
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Read,Glob,Grep",
-        repoId: docData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: String(args.reportId),
+          prompt: docData.prompt,
+          userId: args.userId,
+          completionMutation: "evaluationWorkflow:handleCompletion",
+          entityIdField: "reportId",
+          model: "sonnet",
+          allowedTools: "Read,Glob,Grep",
+          repoId: docData.repoId,
+        },
+        {
+          entityId: args.reportId,
+        },
+      );
 
       const result = await step.awaitEvent(evalCompleteEvent);
 
@@ -159,17 +173,23 @@ export const fixWorkflow = workflow.define({
         branchName: args.fixBranchName,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId: fixSandboxId,
-        entityId: String(args.reportId),
-        prompt: fixData.prompt,
-        userId: args.userId,
-        completionMutation: "evaluationWorkflow:handleFixCompletion",
-        entityIdField: "reportId",
-        model: "sonnet",
-        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-        repoId: fixData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId: fixSandboxId,
+          entityId: String(args.reportId),
+          prompt: fixData.prompt,
+          userId: args.userId,
+          completionMutation: "evaluationWorkflow:handleFixCompletion",
+          entityIdField: "reportId",
+          model: "sonnet",
+          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+          repoId: fixData.repoId,
+        },
+        {
+          entityId: args.reportId,
+        },
+      );
 
       const fixResult = await step.awaitEvent(fixCompleteEvent);
 
@@ -434,6 +454,7 @@ export const saveWorkflowFailure = internalMutation({
       activeWorkflowId: undefined,
       updatedAt: Date.now(),
     });
+    await scheduleArenaCheckCompletion(ctx, report);
     return null;
   },
 });
@@ -450,11 +471,23 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.reportId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, evalCompleteEvent, report.activeWorkflowId, {
       success: args.success,
@@ -592,11 +625,23 @@ export const handleFixCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.reportId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, fixCompleteEvent, report.activeWorkflowId, {
       success: args.success,
@@ -649,7 +694,9 @@ export const startEvaluation = authMutation({
       .withIndex("by_doc", (q) => q.eq("docId", args.docId))
       .collect();
     const active = existing.find(
-      (r) => r.status === "pending" || r.status === "running",
+      (r) =>
+        (r.kind ?? "code") === "code" &&
+        (r.status === "pending" || r.status === "running"),
     );
     if (active) return active._id;
 
@@ -657,6 +704,7 @@ export const startEvaluation = authMutation({
     const reportId = await ctx.db.insert("evaluationReports", {
       repoId: args.repoId,
       docId: args.docId,
+      kind: "code",
       status: "pending",
       issues: [],
       branchName: args.branchName,

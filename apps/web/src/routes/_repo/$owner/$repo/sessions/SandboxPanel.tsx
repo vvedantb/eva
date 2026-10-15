@@ -31,6 +31,7 @@ import {
   useSourceDocuments,
 } from "@/lib/components/docs/SessionDocumentsPanel";
 import { FilesPanel } from "./FilesPanel";
+import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
@@ -59,6 +60,8 @@ import { designVariationPrompt } from "./_utils/composerPrompts";
 
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
+  /** The active chat tab; annotations, plan sends and agent stops route to it. */
+  chatId: Id<"sessionChats">;
   sandboxId: string | undefined;
   isActive: boolean;
   /**
@@ -86,6 +89,12 @@ interface SandboxPanelProps {
   agentBrowsingAt?: number;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined in
+   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
+   */
+  autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
@@ -93,6 +102,7 @@ interface SandboxPanelProps {
 }
 export function SandboxPanel({
   sessionId,
+  chatId,
   sandboxId,
   isActive,
   isRouteActive = true,
@@ -113,16 +123,22 @@ export function SandboxPanel({
   agentBrowsingAt,
   onStartSandbox,
   isSandboxStarting,
+  autoWakeEligible,
   collapsed = false,
   onToggle,
   miniPlayer,
 }: SandboxPanelProps) {
   const simpleView = useSimpleView();
   const sessionIdStr = String(sessionId);
-  const submitAnnotation = useSessionAnnotationSend(sessionId, isRouteActive);
+  const submitAnnotation = useSessionAnnotationSend(
+    sessionId,
+    chatId,
+    isRouteActive,
+  );
   const seedChatDraft = useSeedChatDraft({
     kind: "sessionChat",
     sessionId,
+    chatId,
   });
   const proposedPlans = useHeldQuery(
     api.proposedPlans.listBySession,
@@ -131,6 +147,7 @@ export function SandboxPanel({
   const { implementPlan, implementPlanContent, implementInNewSession } =
     useSessionPlanImplementation({
       sessionId,
+      chatId,
       handleSend: (content) => {
         void seedChatDraft(content);
       },
@@ -257,12 +274,9 @@ export function SandboxPanel({
       }
     >
       <div className="h-full overflow-hidden">
-        <div
-          className={
-            activeTab === "prd"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        <KeepAlivePane
+          active={activeTab === "prd"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           {planContent ? (
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
@@ -310,13 +324,10 @@ export function SandboxPanel({
               </div>
             </div>
           )}
-        </div>
-        <div
-          className={
-            activeTab === "designs"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={activeTab === "designs"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <DesignVariationsPanel
             previewUrl={previewUrl}
@@ -330,51 +341,44 @@ export function SandboxPanel({
               void seedChatDraft(designVariationPrompt(letter, label));
             }}
           />
-        </div>
-        <div
-          className={
-            activeTab === "artifacts"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={activeTab === "artifacts"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <SessionArtifactsPanel source={artifactSource} />
-        </div>
-        <div
-          className={
-            activeTab === "documents"
-              ? "flex h-full min-h-0 flex-col overflow-hidden"
-              : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={activeTab === "documents"}
+          className="flex h-full min-h-0 flex-col overflow-hidden"
         >
           <SessionDocumentsPanel source={artifactSource} />
-        </div>
-        <div
-          className={
-            !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={!simpleView && activeTab === "files"}
+          className="h-full min-h-0"
         >
           <FilesPanel
             sandboxId={sandboxId}
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
             repos={sessionRepos}
             activeRoot={filesRoot}
             onRootChange={setFilesRoot}
           />
-        </div>
-        <div
-          className={
-            !simpleView && activeTab === "agents" ? "h-full min-h-0" : "hidden"
-          }
+        </KeepAlivePane>
+        <KeepAlivePane
+          active={!simpleView && activeTab === "agents"}
+          className="h-full min-h-0"
         >
           <SandboxAgentsPanel
-            entity={{ kind: "session", sessionId }}
+            entity={{ kind: "session", sessionId, chatId }}
             agents={agents}
             isReadOnly={isArchived === true}
           />
-        </div>
+        </KeepAlivePane>
         <SandboxPaneSlots
           activeTab={activeTab}
           panes={panes}
@@ -400,6 +404,10 @@ export function SandboxPanel({
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           onAnnotationSubmit={submitAnnotation}
+          // Only the session on screen holds the idle-pause presence beacon;
+          // cached siblings and a collapsed rail must not keep a VM awake.
+          presenceEnabled={isRouteActive && !collapsed}
+          autoWakeEligible={autoWakeEligible}
           // Multi-repo sessions run a dev server per repo; the Preview port
           // control offers each one instead of only the primary's.
           previewPortOptions={previewPortOptions(

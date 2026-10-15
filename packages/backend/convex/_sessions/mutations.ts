@@ -17,10 +17,9 @@ import {
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
+import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
@@ -30,16 +29,22 @@ import {
   cancelSessionSandboxGraceDelete,
   scheduleSessionSandboxGraceDelete,
 } from "../sandboxCleanup";
-import { livePrState, scheduleSessionPrSync } from "./prArchive";
 import {
-  composerTraitFields,
-  hasComposerTraitUpdate,
-} from "../_shared/composerTraits";
+  closeLivePullRequests,
+  findPrimaryPullRequest,
+  reopenArchivedPullRequests,
+} from "../_pullRequests/store";
+import { composerTraitFields } from "../_shared/composerTraits";
 import {
   assertValidRepoGroupMembers,
   getRepoGroupForSession,
 } from "../repoGroups";
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
+import { touchUserActivity } from "../_sandbox/activity";
+import {
+  ensureMainChat,
+  getSessionChatOrThrow,
+} from "../_sessionChats/helpers";
 
 /** Loads a session by id, throwing if it does not exist. */
 async function getSessionOrThrow(
@@ -67,8 +72,6 @@ const createSessionArgs = v.object({
   ),
   baseBranch: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** Marks the user's persistent master session. Set only at creation. */
-  isOrchestrator: v.optional(v.boolean()),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
   /**
@@ -84,17 +87,26 @@ const createSessionArgs = v.object({
 
 type CreateSessionArgs = Infer<typeof createSessionArgs>;
 
+/** Internal-only: never accepted from clients, so nobody boots a chosen snapshot. */
+export interface CreateSessionFork {
+  sourceSessionId: Id<"sessions">;
+  sourceSandboxId: string;
+  /** Start the source again after this fork's first sandbox is taken. */
+  restartSource: boolean;
+}
+
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
  * (optionally) the first queued message. Used by the `create` mutation and by
- * `_sessions/orchestrator.ts` so the master session takes the same path.
+ * the MCP `create_session` tool.
  */
 export async function createSession(
   ctx: AuthMutationCtx,
   args: CreateSessionArgs,
+  fork?: CreateSessionFork,
 ): Promise<{ sessionId: Id<"sessions">; numId: number }> {
   if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
     throw new Error("Not authorized");
@@ -167,12 +179,21 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
-    ...(args.isOrchestrator !== undefined
-      ? { isOrchestrator: args.isOrchestrator }
+    ...(fork
+      ? {
+          forkedFromSessionId: fork.sourceSessionId,
+          forkSourceSandboxId: fork.sourceSandboxId,
+          ...(fork.restartSource ? { forkRestartsSource: true } : {}),
+        }
       : {}),
   });
   const branchName = `eva/session-${sessionId}`;
   await ctx.db.patch(sessionId, { branchName });
+  const created = await ctx.db.get(sessionId);
+  if (!created) throw new Error("Session was not created");
+  // The Main chat is the session's own transcript; the first message queues
+  // on it, and `ensureMainChat` carries the session's composer picks over.
+  const mainChat = await ensureMainChat(ctx, created);
 
   // Every linked repo is checked out on the SAME branch name as the primary,
   // off its own default base. The rows are the sandbox's clone list, so they
@@ -232,7 +253,7 @@ export async function createSession(
       throw new Error("model is required when queuing a message");
     }
     await ctx.db.insert("queuedMessages", {
-      parentId: sessionId,
+      parentId: mainChat._id,
       content,
       createdAt: Date.now(),
       order: Date.now(),
@@ -279,10 +300,10 @@ export const create = authMutation({
   handler: async (ctx, args) => await createSession(ctx, args),
 });
 
-/** Adds a message to a session conversation. */
+/** Adds a message to one chat of a session. */
 export const addMessage = authMutation({
   args: {
-    id: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     role: roleValidator,
     content: v.string(),
     activityLog: v.optional(v.string()),
@@ -296,17 +317,20 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    const credentialSourceLabel =
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    const credential =
       args.role === "user"
-        ? await resolveCredentialSourceLabel(
+        ? await resolveMessageCredential(
             ctx.db,
-            args.providerAccountId ?? session.providerAccountId,
+            args.providerAccountId ?? chat.providerAccountId,
             session.createdBy ?? session.userId,
           )
         : undefined;
     await ctx.db.insert("messages", {
-      parentId: args.id,
+      parentId: chat._id,
       role: args.role,
       content: args.content,
       timestamp: Date.now(),
@@ -314,7 +338,7 @@ export const addMessage = authMutation({
       clientId: args.clientId,
       userId: ctx.userId,
       attachmentStorageIds: args.attachmentStorageIds,
-      credentialSourceLabel,
+      ...credential,
       ...(args.role === "user"
         ? {
             model: args.model,
@@ -323,98 +347,16 @@ export const addMessage = authMutation({
           }
         : {}),
     });
-    await ctx.db.patch(args.id, { updatedAt: Date.now() });
-    return null;
-  },
-});
-
-/**
- * Sets the sticky composer model for a session. `lastModel` is the single
- * source of truth for the picker, so this is called directly on change (with a
- * client-side optimistic update) rather than only when a message is sent. Does
- * not touch `updatedAt` — changing the model is not conversation activity and
- * must not reorder the session list. Any visible model is allowed, including one
- * from another provider: the sticky account is reconciled to the new model's
- * provider here, and that provider's CLI is caught up on the conversation so far
- * (see `_shared/modelHandoff.ts`).
- */
-export const setModel = authMutation({
-  args: {
-    id: v.id("sessions"),
-    model: aiModelValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
+    const now = Date.now();
+    await ctx.db.patch(chat._id, { updatedAt: now });
+    await ctx.db.patch(session._id, { updatedAt: now });
+    if (args.role === "user") {
+      await touchUserActivity(
+        ctx,
+        { kind: "session", entityId: String(session._id) },
+        { source: "chat", userId: ctx.userId },
+      );
     }
-    const providerAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      session.createdBy ?? session.userId,
-      args.model,
-      session.providerAccountId,
-    );
-    await ctx.db.patch(args.id, { lastModel: args.model, providerAccountId });
-    return null;
-  },
-});
-
-/**
- * Sets the sticky provider account for a session. Same contract as `setModel`:
- * write on change (optimistic on the client), do not bump `updatedAt`. Pass
- * `null` to clear back to Team.
- *
- * Anyone with repo access may pick, but only from accounts owned by the session
- * owner — a session always runs on one person's credentials, and a collaborator
- * must never be able to attach their own. Without this, a collaborator who
- * changed the model could never get back to the owner's account.
- */
-export const setProviderAccountId = authMutation({
-  args: {
-    id: v.id("sessions"),
-    providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const ownerUserId = session.createdBy ?? session.userId;
-    const providerAccountId = await assertProviderAccountUsableBy(
-      ctx.db,
-      args.providerAccountId,
-      ownerUserId,
-    );
-    await ctx.db.patch(args.id, { providerAccountId });
-    return null;
-  },
-});
-
-/**
- * Sets sticky composer traits for a session (effort / thinking / 1M / Fast). Same
- * contract as `setModel`: write on change (optimistic on the client), do not
- * bump `updatedAt`. Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    id: v.id("sessions"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    if (!hasComposerTraitUpdate(args)) {
-      return null;
-    }
-    await ctx.db.patch(args.id, composerTraitFields(args));
     return null;
   },
 });
@@ -433,13 +375,12 @@ export const updateStatus = authMutation({
   },
 });
 
-/** Updates editable fields (title, branch, PR URL) on a session. */
+/** Updates editable fields (title, branch) on a session. */
 export const update = authMutation({
   args: {
     id: v.id("sessions"),
     title: v.optional(v.string()),
     branchName: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -447,23 +388,23 @@ export const update = authMutation({
     const updates: {
       title?: string;
       branchName?: string;
-      prUrl?: string;
     } = {};
     if (args.title !== undefined) updates.title = args.title;
     if (args.branchName !== undefined) updates.branchName = args.branchName;
-    if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
     await ctx.db.patch(args.id, updates);
 
-    if (
-      args.title !== undefined &&
-      args.title !== session.title &&
-      session.prUrl
-    ) {
-      await schedulePrTitleSync(ctx, {
-        repoId: session.repoId,
-        prUrl: session.prUrl,
-        title: args.title,
+    if (args.title !== undefined && args.title !== session.title) {
+      const primaryPr = await findPrimaryPullRequest(ctx.db, {
+        kind: "session",
+        sessionId: session._id,
       });
+      if (primaryPr) {
+        await schedulePrTitleSync(ctx, {
+          repoId: primaryPr.repoId,
+          prUrl: primaryPr.prUrl,
+          title: args.title,
+        });
+      }
     }
     return null;
   },
@@ -484,15 +425,15 @@ export const updateSummary = authMutation({
 });
 
 /**
- * Archives a session: sandbox to cold storage, open/draft PR closed (merged
- * PRs are left alone), row flagged so the active list drops it.
+ * Archives a session: sandbox to cold storage, every open/draft PR it holds
+ * closed (merged PRs are left alone), row flagged so the active list drops it.
  *
  * Split from the `archive` mutation so server-side callers that already hold
  * the doc and its access check — `resetOrchestratorSession` retiring the old
  * master — retire it through exactly this path instead of a second copy.
  */
 export async function archiveSessionDoc(
-  ctx: AuthMutationCtx,
+  ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
   // Archive the sandbox (stops it first, then moves to cold storage)
@@ -503,23 +444,12 @@ export async function archiveSessionDoc(
     });
   }
 
-  const restorePrState = livePrState(session.prState);
-  if (restorePrState) {
-    await scheduleSessionPrSync(ctx, session, { kind: "close" });
-    await ctx.db.patch(session._id, {
-      archived: true,
-      status: "closed",
-      updatedAt: Date.now(),
-      prState: "closed",
-      prStateOnArchive: restorePrState,
-    });
-  } else {
-    await ctx.db.patch(session._id, {
-      archived: true,
-      status: "closed",
-      updatedAt: Date.now(),
-    });
-  }
+  await closeLivePullRequests(ctx, { kind: "session", sessionId: session._id });
+  await ctx.db.patch(session._id, {
+    archived: true,
+    status: "closed",
+    updatedAt: Date.now(),
+  });
   await scheduleSessionSandboxGraceDelete(ctx, {
     ...session,
     archived: true,
@@ -529,7 +459,7 @@ export async function archiveSessionDoc(
 
 /** Archives a session so it no longer appears in the active list.
  * Also archives the sandbox (moves to cold storage for cost savings).
- * Closes an open/draft GitHub PR; merged PRs are left alone. */
+ * Closes every open/draft GitHub PR it holds; merged PRs are left alone. */
 export const archive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
@@ -554,25 +484,11 @@ export const unarchive = authMutation({
       throw new Error("Not authorized");
     }
 
-    const restorePrState = livePrState(session.prStateOnArchive);
-    if (restorePrState !== undefined && session.prState !== "merged") {
-      await ctx.db.patch(args.id, {
-        archived: false,
-        prStateOnArchive: undefined,
-        prState: restorePrState,
-      });
-      await cancelSessionSandboxGraceDelete(ctx, args.id);
-      await scheduleSessionPrSync(ctx, session, {
-        kind: "reopen",
-        asReady: restorePrState === "open",
-      });
-      return null;
-    }
-
-    await ctx.db.patch(args.id, {
-      archived: false,
-      prStateOnArchive: undefined,
+    await reopenArchivedPullRequests(ctx, {
+      kind: "session",
+      sessionId: args.id,
     });
+    await ctx.db.patch(args.id, { archived: false });
     await cancelSessionSandboxGraceDelete(ctx, args.id);
     return null;
   },
@@ -598,19 +514,22 @@ export const updatePlanContent = authMutation({
   },
 });
 
-/** Updates the content or activity log of the most recent message in a session. */
+/** Updates the content or activity log of the most recent message in a chat. */
 export const updateLastMessage = authMutation({
   args: {
-    id: v.id("sessions"),
+    chatId: v.id("sessionChats"),
     content: v.optional(v.string()),
     activityLog: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
     const last = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.id))
+      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
       .order("desc")
       .first();
     if (!last) return null;
@@ -618,7 +537,7 @@ export const updateLastMessage = authMutation({
     if (args.content !== undefined) patch.content = args.content;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(args.id, { updatedAt: Date.now() });
+    await ctx.db.patch(chat._id, { updatedAt: Date.now() });
     return null;
   },
 });

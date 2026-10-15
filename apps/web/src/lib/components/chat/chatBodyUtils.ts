@@ -1,6 +1,7 @@
-import { getAIModelProvider, type Doc } from "@eva/backend";
-import type { ActivityStep } from "@eva/ui";
+import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
+import { getProviderLabel, type ActivityStep } from "@eva/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
+import { isSandboxPausedAlert } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 import {
@@ -9,11 +10,29 @@ import {
 } from "@/lib/components/chat/ChangedFilesCard";
 import { z } from "zod";
 
+/**
+ * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
+ * skill slash items, the prompt stash and repo mentions all switch off.
+ */
+export interface ChatRepo {
+  id: Id<"githubRepos">;
+  /** Repo route prefix, e.g. `/owner/repo` or `/owner/repo--app`. */
+  basePath: string;
+}
+
+/** The id a chat's messages hang off: session, quick task or project. */
+export type ChatParentId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"projects">
+  | Id<"agentTasks">;
+
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without
 // forging a branded id. Real docs stay assignable; nothing in the chat tree
-// feeds `_id` back into Convex.
-export type ChatBodyMessage = Omit<Doc<"messages">, "_id"> & {
+// feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
+// `aveMessages` rows (keyed by thread, not by chat entity) fit too.
+export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
   _id: string;
   media?: { url: string | null; contentType: string | null }[];
   /** @deprecated Prefer `attachments` — kept for optimistic/local messages. */
@@ -54,7 +73,61 @@ export function findHandoffBoundaryIds(
   return boundaries;
 }
 
+/**
+ * Turns that open a new local calendar day — the first turn of the transcript
+ * included — so ChatBody can head each day with an iMessage-style date label.
+ */
+export function findDayBoundaryIds(
+  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
+): Set<string> {
+  const boundaries = new Set<string>();
+  let previousDay: string | undefined;
+  for (const message of messages) {
+    const day = new Date(message.timestamp).toDateString();
+    if (day !== previousDay) boundaries.add(message._id);
+    previousDay = day;
+  }
+  return boundaries;
+}
+
+/**
+ * Messages in the "new since you last read" block, in thread order. The first
+ * id places the NEW divider; the length is the pill count. Uses `finishedAt`
+ * when set (a reply counts from when it finished), else `timestamp` (a reply
+ * still streaming). Only agent replies and teammate turns count: your own
+ * messages and system alerts never do.
+ */
+export function findNewMessageIds(
+  messages: ReadonlyArray<
+    Pick<ChatBodyMessage, "_id" | "timestamp" | "finishedAt"> &
+      ChatUserAttribution
+  >,
+  newSinceAt: number | undefined,
+  currentUserId: string | undefined,
+): string[] {
+  if (newSinceAt === undefined) return [];
+  return messages
+    .filter(
+      (message) =>
+        !message.isSystemAlert &&
+        (message.finishedAt ?? message.timestamp) > newSinceAt &&
+        (message.role === "assistant" ||
+          isOtherUserChatMessage(message, currentUserId)),
+    )
+    .map((message) => message._id);
+}
+
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
+
+/**
+ * A follow-up the server already holds for the next turn, so it cannot be
+ * edited, removed or reordered (Manager Ave). Shown in the same queue panel.
+ */
+export interface ChatHeldFollowUp {
+  id: string;
+  content: string;
+  userId?: Id<"users">;
+}
 
 const SANDBOX_LIFECYCLE_ALERTS = new Set([
   "Sandbox started",
@@ -67,7 +140,10 @@ export function isSandboxLifecycleAlert(
 ): boolean {
   return (
     message.isSystemAlert === true &&
-    SANDBOX_LIFECYCLE_ALERTS.has(message.content)
+    (SANDBOX_LIFECYCLE_ALERTS.has(message.content) ||
+      // "Sandbox paused after N min idle" carries a number, so it cannot sit
+      // in the exact-match set above.
+      isSandboxPausedAlert(message.content))
   );
 }
 
@@ -221,6 +297,34 @@ export function stripErrorPrefix(content: string): string {
 }
 
 /**
+ * The heading a failed turn is announced with, or null when the turn is not a
+ * failure. Both failure classes are failures rather than replies: as markdown
+ * they read as Eva answering "Error: …" in body copy.
+ *
+ * A usage limit belongs to whichever provider ran the turn, so the title reads
+ * that turn's model stamp instead of naming Claude — a Cursor turn used to be
+ * reported as a Claude limit. An unstamped legacy turn names no provider
+ * rather than guessing one.
+ */
+export function turnErrorTitle({
+  errorType,
+  turnModel,
+  messageModel,
+}: {
+  errorType: ChatBodyMessage["errorType"];
+  /** Stamp of the user turn this answers — what the run was actually sent on. */
+  turnModel: string | undefined;
+  /** The assistant row's own stamp, for a failure with no user turn above it. */
+  messageModel: string | undefined;
+}): string | null {
+  if (errorType === "generic") return "This turn failed";
+  if (errorType !== "rate_limit") return null;
+  const model = turnModel ?? messageModel;
+  if (model === undefined) return "Usage limit reached";
+  return `${getProviderLabel(getAIModelProvider(model))} usage limit reached`;
+}
+
+/**
  * One wording for the sandbox across every chat panel (session, quick task,
  * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
  * so the transcript and the composer speak about Eva too rather than about a
@@ -231,15 +335,12 @@ export const SANDBOX_CHAT_COPY = {
   stoppingTitle: "Putting Eva to sleep…",
   asleepTitle: "Eva is asleep",
   asleepDescription: "Eva's sandbox is asleep.",
-  asleepPlaceholder: "Wake Eva up to send a message…",
+  /** Sending while asleep queues the message and wakes Eva to run it. */
+  asleepPlaceholder: "Send a message to wake Eva up…",
+  /** The last turn hit a usage limit; sends queue until just after the reset. */
+  usageLimitPlaceholder: "Usage limit reached — messages send after the reset…",
   /** Why the composer will not send while Eva sleeps. */
   asleepDisabledReason: "Wake Eva up to send",
-  /**
-   * A quick task's first run owns the sandbox until it finishes, so the chat
-   * shows that turn live but cannot take a follow-up yet.
-   */
-  firstRunDisabledReason:
-    "Eva is running this task — you can reply when it finishes",
   wakeAction: "Wake up Eva",
   switchingAccountPlaceholder: "Switching Claude account…",
   activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
@@ -247,6 +348,49 @@ export const SANDBOX_CHAT_COPY = {
   activeDescription:
     "Type / for skills, @ to mention, or drop files to attach.",
 } as const;
+
+/**
+ * Whether a sandbox chat composer accepts input, where its sends go, and the
+ * copy that goes with it. One rule for all three surfaces (session, quick
+ * task, project):
+ * - only an account swap locks the composer. A running turn, a sleeping
+ *   sandbox and a usage limit all take the message into the queue instead.
+ * - `queuesSends` is that queue rule for an idle chat: asleep (the queue wakes
+ *   Eva and sends once she is up) or held by a usage limit on the chosen
+ *   provider (it sends just after the reset). A running turn queues too, but
+ *   each surface already routes that through its own `isExecuting`.
+ */
+export function sandboxComposerState({
+  isSandboxActive,
+  isSwitchingAccount,
+  isExecuting,
+  isUsageLimitHeld,
+}: {
+  isSandboxActive: boolean;
+  isSwitchingAccount: boolean;
+  isExecuting: boolean;
+  isUsageLimitHeld: boolean;
+}): {
+  isInputDisabled: boolean;
+  queuesSends: boolean;
+  placeholder: string;
+  disabledReason: string;
+} {
+  const isAsleep = !isSandboxActive && !isExecuting;
+  const isHeld = isUsageLimitHeld && !isExecuting;
+  return {
+    isInputDisabled: isSwitchingAccount,
+    queuesSends: isAsleep || isHeld,
+    placeholder: isSwitchingAccount
+      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
+      : isHeld
+        ? SANDBOX_CHAT_COPY.usageLimitPlaceholder
+        : isAsleep
+          ? SANDBOX_CHAT_COPY.asleepPlaceholder
+          : SANDBOX_CHAT_COPY.activePlaceholder,
+    disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
+  };
+}
 
 /**
  * The failure a send threw, as the user should read it. Convex wraps a server
@@ -329,24 +473,53 @@ export function findLastAssistantMessageId(
 }
 
 /**
- * Model / account snapshot for an assistant row: walks back to the preceding
- * user turn (where send/dequeue stores model + credentialSourceLabel).
+ * Model / account snapshot for each assistant row: the user turn directly
+ * before it (where send/dequeue stores model + credentialSourceLabel), skipping
+ * system alerts. An assistant row that follows another assistant row has none.
+ *
+ * One pass for the whole transcript — looking each row up separately was
+ * O(n²), and it re-ran on every streamed token.
  */
-export function findPrecedingUserTurn(
-  messages: ReadonlyArray<ChatBodyMessage>,
-  assistantMessageId: string,
-): ChatBodyMessage | undefined {
-  const index = messages.findIndex(
-    (message) => message._id === assistantMessageId,
-  );
-  if (index < 0) return undefined;
-  for (let i = index - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.isSystemAlert) continue;
-    if (message.role === "user") return message;
-    if (message.role === "assistant") return undefined;
+export function buildPrecedingUserTurns<
+  T extends Pick<ChatBodyMessage, "_id" | "role" | "isSystemAlert">,
+>(messages: ReadonlyArray<T>): Map<string, T> {
+  const byAssistantId = new Map<string, T>();
+  let previous: T | undefined;
+  for (const message of messages) {
+    if (message.isSystemAlert) continue;
+    if (message.role === "assistant" && previous?.role === "user") {
+      byAssistantId.set(message._id, previous);
+    }
+    previous = message;
   }
-  return undefined;
+  return byAssistantId;
+}
+
+/** User turns a chat renders when it opens; older turns load on scroll. */
+export const TRANSCRIPT_TURN_WINDOW = 25;
+
+/**
+ * Index of the row that starts the window of `turns` user turns ending before
+ * `endIndex`. Zero when no older turn is left, so the window then covers the
+ * whole transcript, including any rows before the first user turn.
+ */
+export function findTurnWindowStart(
+  messages: ReadonlyArray<Pick<ChatBodyMessage, "role" | "isSystemAlert">>,
+  turns: number,
+  endIndex: number = messages.length,
+): number {
+  let seen = 0;
+  let start = 0;
+  for (let i = endIndex - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "user" || message.isSystemAlert) continue;
+    // One turn past the window means older turns exist: start at the window's
+    // first user row. Otherwise the window runs to the top.
+    if (seen === turns) return start;
+    seen++;
+    start = i;
+  }
+  return 0;
 }
 
 /**

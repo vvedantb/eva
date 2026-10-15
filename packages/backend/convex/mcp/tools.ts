@@ -1,14 +1,23 @@
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { fleetTools, orchestratorTools } from "./orchestratorTools";
 import { entityTools } from "./entityTools";
+import { chatSelfTools } from "./chatSelfTools";
+import { chatContentTools } from "./chatContentTools";
+import { workTools } from "./workTools";
+import { automationTools } from "./automationTools";
+import { tabQueueTools } from "./tabQueueTools";
+import {
+  agentInteractionTools,
+  orchestratorQuestionTools,
+} from "./agentInteractionTools";
 import { defineTool, type EvaTool } from "./registry";
 import { evaluateTool } from "../_mcp/evaluateTool";
+import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
+import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
-import { buildEvaOrchestratorContent } from "../_systemSkills/evaOrchestrator";
 import {
   entityAccess,
   entityRefArgs,
@@ -28,6 +37,12 @@ import {
   type RepoInfo,
 } from "./toolShared";
 
+/** Hidden unless the caller opts in to Experimental → Ask teammates. */
+export const ASK_TEAMMATE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "list_work_profiles",
+  "ask_teammate",
+]);
+
 interface RepoCredentials {
   convexUrl: string;
   deployKey: string;
@@ -42,7 +57,11 @@ export function buildTools(
   ctx: ActionCtx,
 ): EvaTool[] {
   const { clerkUserId, scopedRepoId, entityId, entityKind } = credentials;
-  const isOrchestrator = credentials.isOrchestrator === true;
+  const { aveThreadId } = credentials;
+  // Where this sandbox's chat content lands: a session daemon's own chat row,
+  // otherwise the task or project itself (`resolveChatParent` takes both).
+  const chatContentId = credentials.chatId ?? entityId;
+  const isAve = aveThreadId !== undefined;
   const tools: EvaTool[] = [];
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -510,7 +529,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
 
   // Scoped to a sandbox token: the panel has to land in *this* chat, so a
   // caller without an entity (the user's own OAuth connector) has no target.
-  if (entityKind !== undefined && entityId !== undefined) {
+  if (entityKind !== undefined && chatContentId !== undefined) {
     tools.push(
       renderUiTool(async (input) => {
         const outcome = await ctx.runAction(
@@ -525,7 +544,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
 
         const panelId = await ctx.runMutation(internal.chatUi.create, {
           entityKind,
-          entityId,
+          entityId: chatContentId,
           prompt: input.prompt,
           ...(input.title !== undefined ? { title: input.title } : {}),
           spec: outcome.spec,
@@ -552,6 +571,45 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // render_html — an agent-authored HTML page rendered inline in the chat
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the page has to land in *this* chat.
+  if (entityKind !== undefined && chatContentId !== undefined) {
+    tools.push(
+      renderHtmlTool((input) =>
+        ctx.runMutation(internal.chatHtml.create, {
+          entityKind,
+          entityId: chatContentId,
+          ...input,
+        }),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // list_preview_tools / call_preview_tool — WebMCP tools in the live preview
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the request is relayed through *this* chat's open
+  // Eva tab, so a caller without an entity has no preview to reach.
+  if (entityKind !== undefined && chatContentId !== undefined) {
+    tools.push(
+      ...previewTools({
+        create: (request) =>
+          ctx.runMutation(internal.previewToolCalls.create, {
+            entityKind,
+            entityId: chatContentId,
+            ...request,
+          }),
+        get: (id) => ctx.runQuery(internal.previewToolCalls.get, { id }),
+        expire: (id, error) =>
+          ctx.runMutation(internal.previewToolCalls.expire, { id, error }),
+      }),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Task creation tools
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -563,21 +621,17 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     return matchRepoByName(await getUserRepos(userId), repoName, app);
   }
 
-  /** The master session's own id, carried on the orchestrator sandbox token. */
-  const masterSessionId =
-    isOrchestrator && entityKind === "session" ? entityId : undefined;
-
   /**
-   * Registers a task the master just created so it is woken when that task
-   * finishes. No-op for every non-orchestrator caller.
+   * Registers a task Manager Ave just created so it is woken when that task
+   * finishes. No-op for every caller that is not Ave's own run.
    */
-  async function watchTaskAsOrchestrator(taskId: string): Promise<void> {
-    if (masterSessionId === undefined) return;
+  async function watchTaskAsAve(taskId: string): Promise<void> {
+    if (aveThreadId === undefined) return;
     await ctx.runAction(internal.mcp.nodeActions.orchestratorSetWatch, {
       clerkUserId,
       kind: "task",
       id: taskId,
-      masterSessionId,
+      aveThreadId,
     });
   }
 
@@ -645,7 +699,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       projectId: input.projectId,
     });
 
-    await watchTaskAsOrchestrator(taskId);
+    await watchTaskAsAve(taskId);
 
     return { taskId, repoFullName: `${repo.owner}/${repo.name}` };
   }
@@ -797,7 +851,7 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
           .safeParse(rawResult);
         if (created.success) {
           for (const taskId of created.data.taskIds) {
-            await watchTaskAsOrchestrator(taskId);
+            await watchTaskAsAve(taskId);
           }
         }
 
@@ -831,11 +885,19 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
 
 Name the chat by its Convex "id", by its GitHub "prUrl", or by "numId" plus "kind" and a repo. An idle chat starts its sandbox and runs the message straight away; one mid-turn queues it to run next. The reply says which happened.
 
+A session holds parallel chats that share one checkout. The message lands in its "Main" chat unless "chat" names another one by number or title.
+
 Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done with it so the VM does not keep running.`,
       mutating: true,
       input: {
         message: z.string().describe("The message to post into the chat."),
         ...entityRefArgs,
+        chat: z
+          .string()
+          .optional()
+          .describe(
+            'Sessions only: which chat inside the session, by number ("2") or exact title. Omit for the Main chat.',
+          ),
         model: z
           .enum(MCP_CLAUDE_MODELS)
           .optional()
@@ -843,9 +905,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             'Claude model for this turn ("opus", "sonnet", "haiku", or "fable"). Omit to reuse the model that chat last ran on.',
           ),
       },
-      handler: async ({ message, model, ...ref }) => {
+      handler: async ({ message, model, chat, ...ref }) => {
         if (message.trim().length === 0) {
           return errorResult("message cannot be empty.");
+        }
+        if (chat !== undefined && ref.kind !== undefined && ref.kind !== "session") {
+          return errorResult('"chat" only applies to sessions.');
         }
 
         const { userId } = await getContext();
@@ -853,10 +918,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("isError" in resolved) return resolved;
         const { target } = resolved;
 
+        // A session daemon may message a sibling chat of its own session, but
+        // never the chat it is running in.
         if (entityId !== undefined && target.targetId === entityId) {
-          return errorResult(
-            "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
-          );
+          if (target.kind !== "session" || chat === undefined) {
+            return errorResult(
+              "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+            );
+          }
         }
 
         const result = await ctx.runAction(
@@ -867,8 +936,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             id: target.targetId,
             message,
             model,
-            masterSessionId,
-            // Any MCP send — master sandbox or user OAuth connector — stamps the
+            ...(target.kind === "session" && chat !== undefined ? { chat } : {}),
+            ...(credentials.chatId !== undefined
+              ? { excludeChatId: credentials.chatId }
+              : {}),
+            aveThreadId,
+            // Any MCP send — Manager Ave or a user OAuth connector — stamps the
             // "via MCP" chat badge so it is not mistaken for a composer-typed turn.
             sentViaOrchestrator: true,
           },
@@ -876,6 +949,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
         return textResult({
           ...entitySummary(target),
+          ...(result.chat !== undefined ? { chat: result.chat } : {}),
           delivered: result.delivered,
           model: result.model,
         });
@@ -1089,10 +1163,121 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
 
   tools.push(
     defineTool({
+      name: "list_work_profiles",
+      description:
+        "List teammates and what they own so you can route a clarification. Returns each non-personal team's directory: userId, name, role (business/dev/designer), headline, owns, askMeAbout. Call this before ask_teammate when you do not already know who to ping.",
+      mutating: false,
+      input: {},
+      handler: async () => {
+        const { userId } = await getContext();
+        const teams = await ctx.runQuery(internal.workProfiles.listForAgent, {
+          userId,
+        });
+        if (teams.length === 0) {
+          return textResult({
+            teams: [],
+            note: "No shared team directory. Ask in this chat instead.",
+          });
+        }
+        return textResult({ teams });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "ask_teammate",
+      description:
+        "Route a clarification to one or more teammates as a group thread (they answer from Manager Ave) that any of them can answer. Non-blocking: posts the question, notifies them, and returns immediately — do not wait, and do not also dump the question only in this chat. The first reply is injected back into this session/task/project and wakes the run. Omit userIds and Eva picks the right people automatically; pass userIds from list_work_profiles when you already know who owns the decision, or role to narrow the pool. Defaults to the current chat as the source. Always pass context so they know what is being built and why you need the call.",
+      mutating: true,
+      input: {
+        question: z.string().describe("The question for the teammate."),
+        context: z
+          .string()
+          .describe(
+            "Background they need before answering: what is being built, why this decision matters, constraints or options already in play. Not just a restatement of the question.",
+          ),
+        topicKey: z
+          .string()
+          .describe(
+            'Stable slug for this topic, e.g. "empty-state-copy". Follow-ups with the same topic append to the same thread.',
+          ),
+        role: z
+          .enum(["business", "dev", "designer"])
+          .optional()
+          .describe("Job function to route to when userId is omitted."),
+        userIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Teammate user ids from list_work_profiles. Omit to let Eva pick who should answer.",
+          ),
+        sourceKind: z
+          .enum(["session", "task", "project"])
+          .optional()
+          .describe("Override the source chat. Defaults to this sandbox."),
+        sourceId: z
+          .string()
+          .optional()
+          .describe("Override the source chat id. Defaults to this sandbox."),
+      },
+      handler: async ({
+        question,
+        context,
+        topicKey,
+        role,
+        userIds,
+        sourceKind,
+        sourceId,
+      }) => {
+        const { userId: actorId } = await getContext();
+        const kind = sourceKind ?? entityKind;
+        const id = sourceId ?? entityId;
+        if (!kind || !id) {
+          return errorResult(
+            "No source chat. Pass sourceKind and sourceId, or call this from a session, task, or project sandbox.",
+          );
+        }
+        const result = await ctx.runAction(
+          internal.routedThreadRouting.askRouted,
+          {
+            userId: actorId,
+            sourceKind: kind,
+            sourceId: id,
+            question,
+            context,
+            topicKey,
+            role,
+            assigneeUserIds: userIds,
+          },
+        );
+        if (!result.ok) {
+          return errorResult(
+            result.candidates
+              ? `${result.error} Candidates: ${result.candidates
+                  .map((c) => `${c.name} (${c.userId})`)
+                  .join(", ")}`
+              : result.error,
+          );
+        }
+        return textResult(result);
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
       name: "create_artifact",
       description: `Save an HTML artifact to Eva and get back a hosted link to view it.
 
 Provide a self-contained HTML document (inline CSS/JS, or CDN links). Eva stores it and hosts it in a sandboxed iframe at the returned viewUrl. The link is viewable by members of the bound team while signed in to Eva.
+
+Artifacts can keep persistent state (localStorage is in-memory only and is lost on reload). Use window.cowork.state:
+- await cowork.state.ready — resolves once the saved state has loaded
+- cowork.state.get(key, opts?) / cowork.state.all(opts?) — synchronous reads after ready
+- await cowork.state.set(key, jsonValue, opts?) / await cowork.state.remove(key, opts?)
+- cowork.state.subscribe(fn) — fn(snapshot) on every change, including other viewers' writes; returns an unsubscribe function
+opts = { scope: "user" } (default, private to each viewer) or { scope: "shared" } (one copy for the whole team). Limits: 200 keys per scope, 64 KB per value.
 
 When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
 
@@ -1345,7 +1530,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         const result = await ctx.runAction(
           internal.grokBotActions.callWebhook,
           {
-            userId: userId as Id<"users">,
+            userId,
             task,
           },
         );
@@ -1401,16 +1586,6 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
           ),
       },
       handler: async ({ name, repoName, app }) => {
-        // The master's own skill is not repo-scoped and is never installed on a
-        // repo — the launch path ships its stub, so serve it off the token claim.
-        if (name === "eva-orchestrator" && isOrchestrator) {
-          return {
-            content: [
-              { type: "text" as const, text: buildEvaOrchestratorContent() },
-            ],
-          };
-        }
-
         const { userId } = await getContext();
 
         let repoId = scopedRepoId;
@@ -1448,23 +1623,42 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   // ─────────────────────────────────────────────────────────────────────────────
   // Fleet tools — every MCP caller (OAuth connector included). Authz is the
   // same hasRepoAccess checks the backing actions already run as the user.
-  // send_agent_message stays behind the orchestrator gate: it is the master
-  // speaking, and needs the master sandbox token.
+  // send_agent_message stays behind the Ave gate: it is Manager Ave speaking,
+  // and only Ave's own server-side run carries `aveThreadId`.
   // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(...fleetTools(credentials, ctx));
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Entity tools — list_entities, start_sandbox, stop_sandbox and
-  // cancel_queued_message. Same audience and same authz as send_chat_message:
+  // Entity tools — list_entities, start_sandbox, stop_sandbox,
+  // get_preview_url and cancel_queued_message. Same audience and same authz as send_chat_message:
   // every caller gets them, and each one resolves its target through the
   // shared repo-access check above.
   // ─────────────────────────────────────────────────────────────────────────────
 
   tools.push(...entityTools(credentials, ctx));
 
-  if (isOrchestrator) {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Chat control tools — the caller's own chat (context, dev server, env var
+  // names, Preview), chat content (titles, plans, comments, artifact/doc
+  // deletes), project builds and task lifecycle, automations, custom tabs,
+  // queued messages, sandbox services and in-app notifications. Each calls
+  // the UI's own public function as the user (mcpCallAsUser) or resolves its
+  // target through the shared access check; deletes require `confirmed`.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  tools.push(...chatSelfTools(credentials, ctx));
+  tools.push(...chatContentTools(credentials, ctx));
+  tools.push(...workTools(credentials, ctx));
+  tools.push(...automationTools(credentials, ctx));
+  tools.push(...tabQueueTools(credentials, ctx));
+  tools.push(...agentInteractionTools(credentials, ctx));
+
+  if (isAve) {
     tools.push(...orchestratorTools(credentials, ctx));
+    // Answering a child's question speaks for the user, so only Manager Ave
+    // (which already relays for them) gets it.
+    tools.push(...orchestratorQuestionTools(credentials, ctx));
   }
 
   return tools;

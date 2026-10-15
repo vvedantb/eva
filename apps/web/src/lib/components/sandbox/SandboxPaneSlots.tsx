@@ -1,8 +1,13 @@
 "use client";
 
-import type { Doc, Id, SandboxOwner } from "@eva/backend";
+import { useQuery } from "convex/react";
+import { api, type Doc, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
+import { previewWakePath } from "@eva/shared";
 import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { isSandboxVmTab } from "@/lib/search-params";
+import { SandboxPresenceBeacon } from "./SandboxPresenceBeacon";
+import { SandboxAutoWake } from "./SandboxAutoWake";
 import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
 import { CustomTabPanel } from "./CustomTabPanel";
 import { TerminalPanel } from "@/routes/_repo/$owner/$repo/sessions/TerminalPanel";
@@ -13,12 +18,15 @@ import { PrPanel } from "./PrPanel";
 import { SandboxPaneBoundary } from "./SandboxPaneBoundary";
 import { PreviewPaneTabs } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPaneTabs";
 import { ConsoleDock } from "./ConsoleDock";
+import { KeepAlivePane } from "./KeepAlivePane";
+import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
 import {
   isSimpleViewHiddenSandboxTab,
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
+import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
 
 interface SandboxPaneSlotsProps {
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
@@ -69,6 +77,18 @@ interface SandboxPaneSlotsProps {
    */
   stickyTerminalHistoryTail?: string;
   onStickyTerminalHistoryTailChange?: (tail: string) => void;
+  /**
+   * Whether this host is the one on screen. Sessions keep up to five shells
+   * mounted and every host may collapse its rail; only a visible host may hold the
+   * idle-pause presence beacon or auto-wake. Defaults to true.
+   */
+  presenceEnabled?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined
+   * here with the setting and recent input on a visible tab to auto-wake.
+   */
+  autoWakeEligible?: boolean;
 }
 
 /**
@@ -100,12 +120,36 @@ export function SandboxPaneSlots({
   onStickyPreviewPathChange,
   stickyTerminalHistoryTail,
   onStickyTerminalHistoryTailChange,
+  presenceEnabled = true,
+  autoWakeEligible,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
+  const wake = { onStartSandbox, isSandboxStarting };
   const resolvedTab =
     simpleView && isSimpleViewHiddenSandboxTab(activeTab)
       ? "preview"
       : activeTab;
+  const entityId = sandboxOwnerParentId(owner);
+  // Idle pause: a VM tab in the foreground AND in use keeps the sandbox awake
+  // (presence beacon, always on). With the setting fully on, the same tab
+  // wakes a paused sandbox, and the external links become Eva wake links so
+  // they outlive a pause. "In use" (recent input) stops an unattended visible
+  // tab from holding or re-waking the sandbox indefinitely.
+  const currentUserId = useQuery(api.auth.me);
+  const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
+  const engaged = useUserEngaged();
+  const beaconActive =
+    presenceEnabled &&
+    engaged &&
+    isActive &&
+    isSandboxVmTab(resolvedTab) &&
+    currentUserId !== undefined &&
+    currentUserId !== null;
+  const wakeHrefForPath =
+    idlePause?.mode === "on"
+      ? (path: string, port?: number) =>
+          `${window.location.origin}${previewWakePath({ kind: owner.kind, id: String(entityId), port, path })}`
+      : undefined;
   const {
     previewIds,
     consolePane,
@@ -166,6 +210,7 @@ export function SandboxPaneSlots({
                 id,
                 preview.effectivePort,
               ].join(":")}
+              toolCallParentId={sandboxOwnerParentId(owner)}
               stickyPath={stickyPreviewPath}
               onStickyPathChange={onStickyPreviewPathChange}
               onStartSandbox={onStartSandbox}
@@ -174,6 +219,11 @@ export function SandboxPaneSlots({
               miniPlayer={
                 resolvedTab === "preview" && resolvedPreviewActive === id
                   ? miniPlayer
+                  : undefined
+              }
+              externalHrefForPath={
+                wakeHrefForPath
+                  ? (path) => wakeHrefForPath(path, preview.effectivePort)
                   : undefined
               }
             />
@@ -185,6 +235,22 @@ export function SandboxPaneSlots({
 
   return (
     <>
+      {beaconActive ? (
+        <SandboxPresenceBeacon
+          entityId={String(entityId)}
+          userId={currentUserId}
+        />
+      ) : null}
+      {idlePause?.mode === "on" &&
+      autoWakeEligible &&
+      presenceEnabled &&
+      engaged &&
+      !isActive &&
+      !isSandboxStarting &&
+      onStartSandbox &&
+      isSandboxVmTab(resolvedTab) ? (
+        <SandboxAutoWake wakeKey={String(entityId)} onWake={onStartSandbox} />
+      ) : null}
       <div
         className={
           resolvedTab === "preview"
@@ -222,22 +288,21 @@ export function SandboxPaneSlots({
           )}
         </SandboxPaneBoundary>
       </div>
-      <div className={resolvedTab === "editor" ? "h-full" : "hidden"}>
+      <KeepAlivePane active={resolvedTab === "editor"} className="h-full">
         <SandboxPaneBoundary label="Editor">
           <EditorPanel
             cacheKey={cacheKey}
             sandboxId={sandboxId}
             isActive={isActive}
             repoId={repoId}
+            externalHref={wakeHrefForPath?.("/", 8080)}
+            wake={wake}
           />
         </SandboxPaneBoundary>
-      </div>
-      <div
-        className={
-          resolvedTab === "browser" || resolvedTab === "computer"
-            ? "h-full"
-            : "hidden"
-        }
+      </KeepAlivePane>
+      <KeepAlivePane
+        active={resolvedTab === "browser" || resolvedTab === "computer"}
+        className="h-full"
       >
         <SandboxPaneBoundary
           label={resolvedTab === "browser" ? "Browser" : "Computer"}
@@ -250,26 +315,30 @@ export function SandboxPaneSlots({
             surface={resolvedTab === "browser" ? "browser" : "desktop"}
             agentBrowsingAt={agentBrowsingAt}
             onReleaseLock={onReleaseBrowserLock}
+            externalHref={wakeHrefForPath?.("/", 6080)}
+            wake={wake}
           />
         </SandboxPaneBoundary>
-      </div>
-      <div className={resolvedTab === "review" ? "h-full" : "hidden"}>
+      </KeepAlivePane>
+      <KeepAlivePane active={resolvedTab === "review"} className="h-full">
         <SandboxPaneBoundary label="Review">
           <PrPanel
+            owner={owner}
             prUrl={prUrl}
             repoId={repoId}
             isActive={resolvedTab === "review"}
           />
         </SandboxPaneBoundary>
-      </div>
+      </KeepAlivePane>
       {simpleView
         ? null
         : customTabs?.map((tab) => {
             const slug = slugifyAppTabName(tab.name);
             return (
-              <div
+              <KeepAlivePane
                 key={tab._id}
-                className={resolvedTab === slug ? "h-full" : "hidden"}
+                active={resolvedTab === slug}
+                className="h-full"
               >
                 <SandboxPaneBoundary label={tab.name}>
                   <CustomTabPanel
@@ -280,9 +349,14 @@ export function SandboxPaneSlots({
                     isForeground={resolvedTab === slug}
                     previewPort={preview.effectivePort}
                     repoId={repoId}
+                    externalHref={wakeHrefForPath?.(
+                      `/__tab/${tab.port}/`,
+                      preview.effectivePort,
+                    )}
+                    wake={wake}
                   />
                 </SandboxPaneBoundary>
-              </div>
+              </KeepAlivePane>
             );
           })}
     </>

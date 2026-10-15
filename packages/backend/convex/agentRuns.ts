@@ -2,6 +2,7 @@ export {
   get,
   getWithDetails,
   getActivityLog,
+  getMedia,
   listByTask,
   getTaskIdsWithLatestRunError,
   getLatestDeploymentStatuses,
@@ -11,6 +12,7 @@ export {
 export {
   updateStatus,
   appendLog,
+  attachMedia,
   complete,
   updateDeploymentStatus,
 } from "./_agentRuns/mutations";

@@ -6,9 +6,10 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { authMutation, authQuery } from "./functions";
-import { scheduleFinalizeStop } from "./_sessions/sandbox";
+import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
-import { scheduleFinalizeStopProject } from "./_projects/sandbox";
+import { requestProjectSandboxStop } from "./_projects/sandbox";
+import { loadActiveSandboxRows } from "./_sandbox_runtime/daemonEntitySnapshot";
 
 const DAY_MS = 86_400_000;
 
@@ -54,17 +55,20 @@ function getLocalParts(
   };
 }
 
+const sandboxAutoStopSettingsValidator = v.object({
+  enabled: v.boolean(),
+  time: v.string(),
+  timeZone: v.string(),
+});
+
 /**
- * Returns the app-wide sandbox auto-stop settings for the settings UI. Falls
- * back to sensible defaults (disabled, 22:00, UTC) when no row exists yet.
+ * Returns the app-wide daily auto-stop settings for the settings UI. Falls
+ * back to sensible defaults when no row exists yet: disabled at 22:00 UTC.
+ * The idle sweep's settings live in `sandboxIdlePause.ts`.
  */
 export const getSandboxAutoStopSettings = authQuery({
   args: {},
-  returns: v.object({
-    enabled: v.boolean(),
-    time: v.string(),
-    timeZone: v.string(),
-  }),
+  returns: sandboxAutoStopSettingsValidator,
   handler: async (ctx) => {
     const doc = await ctx.db.query("appSettings").first();
     return {
@@ -108,7 +112,7 @@ export const setSandboxAutoStopSettings = authMutation({
   },
 });
 
-/** Internal: reads the full auto-stop config for the cron, or null if unset. */
+/** Internal: reads the full daily auto-stop config for the cron, or null if unset. */
 export const getSettingsInternal = internalQuery({
   args: {},
   returns: v.union(
@@ -147,8 +151,8 @@ export const recordRun = internalMutation({
 
 /**
  * Internal: collects the ids of every sandbox currently in the `active` state
- * across the four user-facing sandbox surfaces. A full scan is fine here — this
- * runs at most once per day and these tables are small.
+ * across the three user-facing sandbox surfaces. Shared by the daily sweep and
+ * the idle sweep (`sandboxIdlePause.ts`).
  */
 export const listActiveSandboxes = internalQuery({
   args: {},
@@ -158,19 +162,11 @@ export const listActiveSandboxes = internalQuery({
     sessionIds: v.array(v.id("sessions")),
   }),
   handler: async (ctx) => {
-    const tasks = await ctx.db.query("agentTasks").collect();
-    const projects = await ctx.db.query("projects").collect();
-    const sessions = await ctx.db.query("sessions").collect();
+    const { sessions, tasks, projects } = await loadActiveSandboxRows(ctx.db);
     return {
-      taskIds: tasks
-        .filter((t) => t.reviewTaskSandboxStatus === "active" && t.sandboxId)
-        .map((t) => t._id),
-      projectIds: projects
-        .filter((p) => p.reviewProjectSandboxStatus === "active" && p.sandboxId)
-        .map((p) => p._id),
-      sessionIds: sessions
-        .filter((s) => s.status === "active" && s.sandboxId)
-        .map((s) => s._id),
+      taskIds: tasks.filter((t) => t.sandboxId).map((t) => t._id),
+      projectIds: projects.filter((p) => p.sandboxId).map((p) => p._id),
+      sessionIds: sessions.filter((s) => s.sandboxId).map((s) => s._id),
     };
   },
 });
@@ -198,14 +194,10 @@ export const stopProject = internalMutation({
   returns: v.null(),
   handler: async (ctx, { projectId }) => {
     const project = await ctx.db.get(projectId);
-    if (!project || !project.sandboxId) return null;
-    if (project.reviewProjectSandboxStatus !== "active") return null;
-    await scheduleFinalizeStopProject(ctx, {
-      projectId,
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-    });
-    await ctx.db.patch(projectId, { reviewProjectSandboxStatus: "stopping" });
+    if (!project || project.reviewProjectSandboxStatus !== "active") {
+      return null;
+    }
+    await requestProjectSandboxStop(ctx, projectId);
     return null;
   },
 });
@@ -216,18 +208,8 @@ export const stopSession = internalMutation({
   returns: v.null(),
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
-    if (!session || !session.sandboxId) return null;
-    if (session.status !== "active") return null;
-    await scheduleFinalizeStop(ctx, {
-      sessionId,
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-    });
-    await ctx.db.patch(sessionId, {
-      ptySessionId: undefined,
-      status: "stopping",
-      updatedAt: Date.now(),
-    });
+    if (!session || session.status !== "active") return null;
+    await requestSessionSandboxStop(ctx, sessionId);
     return null;
   },
 });

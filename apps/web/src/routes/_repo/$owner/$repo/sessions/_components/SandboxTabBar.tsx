@@ -2,6 +2,7 @@
 
 import {
   IconWorld,
+  IconWorldFilled,
   IconBrowser,
   IconGitPullRequest,
 } from "@tabler/icons-react";
@@ -62,7 +63,12 @@ const MAX_LABELLED_TABS = 6;
 // surface enables them. Browser is first-class (sessions) for watching agent
 // Chrome.
 const allTabs: ReadonlyArray<SandboxCommandTab> = [
-  { value: "preview", label: "Preview", icon: IconWorld },
+  {
+    value: "preview",
+    label: "Preview",
+    icon: IconWorld,
+    activeIcon: IconWorldFilled,
+  },
   { value: "browser", label: "Browser", icon: IconBrowser },
   { value: "review", label: "Review", icon: IconGitPullRequest },
 ];

@@ -203,6 +203,8 @@ async function callStreamingHeartbeatTouchOnce(
   // Captured once: the verdict must be judged against the lease the request
   // carried, not whatever this process owns by the time the reply lands.
   const identity = getCurrentTurnLease();
+  // No lease, no turn to report on: the server would only answer terminal.
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -218,23 +220,17 @@ async function callStreamingHeartbeatTouchOnce(
     return response;
   }
 
-  const response =
-    identity === null
-      ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
-          entityId,
-          touchOnly: true,
-        })
-      : await callConvex("mutation", "turns:heartbeatFromCallback", {
-          entityId,
-          touchOnly: true,
-          turnId: identity.turnId,
-          leaseGeneration: identity.leaseGeneration,
-        });
+  const response = await callConvex("mutation", "turns:heartbeatFromCallback", {
+    entityId,
+    touchOnly: true,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration,
+  });
   noteHeartbeatResponse(response, identity);
   return response;
 }
 
-/** Sends one streaming heartbeat request through the scoped HMAC endpoint or legacy mutation fallback. */
+/** Sends one streaming heartbeat request through the scoped HMAC endpoint or the authenticated mutation fallback. */
 async function callStreamingHeartbeatOnce(
   entityId: string,
   currentActivity: string,
@@ -242,6 +238,7 @@ async function callStreamingHeartbeatOnce(
   pendingQuestion?: string,
 ): Promise<string | JsonValue> {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -266,19 +263,17 @@ async function callStreamingHeartbeatOnce(
     touchOnly: false,
     currentActivity,
     currentContent,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration,
   };
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const path =
-    identity === null
-      ? "turns:legacyHeartbeatFromCallback"
-      : "turns:heartbeatFromCallback";
-  if (identity !== null) {
-    args.turnId = identity.turnId;
-    args.leaseGeneration = identity.leaseGeneration;
-  }
-  const response = await callConvex("mutation", path, args);
+  const response = await callConvex(
+    "mutation",
+    "turns:heartbeatFromCallback",
+    args,
+  );
   noteHeartbeatResponse(response, identity);
   return response;
 }

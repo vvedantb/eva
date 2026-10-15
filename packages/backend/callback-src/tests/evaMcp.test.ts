@@ -57,3 +57,29 @@ test("consumeEvaMcpEnvironment hands off nothing without full credentials", () =
   ).toEqual({});
   expect(consumeEvaMcpEnvironment({}).workerHandoffEnv).toEqual({});
 });
+
+test("consumeEvaMcpEnvironment merges Linear MCP from a bearer token", () => {
+  const env = {
+    EVA_MCP_AUTH: "eva-token",
+    EVA_MCP_BASE_URL: "https://example.convex.site",
+    LINEAR_MCP_AUTH: "lin-token",
+  };
+  const { servers, workerHandoffEnv } = consumeEvaMcpEnvironment(env);
+
+  expect(servers.linear).toEqual({
+    type: "http",
+    url: "https://mcp.linear.app/mcp",
+    headers: { Authorization: "Bearer lin-token" },
+  });
+  expect(env.LINEAR_MCP_AUTH).toBeUndefined();
+  expect(workerHandoffEnv.LINEAR_MCP_AUTH).toBe("lin-token");
+  expect(workerHandoffEnv.LINEAR_MCP_URL).toBe("https://mcp.linear.app/mcp");
+});
+
+test("consumeEvaMcpEnvironment merges Figma MCP only when a bearer is set", () => {
+  const env = { FIGMA_MCP_AUTH: "fig-oauth", FIGMA_MCP_URL: "https://mcp.figma.com/mcp" };
+  const { servers } = consumeEvaMcpEnvironment(env);
+  expect(servers.figma?.headers).toEqual({
+    Authorization: "Bearer fig-oauth",
+  });
+});

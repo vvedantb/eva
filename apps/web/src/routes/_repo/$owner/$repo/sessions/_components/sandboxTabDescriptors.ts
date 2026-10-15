@@ -1,11 +1,17 @@
 import {
   IconClipboardList,
+  IconClipboardListFilled,
   IconCode,
   IconDeviceDesktop,
+  IconDeviceDesktopFilled,
   IconFileText,
+  IconFileTextFilled,
   IconFile,
+  IconFileFilled,
   IconLayoutDashboard,
+  IconLayoutDashboardFilled,
   IconPalette,
+  IconPaletteFilled,
   IconRobot,
 } from "@tabler/icons-react";
 import type { Doc } from "@eva/backend";
@@ -66,7 +72,7 @@ export function buildSandboxTabDescriptors({
     return {
       value: tab.value,
       label: tab.label,
-      icon: { kind: "component", Icon: tab.icon },
+      icon: { kind: "component", Icon: tab.icon, ActiveIcon: tab.activeIcon },
       indicator: live ? "activity" : undefined,
       indicatorLabel: live ? "Agent is browsing" : undefined,
     };
@@ -84,7 +90,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "computer",
       label: "Computer",
-      icon: { kind: "component", Icon: IconDeviceDesktop },
+      icon: {
+        kind: "component",
+        Icon: IconDeviceDesktop,
+        ActiveIcon: IconDeviceDesktopFilled,
+      },
     });
   }
 
@@ -92,7 +102,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "files",
       label: "Files",
-      icon: { kind: "component", Icon: IconFileText },
+      icon: {
+        kind: "component",
+        Icon: IconFileText,
+        ActiveIcon: IconFileTextFilled,
+      },
     });
   }
 
@@ -110,7 +124,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "prd",
       label: "Plan",
-      icon: { kind: "component", Icon: IconClipboardList },
+      icon: {
+        kind: "component",
+        Icon: IconClipboardList,
+        ActiveIcon: IconClipboardListFilled,
+      },
       indicator: hasPrdContent ? "content" : undefined,
       indicatorLabel: hasPrdContent ? "Plan available" : undefined,
     });
@@ -120,7 +138,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "designs",
       label: "Designs",
-      icon: { kind: "component", Icon: IconPalette },
+      icon: {
+        kind: "component",
+        Icon: IconPalette,
+        ActiveIcon: IconPaletteFilled,
+      },
       indicator: hasDesignsContent ? "content" : undefined,
       indicatorLabel: hasDesignsContent
         ? "Design variations available"
@@ -132,7 +154,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "artifacts",
       label: "Artifacts",
-      icon: { kind: "component", Icon: IconLayoutDashboard },
+      icon: {
+        kind: "component",
+        Icon: IconLayoutDashboard,
+        ActiveIcon: IconLayoutDashboardFilled,
+      },
       count: artifactCount,
       indicatorLabel: artifactCount
         ? `${artifactCount} artifacts in this chat`
@@ -144,7 +170,11 @@ export function buildSandboxTabDescriptors({
     descriptors.push({
       value: "documents",
       label: "Documents",
-      icon: { kind: "component", Icon: IconFile },
+      icon: {
+        kind: "component",
+        Icon: IconFile,
+        ActiveIcon: IconFileFilled,
+      },
       count: documentCount,
       indicatorLabel: documentCount
         ? `${documentCount} documents in this chat`

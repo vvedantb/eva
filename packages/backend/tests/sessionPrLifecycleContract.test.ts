@@ -3,46 +3,30 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
-const source = stripComments(
-  readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "../convex/githubWebhook.ts"),
-    "utf8",
-  ),
-);
-const derive = functionBody(source, "function deriveSessionPrState(");
-const handler = definitionBody(source, "handleSessionPrEvent");
-// The archive/unarchive side effects moved into a helper so the linked-repo PR
-// path (multi-repo sessions open one PR per `sessionRepos` row) archives
-// through the same code; the lifecycle contract lives there now.
+const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
+const webhook = readSource("githubWebhook.ts");
+const handler = definitionBody(webhook, "handlePullRequestEvent");
+const prArchive = readSource("_sessions/prArchive.ts");
+// Every PR state change re-checks the session's archive rule through this one
+// helper, over every PR the session holds.
 const reconcile = functionBody(
-  source,
-  "async function reconcileSessionArchiveState(",
+  prArchive,
+  "export async function reconcileSessionArchiveState(",
 );
+const store = readSource("_pullRequests/store.ts");
 
 describe("session pull-request lifecycle", () => {
-  test("distinguishes merged closes from unmerged closes", () => {
-    expect(derive).toContain('return merged ? "merged" : "closed"');
+  test("the webhook updates the PR row before the owner reacts", () => {
+    const rowAt = handler.indexOf("setPullRequestState(");
+    const reactAt = handler.indexOf("reconcileSessionArchiveState(");
+    expect(rowAt).toBeGreaterThan(-1);
+    expect(reactAt).toBeGreaterThan(rowAt);
   });
 
-  test("maps draft, ready, open and reopen events", () => {
-    expect(derive).toContain('action === "converted_to_draft"');
-    expect(derive).toContain('action === "ready_for_review"');
-    expect(derive).toContain('action === "opened" || action === "reopened"');
-  });
-
-  test("both PR paths reconcile the archive state through one helper", () => {
-    // Primary-PR path and linked-repo path, so a multi-repo session archives
-    // exactly once — when every PR it opened is terminal.
-    expect(handler.match(/reconcileSessionArchiveState\(/g)).toHaveLength(2);
-  });
-
-  test("archives both terminal states and unarchives every live state", () => {
-    // Which PR states count as terminal — and how a session's linked PRs
-    // combine with its primary — is `shouldArchiveSession` (see
-    // prArchiveRule.test.ts), not a condition inlined here.
+  test("the archive rule reads every PR the session holds", () => {
+    expect(reconcile).toContain("listOwnerPullRequests(");
     expect(reconcile).toContain("shouldArchiveSession(");
     expect(reconcile).toContain("archived: needsArchive");
-    expect(reconcile).toContain("prStateOnArchive: undefined");
   });
 
   test("stops a terminal session before scheduling its grace deletion", () => {
@@ -64,15 +48,19 @@ describe("session pull-request lifecycle", () => {
       "const needsUnarchive = !archive && session.archived === true",
     );
     expect(reconcile).toContain("cancelSessionSandboxGraceDelete(");
+    expect(reconcile).toContain("clearArchivedPrStates(");
   });
 
-  test("merged verification is fenced by PR number and merge SHA", () => {
+  test("merged verification is fenced by the transition and merge SHA", () => {
     const verifyAt = handler.indexOf("internal.github.verifySessionPrMerged");
     expect(verifyAt).toBeGreaterThan(-1);
     const gate = handler.slice(Math.max(0, verifyAt - 500), verifyAt);
     expect(gate).toContain('nextState === "merged"');
-    expect(gate).toContain("args.prNumber !== undefined");
     expect(gate).toContain("args.mergeCommitSha !== undefined");
+    // A duplicate merged webhook must not re-schedule the check.
+    expect(handler).toContain(
+      "if (nextState === null || nextState === previousState) return null;",
+    );
   });
 
   test("a newly archived session notifies the owner in-app", () => {
@@ -86,44 +74,48 @@ describe("session pull-request lifecycle", () => {
   });
 });
 
-describe("session archive closes a live PR", () => {
-  const mutations = stripComments(
-    readFileSync(
-      join(
-        dirname(fileURLToPath(import.meta.url)),
-        "../convex/_sessions/mutations.ts",
-      ),
-      "utf8",
-    ),
-  );
+describe("session archive closes every live PR", () => {
+  const mutations = readSource("_sessions/mutations.ts");
   const archive = definitionBody(mutations, "archive");
   const unarchive = definitionBody(mutations, "unarchive");
-  // The archive body moved into a helper so `resetOrchestratorSession` retires
-  // the old master through the same path; the PR contract lives there now.
+  // The archive body lives in a helper so `resetOrchestratorSession` retires
+  // the old master through the same path.
   const archiveDoc = functionBody(
     mutations,
     "export async function archiveSessionDoc",
   );
+  const close = functionBody(
+    store,
+    "export async function closeLivePullRequests(",
+  );
+  const reopen = functionBody(
+    store,
+    "export async function reopenArchivedPullRequests(",
+  );
 
-  test("archive closes open/draft PRs and remembers that state", () => {
-    expect(archiveDoc).toContain("livePrState(session.prState)");
-    expect(archiveDoc).toContain('kind: "close"');
-    expect(archiveDoc).toContain("prStateOnArchive: restorePrState");
-    expect(archiveDoc).not.toContain("reopenPullRequest");
+  test("archive closes every open/draft PR and remembers its state", () => {
+    expect(archiveDoc).toContain("closeLivePullRequests(");
+    expect(close).toContain("isLivePrState(row.state)");
+    expect(close).toContain('kind: "close"');
+    expect(close).toContain("stateOnArchive: row.state");
   });
 
   test("the archive mutation has no second copy of that contract", () => {
     expect(archive).toContain("archiveSessionDoc(ctx, session)");
-    expect(archive).not.toContain("livePrState(");
+    expect(archive).not.toContain("closeLivePullRequests(");
   });
 
-  test("unarchive reopens only a PR Eva closed, skipping merged", () => {
-    expect(unarchive).toContain("livePrState(session.prStateOnArchive)");
-    expect(unarchive).toContain('session.prState !== "merged"');
-    expect(unarchive).toContain('kind: "reopen"');
-    expect(unarchive).toContain('asReady: restorePrState === "open"');
+  test("unarchive reopens only PRs Eva closed, skipping merged", () => {
+    expect(unarchive).toContain("reopenArchivedPullRequests(");
+    expect(reopen).toContain("row.stateOnArchive === undefined");
+    expect(reopen).toContain('row.state === "merged"');
+    expect(reopen).toContain('kind: "reopen"');
   });
 });
+
+function readSource(relativePath: string): string {
+  return stripComments(readFileSync(join(convexDir, relativePath), "utf8"));
+}
 
 function definitionBody(input: string, name: string): string {
   const startAt = input.indexOf(`export const ${name} =`);

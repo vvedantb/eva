@@ -13,21 +13,14 @@ import {
   DialogFooter,
   Button,
   Surface,
-  cn,
-  STREAMDOWN_TABLE_RADIUS_CLASS,
 } from "@eva/ui";
-import { Streamdown } from "streamdown";
-import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { Markdown } from "@eva/ui/markdown";
 import { IconSparkles } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import {
   useDevChangelogPreview,
   useDevPreviewSearchKey,
 } from "@/lib/dev/preview";
-
-const changelogPlugins = { cjk, math, mermaid };
 
 export function ChangelogDialog() {
   // Keyed by preview search so reopening `?changelog` resets dismiss without an effect.
@@ -91,15 +84,7 @@ export function ChangelogDialog() {
         <DialogBody>
           <div className="max-h-[60dvh] overflow-y-auto">
             <Surface>
-              <Streamdown
-                className={cn(
-                  "text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-                  STREAMDOWN_TABLE_RADIUS_CLASS,
-                )}
-                plugins={changelogPlugins}
-              >
-                {changelog.content}
-              </Streamdown>
+              <Markdown className="text-sm">{changelog.content}</Markdown>
             </Surface>
           </div>
         </DialogBody>

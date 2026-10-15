@@ -5,6 +5,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { recordPullRequest } from "../convex/_pullRequests/store";
 import { canonicalPrUrl } from "../convex/mcp/sessionRef";
 import { MCP_CLAUDE_MODELS } from "../convex/mcp/toolShared";
 import {
@@ -58,7 +59,6 @@ async function fixture() {
       title: "Fix the login bug",
       status: "active",
       numId: 42,
-      prUrl: PR_URL,
       branchName: "eva/session-login",
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
@@ -77,12 +77,19 @@ async function fixture() {
       updatedAt: now,
       createdBy: ownerUserId,
     });
-    // A task's PR lives on the run that opened it, not on the task row.
-    await ctx.db.insert("agentRuns", {
+    // A task's PR names the run that opened it.
+    const runId = await ctx.db.insert("agentRuns", {
       taskId,
       status: "success",
       logs: [],
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "task", taskId, runId },
+      repoId,
       prUrl: TASK_PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -91,8 +98,23 @@ async function fixture() {
       phase: "in_progress",
       rawInput: "revamp billing",
       numId: 42,
-      prUrl: PROJECT_PR_URL,
       branchName: "eva/project-billing",
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "session", sessionId },
+      repoId,
+      prUrl: PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
+    });
+    await recordPullRequest(ctx, {
+      owner: { kind: "project", projectId },
+      repoId,
+      prUrl: PROJECT_PR_URL,
+      state: "open",
+      primary: true,
+      origin: "eva",
     });
     return {
       ownerUserId,
@@ -109,6 +131,28 @@ async function fixture() {
 }
 
 describe("resolving the chat an MCP caller named", () => {
+  test("any PR a session holds reaches it, not only its main one", async () => {
+    const f = await fixture();
+    const sidePrUrl = "https://github.com/vvedantb/eva/pull/667";
+    await f.t.run(async (ctx) => {
+      await recordPullRequest(ctx, {
+        owner: { kind: "session", sessionId: f.sessionId },
+        repoId: f.repoId,
+        prUrl: sidePrUrl,
+        state: "open",
+        primary: false,
+        origin: "agent",
+      });
+    });
+    const resolved = await f.t.query(
+      internal.mcp.queries.resolveChatTargetForUser,
+      { userId: f.ownerUserId, prUrl: sidePrUrl },
+    );
+    expect(resolved?.targetId).toBe(f.sessionId);
+    // The chat's own PR is still the one it reports.
+    expect(resolved?.prUrl).toBe(PR_URL);
+  });
+
   test("the owner reaches their session by Convex id, PR url, and numId", async () => {
     const f = await fixture();
 
@@ -350,10 +394,12 @@ describe("PR links the tool accepts", () => {
 describe("what a send does to the chat", () => {
   const KINDS: ChatTargetKind[] = ["session", "task", "project"];
 
-  test("an idle session gets a user message and then a turn", () => {
+  test("an idle session chat gets a user message and then a turn", () => {
+    // A session send is addressed to one of its chats (resolved upstream by
+    // `sessionChats:resolveDeliveryChat`), so both mutations take `chatId`.
     const calls = buildChatMessageCalls({
       kind: "session",
-      id: "s1",
+      id: "c1",
       message: "keep going",
       delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
       sentViaOrchestrator: false,
@@ -364,14 +410,14 @@ describe("what a send does to the chat", () => {
       "_sessions/execution:startExecute",
     ]);
     expect(calls[0]?.args).toEqual({
-      id: "s1",
+      chatId: "c1",
       role: "user",
       content: "keep going",
       model: "claude:opus",
       sentViaOrchestrator: false,
     });
     expect(calls[1]?.args).toEqual({
-      sessionId: "s1",
+      chatId: "c1",
       message: "keep going",
       model: "claude:opus",
     });
@@ -495,10 +541,10 @@ describe("which tokens get which tools", () => {
   const orchestratorTools = convexSource("mcp/orchestratorTools.ts");
 
   test("send_chat_message is registered for every MCP caller", () => {
-    // Registered in tools.ts, above the isOrchestrator gate at the bottom —
+    // Registered in tools.ts, above the isAve gate at the bottom —
     // that ordering is what puts it on a plain OAuth connector's tool list.
     const registered = tools.indexOf('"send_chat_message"');
-    const gate = tools.indexOf("if (isOrchestrator) {");
+    const gate = tools.indexOf("if (isAve) {");
     expect(registered).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(registered);
     expect(orchestratorTools).not.toContain('"send_chat_message"');
@@ -514,10 +560,10 @@ describe("which tokens get which tools", () => {
   });
 
   test("fleet tools are registered for every MCP caller", () => {
-    // fleetTools is spread into the catalog above the isOrchestrator gate,
+    // fleetTools is spread into the catalog above the isAve gate,
     // the same ordering that puts send_chat_message on an OAuth connector.
     const fleet = tools.indexOf("tools.push(...fleetTools(credentials, ctx))");
-    const gate = tools.indexOf("if (isOrchestrator) {");
+    const gate = tools.indexOf("if (isAve) {");
     expect(fleet).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(fleet);
     for (const name of [
@@ -532,24 +578,24 @@ describe("which tokens get which tools", () => {
     }
   });
 
-  test("send_agent_message stays behind the orchestrator gate", () => {
+  test("send_agent_message stays behind the Ave gate", () => {
     expect(orchestratorTools).toContain('"send_agent_message"');
     expect(tools).not.toContain('"send_agent_message"');
     const registerAt = tools.indexOf("tools.push(...orchestratorTools(");
-    const guardAt = tools.lastIndexOf("if (isOrchestrator) {", registerAt);
+    const guardAt = tools.lastIndexOf("if (isAve) {", registerAt);
     expect(registerAt).toBeGreaterThan(-1);
     expect(guardAt).toBeGreaterThan(-1);
     expect(tools.slice(guardAt, registerAt)).not.toContain("}");
     expect(tools).toContain(
-      "if (isOrchestrator) {\n    tools.push(...orchestratorTools(credentials, ctx));",
+      "if (isAve) {\n    tools.push(...orchestratorTools(credentials, ctx));",
     );
   });
 
-  test("watch_agent does not require the master sandbox token", () => {
-    expect(orchestratorTools).not.toContain(
-      "Watch tools require the master session's own sandbox token.",
+  test("watch_agent falls back to the user's live Ave thread", () => {
+    expect(orchestratorTools).toContain("resolveAveThreadId(ctx, credentials)");
+    expect(convexSource("mcp/toolShared.ts")).toContain(
+      "internal._ave.threads.getLiveThreadIdForUser",
     );
-    expect(orchestratorTools).toContain("getLiveOrchestratorSessionIdForUser");
   });
 
   test("the send checks repo access before it sends", () => {
@@ -579,8 +625,11 @@ describe("which tokens get which tools", () => {
     expect(getState).toContain(
       "No ${kind} ${id} found, or you do not have access.",
     );
-    expect(getState).toContain('"_sessions/queries:get"');
-    expect(getState).toContain('"_agentTasks/queries:get"');
+    // The per-surface user-authorised read, shared with send and sandbox start.
+    expect(getState).toContain("CHAT_DOC_QUERY[kind]");
+    expect(nodeActions).toContain('session: "_sessions/queries:get"');
+    expect(nodeActions).toContain('task: "_agentTasks/queries:get"');
+    expect(nodeActions).toContain('project: "_projects/queries:get"');
   });
 
   test("code-mode tools are mounted beside the flat tools, never instead of them", () => {
@@ -591,65 +640,51 @@ describe("which tokens get which tools", () => {
   });
 });
 
-describe("user-MCP watch resolves Manager Ave without a master token", () => {
-  test("the owner’s live Ave session is returned, a stranger’s is not", async () => {
+describe("user-MCP watch resolves the live Manager Ave thread", () => {
+  test("the owner’s live thread is returned, a stranger’s is not", async () => {
     const f = await fixture();
-    const aveId = await f.t.run(async (ctx) => {
-      const sessionId = await ctx.db.insert("sessions", {
-        repoId: f.repoId,
+    const threadId = await f.t.run(async (ctx) =>
+      ctx.db.insert("aveThreads", {
         userId: f.ownerUserId,
-        title: "Manager Ave",
-        status: "active",
-        numId: 1,
-        isOrchestrator: true,
-      });
-      await ctx.db.patch(f.ownerUserId, { orchestratorSessionId: sessionId });
-      return sessionId;
-    });
-
+        status: "idle",
+        updatedAt: 1,
+      }),
+    );
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: f.ownerUserId },
-      ),
-    ).toBe(aveId);
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: f.ownerUserId,
+      }),
+    ).toBe(threadId);
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: f.strangerUserId },
-      ),
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: f.strangerUserId,
+      }),
     ).toBeNull();
   });
 
-  test("an archived or unflagged session is not a live master", async () => {
+  test("a reset (archived) thread is not live", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      const sessionId = await ctx.db.insert("sessions", {
-        repoId: f.repoId,
+      await ctx.db.insert("aveThreads", {
         userId: f.ownerUserId,
-        title: "Manager Ave",
-        status: "active",
-        numId: 1,
-        isOrchestrator: true,
-        archived: true,
+        status: "idle",
+        archivedAt: 1,
+        updatedAt: 1,
       });
-      await ctx.db.patch(f.ownerUserId, { orchestratorSessionId: sessionId });
     });
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: f.ownerUserId },
-      ),
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: f.ownerUserId,
+      }),
     ).toBeNull();
   });
 
-  test("a missing user id is rejected rather than guessed at", async () => {
+  test("a malformed user id is rejected rather than guessed at", async () => {
     const f = await fixture();
     expect(
-      await f.t.query(
-        internal.mcp.queries.getLiveOrchestratorSessionIdForUser,
-        { userId: "not-an-id" },
-      ),
+      await f.t.query(internal._ave.threads.getLiveThreadIdForUser, {
+        userId: "not-an-id",
+      }),
     ).toBeNull();
   });
 });
@@ -674,12 +709,17 @@ describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
       nodeActions.indexOf("function chatDelivery"),
     );
     expect(ensure).toContain("SANDBOX_SURFACES[kind]");
-    expect(ensure).toContain("decideSandboxStartPlan");
-    expect(ensure).toContain("TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS");
-    // The Start-button mutation, not an in-place resume of the closed id.
-    expect(convexSource("mcp/orchestratorDelivery.ts")).toContain(
-      "agentTasks:startTaskSandbox",
+    // The start-and-wait loop is shared with the `/p/…` wake link
+    // (`sandboxWake.ts`), so it lives in orchestratorDelivery.
+    expect(ensure).toContain("awaitSandboxActive(");
+    const delivery = convexSource("mcp/orchestratorDelivery.ts");
+    const loop = delivery.slice(
+      delivery.indexOf("export async function awaitSandboxActive"),
     );
+    expect(loop).toContain("decideSandboxStartPlan");
+    expect(loop).toContain("TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS");
+    // The Start-button mutation, not an in-place resume of the closed id.
+    expect(delivery).toContain("agentTasks:startTaskSandbox");
   });
 
   test("turn staging does not prewarm a closed or stopping preview sandbox", () => {
@@ -798,7 +838,7 @@ describe("MCP sends are badged; composer-typed messages are not", () => {
   const sessionSend = readFileSync(
     join(
       testsDir,
-      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionSend.ts",
+      "../../../apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
     ),
     "utf8",
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useConvex } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
@@ -14,11 +15,11 @@ import {
   PlanContent,
   PlanFooter,
   PlanTrigger,
-  MessageResponse,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import {
   IconCheck,
   IconCode,
@@ -36,7 +37,6 @@ import { entityPathSegment } from "@/lib/numId";
 import { DOC_VIEWER_DEFAULT_TAB } from "@/lib/search-params";
 import {
   buildProposedPlanMarkdownFilename,
-  downloadPlanAsMarkdownFile,
   normalizePlanMarkdownForExport,
   proposedPlanTitle,
 } from "./planExport";
@@ -89,7 +89,7 @@ export function SessionPrdPlanView({
 
   const handleDownload = () => {
     if (!planContent.trim()) return;
-    downloadPlanAsMarkdownFile(
+    downloadMarkdownFile(
       buildProposedPlanMarkdownFilename(planContent),
       normalizePlanMarkdownForExport(planContent),
     );
@@ -231,9 +231,9 @@ export function SessionPrdPlanView({
               isPanel ? "min-h-0 flex-1" : "max-h-40 sm:max-h-64",
             )}
           >
-            <MessageResponse className="prose prose-sm dark:prose-invert max-w-none">
+            <Markdown className="text-sm">
               {planContent}
-            </MessageResponse>
+            </Markdown>
           </div>
         )}
       </PlanContent>

@@ -17,14 +17,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  Skeleton,
+  CenteredSpinner,
   toast,
+  RefreshSpinIcon,
 } from "@eva/ui";
 import {
   IconDots,
   IconEyeOff,
   IconPlus,
-  IconRefresh,
   IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
@@ -158,10 +158,7 @@ export function ReposClient() {
                       )
                     }
                   >
-                    <IconRefresh
-                      size={16}
-                      className={syncing ? "animate-spin" : ""}
-                    />
+                    <RefreshSpinIcon busy={syncing} />
                     {syncing ? "Syncing..." : "Sync Repos"}
                     <ConfirmSkipHint />
                   </DropdownMenuItem>
@@ -195,10 +192,7 @@ export function ReposClient() {
                         handleSync();
                       }}
                     >
-                      <IconRefresh
-                        size={16}
-                        className={syncing ? "animate-spin" : ""}
-                      />
+                      <RefreshSpinIcon busy={syncing} />
                       Sync
                     </Button>
                   </DialogFooter>
@@ -235,18 +229,7 @@ export function ReposClient() {
       }
     >
       {repos === undefined || appSlug === undefined ? (
-        <div
-          className="min-h-112 space-y-6"
-          aria-busy="true"
-          aria-label="Loading repositories"
-        >
-          <Skeleton className="ml-4 h-8 w-40" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-28 border border-border" />
-            ))}
-          </div>
-        </div>
+        <CenteredSpinner label="Loading repositories" className="min-h-112" />
       ) : repos.length === 0 ? (
         <EmptyOnboarding connectUrl={buildConnectUrl(appSlug)} />
       ) : (

@@ -2,6 +2,7 @@
 
 import { Button } from "@eva/ui";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
+import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { useAveLauncher } from "@/lib/components/ave/AveLauncherContext";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
@@ -27,7 +28,7 @@ export function AveHeaderButton() {
       onClick={toggle}
       aria-label={isOpen ? "Close Manager Ave" : "Manager Ave"}
       aria-expanded={isOpen}
-      // `relative` anchors the sandbox pip, which hangs off the corner and so
+      // `relative` anchors the working pip, which hangs off the corner and so
       // must not be clipped. `[&_svg]:size-5` beats the variant's `size-4`
       // floor for icon glyphs: the mark is a filled disc, not a stroke icon,
       // and has to fill the 20px box its wrapper reserves.
@@ -36,6 +37,7 @@ export function AveHeaderButton() {
       <AveMark size={20} />
       <QueryErrorBoundary>
         <AveActiveDot />
+        <AveQuestionsBadge />
       </QueryErrorBoundary>
     </Button>
   );

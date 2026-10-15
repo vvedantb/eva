@@ -2,40 +2,28 @@ import { describe, expect, test } from "vitest";
 import {
   canSendSessionForReview,
   getSessionReadOnlyMessage,
-  isSessionPrReadOnly,
   isSessionSidebarActive,
   type SessionPrState,
 } from "./sessionReadOnly";
 
-describe("session PR read-only state", () => {
-  test.each<[SessionPrState | undefined, boolean]>([
-    [undefined, false],
-    ["draft", false],
-    ["open", false],
-    ["merged", true],
-    ["closed", true],
-  ])("%s -> %s", (state, expected) => {
-    expect(isSessionPrReadOnly(state)).toBe(expected);
+describe("session read-only state", () => {
+  test("archive removes a session from Active", () => {
+    expect(isSessionSidebarActive({ archived: true })).toBe(false);
   });
 
-  test("manual archive removes an otherwise live session from Active", () => {
-    expect(isSessionSidebarActive({ archived: true, prState: "open" })).toBe(
-      false,
-    );
+  test("a non-archived session stays active whatever its PR state", () => {
+    expect(isSessionSidebarActive({})).toBe(true);
+    expect(isSessionSidebarActive({ archived: false })).toBe(true);
   });
 
   test.each<SessionPrState>(["merged", "closed"])(
-    "%s removes a non-archived session from Active",
+    "a %s PR kept live (auto-archive off) shows no read-only banner",
     (prState) => {
-      expect(isSessionSidebarActive({ archived: false, prState })).toBe(false);
+      expect(
+        getSessionReadOnlyMessage({ isArchived: false, prState }),
+      ).toBeUndefined();
     },
   );
-
-  test("draft, open and no-PR sessions remain active", () => {
-    expect(isSessionSidebarActive({ prState: "draft" })).toBe(true);
-    expect(isSessionSidebarActive({ prState: "open" })).toBe(true);
-    expect(isSessionSidebarActive({})).toBe(true);
-  });
 
   test("terminal PR reason wins over the generic archive message", () => {
     expect(
@@ -62,12 +50,6 @@ describe("session PR read-only state", () => {
       );
     },
   );
-
-  test("Manager Ave never sends for review", () => {
-    expect(
-      canSendSessionForReview({ branchName: "eva/x", isOrchestrator: true }),
-    ).toBe(false);
-  });
 
   test("manual archive has its own fallback and live sessions have none", () => {
     expect(

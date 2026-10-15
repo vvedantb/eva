@@ -7,9 +7,7 @@ const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const sessionPrompts = readSource("convex/_sessions/prompts.ts");
 const completion = readSource("callback-src/runtime/completion.ts");
-const claudeSdkDaemon = readSource(
-  "callback-src/providers/claudeSdkDaemon.ts",
-);
+const claudeSdkDaemon = readSource("callback-src/providers/claudeSdkDaemon.ts");
 const bundledScript = readSource(
   "convex/_sandbox_runtime/callbackScript.generated.ts",
 );
@@ -89,16 +87,66 @@ describe("the harvest archives posted files instead of deleting them", () => {
   test.each([
     ["callback source", completion],
     ["deployed bundle", bundledScript],
-  ])("posted files move to .posted, none are unlinked (%s)", (_label, source) => {
-    const at = source.indexOf("async function uploadAndAttachSandboxMedia(");
-    expect(at, "the harvest moved").toBeGreaterThan(-1);
-    const body = source.slice(at, source.indexOf("\n}", at));
-    expect(body).toContain("archivePostedFile(");
-    expect(body).not.toContain("unlinkSync(");
-  });
+  ])(
+    "posted files move to .posted, none are unlinked (%s)",
+    (_label, source) => {
+      const at = source.indexOf("async function uploadAndAttachSandboxMedia(");
+      expect(at, "the harvest moved").toBeGreaterThan(-1);
+      const body = source.slice(at, source.indexOf("\n}", at));
+      expect(body).toContain("archivePostedFile(");
+      expect(body).not.toContain("unlinkSync(");
+    },
+  );
 
   test("the session prompt tells agents where posted captures live", () => {
     expect(sessionPrompts).toContain(".posted/");
+  });
+});
+
+/**
+ * A task run is not a chat turn: it writes no `messages` row, and a quick
+ * task's sandbox stops once the run ends. The harvest used to return early
+ * whenever RUN_ID was set, on the assumption a later chat turn would pick the
+ * files up — so screenshots a run was asked for never reached the chat at all.
+ * Run captures now attach to the run doc, which every surface renders from.
+ */
+describe("task runs harvest their captures onto the run", () => {
+  test.each([
+    ["callback source", completion],
+    ["deployed bundle", bundledScript],
+  ])("a run attaches media to the run doc (%s)", (_label, source) => {
+    const body = functionBody(
+      source,
+      "async function uploadAndAttachSandboxMedia(",
+    );
+    // The early return that dropped every run capture.
+    expect(body).not.toMatch(/if \(RUN_ID\) return;/);
+    expect(body).toContain("attachRunMediaIfAny(");
+    expect(source).toContain('"agentRuns:attachMedia"');
+  });
+
+  test.each([
+    ["callback source", completion],
+    ["deployed bundle", bundledScript],
+  ])("a run harvests before it completes (%s)", (_label, source) => {
+    const body = functionBody(
+      source,
+      "async function deliverCompletionWithMedia(",
+    );
+    // Completing a run hands control back to the task workflow, which pushes,
+    // opens the PR and stops the sandbox — a harvest queued after that races
+    // the teardown. A chat turn still harvests after, so the message exists.
+    const runHarvestAt = body.indexOf(
+      "if (RUN_ID) await uploadAndAttachSandboxMedia(",
+    );
+    const completionAt = body.indexOf("COMPLETION_MUTATION");
+    const chatHarvestAt = body.indexOf(
+      "if (!RUN_ID) await uploadAndAttachSandboxMedia(",
+    );
+    expect(runHarvestAt, "the run harvest is missing").toBeGreaterThan(-1);
+    expect(chatHarvestAt, "the chat harvest is missing").toBeGreaterThan(-1);
+    expect(runHarvestAt).toBeLessThan(completionAt);
+    expect(completionAt).toBeLessThan(chatHarvestAt);
   });
 });
 

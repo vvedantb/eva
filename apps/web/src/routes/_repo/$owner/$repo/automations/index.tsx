@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import { Skeleton, motionBase, motionStagger } from "@eva/ui";
+import { CenteredSpinner, motionBase, motionStagger } from "@eva/ui";
 import { m } from "motion/react";
 import { CountPop } from "@/lib/components/ui/CountPop";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -88,7 +88,7 @@ function AutomationsHubPage() {
             {systemAutomations !== undefined && (
               <CountPop
                 label={`${installedCount}/${systemAutomations.length}`}
-                className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+                className="shrink-0 text-2xs tabular-nums text-muted-foreground"
               >
                 {installedCount} of {systemAutomations.length} installed
               </CountPop>
@@ -97,15 +97,7 @@ function AutomationsHubPage() {
         </div>
 
         {systemAutomations === undefined ? (
-          <div
-            className="grid gap-3 sm:grid-cols-2"
-            aria-busy="true"
-            aria-label="Loading automations"
-          >
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-[164px] border border-border" />
-            ))}
-          </div>
+          <CenteredSpinner label="Loading automations" />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {systemAutomations.map((entry, index) => (
@@ -121,6 +113,7 @@ function AutomationsHubPage() {
                 title={entry.title}
                 blurb={entry.blurb}
                 cronSchedule={entry.cronSchedule}
+                trigger={entry.trigger}
                 installed={entry.installed}
                 numId={entry.numId}
                 basePath={basePath}

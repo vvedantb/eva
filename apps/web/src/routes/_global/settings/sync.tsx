@@ -6,8 +6,8 @@ import { api } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { Button, Checkbox, Spinner, toast } from "@eva/ui";
-import { IconGitBranch, IconRefresh } from "@tabler/icons-react";
+import { Button, Checkbox, RefreshSpinIcon, Spinner, toast } from "@eva/ui";
+import { IconGitBranch } from "@tabler/icons-react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
@@ -165,7 +165,7 @@ function SyncSettingsRoute() {
           onClick={handleRefreshFromGithub}
           className="motion-press border-border text-muted-foreground hover:scale-[1.01] active:scale-[0.96]"
         >
-          <IconRefresh size={16} className={fetching ? "animate-spin" : ""} />
+          <RefreshSpinIcon busy={fetching} />
           <span className="max-sm:sr-only">Refresh</span>
         </Button>
       }
@@ -187,10 +187,7 @@ function SyncSettingsRoute() {
                 disabled={fetching}
                 onClick={handleRefreshFromGithub}
               >
-                <IconRefresh
-                  size={16}
-                  className={fetching ? "animate-spin" : ""}
-                />
+                <RefreshSpinIcon busy={fetching} />
                 Fetch from GitHub
               </Button>
             }
@@ -285,7 +282,9 @@ function OwnerGroup({
                   onToggleRepo(repo.owner, repo.name, checked === true)
                 }
               />
-              <span className="max-sm:min-w-0 max-sm:truncate">{repo.name}</span>
+              <span className="max-sm:min-w-0 max-sm:truncate">
+                {repo.name}
+              </span>
             </label>
           </ListEnter>
         );

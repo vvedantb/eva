@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Skeleton } from "@eva/ui";
+import { CenteredSpinner } from "@eva/ui";
 import { IconChartBarOff } from "@tabler/icons-react";
 import {
   DAY_MS,
@@ -54,18 +54,9 @@ export function UsageOverviewView({
 
   if (summary === undefined) {
     return (
-      <section
-        className="flex flex-col gap-3 px-4"
-        aria-busy="true"
-        aria-label="Loading usage"
-      >
+      <section className="flex flex-col gap-3 px-4">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-        </div>
-        <Skeleton className="h-56" />
+        <CenteredSpinner label="Loading usage" />
       </section>
     );
   }

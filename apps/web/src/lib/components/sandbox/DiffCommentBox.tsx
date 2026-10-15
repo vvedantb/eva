@@ -100,7 +100,7 @@ export function DiffCommentPendingCard({
       <div className="flex items-center gap-2">
         <IconMessage className="size-4 text-muted-foreground" />
         <span className="text-xs font-medium">Review comment</span>
-        <span className="ml-auto text-[11px] text-muted-foreground">
+        <span className="ml-auto text-2xs text-muted-foreground">
           {rangeLabel}
         </span>
         <Button

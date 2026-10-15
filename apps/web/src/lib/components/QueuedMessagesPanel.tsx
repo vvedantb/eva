@@ -45,8 +45,9 @@ import {
   useAltHeld,
 } from "@/lib/confirm";
 
-interface QueuedMessageItem {
-  id: Id<"queuedMessages">;
+/** `TId` is the row's id: a `queuedMessages` doc, or Manager Ave's held message. */
+interface QueuedMessageItem<TId extends string> {
+  id: TId;
   content: string;
   model?: string;
   reasoningLevel?: string;
@@ -54,14 +55,14 @@ interface QueuedMessageItem {
   userId?: Id<"users">;
 }
 
-interface QueuedMessagesPanelProps {
-  items: QueuedMessageItem[];
+interface QueuedMessagesPanelProps<TId extends string> {
+  items: QueuedMessageItem<TId>[];
   label?: string;
   renderContent?: (content: string) => React.ReactNode;
-  onEdit?: (id: Id<"queuedMessages">, content: string) => Promise<void>;
-  onDelete?: (id: Id<"queuedMessages">) => Promise<void>;
+  onEdit?: (id: TId, content: string) => Promise<void>;
+  onDelete?: (id: TId) => Promise<void>;
   /** When provided, items become reorderable; receives the new top-to-bottom id order. */
-  onReorder?: (orderedIds: Id<"queuedMessages">[]) => Promise<void>;
+  onReorder?: (orderedIds: TId[]) => Promise<void>;
 }
 
 /** Tooltip copy for a queued row's model + effort snapshot. */
@@ -82,7 +83,7 @@ function QueueRowHandle({
   attributes,
   listeners,
 }: {
-  item: QueuedMessageItem;
+  item: QueuedMessageItem<string>;
   draggable: boolean;
   attributes: ReturnType<typeof useSortable>["attributes"];
   listeners: ReturnType<typeof useSortable>["listeners"];
@@ -128,7 +129,7 @@ function QueueRowHandle({
 }
 
 /** A single sortable queue row (provider handle + 2-line text + actions). */
-function SortableQueuedItem({
+function SortableQueuedItem<TId extends string>({
   item,
   index,
   draggable,
@@ -137,13 +138,13 @@ function SortableQueuedItem({
   onDeleteClick,
   onMoveToFront,
 }: {
-  item: QueuedMessageItem;
+  item: QueuedMessageItem<TId>;
   index: number;
   draggable: boolean;
   renderContent?: (content: string) => React.ReactNode;
-  onEditClick?: (item: QueuedMessageItem) => void;
-  onDeleteClick?: (item: QueuedMessageItem) => void;
-  onMoveToFront?: (item: QueuedMessageItem) => void;
+  onEditClick?: (item: QueuedMessageItem<TId>) => void;
+  onDeleteClick?: (item: QueuedMessageItem<TId>) => void;
+  onMoveToFront?: (item: QueuedMessageItem<TId>) => void;
 }) {
   const {
     attributes,
@@ -223,29 +224,29 @@ function SortableQueuedItem({
  * (which insets it) with square bottom corners so it blends into the input
  * card — same idea as underCardLeading.
  */
-export function QueuedMessagesPanel({
+export function QueuedMessagesPanel<TId extends string>({
   items,
   label = "Queued",
   renderContent,
   onEdit,
   onDelete,
   onReorder,
-}: QueuedMessagesPanelProps) {
-  const [editingItem, setEditingItem] = useState<QueuedMessageItem | null>(
+}: QueuedMessagesPanelProps<TId>) {
+  const [editingItem, setEditingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
   );
-  const [deletingItem, setDeletingItem] = useState<QueuedMessageItem | null>(
+  const [deletingItem, setDeletingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
   );
   const [draftContent, setDraftContent] = useState("");
-  const [draftForId, setDraftForId] = useState<Id<"queuedMessages"> | null>(
+  const [draftForId, setDraftForId] = useState<TId | null>(
     null,
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const altHeld = useAltHeld();
 
-  const deleteQueued = async (item: QueuedMessageItem) => {
+  const deleteQueued = async (item: QueuedMessageItem<TId>) => {
     if (!onDelete) return;
     setIsDeleting(true);
     try {
@@ -283,7 +284,7 @@ export function QueuedMessagesPanel({
     void onReorder(orderedIds);
   };
 
-  const handleMoveToFront = (item: QueuedMessageItem) => {
+  const handleMoveToFront = (item: QueuedMessageItem<TId>) => {
     if (!onReorder) return;
     const rest = items.filter((entry) => entry.id !== item.id);
     void onReorder([item.id, ...rest.map((entry) => entry.id)]);

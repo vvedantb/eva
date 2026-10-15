@@ -93,9 +93,7 @@ test("PR number parsing lives only in prUrl.ts", () => {
   const service = read("convex/_github/prUrl.ts");
   expect(service).toContain("export function extractPrNumber(");
   for (const path of [
-    "convex/_projects/prSync.ts",
-    "convex/_agentTasks/mutations.ts",
-    "convex/_sessions/prArchive.ts",
+    "convex/_pullRequests/store.ts",
     "convex/taskWorkflowActions.ts",
   ] as const) {
     const source = read(path);
@@ -112,14 +110,19 @@ test("PR lifecycle scheduling is shared", () => {
   const service = read("convex/_github/prLifecycleActions.ts");
   expect(service).toContain("export async function schedulePrLifecycleActions(");
   expect(service).toContain("export function selectPrLifecycleTransition(");
+  // Every tracked PR's GitHub action goes through the pullRequests store, which
+  // is the one caller of the scheduler.
+  const store = read("convex/_pullRequests/store.ts");
+  expect(store).toContain("schedulePrLifecycleActions(");
+  expect(store).toContain("export async function applyPrLifecycleTransition(");
   for (const path of [
     "convex/_projects/prSync.ts",
     "convex/_agentTasks/mutations.ts",
-    "convex/_sessions/prArchive.ts",
+    "convex/_sessions/mutations.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should call the shared scheduler`).toContain(
-      "schedulePrLifecycleActions(",
+    expect(source, `${path} should go through the pullRequests store`).toMatch(
+      /applyPrLifecycleTransition\(|closeLivePullRequests\(/,
     );
     expect(
       source,
@@ -554,11 +557,9 @@ test("stale synthetic-turn heartbeats share isStreamingActivityStale", () => {
   const helper = read("convex/_chat/turnLease.ts");
   expect(helper).toContain("export function isStreamingActivityStale(");
   expect(helper).toContain("TURN_RUNNING_LEASE_MS");
-  for (const path of [
-    "convex/_chat/taskChatDaemon.ts",
-    "convex/_chat/projectChatDaemon.ts",
-    "convex/_sessions/workflow.ts",
-  ] as const) {
+  // Task and project synthetic turns have no timer of their own any more: the
+  // turn lease ends them. Only the session timer still classifies.
+  for (const path of ["convex/_sessions/workflow.ts"] as const) {
     const source = read(path);
     expect(source, `${path} should classify via the shared helper`).toContain(
       "isStreamingActivityStale(",
@@ -613,7 +614,7 @@ test("composer last-* patches share composerTraitFields", () => {
     );
   }
   for (const path of [
-    "../../apps/web/src/lib/hooks/useSessionModel.ts",
+    "../../apps/web/src/lib/hooks/useChatModel.ts",
     "../../apps/web/src/lib/components/tasks/TaskSandboxChatPanel.tsx",
     "../../apps/web/src/lib/components/projects/useProjectTraits.ts",
   ] as const) {
@@ -665,7 +666,7 @@ test("implementation prompts share buildTypecheckCommand", () => {
 
 test("session and task trait writes share toRunTraitArgs", () => {
   for (const path of [
-    "../../apps/web/src/lib/hooks/useSessionModel.ts",
+    "../../apps/web/src/lib/hooks/useChatModel.ts",
     "../../apps/web/src/lib/components/tasks/TaskSandboxChatPanel.tsx",
     "../../apps/web/src/lib/components/projects/useProjectTraits.ts",
   ] as const) {

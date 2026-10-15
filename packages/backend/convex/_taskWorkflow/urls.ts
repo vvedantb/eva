@@ -1,4 +1,5 @@
-function getEvaBaseUrl(): string {
+/** Eva web app origin, no trailing slash. */
+export function getEvaBaseUrl(): string {
   const url = process.env.WEB_APP_URL;
   if (!url) throw new Error("WEB_APP_URL is not set in Convex env");
   return url.replace(/\/$/, "");
@@ -64,6 +65,18 @@ export function buildEvaDocUrl(
 ): string {
   const segment = repoPath(repoName, rootDirectory);
   return `${getEvaBaseUrl()}/${repoOwner}/${segment}/docs/${docNumId}/${docTab}`;
+}
+
+/** Builds a link to a doc's Testing Arena tab (path uses per-repo numId). */
+export function buildEvaArenaUrl(
+  repoOwner: string,
+  repoName: string,
+  docNumId: number,
+  arenaTab: "code" | "browser",
+  rootDirectory?: string,
+): string {
+  const segment = repoPath(repoName, rootDirectory);
+  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/testing-arena/${docNumId}/${arenaTab}`;
 }
 
 /** Builds a link to a PR under Reviews (keyed by GitHub PR number). */

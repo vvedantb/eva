@@ -100,6 +100,9 @@ window.addEventListener("unhandledrejection", (event) => {
 
 const router = createRouter({
   routeTree,
+  // Redline history builds serve the app under `/__redline/h/<sha>/`; Vite
+  // sets BASE_URL from `--base`, so routes resolve inside that prefix. "/" in dev.
+  basepath: import.meta.env.BASE_URL,
   history: createAppHistory(),
   context: { isSignedIn: false },
   defaultErrorComponent: DeploymentErrorFallback,
@@ -114,6 +117,19 @@ const router = createRouter({
   // Twice the 50ms default: long enough that dragging the pointer across a
   // sidebar does not queue a fetch for every item it crosses.
   defaultPreloadDelay: 100,
+  // Page swaps fade the content column (`.vt-page` in globals.css). Keyed on
+  // the leaf route, so param-only moves — session to session, tab segments,
+  // search filters — stay instant. Moves inside one entity (a session's
+  // sandbox tabs, its Review sub-tabs) cross leaf routes too, but are tab
+  // switches, not page swaps. Returning `false` skips the transition.
+  defaultViewTransition: {
+    types: ({ fromLocation, toLocation }) =>
+      fromLocation !== undefined &&
+      !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
+      leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
+        ? ["page"]
+        : false,
+  },
   // Monorepo apps: address bar + link hrefs use /owner/repo/app/… while the
   // route tree matches /owner/repo--app/… (single $repo segment).
   rewrite: {
@@ -127,6 +143,19 @@ const router = createRouter({
     },
   },
 });
+
+/** `/…/sessions/42`, `/…/reviews/884`, … — the entity a path is inside, if any. */
+const ENTITY_PREFIX =
+  /^(.*?\/(?:sessions|quick-tasks|projects|reviews|docs|testing-arena)\/[^/]+)(?:\/|$)/;
+
+function isSameEntity(from: string, to: string): boolean {
+  const entity = ENTITY_PREFIX.exec(from)?.[1];
+  return entity !== undefined && entity === ENTITY_PREFIX.exec(to)?.[1];
+}
+
+function leafRouteId(pathname: string): string | undefined {
+  return router.getMatchedRoutes(pathname).foundRoute?.id;
+}
 
 declare module "@tanstack/react-router" {
   interface Register {

@@ -10,6 +10,7 @@ import {
   cn,
 } from "@eva/ui";
 import { IconTags } from "@tabler/icons-react";
+import { FIELD_TEXT_CLASS } from "@/lib/components/fields/FieldsSection";
 
 interface ProjectTagsPopoverProps {
   tags: string[] | undefined;
@@ -53,7 +54,8 @@ export function ProjectTagsPopover({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[13px] transition-colors hover:bg-muted/60",
+            "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-muted/60",
+            FIELD_TEXT_CLASS,
             currentTags.length === 0 && "text-muted-foreground",
             className,
           )}
@@ -92,7 +94,7 @@ export function ProjectTagsPopover({
             ref={inputRef}
             value={draft}
             placeholder="Add tag..."
-            className="h-7 text-[13px]"
+            className="h-7 text-2sm"
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => {
               if (draft.trim()) {

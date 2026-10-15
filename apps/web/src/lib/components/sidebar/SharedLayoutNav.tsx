@@ -116,7 +116,7 @@ export function sidebarNavLinkClass(
     // dead one of the pair. 0.99 because the row is full-width — the same
     // figure `ListRow` uses, where a deeper scale on a 20rem-wide target
     // looks like the panel flexing rather than the row acknowledging.
-    "group motion-press active:scale-[0.99] flex w-full items-center gap-2 rounded-menu-item px-4 py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
+    "group motion-press active:scale-[0.99] flex w-full items-center gap-2 rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
     collapsed && "lg:justify-center lg:px-0",
     isActive
       ? "font-medium text-sidebar-primary"
@@ -126,11 +126,11 @@ export function sidebarNavLinkClass(
 
 /** Section group label above a cluster of sidebar nav rows (Build / Ship / …). */
 export const sidebarSectionLabelClass =
-  "px-4 py-1 text-[11px] font-medium tracking-[-0.01em] text-muted-foreground/55";
+  "px-4 py-1 text-2xs font-medium tracking-[-0.01em] text-muted-foreground/55";
 
 export function sidebarNavLinkClassCompact(isActive: boolean): string {
   return cn(
-    "group motion-press active:scale-[0.99] flex w-full items-center gap-2.5 rounded-menu-item px-4 py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
+    "group motion-press active:scale-[0.99] flex w-full items-center gap-2.5 rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
     isActive
       ? "font-medium text-sidebar-primary"
       : "text-sidebar-foreground/80 hover:text-sidebar-foreground",

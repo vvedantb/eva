@@ -358,7 +358,7 @@ describe("evaluate wiring contract", () => {
     const tools = convexSource("mcp/tools.ts");
     const registration = tools.indexOf("evaluateTool(");
     expect(registration).toBeGreaterThan(-1);
-    expect(registration).toBeLessThan(tools.indexOf("if (isOrchestrator) {"));
+    expect(registration).toBeLessThan(tools.indexOf("if (isAve) {"));
 
     const action = convexSource("mcp/evaluate.ts");
     expect(action.startsWith('"use node";')).toBe(true);

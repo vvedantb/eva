@@ -122,7 +122,7 @@ export function RepoCard({
                   {repo.connected === false && (
                     <div className="flex max-sm:shrink-0 items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-destructive">
                       <IconPlugConnectedX size={11} />
-                      <span className="text-[11px] font-medium">
+                      <span className="text-2xs font-medium">
                         Disconnected
                       </span>
                     </div>

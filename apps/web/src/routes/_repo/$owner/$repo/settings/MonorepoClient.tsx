@@ -7,7 +7,14 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { Badge, Button, CrossfadeIcon, Input, Spinner } from "@eva/ui";
+import {
+  Badge,
+  Button,
+  CrossfadeIcon,
+  Input,
+  RefreshSpinIcon,
+  Spinner,
+} from "@eva/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -17,7 +24,6 @@ import {
   IconCheck,
   IconTerminal2,
   IconAlertCircle,
-  IconRefresh,
   IconEye,
   IconEyeOff,
 } from "@tabler/icons-react";
@@ -125,7 +131,7 @@ export function MonorepoClient() {
           onClick={() => void runDetection()}
           className="motion-press border-border text-muted-foreground"
         >
-          <IconRefresh size={16} className={loading ? "animate-spin" : ""} />
+          <RefreshSpinIcon busy={loading} />
           <span className="max-sm:sr-only">Re-detect</span>
         </Button>
       }
@@ -211,10 +217,7 @@ export function MonorepoClient() {
           </div>
         ) : error ? (
           <div className="flex items-center gap-3 px-4 py-4">
-            <IconAlertCircle
-              size={20}
-              className="shrink-0 text-destructive"
-            />
+            <IconAlertCircle size={20} className="shrink-0 text-destructive" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">
                 Detection failed

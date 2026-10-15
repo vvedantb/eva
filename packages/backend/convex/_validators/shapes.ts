@@ -4,6 +4,7 @@ import {
   auditSeverityValidator,
   findingSeverityValidator,
   fontFamilyValidator,
+  interactionModeValidator,
   letterSpacingValidator,
   logLevelValidator,
   radiusValidator,
@@ -38,6 +39,45 @@ export const turnCheckpointArgs = {
   afterShas: v.optional(v.array(repoShaValidator)),
 };
 
+/**
+ * The durable-turn lease a daemon presents with every completion it posts
+ * while it holds one. Every chat completion receiver accepts these, or a
+ * fenced completion fails validation and the reply is lost.
+ */
+export const turnLeaseFenceArgs = {
+  turnId: v.optional(v.string()),
+  leaseGeneration: v.optional(v.number()),
+};
+
+/** Fields every daemon claim returns, whether or not it hands over a prompt. */
+const daemonClaimDrainFields = {
+  attachmentUrls: v.array(v.string()),
+  stopTaskToolUseIds: v.array(v.string()),
+  cancelRequested: v.boolean(),
+  usageRefreshRequested: v.boolean(),
+  interactionMode: v.optional(interactionModeValidator),
+};
+
+/**
+ * What a chat daemon's `claimPendingTurn` returns on every surface: an empty
+ * claim (drains only, no prompt) or a durable claim that carries the lease.
+ * The empty claim keeps the `legacy` tag so every daemon bundle parses it.
+ */
+export const daemonClaimResultValidator = v.union(
+  v.object({
+    prompt: v.null(),
+    turnLifecycle: v.literal("legacy"),
+    ...daemonClaimDrainFields,
+  }),
+  v.object({
+    prompt: v.string(),
+    turnLifecycle: v.literal("durable"),
+    turnId: v.id("turns"),
+    leaseGeneration: v.number(),
+    ...daemonClaimDrainFields,
+  }),
+);
+
 export const workflowCompleteValidator = v.object({
   success: v.boolean(),
   result: v.union(v.string(), v.null()),
@@ -67,6 +107,18 @@ export const evalIssueValidator = v.object({
   filePaths: v.optional(v.array(v.string())),
   suggestedFix: v.optional(v.string()),
   taskId: v.optional(v.id("agentTasks")),
+});
+
+/**
+ * One browser scenario's outcome in a testing-arena browser run. Title is
+ * copied in so the run stays readable after the scenario is edited or deleted.
+ */
+export const arenaScenarioResultValidator = v.object({
+  scenarioId: v.id("arenaScenarios"),
+  title: v.string(),
+  passed: v.boolean(),
+  notes: v.string(),
+  screenshotStorageId: v.optional(v.id("_storage")),
 });
 
 export const userFlowValidator = v.object({
@@ -125,7 +177,26 @@ export const findingTriageValidator = v.object({
   evaluatedAt: v.number(),
 });
 
-/** One diff hunk Jev judged the prompt did not ask for. */
+/** What a reader sees change; mirrors `_scopeCheck/describe.ts`. */
+export const changeKindValidator = v.union(
+  v.literal("icon"),
+  v.literal("colour"),
+  v.literal("wording"),
+  v.literal("layout"),
+  v.literal("motion"),
+  v.literal("new_element"),
+  v.literal("behaviour"),
+  v.literal("content"),
+  v.literal("internal"),
+);
+
+/**
+ * One diff hunk Jev judged the prompt did not ask for.
+ *
+ * Everything past `necessary` is optional: rows written before the plain-English
+ * pass, and hunks whose extra Jev calls failed, still render from the file and
+ * header alone.
+ */
 export const scopeCheckHunkValidator = v.object({
   /** Repo-relative path of the file the hunk touches. */
   file: v.string(),
@@ -135,6 +206,14 @@ export const scopeCheckHunkValidator = v.object({
   requested: v.number(),
   /** P(the change is required to make a requested change work), 0..1. */
   necessary: v.number(),
+  /** What a user sees change, for grouping and for the visible/invisible split. */
+  kind: v.optional(changeKindValidator),
+  /** Plain-English headline, e.g. `Icon changed (IconAward → IconTrophy)`. */
+  summary: v.optional(v.string()),
+  /** Plain-English screen name, e.g. `Awarded panel`. */
+  surface: v.optional(v.string()),
+  /** P(the assistant's reply told the user about this change), 0..1. */
+  mentioned: v.optional(v.number()),
 });
 
 /**
@@ -189,10 +268,14 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("blurPid"),
   v.literal("voiceDictation"),
   v.literal("composerAutocomplete"),
+  v.literal("composerPredictions"),
   v.literal("simpleView"),
   v.literal("replyChime"),
+  v.literal("notificationBell"),
   v.literal("disablePageMotion"),
   v.literal("viewVercelDeployment"),
+  v.literal("disableAutoArchive"),
+  v.literal("askTeammates"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -201,10 +284,14 @@ export const experimentalFlagsFields = {
   blurPid: v.optional(v.boolean()),
   voiceDictation: v.optional(v.boolean()),
   composerAutocomplete: v.optional(v.boolean()),
+  composerPredictions: v.optional(v.boolean()),
   simpleView: v.optional(v.boolean()),
   replyChime: v.optional(v.boolean()),
+  notificationBell: v.optional(v.boolean()),
   disablePageMotion: v.optional(v.boolean()),
   viewVercelDeployment: v.optional(v.boolean()),
+  disableAutoArchive: v.optional(v.boolean()),
+  askTeammates: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -215,10 +302,14 @@ export const resolvedExperimentalFlagsValidator = v.object({
   blurPid: v.boolean(),
   voiceDictation: v.boolean(),
   composerAutocomplete: v.boolean(),
+  composerPredictions: v.boolean(),
   simpleView: v.boolean(),
   replyChime: v.boolean(),
+  notificationBell: v.boolean(),
   disablePageMotion: v.boolean(),
   viewVercelDeployment: v.boolean(),
+  disableAutoArchive: v.boolean(),
+  askTeammates: v.boolean(),
 });
 
 /**

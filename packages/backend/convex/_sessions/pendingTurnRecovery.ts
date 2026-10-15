@@ -1,3 +1,5 @@
+import type { TurnState } from "../_validators/tableFields";
+
 /**
  * Whether a session is still waiting on a turn no daemon can claim.
  *
@@ -16,6 +18,43 @@ type OpenTurnCandidate = {
   finishedAt?: number;
   isSyntheticTurn?: boolean;
 };
+
+/**
+ * Whether the staged `pendingTurn` still belongs to the turn being staged for.
+ *
+ * `pendingTurn` is the handoff slot for exactly one turn, and only two things
+ * empty it: `claimPendingTurn` when a daemon takes it, and `saveResult` for the
+ * turn whose `requestedAt` it carries. Neither runs when a turn dies before any
+ * daemon claims it, so the slot outlives its turn — and because
+ * {@link isUnclaimedOpenTurn} treated a full slot as "already staged", every
+ * later turn was then refused a prompt. Those turns opened, were never claimed
+ * (`leaseGeneration` 0), and the watchdog stalled each one out ~15 minutes
+ * later, forever: Manager Ave sat on one orphan from 27 Aug and answered
+ * nothing but "Turn stalled" for weeks.
+ *
+ * An orphan is recognisable without a clock: a slot staged for some other turn
+ * can never be claimed against this one.
+ */
+/**
+ * Whether a daemon already claimed this durable turn. The lease is the proof:
+ * a claim moves the turn to `running`, and the daemon's completion moves it on
+ * to `finalizing`. Restaging a claimed turn runs its prompt a second time.
+ */
+export function isTurnClaimed(turn: { state: TurnState } | null): boolean {
+  return turn?.state === "running" || turn?.state === "finalizing";
+}
+
+export function isPendingTurnLive(params: {
+  /** `turnId` of the slot, absent when nothing is staged. */
+  pendingTurn: { turnId?: string } | undefined;
+  /** The session's open durable turn; absent on legacy (pre-durable) sessions. */
+  openTurnId: string | undefined;
+}): boolean {
+  if (params.pendingTurn === undefined) return false;
+  // No durable turn to belong to — the slot is the only record of the turn.
+  if (params.openTurnId === undefined) return true;
+  return params.pendingTurn.turnId === params.openTurnId;
+}
 
 export function isUnclaimedOpenTurn(params: {
   /** Re-staging over a live pendingTurn would run the turn twice. */

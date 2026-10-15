@@ -33,9 +33,11 @@ import {
 import { IconPlayerStop } from "@tabler/icons-react";
 import { useId, type RefObject } from "react";
 import type { Id } from "@eva/backend";
+import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { type SlashItem } from "@/lib/components/mentions";
 import { useComposerCompact } from "@/lib/components/chat/_components/useComposerCompact";
 import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";
+import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 
@@ -59,12 +61,10 @@ interface DataMenuItem {
 }
 
 export function ComposerInputChrome({
-  repoId,
-  repoBasePath,
+  repo,
   mentionRef,
   skillItems,
   plusDataItems,
-  skillsSettingsHref,
   placeholder,
   isExecuting,
   isInputDisabled,
@@ -78,14 +78,13 @@ export function ComposerInputChrome({
   seedSkillMap,
   messageHistory,
   allowEmptySubmit,
+  predictionTarget,
   onDraftChange,
 }: {
-  repoId: Id<"githubRepos">;
-  repoBasePath: string;
+  repo?: ChatRepo;
   mentionRef: RefObject<MentionTextareaHandle | null>;
   skillItems: SlashItem[];
   plusDataItems: DataMenuItem[];
-  skillsSettingsHref: string;
   placeholder: string;
   isExecuting: boolean;
   isInputDisabled: boolean;
@@ -102,6 +101,7 @@ export function ComposerInputChrome({
   seedSkillMap?: Map<string, string>;
   messageHistory: string[];
   allowEmptySubmit?: boolean;
+  predictionTarget?: ComposerPredictionTarget;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
@@ -117,7 +117,7 @@ export function ComposerInputChrome({
     fileCount: attachments.files.length,
   });
 
-  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
+  // Up to five session shells plus Manager Ave stay mounted, so a shortcut
   // registered here fires once per mounted composer. Only the one on screen
   // may act — see composerVisibility.ts.
   const isVisibleComposer = () =>
@@ -253,10 +253,8 @@ export function ComposerInputChrome({
             <MentionTextarea
               key="composer-editor"
               ref={mentionRef}
-              repoBasePath={repoBasePath}
-              repoId={repoId}
+              repo={repo}
               skillItems={skillItems}
-              skillsSettingsHref={skillsSettingsHref}
               placeholder={placeholder}
               initialMentionMap={seedMentionMap}
               initialSkillMap={seedSkillMap}
@@ -264,7 +262,12 @@ export function ComposerInputChrome({
               enableAttachmentPaste
               onBlockedSubmit={handleBlockedSubmit}
               onDraftChange={onDraftChange}
-              completionContext={`a message instructing an AI coding agent working on the repository ${repoBasePath.replace(/^\//, "")}`}
+              predictionTarget={predictionTarget}
+              completionContext={
+                repo
+                  ? `a message instructing an AI coding agent working on the repository ${repo.basePath.replace(/^\//, "")}`
+                  : "a message to Manager Ave, an assistant that runs and watches AI coding agents"
+              }
               className={compact ? COMPACT_EDITOR : EXPANDED_EDITOR}
             />
             {compact ? (

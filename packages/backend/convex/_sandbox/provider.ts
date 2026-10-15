@@ -65,10 +65,32 @@ export interface SandboxLifecycleParams {
   labels?: Record<string, string>;
 }
 
+/**
+ * A persistent named volume to attach at create time, keyed by mount path.
+ *
+ * `read-write` takes an exclusive lock on the volume — at most one sandbox may
+ * hold it. `snapshot` mounts a read-only view frozen at mount time and has no
+ * such limit. Vercel fulfils these with Drives; see `./driveCache.ts` for the
+ * policy that decides which role a sandbox gets.
+ */
+export interface SandboxMount {
+  /** Absolute path to mount at. Must not overlap another mount. */
+  path: string;
+  /** Provider-scoped volume name; created on first use. */
+  volumeName: string;
+  mode: "read-write" | "snapshot";
+}
+
 /** Parameters to create a sandbox, optionally seeded from a snapshot. */
 export interface SandboxCreateParams {
   /** Vercel snapshotId. Omit for a bare sandbox. */
   snapshot?: string;
+  /**
+   * Fork this existing sandbox (by id) instead: the provider restores the new
+   * sandbox from the source's current snapshot ("Fork session"). Takes
+   * precedence over `snapshot` and `image`.
+   */
+  forkFrom?: string;
   /**
    * Vercel Container Registry image to boot from (e.g. the managed
    * `vercel/sandbox/universal:latest`). Ignored when `snapshot` is set — a
@@ -82,6 +104,12 @@ export interface SandboxCreateParams {
   ports?: number[];
   /** Override the create-ready wait; large seeded snapshots need longer. */
   readyTimeoutSeconds?: number;
+  /**
+   * Persistent volumes to attach. Best-effort by contract: a provider that
+   * cannot honour a mount MUST create the sandbox without it rather than fail,
+   * because the caller's fallback is a cold cache, not an error.
+   */
+  mounts?: SandboxMount[];
 }
 
 /** Narrowed view of a snapshot record. */

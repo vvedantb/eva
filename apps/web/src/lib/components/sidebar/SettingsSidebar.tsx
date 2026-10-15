@@ -52,6 +52,11 @@ export function SettingsSidebar({
           href: `${baseUrl}/env-variables/repo`,
           icon: IconKey,
         },
+        {
+          name: "Connections",
+          href: "/settings/connections",
+          icon: IconPlug,
+        },
         { name: "Snapshots", href: `${baseUrl}/snapshots`, icon: IconCamera },
       ],
     },

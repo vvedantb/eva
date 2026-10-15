@@ -34,18 +34,23 @@ function componentFiles(): string[] {
  * and nothing else; a live turn shows the pixel grid the session rows use.
  */
 describe("a working agent marks the card without moving it", () => {
-  it("agent activity is read from either live workflow", () => {
-    const startAt = activitySource.indexOf("export function isTaskAgentActive");
-    expect(startAt, "isTaskAgentActive moved or was renamed").toBeGreaterThan(
+  /**
+   * A synthetic turn (a daemon-minted continuation) never sets
+   * `activeChatWorkflowId`, so a card keyed off that field showed the task as
+   * idle while eva worked on it. The open durable turn is the answer now: list rows carry
+   * it from the server as `isExecuting`, and a single task reads its status.
+   */
+  it("agent activity is the one sandbox-busy status, not a workflow id", () => {
+    const startAt = activitySource.indexOf(
+      "export function useTaskAgentActive",
+    );
+    expect(startAt, "useTaskAgentActive moved or was renamed").toBeGreaterThan(
       -1,
     );
-    // A chat turn and a main run are separate ids; either one means live.
-    expect(activitySource).toContain("task.activeChatWorkflowId !== undefined");
-    expect(activitySource).toContain("task.activeWorkflowId !== undefined");
-    expect(
-      activitySource,
-      "one missing id is one surface that stops marking",
-    ).toContain("||");
+    // A main run and a chat turn share one sandbox; either one means live.
+    expect(activitySource).toContain("task?.activeWorkflowId !== undefined");
+    expect(activitySource).toContain("useChatTurnOpen(taskId)");
+    expect(activitySource).not.toContain("activeChatWorkflowId");
   });
 
   it("the beam is the in-progress column, not the live workflow", () => {
@@ -76,6 +81,24 @@ describe("a working agent marks the card without moving it", () => {
     expect(cardSource).toContain("showAgentPulse ? (");
   });
 
+  /**
+   * The grid and the sandbox dot were two independent siblings, so a live turn
+   * on an awake sandbox drew both — one mark saying "working" beside one saying
+   * "awake", for a single fact. The grid wins, exactly as it does on the
+   * session rows and the sandbox surface tabs.
+   */
+  it("the grid replaces the sandbox dot rather than joining it", () => {
+    expect(
+      cardSource,
+      "the dot must be the else branch of the grid, not a sibling",
+      // The else branch may add conditions (e.g. `showsSandboxStatusDot`).
+    ).toMatch(/\)\s*:\s*sandboxStatus\b[^?]*\?\s*\(/);
+    expect(
+      cardSource,
+      "a standalone dot branch renders both marks at once again",
+    ).not.toContain("{sandboxStatus ? (");
+  });
+
   it("the beam and the grid are the only things these drive", () => {
     expect(cardSource.indexOf("<BorderBeam"), "the beam moved").toBeGreaterThan(
       -1,
@@ -102,7 +125,8 @@ describe("a working agent marks the card without moving it", () => {
       let at = source.indexOf("<QuickTaskCard");
       while (at > -1) {
         const props = source.slice(at, source.indexOf("/>", at));
-        if (props.includes("isAgentActive={isTaskAgentActive(")) wired.push(path);
+        if (props.includes("isAgentActive={task.isExecuting}"))
+          wired.push(path);
         else bare.push(`${path}:${at}`);
         at = source.indexOf("<QuickTaskCard", at + 1);
       }
@@ -112,8 +136,9 @@ describe("a working agent marks the card without moving it", () => {
       wired.length + bare.length,
       "the card moved or was renamed",
     ).toBeGreaterThan(3);
-    expect(bare, "pass isAgentActive so the card marks while eva works").toEqual(
-      [],
-    );
+    expect(
+      bare,
+      "pass isAgentActive so the card marks while eva works",
+    ).toEqual([]);
   });
 });

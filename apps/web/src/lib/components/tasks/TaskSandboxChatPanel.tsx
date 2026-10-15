@@ -15,11 +15,14 @@ import {
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { toast } from "@eva/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
-import { ChatBody } from "@/lib/components/chat/ChatBody";
+import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
+import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
+import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
   readableSendError,
+  sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
 import {
@@ -29,6 +32,7 @@ import {
   taskRunStreamingEntityId,
 } from "@/lib/components/tasks/firstRunChatTurn";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
+import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
@@ -43,6 +47,8 @@ interface TaskSandboxChatPanelProps {
   taskId: Id<"agentTasks">;
   isSandboxActive: boolean;
   isSandboxToggling?: boolean;
+  /** Startup steps while the preview sandbox wakes; undefined otherwise. */
+  sandboxStartupActivity?: string;
   /** Opens the Files tab and loads this sandbox path in the file viewer. */
   onOpenFile?: (path: string) => void;
   /** Opens Review diffs; optional repo-relative path scrolls to that file. */
@@ -56,6 +62,7 @@ export function TaskSandboxChatPanel({
   taskId,
   isSandboxActive,
   isSandboxToggling = false,
+  sandboxStartupActivity,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -63,6 +70,7 @@ export function TaskSandboxChatPanel({
 }: TaskSandboxChatPanelProps) {
   const { repo, basePath } = useRepo();
   const task = useQuery(api.agentTasks.get, { id: taskId });
+  const chatTurnOpen = useChatTurnOpen(taskId);
   const messages = useQuery(api.messages.listByParent, { parentId: taskId });
   const queuedMessages = useQuery(api.queuedMessages.listByParent, {
     parentId: taskId,
@@ -102,6 +110,15 @@ export function TaskSandboxChatPanel({
       ? { taskId }
       : "skip",
   );
+  // Screenshots and recordings the run left behind, uploaded by the sandbox as
+  // it finished. Only resolved when the run says it has some, so a text-only
+  // run costs no extra query.
+  const firstRunMedia = useQuery(
+    api.agentRuns.getMedia,
+    firstRun && (firstRun.mediaStorageIds?.length ?? 0) > 0
+      ? { id: firstRun._id }
+      : "skip",
+  );
   const firstRunTurn =
     task &&
     firstRun &&
@@ -113,6 +130,7 @@ export function TaskSandboxChatPanel({
           ...(taskAttachments !== undefined
             ? { attachments: taskAttachments }
             : {}),
+          ...(firstRunMedia !== undefined ? { media: firstRunMedia } : {}),
         })
       : [];
 
@@ -214,36 +232,91 @@ export function TaskSandboxChatPanel({
     });
   };
 
-  const setProviderAccountId = (next: string | null) => {
+  const setProviderAccountId = async (next: string | null) => {
     if (!isOwner || !task) return;
-    switchProviderAccount(resolveAccountId(next) ?? null);
+    await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
-  // Server flag first; the message-shape fallback is the shared helper so a
-  // finished-but-empty bubble or a trailing system alert cannot pin the
-  // composer in "working" mode (same rule as useSessionSend). The first run
-  // counts too: its bubble is on screen here, so the composer shows Working
-  // and Stop for it like any other turn.
+  // The open durable turn is canonical, synthetic turns included; message
+  // shape only covers the first render while it loads (same rule as
+  // useChatSend). The first run counts too: its bubble is on screen here,
+  // so the composer shows Working and Stop for it like any other turn.
   const isExecuting =
     isFirstRunInProgress ||
-    Boolean(task?.activeChatWorkflowId) ||
-    isAssistantTurnInProgress(messages ?? []);
+    (chatTurnOpen ?? isAssistantTurnInProgress(messages ?? []));
+
+  const queueGate = useChatQueueGate({
+    parentId: taskId,
+    messages: messages ?? [],
+    queuedMessages: queuedMessages ?? [],
+    model,
+    accountId: providerAccountId,
+    accounts,
+    resolveAccountId,
+    isSandboxActive,
+    setModel,
+    setAccount: setProviderAccountId,
+  });
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
+  });
+
+  // A thrown send rolls the whole turn back (no placeholder, no workflow) and
+  // the composer has already cleared, so the prompt only exists here. The toast
+  // owns the failure and hands the text back through the same `drafts` row the
+  // composer reads (same contract as useChatSend).
+  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
+    toast.error("Couldn't send your message", {
+      id: "task-chat-send",
+      description: readableSendError(errorMessage),
+      action: {
+        label: "Restore draft",
+        onClick: () => {
+          void setDraft({
+            target: { kind: "taskChat", taskId },
+            content: draftContent,
+          });
+        },
+      },
+    });
+  };
 
   const handleSend = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
+    options?: ChatSendOptions,
   ) => {
-    if (isExecuting) {
-      await enqueueMessage({
-        taskId,
-        message: content,
-        model,
-        ...executionTraits,
-        reasoningLevel:
-          displayTraits.effortLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: resolveAccountId(providerAccountId),
-        attachmentStorageIds,
-      });
+    // What the user typed. A ChatBody send has already appended its citation /
+    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
+    // re-edit, so the restore has to use the pre-append text.
+    const draftContent = options?.draftContent ?? content;
+    // Hoisted out of the `try`: React Compiler bails on the whole file when it
+    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    const enqueueReasoningLevel =
+      displayTraits.effortLevel ?? executionTraits.reasoningLevel;
+    if (isExecuting || composer.queuesSends) {
+      try {
+        await enqueueMessage({
+          taskId,
+          message: content,
+          model,
+          ...executionTraits,
+          reasoningLevel: enqueueReasoningLevel,
+          providerAccountId: resolveAccountId(providerAccountId),
+          attachmentStorageIds,
+        });
+      } catch (error) {
+        raiseSendFailure(
+          error instanceof Error ? error.message : "",
+          draftContent,
+        );
+        // Rethrow: the caller tells a delivered send from a failed one by
+        // whether this settles, and keeps its pending chips on a failure.
+        throw error;
+      }
       return;
     }
     const accountId = resolveAccountId(providerAccountId);
@@ -264,23 +337,13 @@ export function TaskSandboxChatPanel({
         providerAccountId: accountId,
       });
     } catch (error) {
-      // A thrown startExecute rolls the whole turn back (no placeholder, no
-      // workflow) and the composer has already cleared, so the prompt only
-      // exists here. The toast owns the failure and hands the text back through
-      // the same `drafts` row the composer reads (same contract as
-      // useSessionSend).
-      toast.error("Couldn't send your message", {
-        id: "task-chat-send",
-        description: readableSendError(
-          error instanceof Error ? error.message : "",
-        ),
-        action: {
-          label: "Restore draft",
-          onClick: () => {
-            void setDraft({ target: { kind: "taskChat", taskId }, content });
-          },
-        },
-      });
+      raiseSendFailure(
+        error instanceof Error ? error.message : "",
+        draftContent,
+      );
+      // Rethrow: the caller tells a delivered send from a failed one by whether
+      // this settles, and keeps its pending chips on a failure.
+      throw error;
     }
   };
 
@@ -299,7 +362,6 @@ export function TaskSandboxChatPanel({
     isExecuting,
     isReadOnly: false,
     // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
-    compactionReadOnly: !isSandboxActive,
     backgroundAgents: task?.backgroundAgents,
     // Owner-only, like the account picker: task chat is owner-sticky.
     usageLimitRecovery:
@@ -315,9 +377,6 @@ export function TaskSandboxChatPanel({
         : undefined,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
-    onSendCommand: (command) => {
-      void handleSend(command);
-    },
   };
 
   return (
@@ -329,13 +388,13 @@ export function TaskSandboxChatPanel({
         usageAccountLabel={usageAccountLabel}
       />
       <ChatBody
-        repoId={repo._id}
-        repoBasePath={basePath}
+        repo={{ id: repo._id, basePath }}
         conversationId={taskId}
         chatParentId={taskId}
         messages={[...firstRunTurn, ...(messages ?? [])]}
         isLoadingMessages={messages === undefined}
         queuedMessages={queuedMessages ?? []}
+        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={
           isFirstRunInProgress
             ? firstRunStreaming?.currentActivity
@@ -354,14 +413,8 @@ export function TaskSandboxChatPanel({
         blockingQuestion={activeQuestion ?? undefined}
         onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
         isExecuting={isExecuting}
-        isInputDisabled={!isSandboxActive || isSwitchingAccount}
-        placeholder={
-          !isSandboxActive
-            ? SANDBOX_CHAT_COPY.asleepPlaceholder
-            : isSwitchingAccount
-              ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-              : SANDBOX_CHAT_COPY.activePlaceholder
-        }
+        isInputDisabled={composer.isInputDisabled}
+        placeholder={composer.placeholder}
         emptyStateTitle={
           isSandboxActive
             ? "Ask Eva anything about this task's running sandbox."
@@ -372,26 +425,22 @@ export function TaskSandboxChatPanel({
             ? SANDBOX_CHAT_COPY.activeDescription
             : SANDBOX_CHAT_COPY.asleepDescription
         }
-        disabledReason={
-          isFirstRunInProgress
-            ? SANDBOX_CHAT_COPY.firstRunDisabledReason
-            : isSwitchingAccount
-              ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-              : SANDBOX_CHAT_COPY.asleepDisabledReason
-        }
+        disabledReason={composer.disabledReason}
         onStartSandbox={
           !isSandboxActive && !isSandboxToggling && onSandboxToggle
             ? () => onSandboxToggle("start")
             : undefined
         }
-        model={model}
-        setModel={setModel}
-        modelOptions={modelOptions}
-        accounts={accounts}
-        accountId={providerAccountId}
-        onAccountChange={setProviderAccountId}
-        displayTraits={displayTraits}
-        onTraitsChange={onTraitsChange}
+        modelPicker={{
+          model,
+          setModel: queueGate.setModel,
+          modelOptions,
+          accounts,
+          accountId: providerAccountId,
+          onAccountChange: queueGate.setAccount,
+          displayTraits,
+          onTraitsChange,
+        }}
         onSend={handleSend}
         onCancel={handleCancel}
         preInputContent={<SandboxChatPreInput surface={chatSurface} />}
@@ -408,7 +457,14 @@ export function TaskSandboxChatPanel({
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={task?.backgroundAgents}
         sandboxRunning={isSandboxActive}
+        transcriptTail={sandboxStartupTail(
+          sandboxStartupActivity,
+          sandboxStartupActivity !== undefined &&
+            !isSandboxActive &&
+            !isExecuting,
+        )}
       />
+      {queueGate.switchDialog}
     </div>
   );
 }

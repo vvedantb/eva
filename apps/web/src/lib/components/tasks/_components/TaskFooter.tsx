@@ -15,12 +15,12 @@ import {
   DropdownMenuSeparator,
   motionFast,
   CrossfadeIconSlot,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
   IconPlayerPlay,
-  IconLoader2,
   IconChevronDown,
   IconCalendarClock,
   IconDots,
@@ -43,8 +43,11 @@ type RunDoc = NonNullable<
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
+  /** Main run or chat turn: `useTaskAgentActive`. */
+  isAgentActive: boolean;
   status: TaskStatus | undefined;
   hasActiveRun: boolean;
+  hasRuns: boolean;
   latestPrUrl: string | undefined;
   latestPrError: string | undefined;
   latestDeployment: RunDoc | undefined;
@@ -73,8 +76,10 @@ interface TaskFooterProps {
 export function TaskFooter({
   taskId,
   task,
+  isAgentActive,
   status,
   hasActiveRun,
+  hasRuns,
   latestPrUrl,
   latestPrError,
   latestDeployment,
@@ -103,19 +108,22 @@ export function TaskFooter({
   const isHeader = variant === "header";
   const buttonSize = isHeader ? "sm" : "default";
   const iconSize = isHeader ? 16 : 18;
+  // `todo` only offers a first run; once it has run, the sandbox toggle takes
+  // its place (`canStartSandbox` covers that case).
   const showRunButton =
     !task?.projectId &&
-    (status === "todo" || (status === "in_progress" && !hasActiveRun));
+    ((status === "todo" && !hasRuns) ||
+      (status === "in_progress" && !hasActiveRun));
   // One control for both directions, on every surface: the sandbox chat header
   // no longer carries a start/stop pair, so a header that only knew how to stop
   // left a slept sandbox with no way back. Held open through both transitions
   // rather than popping out, so the row does not jump while it wakes or sleeps.
   const showSandboxToggle = isSandboxActive || canStartSandbox;
-  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the chat
-  // turn only, not `hasActiveRun`: that also counts *queued* runs, and a task
-  // waiting in the queue is no reason to refuse to sleep it. A main run has its
-  // own confirmed Stop; blocking this during one is a separate call.
-  const sleepBlockedMidTurn = Boolean(task?.activeChatWorkflowId);
+  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the one
+  // "sandbox busy" status (main run or chat turn, synthetic turns included),
+  // not `hasActiveRun`: that also counts *queued* runs, and a task waiting in
+  // the queue is no reason to refuse to sleep it.
+  const sleepBlockedMidTurn = isAgentActive;
   // Simple view hides the git/sandbox plumbing: conflict resolution and the
   // startup/dev/background command runners. The footer menu then has nothing
   // left and drops out entirely; the header menu stays for Copy link.
@@ -136,6 +144,7 @@ export function TaskFooter({
       onCreate: onCreatePr,
     },
     prUrl: latestPrUrl,
+    owner: { kind: "task", taskId },
     hasDeployment: Boolean(latestDeployment?.deploymentStatus),
   });
   const showMoreMenu =
@@ -236,7 +245,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -254,7 +263,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -269,7 +278,7 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -283,7 +292,7 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <IconLoader2 size={14} className="animate-spin" />
+                      <CircleSpinner size="sm" className="size-3.5" />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -381,7 +390,10 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <IconLoader2 size={iconSize} className="animate-spin" />
+                  <CircleSpinner
+                    size="sm"
+                    style={{ width: iconSize, height: iconSize }}
+                  />
                 ) : isScheduled ? (
                   <IconCalendarClock size={iconSize} />
                 ) : (

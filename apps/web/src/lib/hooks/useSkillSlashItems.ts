@@ -59,19 +59,23 @@ export function selectRepoSkillsForProvider<TSkill extends RepoSkillCandidate>(
 }
 
 export function useSkillSlashItems(
-  repoId: Id<"githubRepos">,
+  /** Undefined (Manager Ave, no codebase): the `/` menu is empty. */
+  repoId: Id<"githubRepos"> | undefined,
   provider?: AIProvider,
 ): SlashItem[] {
-  const repoSkills = useQuery(api.repoSkills.listByRepo, { repoId }) ?? [];
+  const repoSkills =
+    useQuery(api.repoSkills.listByRepo, repoId ? { repoId } : "skip") ?? [];
   const systemSkills =
-    useQuery(api.repoSystemSkills.listForRepo, { repoId }) ?? [];
+    useQuery(api.repoSystemSkills.listForRepo, repoId ? { repoId } : "skip") ??
+    [];
   const catalogProvider = harnessCatalogProvider(provider);
   // The harness's own catalog, reported by the sandboxes that run it. Global,
   // so it is keyed by provider rather than repo.
   const harnessCatalog = useQuery(
     api.harnessSkills.getForProvider,
-    catalogProvider ? { provider: catalogProvider } : "skip",
+    catalogProvider && repoId ? { provider: catalogProvider } : "skip",
   );
+  if (repoId === undefined) return [];
 
   const selectedRepoSkills = selectRepoSkillsForProvider(repoSkills, provider);
   const repoItems: SlashItem[] = selectedRepoSkills.map((skill) => ({

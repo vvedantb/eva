@@ -11,6 +11,7 @@ import type { z } from "zod";
 import type { booleanQuestion } from "../_jev/schema";
 import type { scopeCheckValidator } from "../_validators/shapes";
 import type { Infer } from "convex/values";
+import type { ChangeKind } from "./describe";
 import { clipToLineBoundary, type DiffHunk } from "./hunks";
 
 /** One Jev call per hunk, so a 400-hunk turn does not bill like one. */
@@ -21,6 +22,8 @@ export const SCOPE_BATCH_SIZE = 6;
 export const MAX_FLAGGED_HUNKS = 20;
 /** Flagged when Jev leans "not asked for" on both questions. */
 export const FLAG_THRESHOLD = 0.5;
+/** Below this, the reply did not tell the user about the change. */
+export const MENTION_THRESHOLD = 0.5;
 /**
  * Whole-diff state budget. Well under Jev's 200k-character schema cap: the
  * gateway answered a 41k-character state (16.7k input tokens) but returned 503
@@ -81,6 +84,12 @@ export interface JudgedHunk {
   requested: number;
   /** P(the change is required to make a requested change work). */
   necessary: number;
+  /** What a user sees change, when Jev returned a kind it recognises. */
+  kind?: ChangeKind;
+  /** Plain-English headline, e.g. `Icon changed (IconAward → IconTrophy)`. */
+  summary?: string;
+  /** Plain-English screen name, e.g. `Awarded panel`. */
+  surface?: string;
 }
 
 /**
@@ -89,6 +98,23 @@ export interface JudgedHunk {
  */
 export function isFlagged(hunk: JudgedHunk): boolean {
   return hunk.requested < FLAG_THRESHOLD && hunk.necessary < FLAG_THRESHOLD;
+}
+
+/**
+ * The flagged hunks in stored order, worst first and capped. Shared so the
+ * mention pass asks about exactly the hunks the chip will show, and no more —
+ * each one is a Jev call.
+ */
+export function selectFlagged(judged: readonly JudgedHunk[]): JudgedHunk[] {
+  return judged
+    .filter(isFlagged)
+    .toSorted((left, right) => left.requested - right.requested)
+    .slice(0, MAX_FLAGGED_HUNKS);
+}
+
+/** Identifies a hunk across the judging passes; headers carry line numbers. */
+export function hunkKey(hunk: { file: string; header: string }): string {
+  return `${hunk.file} ${hunk.header}`;
 }
 
 export function clipPrompt(prompt: string): string {
@@ -132,17 +158,26 @@ export function summariseScopeCheck(args: {
   totalHunks: number;
   diffTruncated: boolean;
   evaluatedAt: number;
+  /** P(the reply mentioned it) per {@link hunkKey}; absent when that call failed. */
+  mentioned?: ReadonlyMap<string, number>;
 }): ScopeCheck {
-  const flagged = args.judged
-    .filter(isFlagged)
-    .toSorted((left, right) => left.requested - right.requested)
-    .slice(0, MAX_FLAGGED_HUNKS)
-    .map((hunk) => ({
+  const mentioned = args.mentioned ?? new Map<string, number>();
+  const flagged = selectFlagged(args.judged).map((hunk) => {
+    const row: ScopeCheck["flagged"][number] = {
       file: hunk.file,
       header: hunk.header,
       requested: hunk.requested,
       necessary: hunk.necessary,
-    }));
+    };
+    if (hunk.kind !== undefined) row.kind = hunk.kind;
+    if (hunk.summary !== undefined) row.summary = hunk.summary;
+    if (hunk.surface !== undefined) row.surface = hunk.surface;
+    // Left off rather than defaulted: "Jev could not tell us" and "the reply
+    // said nothing" would otherwise read identically on the chip.
+    const mention = mentioned.get(hunkKey(hunk));
+    if (mention !== undefined) row.mentioned = mention;
+    return row;
+  });
 
   const worstHunk = args.judged.reduce(
     (worst, hunk) => Math.max(worst, 1 - hunk.requested),

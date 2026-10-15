@@ -58,6 +58,10 @@ export function useBranches(
     }
   };
 
+  /* eslint-disable no-effect/no-derived-state, no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler --
+     GitHub branches come from a Convex *action*, which has no live query to
+     derive from: fetching imperatively and mirroring the result (plus the
+     module-level cache) into state is the only shape available here. */
   useEffect(() => {
     if (!enabled) return;
 
@@ -71,6 +75,7 @@ export function useBranches(
     setIsLoading(true);
     load().finally(() => setIsLoading(false));
   }, [load, enabled, cacheKey]);
+  /* eslint-enable no-effect/no-derived-state, no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler */
 
   const refresh = async () => {
     setIsValidating(true);

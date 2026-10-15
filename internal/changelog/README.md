@@ -6,6 +6,7 @@ New entries go at the **top** of the current month's file, directly under its `#
 
 Entry format: `## <Title> - <YYYY-MM-DD>` followed by bullets describing what changed and why.
 
+- [2026-10.md](2026-10.md)
 - [2026-09.md](2026-09.md)
 - [2026-08.md](2026-08.md)
 - [2026-07.md](2026-07.md)

@@ -1,13 +1,14 @@
 "use client";
 
+import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { useRef, useState } from "react";
 import {
   Badge,
   Button,
   cn,
-  MessageResponse,
   motionBase,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -22,7 +23,6 @@ import { MarkdownEditor } from "@/lib/components/editor/MarkdownEditor";
 import {
   buildCollapsedProposedPlanPreviewMarkdown,
   buildProposedPlanMarkdownFilename,
-  downloadPlanAsMarkdownFile,
   normalizePlanMarkdownForExport,
   proposedPlanTitle,
   stripDisplayedPlanMarkdown,
@@ -75,7 +75,7 @@ export function ProposedPlanCard({
   };
 
   const handleDownload = () => {
-    downloadPlanAsMarkdownFile(
+    downloadMarkdownFile(
       buildProposedPlanMarkdownFilename(planMarkdown),
       exportContents,
     );
@@ -118,7 +118,7 @@ export function ProposedPlanCard({
         <div className="flex min-w-0 items-center gap-2">
           <Badge
             variant="secondary"
-            className="shrink-0 rounded-md px-1.5 py-0 text-[10px] font-semibold tracking-wide uppercase"
+            className="shrink-0 rounded-md px-1.5 py-0 text-3xs font-semibold tracking-wide uppercase"
           >
             {implemented ? "Implemented" : "Plan"}
           </Badge>
@@ -171,9 +171,9 @@ export function ProposedPlanCard({
                   canCollapse && !expanded && "max-h-64 overflow-hidden",
                 )}
               >
-                <MessageResponse className="prose prose-sm dark:prose-invert max-w-none">
+                <Markdown className="text-sm">
                   {canCollapse && !expanded ? (collapsedPreview ?? "") : displayed}
-                </MessageResponse>
+                </Markdown>
               </div>
               {canCollapse && !expanded ? (
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-card via-card/80 to-transparent" />

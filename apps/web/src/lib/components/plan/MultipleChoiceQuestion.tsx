@@ -9,6 +9,7 @@ import {
   Input,
   LIST_ROW_CONTROL_CLASS,
   motionBase,
+  CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -16,7 +17,6 @@ import {
   IconPencil,
   IconArrowRight,
   IconArrowLeft,
-  IconLoader2,
 } from "@tabler/icons-react";
 
 /**
@@ -185,13 +185,13 @@ export function MultipleChoiceQuestion({
               {q.header && (
                 <Badge
                   variant="secondary"
-                  className="text-[10px] font-semibold"
+                  className="text-3xs font-semibold"
                 >
                   {q.header}
                 </Badge>
               )}
               {isMultiStep && (
-                <span className="text-[11px] text-muted-foreground font-medium">
+                <span className="text-2xs text-muted-foreground font-medium">
                   {currentStep + 1}/{totalSteps}
                 </span>
               )}
@@ -226,7 +226,7 @@ export function MultipleChoiceQuestion({
                     <span
                       className={`
                     w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5
-                    text-[11px] font-bold tracking-wide transition-[background-color,border-color,box-shadow] duration-[var(--motion-fast)]
+                    text-2xs font-bold tracking-wide transition-[background-color,border-color,box-shadow] duration-[var(--motion-fast)]
                     ${
                       isSelected
                         ? "bg-primary text-primary-foreground"
@@ -346,9 +346,7 @@ export function MultipleChoiceQuestion({
           onClick={handleNext}
           disabled={!currentHasAnswer || isLoading}
         >
-          {isLoading ? (
-            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
+          {isLoading ? <CircleSpinner size="sm" className="mr-2" /> : null}
           {isLastStep ? "Submit" : "Next"}
           {!isLoading && (
             <IconArrowRight size={15} strokeWidth={2.5} className="ml-1" />

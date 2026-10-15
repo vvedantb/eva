@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  CircleSpinner,
 } from "@eva/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -24,7 +25,6 @@ import {
   IconSun,
   IconMoon,
   IconCircleHalf,
-  IconLoader2,
 } from "@tabler/icons-react";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
@@ -176,9 +176,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
               onClick={() => void handleSignOut()}
               disabled={isSigningOut}
             >
-              {isSigningOut && (
-                <IconLoader2 size={16} className="animate-spin" />
-              )}
+              {isSigningOut && <CircleSpinner size="sm" />}
               Sign out
             </Button>
           </DialogFooter>

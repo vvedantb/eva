@@ -5,22 +5,100 @@ import {
   ENTITY_KINDS,
   entityAccess,
   entityPath,
+  entityPreviewPath,
   entityRefArgs,
   entitySummary,
   repoRefArgs,
+  withSelfDefault,
+  type EntityLocation,
+  type EntityTarget,
 } from "./entityRef";
 import {
   errorResult,
   mcpGetContext,
   mcpListUserRepos,
+  queueParentId,
   textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
+import { previewWakePath } from "@eva/shared";
+
+/** Port the Preview pane falls back to when nothing recorded a dev port. */
+const DEFAULT_PREVIEW_PORT = 3000;
+
+/**
+ * Turns a live preview URL into one that is safe to hand a person: the grant
+ * param is a five-minute bearer token, so it must never be persisted or shared
+ * (same rule the web app's "open in new tab" follows). Without it the proxy
+ * bounces the opener through Eva sign-in and back.
+ *
+ * `path` replaces the route while keeping any query the proxy put there.
+ */
+function shareablePreviewUrl(rawUrl: string, path?: string): string {
+  const url = new URL(rawUrl);
+  url.searchParams.delete(PREVIEW_GRANT_PARAM);
+  if (path !== undefined && path.trim().length > 0) {
+    const trimmed = path.trim();
+    const target = new URL(
+      trimmed.startsWith("/") ? trimmed : `/${trimmed}`,
+      url.origin,
+    );
+    url.pathname = target.pathname;
+    url.hash = target.hash;
+    for (const [key, value] of target.searchParams) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
+}
+
+/**
+ * The permanent Eva page for a chat's Preview tab, for a caller who would
+ * rather open it in Eva than hit the sandbox directly. Omitted rather than
+ * thrown when the chat has no number yet or the deployment has no web app
+ * configured — a missing second link must not cost the caller the first one.
+ */
+function evaPreviewUrl(location: EntityLocation): { evaUrl?: string } {
+  const previewPath = entityPreviewPath(location);
+  if (previewPath === undefined) return {};
+  try {
+    return { evaUrl: `${getEvaBaseUrl()}${previewPath}` };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The stable wake link (`/p/<kind>/<id>`), only while idle pause is fully on:
+ * it wakes a paused sandbox on open, so it is the right thing to hand a person
+ * once sandboxes can pause underneath them. Undefined otherwise, so the tool's
+ * output is unchanged when the setting is off.
+ */
+function wakePreviewUrl(
+  target: EntityTarget,
+  mode: string,
+  path: string | undefined,
+): string | undefined {
+  if (mode !== "on") return undefined;
+  try {
+    return `${getEvaBaseUrl()}${previewWakePath({
+      kind: target.kind,
+      id: target.targetId,
+      port: target.devPort,
+      path,
+    })}`;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Tools that inspect and operate the chats a caller already has: what exists,
- * whether its preview VM is up, and what is still waiting in its queue.
+ * whether its preview VM is up, where that VM is serving the app, and what is
+ * still waiting in its queue.
  *
  * Deliberately absent: anything that patches a session, task or project's
  * status or review state. Those stay a person's call, so an agent can drive a
@@ -46,7 +124,7 @@ export function entityTools(
       name: "list_entities",
       description: `List the Eva sessions, quick tasks and projects you can reach, most recently updated first. Use it to find something that already exists — and to avoid creating a second copy of work that is already in flight.
 
-Each row carries the Convex "id" and "numId" that send_chat_message, start_sandbox and cancel_queued_message accept, plus "status", "sandboxStatus", "isExecuting" and "prUrl" so you can tell what is safe to merge, retry or leave alone.
+Each row carries the Convex "id" and "numId" that send_chat_message, start_sandbox and cancel_queued_message accept, plus "status", "sandboxStatus", "isExecuting" and "prUrl" so you can tell what is safe to merge, retry or leave alone. A session, quick task or project can hold several pull requests: "prUrl" is its main one, and "prUrls" lists every one when there is more than one. Any of them works as "prUrl" in send_chat_message.
 
 Only entities you could already open in Eva are returned. The page is capped; "truncated" is true when more matched than fit. Listing is per repo, so a project's child task that has no repo of its own is not listed — reach it by id instead.`,
       mutating: false,
@@ -105,6 +183,8 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           isExecuting: entity.isExecuting,
           archived: entity.archived,
           prUrl: entity.prUrl,
+          // Only when the entity holds more than one PR.
+          ...(entity.prUrls ? { prUrls: entity.prUrls } : {}),
           branch: entity.branchName,
           updatedAt: entity.updatedAt,
           repo: `${entity.repoOwner}/${entity.repoName}`,
@@ -133,7 +213,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
       name: "start_sandbox",
       description: `Start the preview sandbox for a session, quick task or project — the same Start button the Eva UI has. Returns only once the VM is genuinely active, or fails saying why; it never leaves you guessing at "resuming sandbox".
 
-Already-active sandboxes are left alone. Each surface has its own gate: a quick task must be in code_review, business_review or done, and a project must be in in_progress, business_review or code_review, before a preview sandbox will start.`,
+Already-active sandboxes are left alone. Each surface has its own gate: a quick task must be in code_review, business_review or done (or in todo after it has already run), and a project must be in in_progress, business_review or code_review, before a preview sandbox will start.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -179,6 +259,102 @@ If a turn is in flight this is REJECTED rather than killing that turn: wait for 
           ...entitySummary(target),
           sandboxStatus: result.sandboxStatus,
           stopped: result.stopRequested,
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // get_preview_url
+  // ───────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "get_preview_url",
+      description: `The live web address of a chat's running app — the same thing the Preview tab shows. Call this whenever the user asks for "the link", "the preview", "the URL" or wants to open what you just built; do not tell them no link exists until this has said so.
+
+Name no chat and it answers for the one you are running in. "path" points the link at a route you built, e.g. "/demo/referral-portal".
+
+The returned "previewUrl" opens the app and requires an Eva login — it is for the user and their team, not a public address. When idle pause is on it is a stable Eva link that wakes a paused sandbox on open; otherwise it is served straight from the sandbox and only works while that sandbox is running. "rawPreviewUrl" is always the sandbox's own address (null while the sandbox is not running). "evaUrl" is the permanent Eva page holding the same preview. When the sandbox is not running and idle pause is off there is no previewUrl: "sandboxStatus" says so, and start_sandbox brings it up. A "ready" of false means the dev server is not answering yet (a cold compile takes 1-2 minutes) — wait and call again.`,
+      mutating: false,
+      input: {
+        ...entityRefArgs,
+        path: z
+          .string()
+          .optional()
+          .describe(
+            'Route to open, e.g. "/demo/referral-portal". Defaults to the app root.',
+          ),
+      },
+      handler: async ({ path, ...ref }) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const chatRef = withSelfDefault(ref, credentials);
+        const resolved = await resolveEntityTarget(chatRef, userId);
+        if ("isError" in resolved) return resolved;
+        const { target } = resolved;
+
+        const idlePause = await ctx.runQuery(
+          internal.sandboxIdlePause.getSettingsInternal,
+          {},
+        );
+        const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);
+        const summary = {
+          ...entitySummary(target),
+          sandboxStatus: target.sandboxStatus,
+          ...evaPreviewUrl(target),
+        };
+
+        if (
+          target.sandboxId === undefined ||
+          target.sandboxStatus !== "active"
+        ) {
+          return textResult({
+            ...summary,
+            previewUrl: wakeUrl ?? null,
+            rawPreviewUrl: null,
+            ready: false,
+            note:
+              wakeUrl !== undefined
+                ? `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Opening previewUrl wakes it and waits for the dev server; start_sandbox does the same without a browser.`
+                : `This ${target.kind}'s sandbox is "${target.sandboxStatus}", so nothing is being served. Call start_sandbox and try again.`,
+          });
+        }
+
+        const preview = await ctx.runAction(
+          internal.sandbox.previewUrlForAuthorizedSandbox,
+          {
+            clerkUserId,
+            sandboxId: target.sandboxId,
+            repoId: target.repoId,
+            port: target.devPort ?? DEFAULT_PREVIEW_PORT,
+            checkReady: true,
+          },
+        );
+
+        // An unreachable dev server comes back as an empty url, not an error.
+        if (preview.url.length === 0) {
+          return textResult({
+            ...summary,
+            previewUrl: wakeUrl ?? null,
+            rawPreviewUrl: null,
+            ready: false,
+            port: preview.port,
+            note: "The sandbox is not serving anything on the app port yet. Eva restarts the dev server automatically; wait a minute and call again.",
+          });
+        }
+
+        const rawPreviewUrl = shareablePreviewUrl(preview.url, path);
+        return textResult({
+          ...summary,
+          previewUrl: wakeUrl ?? rawPreviewUrl,
+          rawPreviewUrl,
+          port: preview.port,
+          ready: preview.ready,
+          ...(preview.ready
+            ? {}
+            : {
+                note: "The dev server has not answered yet (a cold compile takes 1-2 minutes). The link is right; it may need a retry.",
+              }),
         });
       },
     }),
@@ -231,7 +407,12 @@ A message the chat dequeued in the same instant is already running and cannot be
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.mcpCancelQueuedMessages,
-          { clerkUserId, id: target.targetId, queuedMessageId, all },
+          {
+            clerkUserId,
+            id: queueParentId(target, credentials),
+            queuedMessageId,
+            all,
+          },
         );
 
         return textResult({

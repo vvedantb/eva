@@ -5,7 +5,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useAuth } from "@clerk/clerk-react";
-import { NuqsAdapter } from "nuqs/adapters/tanstack-router";
+import { NuqsAdapter } from "@/lib/nuqsTanstackAdapter";
 import { Analytics } from "@vercel/analytics/react";
 import { TooltipProvider } from "@eva/ui";
 import { ClientProvider } from "@/lib/components/ClientProvider";
@@ -31,6 +31,15 @@ const DevAgentation = import.meta.env.DEV
   ? lazy(() =>
       import("@/lib/components/DevAgentation").then((m) => ({
         default: m.DevAgentation,
+      })),
+    )
+  : null;
+
+/** Lazy so @vvedantb/redline stays out of the production bundle. */
+const DevRedline = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/lib/components/DevRedline").then((m) => ({
+        default: m.DevRedline,
       })),
     )
   : null;
@@ -69,6 +78,11 @@ function RootComponent() {
       {DevAgentation ? (
         <Suspense fallback={null}>
           <DevAgentation />
+        </Suspense>
+      ) : null}
+      {DevRedline ? (
+        <Suspense fallback={null}>
+          <DevRedline />
         </Suspense>
       ) : null}
     </>

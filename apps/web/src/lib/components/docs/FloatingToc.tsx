@@ -69,6 +69,9 @@ export function FloatingToc({
     return () => cancelAnimationFrame(raf);
   }, [containerRef, content]);
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     Reads live scroll position and element geometry on every scroll/resize;
+     useSyncExternalStore would re-measure the whole heading list per render. */
   // Highlight the last heading that has scrolled past the top of the viewport.
   useEffect(() => {
     const container = containerRef.current;
@@ -101,6 +104,7 @@ export function FloatingToc({
       resizeObserver.disconnect();
     };
   }, [containerRef, items]);
+  /* eslint-enable no-effect/no-external-store-subscription */
 
   const handleClick = (id: string) => {
     const container = containerRef.current;
@@ -140,7 +144,7 @@ export function FloatingToc({
           exit={{ opacity: 0 }}
           transition={motionFast}
         >
-          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="mb-2 px-3 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             On this page
           </p>
           <FloatingTocItems
@@ -189,7 +193,7 @@ function FloatingTocItems({
                 paddingLeft: `${(item.level - minLevel) * 12 + 12}px`,
               }}
               className={cn(
-                "-ml-px block w-full border-l-2 py-1 pr-3 text-left text-[13px] leading-snug transition-colors",
+                "-ml-px block w-full border-l-2 py-1 pr-3 text-left text-2sm leading-snug transition-colors",
                 isActive
                   ? "border-primary font-medium text-foreground"
                   : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",

@@ -26,10 +26,7 @@ export function useRetryLastTurnWithAccount(
 
   return async (providerAccountId: Id<"userProviderAccounts"> | null) => {
     return entity.kind === "session"
-      ? await retrySessionTurn({
-          sessionId: entity.sessionId,
-          providerAccountId,
-        })
+      ? await retrySessionTurn({ chatId: entity.chatId, providerAccountId })
       : entity.kind === "task"
         ? await retryTaskTurn({ taskId: entity.taskId, providerAccountId })
         : await retryProjectTurn({

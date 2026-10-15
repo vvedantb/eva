@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   formatPercent,
+  hunkHeadline,
+  hunkLocation,
   hunkUnrequestedProbability,
+  isUnmentioned,
   scopeCheckLabel,
   scopeCheckTone,
+  unmentionedHunks,
+  MENTION_THRESHOLD,
   SCOPE_FLAGGED_THRESHOLD,
   SCOPE_REVIEW_THRESHOLD,
   type ScopeCheck,
@@ -56,16 +61,18 @@ describe("scopeCheckTone", () => {
 
   it("is flagged at the flagged threshold", () => {
     expect(
-      scopeCheckTone(check({ unrequestedProbability: SCOPE_FLAGGED_THRESHOLD })),
+      scopeCheckTone(
+        check({ unrequestedProbability: SCOPE_FLAGGED_THRESHOLD }),
+      ),
     ).toBe("flagged");
-    expect(scopeCheckTone(check({ unrequestedProbability: 1 }))).toBe("flagged");
+    expect(scopeCheckTone(check({ unrequestedProbability: 1 }))).toBe(
+      "flagged",
+    );
   });
 
   it("is flagged whenever a hunk is named, however low the probability", () => {
     expect(
-      scopeCheckTone(
-        check({ unrequestedProbability: 0, flagged: [hunk()] }),
-      ),
+      scopeCheckTone(check({ unrequestedProbability: 0, flagged: [hunk()] })),
     ).toBe("flagged");
   });
 });
@@ -85,7 +92,9 @@ describe("scopeCheckLabel", () => {
 
   it("counts named hunks, singular and plural", () => {
     expect(
-      scopeCheckLabel(check({ unrequestedProbability: 0.8, flagged: [hunk()] })),
+      scopeCheckLabel(
+        check({ unrequestedProbability: 0.8, flagged: [hunk()] }),
+      ),
     ).toBe("1 unrequested change");
     expect(
       scopeCheckLabel(
@@ -101,6 +110,73 @@ describe("scopeCheckLabel", () => {
     expect(scopeCheckLabel(check({ unrequestedProbability: 0.9 }))).toBe(
       "Likely off scope",
     );
+  });
+});
+
+/**
+ * The failure this chip exists for is a change nobody was told about, so an
+ * unreported hunk outranks the count of unrequested ones in the label.
+ */
+describe("unreported changes", () => {
+  const silent = hunk({ mentioned: 0.05 });
+  const owned = hunk({ file: "src/b.ts", mentioned: 0.95 });
+  const unasked = hunk({ file: "src/c.ts" });
+
+  it("counts only hunks Jev judged unmentioned", () => {
+    expect(
+      unmentionedHunks(check({ flagged: [silent, owned, unasked] })),
+    ).toEqual([silent]);
+  });
+
+  it("treats an unanswered mention question as unknown, not silent", () => {
+    expect(isUnmentioned(unasked)).toBe(false);
+    expect(isUnmentioned(hunk({ mentioned: MENTION_THRESHOLD }))).toBe(false);
+    expect(isUnmentioned(silent)).toBe(true);
+  });
+
+  it("leads the label with what was not mentioned", () => {
+    expect(
+      scopeCheckLabel(
+        check({ unrequestedProbability: 0.8, flagged: [silent, owned] }),
+      ),
+    ).toBe("1 change not mentioned");
+    expect(
+      scopeCheckLabel(
+        check({
+          unrequestedProbability: 0.8,
+          flagged: [silent, hunk({ file: "src/d.ts", mentioned: 0.1 })],
+        }),
+      ),
+    ).toBe("2 changes not mentioned");
+  });
+
+  it("falls back to the unrequested count when the reply named them all", () => {
+    expect(
+      scopeCheckLabel(check({ unrequestedProbability: 0.8, flagged: [owned] })),
+    ).toBe("1 unrequested change");
+  });
+
+  it("stays quiet on a clear turn even if a mention answer exists", () => {
+    expect(scopeCheckLabel(check({ unrequestedProbability: 0.1 }))).toBe(
+      "In scope",
+    );
+  });
+});
+
+describe("row text", () => {
+  it("prefers the plain-English summary and screen name", () => {
+    const row = hunk({
+      summary: "Icon changed (IconAward → IconTrophy)",
+      surface: "Awarded panel",
+    });
+    expect(hunkHeadline(row)).toBe("Icon changed (IconAward → IconTrophy)");
+    expect(hunkLocation(row)).toBe("Awarded panel");
+  });
+
+  it("falls back to the header and path for rows judged before the labels", () => {
+    const row = hunk();
+    expect(hunkHeadline(row)).toBe(row.header);
+    expect(hunkLocation(row)).toBe(row.file);
   });
 });
 

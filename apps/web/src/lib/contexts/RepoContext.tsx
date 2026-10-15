@@ -2,11 +2,11 @@
 
 import { createContext, useContext, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useNavigate, useLocation } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import { decodeRepoParam, toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { FunctionReturnType } from "convex/server";
-import { Skeleton } from "@eva/ui";
+import { CenteredSpinner } from "@eva/ui";
 import { RepoNotFound } from "@/lib/components/RepoNotFound";
 
 type Repo = NonNullable<
@@ -42,32 +42,6 @@ const PENDING: RepoLoadState = { status: "pending" };
 
 const RepoLoadStateContext = createContext<RepoLoadState>(PENDING);
 
-function resolveLoadState(
-  repo: Repo | null | undefined,
-  context: Pick<RepoContextType, "basePath" | "owner" | "name">,
-  passive: boolean,
-): RepoLoadState {
-  if (repo === undefined) return PENDING;
-  // Passive trees are cached and hidden: they must render nothing the user
-  // could act on, so a background repo can never explain itself over the top of
-  // the session they are actually looking at.
-  if (repo === null) {
-    return passive
-      ? PENDING
-      : { status: "not-found", owner: context.owner, name: context.name };
-  }
-  return {
-    status: "ready",
-    value: {
-      ...context,
-      repo,
-      repoId: repo._id,
-      installationId: repo.installationId,
-      rootDirectory: repo.rootDirectory,
-    },
-  };
-}
-
 interface RepoProviderProps {
   children: React.ReactNode;
   owner: string;
@@ -89,7 +63,11 @@ export function RepoProvider({
   const { name, appName } = decodeRepoParam(repoParam);
 
   const navigate = useNavigate();
-  const location = useLocation();
+  // Only the canonicalisation effect needs the path. Passive (cached, hidden)
+  // trees select a constant so a navigation elsewhere does not re-render them.
+  const pathname = useRouterState({
+    select: (s) => (passive ? "" : s.location.pathname),
+  });
 
   const repo = useQuery(api.githubRepos.getByOwnerAndName, {
     owner,
@@ -97,6 +75,9 @@ export function RepoProvider({
     appName,
   });
 
+  /* eslint-disable no-effect/no-event-handler --
+     Canonicalises the URL the user landed on (bookmark, shared link, back
+     button) once the repo row arrives from Convex — no click involved. */
   // Bare /owner/repo URLs for monorepos without a visible root row resolve to an
   // app repo — canonicalize to the public slash form (router rewrite maps it
   // to the internal `--` segment for matching).
@@ -108,8 +89,8 @@ export function RepoProvider({
 
     const barePrefix = `/${owner}/${name}`;
     const canonicalPrefix = `/${owner}/${name}/${appSegment}`;
-    if (!location.pathname.startsWith(barePrefix)) return;
-    const after = location.pathname.slice(barePrefix.length);
+    if (!pathname.startsWith(barePrefix)) return;
+    const after = pathname.slice(barePrefix.length);
     if (after !== "" && !after.startsWith("/")) return;
     if (barePrefix === canonicalPrefix) return;
 
@@ -118,7 +99,8 @@ export function RepoProvider({
       search: (prev) => prev,
       replace: true,
     });
-  }, [repo, appName, owner, name, location.pathname, navigate, passive]);
+  }, [repo, appName, owner, name, pathname, navigate, passive]);
+  /* eslint-enable no-effect/no-event-handler */
 
   /**
    * Public path prefix for the active repo. Monorepo apps use slash form
@@ -131,11 +113,31 @@ export function RepoProvider({
     ? `/${owner}/${name}/${resolvedAppName}`
     : `/${owner}/${name}`;
 
-  const loadState = resolveLoadState(
-    repo,
-    { basePath, owner, name },
-    passive,
-  );
+  // Built inline, not in a helper: the compiler memoises object literals but
+  // not the result of an arbitrary call, and a fresh value here re-renders
+  // every `useRepo()` consumer below (whole session trees) on each navigation.
+  // Passive trees are cached and hidden: they must render nothing the user
+  // could act on, so a missing repo stays "pending" there instead of
+  // explaining itself over the session the user is actually looking at.
+  const loadState: RepoLoadState =
+    repo === undefined
+      ? PENDING
+      : repo === null
+        ? passive
+          ? PENDING
+          : { status: "not-found", owner, name }
+        : {
+            status: "ready",
+            value: {
+              basePath,
+              owner,
+              name,
+              repo,
+              repoId: repo._id,
+              installationId: repo.installationId,
+              rootDirectory: repo.rootDirectory,
+            },
+          };
 
   return (
     <RepoLoadStateContext.Provider value={loadState}>
@@ -161,14 +163,7 @@ export function RepoGate({ children }: { children: React.ReactNode }) {
   // does not re-centre as the real content lands.
   if (loadState.status === "pending") {
     return (
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-3 p-3"
-        aria-busy="true"
-        aria-label="Loading codebase"
-      >
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="min-h-0 flex-1" />
-      </div>
+      <CenteredSpinner label="Loading codebase" />
     );
   }
 

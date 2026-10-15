@@ -38,7 +38,16 @@ describe("the composer's under-card bar", () => {
     // wrapping the bar itself is the regression both fixes undid.
     const gates = composer.match(/underCardLeading \?/g) ?? [];
     expect(gates).toHaveLength(1);
-    expect(composer).toContain("{underCardLeading}</div>");
+    expect(composer).toMatch(/\{underCardLeading\}\s*<\/div>/);
+  });
+
+  test("only drops out when it has nothing at all to hold", () => {
+    // Manager Ave has no picker, stash or leading control, so an empty muted
+    // strip would be all that rendered. The gate must still include the
+    // picker, or a surface with one could lose it again.
+    expect(composer).toContain(
+      "!underCardLeading && !stashButton && !modelPicker ? null",
+    );
   });
 
   test("renders on the draft-loading branch as well as the loaded one", () => {

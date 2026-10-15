@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 
 export const taskStatusValidator = v.union(
   v.literal("draft"),
@@ -74,6 +74,21 @@ export const prRecapStatusValidator = v.union(
   v.literal("error"),
 );
 
+export const chatLogEntryKindValidator = v.union(
+  v.literal("decision"),
+  v.literal("change"),
+  v.literal("research"),
+  v.literal("question"),
+  v.literal("note"),
+);
+export type ChatLogEntryKind = Infer<typeof chatLogEntryKindValidator>;
+
+export const chatLogAuthorValidator = v.union(
+  v.literal("agent"),
+  v.literal("user"),
+  v.literal("system"),
+);
+
 export const docKindValidator = v.union(
   v.literal("document"),
   v.literal("pr-recap"),
@@ -93,6 +108,15 @@ export const evaluationStatusValidator = v.union(
   v.literal("completed"),
   v.literal("error"),
 );
+
+/** Which Testing Arena check a report holds: spec-vs-code review or browser scenarios. */
+export const evaluationKindValidator = v.union(
+  v.literal("code"),
+  v.literal("browser"),
+);
+
+/** What started a Testing Arena run. Absent on manual runs. */
+export const evaluationTriggerValidator = v.literal("pr");
 
 export const evalFixStatusValidator = v.union(
   v.literal("fixing"),
@@ -141,6 +165,27 @@ export const notificationTypeValidator = v.union(
   v.literal("system"),
   // Inbox-only: session auto-archived because its GitHub PR closed or merged.
   v.literal("session_archived"),
+  // Eva routed a clarification to a teammate (answered in Manager Ave).
+  v.literal("routed_question"),
+);
+
+export const routedSourceKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+
+export const routedThreadStatusValidator = v.union(
+  v.literal("open"),
+  v.literal("waiting_human"),
+  v.literal("waiting_eva"),
+  v.literal("resolved"),
+  v.literal("cancelled"),
+);
+
+export const routedAuthorKindValidator = v.union(
+  v.literal("eva"),
+  v.literal("user"),
 );
 
 export const errorTypeValidator = v.union(

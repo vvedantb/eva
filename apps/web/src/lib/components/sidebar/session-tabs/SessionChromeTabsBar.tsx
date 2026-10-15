@@ -5,7 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useMemo, useState } from "react";
-import { Skeleton } from "@eva/ui";
+import { CenteredSpinner } from "@eva/ui";
 import {
   sessionActivityAt,
   sortAppsForSidebar,
@@ -165,15 +165,7 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
             chevron menu lists whatever no longer fits. */}
         <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-hidden px-1">
           {orderedRepos === undefined ? (
-            <div
-              className="flex items-end gap-0.5 pb-0 pl-1"
-              aria-busy="true"
-              aria-label="Loading session tabs"
-            >
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-9 w-52 rounded-t-[0.625rem]" />
-              ))}
-            </div>
+            <CenteredSpinner label="Loading session tabs" className="p-2" />
           ) : orderedRepos.length === 0 ? (
             <p className="flex items-center pb-3 pl-2 text-sm text-muted-foreground">
               No apps yet

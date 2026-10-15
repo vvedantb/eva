@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import type { Id } from "@eva/backend";
 import { cn, Spinner, Button, WebPreview } from "@eva/ui";
 import { useSessionStorage } from "usehooks-ts";
-import { IconPlayerPlay, IconRefresh, IconWorld } from "@tabler/icons-react";
+import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
+import { IconRefresh, IconWorld } from "@tabler/icons-react";
 import {
   buildUrlWithPath,
   normalizePreviewPath,
@@ -13,6 +14,10 @@ import {
   useFullscreenElement,
   usePreviewIframeElement,
 } from "@/lib/components/sandbox/previewIframeHost";
+import {
+  PreviewToolCallExecutor,
+  type PreviewToolCallParentId,
+} from "@/lib/components/sandbox/PreviewToolCallExecutor";
 import { resolveMiniPlayerLogicalSize } from "@/lib/components/sandbox/previewContain";
 import {
   closePreviewMiniPlayer,
@@ -57,6 +62,8 @@ interface WebPreviewPanelProps {
   /** Multi-repo sessions: one dev-server port per checked-out repo. */
   portOptions?: readonly PreviewPortOption[];
   pathStorageKey: string;
+  /** The chat that owns this sandbox: agent page-tool calls are queued on it. */
+  toolCallParentId: PreviewToolCallParentId;
   /**
    * When set (sessions), Preview path is sticky on Convex. `undefined` while
    * the session query loads — falls back to sessionStorage until then.
@@ -80,6 +87,8 @@ interface WebPreviewPanelProps {
     returnTo: string;
     title: string;
   };
+  /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
+  externalHrefForPath?: (path: string) => string;
 }
 
 export function WebPreviewPanel({
@@ -94,12 +103,14 @@ export function WebPreviewPanel({
   onPortChange,
   portOptions,
   pathStorageKey,
+  toolCallParentId,
   stickyPath,
   onStickyPathChange,
   onStartSandbox,
   isSandboxStarting = false,
   onAnnotationSubmit,
   miniPlayer,
+  externalHrefForPath,
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
@@ -206,27 +217,15 @@ export function WebPreviewPanel({
 
   if (!isActive || !sandboxId) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
-          <IconWorld className="w-12 h-12 opacity-50" />
-          <p className="text-sm">
-            {!isActive
-              ? "Wake Eva up to preview your app"
-              : "Waiting for sandbox..."}
-          </p>
-          {!isActive && onStartSandbox ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onStartSandbox}
-              disabled={isSandboxStarting}
-            >
-              <IconPlayerPlay size={14} />
-              {isSandboxStarting ? "Starting..." : "Wake up Eva"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+      <SandboxAsleepState
+        icon={IconWorld}
+        label={
+          !isActive
+            ? "Wake Eva up to preview your app"
+            : "Waiting for sandbox..."
+        }
+        wake={!isActive ? { onStartSandbox, isSandboxStarting } : undefined}
+      />
     );
   }
 
@@ -306,6 +305,7 @@ export function WebPreviewPanel({
         port={port}
         onPortChange={onPortChange}
         portOptions={portOptions}
+        externalHrefForPath={externalHrefForPath}
         previewPath={previewPath}
         onPathChange={handlePathChange}
         viewport={viewport}
@@ -316,6 +316,10 @@ export function WebPreviewPanel({
         onAnnotationModeChange={setAnnotationMode}
         showAnnotationToggle={Boolean(onAnnotationSubmit)}
         popOut={popOut}
+      />
+      <PreviewToolCallExecutor
+        parentId={toolCallParentId}
+        iframeElement={iframeElement}
       />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar

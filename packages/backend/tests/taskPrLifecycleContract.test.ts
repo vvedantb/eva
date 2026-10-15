@@ -6,7 +6,8 @@ import { describe, expect, test } from "vitest";
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
 const webhook = readSource("githubWebhook.ts");
-const handler = definitionBody(webhook, "handlePrClosed");
+const handler = functionBody(webhook, "async function applyQuickTaskPrClosed(");
+const dispatch = definitionBody(webhook, "handlePullRequestEvent");
 
 /**
  * A merged/closed PR makes a quick task read-only, so its preview VM has to be
@@ -22,23 +23,35 @@ describe("quick-task pull-request close stops the preview sandbox", () => {
     expect(deleteAt).toBeGreaterThan(stopAt);
   });
 
-  test("the stop is gated on the task being a quick task", () => {
-    const gateAt = handler.indexOf("if (t.projectId === undefined) {");
-    expect(gateAt, "the quick-task gate moved or was renamed").toBeGreaterThan(
-      -1,
-    );
-    expect(handler.indexOf("requestTaskSandboxStop(")).toBeGreaterThan(gateAt);
+  test("waits for every PR the task holds before it moves", () => {
+    const gateAt = handler.indexOf("allPullRequestsTerminal(rows)");
+    const stopAt = handler.indexOf("requestTaskSandboxStop(");
+    expect(gateAt).toBeGreaterThan(-1);
+    expect(stopAt).toBeGreaterThan(gateAt);
+  });
+
+  /**
+   * A project's tasks share one sandbox with the project, so the stop belongs
+   * to quick tasks only: a project PR is dispatched to the project handler and
+   * never reaches this one (fix 51cdced9). Behavioural coverage of what each
+   * path leaves behind lives in prClosedProjectScope.test.ts.
+   */
+  test("a project pull request never reaches the quick-task stop", () => {
+    const projectAt = dispatch.indexOf('owner.kind === "project"');
+    const quickAt = dispatch.indexOf("applyQuickTaskPrClosed(");
+    expect(projectAt).toBeGreaterThan(-1);
+    expect(quickAt).toBeGreaterThan(projectAt);
+    expect(dispatch.slice(projectAt, quickAt)).toContain("} else if (terminal)");
   });
 
   test.each([
-    ['reviewTaskSandboxStatus === "active"'],
-    ['reviewTaskSandboxStatus === "starting"'],
-    ['reviewTaskSandboxStatus === "stopping"'],
-    ["t.sandboxId !== undefined"],
+    ['task.reviewTaskSandboxStatus === "active"'],
+    ['task.reviewTaskSandboxStatus === "starting"'],
+    ['task.reviewTaskSandboxStatus === "stopping"'],
+    ["task.sandboxId !== undefined"],
   ])("the stop condition covers %s", (clause) => {
-    const gateAt = handler.indexOf("if (t.projectId === undefined) {");
     const stopAt = handler.indexOf("requestTaskSandboxStop(");
-    expect(handler.slice(gateAt, stopAt)).toContain(clause);
+    expect(handler.slice(0, stopAt)).toContain(clause);
   });
 });
 
@@ -79,6 +92,14 @@ function definitionBody(input: string, name: string): string {
   const startAt = input.indexOf(`export const ${name} =`);
   expect(startAt, `${name} moved or was renamed`).toBeGreaterThan(-1);
   const endAt = input.indexOf("\n});", startAt);
+  return input.slice(startAt, endAt < 0 ? undefined : endAt);
+}
+
+/** One plain function, ending on the `\n}` that closes it. */
+function functionBody(input: string, declaration: string): string {
+  const startAt = input.indexOf(declaration);
+  expect(startAt, `${declaration} moved or was renamed`).toBeGreaterThan(-1);
+  const endAt = input.indexOf("\n}", startAt);
   return input.slice(startAt, endAt < 0 ? undefined : endAt);
 }
 

@@ -1,14 +1,17 @@
 {
-  "name": "Eva - Your New Coworker",
+  "id": "/",
+  "name": "Eva",
   "short_name": "Eva",
   "description": "Meet Eva, your new AI coworker. Manage tasks, ship code, and track progress in real-time.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F4F5F6",
   "theme_color": "#F4F5F6",
-  "orientation": "portrait",
   "scope": "/",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon.png", "sizes": "1024x1024", "type": "image/png" }
+  ],
   "categories": ["productivity", "developer tools"],
   "lang": "en",
   "dir": "ltr"

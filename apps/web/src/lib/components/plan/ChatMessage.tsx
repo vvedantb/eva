@@ -5,9 +5,9 @@ import {
   AvatarFallback,
   Message as AIMessage,
   MessageContent,
-  MessageResponse,
   motionFast,
 } from "@eva/ui";
+import { Markdown } from "@eva/ui/markdown";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import dayjs from "@eva/shared/dates";
@@ -88,9 +88,9 @@ export function ChatMessage({
                       finalText={content}
                     />
                   )}
-                  <MessageResponse className="prose prose-sm dark:prose-invert max-w-none">
+                  <Markdown className="text-sm">
                     {content}
-                  </MessageResponse>
+                  </Markdown>
                 </>
               )}
             </>
@@ -100,7 +100,7 @@ export function ChatMessage({
           <div className="flex items-center justify-end gap-2 mt-0.5 ml-auto">
             {startedAt !== undefined ? (
               <div className="reveal-on-hover transition-opacity flex items-center gap-3">
-                <span className="text-[11px] text-muted-foreground/60">
+                <span className="text-2xs text-muted-foreground/60">
                   {dayjs(startedAt).format("h:mm A")}
                 </span>
               </div>

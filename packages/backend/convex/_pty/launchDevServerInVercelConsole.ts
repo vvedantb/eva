@@ -1,14 +1,17 @@
 "use node";
 
 import type { SandboxHandle } from "../_sandbox/provider";
-import { defaultTerminalPtyId } from "../_sandbox_runtime/devServer";
 import { workspaceDirShell } from "../_sandbox_runtime/helpers";
 import { ensureSwapFile } from "../_sandbox_runtime/swap";
+import {
+  PACKAGE_HELPER_SCRIPT,
+  pkgInstall,
+} from "../_sandbox_runtime/packageManager";
 import {
   EVA_ENV_FILE,
   tmuxNewSessionWithEvaEnv,
 } from "../_sandbox/vercelEnvFile";
-import { tmuxSessionName } from "./vercel";
+import { previewConsoleSessionName } from "./consoleSessionName";
 
 /**
  * Per-`sessionName` so a linked repo's console session (a distinct tmux
@@ -38,11 +41,11 @@ export async function launchDevServerInVercelConsole(
   port: number,
   dir: string = workspaceDirShell(),
 ): Promise<void> {
-  const sessionName = tmuxSessionName(defaultTerminalPtyId(ownerKey));
+  const sessionName = previewConsoleSessionName(ownerKey);
   const workspace = dir;
 
   await handle.exec(
-    "command -v tmux >/dev/null 2>&1 || sudo dnf install -y tmux >/dev/null 2>&1",
+    `${PACKAGE_HELPER_SCRIPT}\ncommand -v tmux >/dev/null 2>&1 || ${pkgInstall("tmux")}`,
     { cwd: "/", timeoutSeconds: 120 },
   );
 

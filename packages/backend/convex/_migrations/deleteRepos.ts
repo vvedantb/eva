@@ -1,7 +1,9 @@
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import { deleteChatLogEntries } from "../chatLog";
+import { listSessionChats } from "../_sessionChats/helpers";
 
 const STEPS = [
   "projects",
@@ -38,6 +40,51 @@ const stepValidator = v.union(
   v.literal("repo"),
 );
 
+/** Deletes the transcript, queue and inline cards of one session chat parent; returns the count. */
+async function deleteChatRows(
+  ctx: MutationCtx,
+  parentId: Id<"sessions"> | Id<"sessionChats">,
+): Promise<number> {
+  let deleted = 0;
+  const messages = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .collect();
+  for (const row of messages) await ctx.db.delete(row._id);
+  deleted += messages.length;
+  const queued = await ctx.db
+    .query("queuedMessages")
+    .withIndex("by_parent_and_order", (q) => q.eq("parentId", parentId))
+    .collect();
+  for (const row of queued) await ctx.db.delete(row._id);
+  deleted += queued.length;
+  const panels = await ctx.db
+    .query("chatUiPanels")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .collect();
+  for (const row of panels) await ctx.db.delete(row._id);
+  deleted += panels.length;
+  const renders = await ctx.db
+    .query("chatHtmlRenders")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .collect();
+  for (const row of renders) {
+    if (await ctx.db.get(row.bodyId)) {
+      await ctx.db.delete(row.bodyId);
+      deleted++;
+    }
+    await ctx.db.delete(row._id);
+  }
+  deleted += renders.length;
+  const envRequests = await ctx.db
+    .query("envVarRequests")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .collect();
+  for (const row of envRequests) await ctx.db.delete(row._id);
+  deleted += envRequests.length;
+  return deleted;
+}
+
 /** Executes one step of the repo deletion pipeline and schedules the next step. */
 export const deleteRepoStep = internalMutation({
   args: {
@@ -73,6 +120,10 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(d._id);
             deleted++;
           }
+          deleted += await deleteChatLogEntries(ctx, {
+            kind: "project",
+            projectId: project._id,
+          });
           await ctx.db.delete(project._id);
           deleted++;
         }
@@ -128,6 +179,11 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(s._id);
             deleted++;
           }
+
+          deleted += await deleteChatLogEntries(ctx, {
+            kind: "task",
+            taskId: task._id,
+          });
         }
         break;
       }
@@ -166,12 +222,32 @@ export const deleteRepoStep = internalMutation({
             await ctx.db.delete(daemonState._id);
             deleted++;
           }
-          const messages = await ctx.db
-            .query("messages")
-            .withIndex("by_parent", (q) => q.eq("parentId", session._id))
-            .collect();
-          for (const m of messages) {
-            await ctx.db.delete(m._id);
+          // Chat rows hang off each chat id; pre-chat sessions keep theirs on
+          // the session id.
+          const chats = await listSessionChats(ctx.db, session._id);
+          for (const parentId of [session._id, ...chats.map((c) => c._id)]) {
+            deleted += await deleteChatRows(ctx, parentId);
+          }
+          // `drafts` is indexed by user first: clear the session owner's and
+          // each chat creator's.
+          const draftUsers = new Set([
+            session.userId,
+            ...chats.flatMap((c) => (c.createdBy ? [c.createdBy] : [])),
+          ]);
+          for (const userId of draftUsers) {
+            const drafts = await ctx.db
+              .query("drafts")
+              .withIndex("by_user_and_session", (q) =>
+                q.eq("userId", userId).eq("sessionId", session._id),
+              )
+              .collect();
+            for (const draft of drafts) {
+              await ctx.db.delete(draft._id);
+              deleted++;
+            }
+          }
+          for (const chat of chats) {
+            await ctx.db.delete(chat._id);
             deleted++;
           }
 
@@ -186,6 +262,10 @@ export const deleteRepoStep = internalMutation({
             deleted++;
           }
 
+          deleted += await deleteChatLogEntries(ctx, {
+            kind: "session",
+            sessionId: session._id,
+          });
           await ctx.db.delete(session._id);
           deleted++;
         }

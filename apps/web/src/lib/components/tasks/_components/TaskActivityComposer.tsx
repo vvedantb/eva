@@ -23,7 +23,7 @@ export function TaskActivityComposer({ taskId }: TaskActivityComposerProps) {
   });
 
   const editorClassName =
-    "min-h-14 max-h-44 rounded-none border-0 bg-transparent px-3 py-2.5 shadow-none focus-visible:ring-0 transition-[background-color]";
+    "min-h-14 max-h-44 rounded-none border-0 bg-transparent px-3.5 py-3 shadow-none focus-visible:ring-0 transition-[background-color]";
 
   // While draft is undefined (query not yet resolved), show a disabled
   // placeholder using the same chrome so layout doesn't shift.
@@ -38,13 +38,14 @@ export function TaskActivityComposer({ taskId }: TaskActivityComposerProps) {
             disabled
             className={editorClassName}
           />
-          <div className="flex items-center justify-end gap-2 px-2 pb-2">
+          <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5">
             <CommentSendButton
               size="icon-sm"
               disabled
               isSubmitting={false}
               onClick={() => undefined}
               ariaLabel="Add comment"
+              quietWhenDisabled
             />
           </div>
         </div>

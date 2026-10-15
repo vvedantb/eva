@@ -7,8 +7,10 @@ export const Route = createFileRoute(
 )({
   beforeLoad: ({ params }) => {
     // Unknown slugs fall back to the default tab; the old `diff` slug maps onto
-    // the canonical `diffs` the sandbox already used.
-    const canonical = canonicalReviewTab(params.reviewTab);
+    // the canonical `diffs` the sandbox already used. Pull requests is a
+    // sandbox tab: this page is already one pull request.
+    const mapped = canonicalReviewTab(params.reviewTab);
+    const canonical = mapped === "prs" ? REVIEW_DEFAULT_TAB : mapped;
     if (canonical !== params.reviewTab) {
       throw redirect({
         to: "/$owner/$repo/reviews/$prNumber/$reviewTab",

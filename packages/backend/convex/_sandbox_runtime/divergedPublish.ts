@@ -33,6 +33,24 @@ export function isEvaOwnedBranch(branchName: string): boolean {
 }
 
 /**
+ * A chat's side branch is `<chat branch>-<slug>`: the agent pushes it and opens
+ * its own PR, which Eva links to the chat. When the user asks the agent to
+ * check one out, publish follows the sandbox onto it instead of refusing
+ * (session 89, evalucom/carepulse-ts, Oct 2026: every turn on PR #2487's
+ * branch failed with "Failed to publish session branch").
+ */
+export function isChatSideBranch(
+  currentBranch: string,
+  chatBranch: string,
+): boolean {
+  return (
+    isEvaOwnedBranch(chatBranch) &&
+    currentBranch.length > chatBranch.length + 1 &&
+    currentBranch.startsWith(`${chatBranch}-`)
+  );
+}
+
+/**
  * A diverged local branch rewrote its own history — rebase onto a new base,
  * reset, amend — exactly when the remote tip is a commit the local branch
  * itself used to point at. The sandbox then already held every remote commit

@@ -1,3 +1,5 @@
+import { catColorForSlot, catSlotForId, type CatSlot } from "@eva/ui";
+
 /** Stable Chrome-like tab-group accent for a repo id. */
 export interface TabGroupColor {
   /** Line under the group — Chrome's only group fill besides the pill. */
@@ -14,69 +16,37 @@ export interface TabGroupColor {
   accent: string;
 }
 
-const GROUP_COLORS: TabGroupColor[] = [
-  {
-    underline: "bg-sky-500",
-    pill: "bg-sky-500 text-white",
-    border: "border-sky-500",
-    accent: "text-sky-500",
-  },
-  {
-    underline: "bg-rose-500",
-    pill: "bg-rose-500 text-white",
-    border: "border-rose-500",
-    accent: "text-rose-500",
-  },
-  {
-    underline: "bg-amber-500",
-    pill: "bg-amber-500 text-black",
-    border: "border-amber-500",
-    accent: "text-amber-500",
-  },
-  {
-    underline: "bg-emerald-500",
-    pill: "bg-emerald-500 text-white",
-    border: "border-emerald-500",
-    accent: "text-emerald-500",
-  },
-  {
-    underline: "bg-violet-500",
-    pill: "bg-violet-500 text-white",
-    border: "border-violet-500",
-    accent: "text-violet-500",
-  },
-  {
-    underline: "bg-fuchsia-500",
-    pill: "bg-fuchsia-500 text-white",
-    border: "border-fuchsia-500",
-    accent: "text-fuchsia-500",
-  },
-  {
-    underline: "bg-lime-500",
-    pill: "bg-lime-500 text-black",
-    border: "border-lime-500",
-    accent: "text-lime-500",
-  },
-  {
-    underline: "bg-orange-500",
-    pill: "bg-orange-500 text-white",
-    border: "border-orange-500",
-    accent: "text-orange-500",
-  },
-];
-
-const FALLBACK_COLOR: TabGroupColor = {
-  underline: "bg-sky-500",
-  pill: "bg-sky-500 text-white",
-  border: "border-sky-500",
-  accent: "text-sky-500",
+// This module's original 8-colour palette, in its original hash-bucket
+// order: sky, rose, amber, emerald, violet, fuchsia, cyan, orange. `cat-*`
+// only has 8 hues total and some of those names share one (violet/fuchsia
+// both read as violet, sky/cyan both read as sky), so this table maps each
+// legacy bucket onto the closest `cat-*` slot rather than the ramp's own
+// 1:1 numbering — that keeps existing groups' colours recognisable instead
+// of shuffling them onto an arbitrary new hue.
+//
+// `catSlotForId` reuses this file's original hash formula, so
+// `catSlotForId(id) - 1` is exactly the old raw bucket index — this table
+// only relabels which `cat-*` slot that bucket now renders as.
+const LEGACY_SLOT_BY_BUCKET: Record<number, CatSlot> = {
+  0: 7, // sky -> sky
+  1: 5, // rose -> rose
+  2: 4, // amber -> amber
+  3: 6, // emerald -> emerald
+  4: 2, // violet -> violet
+  5: 2, // fuchsia -> violet (closest remaining hue)
+  6: 7, // cyan -> sky
+  7: 8, // orange -> orange
 };
 
 export function tabGroupColorForId(id: string): TabGroupColor {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  }
-  const index = Math.abs(hash) % GROUP_COLORS.length;
-  return GROUP_COLORS[index] ?? FALLBACK_COLOR;
+  const bucket = catSlotForId(id) - 1;
+  const { text, bg, bgTint, border } = catColorForSlot(
+    LEGACY_SLOT_BY_BUCKET[bucket] ?? 7,
+  );
+  return {
+    underline: bg,
+    pill: `${bgTint} ${text}`,
+    border,
+    accent: text,
+  };
 }

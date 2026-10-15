@@ -30,7 +30,7 @@ import {
   IconExternalLink,
   IconGitPullRequest,
 } from "@tabler/icons-react";
-import { Streamdown } from "streamdown";
+import { Markdown } from "@eva/ui/markdown";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { HtmlPreviewFrame } from "@/lib/components/docs/_components/HtmlPreviewFrame";
 import { RecapGenerateControls } from "@/lib/components/sandbox/_components/RecapGenerateControls";
@@ -197,7 +197,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
             {recapDoc.prNumber !== undefined ? (
               <DynamicLink
                 to={toInternalRepoHref(
-                  `${basePath}/reviews/${recapDoc.prNumber}/recap`,
+                  `${basePath}/reviews/${recapDoc.prNumber}/summary`,
                 )}
                 className="hover:text-foreground"
               >
@@ -294,9 +294,9 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
           )
         ) : (
           <Surface>
-            <Streamdown className="prose prose-sm dark:prose-invert max-w-none text-sm [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+            <Markdown className="text-sm">
               {recapDoc.content}
-            </Streamdown>
+            </Markdown>
           </Surface>
         )}
       </div>

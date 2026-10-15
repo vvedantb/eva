@@ -6,7 +6,11 @@ import { formatDurationMsShort } from "@eva/shared/duration";
 import { getInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
-import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
+import type {
+  SandboxClient,
+  SandboxHandle,
+  SandboxMount,
+} from "../_sandbox/provider";
 import {
   execHandle,
   LEGACY_WORKSPACE_DIR,
@@ -30,13 +34,27 @@ import { ensureGitCredentialHelper } from "./gitCredentials";
 import { isMissingRemoteRefFetchFailure } from "../_git/remoteRef";
 import { gitRemoteAuthPrefix } from "./gitRemoteCommand";
 import {
+  isChatSideBranch,
   isEvaOwnedBranch,
   parseGitNameOnlyList,
   rewrittenBranchIsOwnHistory,
   rewrittenBranchPublishError,
 } from "./divergedPublish";
 import { ensureSwapFile } from "./swap";
-import { COREPACK_SANDBOX_ENV } from "../_sandbox/vercelEnvFile";
+import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
+import {
+  AGENT_CLI_PATH_LINE,
+  COREPACK_SANDBOX_ENV,
+} from "../_sandbox/vercelEnvFile";
+import {
+  DRIVE_CACHE_ENV,
+  DRIVE_CACHE_READER,
+  DRIVE_CACHE_WRITER,
+  DRIVE_MOUNT_PATH,
+  driveCacheName,
+  driveCacheSetupScript,
+  type DriveCacheRole,
+} from "../_sandbox/driveCache";
 import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
@@ -121,6 +139,21 @@ function sanitizeCommand(command: string): string {
 }
 
 /** Executes a git command, cleaning up lock files on timeout errors. */
+/**
+ * One lock for every Eva-side git command on a sandbox. Parallel chats share
+ * the working tree, so two turns finishing together used to race their
+ * publishes (`fetch`, `rev-list`, `push`) on the same `.git/index.lock`. The
+ * agents' own in-turn git calls are not serialised — that is the shared-tree
+ * trade-off the user accepted.
+ */
+const SANDBOX_GIT_LOCK_PATH = "/tmp/eva-git.lock";
+
+function withSandboxGitLock(command: string, timeoutSeconds: number): string {
+  // `flock` waits up to the command's own timeout, so a stuck holder fails
+  // the waiter the same way a slow push would, instead of hanging it longer.
+  return `flock -w ${Math.max(1, timeoutSeconds - 1)} ${SANDBOX_GIT_LOCK_PATH} bash -c ${quote([command])}`;
+}
+
 async function execGitCommand(
   sandbox: SandboxHandle,
   command: string,
@@ -130,7 +163,11 @@ async function execGitCommand(
   const startedAt = Date.now();
   logGit(`exec [timeout=${timeoutSeconds}s]: ${sanitized}`);
   try {
-    const result = await execHandle(sandbox, command, timeoutSeconds);
+    const result = await execHandle(
+      sandbox,
+      withSandboxGitLock(command, timeoutSeconds),
+      timeoutSeconds,
+    );
     logGit(
       `exec completed in ${formatDurationMsShort(Date.now() - startedAt)}: ${sanitized}`,
     );
@@ -222,10 +259,14 @@ function isSafeBranchName(branchName: string): boolean {
   return /^[^\s\\:?*[~^]+$/.test(branchName) && !branchName.includes("..");
 }
 
-function isRetryableGitNetworkError(message: string): boolean {
+/** Transient git failure (network, GitHub 5xx, token race) worth a retry. */
+export function isRetryableGitNetworkError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     isSandboxExecTimeout(message) ||
+    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
+    lower.includes("internal server error") ||
+    lower.includes("status code 500") ||
     lower.includes("status code 502") ||
     lower.includes("status code 503") ||
     lower.includes("status code 504") ||
@@ -311,26 +352,33 @@ export async function createSandbox(
   // Those post-create steps absorb Vercel's first-command boot penalty
   // (seconds–tens of seconds); session UI should not wait on them.
   onSandboxAcquired?: (sandbox: SandboxHandle) => Promise<void>,
-  // Boot from a Vercel Container Registry image instead of the legacy runtime.
-  // Only read when there is no snapshot — a restore carries its own image.
-  image?: string,
+  // "Fork session": fork this sandbox (provider-side) instead of booting
+  // `snapshotName`.
+  forkFrom?: string,
   /**
-   * Manager Ave never runs repo services, so installing and polling dockerd
-   * on the Ubuntu universal image is pure wait (dnf is missing, then 90s+60s
-   * of `docker info` loops). Skip it.
+   * How this sandbox uses the repo's shared package cache Drive. Defaults to
+   * the read-only reader role; only the seed-prep and group-builder sandboxes
+   * pass `writer`, since a Drive allows one read-write mount at a time.
+   * See ../_sandbox/driveCache.ts.
    */
-  skipDocker = false,
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<SandboxHandle> {
+  // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
+  // only on paths that never resolve a repo, which then get no mount at all.
+  const repoId = sandboxEnvVars.REPO_ID;
+  const driveMountMode: SandboxMount["mode"] =
+    driveCacheRole === DRIVE_CACHE_WRITER ? "read-write" : "snapshot";
   const details = [
     `installation=${installationId}`,
+    forkFrom ? `forkFrom=${forkFrom}` : "forkFrom=none",
     snapshotName ? `snapshot=${snapshotName}` : "snapshot=none",
-    image ? `image=${image}` : "image=none",
     lifecycle.ephemeral ? "ephemeral=true" : "ephemeral=false",
+    `driveCache=${repoId ? driveCacheRole : "none"}`,
   ].join(", ");
   return await runLoggedGitStep("createSandbox", details, async () => {
     const timeoutSeconds =
       readyTimeoutSeconds ??
-      (snapshotName
+      (snapshotName || forkFrom
         ? SNAPSHOT_SANDBOX_READY_TIMEOUT_SECONDS
         : DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS);
 
@@ -342,7 +390,7 @@ export async function createSandbox(
 
     const sandbox = await client.create({
       snapshot: snapshotName,
-      image,
+      ...(forkFrom ? { forkFrom } : {}),
       ports: [...VERCEL_DEFAULT_EXPOSED_PORTS],
       envVars: {
         // VNC_RESOLUTION is read by the snapshot's ComputerUse plugin at startup
@@ -367,6 +415,15 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
+      mounts: repoId
+        ? [
+            {
+              path: DRIVE_MOUNT_PATH,
+              volumeName: driveCacheName(repoId),
+              mode: driveMountMode,
+            },
+          ]
+        : undefined,
     });
     logGit(
       `createSandbox: created id=${sandbox.id}, cpu=${sandbox.cpu}, memory=${sandbox.memory}, disk=${sandbox.disk}`,
@@ -386,11 +443,21 @@ export async function createSandbox(
           renderEvaEnvFile({
             VNC_RESOLUTION: "1920x1080",
             ...COREPACK_SANDBOX_ENV,
+            // Safe to set unconditionally: driveCacheSetupScript guarantees the
+            // cache root exists and is writable even when no Drive attached, so
+            // the worst case is an ordinary empty local cache.
+            ...DRIVE_CACHE_ENV,
             ...sandboxEnvVars,
             GITHUB_TOKEN: token,
             INSTALLATION_ID: String(installationId),
-          }),
+          }) + AGENT_CLI_PATH_LINE,
         ),
+      );
+      // Must run before any install: it turns the raw Drive mount into the
+      // writable cache root the env above points at. Never fails a create —
+      // the script itself soft-fails to a plain directory.
+      await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
+        execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
       // Belt-and-suspenders for login shells; tmux Console already sources
       // eva-env. Never fail create over this hook.
@@ -414,7 +481,7 @@ export async function createSandbox(
           "GITHUB_APP_SLUG and GITHUB_BOT_USER_ID must be set in Convex env",
         );
       }
-      // Fresh Vercel node24 sandboxes ship without `jq`, which the git credential
+      // Fresh Vercel sandboxes ship without `jq`, which the git credential
       // helper (git-credential-eva) shells out to on every authenticated
       // fetch/push. Without it, syncRepo/fetchBaseBranch fail with exit 128
       // ("jq: command not found") before the seed toolchain stage ever runs.
@@ -423,7 +490,7 @@ export async function createSandbox(
       await runLoggedGitStep("createSandbox.ensureJq", sandbox.id, () =>
         execHandle(
           sandbox,
-          "command -v jq >/dev/null 2>&1 || sudo dnf install -y jq >/dev/null 2>&1 || true",
+          `${PACKAGE_HELPER_SCRIPT}\ncommand -v jq >/dev/null 2>&1 || ${pkgInstall("jq")} || true`,
           120,
         ),
       );
@@ -464,15 +531,11 @@ export async function createSandbox(
       // since dockerd doesn't survive auto-stop. Already fast-paths on an
       // already-running daemon (`docker info` check first); the timing
       // wrapper just makes that fast path visible in logs instead of assumed.
-      // Orchestrator: no containers, and the universal image has no docker
-      // binary — the bootstrap would sit in a 90s poll then another 60s.
-      if (!skipDocker) {
-        await runLoggedGitStep(
-          "createSandbox.bootstrapDocker",
-          sandbox.id,
-          () => bootstrapVercelDocker(sandbox),
-        );
-      }
+      await runLoggedGitStep(
+        "createSandbox.bootstrapDocker",
+        sandbox.id,
+        () => bootstrapVercelDocker(sandbox),
+      );
 
       return sandbox;
     } catch (error) {
@@ -806,6 +869,39 @@ export async function recoverUnresolvedGitIndex(
   );
 }
 
+/**
+ * Returns the branch the user moved a reused sandbox to, or null when the
+ * resume should check out the session branch. A local session branch proves
+ * the startup checkout once ran, so being elsewhere was a deliberate switch;
+ * without it (the eva/65 failed-checkout shape) HEAD is just where setup left it.
+ */
+export async function getUserCheckedOutBranch(
+  sandbox: SandboxHandle,
+  branchName: string,
+): Promise<string | null> {
+  const workspaceDir = workspaceDirShell();
+  const quotedLocalHeadRef = quote([`refs/heads/${branchName}`]);
+  // One line, `<current>|<exists|missing>`: detached HEAD prints an empty
+  // current branch, which a newline-separated form would lose to trim().
+  const [currentBranch = "", localBranchState = ""] = (
+    await execGitCommand(
+      sandbox,
+      `cd ${workspaceDir} && echo "$(git branch --show-current)|$( (git show-ref --verify --quiet ${quotedLocalHeadRef} && echo exists) || echo missing)"`,
+      10,
+    )
+  )
+    .trim()
+    .split("|");
+  if (
+    currentBranch === "" ||
+    currentBranch === branchName ||
+    localBranchState !== "exists"
+  ) {
+    return null;
+  }
+  return currentBranch;
+}
+
 /** Checks out a session branch, creating it from a remote or base ref if needed. */
 export async function checkoutSessionBranch(
   sandbox: SandboxHandle,
@@ -962,28 +1058,36 @@ export async function copySandboxConfigFilesToWorkspace(
   );
 }
 
+/** Shell for a non-interactive dependency install of `dir` with package manager `pm`. */
+export function dependencyInstallCommand(pm: string, dir: string): string {
+  if (pm === "pnpm") {
+    // DRIVE_CACHE_ENV moves the pnpm store to the Drive cache, so snapshots baked
+    // with the old local store make pnpm purge and rebuild node_modules. Without
+    // a TTY its confirm prompt aborts (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+    // Only the CLI flag works: pnpm 10 reads "false" from .npmrc/env as truthy.
+    // CI=true is rejected because it also implies --frozen-lockfile.
+    return `npm install -g pnpm && cd ${dir} && pnpm install --config.confirm-modules-purge=false`;
+  }
+  if (pm === "yarn") {
+    // No base image ships a yarn shim — mirror the pnpm branch's global install.
+    return `npm install -g yarn && cd ${dir} && yarn install`;
+  }
+  return `cd ${dir} && npm install`;
+}
+
 /** Installs project dependencies using the detected package manager. */
 export async function installDependencies(
   sandbox: SandboxHandle,
   pm: string,
   dir: string = WORKSPACE_DIR,
 ): Promise<void> {
-  if (pm === "pnpm") {
-    await execHandle(
-      sandbox,
-      `npm install -g pnpm && cd ${dir} && pnpm install`,
-      PNPM_INSTALL_TIMEOUT_SECONDS,
-    );
-  } else if (pm === "yarn") {
-    // Bare node24 has no yarn shim — mirror the pnpm branch's global install.
-    await execHandle(
-      sandbox,
-      `npm install -g yarn && cd ${dir} && yarn install`,
-      YARN_INSTALL_TIMEOUT_SECONDS,
-    );
-  } else {
-    await execHandle(sandbox, `cd ${dir} && npm install`, NPM_INSTALL_TIMEOUT_SECONDS);
-  }
+  const timeoutSeconds =
+    pm === "pnpm"
+      ? PNPM_INSTALL_TIMEOUT_SECONDS
+      : pm === "yarn"
+        ? YARN_INSTALL_TIMEOUT_SECONDS
+        : NPM_INSTALL_TIMEOUT_SECONDS;
+  await execHandle(sandbox, dependencyInstallCommand(pm, dir), timeoutSeconds);
 }
 
 /** Best-effort pip for `dir`'s requirements.txt / pyproject.toml (never throws). */
@@ -1383,86 +1487,125 @@ export async function pushBranchToOrigin(
   const details = `${owner}/${name}, branch=${branchName}`;
   return await runLoggedGitStep("pushBranchToOrigin", details, async () => {
     const workspaceDir = opts?.workspaceDir ?? workspaceDirShell();
-    // Fully-qualified refspec, both sides. A bare branch name, `HEAD` or `@{u}`
-    // can each resolve somewhere else (stale upstream, detached HEAD, a tag of
-    // the same name); `refs/heads/x:refs/heads/x` names the exact ref to update.
-    const quotedRefspec = quote([
-      `refs/heads/${branchName}:refs/heads/${branchName}`,
-    ]);
-    const repoUrl = bareGitHubRepoUrl(owner, name);
-    const maxAttempts = opts?.retryAttempts ?? 2;
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      const { remoteExists, replaceRemoteTip } =
-        await synchronizeBranchForPublish(
-          sandbox,
-          owner,
-          name,
-          branchName,
-          workspaceDir,
-        );
-      // Never a bare --force: the lease names the exact remote sha the sync
-      // just verified as the sandbox's own old tip, so a commit that lands in
-      // between is rejected ("stale info") and the retry re-syncs against it.
-      const lease =
-        replaceRemoteTip === undefined
-          ? ""
-          : `--force-with-lease=${quote([`refs/heads/${branchName}:${replaceRemoteTip}`])} `;
+    const currentBranch = (
+      await execGitCommand(
+        sandbox,
+        `cd ${workspaceDir} && git branch --show-current`,
+        10,
+      )
+    ).trim();
+    if (isChatSideBranch(currentBranch, branchName)) {
+      logGit(
+        `pushBranchToOrigin: sandbox is on side branch ${currentBranch}; publishing it instead (${details})`,
+      );
+      await publishCheckedOutBranch(sandbox, owner, name, currentBranch, {
+        ...opts,
+        workspaceDir,
+      });
+      // The chat branch did not move, so its PR flow has nothing to do; the
+      // side branch's PR belongs to the agent that opened it.
+      return { pushed: false, published: false };
+    }
+    return await publishCheckedOutBranch(sandbox, owner, name, branchName, {
+      ...opts,
+      workspaceDir,
+    });
+  });
+}
 
-      // A chat/Q&A turn has nothing to publish. Once the remote session branch
-      // exists, compare to that exact ref; otherwise compare to all fetched
-      // refs so the first chat turn does not create an empty branch. Fail open
-      // if the count itself fails: durability remains the critical path.
-      let unpushedCount: string | undefined;
-      try {
-        const exclusion = remoteExists
-          ? quote([`refs/remotes/origin/${branchName}`])
-          : "--remotes=origin";
-        unpushedCount = (
-          await execGitCommand(
-            sandbox,
-            `cd ${workspaceDir} && git rev-list --count HEAD --not ${exclusion}`,
-            15,
-          )
-        ).trim();
-      } catch (error) {
-        logGit(
-          `pushBranchToOrigin: ahead-of-remote gate failed, pushing anyway (${details}): ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-      if (unpushedCount === "0") {
-        logGit(
-          `pushBranchToOrigin: skipped — HEAD has no commits origin lacks (${details})`,
-        );
-        return { pushed: false, published: remoteExists };
-      }
+/** Syncs `branchName` with origin and pushes it; the sandbox must be on it. */
+async function publishCheckedOutBranch(
+  sandbox: SandboxHandle,
+  owner: string,
+  name: string,
+  branchName: string,
+  opts: {
+    timeoutSeconds?: number;
+    retryAttempts?: number;
+    workspaceDir: string;
+  },
+): Promise<{ pushed: boolean; published: boolean }> {
+  const details = `${owner}/${name}, branch=${branchName}`;
+  const workspaceDir = opts.workspaceDir;
+  // Fully-qualified refspec, both sides. A bare branch name, `HEAD` or `@{u}`
+  // can each resolve somewhere else (stale upstream, detached HEAD, a tag of
+  // the same name); `refs/heads/x:refs/heads/x` names the exact ref to update.
+  const quotedRefspec = quote([
+    `refs/heads/${branchName}:refs/heads/${branchName}`,
+  ]);
+  const repoUrl = bareGitHubRepoUrl(owner, name);
+  const maxAttempts = opts.retryAttempts ?? 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const { remoteExists, replaceRemoteTip } =
+      await synchronizeBranchForPublish(
+        sandbox,
+        owner,
+        name,
+        branchName,
+        workspaceDir,
+      );
+    // Never a bare --force: the lease names the exact remote sha the sync
+    // just verified as the sandbox's own old tip, so a commit that lands in
+    // between is rejected ("stale info") and the retry re-syncs against it.
+    const lease =
+      replaceRemoteTip === undefined
+        ? ""
+        : `--force-with-lease=${quote([`refs/heads/${branchName}:${replaceRemoteTip}`])} `;
 
-      try {
+    // A chat/Q&A turn has nothing to publish. Once the remote session branch
+    // exists, compare to that exact ref; otherwise compare to all fetched
+    // refs so the first chat turn does not create an empty branch. Fail open
+    // if the count itself fails: durability remains the critical path.
+    let unpushedCount: string | undefined;
+    try {
+      const exclusion = remoteExists
+        ? quote([`refs/remotes/origin/${branchName}`])
+        : "--remotes=origin";
+      unpushedCount = (
         await execGitCommand(
           sandbox,
-          `${gitRemoteAuthPrefix(workspaceDir, repoUrl)} git push ${lease}-u origin ${quotedRefspec}`,
-          opts?.timeoutSeconds ?? 60,
-        );
-        return { pushed: true, published: true };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const shouldRetry =
-          attempt < maxAttempts &&
-          (isRetryableGitNetworkError(message) ||
-            isNonFastForwardPushError(message));
-        if (!shouldRetry) {
-          throw error;
-        }
-        const delayMs = 1000 * attempt;
-        logGit(
-          `pushBranchToOrigin: remote moved or push was transient; refetching in ${delayMs}ms after attempt ${attempt}/${maxAttempts} (${details}): ${message}`,
-        );
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, delayMs);
-        });
-      }
+          `cd ${workspaceDir} && git rev-list --count HEAD --not ${exclusion}`,
+          15,
+        )
+      ).trim();
+    } catch (error) {
+      logGit(
+        `pushBranchToOrigin: ahead-of-remote gate failed, pushing anyway (${details}): ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-    throw new Error(`pushBranchToOrigin exhausted retries (${details})`);
-  });
+    if (unpushedCount === "0") {
+      logGit(
+        `pushBranchToOrigin: skipped — HEAD has no commits origin lacks (${details})`,
+      );
+      return { pushed: false, published: remoteExists };
+    }
+
+    try {
+      await execGitCommand(
+        sandbox,
+        `${gitRemoteAuthPrefix(workspaceDir, repoUrl)} git push ${lease}-u origin ${quotedRefspec}`,
+        opts.timeoutSeconds ?? 60,
+      );
+      return { pushed: true, published: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const shouldRetry =
+        attempt < maxAttempts &&
+        (isRetryableGitNetworkError(message) ||
+          isNonFastForwardPushError(message));
+      if (!shouldRetry) {
+        throw error;
+      }
+      const delayMs = 1000 * attempt;
+      logGit(
+        `pushBranchToOrigin: remote moved or push was transient; refetching in ${delayMs}ms after attempt ${attempt}/${maxAttempts} (${details}): ${message}`,
+      );
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delayMs);
+      });
+    }
+  }
+  throw new Error(`pushBranchToOrigin exhausted retries (${details})`);
 }
 
 /**
@@ -1583,15 +1726,16 @@ export async function createSandboxAndPrepareRepo(
   // and reliably trips Convex's 600s per-action ceiling on providers (Vercel)
   // that don't have it pre-baked into their base snapshot.
   skipInstallDeps = false,
-  // VCR image to boot from when there is no snapshot (orchestrator sessions use
-  // the Vercel-managed universal image). Threaded straight to createSandbox.
-  image?: string,
-  // Orchestrator: skip dockerd. See createSandbox.skipDocker.
-  skipDocker = false,
+  // "Fork session": fork this sandbox instead of booting `snapshotName`. The
+  // fork carries the repo checkout, so it takes the snapshot path below. No
+  // fallback on failure — the source's data is the point of a fork.
+  forkFrom?: string,
+  // Shared package-cache Drive role. See createSandbox.driveCacheRole.
+  driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
 ): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
   let sandbox: SandboxHandle | undefined;
   try {
-    const details = `${owner}/${name}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, syncStrategy=${syncStrategy.mode}`;
+    const details = `${owner}/${name}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
     return await runLoggedGitStep(
       "createSandboxAndPrepareRepo",
       details,
@@ -1607,11 +1751,11 @@ export async function createSandboxAndPrepareRepo(
             effectiveSnapshot,
             readyTimeoutSeconds,
             onSandboxAcquired,
-            image,
-            skipDocker,
+            forkFrom,
+            driveCacheRole,
           );
         } catch (err) {
-          if (effectiveSnapshot && isSnapshotUnusableError(err)) {
+          if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
             logGit(
               `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${err instanceof Error ? err.message : String(err)})`,
             );
@@ -1626,14 +1770,14 @@ export async function createSandboxAndPrepareRepo(
               undefined,
               readyTimeoutSeconds,
               onSandboxAcquired,
-              image,
-              skipDocker,
+              undefined, // forkFrom — the fallback is a fresh boot
+              driveCacheRole,
             );
           } else {
             throw err;
           }
         }
-        if (effectiveSnapshot) {
+        if (effectiveSnapshot || forkFrom) {
           // Deliberately no `installDependencies`/pnpm install on this path:
           // a seeded/base snapshot already carries node_modules from the seed
           // build (launchSeedRun's buildCommands), and normalizeSnapshotWorktree
@@ -1710,17 +1854,12 @@ export async function getOrCreateSandbox(
   snapshotName?: string,
   onProgress?: (label: string) => Promise<void>,
   syncStrategy: RepoSyncStrategy = { mode: "all" },
-  // Both only matter on the create fallback below — a resume reuses whatever the
-  // existing sandbox was built from. See createSandboxAndPrepareRepo.
-  skipInstallDeps = false,
-  image?: string,
-  skipDocker = false,
 ): Promise<{
   sandbox: SandboxHandle;
   isNew: boolean;
   resumeFellBack: boolean;
 }> {
-  const details = `${owner}/${name}, existingSandboxId=${existingSandboxId ?? "none"}, snapshot=${snapshotName ?? "none"}, image=${image ?? "none"}, syncStrategy=${syncStrategy.mode}`;
+  const details = `${owner}/${name}, existingSandboxId=${existingSandboxId ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
   return await runLoggedGitStep("getOrCreateSandbox", details, async () => {
     if (existingSandboxId) {
       const resumed = await tryResumeSandbox(
@@ -1752,10 +1891,6 @@ export async function getOrCreateSandbox(
       undefined,
       onProgress,
       syncStrategy,
-      undefined,
-      skipInstallDeps,
-      image,
-      skipDocker,
     );
     return {
       sandbox,

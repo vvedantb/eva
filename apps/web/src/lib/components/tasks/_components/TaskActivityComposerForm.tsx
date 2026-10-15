@@ -22,7 +22,7 @@ export interface TaskActivityComposerFormProps {
 }
 
 const COMMENT_EDITOR_CLASS =
-  "min-h-14 max-h-44 rounded-none border-0 bg-transparent px-3 py-2.5 shadow-none focus-visible:ring-0 transition-[background-color]";
+  "min-h-14 max-h-44 rounded-none border-0 bg-transparent px-3.5 py-3 shadow-none focus-visible:ring-0 transition-[background-color]";
 
 // Inner form — mounts only once the draft has resolved. Seeds text and maps
 // from the draft initializer so there is no hydration useEffect.
@@ -90,7 +90,10 @@ export function TaskActivityComposerForm({
         users={typingUsers}
         className="absolute bottom-full left-0 mb-1"
       />
-      <div className="overflow-hidden rounded-surface border border-input bg-card transition-[border-color,box-shadow] focus-within:border-ring/60 focus-within:ring-2 focus-within:ring-ring/35">
+      {/* Focus is a single hairline, not a halo: the ring stays at width 1 and
+          the border darkens, so the active box weighs the same as the resting
+          one. A 2px ring read as a heavy blue slab around the card. */}
+      <div className="overflow-hidden rounded-surface border border-input bg-card transition-[border-color,box-shadow] hover:border-ring/25 focus-within:border-ring/45 focus-within:ring-1 focus-within:ring-ring/20">
         <CommentMentionInput
           ref={mentionRef}
           value={commentText}
@@ -100,13 +103,14 @@ export function TaskActivityComposerForm({
           initialSkillMap={initialSkillMap}
           className={COMMENT_EDITOR_CLASS}
         />
-        <div className="flex items-center justify-end gap-2 px-2 pb-2">
+        <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5">
           <CommentSendButton
             size="icon-sm"
             disabled={!commentText.trim() || isSubmitting}
             isSubmitting={isSubmitting}
             onClick={handleAddComment}
             ariaLabel="Add comment"
+            quietWhenDisabled
           />
         </div>
       </div>

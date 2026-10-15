@@ -12,22 +12,15 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { cn } from "../utils/cn";
-import { STREAMDOWN_TABLE_RADIUS_CLASS } from "../utils/surface-radius";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import {
   createContext,
-  memo,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -89,19 +82,43 @@ export const MessageAction = ({
   label,
   variant = "ghost",
   size = "icon-sm",
+  onPointerEnter,
+  onFocus,
   ...props
 }: MessageActionProps) => {
+  // The tooltip mounts on first hover or focus, not with the button. Each
+  // Radix tooltip is ~16 components plus a re-render once it has measured its
+  // anchor, and a long chat has over a hundred of these buttons: that settle
+  // pass was ~1 s of frozen page a moment after opening a heavy session.
+  const [armedBy, setArmedBy] = useState<"pointer" | "focus" | null>(null);
   const button = (
-    <Button size={size} type="button" variant={variant} {...props}>
+    <Button
+      size={size}
+      type="button"
+      variant={variant}
+      onPointerEnter={(event) => {
+        onPointerEnter?.(event);
+        if (tooltip && armedBy === null) setArmedBy("pointer");
+      }}
+      onFocus={(event) => {
+        onFocus?.(event);
+        if (tooltip && armedBy === null) setArmedBy("focus");
+      }}
+      // Arming remounts the button inside the tooltip trigger; a keyboard
+      // user keeps focus on it (and so sees the tooltip, as before).
+      autoFocus={armedBy === "focus"}
+      {...props}
+    >
       {children}
       <span className="sr-only">{label || tooltip}</span>
     </Button>
   );
 
-  if (tooltip) {
+  if (tooltip && armedBy !== null) {
     return (
       <TooltipProvider>
-        <Tooltip>
+        {/* The focus that armed it landed before the tooltip existed. */}
+        <Tooltip defaultOpen={armedBy === "focus"}>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
           <TooltipContent>
             <p>{tooltip}</p>
@@ -319,27 +336,6 @@ export const MessageBranchPage = ({
     </ButtonGroupText>
   );
 };
-
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
-
-const streamdownPlugins = { cjk, code, math, mermaid };
-
-export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        STREAMDOWN_TABLE_RADIUS_CLASS,
-        className,
-      )}
-      plugins={streamdownPlugins}
-      {...props}
-    />
-  ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children,
-);
-
-MessageResponse.displayName = "MessageResponse";
 
 export type MessageToolbarProps = ComponentProps<"div">;
 

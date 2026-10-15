@@ -3,7 +3,7 @@
 import { useQueryState } from "nuqs";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Skeleton, motionFast } from "@eva/ui";
+import { CenteredSpinner, motionFast } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -160,24 +160,7 @@ export function UsageClient() {
             transition={motionFast}
           >
             {isLoading ? (
-              <>
-                <section
-                  className="flex flex-col gap-1 px-4"
-                  aria-busy="true"
-                  aria-label="Loading logs"
-                >
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {periodTitle}
-                  </h3>
-                  <Skeleton className="h-9 w-28" />
-                  <Skeleton className="mt-1 h-4 w-48" />
-                </section>
-                <SettingsSection title="Completions" bodyVariant="list">
-                  <Skeleton className="h-14 rounded-none" />
-                  <Skeleton className="h-14 rounded-none" />
-                  <Skeleton className="h-14 rounded-none" />
-                </SettingsSection>
-              </>
+              <CenteredSpinner label="Loading logs" />
             ) : isEmpty ? (
               <SettingsSection title={periodTitle} bodyVariant="list">
                 <SettingsEmptyState

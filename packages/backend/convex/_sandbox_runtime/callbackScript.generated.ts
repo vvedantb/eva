@@ -7,6 +7,8 @@ import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
 import { existsSync } from "fs";
 
 // callback-src/evaMcp.ts
+var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
+var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
 function buildEvaMcpServers({
   auth,
   baseUrl
@@ -20,15 +22,56 @@ function buildEvaMcpServers({
     }
   };
 }
+function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
+  const auth = env[authKey];
+  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
+  delete env[authKey];
+  delete env[urlKey];
+  if (!auth || !url) return { servers: {}, handoff: {} };
+  return {
+    servers: {
+      [name]: {
+        type: "http",
+        url,
+        headers: { Authorization: \`Bearer \${auth}\` }
+      }
+    },
+    handoff: {
+      [authKey]: auth,
+      [urlKey]: url
+    }
+  };
+}
 function consumeEvaMcpEnvironment(env) {
-  const auth = env.EVA_MCP_AUTH;
-  const baseUrl = env.EVA_MCP_BASE_URL;
-  const servers = buildEvaMcpServers({ auth, baseUrl });
+  const eva = buildEvaMcpServers({
+    auth: env.EVA_MCP_AUTH,
+    baseUrl: env.EVA_MCP_BASE_URL
+  });
+  const evaAuth = env.EVA_MCP_AUTH;
+  const evaBase = env.EVA_MCP_BASE_URL;
   delete env.EVA_MCP_AUTH;
   delete env.EVA_MCP_BASE_URL;
+  const linear = takeBearerServer(
+    env,
+    "linear",
+    "LINEAR_MCP_AUTH",
+    "LINEAR_MCP_URL",
+    LINEAR_MCP_DEFAULT_URL
+  );
+  const figma = takeBearerServer(
+    env,
+    "figma",
+    "FIGMA_MCP_AUTH",
+    "FIGMA_MCP_URL",
+    FIGMA_MCP_DEFAULT_URL
+  );
   return {
-    servers,
-    workerHandoffEnv: auth && baseUrl ? { EVA_MCP_AUTH: auth, EVA_MCP_BASE_URL: baseUrl } : {}
+    servers: { ...eva, ...linear.servers, ...figma.servers },
+    workerHandoffEnv: {
+      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
+      ...linear.handoff,
+      ...figma.handoff
+    }
   };
 }
 var consumed = consumeEvaMcpEnvironment(process.env);
@@ -78,7 +121,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
 
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-09-01";
+var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
   return {
     inputPerMillion,
@@ -94,11 +137,13 @@ var CLAUDE_PRICING_PER_MILLION = {
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
   "claude-mythos-5": anthropicRow(10, 1, 12.5, 50),
+  "claude-opus-5-5": anthropicRow(4, 0.2, 5, 20),
   "claude-opus-5": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-8": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-7": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-6": anthropicRow(5, 0.5, 6.25, 25),
   "claude-opus-4-5": anthropicRow(5, 0.5, 6.25, 25),
+  "claude-sonnet-5-5": anthropicRow(2, 0.2, 2.5, 10),
   "claude-sonnet-5": anthropicRow(2, 0.2, 2.5, 10),
   "claude-sonnet-4-6": anthropicRow(3, 0.3, 3.75, 15),
   "claude-sonnet-4-5": anthropicRow(3, 0.3, 3.75, 15),
@@ -149,12 +194,16 @@ var REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
 var ALLOWED_TOOLS = process.env.ALLOWED_TOOLS || "Read,Glob,Grep";
-var NO_WRITES = process.env.EVA_NO_WRITES === "1";
-var BLOCKING_QUESTIONS_ENABLED = process.env.ENTITY_ID_FIELD === "sessionId";
+var QUESTION_ANSWERING_ENTITY_FIELDS = /* @__PURE__ */ new Set([
+  "sessionId",
+  "chatId",
+  "taskId",
+  "projectId"
+]);
+var BLOCKING_QUESTIONS_ENABLED = RUN_ID === null && ENTITY_ID_FIELD !== void 0 && QUESTION_ANSWERING_ENTITY_FIELDS.has(ENTITY_ID_FIELD);
 var CALLBACK_SCRIPT_FP = process.env.CALLBACK_SCRIPT_FP || "";
 var DAEMON_OPTS_SIG = process.env.EVA_DAEMON_OPTS || "";
 var CURSOR_TURN_WORKER_PROMPT_FILE = process.env.EVA_CURSOR_TURN_WORKER_PROMPT_FILE || "";
-var CURSOR_TURN_WORKER_LIFECYCLE = process.env.EVA_CURSOR_TURN_WORKER_LIFECYCLE || "";
 var CURSOR_TURN_WORKER_TURN_ID = process.env.EVA_CURSOR_TURN_WORKER_TURN_ID || "";
 var parsedCursorWorkerLeaseGeneration = Number(
   process.env.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION
@@ -875,8 +924,8 @@ function releaseTurnLeaseForCompletion() {
 function getCurrentTurnLease() {
   return turnOwnership.status === "owned" ? turnOwnership.turnLease : null;
 }
-function canSendTurnHeartbeat(input) {
-  return input.claimMutation === void 0 || input.ownership.status === "owned";
+function canSendTurnHeartbeat(ownership) {
+  return ownership.status === "owned";
 }
 function appendCurrentTurnLease(args) {
   const identity = getCurrentTurnLease();
@@ -1044,6 +1093,7 @@ async function callHarnessSkillCatalogReport(provider, cliVersion, skills) {
 }
 async function callStreamingHeartbeatTouchOnce(entityId) {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -1058,10 +1108,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
     noteHeartbeatResponse(response2, identity);
     return response2;
   }
-  const response = identity === null ? await callConvex("mutation", "turns:legacyHeartbeatFromCallback", {
-    entityId,
-    touchOnly: true
-  }) : await callConvex("mutation", "turns:heartbeatFromCallback", {
+  const response = await callConvex("mutation", "turns:heartbeatFromCallback", {
     entityId,
     touchOnly: true,
     turnId: identity.turnId,
@@ -1072,6 +1119,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
 }
 async function callStreamingHeartbeatOnce(entityId, currentActivity, currentContent, pendingQuestion) {
   const identity = getCurrentTurnLease();
+  if (identity === null) return null;
   if (CONVEX_SITE_URL && STREAMING_HMAC) {
     const body = new URLSearchParams();
     body.set("entityId", entityId);
@@ -1094,17 +1142,18 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
     entityId,
     touchOnly: false,
     currentActivity,
-    currentContent
+    currentContent,
+    turnId: identity.turnId,
+    leaseGeneration: identity.leaseGeneration
   };
   if (pendingQuestion) {
     args.pendingQuestion = pendingQuestion;
   }
-  const path3 = identity === null ? "turns:legacyHeartbeatFromCallback" : "turns:heartbeatFromCallback";
-  if (identity !== null) {
-    args.turnId = identity.turnId;
-    args.leaseGeneration = identity.leaseGeneration;
-  }
-  const response = await callConvex("mutation", path3, args);
+  const response = await callConvex(
+    "mutation",
+    "turns:heartbeatFromCallback",
+    args
+  );
   noteHeartbeatResponse(response, identity);
   return response;
 }
@@ -2116,6 +2165,7 @@ function currentBranch() {
 }
 var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
   "sessionId",
+  "chatId",
   "taskId",
   "projectId"
 ]);
@@ -2138,40 +2188,22 @@ function readClaimedTurn(result) {
   const payload = unwrapConvexMutationPayload(result);
   if (!payload || typeof payload.prompt !== "string") return null;
   const lifecycle = payload.turnLifecycle;
-  if (lifecycle !== void 0 && lifecycle !== "legacy" && lifecycle !== "durable") {
-    throw new Error("Claimed turn returned an invalid lifecycle discriminator");
-  }
+  if (lifecycle !== "durable") return null;
   const attachmentUrls = Array.isArray(payload.attachmentUrls) ? payload.attachmentUrls.filter(
     (url) => typeof url === "string"
   ) : [];
   const interactionMode = "default";
   const turnLease = readTurnLeaseIdentity(result);
-  if (lifecycle === "durable" && turnLease === null) {
+  if (turnLease === null) {
     throw new Error("Durable claimed turn did not include a lease identity");
   }
-  if (lifecycle === "legacy" && turnLease !== null) {
-    throw new Error("Legacy claimed turn unexpectedly included a lease identity");
-  }
-  if (turnLease !== null) {
-    return {
-      lifecycle: "durable",
-      prompt: payload.prompt,
-      attachmentUrls,
-      interactionMode,
-      turnLease
-    };
-  }
-  return {
-    lifecycle: "legacy",
-    prompt: payload.prompt,
-    attachmentUrls,
-    interactionMode,
-    turnLease: null
-  };
+  return { prompt: payload.prompt, attachmentUrls, interactionMode, turnLease };
 }
 function startClaimedTurn(turn) {
   if (claimedTurnLifecycleStatus() === "active") {
-    throw new Error("Cannot start a claimed turn while another claim is active");
+    throw new Error(
+      "Cannot start a claimed turn while another claim is active"
+    );
   }
   beginTurnOwnership("claim", turn.turnLease);
   beginTurnCheckpoint();
@@ -2181,10 +2213,8 @@ function appendClaimedTurnCompletion(args) {
   if (ownership.status !== "owned" || ownership.owner !== "claim") {
     throw new Error("Cannot complete a claimed turn before it starts");
   }
-  if (ownership.turnLease !== null) {
-    args.turnId = ownership.turnLease.turnId;
-    args.leaseGeneration = ownership.turnLease.leaseGeneration;
-  }
+  args.turnId = ownership.turnLease.turnId;
+  args.leaseGeneration = ownership.turnLease.leaseGeneration;
 }
 function finishClaimedTurn() {
   endTurnOwnership();
@@ -2207,13 +2237,18 @@ var DAEMON_CLAIM_POLL_TIMING = {
   idleExitMs: 45 * 60 * 1e3,
   fencePollIntervalMs: 5e3,
   fastPollIntervalMs: 50,
+  // Mid-turn the claim only drains cancel/stop-task flags (no turn can be
+  // handed over), so 250ms keeps Stop instant while cutting the busiest
+  // phase's claim reads ~5x versus the 50ms handoff cadence.
+  busyPollIntervalMs: 250,
   idlePollIntervalMs: 1e3,
   fastPollWindowMs: 3e4
 };
 function selectClaimPollIntervalMs(params) {
+  if (params.busy) return DAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;
   const now = params.now ?? Date.now();
   const recentlyActive = now - params.lastIdleActivityAtMs < DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
-  return params.busy || recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
+  return recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
 }
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -2226,6 +2261,16 @@ function pidAlive(pid) {
     return true;
   } catch {
     return false;
+  }
+}
+function isCallbackRunnerPid(pid) {
+  if (!pidAlive(pid)) return false;
+  try {
+    return readFileSync2(\`/proc/\${pid}/cmdline\`, "utf8").includes(
+      "run-design.mjs"
+    );
+  } catch {
+    return true;
   }
 }
 function writeOomScoreAdj(target2, score) {
@@ -2259,8 +2304,9 @@ function buildEntityMutationArgs(entityIdField, entityId, fields) {
 }
 function claimDaemonPidfileBoot(params) {
   const currentPid = params.currentPid ?? process.pid;
+  const isRival = params.isRival ?? isCallbackRunnerPid;
   const rivalPid = readPidFromFile(params.paths.pid);
-  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && pidAlive(rivalPid)) {
+  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
     return { status: "rival_alive", rivalPid };
   }
   writeFileSync2(params.paths.pid, String(currentPid));
@@ -2747,7 +2793,7 @@ function trackClaudeToolResult(toolUseId, resultText, isError) {
   });
 }
 function canFlushBackgroundShells() {
-  return PROVIDER === "claude" && ENTITY_ID_FIELD === "sessionId" && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
+  return PROVIDER === "claude" && (ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") && typeof ENTITY_ID === "string" && ENTITY_ID.length > 0;
 }
 async function flushBackgroundShellQueue() {
   if (!canFlushBackgroundShells()) return;
@@ -4538,10 +4584,7 @@ var heartbeatInterval = null;
 var activeFlush = null;
 var flushRequested = false;
 function ownsHeartbeatLease() {
-  return canSendTurnHeartbeat({
-    claimMutation: CLAIM_MUTATION,
-    ownership: getTurnOwnership()
-  });
+  return canSendTurnHeartbeat(getTurnOwnership());
 }
 function buildStreamingPayload() {
   return serializeSteps(
@@ -5128,17 +5171,13 @@ function buildTurnCompletionPayload(params) {
   );
 }
 async function postClaimedTurnFailureCompletion(params) {
-  const completionArgs = buildEntityMutationArgs(
-    ENTITY_ID_FIELD,
-    ENTITY_ID,
-    {
-      success: false,
-      result: null,
-      error: params.error,
-      activityLog: params.activityLog,
-      ...RUN_ID ? { runId: RUN_ID } : {}
-    }
-  );
+  const completionArgs = buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, {
+    success: false,
+    result: null,
+    error: params.error,
+    activityLog: params.activityLog,
+    ...RUN_ID ? { runId: RUN_ID } : {}
+  });
   appendClaimedTurnCompletion(completionArgs);
   appendTurnCheckpoint(completionArgs);
   releaseTurnLeaseForCompletion();
@@ -5198,15 +5237,28 @@ async function attachChatMediaIfAny(uploaded, target2) {
   if (target2.messageId) mediaArgs.messageId = target2.messageId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
+async function attachRunMediaIfAny(uploaded) {
+  if (uploaded.length === 0) return;
+  await callConvexWithRetry(
+    "mutation",
+    "agentRuns:attachMedia",
+    {
+      id: RUN_ID ?? "",
+      mediaStorageIds: uploaded.map((item) => item.storageId)
+    },
+    3
+  );
+}
 async function deliverCompletionWithMedia(completionArgs) {
   appendTurnCheckpoint(completionArgs);
   releaseTurnLeaseForCompletion();
+  if (RUN_ID) await uploadAndAttachSandboxMedia({});
   await callConvexWithRetry(
     "mutation",
     COMPLETION_MUTATION ?? "",
     completionArgs
   );
-  await uploadAndAttachSandboxMedia({});
+  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
 }
 function archivePostedFile(dir, file) {
   const postedDir = dir + "/.posted";
@@ -5214,7 +5266,6 @@ function archivePostedFile(dir, file) {
   renameSync(dir + "/" + file, postedDir + "/" + file);
 }
 async function uploadAndAttachSandboxMedia(target2) {
-  if (RUN_ID) return;
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
   const isDuplicate = (filePath) => {
@@ -5265,7 +5316,11 @@ async function uploadAndAttachSandboxMedia(target2) {
     }
   }
   try {
-    await attachChatMediaIfAny(uploaded, target2);
+    if (RUN_ID) {
+      await attachRunMediaIfAny(uploaded);
+    } else {
+      await attachChatMediaIfAny(uploaded, target2);
+    }
   } catch (e) {
     console.error("Failed to attach sandbox media:", e);
   }
@@ -5409,7 +5464,7 @@ function buildCanUseTool() {
         updatedInput: { ...input, run_in_background: false }
       };
     }
-    if (toolName !== "AskUserQuestion") {
+    if (toolName !== "AskUserQuestion" || !BLOCKING_QUESTIONS_ENABLED) {
       return { behavior: "allow", updatedInput: input };
     }
     const toolUseId = typeof options.toolUseID === "string" && options.toolUseID ? options.toolUseID : "";
@@ -5462,7 +5517,7 @@ function isZeroWorkTaskNotificationResult(message) {
 
 // callback-src/providers/claudeSdk.ts
 var SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
-var SDK_VERSION = "0.3.258";
+var SDK_VERSION = "0.3.282";
 async function readSdkPlanUsage(handle) {
   if (typeof handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET !== "function") {
     log("usage limits: this SDK query handle exposes no usage method");
@@ -5552,39 +5607,50 @@ async function loadSdk() {
   return mod;
 }
 var CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code";
-function globalClaudeCliVersion() {
-  for (const root of globalNpmRoots()) {
-    const version = installedPackageVersion(root + "/" + CLAUDE_CODE_PACKAGE);
-    if (version !== null) return version;
-  }
-  return null;
+function binPackageVersion(binPath, packageName) {
+  return installedPackageVersion(
+    dirname(dirname(binPath)) + "/lib/node_modules/" + packageName
+  );
 }
-function claudeExecutablePath() {
-  const pinned = process.env.CLAUDE_CLI_PINNED_VERSION || null;
-  const fallback = process.env.CLAUDE_BIN_PATH || "";
+function resolvePinnedCliBinary(cli) {
+  const pinned = cli.pinnedVersion;
   let globalBin = "";
   try {
-    globalBin = execSync("command -v claude", { encoding: "utf8" }).trim();
+    globalBin = execSync("command -v " + cli.binName, {
+      encoding: "utf8"
+    }).trim();
   } catch {
     globalBin = "";
   }
   if (globalBin) {
-    const globalVersion = globalClaudeCliVersion();
+    const globalVersion = binPackageVersion(globalBin, cli.packageName);
     if (pinned === null || globalVersion === pinned) return globalBin;
     log(
-      "cli version drift: global claude is " + (globalVersion ?? "unknown") + ", need " + pinned + "; preferring the pinned fallback install"
+      "cli version drift: global " + cli.binName + " is " + (globalVersion ?? "unknown") + ", need " + pinned + "; preferring the pinned fallback install"
     );
   }
-  if (fallback && existsSync6(fallback)) {
-    const fallbackRoot = dirname(dirname(fallback)) + "/lib/node_modules/" + CLAUDE_CODE_PACKAGE;
-    const fallbackVersion = installedPackageVersion(fallbackRoot);
-    if (pinned === null || fallbackVersion === pinned) return fallback;
+  if (cli.fallbackBinPath && existsSync6(cli.fallbackBinPath)) {
+    const fallbackVersion = binPackageVersion(
+      cli.fallbackBinPath,
+      cli.packageName
+    );
+    if (pinned === null || fallbackVersion === pinned) {
+      return cli.fallbackBinPath;
+    }
     log(
-      "cli version drift: fallback claude is " + (fallbackVersion ?? "unknown") + ", need " + pinned + "; no pinned binary available"
+      "cli version drift: fallback " + cli.binName + " is " + (fallbackVersion ?? "unknown") + ", need " + pinned + "; no pinned binary available"
     );
-    if (!globalBin) return fallback;
+    if (!globalBin) return cli.fallbackBinPath;
   }
-  return globalBin || "claude";
+  return globalBin || cli.binName;
+}
+function claudeExecutablePath() {
+  return resolvePinnedCliBinary({
+    packageName: CLAUDE_CODE_PACKAGE,
+    binName: "claude",
+    pinnedVersion: process.env.CLAUDE_CLI_PINNED_VERSION || null,
+    fallbackBinPath: process.env.CLAUDE_BIN_PATH || ""
+  });
 }
 function readPromptText() {
   return readFileSync6("/tmp/design-prompt.txt", "utf8");
@@ -5596,7 +5662,7 @@ function buildSdkOptions(sessionMode) {
 var EVA_SDK_SYSTEM_APPEND = "You are running inside Eva, a platform that runs coding agents in remote sandboxes against GitHub repos. Treat the workspace as the active repo checkout.";
 function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   const allowedToolsOption = tools === "agent" && ALLOWED_TOOLS ? { allowedTools: ALLOWED_TOOLS.split(",") } : { allowedTools: [] };
-  const permissionOption = tools === "agent" && BLOCKING_QUESTIONS_ENABLED ? {
+  const permissionOption = tools === "agent" ? {
     permissionMode: "default",
     allowDangerouslySkipPermissions: false,
     canUseTool: buildCanUseTool()
@@ -5615,7 +5681,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
     ENABLE_TOOL_SEARCH: "auto"
   };
-  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId") {
+  if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
   }
   const effortOption = claudeEffort === "low" || claudeEffort === "medium" || claudeEffort === "high" || claudeEffort === "xhigh" || claudeEffort === "max" ? { effort: claudeEffort } : {};
@@ -6020,8 +6086,6 @@ var DAEMON_PID_FILE = daemonPaths.pid;
 var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
@@ -6542,12 +6606,13 @@ async function ensureSyntheticTurn() {
       entityMutationArgs({ model: MODEL })
     );
     const messageId = readSyntheticTurnMessageId(result);
-    if (messageId === null) {
-      log("daemon: openSyntheticTurn returned no messageId");
+    const syntheticLease = readTurnLeaseIdentity(result);
+    if (messageId === null || syntheticLease === null) {
+      log("daemon: openSyntheticTurn returned no messageId or lease");
       return;
     }
     resetTurnState();
-    beginTurnOwnership("provider", readTurnLeaseIdentity(result));
+    beginTurnOwnership("provider", syntheticLease);
     beginTurnCheckpoint();
     if (!supervisor.startTurn({ kind: "synthetic", messageId })) {
       log("daemon: synthetic turn opened after lifecycle moved; ignoring");
@@ -7026,9 +7091,681 @@ async function runSdkDaemon() {
 }
 
 // callback-src/providers/codexAppServerClient.ts
-import { spawn } from "child_process";
-import { existsSync as existsSync7 } from "fs";
+import { spawn as spawn2 } from "child_process";
 import { createInterface } from "readline";
+
+// ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
+import { promises as fs } from "fs";
+import os from "os";
+import path from "path";
+import { spawn } from "child_process";
+import { statSync as statSync2 } from "fs";
+import path2 from "path";
+import readline from "readline";
+import { createRequire } from "module";
+async function createOutputSchemaFile(schema) {
+  if (schema === void 0) {
+    return { cleanup: async () => {
+    } };
+  }
+  if (!isJsonObject(schema)) {
+    throw new Error("outputSchema must be a plain JSON object");
+  }
+  const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
+  const schemaPath = path.join(schemaDir, "schema.json");
+  const cleanup = async () => {
+    try {
+      await fs.rm(schemaDir, { recursive: true, force: true });
+    } catch {
+    }
+  };
+  try {
+    await fs.writeFile(schemaPath, JSON.stringify(schema), "utf8");
+    return { schemaPath, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+}
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+var Thread = class {
+  _exec;
+  _options;
+  _id;
+  _threadOptions;
+  /** Returns the ID of the thread. Populated after the first turn starts. */
+  get id() {
+    return this._id;
+  }
+  /* @internal */
+  constructor(exec, options, threadOptions, id = null) {
+    this._exec = exec;
+    this._options = options;
+    this._id = id;
+    this._threadOptions = threadOptions;
+  }
+  /** Provides the input to the agent and streams events as they are produced during the turn. */
+  async runStreamed(input, turnOptions = {}) {
+    return { events: this.runStreamedInternal(input, turnOptions) };
+  }
+  async *runStreamedInternal(input, turnOptions = {}) {
+    const { schemaPath, cleanup } = await createOutputSchemaFile(turnOptions.outputSchema);
+    const options = this._threadOptions;
+    const { prompt, images } = normalizeInput(input);
+    const generator = this._exec.run({
+      input: prompt,
+      baseUrl: this._options.baseUrl,
+      apiKey: this._options.apiKey,
+      threadId: this._id,
+      images,
+      model: options?.model,
+      sandboxMode: options?.sandboxMode,
+      workingDirectory: options?.workingDirectory,
+      skipGitRepoCheck: options?.skipGitRepoCheck,
+      outputSchemaFile: schemaPath,
+      modelReasoningEffort: options?.modelReasoningEffort,
+      signal: turnOptions.signal,
+      networkAccessEnabled: options?.networkAccessEnabled,
+      webSearchMode: options?.webSearchMode,
+      webSearchEnabled: options?.webSearchEnabled,
+      approvalPolicy: options?.approvalPolicy,
+      additionalDirectories: options?.additionalDirectories
+    });
+    try {
+      for await (const item of generator) {
+        let parsed;
+        try {
+          parsed = JSON.parse(item);
+        } catch (error) {
+          throw new Error(\`Failed to parse item: \${item}\`, { cause: error });
+        }
+        if (parsed.type === "thread.started") {
+          this._id = parsed.thread_id;
+        } else if (parsed.type === "turn.completed") {
+          parsed.usage.cache_write_input_tokens ??= 0;
+        }
+        yield parsed;
+      }
+    } finally {
+      await cleanup();
+    }
+  }
+  /** Provides the input to the agent and returns the completed turn. */
+  async run(input, turnOptions = {}) {
+    const generator = this.runStreamedInternal(input, turnOptions);
+    const items = [];
+    let finalResponse = "";
+    let usage = null;
+    let turnFailure = null;
+    for await (const event of generator) {
+      if (event.type === "item.completed") {
+        if (event.item.type === "agent_message") {
+          finalResponse = event.item.text;
+        }
+        items.push(event.item);
+      } else if (event.type === "turn.completed") {
+        usage = event.usage;
+      } else if (event.type === "turn.failed") {
+        turnFailure = event.error;
+        break;
+      }
+    }
+    if (turnFailure) {
+      throw new Error(turnFailure.message);
+    }
+    return { items, finalResponse, usage };
+  }
+};
+function normalizeInput(input) {
+  if (typeof input === "string") {
+    return { prompt: input, images: [] };
+  }
+  const promptParts = [];
+  const images = [];
+  for (const item of input) {
+    if (item.type === "text") {
+      promptParts.push(item.text);
+    } else if (item.type === "local_image") {
+      images.push(item.path);
+    }
+  }
+  return { prompt: promptParts.join("\\n\\n"), images };
+}
+var INTERNAL_ORIGINATOR_ENV = "CODEX_INTERNAL_ORIGINATOR_OVERRIDE";
+var TYPESCRIPT_SDK_ORIGINATOR = "codex_sdk_ts";
+var CODEX_NPM_NAME = "@openai/codex";
+var PLATFORM_PACKAGE_BY_TARGET = {
+  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
+  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
+  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
+  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
+  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
+  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64"
+};
+var moduleRequire = createRequire(import.meta.url);
+var CodexExec = class {
+  executablePath;
+  pathDirs;
+  envOverride;
+  configOverrides;
+  constructor(executablePath = null, env, configOverrides) {
+    if (executablePath) {
+      this.executablePath = executablePath;
+      this.pathDirs = [];
+    } else {
+      const resolved = findCodexPath();
+      this.executablePath = resolved.executablePath;
+      this.pathDirs = resolved.pathDirs;
+    }
+    this.envOverride = env;
+    this.configOverrides = configOverrides;
+  }
+  async *run(args) {
+    const commandArgs = ["exec", "--experimental-json"];
+    if (this.configOverrides) {
+      for (const override of serializeConfigOverrides(this.configOverrides)) {
+        commandArgs.push("--config", override);
+      }
+    }
+    if (args.baseUrl) {
+      commandArgs.push(
+        "--config",
+        \`openai_base_url=\${toTomlValue(args.baseUrl, "openai_base_url")}\`
+      );
+    }
+    if (args.model) {
+      commandArgs.push("--model", args.model);
+    }
+    if (args.sandboxMode) {
+      commandArgs.push("--sandbox", args.sandboxMode);
+    }
+    if (args.workingDirectory) {
+      commandArgs.push("--cd", args.workingDirectory);
+    }
+    if (args.additionalDirectories?.length) {
+      for (const dir of args.additionalDirectories) {
+        commandArgs.push("--add-dir", dir);
+      }
+    }
+    if (args.skipGitRepoCheck) {
+      commandArgs.push("--skip-git-repo-check");
+    }
+    if (args.outputSchemaFile) {
+      commandArgs.push("--output-schema", args.outputSchemaFile);
+    }
+    if (args.modelReasoningEffort) {
+      commandArgs.push("--config", \`model_reasoning_effort="\${args.modelReasoningEffort}"\`);
+    }
+    if (args.networkAccessEnabled !== void 0) {
+      commandArgs.push(
+        "--config",
+        \`sandbox_workspace_write.network_access=\${args.networkAccessEnabled}\`
+      );
+    }
+    if (args.webSearchMode) {
+      commandArgs.push("--config", \`web_search="\${args.webSearchMode}"\`);
+    } else if (args.webSearchEnabled === true) {
+      commandArgs.push("--config", \`web_search="live"\`);
+    } else if (args.webSearchEnabled === false) {
+      commandArgs.push("--config", \`web_search="disabled"\`);
+    }
+    if (args.approvalPolicy) {
+      commandArgs.push("--config", \`approval_policy="\${args.approvalPolicy}"\`);
+    }
+    if (args.threadId) {
+      commandArgs.push("resume", args.threadId);
+    }
+    if (args.images?.length) {
+      for (const image of args.images) {
+        commandArgs.push("--image", image);
+      }
+    }
+    const env = {};
+    if (this.envOverride) {
+      Object.assign(env, this.envOverride);
+    } else {
+      for (const [key, value] of Object.entries(process.env)) {
+        if (value !== void 0) {
+          env[key] = value;
+        }
+      }
+    }
+    if (!env[INTERNAL_ORIGINATOR_ENV]) {
+      env[INTERNAL_ORIGINATOR_ENV] = TYPESCRIPT_SDK_ORIGINATOR;
+    }
+    if (args.apiKey) {
+      env.CODEX_API_KEY = args.apiKey;
+    }
+    if (this.pathDirs.length > 0) {
+      prependPathDirs(env, this.pathDirs);
+    }
+    const child = spawn(this.executablePath, commandArgs, {
+      env,
+      signal: args.signal
+    });
+    let spawnError = null;
+    child.once("error", (err) => spawnError = err);
+    if (!child.stdin) {
+      child.kill();
+      throw new Error("Child process has no stdin");
+    }
+    child.stdin.write(args.input);
+    child.stdin.end();
+    if (!child.stdout) {
+      child.kill();
+      throw new Error("Child process has no stdout");
+    }
+    const stderrChunks = [];
+    if (child.stderr) {
+      child.stderr.on("data", (data) => {
+        stderrChunks.push(data);
+      });
+    }
+    const exitPromise = new Promise(
+      (resolve) => {
+        child.once("exit", (code, signal) => {
+          resolve({ code, signal });
+        });
+      }
+    );
+    const rl = readline.createInterface({
+      input: child.stdout,
+      crlfDelay: Infinity
+    });
+    try {
+      for await (const line of rl) {
+        yield line;
+      }
+      if (spawnError) throw spawnError;
+      const { code, signal } = await exitPromise;
+      if (code !== 0 || signal) {
+        const stderrBuffer = Buffer.concat(stderrChunks);
+        const detail = signal ? \`signal \${signal}\` : \`code \${code ?? 1}\`;
+        throw new Error(\`Codex Exec exited with \${detail}: \${stderrBuffer.toString("utf8")}\`);
+      }
+    } finally {
+      rl.close();
+      child.removeAllListeners();
+      try {
+        if (!child.killed) child.kill();
+      } catch {
+      }
+    }
+  }
+};
+function serializeConfigOverrides(configOverrides) {
+  const overrides = [];
+  flattenConfigOverrides(configOverrides, "", overrides);
+  return overrides;
+}
+function flattenConfigOverrides(value, prefix, overrides) {
+  if (!isPlainObject(value)) {
+    if (prefix) {
+      overrides.push(\`\${prefix}=\${toTomlValue(value, prefix)}\`);
+      return;
+    } else {
+      throw new Error("Codex config overrides must be a plain object");
+    }
+  }
+  const entries = Object.entries(value);
+  if (!prefix && entries.length === 0) {
+    return;
+  }
+  if (prefix && entries.length === 0) {
+    overrides.push(\`\${prefix}={}\`);
+    return;
+  }
+  for (const [key, child] of entries) {
+    if (!key) {
+      throw new Error("Codex config override keys must be non-empty strings");
+    }
+    if (child === void 0) {
+      continue;
+    }
+    const path3 = prefix ? \`\${prefix}.\${key}\` : key;
+    if (isPlainObject(child)) {
+      flattenConfigOverrides(child, path3, overrides);
+    } else {
+      overrides.push(\`\${path3}=\${toTomlValue(child, path3)}\`);
+    }
+  }
+}
+function toTomlValue(value, path3) {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  } else if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(\`Codex config override at \${path3} must be a finite number\`);
+    }
+    return \`\${value}\`;
+  } else if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  } else if (Array.isArray(value)) {
+    const rendered = value.map((item, index) => toTomlValue(item, \`\${path3}[\${index}]\`));
+    return \`[\${rendered.join(", ")}]\`;
+  } else if (isPlainObject(value)) {
+    const parts = [];
+    for (const [key, child] of Object.entries(value)) {
+      if (!key) {
+        throw new Error("Codex config override keys must be non-empty strings");
+      }
+      if (child === void 0) {
+        continue;
+      }
+      parts.push(\`\${formatTomlKey(key)} = \${toTomlValue(child, \`\${path3}.\${key}\`)}\`);
+    }
+    return \`{\${parts.join(", ")}}\`;
+  } else if (value === null) {
+    throw new Error(\`Codex config override at \${path3} cannot be null\`);
+  } else {
+    const typeName = typeof value;
+    throw new Error(\`Unsupported Codex config override value at \${path3}: \${typeName}\`);
+  }
+}
+var TOML_BARE_KEY = /^[A-Za-z0-9_-]+\$/;
+function formatTomlKey(key) {
+  return TOML_BARE_KEY.test(key) ? key : JSON.stringify(key);
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function findCodexPath() {
+  const { platform, arch } = process;
+  let targetTriple = null;
+  switch (platform) {
+    case "linux":
+    case "android":
+      switch (arch) {
+        case "x64":
+          targetTriple = "x86_64-unknown-linux-musl";
+          break;
+        case "arm64":
+          targetTriple = "aarch64-unknown-linux-musl";
+          break;
+        default:
+          break;
+      }
+      break;
+    case "darwin":
+      switch (arch) {
+        case "x64":
+          targetTriple = "x86_64-apple-darwin";
+          break;
+        case "arm64":
+          targetTriple = "aarch64-apple-darwin";
+          break;
+        default:
+          break;
+      }
+      break;
+    case "win32":
+      switch (arch) {
+        case "x64":
+          targetTriple = "x86_64-pc-windows-msvc";
+          break;
+        case "arm64":
+          targetTriple = "aarch64-pc-windows-msvc";
+          break;
+        default:
+          break;
+      }
+      break;
+    default:
+      break;
+  }
+  if (!targetTriple) {
+    throw new Error(\`Unsupported platform: \${platform} (\${arch})\`);
+  }
+  const platformPackage = PLATFORM_PACKAGE_BY_TARGET[targetTriple];
+  if (!platformPackage) {
+    throw new Error(\`Unsupported target triple: \${targetTriple}\`);
+  }
+  let vendorRoot;
+  try {
+    const codexPackageJsonPath = moduleRequire.resolve(\`\${CODEX_NPM_NAME}/package.json\`);
+    const codexRequire = createRequire(codexPackageJsonPath);
+    const platformPackageJsonPath = codexRequire.resolve(\`\${platformPackage}/package.json\`);
+    vendorRoot = path2.join(path2.dirname(platformPackageJsonPath), "vendor");
+  } catch {
+    throw new Error(
+      \`Unable to locate Codex CLI binaries. Ensure \${CODEX_NPM_NAME} is installed with optional dependencies.\`
+    );
+  }
+  const codexBinaryName = process.platform === "win32" ? "codex.exe" : "codex";
+  const nativePackage = resolveNativePackage(vendorRoot, targetTriple, codexBinaryName);
+  if (!nativePackage) {
+    throw new Error(
+      \`Unable to locate Codex CLI binaries for \${targetTriple}. Ensure \${CODEX_NPM_NAME} is installed with optional dependencies.\`
+    );
+  }
+  return nativePackage;
+}
+function resolveNativePackage(vendorRoot, targetTriple, codexBinaryName) {
+  const packageRoot = path2.join(vendorRoot, targetTriple);
+  const packageBinaryPath = path2.join(packageRoot, "bin", codexBinaryName);
+  if (isFile(packageBinaryPath) && isFile(path2.join(packageRoot, "codex-package.json"))) {
+    return {
+      executablePath: packageBinaryPath,
+      pathDirs: existingDirs(path2.join(packageRoot, "codex-path"))
+    };
+  }
+  const legacyBinaryPath = path2.join(packageRoot, "codex", codexBinaryName);
+  if (isFile(legacyBinaryPath)) {
+    return {
+      executablePath: legacyBinaryPath,
+      pathDirs: existingDirs(path2.join(packageRoot, "path"))
+    };
+  }
+  return null;
+}
+function existingDirs(...dirs) {
+  return dirs.filter(isDirectory);
+}
+function prependPathDirs(env, pathDirs, platform = process.platform) {
+  const pathKey = pathEnvKey(env, platform);
+  if (platform === "win32") {
+    for (const key of Object.keys(env)) {
+      if (key.toLowerCase() === "path" && key !== pathKey) {
+        delete env[key];
+      }
+    }
+  }
+  const existingEntries = (env[pathKey] ?? "").split(path2.delimiter).filter((entry) => entry.length > 0 && !pathDirs.includes(entry));
+  env[pathKey] = [...pathDirs, ...existingEntries].join(path2.delimiter);
+}
+function pathEnvKey(env, platform) {
+  if (platform !== "win32") {
+    return "PATH";
+  }
+  const matchingKeys = Object.keys(env).filter((key) => key.toLowerCase() === "path");
+  return matchingKeys.includes("Path") ? "Path" : matchingKeys.at(-1) ?? "PATH";
+}
+function isFile(filePath) {
+  try {
+    return statSync2(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+function isDirectory(filePath) {
+  try {
+    return statSync2(filePath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+var Codex = class {
+  exec;
+  options;
+  constructor(options = {}) {
+    const { codexPathOverride, env, config } = options;
+    this.exec = new CodexExec(codexPathOverride, env, config);
+    this.options = options;
+  }
+  /**
+   * Starts a new conversation with an agent.
+   * @returns A new thread instance.
+   */
+  startThread(options = {}) {
+    return new Thread(this.exec, this.options, options);
+  }
+  /**
+   * Resumes a conversation with an agent based on the thread id.
+   * Threads are persisted in ~/.codex/sessions.
+   *
+   * @param id The id of the thread to resume.
+   * @returns A new thread instance.
+   */
+  resumeThread(id, options = {}) {
+    return new Thread(this.exec, this.options, options, id);
+  }
+};
+
+// callback-src/providers/codexSdk.ts
+import { readFileSync as readFileSync7 } from "fs";
+var CODEX_CLI_PACKAGE = "@openai/codex";
+function codexExecutablePath() {
+  return resolvePinnedCliBinary({
+    packageName: CODEX_CLI_PACKAGE,
+    binName: "codex",
+    pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
+    fallbackBinPath: CODEX_BIN_PATH
+  });
+}
+function readPromptText2() {
+  const prompt = readFileSync7("/tmp/design-prompt.txt", "utf8");
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
+}
+function codexEnvironment() {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== void 0) env[key] = value;
+  }
+  env.CODEX_HOME = CODEX_RUNTIME_HOME_DIR;
+  return env;
+}
+function buildCodexSdkThreadOptions() {
+  return {
+    model: normalizedCodexModel,
+    sandboxMode: "danger-full-access",
+    workingDirectory: WORK_DIR,
+    skipGitRepoCheck: true,
+    approvalPolicy: "never"
+  };
+}
+function agentMessageDelta(event, priorTextByItem) {
+  if (event.type !== "item.updated" && event.type !== "item.completed" || event.item.type !== "agent_message") {
+    return "";
+  }
+  const previous = priorTextByItem.get(event.item.id) ?? "";
+  const current = event.item.text;
+  priorTextByItem.set(event.item.id, current);
+  if (!current || current === previous) return "";
+  return current.startsWith(previous) ? current.slice(previous.length) : current;
+}
+async function runCodexSdkAttempt(sessionMode) {
+  resetAttemptState();
+  callbackState.activeAttemptStartedAt = Date.now();
+  updateThinkingStep(
+    "Starting Codex SDK...",
+    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
+  );
+  log(
+    "runCodexSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  );
+  let attemptOutput = "";
+  let lastEventAt2 = Date.now();
+  let timedOutForNoOutput = false;
+  let timedOutForMaxRuntime = false;
+  let sawCompletedTurn = false;
+  let turnFailed = false;
+  let attemptErrorMessage = "";
+  const abortController = new AbortController();
+  const agentTextByItem = /* @__PURE__ */ new Map();
+  const codex = new Codex({
+    codexPathOverride: codexExecutablePath(),
+    env: codexEnvironment()
+  });
+  const threadOptions = buildCodexSdkThreadOptions();
+  const thread = sessionMode.mode === "resume" && sessionMode.sessionId ? codex.resumeThread(sessionMode.sessionId, threadOptions) : codex.startThread(threadOptions);
+  const healthTimer = setInterval(() => {
+    const now = Date.now();
+    if (callbackState.fatalHeartbeatErrorMessage) {
+      attemptErrorMessage = callbackState.fatalHeartbeatErrorMessage;
+      abortController.abort();
+      return;
+    }
+    if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
+      timedOutForMaxRuntime = true;
+      log("runCodexSdkAttempt: max runtime exceeded \\u2014 aborting turn");
+      abortController.abort();
+      return;
+    }
+    if (callbackState.inFlightToolUses > 0) {
+      lastEventAt2 = now;
+    }
+    if (!sawCompletedTurn && now - lastEventAt2 > NO_OUTPUT_TIMEOUT_MS * 5) {
+      timedOutForNoOutput = true;
+      log("runCodexSdkAttempt: no SDK events \\u2014 aborting turn");
+      abortController.abort();
+    }
+  }, NO_OUTPUT_CHECK_INTERVAL_MS);
+  const emitLine = (line) => {
+    emitParsedStreamLine(line);
+    attemptOutput = trimBufferHead(attemptOutput + line);
+  };
+  try {
+    const streamed = await thread.runStreamed(readPromptText2(), {
+      signal: abortController.signal
+    });
+    for await (const event of streamed.events) {
+      lastEventAt2 = Date.now();
+      const delta = agentMessageDelta(event, agentTextByItem);
+      if (delta) {
+        emitLine(
+          JSON.stringify({ type: "item.agent_message.delta", delta }) + "\\n"
+        );
+        if (callbackState.firstTextBlockAt === 0) callbackState.firstTextBlockAt = Date.now();
+      }
+      emitLine(JSON.stringify(event) + "\\n");
+      if (event.type === "turn.completed") sawCompletedTurn = true;
+      if (event.type === "turn.failed") {
+        turnFailed = true;
+        attemptErrorMessage = event.error.message;
+      }
+      if (event.type === "error") {
+        turnFailed = true;
+        attemptErrorMessage = event.message;
+      }
+      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!abortController.signal.aborted || !attemptErrorMessage) {
+      attemptErrorMessage = message;
+    }
+    log("runCodexSdkAttempt: turn failed \\u2014 " + message);
+  } finally {
+    clearInterval(healthTimer);
+  }
+  if (attemptErrorMessage) {
+    recordSdkAttemptFailure(attemptErrorMessage);
+  }
+  const code = sawCompletedTurn && !turnFailed && !attemptErrorMessage && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
+  log(
+    "runCodexSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawCompletedTurn=" + sawCompletedTurn + ", turnFailed=" + turnFailed + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") + ")"
+  );
+  return buildStandardSdkAttemptResult({
+    code,
+    output: attemptOutput,
+    timedOutForNoOutput,
+    timedOutForMaxRuntime
+  });
+}
+
+// callback-src/providers/codexAppServerClient.ts
 function responseErrorMessage(message) {
   const error = asJsonObject(message.error);
   return typeof error.message === "string" ? error.message : "Codex App Server request failed";
@@ -7040,8 +7777,8 @@ var CodexAppServerClient = class {
   notifications = [];
   terminalError = null;
   start() {
-    const command = existsSync7(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex";
-    this.child = spawn(command, ["app-server"], {
+    const command = codexExecutablePath();
+    this.child = spawn2(command, ["app-server"], {
       cwd: WORK_DIR,
       env: { ...process.env, CODEX_HOME: CODEX_RUNTIME_HOME_DIR },
       stdio: ["pipe", "pipe", "pipe"]
@@ -7155,6 +7892,7 @@ var supervisor2 = new DaemonSupervisor();
 var activeTurnStartedAt = 0;
 var lastEventAt = 0;
 var lastIdleActivityAt = Date.now();
+var lastClaimAt = 0;
 var finalText = "";
 var exitWithError = false;
 var threadTotalUsage = null;
@@ -7418,39 +8156,47 @@ async function runCodexAppServerDaemon() {
         const completion = processNotification(notification);
         if (completion) await completion;
       }
-      const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
-      const claimed = await callConvexWithRetry(
-        "mutation",
-        CLAIM_MUTATION,
-        entityArgs({ model: MODEL, acceptTurn })
-      );
-      const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
-      if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
-        void client.request("turn/interrupt", {
-          threadId: callbackState.activeCodexThreadId,
-          turnId: providerTurnId
-        }).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          log("codex daemon: interrupt failed \\u2014 " + message);
-        });
-      }
-      const claimedTurn = readClaimedTurn(claimed);
-      if (claimedTurn) {
-        const currentLease = getCurrentTurnLease();
-        if (shouldParkClaimedTurn({
-          hasActiveRealTurn: supervisor2.currentTurn !== null,
-          isCancellationInFlight: supervisor2.isCancellationInFlight,
-          isFinalizing: false,
-          currentLeaseTurnId: currentLease?.turnId ?? null,
-          claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null
-        })) {
-          if (!supervisor2.parkClaim(claimedTurn)) {
-            log("codex daemon: duplicate claimed turn ignored");
+      const claimNow = Date.now();
+      if (claimNow - lastClaimAt >= selectClaimPollIntervalMs({
+        busy: supervisor2.hasWork,
+        lastIdleActivityAtMs: lastIdleActivityAt,
+        now: claimNow
+      })) {
+        lastClaimAt = claimNow;
+        const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
+        const claimed = await callConvexWithRetry(
+          "mutation",
+          CLAIM_MUTATION,
+          entityArgs({ model: MODEL, acceptTurn })
+        );
+        const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
+        if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
+          void client.request("turn/interrupt", {
+            threadId: callbackState.activeCodexThreadId,
+            turnId: providerTurnId
+          }).catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            log("codex daemon: interrupt failed \\u2014 " + message);
+          });
+        }
+        const claimedTurn = readClaimedTurn(claimed);
+        if (claimedTurn) {
+          const currentLease = getCurrentTurnLease();
+          if (shouldParkClaimedTurn({
+            hasActiveRealTurn: supervisor2.currentTurn !== null,
+            isCancellationInFlight: supervisor2.isCancellationInFlight,
+            isFinalizing: false,
+            currentLeaseTurnId: currentLease?.turnId ?? null,
+            claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null
+          })) {
+            if (!supervisor2.parkClaim(claimedTurn)) {
+              log("codex daemon: duplicate claimed turn ignored");
+            }
+          } else {
+            log(
+              "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
+            );
           }
-        } else {
-          log(
-            "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-          );
         }
       }
       if (supervisor2.currentTurn === null && supervisor2.pendingClaim !== null) {
@@ -7485,8 +8231,8 @@ async function runCodexAppServerDaemon() {
 }
 
 // callback-src/providers/cursorSdkDaemon.ts
-import { spawn as spawn2 } from "child_process";
-import { readFileSync as readFileSync8, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
+import { spawn as spawn3 } from "child_process";
+import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
 
 // callback-src/providers/callbackRefresh.ts
 function decideCallbackRefresh(state) {
@@ -7516,7 +8262,7 @@ function decideCallbackRefresh(state) {
 }
 
 // callback-src/providers/cursorSdk.ts
-import { mkdirSync as mkdirSync7, readFileSync as readFileSync7 } from "fs";
+import { mkdirSync as mkdirSync7, readFileSync as readFileSync8 } from "fs";
 var SDK_PACKAGE2 = "@cursor/sdk";
 var SDK_VERSION2 = "1.0.28";
 var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
@@ -7599,11 +8345,6 @@ function filterModeParamsByModel(candidates, model, opted) {
     })
   );
 }
-var CURSOR_WRITE_TOOLS = [
-  "edit",
-  "delete",
-  "applyAgentDiff"
-];
 var loadedSdk = null;
 var loadedSdkSqlite = null;
 async function loadCursorSdk() {
@@ -7626,8 +8367,8 @@ async function loadCursorSdkSqlite() {
   loadedSdkSqlite = mod;
   return mod;
 }
-function readPromptText2() {
-  return readFileSync7("/tmp/design-prompt.txt", "utf8");
+function readPromptText3() {
+  return readFileSync8("/tmp/design-prompt.txt", "utf8");
 }
 function cursorModelCatalogJson(models) {
   if (models.length === 0) return null;
@@ -7881,8 +8622,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     // EVA_LINKED_REPOS_CWD_ROOT=1 to root cwd at the workspace instead — no
     // rebuild needed.
     local: { cwd: AGENT_CWD, store: store4 },
-    ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
-    ...NO_WRITES ? { disallowedTools: [...CURSOR_WRITE_TOOLS] } : {}
+    ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {}
   };
   const persistAgentId = (agentId) => {
     callbackState.activeCursorSessionId = agentId;
@@ -7967,7 +8707,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   } else {
     agent = await createFreshAgent();
   }
-  const promptText = overrides.promptText ?? readPromptText2();
+  const promptText = overrides.promptText ?? readPromptText3();
   const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
   const healthTimer = setInterval(() => {
     const now = Date.now();
@@ -8221,8 +8961,6 @@ function cursorAgentStartupActivity(sessionMode) {
 var IDLE_EXIT_MS3 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var PROMPT_POLL_IDLE_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-var PROMPT_POLL_FAST_WINDOW_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
 var WATCHDOG_TICK_MS2 = 5e3;
 var TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1e3;
 var CANCEL_SETTLE_TIMEOUT_MS2 = 3e4;
@@ -8253,21 +8991,11 @@ function readCursorTurnWorkerClaim() {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
   }
-  const prompt = readFileSync8(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
-  if (CURSOR_TURN_WORKER_LIFECYCLE === "legacy") {
-    return {
-      lifecycle: "legacy",
-      prompt,
-      attachmentUrls: [],
-      interactionMode: "default",
-      turnLease: null
-    };
-  }
-  if (CURSOR_TURN_WORKER_LIFECYCLE !== "durable" || !CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
+  const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
+  if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
   return {
-    lifecycle: "durable",
     prompt,
     attachmentUrls: [],
     interactionMode: "default",
@@ -8300,17 +9028,11 @@ function buildCursorTurnWorkerEnv(baseEnv, mcpHandoffEnv, turn, promptFile) {
     ...baseEnv,
     ...mcpHandoffEnv,
     EVA_CURSOR_TURN_WORKER_PROMPT_FILE: promptFile,
-    EVA_CURSOR_TURN_WORKER_LIFECYCLE: turn.lifecycle
-  };
-  if (turn.lifecycle === "durable") {
-    workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID = turn.turnLease.turnId;
-    workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION = String(
+    EVA_CURSOR_TURN_WORKER_TURN_ID: turn.turnLease.turnId,
+    EVA_CURSOR_TURN_WORKER_LEASE_GENERATION: String(
       turn.turnLease.leaseGeneration
-    );
-  } else {
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_TURN_ID;
-    delete workerEnv.EVA_CURSOR_TURN_WORKER_LEASE_GENERATION;
-  }
+    )
+  };
   return workerEnv;
 }
 function spawnCursorTurnWorker(turn, promptFile) {
@@ -8320,7 +9042,7 @@ function spawnCursorTurnWorker(turn, promptFile) {
     turn,
     promptFile
   );
-  const child = spawn2(
+  const child = spawn3(
     process.execPath,
     [
       \`--max-old-space-size=\${CURSOR_TURN_WORKER_HEAP_MB}\`,
@@ -8675,10 +9397,10 @@ async function runCursorDaemon() {
 
 // callback-src/runtime/systemSkills.ts
 import {
-  existsSync as existsSync8,
+  existsSync as existsSync7,
   mkdirSync as mkdirSync8,
   readdirSync as readdirSync4,
-  readFileSync as readFileSync9,
+  readFileSync as readFileSync10,
   rmSync,
   writeFileSync as writeFileSync11
 } from "fs";
@@ -8739,16 +9461,16 @@ function skillsRoot() {
 }
 function isEvaStub(directoryName) {
   const skillFile = \`\${skillsRoot()}/\${directoryName}/SKILL.md\`;
-  if (!existsSync8(skillFile)) return false;
+  if (!existsSync7(skillFile)) return false;
   try {
-    return readFileSync9(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync10(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
 }
 function writeStub(skill) {
   const directory = \`\${skillsRoot()}/\${skill.name}\`;
-  if (existsSync8(\`\${directory}/SKILL.md\`) && !isEvaStub(skill.name)) {
+  if (existsSync7(\`\${directory}/SKILL.md\`) && !isEvaStub(skill.name)) {
     log(\`[system-skills] \${skill.name} exists in the repo \\u2014 leaving it alone\`);
     return false;
   }
@@ -8758,7 +9480,7 @@ function writeStub(skill) {
 }
 function pruneStaleStubs(keep) {
   const root = skillsRoot();
-  if (!existsSync8(root)) return;
+  if (!existsSync7(root)) return;
   for (const entry of readdirSync4(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     if (keep.has(entry.name)) continue;
@@ -8773,10 +9495,10 @@ function pruneStaleStubs(keep) {
 }
 function updateGitExclude(names) {
   const gitDir = \`\${WORK_DIR}/.git\`;
-  if (!existsSync8(gitDir)) return;
+  if (!existsSync7(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync8(excludeFile) ? readFileSync9(excludeFile, "utf8") : "";
+  const existing = existsSync7(excludeFile) ? readFileSync10(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
@@ -8784,13 +9506,13 @@ function updateGitExclude(names) {
 }
 function materializeSystemSkills() {
   try {
-    if (!existsSync8(SYSTEM_SKILLS_STATE_FILE)) return;
-    if (!existsSync8(WORK_DIR)) {
+    if (!existsSync7(SYSTEM_SKILLS_STATE_FILE)) return;
+    if (!existsSync7(WORK_DIR)) {
       log("[system-skills] no checkout yet \\u2014 skipping");
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync9(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync10(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
@@ -8815,13 +9537,14 @@ function materializeSystemSkills() {
 }
 
 // callback-src/runtime/branchWatcher.ts
-import { statSync as statSync2, watch } from "fs";
+import { statSync as statSync3, watch } from "fs";
 var GIT_TIMEOUT_MS = 5e3;
 var POLL_INTERVAL_MS3 = 15e3;
 var DEBOUNCE_MS = 300;
 function resolveBranchTarget(field, id) {
   if (typeof id !== "string" || id.length === 0) return null;
   if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "chatId") return { kind: "sessionChat", chatId: id };
   if (field === "taskId") return { kind: "task", taskId: id };
   if (field === "projectId") return { kind: "project", projectId: id };
   return null;
@@ -8926,7 +9649,7 @@ function startBranchWatcher() {
   const gitDir = WORK_DIR + "/.git";
   let gitDirIsDirectory = false;
   try {
-    gitDirIsDirectory = statSync2(gitDir).isDirectory();
+    gitDirIsDirectory = statSync3(gitDir).isDirectory();
   } catch {
     gitDirIsDirectory = false;
   }
@@ -8942,668 +9665,6 @@ function startBranchWatcher() {
   void runCheckLoop();
 }
 
-// ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
-import { promises as fs } from "fs";
-import os from "os";
-import path from "path";
-import { spawn as spawn3 } from "child_process";
-import { statSync as statSync3 } from "fs";
-import path2 from "path";
-import readline from "readline";
-import { createRequire } from "module";
-async function createOutputSchemaFile(schema) {
-  if (schema === void 0) {
-    return { cleanup: async () => {
-    } };
-  }
-  if (!isJsonObject(schema)) {
-    throw new Error("outputSchema must be a plain JSON object");
-  }
-  const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
-  const schemaPath = path.join(schemaDir, "schema.json");
-  const cleanup = async () => {
-    try {
-      await fs.rm(schemaDir, { recursive: true, force: true });
-    } catch {
-    }
-  };
-  try {
-    await fs.writeFile(schemaPath, JSON.stringify(schema), "utf8");
-    return { schemaPath, cleanup };
-  } catch (error) {
-    await cleanup();
-    throw error;
-  }
-}
-function isJsonObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-var Thread = class {
-  _exec;
-  _options;
-  _id;
-  _threadOptions;
-  /** Returns the ID of the thread. Populated after the first turn starts. */
-  get id() {
-    return this._id;
-  }
-  /* @internal */
-  constructor(exec, options, threadOptions, id = null) {
-    this._exec = exec;
-    this._options = options;
-    this._id = id;
-    this._threadOptions = threadOptions;
-  }
-  /** Provides the input to the agent and streams events as they are produced during the turn. */
-  async runStreamed(input, turnOptions = {}) {
-    return { events: this.runStreamedInternal(input, turnOptions) };
-  }
-  async *runStreamedInternal(input, turnOptions = {}) {
-    const { schemaPath, cleanup } = await createOutputSchemaFile(turnOptions.outputSchema);
-    const options = this._threadOptions;
-    const { prompt, images } = normalizeInput(input);
-    const generator = this._exec.run({
-      input: prompt,
-      baseUrl: this._options.baseUrl,
-      apiKey: this._options.apiKey,
-      threadId: this._id,
-      images,
-      model: options?.model,
-      sandboxMode: options?.sandboxMode,
-      workingDirectory: options?.workingDirectory,
-      skipGitRepoCheck: options?.skipGitRepoCheck,
-      outputSchemaFile: schemaPath,
-      modelReasoningEffort: options?.modelReasoningEffort,
-      signal: turnOptions.signal,
-      networkAccessEnabled: options?.networkAccessEnabled,
-      webSearchMode: options?.webSearchMode,
-      webSearchEnabled: options?.webSearchEnabled,
-      approvalPolicy: options?.approvalPolicy,
-      additionalDirectories: options?.additionalDirectories
-    });
-    try {
-      for await (const item of generator) {
-        let parsed;
-        try {
-          parsed = JSON.parse(item);
-        } catch (error) {
-          throw new Error(\`Failed to parse item: \${item}\`, { cause: error });
-        }
-        if (parsed.type === "thread.started") {
-          this._id = parsed.thread_id;
-        } else if (parsed.type === "turn.completed") {
-          parsed.usage.cache_write_input_tokens ??= 0;
-        }
-        yield parsed;
-      }
-    } finally {
-      await cleanup();
-    }
-  }
-  /** Provides the input to the agent and returns the completed turn. */
-  async run(input, turnOptions = {}) {
-    const generator = this.runStreamedInternal(input, turnOptions);
-    const items = [];
-    let finalResponse = "";
-    let usage = null;
-    let turnFailure = null;
-    for await (const event of generator) {
-      if (event.type === "item.completed") {
-        if (event.item.type === "agent_message") {
-          finalResponse = event.item.text;
-        }
-        items.push(event.item);
-      } else if (event.type === "turn.completed") {
-        usage = event.usage;
-      } else if (event.type === "turn.failed") {
-        turnFailure = event.error;
-        break;
-      }
-    }
-    if (turnFailure) {
-      throw new Error(turnFailure.message);
-    }
-    return { items, finalResponse, usage };
-  }
-};
-function normalizeInput(input) {
-  if (typeof input === "string") {
-    return { prompt: input, images: [] };
-  }
-  const promptParts = [];
-  const images = [];
-  for (const item of input) {
-    if (item.type === "text") {
-      promptParts.push(item.text);
-    } else if (item.type === "local_image") {
-      images.push(item.path);
-    }
-  }
-  return { prompt: promptParts.join("\\n\\n"), images };
-}
-var INTERNAL_ORIGINATOR_ENV = "CODEX_INTERNAL_ORIGINATOR_OVERRIDE";
-var TYPESCRIPT_SDK_ORIGINATOR = "codex_sdk_ts";
-var CODEX_NPM_NAME = "@openai/codex";
-var PLATFORM_PACKAGE_BY_TARGET = {
-  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
-  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
-  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
-  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
-  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
-  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64"
-};
-var moduleRequire = createRequire(import.meta.url);
-var CodexExec = class {
-  executablePath;
-  pathDirs;
-  envOverride;
-  configOverrides;
-  constructor(executablePath = null, env, configOverrides) {
-    if (executablePath) {
-      this.executablePath = executablePath;
-      this.pathDirs = [];
-    } else {
-      const resolved = findCodexPath();
-      this.executablePath = resolved.executablePath;
-      this.pathDirs = resolved.pathDirs;
-    }
-    this.envOverride = env;
-    this.configOverrides = configOverrides;
-  }
-  async *run(args) {
-    const commandArgs = ["exec", "--experimental-json"];
-    if (this.configOverrides) {
-      for (const override of serializeConfigOverrides(this.configOverrides)) {
-        commandArgs.push("--config", override);
-      }
-    }
-    if (args.baseUrl) {
-      commandArgs.push(
-        "--config",
-        \`openai_base_url=\${toTomlValue(args.baseUrl, "openai_base_url")}\`
-      );
-    }
-    if (args.model) {
-      commandArgs.push("--model", args.model);
-    }
-    if (args.sandboxMode) {
-      commandArgs.push("--sandbox", args.sandboxMode);
-    }
-    if (args.workingDirectory) {
-      commandArgs.push("--cd", args.workingDirectory);
-    }
-    if (args.additionalDirectories?.length) {
-      for (const dir of args.additionalDirectories) {
-        commandArgs.push("--add-dir", dir);
-      }
-    }
-    if (args.skipGitRepoCheck) {
-      commandArgs.push("--skip-git-repo-check");
-    }
-    if (args.outputSchemaFile) {
-      commandArgs.push("--output-schema", args.outputSchemaFile);
-    }
-    if (args.modelReasoningEffort) {
-      commandArgs.push("--config", \`model_reasoning_effort="\${args.modelReasoningEffort}"\`);
-    }
-    if (args.networkAccessEnabled !== void 0) {
-      commandArgs.push(
-        "--config",
-        \`sandbox_workspace_write.network_access=\${args.networkAccessEnabled}\`
-      );
-    }
-    if (args.webSearchMode) {
-      commandArgs.push("--config", \`web_search="\${args.webSearchMode}"\`);
-    } else if (args.webSearchEnabled === true) {
-      commandArgs.push("--config", \`web_search="live"\`);
-    } else if (args.webSearchEnabled === false) {
-      commandArgs.push("--config", \`web_search="disabled"\`);
-    }
-    if (args.approvalPolicy) {
-      commandArgs.push("--config", \`approval_policy="\${args.approvalPolicy}"\`);
-    }
-    if (args.threadId) {
-      commandArgs.push("resume", args.threadId);
-    }
-    if (args.images?.length) {
-      for (const image of args.images) {
-        commandArgs.push("--image", image);
-      }
-    }
-    const env = {};
-    if (this.envOverride) {
-      Object.assign(env, this.envOverride);
-    } else {
-      for (const [key, value] of Object.entries(process.env)) {
-        if (value !== void 0) {
-          env[key] = value;
-        }
-      }
-    }
-    if (!env[INTERNAL_ORIGINATOR_ENV]) {
-      env[INTERNAL_ORIGINATOR_ENV] = TYPESCRIPT_SDK_ORIGINATOR;
-    }
-    if (args.apiKey) {
-      env.CODEX_API_KEY = args.apiKey;
-    }
-    if (this.pathDirs.length > 0) {
-      prependPathDirs(env, this.pathDirs);
-    }
-    const child = spawn3(this.executablePath, commandArgs, {
-      env,
-      signal: args.signal
-    });
-    let spawnError = null;
-    child.once("error", (err) => spawnError = err);
-    if (!child.stdin) {
-      child.kill();
-      throw new Error("Child process has no stdin");
-    }
-    child.stdin.write(args.input);
-    child.stdin.end();
-    if (!child.stdout) {
-      child.kill();
-      throw new Error("Child process has no stdout");
-    }
-    const stderrChunks = [];
-    if (child.stderr) {
-      child.stderr.on("data", (data) => {
-        stderrChunks.push(data);
-      });
-    }
-    const exitPromise = new Promise(
-      (resolve) => {
-        child.once("exit", (code, signal) => {
-          resolve({ code, signal });
-        });
-      }
-    );
-    const rl = readline.createInterface({
-      input: child.stdout,
-      crlfDelay: Infinity
-    });
-    try {
-      for await (const line of rl) {
-        yield line;
-      }
-      if (spawnError) throw spawnError;
-      const { code, signal } = await exitPromise;
-      if (code !== 0 || signal) {
-        const stderrBuffer = Buffer.concat(stderrChunks);
-        const detail = signal ? \`signal \${signal}\` : \`code \${code ?? 1}\`;
-        throw new Error(\`Codex Exec exited with \${detail}: \${stderrBuffer.toString("utf8")}\`);
-      }
-    } finally {
-      rl.close();
-      child.removeAllListeners();
-      try {
-        if (!child.killed) child.kill();
-      } catch {
-      }
-    }
-  }
-};
-function serializeConfigOverrides(configOverrides) {
-  const overrides = [];
-  flattenConfigOverrides(configOverrides, "", overrides);
-  return overrides;
-}
-function flattenConfigOverrides(value, prefix, overrides) {
-  if (!isPlainObject(value)) {
-    if (prefix) {
-      overrides.push(\`\${prefix}=\${toTomlValue(value, prefix)}\`);
-      return;
-    } else {
-      throw new Error("Codex config overrides must be a plain object");
-    }
-  }
-  const entries = Object.entries(value);
-  if (!prefix && entries.length === 0) {
-    return;
-  }
-  if (prefix && entries.length === 0) {
-    overrides.push(\`\${prefix}={}\`);
-    return;
-  }
-  for (const [key, child] of entries) {
-    if (!key) {
-      throw new Error("Codex config override keys must be non-empty strings");
-    }
-    if (child === void 0) {
-      continue;
-    }
-    const path3 = prefix ? \`\${prefix}.\${key}\` : key;
-    if (isPlainObject(child)) {
-      flattenConfigOverrides(child, path3, overrides);
-    } else {
-      overrides.push(\`\${path3}=\${toTomlValue(child, path3)}\`);
-    }
-  }
-}
-function toTomlValue(value, path3) {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  } else if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new Error(\`Codex config override at \${path3} must be a finite number\`);
-    }
-    return \`\${value}\`;
-  } else if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  } else if (Array.isArray(value)) {
-    const rendered = value.map((item, index) => toTomlValue(item, \`\${path3}[\${index}]\`));
-    return \`[\${rendered.join(", ")}]\`;
-  } else if (isPlainObject(value)) {
-    const parts = [];
-    for (const [key, child] of Object.entries(value)) {
-      if (!key) {
-        throw new Error("Codex config override keys must be non-empty strings");
-      }
-      if (child === void 0) {
-        continue;
-      }
-      parts.push(\`\${formatTomlKey(key)} = \${toTomlValue(child, \`\${path3}.\${key}\`)}\`);
-    }
-    return \`{\${parts.join(", ")}}\`;
-  } else if (value === null) {
-    throw new Error(\`Codex config override at \${path3} cannot be null\`);
-  } else {
-    const typeName = typeof value;
-    throw new Error(\`Unsupported Codex config override value at \${path3}: \${typeName}\`);
-  }
-}
-var TOML_BARE_KEY = /^[A-Za-z0-9_-]+\$/;
-function formatTomlKey(key) {
-  return TOML_BARE_KEY.test(key) ? key : JSON.stringify(key);
-}
-function isPlainObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function findCodexPath() {
-  const { platform, arch } = process;
-  let targetTriple = null;
-  switch (platform) {
-    case "linux":
-    case "android":
-      switch (arch) {
-        case "x64":
-          targetTriple = "x86_64-unknown-linux-musl";
-          break;
-        case "arm64":
-          targetTriple = "aarch64-unknown-linux-musl";
-          break;
-        default:
-          break;
-      }
-      break;
-    case "darwin":
-      switch (arch) {
-        case "x64":
-          targetTriple = "x86_64-apple-darwin";
-          break;
-        case "arm64":
-          targetTriple = "aarch64-apple-darwin";
-          break;
-        default:
-          break;
-      }
-      break;
-    case "win32":
-      switch (arch) {
-        case "x64":
-          targetTriple = "x86_64-pc-windows-msvc";
-          break;
-        case "arm64":
-          targetTriple = "aarch64-pc-windows-msvc";
-          break;
-        default:
-          break;
-      }
-      break;
-    default:
-      break;
-  }
-  if (!targetTriple) {
-    throw new Error(\`Unsupported platform: \${platform} (\${arch})\`);
-  }
-  const platformPackage = PLATFORM_PACKAGE_BY_TARGET[targetTriple];
-  if (!platformPackage) {
-    throw new Error(\`Unsupported target triple: \${targetTriple}\`);
-  }
-  let vendorRoot;
-  try {
-    const codexPackageJsonPath = moduleRequire.resolve(\`\${CODEX_NPM_NAME}/package.json\`);
-    const codexRequire = createRequire(codexPackageJsonPath);
-    const platformPackageJsonPath = codexRequire.resolve(\`\${platformPackage}/package.json\`);
-    vendorRoot = path2.join(path2.dirname(platformPackageJsonPath), "vendor");
-  } catch {
-    throw new Error(
-      \`Unable to locate Codex CLI binaries. Ensure \${CODEX_NPM_NAME} is installed with optional dependencies.\`
-    );
-  }
-  const codexBinaryName = process.platform === "win32" ? "codex.exe" : "codex";
-  const nativePackage = resolveNativePackage(vendorRoot, targetTriple, codexBinaryName);
-  if (!nativePackage) {
-    throw new Error(
-      \`Unable to locate Codex CLI binaries for \${targetTriple}. Ensure \${CODEX_NPM_NAME} is installed with optional dependencies.\`
-    );
-  }
-  return nativePackage;
-}
-function resolveNativePackage(vendorRoot, targetTriple, codexBinaryName) {
-  const packageRoot = path2.join(vendorRoot, targetTriple);
-  const packageBinaryPath = path2.join(packageRoot, "bin", codexBinaryName);
-  if (isFile(packageBinaryPath) && isFile(path2.join(packageRoot, "codex-package.json"))) {
-    return {
-      executablePath: packageBinaryPath,
-      pathDirs: existingDirs(path2.join(packageRoot, "codex-path"))
-    };
-  }
-  const legacyBinaryPath = path2.join(packageRoot, "codex", codexBinaryName);
-  if (isFile(legacyBinaryPath)) {
-    return {
-      executablePath: legacyBinaryPath,
-      pathDirs: existingDirs(path2.join(packageRoot, "path"))
-    };
-  }
-  return null;
-}
-function existingDirs(...dirs) {
-  return dirs.filter(isDirectory);
-}
-function prependPathDirs(env, pathDirs, platform = process.platform) {
-  const pathKey = pathEnvKey(env, platform);
-  if (platform === "win32") {
-    for (const key of Object.keys(env)) {
-      if (key.toLowerCase() === "path" && key !== pathKey) {
-        delete env[key];
-      }
-    }
-  }
-  const existingEntries = (env[pathKey] ?? "").split(path2.delimiter).filter((entry) => entry.length > 0 && !pathDirs.includes(entry));
-  env[pathKey] = [...pathDirs, ...existingEntries].join(path2.delimiter);
-}
-function pathEnvKey(env, platform) {
-  if (platform !== "win32") {
-    return "PATH";
-  }
-  const matchingKeys = Object.keys(env).filter((key) => key.toLowerCase() === "path");
-  return matchingKeys.includes("Path") ? "Path" : matchingKeys.at(-1) ?? "PATH";
-}
-function isFile(filePath) {
-  try {
-    return statSync3(filePath).isFile();
-  } catch {
-    return false;
-  }
-}
-function isDirectory(filePath) {
-  try {
-    return statSync3(filePath).isDirectory();
-  } catch {
-    return false;
-  }
-}
-var Codex = class {
-  exec;
-  options;
-  constructor(options = {}) {
-    const { codexPathOverride, env, config } = options;
-    this.exec = new CodexExec(codexPathOverride, env, config);
-    this.options = options;
-  }
-  /**
-   * Starts a new conversation with an agent.
-   * @returns A new thread instance.
-   */
-  startThread(options = {}) {
-    return new Thread(this.exec, this.options, options);
-  }
-  /**
-   * Resumes a conversation with an agent based on the thread id.
-   * Threads are persisted in ~/.codex/sessions.
-   *
-   * @param id The id of the thread to resume.
-   * @returns A new thread instance.
-   */
-  resumeThread(id, options = {}) {
-    return new Thread(this.exec, this.options, options, id);
-  }
-};
-
-// callback-src/providers/codexSdk.ts
-import { existsSync as existsSync9, readFileSync as readFileSync10 } from "fs";
-function readPromptText3() {
-  const prompt = readFileSync10("/tmp/design-prompt.txt", "utf8");
-  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
-}
-function codexEnvironment() {
-  const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== void 0) env[key] = value;
-  }
-  env.CODEX_HOME = CODEX_RUNTIME_HOME_DIR;
-  return env;
-}
-function buildCodexSdkThreadOptions() {
-  return {
-    model: normalizedCodexModel,
-    sandboxMode: NO_WRITES ? "read-only" : "danger-full-access",
-    workingDirectory: WORK_DIR,
-    skipGitRepoCheck: true,
-    approvalPolicy: "never"
-  };
-}
-function agentMessageDelta(event, priorTextByItem) {
-  if (event.type !== "item.updated" && event.type !== "item.completed" || event.item.type !== "agent_message") {
-    return "";
-  }
-  const previous = priorTextByItem.get(event.item.id) ?? "";
-  const current = event.item.text;
-  priorTextByItem.set(event.item.id, current);
-  if (!current || current === previous) return "";
-  return current.startsWith(previous) ? current.slice(previous.length) : current;
-}
-async function runCodexSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Codex SDK...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
-  );
-  log(
-    "runCodexSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
-  let attemptOutput = "";
-  let lastEventAt2 = Date.now();
-  let timedOutForNoOutput = false;
-  let timedOutForMaxRuntime = false;
-  let sawCompletedTurn = false;
-  let turnFailed = false;
-  let attemptErrorMessage = "";
-  const abortController = new AbortController();
-  const agentTextByItem = /* @__PURE__ */ new Map();
-  const codex = new Codex({
-    codexPathOverride: existsSync9(CODEX_BIN_PATH) ? CODEX_BIN_PATH : "codex",
-    env: codexEnvironment()
-  });
-  const threadOptions = buildCodexSdkThreadOptions();
-  const thread = sessionMode.mode === "resume" && sessionMode.sessionId ? codex.resumeThread(sessionMode.sessionId, threadOptions) : codex.startThread(threadOptions);
-  const healthTimer = setInterval(() => {
-    const now = Date.now();
-    if (callbackState.fatalHeartbeatErrorMessage) {
-      attemptErrorMessage = callbackState.fatalHeartbeatErrorMessage;
-      abortController.abort();
-      return;
-    }
-    if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
-      timedOutForMaxRuntime = true;
-      log("runCodexSdkAttempt: max runtime exceeded \\u2014 aborting turn");
-      abortController.abort();
-      return;
-    }
-    if (callbackState.inFlightToolUses > 0) {
-      lastEventAt2 = now;
-    }
-    if (!sawCompletedTurn && now - lastEventAt2 > NO_OUTPUT_TIMEOUT_MS * 5) {
-      timedOutForNoOutput = true;
-      log("runCodexSdkAttempt: no SDK events \\u2014 aborting turn");
-      abortController.abort();
-    }
-  }, NO_OUTPUT_CHECK_INTERVAL_MS);
-  const emitLine = (line) => {
-    emitParsedStreamLine(line);
-    attemptOutput = trimBufferHead(attemptOutput + line);
-  };
-  try {
-    const streamed = await thread.runStreamed(readPromptText3(), {
-      signal: abortController.signal
-    });
-    for await (const event of streamed.events) {
-      lastEventAt2 = Date.now();
-      const delta = agentMessageDelta(event, agentTextByItem);
-      if (delta) {
-        emitLine(
-          JSON.stringify({ type: "item.agent_message.delta", delta }) + "\\n"
-        );
-        if (callbackState.firstTextBlockAt === 0) callbackState.firstTextBlockAt = Date.now();
-      }
-      emitLine(JSON.stringify(event) + "\\n");
-      if (event.type === "turn.completed") sawCompletedTurn = true;
-      if (event.type === "turn.failed") {
-        turnFailed = true;
-        attemptErrorMessage = event.error.message;
-      }
-      if (event.type === "error") {
-        turnFailed = true;
-        attemptErrorMessage = event.message;
-      }
-      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!abortController.signal.aborted || !attemptErrorMessage) {
-      attemptErrorMessage = message;
-    }
-    log("runCodexSdkAttempt: turn failed \\u2014 " + message);
-  } finally {
-    clearInterval(healthTimer);
-  }
-  if (attemptErrorMessage) {
-    recordSdkAttemptFailure(attemptErrorMessage);
-  }
-  const code = sawCompletedTurn && !turnFailed && !attemptErrorMessage && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCodexSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawCompletedTurn=" + sawCompletedTurn + ", turnFailed=" + turnFailed + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
-    timedOutForNoOutput,
-    timedOutForMaxRuntime
-  });
-}
-
 // callback-src/providers/opencodeSdk.ts
 import { readFileSync as readFileSync12 } from "fs";
 
@@ -9611,7 +9672,7 @@ import { readFileSync as readFileSync12 } from "fs";
 import { spawn as spawn4 } from "child_process";
 import {
   closeSync,
-  existsSync as existsSync10,
+  existsSync as existsSync8,
   mkdirSync as mkdirSync9,
   openSync,
   readFileSync as readFileSync11,
@@ -9755,7 +9816,7 @@ async function ensureOpencodeServer() {
     while (Date.now() < deadline) {
       await sleep(HEALTH_POLL_INTERVAL_MS);
       if (await probeHealth()) return opencodeServerBaseUrl;
-      if (!existsSync10(SERVER_LOCK_DIR)) break;
+      if (!existsSync8(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;
     releaseStartupLock();

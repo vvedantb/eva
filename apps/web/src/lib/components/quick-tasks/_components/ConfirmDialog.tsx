@@ -5,8 +5,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  CircleSpinner,
 } from "@eva/ui";
-import { IconLoader2 } from "@tabler/icons-react";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -48,7 +48,7 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button variant={variant} onClick={onConfirm} disabled={isLoading}>
-            {isLoading && <IconLoader2 size={16} className="animate-spin" />}
+            {isLoading && <CircleSpinner size="sm" />}
             {confirmLabel}
           </Button>
         </DialogFooter>

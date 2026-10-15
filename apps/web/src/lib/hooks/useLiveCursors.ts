@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import usePresence from "@convex-dev/presence/react";
 import { api } from "@eva/backend";
@@ -67,6 +67,9 @@ export function useLiveCursors(
     presenceState?.some((member) => member.userId !== userId && member.online),
   );
 
+  /* eslint-disable no-effect/no-external-store-subscription --
+     The "store" is the clock: a timer that only runs while the tab is visible
+     and other people are online. There is no snapshot to subscribe to. */
   useEffect(() => {
     if (!hasRemoteOnline) return;
     let intervalId = 0;
@@ -97,15 +100,15 @@ export function useLiveCursors(
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [hasRemoteOnline]);
+  /* eslint-enable no-effect/no-external-store-subscription */
 
-  const updateCursorRef = useRef(updateCursor);
-  updateCursorRef.current = updateCursor;
-
-  const sendUpdate = useCallback((x: number, y: number) => {
+  // `useMutation` returns a stable function, so no latest-ref is needed; the
+  // React Compiler memoises this on `roomId` and `updateCursor`.
+  const sendUpdate = (x: number, y: number) => {
     if (!cursorMovedEnough(lastPosRef.current, { x, y })) return;
     lastPosRef.current = { x, y };
-    updateCursorRef.current({ roomId, x, y }).catch(console.error);
-  }, [roomId]);
+    updateCursor({ roomId, x, y }).catch(console.error);
+  };
 
   useEffect(() => {
     if (!hasRemoteOnline) return;

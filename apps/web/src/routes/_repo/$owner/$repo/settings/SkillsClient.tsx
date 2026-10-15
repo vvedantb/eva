@@ -7,9 +7,15 @@ import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SkillRow } from "./skills/_components/SkillRow";
 import { SystemSkillRow } from "./skills/_components/SystemSkillRow";
-import { Button, motionBase, motionFast, motionStagger } from "@eva/ui";
+import {
+  Button,
+  motionBase,
+  motionFast,
+  motionStagger,
+  RefreshSpinIcon,
+} from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconRefresh, IconSparkles } from "@tabler/icons-react";
+import { IconSparkles } from "@tabler/icons-react";
 import { useState } from "react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
@@ -84,7 +90,7 @@ export function SkillsClient() {
       title="Skills"
       headerRight={
         <Button size="sm" onClick={handleSync} disabled={syncing}>
-          <IconRefresh size={14} className={syncing ? "animate-spin" : ""} />
+          <RefreshSpinIcon busy={syncing} />
           {syncing ? "Syncing..." : "Sync from GitHub"}
         </Button>
       }
@@ -150,26 +156,26 @@ export function SkillsClient() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ ...motionBase, delay: motionStagger(index) }}
             >
-            <SystemSkillRow
-              repoId={repoId}
-              skill={skill}
-              onInstall={(name) =>
-                void withMutationToast(
-                  installSystemSkill({ repoId, name }),
-                  "Skill installed",
-                  "Couldn't install skill",
-                  "skill-install",
-                )
-              }
-              onUninstall={(name) =>
-                void withMutationToast(
-                  uninstallSystemSkill({ repoId, name }),
-                  "Skill uninstalled",
-                  "Couldn't uninstall skill",
-                  "skill-uninstall",
-                )
-              }
-            />
+              <SystemSkillRow
+                repoId={repoId}
+                skill={skill}
+                onInstall={(name) =>
+                  void withMutationToast(
+                    installSystemSkill({ repoId, name }),
+                    "Skill installed",
+                    "Couldn't install skill",
+                    "skill-install",
+                  )
+                }
+                onUninstall={(name) =>
+                  void withMutationToast(
+                    uninstallSystemSkill({ repoId, name }),
+                    "Skill uninstalled",
+                    "Couldn't uninstall skill",
+                    "skill-uninstall",
+                  )
+                }
+              />
             </m.div>
           ))}
         </div>

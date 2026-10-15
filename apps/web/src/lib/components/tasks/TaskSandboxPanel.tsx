@@ -52,6 +52,12 @@ interface TaskSandboxPanelProps {
   onTabChange: (tab: SandboxTab) => void;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /**
+   * The sandbox is closed and the host would allow a Start: no last-start
+   * error, not read-only, no run or build owning it. Combined in
+   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
+   */
+  autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
 }
@@ -80,6 +86,7 @@ export function TaskSandboxPanel({
   onTabChange,
   onStartSandbox,
   isSandboxStarting,
+  autoWakeEligible,
   collapsed = false,
   onToggle,
 }: TaskSandboxPanelProps) {
@@ -118,10 +125,14 @@ export function TaskSandboxPanel({
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
 
+  /* eslint-disable no-effect/no-event-handler --
+     "prd" is a session-only tab that can arrive from a deep link or persisted
+     state, so the redirect has to follow the prop rather than a click. */
   useEffect(() => {
     if (activeTab !== "prd") return;
     onTabChange("preview");
   }, [activeTab, onTabChange]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const tabBarValue = activeTab === "prd" ? "preview" : activeTab;
 
@@ -142,21 +153,21 @@ export function TaskSandboxPanel({
           onTabChange={handleTabChange}
           collapsed={collapsed}
           onToggle={onToggle}
-        onNewPreview={() => {
-          panes.handleNewPreview();
-          onTabChange("preview");
-        }}
-        newPreviewDisabled={panes.newPreviewDisabled}
-        enabledTabs={enabledTabs}
-        showFilesTab
-        showAgentsTab={hasAgents}
-        hasRunningAgents={hasRunningAgents}
-        artifactCount={artifactCount}
-        documentCount={documentCount}
-        agentBrowsingAt={viewState?.agentBrowsingAt}
-        fileList={fileList}
-        consoleDock={panes.consoleDock}
-        terminalPanel={terminalPanel}
+          onNewPreview={() => {
+            panes.handleNewPreview();
+            onTabChange("preview");
+          }}
+          newPreviewDisabled={panes.newPreviewDisabled}
+          enabledTabs={enabledTabs}
+          showFilesTab
+          showAgentsTab={hasAgents}
+          hasRunningAgents={hasRunningAgents}
+          artifactCount={artifactCount}
+          documentCount={documentCount}
+          agentBrowsingAt={viewState?.agentBrowsingAt}
+          fileList={fileList}
+          consoleDock={panes.consoleDock}
+          terminalPanel={terminalPanel}
         />
       }
     >
@@ -179,20 +190,30 @@ export function TaskSandboxPanel({
         >
           <SessionDocumentsPanel source={artifactSource} />
         </div>
-        <div className={!simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"}>
+        <div
+          className={
+            !simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"
+          }
+        >
           <FilesPanel
             sandboxId={sandboxId}
             repoId={repoId}
             isActive={isActive}
             fileList={fileList}
+            wake={{ onStartSandbox, isSandboxStarting }}
           />
         </div>
         <div
           className={
-            !simpleView && tabBarValue === "agents" ? "h-full min-h-0" : "hidden"
+            !simpleView && tabBarValue === "agents"
+              ? "h-full min-h-0"
+              : "hidden"
           }
         >
-          <SandboxAgentsPanel entity={{ kind: "task", taskId }} agents={agents} />
+          <SandboxAgentsPanel
+            entity={{ kind: "task", taskId }}
+            agents={agents}
+          />
         </div>
         <SandboxPaneSlots
           activeTab={tabBarValue}
@@ -211,6 +232,9 @@ export function TaskSandboxPanel({
           runConsoleDevCommandOnConnect={false}
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
+          autoWakeEligible={autoWakeEligible}
+          // A collapsed rail is not on screen: no presence beacon, no auto-wake.
+          presenceEnabled={!collapsed}
           stickyPreviewPath={viewState?.previewPath}
           onStickyPreviewPathChange={(path) => {
             void setPreviewPath({ owner, path });

@@ -4,17 +4,8 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 import { resolveSandboxContext } from "./helpers";
-import { launchDevServerInBackground, startSessionServices } from "./devServer";
-
-function devOverrides(repo: {
-  devPort?: number;
-  devCommand?: string;
-}): { devPort?: number; devCommand?: string } | undefined {
-  if (repo.devPort === undefined && repo.devCommand === undefined) {
-    return undefined;
-  }
-  return { devPort: repo.devPort, devCommand: repo.devCommand };
-}
+import { launchDevServerInBackground } from "./devServer";
+import { startServicesWithRestoreAlert } from "./sessions";
 
 /**
  * Re-runs the app dev server inside an active task sandbox using the repo's
@@ -39,10 +30,12 @@ export const runDevServerInTaskSandbox = internalAction({
     const { client } = await resolveSandboxContext(ctx, args.repoId);
     const handle = await client.get(args.sandboxId);
 
-    const { port: devPort, devCommand } = await startSessionServices(
+    const { port: devPort, devCommand } = await startServicesWithRestoreAlert(
+      ctx,
+      args.taskId,
       handle,
       rootDir,
-      devOverrides(repo),
+      repo,
     );
 
     await launchDevServerInBackground(handle, devCommand, devPort);

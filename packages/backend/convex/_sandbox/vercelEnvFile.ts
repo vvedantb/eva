@@ -23,6 +23,18 @@ export const COREPACK_SANDBOX_ENV: Record<string, string> = {
   COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
 };
 
+/** Where each launch installs the registry-latest Claude / Codex CLI (see launch.ts). */
+export const CLAUDE_CLI_INSTALL_DIR = "/tmp/claude-cli";
+export const CODEX_CLI_INSTALL_DIR = "/tmp/codex-cli";
+
+/**
+ * Puts the launch-installed CLIs ahead of the image's copies, so `claude` /
+ * `codex` typed in a terminal runs the same latest build the agent does rather
+ * than the version the snapshot was seeded with. Raw line, not an
+ * `renderEvaEnvFile` entry: `$PATH` must expand when sourced.
+ */
+export const AGENT_CLI_PATH_LINE = `export PATH="${CLAUDE_CLI_INSTALL_DIR}/bin:${CODEX_CLI_INSTALL_DIR}/bin:$PATH"\n`;
+
 /** Renders env vars as sourceable `export K='V'` lines (single-quote-escaped). */
 export function renderEvaEnvFile(env: Record<string, string>): string {
   return (
@@ -56,7 +68,12 @@ export function ensureEvaEnvInteractiveHookScript(): string {
   return [
     `printf '%s\\n' '${EVA_ENV_SOURCE_CMD}' | sudo tee /etc/profile.d/eva-sandbox-env.sh >/dev/null`,
     `sudo chmod 644 /etc/profile.d/eva-sandbox-env.sh`,
+    // `$HOME/.bashrc` is listed because the sandbox user is not the same on
+    // every base image: AL2023 runs as `vercel-sandbox` (HOME=/home/vercel-sandbox)
+    // and the Ubuntu managed image as `ubuntu` (HOME=/vercel), so neither reads
+    // /home/eva/.bashrc — that path is an eva-created directory, not anyone's
+    // real home. It stays in the list for snapshots that already have it.
     // Entire for-loop is one statement so join("; ") cannot produce `do;`.
-    `for rc in /home/eva/.bashrc /root/.bashrc; do grep -qF '${marker}' "$rc" 2>/dev/null || printf '%s\\n' '' '${marker}' '${EVA_ENV_SOURCE_CMD}' >> "$rc" 2>/dev/null || true; done`,
+    `for rc in "$HOME/.bashrc" /home/eva/.bashrc /root/.bashrc; do grep -qF '${marker}' "$rc" 2>/dev/null || printf '%s\\n' '' '${marker}' '${EVA_ENV_SOURCE_CMD}' >> "$rc" 2>/dev/null || true; done`,
   ].join("; ");
 }

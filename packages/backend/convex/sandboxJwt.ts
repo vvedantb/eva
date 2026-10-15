@@ -30,9 +30,10 @@ export const mintSandboxSessionTokens = internalAction({
     entityKind: v.optional(
       v.union(v.literal("session"), v.literal("task"), v.literal("project")),
     ),
-    // Marks the launch as the user's persistent orchestrator session, which
-    // unlocks the extra orchestrator-only MCP tools.
-    isOrchestrator: v.optional(v.boolean()),
+    // The session chat a session daemon runs. `entityId` stays the session so
+    // session-level tools (dev server, browser, PRs) keep resolving; chat
+    // content (panels, questions, env var cards) lands on this row instead.
+    chatId: v.optional(v.string()),
   },
   returns: v.object({
     sandboxToken: v.string(),
@@ -88,7 +89,7 @@ export const mintSandboxSessionTokens = internalAction({
             ...(args.entityKind !== undefined
               ? { entityKind: args.entityKind }
               : {}),
-            ...(args.isOrchestrator ? { orchestrator: true } : {}),
+            ...(args.chatId !== undefined ? { chatId: args.chatId } : {}),
           })
             .setProtectedHeader({ alg: "HS256" })
             .setExpirationTime(`${expiresIn}s`)

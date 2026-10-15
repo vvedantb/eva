@@ -22,6 +22,14 @@ interface CommentReplyComposerProps {
   parentId: Id<"taskComments">;
 }
 
+/**
+ * The reply field carries no box of its own: it is the last row of the thread
+ * card, so the card's divider and padding already frame it. A bordered control
+ * here read as a second, competing surface stacked inside the first.
+ */
+const REPLY_INPUT_CLASS =
+  "min-h-8 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0";
+
 // ---------------------------------------------------------------------------
 // Inner form — mounts only once the draft has resolved.
 // ---------------------------------------------------------------------------
@@ -101,25 +109,26 @@ function CommentReplyComposerForm({
         className="absolute bottom-full left-0 mb-1"
       />
       {/* Fixed slot keeps the avatar from shifting the input once it loads;
-          h-9 aligns it with the input's first line when multi-line. */}
-      <span className="flex h-9 w-4 shrink-0 items-center justify-center">
+          h-8 aligns it with the input's first line when multi-line. */}
+      <span className="flex h-8 w-4 shrink-0 items-center justify-center">
         {currentUserId ? (
           <UserInitials userId={currentUserId} size="sm" hideLastSeen />
         ) : null}
       </span>
-      <div className="flex min-h-9 min-w-0 flex-1 items-start gap-1 rounded-control border border-input bg-card transition-[background-color,border-color,box-shadow] focus-within:border-ring/60 focus-within:ring-2 focus-within:ring-ring/35 hover:bg-muted/50">
+      <div className="flex min-h-8 min-w-0 flex-1 items-start gap-1">
         <CommentMentionInput
           ref={mentionRef}
           value={replyText}
           onValueChange={handleValueChange}
           onEnterSubmit={handleSubmit}
-          placeholder="Leave a reply"
+          placeholder="Leave a reply..."
           initialMentionMap={initialMentionMap}
           initialSkillMap={initialSkillMap}
-          className="min-h-0 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent py-1.5 pr-2 shadow-none focus-visible:ring-0"
+          className={REPLY_INPUT_CLASS}
         />
         <CommentSendButton
-          className="mt-1 mr-1.5 shrink-0"
+          className="mt-0.5 shrink-0 text-muted-foreground"
+          variant="outline"
           disabled={!canSubmit}
           isSubmitting={isSubmitting}
           onClick={handleSubmit}
@@ -153,14 +162,14 @@ export function CommentReplyComposer({
   if (draft === undefined) {
     return (
       <div className="flex items-start gap-2">
-        <span className="flex h-9 w-4 shrink-0 items-center justify-center" />
-        <div className="flex min-h-9 min-w-0 flex-1 items-start rounded-control border border-input bg-card">
+        <span className="flex h-8 w-4 shrink-0 items-center justify-center" />
+        <div className="flex min-h-8 min-w-0 flex-1 items-start">
           <CommentMentionInput
             value=""
             onValueChange={() => undefined}
-            placeholder="Leave a reply"
+            placeholder="Leave a reply..."
             disabled
-            className="min-h-0 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent py-1.5 shadow-none focus-visible:ring-0"
+            className={REPLY_INPUT_CLASS}
           />
         </div>
       </div>

@@ -48,18 +48,23 @@ export function DocCommentThread({
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A notification for a reply carries the reply's id, but the whole thread
   // renders as one card — so the card is what scrolls and flashes.
-  const { ref: anchorRef, isAnchored } = useCommentAnchor(root._id, (anchorId) =>
-    replies.some((reply) => reply._id === anchorId),
+  const { ref: anchorRef, isAnchored } = useCommentAnchor(
+    root._id,
+    (anchorId) => replies.some((reply) => reply._id === anchorId),
   );
 
   const isResolved = root.resolvedAt !== undefined;
 
+  /* eslint-disable no-effect/no-event-handler --
+     The click happens on a highlight inside the editor, in a different subtree;
+     all this thread can do is scroll itself once it learns it is active. */
   // Bring the thread into view when its highlight is clicked in the editor.
   useEffect(() => {
     if (isActive) {
       rootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [isActive]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const handleReply = async () => {
     if (!replyContent.trim()) return;
@@ -108,12 +113,12 @@ export function DocCommentThread({
         </div>
       )}
       {root.resolutionTarget === "agent" && !isResolved ? (
-        <div className="mb-2 inline-flex rounded border border-border bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+        <div className="mb-2 inline-flex rounded border border-border bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary">
           For Eva
         </div>
       ) : null}
       {isOrphaned && (
-        <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-warning">
+        <div className="mb-2 text-3xs font-medium uppercase tracking-wide text-warning">
           Original text deleted
         </div>
       )}
@@ -261,7 +266,7 @@ function DocCommentItem({ comment }: { comment: DocComment }) {
         </span>
         <RelativeDateTime
           at={comment.createdAt}
-          className="text-[10px] text-muted-foreground"
+          className="text-3xs text-muted-foreground"
         />
       </div>
       <p

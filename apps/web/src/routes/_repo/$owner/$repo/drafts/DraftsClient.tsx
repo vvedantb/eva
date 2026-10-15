@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Skeleton, motionBase, motionStagger } from "@eva/ui";
+import { CenteredSpinner, motionBase, motionStagger } from "@eva/ui";
 import { m } from "motion/react";
 import { IconFileText } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -20,15 +20,7 @@ export function DraftsClient() {
   if (commentDrafts === undefined || taskDrafts === undefined) {
     return (
       <PageWrapper title="Drafts" comfortable>
-        <div
-          className="grid min-h-80 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-          aria-busy="true"
-          aria-label="Loading drafts"
-        >
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 border border-border" />
-          ))}
-        </div>
+        <CenteredSpinner label="Loading drafts" className="min-h-80" />
       </PageWrapper>
     );
   }

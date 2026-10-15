@@ -24,6 +24,8 @@ export interface SandboxCommandTab {
   value: SandboxTab;
   label: string;
   icon: ComponentType<{ className?: string }>;
+  /** Filled variant for the active tab chip, when Tabler ships one. */
+  activeIcon?: ComponentType<{ className?: string }>;
 }
 
 interface BuildSandboxPaletteCommandsArgs {

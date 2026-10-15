@@ -1,8 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-/** Matched for params; parent quick-tasks layout renders the task. */
+/** Legacy review tab, folded into Summary when the tabs became three. */
 export const Route = createFileRoute(
   "/_repo/$owner/$repo/quick-tasks/$numId/sandbox/review/recap",
 )({
-  component: () => null,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: "/$owner/$repo/quick-tasks/$numId/sandbox/review/summary",
+      params,
+      search,
+      replace: true,
+    });
+  },
 });

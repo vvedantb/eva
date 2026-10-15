@@ -8,6 +8,7 @@ import {
   resolveSandboxCredentials,
   resolveSandboxCredentialsOnly,
 } from "../envVarResolver";
+import { resolveConnectorLaunchEnv } from "../_connectors/resolve";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
 import {
   SandboxCommandFailedError,
@@ -25,7 +26,7 @@ import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
 import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
-import { buildStubMarkdown, SYSTEM_SKILLS } from "../_systemSkills/registry";
+import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 
 export const WORKSPACE_DIR = "/tmp/repo";
@@ -208,7 +209,8 @@ export async function ensureDockerDaemon(
     await execHandle(
       sandbox,
       [
-        "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker 2>/dev/null || true",
+        PACKAGE_HELPER_SCRIPT,
+        `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || true`,
         "command -v docker >/dev/null 2>&1 || exit 1",
         ...buildDockerdProcessCleanup(),
         "sleep 1",
@@ -218,7 +220,11 @@ export async function ensureDockerDaemon(
         buildDockerInfoWaitLoop(60),
         buildDockerSockPerms(),
         "docker info >/dev/null 2>&1",
-      ].join("; "),
+        // Newline-joined, not "; ": backgrounding `dockerd … &` followed by a
+        // literal `;` is a bash syntax error, so this whole script used to fail
+        // to PARSE — the recovery never ran, it just threw into the catch below
+        // and logged "Docker not available". A newline terminates `&` cleanly.
+      ].join("\n"),
       90,
     );
     console.log(
@@ -252,8 +258,9 @@ export async function bootstrapVercelDocker(
   const script = [
     "set -e",
     'echo "bootstrap-docker:start"',
-    "command -v docker >/dev/null 2>&1 || sudo dnf install -y docker",
-    "command -v docker >/dev/null 2>&1 || { echo \"bootstrap-docker:no-binary\"; exit 1; }",
+    PACKAGE_HELPER_SCRIPT,
+    `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")}`,
+    'command -v docker >/dev/null 2>&1 || { echo "bootstrap-docker:no-binary"; exit 1; }',
     ...buildDockerdProcessCleanup(true),
     buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",
@@ -528,21 +535,11 @@ export async function resolveSandboxClientOnly(
   return client;
 }
 
-/**
- * Vercel-managed universal image: Ubuntu with Node 24, git, ripgrep and the
- * claude-code / codex / opencode CLIs, patched nightly. The orchestrator boots
- * from it so the master session never waits on (or drifts with) a per-repo
- * snapshot build.
- */
-export const ORCHESTRATOR_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
-
 /** Resolves the provider client, sandbox env vars, and snapshot name for a repo. */
 export async function resolveSandboxContext(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
   opts?: {
-    /** Orchestrator sessions boot from the managed image, not a repo snapshot. */
-    isOrchestrator?: boolean;
     /**
      * A multi-repo session's saved codebase group. When its seeded snapshot
      * (primary + linked repos, deps installed) is still current for this
@@ -555,7 +552,6 @@ export async function resolveSandboxContext(
   client: SandboxClient;
   sandboxEnvVars: Record<string, string>;
   snapshotName: string | undefined;
-  image: string | undefined;
 }> {
   const startedAt = Date.now();
   const { credentials, sandboxEnvVars } = await resolveSandboxCredentials(
@@ -563,16 +559,12 @@ export async function resolveSandboxContext(
     repoId,
   );
   const client = getSandboxClient(credentials);
-  const isOrchestrator = opts?.isOrchestrator === true;
-  // Snapshot lookup is skipped entirely for the orchestrator: the image boot
-  // ignores it, and the query would only add latency to the master's start.
-  const repoSnapshot = isOrchestrator
-    ? null
-    : await ctx.runQuery(internal.repoSnapshots.getRepoSnapshotName, {
-        repoId,
-      });
+  const repoSnapshot = await ctx.runQuery(
+    internal.repoSnapshots.getRepoSnapshotName,
+    { repoId },
+  );
   let snapshotName = repoSnapshot?.snapshotName;
-  if (!isOrchestrator && opts?.repoGroupId) {
+  if (opts?.repoGroupId) {
     const groupSnapshotName = await ctx.runQuery(
       internal.repoGroups.getGroupSnapshotForBoot,
       { groupId: opts.repoGroupId },
@@ -580,13 +572,12 @@ export async function resolveSandboxContext(
     if (groupSnapshotName) snapshotName = groupSnapshotName;
   }
   console.log(
-    `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} orchestrator=${isOrchestrator} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,
+    `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,
   );
   return {
     client,
     sandboxEnvVars: { ...sandboxEnvVars, REPO_ID: repoId },
     snapshotName,
-    image: isOrchestrator ? ORCHESTRATOR_SANDBOX_IMAGE : undefined,
   };
 }
 
@@ -613,8 +604,6 @@ export async function signAndLaunchScript(
   opts: {
     model?: string;
     allowedTools?: string;
-    /** Read-only turn: each provider SDK translates this into its own option. */
-    noWrites?: boolean;
     systemPrompt?: string;
     extraEnvVars?: Record<string, string>;
     claudeSessionId?: string;
@@ -666,17 +655,24 @@ export async function signAndLaunchScript(
       );
     }
   }
-  // The orchestrator flag lives on the session, so it is resolved here — the
-  // single launch choke point — and minted into the MCP token as a claim.
-  const launchSession =
-    entityIdField === "sessionId"
-      ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
+  // The linked-repo workspace description lives on the session, so it is
+  // resolved here — the single launch choke point.
+  // A session daemon is keyed by its chat; the session comes through the chat.
+  const launchChat =
+    entityIdField === "chatId"
+      ? await ctx.runQuery(internal.sessionChats.getInternal, {
+          chatId: entityId,
+        })
       : null;
+  const launchSession =
+    launchChat?.session ??
+    (entityIdField === "sessionId"
+      ? await ctx.runQuery(internal.sessions.getInternal, { id: entityId })
+      : null);
 
-  // Same reasoning for the workspace description: every launch path (prewarm
-  // daemon, launch on an existing sandbox, relaunch/heal) comes through here,
-  // so resolving the linked clones once means the agent is told about the same
-  // workspace on all of them. Absent entirely for single-repo sessions.
+  // Every launch path (prewarm daemon, launch on an existing sandbox,
+  // relaunch/heal) comes through here, so resolving the linked clones once
+  // means the agent is told about the same workspace on all of them. Absent entirely for single-repo sessions.
   // Annotated locally so this `runQuery` cannot feed a generated-api type
   // cycle back into `_generated/api.d.ts`.
   let linkedRepos: LinkedRepoEnvRow[] = [];
@@ -697,15 +693,17 @@ export async function signAndLaunchScript(
       userId,
       repoId,
       enableMcp: opts.enableMcp !== false,
-      entityId,
-      ...(entityIdField === "sessionId"
+      // The MCP token names the session (not the chat) so every session-level
+      // tool keeps resolving; the chat rides along as its own claim.
+      entityId: launchSession ? String(launchSession._id) : entityId,
+      ...(launchChat ? { chatId: entityId } : {}),
+      ...(launchSession
         ? { entityKind: "session" as const }
         : entityIdField === "taskId"
           ? { entityKind: "task" as const }
           : entityIdField === "projectId"
             ? { entityKind: "project" as const }
             : {}),
-      ...(launchSession?.isOrchestrator ? { isOrchestrator: true } : {}),
     },
   );
   console.log(
@@ -713,6 +711,13 @@ export async function signAndLaunchScript(
   );
 
   const mcpBaseUrl = mcpToken ? (process.env.CONVEX_SITE_URL ?? "") : "";
+
+  if (opts.enableMcp !== false) {
+    const connectorEnv = await resolveConnectorLaunchEnv(ctx, userId, repoId);
+    if (Object.keys(connectorEnv).length > 0) {
+      extraEnvVars = { ...extraEnvVars, ...connectorEnv };
+    }
+  }
 
   // A catalog writer is deliberately short-lived and single-use. Unlike the
   // old fleet-constant HMAC, reading one sandbox's env cannot grant permanent
@@ -733,27 +738,11 @@ export async function signAndLaunchScript(
   // System skills reach the agent as stub SKILL.md files in the checkout, and
   // the stubs are useless without the eva MCP server — so a launch with MCP
   // disabled ships an empty list, which prunes any leftovers.
-  const installedSkillStubs = mcpToken
+  const systemSkillStubs = mcpToken
     ? await ctx.runQuery(internal.repoSystemSkills.listStubsForLaunch, {
         repoId,
       })
     : [];
-  // The master's own skill skips the per-repo install gate — it belongs to the
-  // session, not to whichever repo the master happens to be checked out on.
-  // `get_skill` mirrors this bypass when it serves the content.
-  const orchestratorSkill = SYSTEM_SKILLS["eva-orchestrator"];
-  const systemSkillStubs =
-    mcpToken && launchSession?.isOrchestrator === true
-      ? [
-          ...installedSkillStubs.filter(
-            (stub) => stub.name !== orchestratorSkill.name,
-          ),
-          {
-            name: orchestratorSkill.name,
-            stub: buildStubMarkdown(orchestratorSkill),
-          },
-        ]
-      : installedSkillStubs;
 
   await launchScript(
     sandbox,
@@ -778,7 +767,11 @@ export async function signAndLaunchScript(
 }
 
 /** Owner id types that can derive a stable per-owner Claude session UUID. */
-type PersistableSessionId = Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+type PersistableSessionId =
+  | Id<"sessionChats">
+  | Id<"sessions">
+  | Id<"projects">
+  | Id<"agentTasks">;
 
 /** Derives a deterministic UUID v4 from a session ID hash for Claude session identification. */
 export function sessionClaudeUuid(sessionId: PersistableSessionId): string {

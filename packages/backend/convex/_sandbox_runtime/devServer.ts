@@ -10,6 +10,7 @@ import {
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { ensureSwapFile } from "./swap";
+import { EVA_ENV_FILE } from "../_sandbox/vercelEnvFile";
 
 const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
@@ -169,8 +170,8 @@ export async function startSessionServices(
   sandbox: SandboxHandle,
   rootDir: string,
   overrides?: { devPort?: number; devCommand?: string },
-): Promise<{ port: number; devCommand: string }> {
-  await restoreSeededRuntimeState(sandbox);
+): Promise<{ port: number; devCommand: string; restoreError?: string }> {
+  const restoreError = await restoreSeededRuntimeState(sandbox);
 
   const port =
     overrides?.devPort !== undefined
@@ -181,19 +182,24 @@ export async function startSessionServices(
     return {
       port,
       devCommand: `cd ${workspaceDirShell()} && HOSTNAME=0.0.0.0 PORT=${port} ${overrides.devCommand}`,
+      restoreError,
     };
   }
 
   const pm = await detectPackageManager(sandbox, rootDir);
   const dir = packageDirShell(rootDir, workspaceDirShell());
   const devCommand = `cd ${dir} && HOSTNAME=0.0.0.0 PORT=${port} ${pm} run dev`;
-  return { port, devCommand };
+  return { port, devCommand, restoreError };
 }
 
-/** Restores service state that was exported into a seeded snapshot filesystem. */
+/**
+ * Restores service state that was exported into a seeded snapshot filesystem.
+ * Returns the dump-restore error instead of throwing, so callers can alert the
+ * chat and still launch the dev server.
+ */
 export async function restoreSeededRuntimeState(
   sandbox: SandboxHandle,
-): Promise<void> {
+): Promise<string | undefined> {
   try {
     await execHandle(sandbox, `test -f ${SUPABASE_DUMP_PATH}`, 5);
   } catch {
@@ -216,6 +222,25 @@ export async function restoreSeededRuntimeState(
     );
     return;
   }
+  // Non-fatal: every caller runs this before the dev server resolves, so a
+  // throw here (e.g. a repo whose `supabase` CLI never installed, exit 127)
+  // left the Preview Console with no dev server at all. Background/startup
+  // commands still own Supabase and surface their own failures.
+  try {
+    await restoreSeededSupabaseDump(sandbox);
+    return undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${message}`,
+    );
+    return message;
+  }
+}
+
+async function restoreSeededSupabaseDump(
+  sandbox: SandboxHandle,
+): Promise<void> {
   await execHandle(
     sandbox,
     [
@@ -261,13 +286,6 @@ export async function restoreSeededRuntimeState(
     600,
   );
 }
-
-/** Stable default terminal pane id — must match `sandboxPanes.defaultPane`. */
-export function defaultTerminalPtyId(ownerKey: string): string {
-  return `${ownerKey}-terminal-default`;
-}
-
-const EVA_ENV_FILE = "/vercel/sandbox/.eva-env.sh";
 
 const DEVSERVER_LOCK = "/tmp/eva-devserver.lock";
 const DEVSERVER_LAST_LAUNCH = "/tmp/eva-devserver-last-launch";

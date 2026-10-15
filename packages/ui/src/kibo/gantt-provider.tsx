@@ -95,10 +95,7 @@ const GANTT_SIDEBAR_WIDTH_PX = 300;
  * desktop is unchanged.
  */
 function ganttSidebarWidth(): number {
-  return Math.min(
-    GANTT_SIDEBAR_WIDTH_PX,
-    Math.round(window.innerWidth * 0.45),
-  );
+  return Math.min(GANTT_SIDEBAR_WIDTH_PX, Math.round(window.innerWidth * 0.45));
 }
 
 export const GanttContext = createContext<GanttContextProps>({
@@ -310,6 +307,9 @@ export const GanttProvider: FC<GanttProviderProps> = ({
   // Center the canvas on today once the sidebar width is known, matching
   // Linear's default (today near the middle of the viewport). Runs once.
   const didCenterRef = useRef(false);
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-chain-state-updates, no-effect/no-event-handler --
+     Scrolls the real element and then records where it landed; the scroll
+     position only exists after layout, so it cannot be derived during render. */
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || didCenterRef.current || sidebarWidth === 0) return;
@@ -334,6 +334,7 @@ export const GanttProvider: FC<GanttProviderProps> = ({
     setScrollX(el.scrollLeft);
     didCenterRef.current = true;
   }, [sidebarWidth, zoom, range, columnWidth, timelineData, onAddItem]);
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-chain-state-updates, no-effect/no-event-handler */
 
   // Ctrl/Cmd + wheel (and trackpad pinch, which sends ctrlKey) zooms the
   // timeline like Linear, instead of zooming the page. Plain wheel scrolls.
@@ -359,6 +360,10 @@ export const GanttProvider: FC<GanttProviderProps> = ({
     return () => el.removeEventListener("wheel", onWheel);
   }, [onZoomChange]);
 
+  /* eslint-disable no-effect/no-external-store-subscription, no-effect/no-initialize-state --
+     Measures the rendered sidebar via a MutationObserver plus resize. There is
+     no snapshot to read before the first paint, so useSyncExternalStore has
+     nothing to return on mount. */
   useEffect(() => {
     const updateSidebarWidth = () => {
       const sidebarElement = scrollRef.current?.querySelector(
@@ -385,6 +390,7 @@ export const GanttProvider: FC<GanttProviderProps> = ({
       window.removeEventListener("resize", updateSidebarWidth);
     };
   }, []);
+  /* eslint-enable no-effect/no-external-store-subscription, no-effect/no-initialize-state */
 
   const handleScroll = useMemo(
     () =>

@@ -11,7 +11,6 @@ import { BG_HEAL_MIN_INTERVAL_MS } from "../convex/sandboxHeal";
  * children and truncated /tmp/bg-<i>.log. `claim` now refuses while the owning
  * session has `sandboxServicesPending` set (fix cf8a50f21).
  *
- * previewHealThrottleContract.test.ts pins where the gate sits in the source.
  * This runs the mutation, because the two properties that actually matter are
  * behavioural: the gate blocks, and it does NOT consume the interval slot.
  */
@@ -55,6 +54,13 @@ async function stampCount(t: ReturnType<typeof convexTest>): Promise<number> {
 }
 
 describe("the preview heal waits for the session's own service launch", () => {
+  test("the throttle interval stays in the 30-60s band", () => {
+    // The point is fewer execs (the poll fires every ~2s per open page)
+    // without letting a dead background daemon linger.
+    expect(BG_HEAL_MIN_INTERVAL_MS).toBeGreaterThanOrEqual(30_000);
+    expect(BG_HEAL_MIN_INTERVAL_MS).toBeLessThanOrEqual(60_000);
+  });
+
   test(
     "a session still launching services never wins the claim",
     async () => {

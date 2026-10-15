@@ -24,8 +24,10 @@ import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
 import {
   SANDBOX_STATUS_STYLES,
+  showsSandboxStatusDot,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { IconClock, IconDots, IconFolder, IconTag } from "@tabler/icons-react";
 import {
   statusConfig,
@@ -33,6 +35,7 @@ import {
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { PriorityIcon } from "@/lib/components/priority/PriorityIcon";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import {
   PRIORITY_LABELS,
   type Priority,
@@ -107,6 +110,8 @@ interface QuickTaskCardProps {
    * and status badge stay on `status`.
    */
   isAgentActive?: boolean;
+  /** Finished chat reply the user has not seen. `isAgentActive` hides it. */
+  hasUnread?: boolean;
 }
 
 export function QuickTaskCard({
@@ -140,6 +145,7 @@ export function QuickTaskCard({
   currentUserId,
   projects,
   isAgentActive = false,
+  hasUnread = false,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
@@ -150,6 +156,7 @@ export function QuickTaskCard({
   // A live turn gets the same pixel grid the session rows use instead.
   const isInProgress = !hasError && status === "in_progress";
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
+  const simpleView = useSimpleView();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
@@ -260,7 +267,7 @@ export function QuickTaskCard({
         ) : null}
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
           <EntityNumLabel numId={numId} projectNumId={projectNumId} />
-          <MarqueeOnHover className="min-w-0 flex-1 text-[13px] font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
+          <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
             {title}
           </MarqueeOnHover>
         </div>
@@ -276,35 +283,9 @@ export function QuickTaskCard({
               <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
             </Tooltip>
           ) : null}
-          {sandboxStatus ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    "relative size-2 shrink-0 rounded-full hit-target",
-                    SANDBOX_STATUS_STYLES[sandboxStatus].dot,
-                  )}
-                />
-              </TooltipTrigger>
-              <TooltipContent>
-                {SANDBOX_STATUS_STYLES[sandboxStatus].label}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {scheduledAt ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="relative flex items-center text-primary hit-target">
-                  <IconClock className="size-3.5" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {status === "todo"
-                  ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
-                  : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          {/* One mark, never two: a turn in flight already implies an awake
+              sandbox, so the pixel grid stands in for the status dot — the same
+              swap the session rows and the sandbox surface tabs make. */}
           {showAgentPulse ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -319,6 +300,37 @@ export function QuickTaskCard({
               </TooltipTrigger>
               <TooltipContent>Eva is replying</TooltipContent>
             </Tooltip>
+          ) : sandboxStatus &&
+            showsSandboxStatusDot(sandboxStatus, simpleView) ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    "relative size-2 shrink-0 rounded-full hit-target",
+                    SANDBOX_STATUS_STYLES[sandboxStatus].dot,
+                  )}
+                />
+              </TooltipTrigger>
+              <TooltipContent>
+                {SANDBOX_STATUS_STYLES[sandboxStatus].label}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {/* Executing wins: the dot shows once the turn has ended. */}
+          <UnreadDot show={hasUnread && !isAgentActive} />
+          {scheduledAt ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="relative flex items-center text-primary hit-target">
+                  <IconClock className="size-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {status === "todo"
+                  ? `Scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
+                  : `Was scheduled for ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
       </div>
@@ -330,7 +342,7 @@ export function QuickTaskCard({
               <TooltipTrigger asChild>
                 <Badge
                   variant="default"
-                  className="max-w-full px-1.5 py-0 text-[10px] font-medium leading-4"
+                  className="max-w-full px-1.5 py-0 text-3xs font-medium leading-4"
                 >
                   <span className="flex min-w-0 items-center gap-0.5">
                     <IconFolder className="size-2.5 shrink-0" />
@@ -345,7 +357,7 @@ export function QuickTaskCard({
             <Badge
               key={tag}
               variant="secondary"
-              className="max-w-28 px-1.5 py-0 text-[10px] font-medium leading-4"
+              className="max-w-28 px-1.5 py-0 text-3xs font-medium leading-4"
             >
               <span className="flex min-w-0 items-center gap-0.5">
                 <IconTag className="size-2.5 shrink-0" />
@@ -362,7 +374,7 @@ export function QuickTaskCard({
             <>
               <UserInitials user={createdByUser} size="sm" />
               {creatorFirstName ? (
-                <MarqueeOnHover className="min-w-0 text-[11px] text-muted-foreground/75">
+                <MarqueeOnHover className="min-w-0 text-2xs text-muted-foreground/75">
                   <span data-pii>{creatorFirstName}</span>
                 </MarqueeOnHover>
               ) : null}
@@ -370,7 +382,7 @@ export function QuickTaskCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="text-[11px] tabular-nums text-muted-foreground/70">
+          <span className="text-2xs tabular-nums text-muted-foreground/70">
             {compactRelativeTime(createdAt)}
           </span>
           <DropdownMenu>

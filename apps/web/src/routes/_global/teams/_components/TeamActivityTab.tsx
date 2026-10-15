@@ -78,7 +78,7 @@ export function TeamActivityTab({ members }: { members: Array<Member> }) {
                         {name}
                       </span>
                       {isSelf ? (
-                        <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                        <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-3xs font-normal text-muted-foreground">
                           You
                         </span>
                       ) : null}

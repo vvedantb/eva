@@ -1,10 +1,16 @@
 import { v } from "convex/values";
+import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
+import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { authMutation } from "./functions";
-import { turnCheckpointArgs, workflowCompleteValidator } from "./validators";
+import {
+  turnCheckpointArgs,
+  turnLeaseFenceArgs,
+  workflowCompleteValidator,
+} from "./validators";
 import { trackDocWorkflow } from "./workflowWatchdog";
 import {
   clearStreamingActivity,
@@ -90,17 +96,23 @@ export const testGenWorkflow = workflow.define({
         streamingEntityId: args.docId,
       }));
 
-      await step.runAction(internal.sandbox.launchOnExistingSandbox, {
-        sandboxId,
-        entityId: args.docId,
-        prompt: docData.prompt,
-        userId: args.userId,
-        completionMutation: "testGenWorkflow:handleCompletion",
-        entityIdField: "docId",
-        model: "sonnet",
-        allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
-        repoId: docData.repoId,
-      });
+      await launchAgentStep(
+        step,
+        {
+          sandboxId,
+          entityId: args.docId,
+          prompt: docData.prompt,
+          userId: args.userId,
+          completionMutation: "testGenWorkflow:handleCompletion",
+          entityIdField: "docId",
+          model: "sonnet",
+          allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
+          repoId: docData.repoId,
+        },
+        {
+          entityId: args.docId,
+        },
+      );
 
       // Step 4: Wait for callback
       const result = await step.awaitEvent(testGenCompleteEvent);
@@ -332,11 +344,23 @@ export const handleCompletion = authMutation({
     activityLog: v.union(v.string(), v.null()),
     rawResultEvent: v.optional(v.string()),
     ...turnCheckpointArgs,
+    ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (
+      !(await settleAgentTurnCompletion(ctx, {
+        entityId: args.docId,
+        turnId: args.turnId,
+        leaseGeneration: args.leaseGeneration,
+        success: args.success,
+        error: args.error,
+      }))
+    ) {
+      return null;
+    }
 
     await sendCompletionEvent(ctx, testGenCompleteEvent, doc.activeWorkflowId, {
       success: args.success,

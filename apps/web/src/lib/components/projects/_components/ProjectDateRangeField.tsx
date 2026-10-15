@@ -3,7 +3,10 @@
 import { Popover, PopoverTrigger, PopoverContent, Calendar } from "@eva/ui";
 import { IconCalendarEvent } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import { FIELD_ROW_CLASS } from "@/lib/components/fields/FieldsSection";
+import {
+  FIELD_ROW_CLASS,
+  FIELD_TEXT_CLASS,
+} from "@/lib/components/fields/FieldsSection";
 
 /** One end of the range: its date (or placeholder) behind a calendar popover. */
 function DateEnd({
@@ -62,7 +65,7 @@ export function ProjectDateRangeField({
     dayjs(start).year() === dayjs(end).year();
 
   return (
-    <div className={`${FIELD_ROW_CLASS} gap-1 text-[13px]`}>
+    <div className={`${FIELD_ROW_CLASS} gap-1 ${FIELD_TEXT_CLASS}`}>
       <IconCalendarEvent
         size={14}
         className="mr-0.5 shrink-0 text-muted-foreground"

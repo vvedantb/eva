@@ -84,12 +84,4 @@ describe("KANBAN_COLUMN_WIDTH_CLASS", () => {
     );
     expect(GUTTER_REM).toBe(0.75);
   });
-
-  it("the loading skeleton uses the same column width class", () => {
-    const skeletonSource = readFileSync(
-      join(here, "KanbanBoardSkeleton.tsx"),
-      "utf8",
-    );
-    expect(skeletonSource).toContain("KANBAN_COLUMN_WIDTH_CLASS");
-  });
 });
