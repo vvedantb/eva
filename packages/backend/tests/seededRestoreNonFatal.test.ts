@@ -54,7 +54,6 @@ function fakeHandle(options: {
     start: () => outOfScope("start"),
     writeFile: () => outOfScope("writeFile"),
     execDetached: () => outOfScope("execDetached"),
-    archive: () => outOfScope("archive"),
     extendTimeout: () => outOfScope("extendTimeout"),
     delete: () => outOfScope("delete"),
     previewUrl: () => outOfScope("previewUrl"),

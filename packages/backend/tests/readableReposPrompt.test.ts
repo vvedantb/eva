@@ -31,18 +31,15 @@ test("buildReadableReposBlock lists every repo and clones the first one", () => 
 function sessionPrompt(
   readableRepos: Array<{ owner: string; name: string }>,
 ): string {
-  return buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/session-1",
-    "",
-    "continue",
-    "",
-    "",
-    "Repo system prompt text",
-    undefined,
-    [],
+  return buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/session-1",
+    message: "continue",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    systemPrompt: "Repo system prompt text",
     readableRepos,
-  );
+  });
 }
 
 test("buildEditPrompt appends the block after the system prompt", () => {

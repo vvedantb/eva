@@ -36,6 +36,7 @@ describe("every branch Eva publishes stays under the eva/ prefix", () => {
       "eva/project-mh7project0000000000000001",
       "eva/project-mh7project0000000000000001-v3",
       buildTestGenBranchName("Mention documents in the session prompt input"),
+      "eva/task-mh7task00000000000000000001",
     ];
     for (const name of built) {
       expect(name.startsWith(EVA_BRANCH_PREFIX), name).toBe(true);
@@ -84,7 +85,7 @@ describe("every branch Eva publishes stays under the eva/ prefix", () => {
       readFileSync(join(backendDir, "convex/_git/branchNames.ts"), "utf8"),
     );
     expect(builders).not.toMatch(/`eva\//);
-    expect(builders.match(/\$\{EVA_BRANCH_PREFIX\}/g)?.length).toBe(4);
+    expect(builders.match(/\$\{EVA_BRANCH_PREFIX\}/g)?.length).toBe(5);
   });
 });
 

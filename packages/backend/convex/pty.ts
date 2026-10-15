@@ -2,7 +2,6 @@
 
 import { v } from "convex/values";
 import { action } from "./_generated/server";
-import { resolveSandboxCredentials } from "./envVarResolver";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 import { unwrapVercelSandbox } from "./_sandbox/vercelProvider";
 import { ownerArg, resolveOwner } from "./_pty/owners";
@@ -61,8 +60,6 @@ export const connectPty = action({
       source: "terminal",
       clerkUserId: identity.subject,
     });
-    await resolveSandboxCredentials(ctx, resolved.repoId);
-
     const handle = await getSandboxHandle(
       ctx,
       resolved.repoId,

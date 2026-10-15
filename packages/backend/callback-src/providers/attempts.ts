@@ -45,40 +45,13 @@ export function syncProviderStateToPersist(reason: string): void {
 }
 
 /**
- * Claude always runs via the Agent SDK. Chat entities with CLAIM_MUTATION enter
- * the persistent daemon earlier in index.ts; job runs and daemon fallbacks land
- * here on the one-shot SDK runner.
+ * One-shot SDK runner per provider. Claude chat entities with CLAIM_MUTATION
+ * enter the persistent daemon earlier in index.ts; job runs and daemon
+ * fallbacks land here. OpenCode still needs its CLI binary for `opencode serve`.
  */
-async function runClaudeAttempt(sessionMode: SessionMode) {
-  return await runClaudeSdkAttempt(sessionMode);
-}
-
-async function runCodexAttempt(sessionMode: SessionMode) {
-  return await runCodexSdkAttempt(sessionMode);
-}
-
-/**
- * OpenCode runs via the opencode SDK against the sandbox's `opencode serve`
- * process (one shot per turn). The CLI binary is still required — it is what
- * serves.
- */
-async function runOpencodeAttempt(sessionMode: SessionMode) {
-  return await runOpencodeSdkAttempt(sessionMode);
-}
-
-/** Cursor runs via the Cursor SDK (local agent in-process, one shot per turn). */
-async function runCursorAttempt(sessionMode: SessionMode) {
-  if (!process.env.CURSOR_API_KEY?.trim()) {
-    throw new Error(
-      "CURSOR_API_KEY is missing in the sandbox environment — the Cursor SDK cannot authenticate",
-    );
-  }
-  return await runCursorSdkAttempt(sessionMode);
-}
-
 export async function runProviderAttempt(sessionMode: SessionMode) {
-  if (PROVIDER === "codex") return await runCodexAttempt(sessionMode);
-  if (PROVIDER === "opencode") return await runOpencodeAttempt(sessionMode);
-  if (PROVIDER === "cursor") return await runCursorAttempt(sessionMode);
-  return await runClaudeAttempt(sessionMode);
+  if (PROVIDER === "codex") return await runCodexSdkAttempt(sessionMode);
+  if (PROVIDER === "opencode") return await runOpencodeSdkAttempt(sessionMode);
+  if (PROVIDER === "cursor") return await runCursorSdkAttempt(sessionMode);
+  return await runClaudeSdkAttempt(sessionMode);
 }

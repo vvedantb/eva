@@ -335,20 +335,13 @@ async function refreshOne(
   const windows: UsageWindow[] = readClaudeUsageWindows(result.body);
   const accountArg =
     accountId === undefined ? {} : { providerAccountId: accountId };
-  // The probe never names the plan, so the stored plan name is carried forward
-  // rather than dropped. Keyed by credential, so the team row is named by its
-  // team and the account row by its account.
-  const stored = await ctx.runQuery(internal.usageLimits.getReadingInternal, {
-    provider: USAGE_PROVIDER,
-    ...accountArg,
-    ...(target.teamId === undefined ? {} : { teamId: target.teamId }),
-  });
-  const subscriptionType = stored?.subscriptionType;
   // `report` still takes the repo — it authorises the call, and for the shared
   // credential it is how the team behind the token is resolved.
   //
   // Partial, always: the probe sees three windows, so `snapshotComplete` here
-  // would wipe the Opus/Sonnet weeklies a real turn captured.
+  // would wipe the Opus/Sonnet weeklies a real turn captured. The probe never
+  // names the plan, and a partial merge keeps the stored `subscriptionType`
+  // when none is sent.
   await ctx.runMutation(api.usageLimits.report, {
     repoId,
     provider: USAGE_PROVIDER,
@@ -356,7 +349,6 @@ async function refreshOne(
     capturedAt: Date.now(),
     completeness: "partial",
     windows,
-    ...(subscriptionType === undefined ? {} : { subscriptionType }),
   });
   return { ok: true };
 }

@@ -123,7 +123,6 @@ describe("the daemon preserves durable ownership from the claim response", () =>
     ).toEqual({
       prompt: "Fix the upload.",
       attachmentUrls: ["https://example.test/input.png"],
-      interactionMode: "default",
       turnLease: { turnId: "turn-47", leaseGeneration: 3 },
     });
   });
@@ -175,7 +174,6 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
       {
         prompt: "p",
         attachmentUrls: [],
-        interactionMode: "default",
         turnLease: { turnId: "turn-1", leaseGeneration: 1 },
       },
       "/tmp/eva-cursor-turn-1.txt",
@@ -195,7 +193,6 @@ describe("the Cursor daemon isolates every turn in a disposable worker", () => {
       {
         prompt: "p",
         attachmentUrls: [],
-        interactionMode: "default",
         turnLease: { turnId: "turn-1", leaseGeneration: 3 },
       },
       "/tmp/eva-cursor-turn-2.txt",
@@ -316,15 +313,19 @@ describe("the cursor daemon's per-turn ordering", () => {
    * workflow event instead of this already-settled one.
    */
   test("a cancelled turn posts no completion", () => {
-    const runTurn = functionBody(
+    const supervisorTurn = functionBody(
       daemon,
-      "async function executeClaimedTurn(turn: ClaimedTurn): Promise<void> {",
+      "async function runClaimedTurn(turn: ClaimedTurn): Promise<void> {",
     );
-    const cancelAt = runTurn.indexOf("if (cancelInFlight) {");
-    const finalizeAt = runTurn.indexOf("await finalizeTurn(attempt)");
+    const cancelAt = supervisorTurn.indexOf(
+      "if (supervisor.isCancellationInFlight) {",
+    );
+    const failureAt = supervisorTurn.indexOf(
+      "reportCursorTurnWorkerFailure(outcome)",
+    );
     expect(cancelAt, "the cancel guard moved").toBeGreaterThan(-1);
-    expect(finalizeAt, "the finalize call moved").toBeGreaterThan(-1);
-    expect(cancelAt).toBeLessThan(finalizeAt);
+    expect(failureAt, "the failure report moved").toBeGreaterThan(-1);
+    expect(cancelAt).toBeLessThan(failureAt);
   });
 
   /**
@@ -372,17 +373,15 @@ describe("the cursor daemon's per-turn ordering", () => {
    */
   test("a claim that cannot start now is parked through the shared guard", () => {
     const watcher = daemon.slice(daemon.indexOf("function startClaimWatcher("));
-    const guardAt = watcher.indexOf("shouldParkClaimedTurn({");
-    const parkAt = watcher.indexOf("pendingClaimedTurn = turn;");
-    const discardAt = watcher.indexOf("cursor daemon: claim discarded");
-    expect(guardAt, "the park guard is gone").toBeGreaterThan(-1);
-    expect(parkAt, "the park moved out of the claim handler").toBeGreaterThan(
+    const guardAt = watcher.indexOf("routeClaimedTurn({");
+    const parkAt = watcher.indexOf("park: () => supervisor.parkClaim(turn)");
+    expect(guardAt, "the shared claim router is gone").toBeGreaterThan(-1);
+    expect(parkAt, "the park moved out of the claim router").toBeGreaterThan(
       guardAt,
     );
-    expect(discardAt, "the discard log moved").toBeGreaterThan(parkAt);
+    expect(watcher.split("routeClaimedTurn({").length - 1).toBe(1);
     // One park site only: a second, ungated one is the regression itself.
-    expect(watcher.split("pendingClaimedTurn = turn;").length - 1).toBe(1);
-    expect(watcher).toContain("claimedLeaseTurnId: turn.turnLease?.turnId");
+    expect(watcher.split("supervisor.parkClaim(").length - 1).toBe(1);
     expect(watcher).toContain("acceptTurn:");
   });
 

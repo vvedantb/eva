@@ -5,10 +5,16 @@ import {
   internalQuery,
   type MutationCtx,
 } from "../_generated/server";
-import { workflow, cancelTrackedWorkflow } from "../workflowManager";
-import { authAction, authMutation, hasRepoAccess } from "../functions";
+import { workflow } from "../workflowManager";
+import {
+  authAction,
+  authMutation,
+  getSessionWithAccess,
+  hasRepoAccess,
+} from "../functions";
 import {
   aiModelValidator,
+  launchTraitsFromEntity,
   launchTraitsFromStored,
   normalizeAIModel,
   reasoningLevelValidator,
@@ -16,8 +22,6 @@ import {
 } from "../validators";
 import { trackSessionChatWorkflow } from "../workflowWatchdog";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
@@ -30,18 +34,13 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
-import { detectCancelSupersession } from "../_chat/cancelRace";
+import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { touchUserActivity } from "../_sandbox/activity";
-import {
-  bindTurnWorkflow,
-  closeOpenTurn,
-  closeTurnForWorkflow,
-  openSessionChatTurn,
-} from "../_chat/turnStore";
+import { bindTurnWorkflow, openSessionChatTurn } from "../_chat/turnStore";
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
   listLiveSessionChats,
   loadSessionChat,
   sessionChatHasFreeSlot,
@@ -119,7 +118,7 @@ async function stageAndStartChatTurn(
   });
 
   const normalizedModel = normalizeAIModel(settings.model);
-  // Normalise exactly as the page-open prewarm does (`launchTraitsFromStored`
+  // Normalise exactly as the page-open prewarm does (`launchTraitsFromEntity`
   // in `prewarmDaemon` below): the composer can send a model default explicitly
   // (e.g. reasoning "high", its display value), and forwarding it verbatim gives
   // this turn's prewarm and the workflow's prewarm a different daemon opts sig
@@ -316,10 +315,12 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     if (
       chat.activeWorkflowId !== undefined ||
       chat.pendingTurn !== undefined
@@ -384,10 +385,12 @@ export const startExecute = authMutation({
   },
   returns: v.union(v.literal("started"), v.literal("queued")),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     if (chat.archived === true) throw new Error("This chat is closed");
     await touchUserActivity(ctx, sessionActivityRef(session), {
       source: "chat",
@@ -489,8 +492,12 @@ export const prewarmDaemon = authMutation({
     // Match the turn path's launch options so the first real message does not
     // immediately optsmismatch-kill this daemon (which races with
     // claimPendingTurn and leaves the chat stuck on Working). The sticky traits
-    // must go through `launchTraitsFromStored` — the same normalisation the
-    // composer applies — because the send path omits defaults.
+    // must go through `launchTraitsFromEntity` — the same normalisation the
+    // composer applies — because the send path omits defaults. Forwarding the
+    // stored values verbatim (e.g. reasoning "high", which is the Claude
+    // default, or `fastMode: false` on a model with no Fast trait) yields a
+    // different opts sig from the turn path and kill+respawns the warm daemon on
+    // every page open (each respawn window can duplicate daemons).
     const credentialOwnerUserId = session.createdBy ?? session.userId;
     const normalizedModel = normalizeAIModel(chat.lastModel);
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
@@ -499,12 +506,7 @@ export const prewarmDaemon = authMutation({
       repoId: session.repoId,
       userId: session.userId,
       model: normalizedModel,
-      ...launchTraitsFromStored(normalizedModel, {
-        reasoningLevel: chat.lastReasoningLevel,
-        thinkingEnabled: chat.lastThinkingEnabled,
-        use1mContext: chat.lastUse1mContext,
-        fastMode: chat.lastFastMode,
-      }),
+      ...launchTraitsFromEntity(normalizedModel, chat),
       allowedTools: SESSION_TOOLS,
       providerAccountId: chat.providerAccountId,
       credentialOwnerUserId,
@@ -569,10 +571,11 @@ export const getDaemonPrewarmData = internalQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
-      throw new Error("Not authorized");
-    }
+    const { chat, session } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      args.userId,
+    );
     if (
       !session.sandboxId ||
       isSandboxClosingStatus(session.status) ||
@@ -590,12 +593,7 @@ export const getDaemonPrewarmData = internalQuery({
       // Normalised here, not in the caller: the traits must be exactly what the
       // composer sends (defaults omitted) or the prewarm's opts sig differs from
       // the turn path's and kills the warm daemon.
-      ...launchTraitsFromStored(normalizedModel, {
-        reasoningLevel: chat.lastReasoningLevel,
-        thinkingEnabled: chat.lastThinkingEnabled,
-        use1mContext: chat.lastUse1mContext,
-        fastMode: chat.lastFastMode,
-      }),
+      ...launchTraitsFromEntity(normalizedModel, chat),
       providerAccountId: chat.providerAccountId,
       sessionPersistenceId: sessionChatPersistenceId(chat),
     };
@@ -619,10 +617,12 @@ export const enqueueMessage = authMutation({
     if (!content) return null;
     const displayContent = args.displayContent?.trim();
 
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     await touchUserActivity(ctx, sessionActivityRef(session), {
       source: "chat",
       userId: ctx.userId,
@@ -672,74 +672,26 @@ export async function cancelChatExecution(
   context: SessionChatContext,
 ): Promise<void> {
   const { chat, session } = context;
-  const streamingEntityId = sessionChatStreamingEntityId(chat._id);
-
-  // Snapshot what this cancel owns. A concurrent startExecute may stage a
-  // newer pendingTurn / activeWorkflowId while we run — must not clear those
-  // or mark the newer assistant placeholder as cancelled.
-  const workflowIdToCancel = chat.activeWorkflowId;
-  const pendingRequestedAt = chat.pendingTurn?.requestedAt;
-
-  await cancelTrackedWorkflow(ctx, workflowIdToCancel);
-
-  if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
-    await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
-  } else if (session.sandboxId) {
-    // One-shot providers run under the sandbox-wide /tmp/run-design.pid, not
-    // a per-chat daemon pidfile, so only the process kill stops them.
-    await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-    });
-  }
-
-  if (workflowIdToCancel !== undefined) {
-    await closeTurnForWorkflow(ctx, chat._id, workflowIdToCancel, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  const streaming = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-    .first();
-
-  const latest = await ctx.db.get(chat._id);
-  if (!latest) return;
-
-  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-    latestPendingTurn: latest.pendingTurn,
-    cancelPendingRequestedAt: pendingRequestedAt,
-    latestActiveWorkflowId: latest.activeWorkflowId,
-    cancelWorkflowId: workflowIdToCancel,
+  const cancelled = await cancelChatTurn(ctx, {
+    id: chat._id,
+    entity: chat,
+    activeWorkflowId: (c) => c.activeWorkflowId,
+    streamingEntityId: sessionChatStreamingEntityId(chat._id),
+    interrupt: async () => {
+      if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
+        await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
+      } else if (session.sandboxId) {
+        // One-shot providers run under the sandbox-wide /tmp/run-design.pid,
+        // not a per-chat daemon pidfile, so only the process kill stops them.
+        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+          sandboxId: session.sandboxId,
+          repoId: session.repoId,
+        });
+      }
+    },
+    getLatest: () => ctx.db.get(chat._id),
   });
-
-  if (cancelOwnsCurrentTurn) {
-    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (
-      last &&
-      last.role === "assistant" &&
-      last.finishedAt === undefined &&
-      last._id !== syntheticTurnMessageId
-    ) {
-      await finalizeCancelledAssistantMessage(ctx, last, streaming);
-    }
-    await finalizeOpenSyntheticTurnOnCancel(
-      ctx,
-      syntheticTurnMessageId,
-      streaming,
-    );
-    await closeOpenTurn(ctx, chat._id, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  await clearStreamingActivity(ctx, streamingEntityId);
+  if (!cancelled) return;
 
   const chatPatch: {
     activeWorkflowId?: undefined;
@@ -747,23 +699,11 @@ export async function cancelChatExecution(
     syntheticTurnMessageId?: undefined;
     updatedAt: number;
   } = { updatedAt: Date.now() };
-
-  if (
-    workflowIdToCancel !== undefined &&
-    latest.activeWorkflowId === workflowIdToCancel
-  ) {
-    chatPatch.activeWorkflowId = undefined;
-  }
-  if (
-    pendingRequestedAt !== undefined &&
-    latest.pendingTurn?.requestedAt === pendingRequestedAt
-  ) {
-    chatPatch.pendingTurn = undefined;
-  }
-  if (cancelOwnsCurrentTurn) {
+  if (cancelled.clearsWorkflow) chatPatch.activeWorkflowId = undefined;
+  if (cancelled.clearsPendingTurn) chatPatch.pendingTurn = undefined;
+  if (cancelled.cancelOwnsCurrentTurn) {
     chatPatch.syntheticTurnMessageId = undefined;
   }
-
   await ctx.db.patch(chat._id, chatPatch);
   await drainSessionChatQueues(ctx, session._id, chat._id);
 }
@@ -772,9 +712,11 @@ export const cancelExecution = authMutation({
   args: { chatId: v.id("sessionChats") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     await cancelChatExecution(ctx, context);
     return null;
   },
@@ -785,10 +727,11 @@ export const cancelSessionExecution = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
       await cancelChatExecution(ctx, { chat, session });
     }

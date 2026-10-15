@@ -1,38 +1,26 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
-import { authQuery, authMutation } from "./functions";
+import { authQuery, authMutation, hasTeamAccess } from "./functions";
 import {
+  findTeamEnvVarDoc,
   maskEnvVarEntries,
   removeEnvVarEntry,
-  sandboxEligibleEnvVars,
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "./_envVars/documentStore";
+import {
+  envVarEntryValidator,
+  maskedEnvVarEntryValidator,
+} from "./validators";
 
 /** Lists team env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
   args: { teamId: v.id("teams") },
-  returns: v.array(
-    v.object({
-      key: v.string(),
-      value: v.string(),
-      sandboxExclude: v.boolean(),
-    }),
-  ),
+  returns: v.array(maskedEnvVarEntryValidator),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
 
-    if (!membership) return [];
-
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, args.teamId);
 
     if (!doc) return [];
     return maskEnvVarEntries(doc.vars);
@@ -42,34 +30,11 @@ export const list = authQuery({
 /** Returns all team env vars with raw encrypted values (internal use only). */
 export const getAllInternal = internalQuery({
   args: { teamId: v.id("teams") },
-  returns: v.array(
-    v.object({
-      key: v.string(),
-      value: v.string(),
-      sandboxExclude: v.optional(v.boolean()),
-    }),
-  ),
+  returns: v.array(envVarEntryValidator),
   handler: async (ctx, args) => {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, args.teamId);
     if (!doc) return [];
     return doc.vars;
-  },
-});
-
-/** Returns team env vars eligible for sandbox injection (excludes sandbox-excluded vars). */
-export const getForSandbox = internalQuery({
-  args: { teamId: v.id("teams") },
-  returns: v.array(v.object({ key: v.string(), value: v.string() })),
-  handler: async (ctx, args) => {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .first();
-    if (!doc) return [];
-    return sandboxEligibleEnvVars(doc.vars);
   },
 });
 
@@ -83,10 +48,7 @@ export const upsertVarInternal = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, args.teamId);
     const newEntry = {
       key: args.key,
       value: args.value,
@@ -116,19 +78,11 @@ export const removeVar = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) {
+      throw new Error("Not a team member");
+    }
 
-    if (!membership) throw new Error("Not a team member");
-
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, args.teamId);
 
     if (!doc) return null;
 
@@ -147,19 +101,11 @@ export const toggleSandboxExclude = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) {
+      throw new Error("Not a team member");
+    }
 
-    if (!membership) throw new Error("Not a team member");
-
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, args.teamId);
     if (!doc) return null;
     const vars = toggleEnvVarSandboxExclude(
       doc.vars,

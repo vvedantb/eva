@@ -3,6 +3,8 @@ import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authAction, authMutation, authQuery } from "./functions";
+import { findTeamEnvVarDoc } from "./_envVars/documentStore";
+import { requireEnv } from "./_env/requireEnv";
 import {
   connectorActorValidator,
   connectorProviderValidator,
@@ -76,10 +78,7 @@ async function envFallbackForUser(
     .collect();
   const keys = CONNECTOR_ENV_KEYS[provider];
   for (const membership of memberships) {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, membership.teamId);
     const hit = doc?.vars.find((entry) => keys.includes(entry.key));
     if (!hit) continue;
     const team = await ctx.db.get(membership.teamId);
@@ -132,8 +131,7 @@ export const startOAuth = authMutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     const { clientId } = readOAuthClient(args.provider);
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) throw new Error("CONVEX_SITE_URL is not set");
+    const siteUrl = requireEnv("CONVEX_SITE_URL");
     const actor = args.actor ?? "user";
     const { verifier, challenge } = await createPkce();
     const nonce = crypto.randomUUID();

@@ -742,6 +742,28 @@ export function launchTraitsFromStored(
   });
 }
 
+/**
+ * `launchTraitsFromStored` over an entity's sticky `last*` composer traits
+ * (session, task, project). Every page-open prewarm and turn launch that reads
+ * stored traits goes through here, so their daemon opts sig cannot drift.
+ */
+export function launchTraitsFromEntity(
+  model: string | null | undefined,
+  entity: {
+    lastReasoningLevel?: ReasoningLevel;
+    lastThinkingEnabled?: boolean;
+    lastUse1mContext?: boolean;
+    lastFastMode?: boolean;
+  },
+): ModelTraitsExecutionArgs {
+  return launchTraitsFromStored(model, {
+    reasoningLevel: entity.lastReasoningLevel,
+    thinkingEnabled: entity.lastThinkingEnabled,
+    use1mContext: entity.lastUse1mContext,
+    fastMode: entity.lastFastMode,
+  });
+}
+
 /** Repo-config default traits, shaped for the composer traits menu. */
 export function storedTraitsFromRepoDefaults(repo: {
   defaultReasoningLevel?: ReasoningLevel;

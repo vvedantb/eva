@@ -6,6 +6,8 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { findReposByOwnerAndName } from "./_githubRepos/helpers";
+import { sandboxConfigFileFields } from "./validators";
 
 /** Regex for safe filenames: alphanumeric, dash, underscore, dot only. */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -39,12 +41,7 @@ async function collectSiblingConfigFiles(
 ): Promise<Array<Doc<"sandboxConfigFiles">>> {
   const anchorRepo = await ctx.db.get(repoId);
   if (!anchorRepo) return [];
-  const siblings = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", anchorRepo.owner).eq("name", anchorRepo.name),
-    )
-    .collect();
+  const siblings = await findReposByOwnerAndName(ctx.db, anchorRepo);
   const files: Array<Doc<"sandboxConfigFiles">> = [];
   for (const sibling of siblings) {
     const siblingFiles = await ctx.db
@@ -137,13 +134,7 @@ export const list = authQuery({
     v.object({
       _id: v.id("sandboxConfigFiles"),
       _creationTime: v.number(),
-      repoId: v.id("githubRepos"),
-      storageId: v.optional(v.id("_storage")),
-      chunks: v.optional(v.array(v.id("_storage"))),
-      fileName: v.string(),
-      fileSize: v.number(),
-      uploadedBy: v.id("users"),
-      createdAt: v.number(),
+      ...sandboxConfigFileFields,
     }),
   ),
   handler: async (ctx, args) => {
@@ -209,27 +200,5 @@ export const getConfigFilesForSnapshot = internalQuery({
       filesByName.set(file.fileName, { fileName: file.fileName, chunkUrls });
     }
     return Array.from(filesByName.values());
-  },
-});
-
-/**
- * Stable identity keys for the config files baked into a snapshot — same
- * sibling aggregation as getConfigFilesForSnapshot but returns
- * `fileName:fileSize:chunkIds` strings (storage ids are immutable, unlike the
- * signed chunk URLs). Used to fingerprint image/seed inputs for skip decisions.
- */
-export const getConfigFileKeys = internalQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.string()),
-  handler: async (ctx, args) => {
-    const files = await collectSiblingConfigFiles(ctx, args.repoId);
-    const keysByName = new Map<string, string>();
-    for (const file of files) {
-      keysByName.set(
-        file.fileName,
-        `${file.fileName}:${file.fileSize}:${fileChunkIds(file).join(",")}`,
-      );
-    }
-    return Array.from(keysByName.values()).sort();
   },
 });

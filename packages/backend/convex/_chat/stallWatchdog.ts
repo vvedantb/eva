@@ -4,6 +4,7 @@ import { cancelTrackedWorkflow } from "../workflowManager";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
+import { finalizeOpenSyntheticTurnOnCancel } from "./chatResult";
 import { closeTurnForWorkflow } from "./turnStore";
 
 /**
@@ -61,12 +62,11 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
   ]);
 
   const syntheticTurnMessageId = adapter.syntheticTurnMessageId(entity);
-  if (syntheticTurnMessageId) {
-    const syntheticMessage = await ctx.db.get(syntheticTurnMessageId);
-    if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-      await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-    }
-  }
+  await finalizeOpenSyntheticTurnOnCancel(
+    ctx,
+    syntheticTurnMessageId,
+    streaming,
+  );
 
   const last = await ctx.db
     .query("messages")

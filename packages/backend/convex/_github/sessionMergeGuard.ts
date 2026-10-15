@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
+import { errorText } from "../_shared/errors";
 
 /**
  * Guards against a "tip-copy" false-positive merge of one of a session's PRs.
@@ -63,7 +64,7 @@ export const verifySessionPrMerged = internalAction({
       // behavior) rather than risk incorrectly reopening a genuinely merged
       // session.
       console.error(
-        `[verifySessionPrMerged] failed to check association for sessionId=${sessionId} sha=${args.mergeCommitSha}: ${error instanceof Error ? error.message : String(error)}`,
+        `[verifySessionPrMerged] failed to check association for sessionId=${sessionId} sha=${args.mergeCommitSha}: ${errorText(error)}`,
       );
       return null;
     }

@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { authMutation, hasRepoAccess, hasTaskAccess } from "./functions";
+import {
+  authMutation,
+  getProjectWithAccess,
+  getSessionWithAccess,
+  hasTaskAccess,
+} from "./functions";
 import { assertOwnAveThread } from "./_ave/threads";
 
 /**
@@ -14,11 +19,7 @@ export const setSessionWatchedBy = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
     const watchedByAve = await assertOwnAveThread(
       ctx.db,
       args.aveThreadId,
@@ -60,11 +61,7 @@ export const setProjectWatchedBy = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
     const watchedByAve = await assertOwnAveThread(
       ctx.db,
       args.aveThreadId,

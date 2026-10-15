@@ -12,7 +12,6 @@ export {
   clearTaskSandbox,
   scheduleDeploymentTracking,
   updateProjectSandbox,
-  finalizeRunStreamingPhase,
   completeRun,
   recordManualTaskPr,
 } from "./_taskWorkflow/runLifecycle";
@@ -34,5 +33,4 @@ export {
 export {
   handleCompletion,
   cancelExecution,
-  triggerExecution,
 } from "./_taskWorkflow/publicMutations";

@@ -329,7 +329,7 @@ describe("each chat staging helper prewarms with normalised traits", () => {
 
       test("the prewarm spreads the normalised traits, raw args reach neither", () => {
         const prewarmArgs = braceBlock(body, prewarmAt);
-        expect(prewarmArgs).toContain("...launchTraits");
+        expect(prewarmArgs).toContain("traits: launchTraits");
         for (const arg of [...RAW_COMPOSER_ARGS, ...RAW_TRAIT_ARGS]) {
           expect(
             prewarmArgs,

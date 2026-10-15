@@ -18,18 +18,13 @@ export {
 export {
   create,
   addMessage,
-  updateStatus,
   update,
-  updateSummary,
   archive,
   unarchive,
   updatePlanContent,
-  updateLastMessage,
 } from "./_sessions/mutations";
 
 export {
-  updateSandbox,
-  clearSandbox,
   startSandbox,
   forcePushBranch,
   stopSandbox,
@@ -40,8 +35,6 @@ export {
   sandboxError,
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
-
-export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 
 export {
   getForkSource,

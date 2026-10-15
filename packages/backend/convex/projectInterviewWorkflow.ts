@@ -6,9 +6,9 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, getProjectWithAccess } from "./functions";
 import {
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
 } from "./validators";
@@ -27,6 +27,7 @@ import {
   setProjectGeneratedSpec,
 } from "./_projects/helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
 
 const projectInterviewCompleteEvent = defineEvent({
   name: "projectInterviewComplete",
@@ -242,8 +243,7 @@ export const getProjectData = internalQuery({
     // to the repo's default branch — the sandbox just needs a valid checkout.
     const branchName =
       project.branchName ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-    const baseBranch =
-      project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+    const baseBranch = resolveProjectBaseBranch(project, repo);
 
     return {
       sandboxId: project.sandboxId,
@@ -391,12 +391,7 @@ export const startSpecWorkflowInternal = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     projectId: v.id("projects"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
@@ -455,8 +450,11 @@ export const startInterview = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.activeWorkflowId) return null;
 
     const repo = await ctx.db.get(project.repoId);
@@ -491,8 +489,11 @@ export const startSpec = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.activeWorkflowId) return null;
 
     const repo = await ctx.db.get(project.repoId);
@@ -579,7 +580,7 @@ Output ONLY valid JSON.`;
           entityId: args.projectId,
           prompt,
           userId: args.userId,
-          completionMutation: "projectInterviewWorkflow:handleSpecCompletion",
+          completionMutation: "projectInterviewWorkflow:handleCompletion",
           entityIdField: "projectId",
           model: "sonnet",
           allowedTools: "Read,Glob,Grep",
@@ -611,60 +612,6 @@ Output ONLY valid JSON.`;
       });
       throw error;
     }
-  },
-});
-
-/** Receives sandbox spec completion callback and forwards the event to the active workflow. */
-export const handleSpecCompletion = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !project.activeWorkflowId) return null;
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.projectId,
-        lane: "interview",
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(
-      ctx,
-      projectInterviewCompleteEvent,
-      project.activeWorkflowId,
-      {
-        success: args.success,
-        result: args.result,
-        error: args.error,
-        activityLog: args.activityLog,
-      },
-    );
-
-    await recordCompletionLog(ctx, {
-      entityType: "project",
-      entityId: String(args.projectId),
-      entityTitle: project.title,
-      repoId: project.repoId,
-      rawResultEvent: args.rawResultEvent,
-      projectId: args.projectId,
-    });
-
-    return null;
   },
 });
 

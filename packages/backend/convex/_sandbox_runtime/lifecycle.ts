@@ -12,6 +12,7 @@ import {
 import { releaseSwapFile } from "./swap";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
+import { errorText } from "../_shared/errors";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -200,7 +201,7 @@ export const stopSandbox = internalAction({
             state = sandbox.state;
           } catch (refreshError) {
             console.log(
-              `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+              `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${errorText(refreshError)}`,
             );
           }
           // Stop auto-snapshots the filesystem — drop the swapfile first so
@@ -216,7 +217,7 @@ export const stopSandbox = internalAction({
               );
             } catch (swapError) {
               console.log(
-                `[sandbox] stopSandbox swap release failed sandboxId=${args.sandboxId}: ${swapError instanceof Error ? swapError.message : String(swapError)}`,
+                `[sandbox] stopSandbox swap release failed sandboxId=${args.sandboxId}: ${errorText(swapError)}`,
               );
             }
           } else {
@@ -231,7 +232,7 @@ export const stopSandbox = internalAction({
       );
       console.log(`[sandbox] stopSandbox ok sandboxId=${args.sandboxId}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       // Already gone / already idle — treat as success so finalize can close.
       //
       // The structured verdict comes first. The provider's own 404 carries no
@@ -312,7 +313,7 @@ export const captureStalledTurnDiagnostics = internalAction({
       );
       return diagnostics.trim().slice(0, 4000);
     } catch (error) {
-      return `diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`;
+      return `diagnostics capture failed: ${errorText(error)}`;
     }
   },
 });
@@ -349,7 +350,7 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
       });
     } catch (error) {
       console.log(
-        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${errorText(error)}`,
       );
     }
     await ctx.runAction(internal.sandbox.stopSandbox, {
@@ -377,60 +378,4 @@ export const deleteSandbox = internalAction({
     });
     return null;
   },
-});
-
-/** Archives a sandbox (stops first if running, then moves to cold storage). */
-export const archiveSandbox = internalAction({
-  args: { sandboxId: v.string(), repoId: v.id("githubRepos") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-      await sandbox.refresh();
-      const state = sandbox.state;
-      console.log(
-        `[sandbox] Archiving sandbox ${args.sandboxId}, current state: ${state}`,
-      );
-
-      // Already archived - nothing to do
-      if (state === "archived") {
-        console.log(`[sandbox] Sandbox ${args.sandboxId} already archived`);
-        return null;
-      }
-
-      // Stop first if currently running (archive requires stopped state)
-      if (state === "running") {
-        await releaseSwapFile(sandbox);
-        await sandbox.stop();
-        console.log(`[sandbox] Stopped sandbox ${args.sandboxId}`);
-      }
-
-      await sandbox.archive();
-      console.log(`[sandbox] Archived sandbox ${args.sandboxId}`);
-    } catch (error) {
-      // Sandbox may already be archived, stopped, or deleted
-      console.warn(
-        `[sandbox] Failed to archive sandbox ${args.sandboxId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-    return null;
-  },
-});
-
-/** Returns the active sandbox provider for a repo (for workflow thaw id selection). Vercel is the only provider. */
-export const getSandboxProviderKind = internalAction({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
-});
-
-/**
- * Provider for a snapshot config. Vercel is the only provider, so this
- * always resolves "vercel"; kept as an internalAction (name unchanged) since
- * it is still part of the public `internal.sandbox.*` surface.
- */
-export const getSnapshotSandboxProviderKind = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
 });

@@ -1,12 +1,17 @@
 import { v } from "convex/values";
 import type { GenericDatabaseWriter } from "convex/server";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  getSessionWithAccess,
+  hasRepoAccess,
+} from "./functions";
 import {
   internalMutation,
   internalQuery,
   type DatabaseReader,
 } from "./_generated/server";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { backgroundProcessFields } from "./validators";
 import { backgroundProcessStatusValidator } from "./_validators/enums";
 
@@ -60,17 +65,13 @@ export const listRunning = authQuery({
  * the chat's session — background shells belong to the sandbox, which every
  * chat of the session shares.
  */
-async function resolveOwningSession(
+async function resolveOwningSessionId(
   db: DatabaseReader,
   id: Id<"sessions"> | Id<"sessionChats">,
-): Promise<Doc<"sessions"> | null> {
+): Promise<Id<"sessions"> | null> {
   const chatId = db.normalizeId("sessionChats", String(id));
-  if (chatId) {
-    const chat = await db.get(chatId);
-    return chat ? await db.get(chat.sessionId) : null;
-  }
-  const sessionId = db.normalizeId("sessions", String(id));
-  return sessionId ? await db.get(sessionId) : null;
+  if (chatId) return (await db.get(chatId))?.sessionId ?? null;
+  return db.normalizeId("sessions", String(id));
 }
 
 /**
@@ -86,11 +87,9 @@ export const register = authMutation({
   },
   returns: v.id("backgroundProcesses"),
   handler: async (ctx, args) => {
-    const session = await resolveOwningSession(ctx.db, args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const sessionId = await resolveOwningSessionId(ctx.db, args.sessionId);
+    if (!sessionId) throw new Error("Session not found");
+    const session = await getSessionWithAccess(ctx.db, sessionId, ctx.userId);
     const command = args.command.slice(0, COMMAND_MAX_CHARS);
     const existing = await ctx.db
       .query("backgroundProcesses")
@@ -126,7 +125,8 @@ export const markExitedByShellId = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await resolveOwningSession(ctx.db, args.sessionId);
+    const sessionId = await resolveOwningSessionId(ctx.db, args.sessionId);
+    const session = sessionId ? await ctx.db.get(sessionId) : null;
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw new Error("Not authorized");

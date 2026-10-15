@@ -7,6 +7,7 @@ import { aiModelValidator, taskStatusValidator } from "../validators";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
   openChatEntityIdsForRepo,
@@ -214,29 +215,9 @@ async function activeTasksForUser(
       if (!(await hasRepoAccess(ctx.db, args.repoId, ctxUserId))) return [];
       repoIds = [args.repoId];
     } else {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", ctxUserId))
-        .collect();
-      const teamRepos = await Promise.all(
-        memberships.map((m) =>
-          ctx.db
-            .query("githubRepos")
-            .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-            .collect(),
-        ),
+      repoIds = (await gatherAccessibleRepos(ctx.db, ctxUserId, true)).map(
+        (repo) => repo._id,
       );
-      const connectedRepos = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", ctxUserId))
-        .collect();
-      const seen = new Set<string>();
-      repoIds = [];
-      for (const repo of [...connectedRepos, ...teamRepos.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        repoIds.push(repo._id);
-      }
     }
 
     const taskArrays = await Promise.all(

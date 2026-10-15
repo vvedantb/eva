@@ -4,6 +4,10 @@ import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { decryptCredentialMap } from "./_envVars/encryptedEntries";
+import {
+  sandboxEligibleEnvVars,
+  type EnvVarEntry,
+} from "./_envVars/documentStore";
 import { getAIModelProvider } from "./validators";
 import type { SandboxCredentials } from "./_sandbox/provider";
 import {
@@ -16,29 +20,36 @@ import {
   type AppRepoPickFields,
 } from "./_githubRepos/sandboxRepoPick";
 
+/**
+ * Loads team + repo env vars, keeps the entries `pick` returns from each
+ * source, and decrypts them. Repo vars override team vars.
+ */
+async function loadMergedEnvVars(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  pick: (vars: EnvVarEntry[]) => Array<{ key: string; value: string }>,
+): Promise<Record<string, string>> {
+  const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
+    repoId,
+  });
+  const teamVars = teamId
+    ? await ctx.runQuery(internal.teamEnvVars.getAllInternal, { teamId })
+    : [];
+  const repoVars = await ctx.runQuery(internal.repoEnvVars.getAllInternal, {
+    repoId,
+  });
+  return {
+    ...decryptCredentialMap(pick(teamVars)),
+    ...decryptCredentialMap(pick(repoVars)),
+  };
+}
+
 /** Resolves and decrypts all env vars (team + repo), including sandbox-excluded ones. Repo vars override team vars. */
 export async function resolveAllEnvVars(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
-  const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
-    repoId,
-  });
-
-  const teamEnvVars: Record<string, string> = {};
-  if (teamId) {
-    const vars = await ctx.runQuery(internal.teamEnvVars.getAllInternal, {
-      teamId,
-    });
-    Object.assign(teamEnvVars, decryptCredentialMap(vars));
-  }
-
-  const repoVars = await ctx.runQuery(internal.repoEnvVars.getAllInternal, {
-    repoId,
-  });
-  const repoEnvVars = decryptCredentialMap(repoVars);
-
-  return { ...teamEnvVars, ...repoEnvVars };
+  return loadMergedEnvVars(ctx, repoId, (vars) => vars);
 }
 
 /** Resolves and decrypts sandbox-eligible env vars (team + repo). Repo vars override team vars. */
@@ -46,24 +57,7 @@ export async function resolveEnvVars(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Record<string, string>> {
-  const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
-    repoId,
-  });
-
-  const teamEnvVars: Record<string, string> = {};
-  if (teamId) {
-    const vars = await ctx.runQuery(internal.teamEnvVars.getForSandbox, {
-      teamId,
-    });
-    Object.assign(teamEnvVars, decryptCredentialMap(vars));
-  }
-
-  const repoVars = await ctx.runQuery(internal.repoEnvVars.getForSandbox, {
-    repoId,
-  });
-  const repoEnvVars = decryptCredentialMap(repoVars);
-
-  return { ...teamEnvVars, ...repoEnvVars };
+  return loadMergedEnvVars(ctx, repoId, sandboxEligibleEnvVars);
 }
 
 /** All repos in the same codebase (owner/name), requested repo first. */
@@ -147,14 +141,9 @@ async function selectVercelCredentialsForRepo(
   };
 }
 
-async function resolveVercelCredentialsForRepo(
-  ctx: GenericActionCtx<DataModel>,
-  repoId: Id<"githubRepos">,
-): Promise<Extract<SandboxCredentials, { kind: "vercel" }>> {
-  const { selected } = await selectVercelCredentialsForRepo(ctx, repoId);
-  if (!selected.ok) {
-    throw new Error(selected.message);
-  }
+function toVercelCredentials(
+  selected: Extract<VercelCredentialSelection, { ok: true }>,
+): Extract<SandboxCredentials, { kind: "vercel" }> {
   return {
     kind: "vercel",
     token: selected.token,
@@ -188,12 +177,7 @@ export async function tryResolveSandboxCredentials(
   const sandboxEnvVars = await resolveEnvVars(ctx, credentialRepoId);
   return {
     ok: true,
-    credentials: {
-      kind: "vercel",
-      token: selected.token,
-      teamId: selected.teamId,
-      projectId: selected.projectId,
-    },
+    credentials: toVercelCredentials(selected),
     sandboxEnvVars,
   };
 }
@@ -207,7 +191,11 @@ export async function resolveSandboxCredentialsOnly(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<SandboxCredentials> {
-  return resolveVercelCredentialsForRepo(ctx, repoId);
+  const { selected } = await selectVercelCredentialsForRepo(ctx, repoId);
+  if (!selected.ok) {
+    throw new Error(selected.message);
+  }
+  return toVercelCredentials(selected);
 }
 
 /**

@@ -4,7 +4,6 @@ import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
 import { getInstallationToken } from "../githubAuth";
-import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type {
   SandboxClient,
@@ -30,7 +29,10 @@ import {
 } from "./devServer";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
-import { ensureGitCredentialHelper } from "./gitCredentials";
+import {
+  deleteSandboxAndCredentials,
+  ensureGitCredentialHelper,
+} from "./gitCredentials";
 import { isMissingRemoteRefFetchFailure } from "../_git/remoteRef";
 import { gitRemoteAuthPrefix } from "./gitRemoteCommand";
 import {
@@ -59,9 +61,10 @@ import {
   EVA_ENV_FILE,
   ensureEvaEnvInteractiveHookScript,
   renderEvaEnvFile,
-  VERCEL_DEFAULT_EXPOSED_PORTS,
-} from "../_sandbox/vercelProvider";
+} from "../_sandbox/vercelEnvFile";
+import { VERCEL_DEFAULT_EXPOSED_PORTS } from "../_sandbox/vercelProvider";
 import { buildSandboxLabels } from "../_sandbox/tags";
+import { errorText } from "../_shared/errors";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
@@ -126,7 +129,7 @@ async function cleanupTimedOutGitState(sandbox: SandboxHandle): Promise<void> {
     logGit("cleanupTimedOutGitState: cleanup completed");
   } catch (error) {
     logGit(
-      `cleanupTimedOutGitState: cleanup failed (best-effort): ${error instanceof Error ? error.message : String(error)}`,
+      `cleanupTimedOutGitState: cleanup failed (best-effort): ${errorText(error)}`,
     );
   }
 }
@@ -174,7 +177,7 @@ async function execGitCommand(
     return result;
   } catch (error) {
     const elapsed = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     logGit(
       `exec failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${sanitized} — ${message}`,
     );
@@ -208,7 +211,7 @@ async function execSdkGitOperation<T>(
     return result;
   } catch (error) {
     const elapsed = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     logGit(
       `sdk failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${label} — ${message}`,
     );
@@ -235,7 +238,7 @@ export async function runLoggedGitStep<T>(
     return result;
   } catch (error) {
     logGit(
-      `${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${error instanceof Error ? error.message : String(error)}`,
+      `${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${errorText(error)}`,
     );
     throw error;
   }
@@ -259,21 +262,14 @@ function isSafeBranchName(branchName: string): boolean {
   return /^[^\s\\:?*[~^]+$/.test(branchName) && !branchName.includes("..");
 }
 
-/** Transient git failure (network, GitHub 5xx, token race) worth a retry. */
-export function isRetryableGitNetworkError(message: string): boolean {
+/** Transport-level hiccup (exec timeout, dropped connection, TLS, gateway 5xx) — never a real command failure. */
+export function isTransientTransportError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     isSandboxExecTimeout(message) ||
-    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
-    lower.includes("internal server error") ||
-    lower.includes("status code 500") ||
     lower.includes("status code 502") ||
     lower.includes("status code 503") ||
     lower.includes("status code 504") ||
-    lower.includes("status code 401") ||
-    lower.includes("http 401") ||
-    lower.includes("authentication failed") ||
-    lower.includes("could not read username") ||
     lower.includes("fetch failed") ||
     lower.includes("econnreset") ||
     lower.includes("econnrefused") ||
@@ -286,6 +282,33 @@ export function isRetryableGitNetworkError(message: string): boolean {
     lower.includes("rpc failed") ||
     lower.includes("early eof") ||
     lower.includes("http/2 stream")
+  );
+}
+
+/**
+ * Transient git push/fetch/clone failure: transport hiccups plus GitHub-side
+ * 500s and the installation-token race (401 / auth prompt right after a token
+ * rotation). Too broad for sandbox setup, where an auth failure is permanent.
+ */
+export function isRetryableGitNetworkError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    isTransientTransportError(message) ||
+    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
+    lower.includes("internal server error") ||
+    lower.includes("status code 500") ||
+    lower.includes("status code 401") ||
+    lower.includes("http 401") ||
+    lower.includes("authentication failed") ||
+    lower.includes("could not read username")
+  );
+}
+
+/** Session checkout and dependency install: transport hiccups plus npm "network request … failed" / git "Network is unreachable". */
+export function isRetryableSessionStepError(message: string): boolean {
+  return (
+    isTransientTransportError(message) ||
+    message.toLowerCase().includes("network")
   );
 }
 
@@ -303,12 +326,14 @@ function isNonFastForwardPushError(message: string): boolean {
   );
 }
 
-/** Retries transient git network operations with short backoff. */
-async function retryGitNetworkOperation<T>(
+/** Retries transient git network operations with linear backoff (`delayStepMs * attempt`). */
+export async function retryGitNetworkOperation<T>(
   label: string,
   details: string,
   fn: () => Promise<T>,
   maxAttempts = 3,
+  delayStepMs = 1000,
+  isRetryable: (message: string) => boolean = isRetryableGitNetworkError,
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -320,19 +345,17 @@ async function retryGitNetworkOperation<T>(
       }
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       const shouldRetry =
-        attempt < maxAttempts && isRetryableGitNetworkError(message);
+        attempt < maxAttempts && isRetryable(message);
       if (!shouldRetry) {
         throw error;
       }
-      const delayMs = 1000 * attempt;
+      const delayMs = delayStepMs * attempt;
       logGit(
         `${label} retrying in ${delayMs}ms after attempt ${attempt}/${maxAttempts}${details ? ` (${details})` : ""}: ${message}`,
       );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
+      await sleep(delayMs);
     }
   }
   throw new Error(
@@ -470,7 +493,7 @@ export async function createSandbox(
         );
       } catch (hookError) {
         console.warn(
-          `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+          `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${errorText(hookError)}`,
         );
       }
 
@@ -540,13 +563,13 @@ export async function createSandbox(
       return sandbox;
     } catch (error) {
       console.warn(
-        `[sandbox][git] createSandbox: post-create setup failed for ${sandbox.id}; deleting orphan: ${error instanceof Error ? error.message : String(error)}`,
+        `[sandbox][git] createSandbox: post-create setup failed for ${sandbox.id}; deleting orphan: ${errorText(error)}`,
       );
       try {
         await sandbox.delete();
       } catch (deleteError) {
         console.warn(
-          `[sandbox][git] createSandbox: orphan delete failed for ${sandbox.id}: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+          `[sandbox][git] createSandbox: orphan delete failed for ${sandbox.id}: ${errorText(deleteError)}`,
         );
       }
       throw error;
@@ -816,7 +839,7 @@ async function pinBranchUpstream(
     );
   } catch (error) {
     logGit(
-      `pinBranchUpstream: failed for ${branchName} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+      `pinBranchUpstream: failed for ${branchName} (continuing): ${errorText(error)}`,
     );
   }
 }
@@ -1131,41 +1154,20 @@ export async function cloneRepoInto(
 
   await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
 
-  const maxCloneAttempts = 3;
-  for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
-    try {
-      await execSdkGitOperation(
+  await retryGitNetworkOperation(
+    "cloneRepoInto",
+    `${owner}/${name}`,
+    () =>
+      execSdkGitOperation(
         sandbox,
         `clone ${owner}/${name}`,
         () =>
           sandbox.git.clone(repoUrl, destDir, "x-access-token", githubToken),
         REPO_CLONE_TIMEOUT_SECONDS,
-      );
-      if (attempt > 1) {
-        logGit(
-          `cloneRepoInto: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
-        );
-      }
-      return;
-    } catch (error) {
-      if (!(error instanceof Error)) {
-        throw error;
-      }
-      const shouldRetry =
-        attempt < maxCloneAttempts &&
-        isRetryableGitNetworkError(error.message);
-      if (!shouldRetry) {
-        throw error;
-      }
-      const delayMs = attempt * 2000;
-      logGit(
-        `cloneRepoInto: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
-      );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
-    }
-  }
+      ),
+    3,
+    2000,
+  );
 }
 
 /**
@@ -1280,7 +1282,7 @@ async function localBranchReflogShas(
     );
   } catch (error) {
     logGit(
-      `localBranchReflogShas: no reflog for ${branchName}: ${error instanceof Error ? error.message : String(error)}`,
+      `localBranchReflogShas: no reflog for ${branchName}: ${errorText(error)}`,
     );
     return [];
   }
@@ -1442,7 +1444,7 @@ async function synchronizeBranchForPublish(
       );
     } catch (error) {
       logGit(
-        `synchronizeBranchForPublish: merge origin/${branchName} failed: ${error instanceof Error ? error.message : String(error)}`,
+        `synchronizeBranchForPublish: merge origin/${branchName} failed: ${errorText(error)}`,
       );
       try {
         await execGitCommand(
@@ -1452,7 +1454,7 @@ async function synchronizeBranchForPublish(
         );
       } catch (abortError) {
         logGit(
-          `synchronizeBranchForPublish: merge --abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+          `synchronizeBranchForPublish: merge --abort failed: ${errorText(abortError)}`,
         );
       }
       throw new Error(
@@ -1570,7 +1572,7 @@ async function publishCheckedOutBranch(
       ).trim();
     } catch (error) {
       logGit(
-        `pushBranchToOrigin: ahead-of-remote gate failed, pushing anyway (${details}): ${error instanceof Error ? error.message : String(error)}`,
+        `pushBranchToOrigin: ahead-of-remote gate failed, pushing anyway (${details}): ${errorText(error)}`,
       );
     }
     if (unpushedCount === "0") {
@@ -1588,7 +1590,7 @@ async function publishCheckedOutBranch(
       );
       return { pushed: true, published: true };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       const shouldRetry =
         attempt < maxAttempts &&
         (isRetryableGitNetworkError(message) ||
@@ -1684,7 +1686,7 @@ export async function forcePushBranchToOrigin(
  *   would be silently downgraded to "clone instead" and hide the real fault.
  */
 function isSnapshotUnusableError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
+  const msg = errorText(err);
   if (/Snapshot\s+\S+\s+is\s+(error|build_failed)/i.test(msg)) return true;
 
   const requestedASnapshot =
@@ -1757,7 +1759,7 @@ export async function createSandboxAndPrepareRepo(
         } catch (err) {
           if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
             logGit(
-              `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${err instanceof Error ? err.message : String(err)})`,
+              `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${errorText(err)})`,
             );
             if (onProgress)
               await onProgress("Snapshot unavailable — cloning instead...");
@@ -1829,13 +1831,7 @@ export async function createSandboxAndPrepareRepo(
     );
   } catch (error) {
     if (sandbox) {
-      try {
-        await sandbox.delete();
-      } catch {}
-      // Best-effort cleanup of the credential-helper row. No-op if absent.
-      await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-        sandboxId: sandbox.id,
-      });
+      await deleteSandboxAndCredentials(ctx, sandbox);
     }
     throw error;
   }
@@ -1947,7 +1943,7 @@ async function tryResumeSandbox(
       } catch (refreshErr) {
         if (isSandboxMissingError(refreshErr)) {
           logGit(
-            `getOrCreateSandbox: resume refresh says gone — will create new one (${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)})`,
+            `getOrCreateSandbox: resume refresh says gone — will create new one (${errorText(refreshErr)})`,
           );
           return null;
         }
@@ -1983,7 +1979,7 @@ async function tryResumeSandbox(
     } catch (err) {
       if (isSandboxMissingError(err)) {
         logGit(
-          `getOrCreateSandbox: resume failed because sandbox is gone — will create new one (${err instanceof Error ? err.message : String(err)})`,
+          `getOrCreateSandbox: resume failed because sandbox is gone — will create new one (${errorText(err)})`,
         );
         // Unresumable (missing snap / deadline): do not burn another 180s retry.
         return null;
@@ -1991,7 +1987,7 @@ async function tryResumeSandbox(
       if (attempt === maxAttempts) throw err;
       const delay = backoffMs[attempt - 1] ?? 8000;
       logGit(
-        `getOrCreateSandbox: resume attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms — ${err instanceof Error ? err.message : String(err)}`,
+        `getOrCreateSandbox: resume attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms — ${errorText(err)}`,
       );
       await sleep(delay);
     }

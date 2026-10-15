@@ -2,6 +2,7 @@ import { getConvexSize, v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import { hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
 
@@ -50,6 +51,19 @@ export async function getSessionChatOrThrow(
 ): Promise<SessionChatContext> {
   const context = await loadSessionChat(db, chatId);
   if (!context) throw new Error("Chat not found");
+  return context;
+}
+
+/** Loads a chat and its session and verifies access through the repository. */
+export async function getSessionChatWithAccess(
+  db: DatabaseReader,
+  chatId: Id<"sessionChats">,
+  userId: Id<"users">,
+): Promise<SessionChatContext> {
+  const context = await getSessionChatOrThrow(db, chatId);
+  if (!(await hasRepoAccess(db, context.session.repoId, userId))) {
+    throw new Error("Not authorized");
+  }
   return context;
 }
 

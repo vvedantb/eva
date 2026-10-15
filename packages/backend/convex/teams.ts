@@ -6,8 +6,16 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authQuery, authMutation } from "./functions";
+import {
+  authQuery,
+  authMutation,
+  getTeamMembership,
+  hasTeamAccess,
+  requireTeamOwner,
+} from "./functions";
 import { teamFields } from "./_validators/tableFields";
+import { teamMemberRoleValidator } from "./validators";
+import { findTeamEnvVarDoc } from "./_envVars/documentStore";
 
 /** Team doc fields plus resolved media URLs and membership role for list/get. */
 const teamWithLogoValidator = v.object({
@@ -17,7 +25,7 @@ const teamWithLogoValidator = v.object({
   logoUrl: v.optional(v.union(v.string(), v.null())),
   backgroundUrl: v.optional(v.union(v.string(), v.null())),
   displayName: v.string(),
-  userRole: v.union(v.literal("owner"), v.literal("member")),
+  userRole: teamMemberRoleValidator,
 });
 
 /** Computes a team's display name, deriving personal-team labels from the current user or owner. */
@@ -54,13 +62,9 @@ async function assertTeamMember(
   teamId: Id<"teams">,
   userId: Id<"users">,
 ): Promise<void> {
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  if (!membership) throw new Error("Not authorized");
+  if (!(await hasTeamAccess(db, teamId, userId))) {
+    throw new Error("Not authorized");
+  }
 }
 
 /** Gets the user's personal team, creating one (with owner membership) if it doesn't exist. */
@@ -164,13 +168,7 @@ export const get = authQuery({
     const team = await ctx.db.get(teamId);
     if (!team) return null;
 
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
+    const membership = await getTeamMembership(ctx.db, teamId, ctx.userId);
     if (!membership) return null;
 
     return {
@@ -190,16 +188,12 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.id).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership || membership.role !== "owner") {
-      throw new Error("Only team owners can update team settings");
-    }
+    await requireTeamOwner(
+      ctx.db,
+      args.id,
+      ctx.userId,
+      "Only team owners can update team settings",
+    );
 
     const updates: { name?: string } = {};
     if (args.name !== undefined) updates.name = args.name;
@@ -299,16 +293,12 @@ export const remove = authMutation({
       throw new Error("Cannot delete Personal team");
     }
 
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.id).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership || membership.role !== "owner") {
-      throw new Error("Only team owners can delete the team");
-    }
+    await requireTeamOwner(
+      ctx.db,
+      args.id,
+      ctx.userId,
+      "Only team owners can delete the team",
+    );
 
     const allMembers = await ctx.db
       .query("teamMembers")
@@ -326,10 +316,7 @@ export const remove = authMutation({
       await ctx.db.patch(repo._id, { teamId: undefined });
     }
 
-    const teamEnvVars = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", args.id))
-      .first();
+    const teamEnvVars = await findTeamEnvVarDoc(ctx.db, args.id);
     if (teamEnvVars) {
       await ctx.db.delete(teamEnvVars._id);
     }

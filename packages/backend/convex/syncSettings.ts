@@ -4,6 +4,10 @@ import { internalQuery } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { syncSettingFields } from "./validators";
 import type { Id } from "./_generated/dataModel";
+import {
+  findReposByOwnerAndName,
+  gatherAccessibleRepos,
+} from "./_githubRepos/helpers";
 
 /** Throws unless the user can access at least one app row for the codebase. */
 async function assertCodebaseAccess(
@@ -12,12 +16,7 @@ async function assertCodebaseAccess(
   name: string,
   userId: Id<"users">,
 ): Promise<void> {
-  const repos = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", owner).eq("name", name),
-    )
-    .collect();
+  const repos = await findReposByOwnerAndName(ctx.db, { owner, name });
   for (const repo of repos) {
     if (await hasRepoAccess(ctx.db, repo._id, userId)) return;
   }
@@ -76,28 +75,8 @@ export const list = authQuery({
     }),
   ),
   handler: async (ctx) => {
-    const memberships = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .collect();
-    const teamIds = new Set(memberships.map((membership) => membership.teamId));
-    const connected = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_connected_by", (q) => q.eq("connectedBy", ctx.userId))
-      .collect();
-    const teamRepos = await Promise.all(
-      [...teamIds].map((teamId) =>
-        ctx.db
-          .query("githubRepos")
-          .withIndex("by_team", (q) => q.eq("teamId", teamId))
-          .collect(),
-      ),
-    );
-    const allowed = new Set(
-      [...connected, ...teamRepos.flat()].map(
-        (repo) => `${repo.owner}/${repo.name}`,
-      ),
-    );
+    const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, true);
+    const allowed = new Set(repos.map((repo) => `${repo.owner}/${repo.name}`));
     const settings = await ctx.db.query("syncSettings").collect();
     return settings.filter((setting) =>
       allowed.has(`${setting.owner}/${setting.name}`),

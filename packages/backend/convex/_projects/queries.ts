@@ -15,10 +15,10 @@ import {
   projectListItemValidator,
   resolveProjectPlanningMode,
   getProjectDetails,
-  buildProjectBranchName,
 } from "./helpers";
 import { unreadLookupForRepo } from "../chatReads";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { resolveProjectBranchName } from "../_git/branchNames";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
@@ -205,9 +205,7 @@ export const getProjectPrCreationData = internalQuery({
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const branchName =
-      project.branchName ??
-      buildProjectBranchName(args.projectId, project.branchVersion);
+    const branchName = resolveProjectBranchName(args.projectId, project);
 
     const tasks = filterActiveEntities(
       await ctx.db
@@ -231,23 +229,15 @@ export const getProjectPrCreationData = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
-      baseBranch:
-        project.baseBranch ??
-        repo.defaultBaseBranch ??
-        FALLBACK_GIT_BASE_BRANCH,
+      baseBranch: resolveProjectBaseBranch(project, repo),
       projectTitle: project.title,
       projectDescription: project.description,
       rootDirectory: repo.rootDirectory ?? "",
       // Only a live PR on the current branch counts: a merged one belongs to
       // an earlier branch version, and the next cycle needs its own PR.
       existingPrUrl:
-        (
-          await findLivePullRequestOnBranch(
-            ctx.db,
-            project.repoId,
-            branchName,
-          )
-        )?.prUrl ?? null,
+        (await findLivePullRequestOnBranch(ctx.db, project.repoId, branchName))
+          ?.prUrl ?? null,
       completedTasks,
     };
   },

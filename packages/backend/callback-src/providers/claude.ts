@@ -19,7 +19,13 @@ import type {
   TodoItem,
   ToolCompleteResult,
 } from "../types.js";
-import { elapsedAttemptMs, log } from "../utils.js";
+import {
+  asJsonObject,
+  attemptElapsedMs,
+  isJsonObject,
+  log,
+  readTrimmedString,
+} from "../utils.js";
 import type { ProviderAdapter } from "./types.js";
 import {
   parseClaudeSdkTaxonomy,
@@ -63,9 +69,7 @@ function extractToolResultText(content: JsonValue): string {
       continue;
     }
     if (
-      item &&
-      typeof item === "object" &&
-      !Array.isArray(item) &&
+      isJsonObject(item) &&
       item.type === "text" &&
       typeof item.text === "string"
     ) {
@@ -73,6 +77,19 @@ function extractToolResultText(content: JsonValue): string {
     }
   }
   return parts.join("");
+}
+
+/** Tracks a tool_result (top-level event or user block) and builds its completion. */
+function toolResultEvent(source: JsonObject): CanonicalEvent {
+  const toolUseId = readTrimmedString(source.tool_use_id);
+  const resultText =
+    source.content !== undefined ? extractToolResultText(source.content) : "";
+  const isError = source.is_error === true;
+  if (toolUseId) trackClaudeToolResult(toolUseId, resultText, isError);
+  const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+  return result
+    ? { kind: "complete_tool", trackingId: toolUseId, result }
+    : { kind: "complete_tool", trackingId: toolUseId };
 }
 
 /** Coerces a raw todo status field to the checklist's fixed set. */
@@ -92,7 +109,7 @@ function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
     const raw = Array.isArray(input.todos) ? input.todos : [];
     S.todoState.length = 0;
     for (const item of raw) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const content = typeof item.content === "string" ? item.content : "";
       if (!content) continue;
       S.todoState.push({ content, status: normalizeTodoStatus(item.status) });
@@ -134,13 +151,8 @@ function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
  */
 function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
-  const inner =
-    event.event &&
-    typeof event.event === "object" &&
-    !Array.isArray(event.event)
-      ? event.event
-      : null;
-  if (!inner) return events;
+  const inner = event.event;
+  if (!isJsonObject(inner)) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
     return events;
@@ -150,25 +162,17 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
     // text → thinking → text with no message_start between) needs a paragraph
     // break so the blocks do not clump. Only text blocks — thinking/tool blocks
     // are not appended to the streamed content.
-    const contentBlock =
-      inner.content_block &&
-      typeof inner.content_block === "object" &&
-      !Array.isArray(inner.content_block)
-        ? inner.content_block
-        : null;
-    if (contentBlock && contentBlock.type === "text") {
+    if (
+      isJsonObject(inner.content_block) &&
+      inner.content_block.type === "text"
+    ) {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta =
-    inner.delta &&
-    typeof inner.delta === "object" &&
-    !Array.isArray(inner.delta)
-      ? inner.delta
-      : null;
-  if (!delta) return events;
+  const delta = inner.delta;
+  if (!isJsonObject(delta)) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
       events.push({ kind: "stream_text_delta", text: delta.text });
@@ -192,53 +196,18 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
-    const toolUseId =
-      typeof event.tool_use_id === "string" && event.tool_use_id.trim()
-        ? event.tool_use_id.trim()
-        : undefined;
-    const resultText =
-      event.content !== undefined ? extractToolResultText(event.content) : "";
-    const isError = event.is_error === true;
-    if (toolUseId) {
-      trackClaudeToolResult(toolUseId, resultText, isError);
-    }
-    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-    events.push(
-      result
-        ? { kind: "complete_tool", trackingId: toolUseId, result }
-        : { kind: "complete_tool", trackingId: toolUseId },
-    );
+    events.push(toolResultEvent(event));
     return events;
   }
   if (event.type === "user") {
-    const message =
-      event.message &&
-      typeof event.message === "object" &&
-      !Array.isArray(event.message)
-        ? event.message
-        : null;
-    const content =
-      message && Array.isArray(message.content) ? message.content : [];
-    for (const block of content) {
-      if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    const content = asJsonObject(event.message).content;
+    for (const block of Array.isArray(content) ? content : []) {
       if (
+        isJsonObject(block) &&
         block.type === "tool_result" &&
-        typeof block.tool_use_id === "string" &&
-        block.tool_use_id.trim()
+        readTrimmedString(block.tool_use_id)
       ) {
-        const toolUseId = block.tool_use_id.trim();
-        const resultText =
-          block.content !== undefined
-            ? extractToolResultText(block.content)
-            : "";
-        const isError = block.is_error === true;
-        trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-        events.push(
-          result
-            ? { kind: "complete_tool", trackingId: toolUseId, result }
-            : { kind: "complete_tool", trackingId: toolUseId },
-        );
+        events.push(toolResultEvent(block));
       }
     }
     if (events.length > 0) {
@@ -250,30 +219,15 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
   if (S.waitingForFirstAssistantEvent) {
     events.push({ kind: "mark_first_assistant" });
   }
-  const message =
-    event.message &&
-    typeof event.message === "object" &&
-    !Array.isArray(event.message)
-      ? event.message
-      : null;
-  const content =
-    message && Array.isArray(message.content) ? message.content : [];
+  const messageContent = asJsonObject(event.message).content;
+  const content = Array.isArray(messageContent) ? messageContent : [];
   // Set on messages produced INSIDE a subagent — the parent `Agent` tool_use id.
   // The UI nests these steps under the matching `subtask` row.
-  const parentToolUseId =
-    typeof event.parent_tool_use_id === "string" &&
-    event.parent_tool_use_id.trim()
-      ? event.parent_tool_use_id.trim()
-      : undefined;
+  const parentToolUseId = readTrimmedString(event.parent_tool_use_id);
   for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    if (!isJsonObject(block)) continue;
     if (block.type === "tool_use" && typeof block.name === "string") {
-      const input =
-        block.input &&
-        typeof block.input === "object" &&
-        !Array.isArray(block.input)
-          ? block.input
-          : {};
+      const input = asJsonObject(block.input);
       // Todo tools drive a single evolving checklist, not one activity row per
       // call. Read-only variants add nothing to the timeline.
       if (
@@ -296,10 +250,7 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
         continue;
       }
       const step = toolCallToStep(block.name, input);
-      const trackingId =
-        typeof block.id === "string" && block.id.trim()
-          ? block.id.trim()
-          : undefined;
+      const trackingId = readTrimmedString(block.id);
       if (trackingId) {
         step.toolUseId = trackingId;
         trackClaudeToolUse(block.name, input, trackingId);
@@ -355,7 +306,7 @@ function onStreamLine(parsed: JsonObject): StreamLineResult {
     S.waitingForFirstAssistantEvent = true;
     log(
       "claude init event after " +
-        String(elapsedAttemptMs()) +
+        String(attemptElapsedMs()) +
         "ms sessionId=" +
         S.activeClaudeSessionId,
     );
@@ -373,19 +324,11 @@ function onStreamLine(parsed: JsonObject): StreamLineResult {
           "ms",
       );
     }
-    const message =
-      parsed.message &&
-      typeof parsed.message === "object" &&
-      !Array.isArray(parsed.message)
-        ? parsed.message
-        : null;
-    const contentBlocks =
-      message && Array.isArray(message.content) ? message.content : [];
+    const messageContent = asJsonObject(parsed.message).content;
+    const contentBlocks = Array.isArray(messageContent) ? messageContent : [];
     for (const block of contentBlocks) {
       if (
-        block &&
-        typeof block === "object" &&
-        !Array.isArray(block) &&
+        isJsonObject(block) &&
         block.type === "text" &&
         typeof block.text === "string"
       ) {

@@ -13,6 +13,8 @@
  * latest successfully — so we always also plant under
  * EXPECTED_LATEST_CONVEX_LOCAL_BACKEND_VERSION.
  */
+import { PRIMARY_REPO_DIR } from "./workspaceLayout";
+
 export const PINNED_CONVEX_LOCAL_BACKEND_VERSION =
   "precompiled-2026-07-14-7b3d1a5";
 
@@ -306,7 +308,7 @@ export function buildConvexBackgroundScriptBody(command: string): string {
     "    if not matches:",
     "      raise SystemExit(f'pin zip missing convex-local-backend: {os.listdir(td)}')",
     "    plant_all(str(matches[0]), needed)",
-    "for p in glob.glob('/tmp/repo/**/.convex/**/config.json', recursive=True):",
+    `for p in glob.glob('${PRIMARY_REPO_DIR}/**/.convex/**/config.json', recursive=True):`,
     "  try:",
     "    with open(p) as f: cfg=json.load(f)",
     "    if cfg.get('backendVersion') == latest: continue",

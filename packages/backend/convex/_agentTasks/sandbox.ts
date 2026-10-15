@@ -7,13 +7,16 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
+import { buildTaskBranchName } from "../_git/branchNames";
 import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import {
@@ -22,6 +25,8 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { errorText } from "../_shared/errors";
+import { sleep } from "../_shared/async";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -98,7 +103,7 @@ export async function requestTaskSandboxStart(
   task: Doc<"agentTasks">,
   repo: Doc<"githubRepos">,
 ): Promise<void> {
-  const branchName = `eva/task-${task._id}`;
+  const branchName = buildTaskBranchName(task._id);
   const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
     ctx.db,
     task,
@@ -111,7 +116,10 @@ export async function requestTaskSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `task-sandbox-startup-${task._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "task", taskId: task._id }),
+  );
   const reusableSandboxId = task.sandboxId;
   console.log(
     `[tasks] startTaskSandbox taskId=${task._id} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -197,7 +205,7 @@ export const retryStartupCommands = authMutation({
     const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
-    const branchName = `eva/task-${args.taskId}`;
+    const branchName = buildTaskBranchName(args.taskId);
     const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
       ctx.db,
       task,
@@ -368,7 +376,10 @@ export async function requestTaskSandboxStop(
   });
 
   // Clear leftover start steps so stop does not re-show startup activity.
-  await clearSandboxStartupActivity(ctx.db, `task-sandbox-startup-${taskId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "task", taskId }),
+  );
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
   // never be claimed — clear it or it hides the composer forever.
@@ -491,7 +502,7 @@ export const finalizeStopTaskSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorText(err);
     }
     await ctx.runMutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
       taskId: args.taskId,
@@ -576,10 +587,7 @@ export const taskSandboxReady = internalMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
 
-    if (
-      task.reviewTaskSandboxStatus === "stopping" ||
-      task.reviewTaskSandboxStatus === "closed"
-    ) {
+    if (isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       console.log(
         `[tasks] taskSandboxReady ignored taskId=${args.taskId} status=${task.reviewTaskSandboxStatus} sandboxId=${args.sandboxId}`,
       );
@@ -699,7 +707,7 @@ export const waitForTaskPreviewSandboxActive = internalAction({
       ) {
         return { ready: false };
       }
-      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      await sleep(2_000);
     }
     return { ready: false };
   },

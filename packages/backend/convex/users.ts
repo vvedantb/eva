@@ -5,17 +5,6 @@ import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { collectDirectoryUserIds } from "./_users/directory";
 
-/** Returns the Clerk ID for a user (internal use only). */
-export const getInternal = internalQuery({
-  args: { userId: v.id("users") },
-  returns: v.union(v.object({ clerkId: v.string() }), v.null()),
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user || !user.clerkId) return null;
-    return { clerkId: user.clerkId };
-  },
-});
-
 /** First/full name for derived personal-account labels (node actions). */
 export const getDisplayNameInternal = internalQuery({
   args: { userId: v.id("users") },

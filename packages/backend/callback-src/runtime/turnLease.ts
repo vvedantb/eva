@@ -1,6 +1,11 @@
 import { TURN_ID, TURN_LEASE_GENERATION } from "../config.js";
 import type { JsonObject, JsonValue } from "../types.js";
-import { log } from "../utils.js";
+import {
+  isJsonObject,
+  log,
+  tryParseJson,
+  unwrapConvexMutationPayload,
+} from "../utils.js";
 
 export type TurnLeaseIdentity = {
   turnId: string;
@@ -157,30 +162,12 @@ export function noteHeartbeatResponse(
   sentUnder: TurnLeaseIdentity | null,
 ): boolean {
   if (terminalReason !== null) return true;
-  let parsed: JsonValue;
-  if (typeof response === "string") {
-    try {
-      parsed = JSON.parse(response);
-    } catch {
-      return false;
-    }
-  } else {
-    parsed = response;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return false;
-  }
-  const responseValue = parsed.value;
-  const payload =
-    typeof responseValue === "object" &&
-    responseValue !== null &&
-    !Array.isArray(responseValue)
-      ? responseValue
-      : parsed;
+  const payload = unwrapConvexMutationPayload(
+    typeof response === "string" ? (tryParseJson(response) ?? null) : response,
+  );
+  if (!payload) return false;
   const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
-    return false;
-  }
+  if (!isJsonObject(lease)) return false;
   if (lease.status !== "terminal") return false;
   const reason = parseTerminalReason(lease.reason) ?? "closed";
   const current = getCurrentTurnLease();

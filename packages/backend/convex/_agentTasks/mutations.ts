@@ -17,6 +17,7 @@ import {
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
+import { cancelScheduledFunction } from "../_scheduling/helpers";
 import {
   normalizeTaskTags,
   buildTaskNotificationMessage,
@@ -323,13 +324,8 @@ export const updateStatus = authMutation({
     }
     const clearSchedule =
       args.status !== "todo" && task.scheduledFunctionId !== undefined;
-    if (clearSchedule && task.scheduledFunctionId) {
-      try {
-        await ctx.scheduler.cancel(task.scheduledFunctionId);
-      } catch {
-        // may have already fired
-      }
-    }
+    if (clearSchedule)
+      await cancelScheduledFunction(ctx, task.scheduledFunctionId);
     const previousStatus = task.status;
     await ctx.db.patch(args.id, {
       status: args.status,

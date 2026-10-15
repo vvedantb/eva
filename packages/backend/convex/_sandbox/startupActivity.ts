@@ -3,6 +3,13 @@ import type { DataModel } from "../_generated/dataModel";
 
 type DatabaseWriter = GenericDatabaseWriter<DataModel>;
 
+/** One step of the sandbox startup progress stored in streamingActivity. */
+export type ProgressStep = {
+  type: "tool";
+  label: string;
+  status: "active" | "complete";
+};
+
 const STARTUP_ACTIVITY = JSON.stringify([
   { type: "tool", label: "Starting sandbox...", status: "active" },
 ]);

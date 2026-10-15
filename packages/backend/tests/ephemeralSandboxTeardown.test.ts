@@ -36,6 +36,7 @@ describe("every ephemeral sandbox is torn down by the workflow that made it", ()
       sites.map((site) => `${site.id} ephemeral=${site.ephemeral}`).sort(),
     ).toEqual(
       [
+        "arenaBrowserWorkflow.ts::arenaBrowserWorkflow ephemeral=true",
         "automationWorkflow.ts::automationExecutionWorkflow ephemeral=true",
         "docInterviewWorkflow.ts::docInterviewWorkflow ephemeral=false",
         "docInterviewWorkflow.ts::docGenerateWorkflow ephemeral=false",

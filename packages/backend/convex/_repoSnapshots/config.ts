@@ -3,9 +3,10 @@ import { internalQuery, internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
-import { snapshotScheduleValidator } from "../validators";
+import { repoSnapshotFields, snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
+import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 
 /** Converts a schedule string to a cron expression, returning null for "manual". */
 function resolveCronspec(schedule: string): string | null {
@@ -31,12 +32,7 @@ export async function findSnapshotForRepo(
   const repo = await db.get(repoId);
   if (!repo) return null;
 
-  const siblings = await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", repo.owner).eq("name", repo.name),
-    )
-    .collect();
+  const siblings = await findReposByOwnerAndName(db, repo);
 
   for (const sibling of siblings) {
     if (sibling._id === repoId) continue;
@@ -57,18 +53,7 @@ export const getRepoSnapshot = authQuery({
     v.object({
       _id: v.id("repoSnapshots"),
       _creationTime: v.number(),
-      repoId: v.id("githubRepos"),
-      snapshotName: v.string(),
-      schedule: snapshotScheduleValidator,
-      enabled: v.optional(v.boolean()),
-      cronJobId: v.optional(v.string()),
-      workflowRef: v.optional(v.string()),
-      buildCommands: v.optional(v.array(v.string())),
-      seedCommands: v.optional(v.array(v.string())),
-      imageFingerprint: v.optional(v.string()),
-      baseSnapshotId: v.optional(v.string()),
-      createdAt: v.number(),
-      updatedAt: v.number(),
+      ...repoSnapshotFields,
     }),
     v.null(),
   ),
@@ -116,17 +101,12 @@ export const getRepoSnapshotName = internalQuery({
 });
 
 /**
- * Lists the app repos a seeded snapshot should be built for after the base Image
+ * Lists the app repos a seeded snapshot is built for after the base Image
  * build. Seeded snapshots are PER APP, not per monorepo: an app is a sibling
  * (same owner/name) with stopCommands configured that is NOT the monorepo parent
  * (i.e. no other sibling points to it via parentRepoId). For a single-app repo
- * the lone repo qualifies (it parents nobody). For carepulse this yields web +
- * eprocurement, excluding the parent root.
- */
-/**
- * Shared resolver for the seedable app repos of a snapshot config (see
- * getSeedableAppRepos doc for the rule). Returns the full repo docs so callers
- * can read display fields / seededSnapshotName.
+ * the lone repo qualifies (it parents nobody). Returns the full repo docs so
+ * callers can read display fields / seededSnapshotName.
  */
 export async function findSeedableAppRepos(
   db: GenericDatabaseReader<DataModel>,
@@ -136,12 +116,7 @@ export async function findSeedableAppRepos(
   if (!config) return [];
   const configRepo = await db.get(config.repoId);
   if (!configRepo) return [];
-  const siblings = await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", configRepo.owner).eq("name", configRepo.name),
-    )
-    .collect();
+  const siblings = await findReposByOwnerAndName(db, configRepo);
   // Repos that are a monorepo parent of another sibling — skip these.
   const parentIds = new Set<Id<"githubRepos">>();
   for (const r of siblings) {
@@ -151,76 +126,6 @@ export async function findSeedableAppRepos(
     (r) => (r.stopCommands?.length ?? 0) > 0 && !parentIds.has(r._id),
   );
 }
-
-export const getSeedableAppRepos = internalQuery({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.array(
-    v.object({
-      repoId: v.id("githubRepos"),
-      // Current live seeded snapshot (null when falling back to the Image).
-      // The build workflow warm-boots the seed-prep sandbox from this and
-      // deletes it only after the replacement capture succeeds.
-      seededSnapshotName: v.union(v.string(), v.null()),
-      // Seed-input fingerprint stored at the last successful capture — when it
-      // still matches the current inputs the workflow skips re-seeding.
-      seededFingerprint: v.union(v.string(), v.null()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const apps = await findSeedableAppRepos(ctx.db, args.repoSnapshotId);
-    return apps.map((r) => ({
-      repoId: r._id,
-      seededSnapshotName: r.seededSnapshotName ?? null,
-      seededFingerprint: r.seededFingerprint ?? null,
-    }));
-  },
-});
-
-/**
- * Siblings that still carry a seededSnapshotName but are NO LONGER seedable
- * (e.g. an app that dropped its stopCommands, or the monorepo parent). The
- * per-app rebuild loop only deletes snapshots for CURRENTLY seedable apps, so
- * without cleanup an ex-seedable app's seeded-<repoId> snapshot lingers
- * forever. The build workflow uses this to delete those snapshots and
- * clear the stale name.
- */
-export const getOrphanedSeededApps = internalQuery({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.array(
-    v.object({
-      repoId: v.id("githubRepos"),
-      seededSnapshotName: v.string(),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const config = await ctx.db.get(args.repoSnapshotId);
-    if (!config) return [];
-    const configRepo = await ctx.db.get(config.repoId);
-    if (!configRepo) return [];
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", configRepo.owner).eq("name", configRepo.name),
-      )
-      .collect();
-    const seedable = await findSeedableAppRepos(ctx.db, args.repoSnapshotId);
-    const seedableIds = new Set(seedable.map((r) => r._id));
-    const orphans: Array<{
-      repoId: Id<"githubRepos">;
-      seededSnapshotName: string;
-    }> = [];
-    for (const r of siblings) {
-      // The !== undefined guard narrows seededSnapshotName to string.
-      if (!seedableIds.has(r._id) && r.seededSnapshotName !== undefined) {
-        orphans.push({
-          repoId: r._id,
-          seededSnapshotName: r.seededSnapshotName,
-        });
-      }
-    }
-    return orphans;
-  },
-});
 
 /**
  * Current per-app seeded-snapshot state for a snapshot config: each seedable app
@@ -250,54 +155,6 @@ export const getSeededAppStatus = authQuery({
   },
 });
 
-/**
- * Resolves the PRIMARY seed app for a whole-repo seeded snapshot build (see
- * SNAPSHOT_SINGLE_REFACTOR_DESIGN.md). Among the seedable apps (siblings with
- * stopCommands, not the monorepo parent), the primary is the one whose
- * combined startup/background/stop commands need Supabase state capture
- * (owns start-db/supabase/seed:sql) — for carepulse that is apps/web. Falls
- * back to the first seedable app if none match. Returns null when there are
- * no seedable apps at all.
- */
-export const getPrimarySeedAppRepo = internalQuery({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.union(
-    v.object({
-      primaryRepoId: v.id("githubRepos"),
-      seedableRepoIds: v.array(v.id("githubRepos")),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const apps = await findSeedableAppRepos(ctx.db, args.repoSnapshotId);
-    if (apps.length === 0) return null;
-
-    const seedableRepoIds = apps.map((r) => r._id);
-    let primary = apps.find((r) =>
-      shouldCaptureSupabaseState([
-        ...(r.startupCommands ?? []),
-        ...(r.backgroundCommands ?? []),
-        ...(r.stopCommands ?? []),
-      ]),
-    );
-    if (!primary) primary = apps[0];
-
-    return { primaryRepoId: primary._id, seedableRepoIds };
-  },
-});
-
-/** Mirrors snapshotActions.shouldCaptureSupabaseState — kept local to avoid a "use node" import. */
-function shouldCaptureSupabaseState(commands: string[]): boolean {
-  return commands.some((command) => {
-    const lower = command.toLowerCase();
-    return (
-      lower.includes("supabase") ||
-      lower.includes("start-db") ||
-      lower.includes("seed:sql")
-    );
-  });
-}
-
 /** Sets (or clears) an app repo's seeded snapshot name (+ input fingerprint). */
 export const setSeededSnapshotName = internalMutation({
   args: {
@@ -314,76 +171,6 @@ export const setSeededSnapshotName = internalMutation({
         : {}),
     });
     return null;
-  },
-});
-
-/**
- * Writes the SAME seeded snapshot id to every seedable app repo. Used by the
- * single whole-repo seeded snapshot flow: one snapshot is built (from the
- * primary app) but every seedable app repo's `seededSnapshotName` must point
- * at it so any app can boot from it (getRepoSnapshotName reads this field
- * per-repo at sandbox-create time).
- */
-export const setSeededSnapshotNameForAll = internalMutation({
-  args: {
-    repoIds: v.array(v.id("githubRepos")),
-    seededSnapshotName: v.union(v.string(), v.null()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    for (const repoId of args.repoIds) {
-      await ctx.db.patch(repoId, {
-        seededSnapshotName: args.seededSnapshotName ?? undefined,
-      });
-    }
-    return null;
-  },
-});
-
-/**
- * Fingerprint of an app's seed inputs: its startup/background/stop commands
- * plus the config-file blobs of the app repo and the snapshot config's repo
- * (data.sql / backup zips live on the parent). When this matches the value
- * stored at the last successful seeded capture, the build workflow skips
- * re-seeding: the resulting snapshot's data would be identical, and rebuilding
- * it only contends with the concurrent base-image build on Vercel.
- */
-export const getSeedFingerprint = internalQuery({
-  args: {
-    repoSnapshotId: v.id("repoSnapshots"),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.string(),
-  handler: async (ctx, args) => {
-    const app = await ctx.db.get(args.repoId);
-    if (!app) return "missing-repo";
-    const config = await ctx.db.get(args.repoSnapshotId);
-    const fileKeys = async (repoId: Id<"githubRepos">): Promise<string[]> => {
-      const files = await ctx.db
-        .query("sandboxConfigFiles")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      return files
-        .map(
-          (f) =>
-            `${f.fileName}:${f.fileSize}:${(f.chunks ?? (f.storageId ? [f.storageId] : [])).join(",")}`,
-        )
-        .sort();
-    };
-    const payload = JSON.stringify({
-      startup: app.startupCommands ?? [],
-      background: app.backgroundCommands ?? [],
-      stop: app.stopCommands ?? [],
-      appFiles: await fileKeys(args.repoId),
-      parentFiles: config ? await fileKeys(config.repoId) : [],
-    });
-    // djb2 — cheap, deterministic, collision-resistant enough for a
-    // change-detection fingerprint (a false match only skips a re-seed).
-    let hash = 5381;
-    for (let i = 0; i < payload.length; i++) {
-      hash = (hash * 33) ^ payload.charCodeAt(i);
-    }
-    return `fp-${(hash >>> 0).toString(36)}-${payload.length}`;
   },
 });
 
@@ -414,45 +201,6 @@ export const getRepoSnapshotInternal = internalQuery({
       imageFingerprint: doc.imageFingerprint,
       baseSnapshotId: doc.baseSnapshotId,
     };
-  },
-});
-
-/**
- * snap_* / seeded ids that must survive orphan cleanup for this monorepo
- * (current base Image + per-app seeded captures).
- */
-export const listProtectedSnapshotIds = internalQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.string()),
-  handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) return [];
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", repo.owner).eq("name", repo.name),
-      )
-      .collect();
-    const protectedIds = new Set<string>();
-    for (const sibling of siblings) {
-      if (sibling.seededSnapshotName !== undefined) {
-        protectedIds.add(sibling.seededSnapshotName);
-      }
-      const snapConfig = await ctx.db
-        .query("repoSnapshots")
-        .withIndex("by_repo", (q) => q.eq("repoId", sibling._id))
-        .first();
-      if (snapConfig?.baseSnapshotId !== undefined) {
-        protectedIds.add(snapConfig.baseSnapshotId);
-      }
-      if (
-        snapConfig?.snapshotName !== undefined &&
-        snapConfig.snapshotName.startsWith("snap_")
-      ) {
-        protectedIds.add(snapConfig.snapshotName);
-      }
-    }
-    return [...protectedIds];
   },
 });
 
@@ -496,21 +244,6 @@ export const setBaseSnapshotId = internalMutation({
     await ctx.db.patch(args.repoSnapshotId, {
       baseSnapshotId: args.baseSnapshotId,
       updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
-
-/** Stores the image-input fingerprint after a successful Image build. */
-export const setImageFingerprint = internalMutation({
-  args: {
-    repoSnapshotId: v.id("repoSnapshots"),
-    imageFingerprint: v.union(v.string(), v.null()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.repoSnapshotId, {
-      imageFingerprint: args.imageFingerprint ?? undefined,
     });
     return null;
   },
@@ -562,12 +295,7 @@ export const saveRepoSnapshot = authMutation({
     // and copy it to this app. This is the lazy-migration path.
     const repo = await ctx.db.get(args.repoId);
     if (repo) {
-      const siblings = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", repo.owner).eq("name", repo.name),
-        )
-        .collect();
+      const siblings = await findReposByOwnerAndName(ctx.db, repo);
 
       for (const sibling of siblings) {
         if (sibling._id === args.repoId) continue;

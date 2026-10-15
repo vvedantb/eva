@@ -11,6 +11,14 @@ const gitSource = readFileSync(
   "utf8",
 );
 
+const gitCredentialsSource = readFileSync(
+  join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../convex/_sandbox_runtime/gitCredentials.ts",
+  ),
+  "utf8",
+);
+
 /**
  * A created-then-abandoned VM costs money for as long as it lives, and nothing in
  * the app ever looks for one: `createSandbox` threw during post-create setup
@@ -75,21 +83,33 @@ describe("createSandboxAndPrepareRepo cleans up on failure", () => {
     "export async function createSandboxAndPrepareRepo(",
   );
 
-  test("deletes the sandbox and rethrows", () => {
-    const deleteAt = body.indexOf("await sandbox.delete()");
+  /**
+   * The shared teardown also drops the credential-helper row, which is keyed by
+   * sandbox id and would otherwise outlive the thing it authenticates.
+   */
+  test("deletes the sandbox and its credentials, then rethrows", () => {
+    const deleteAt = body.indexOf("deleteSandboxAndCredentials(");
     expect(
       deleteAt,
       "prepare failures must delete the sandbox",
     ).toBeGreaterThan(-1);
     expect(body.indexOf("throw error;", deleteAt)).toBeGreaterThan(deleteAt);
   });
+});
 
-  /**
-   * The credential-helper row is keyed by sandbox id, so it has to go with the
-   * sandbox or it outlives the thing it authenticates.
-   */
-  test("drops the sandbox's credential row too", () => {
-    expect(body).toContain("sandboxGitCredentials.deleteBySandboxId");
+/** The one teardown every failed-setup path shares: VM first, then its credential row. */
+describe("deleteSandboxAndCredentials", () => {
+  const body = functionBody(
+    gitCredentialsSource,
+    "export async function deleteSandboxAndCredentials(",
+  );
+
+  test("deletes the VM best-effort, then the credential row", () => {
+    const deleteAt = body.indexOf("await sandbox.delete()");
+    expect(deleteAt).toBeGreaterThan(-1);
+    expect(
+      body.indexOf("internal.sandboxGitCredentials.deleteBySandboxId"),
+    ).toBeGreaterThan(deleteAt);
   });
 });
 

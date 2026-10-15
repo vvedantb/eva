@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { authMutation, authQuery } from "./functions";
-import { aveMessageFields } from "./_validators/tableFields";
+import { aveMessageFields, aveThreadFields } from "./_validators/tableFields";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import {
   findLiveThread,
@@ -23,7 +23,7 @@ export const getThread = authQuery({
   returns: v.union(
     v.object({
       _id: v.id("aveThreads"),
-      status: v.union(v.literal("idle"), v.literal("running")),
+      status: aveThreadFields.status,
     }),
     v.null(),
   ),

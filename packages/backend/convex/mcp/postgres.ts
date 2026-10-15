@@ -4,20 +4,14 @@ import { Client } from "pg";
 import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
+import type { JsonValue } from "../_jev/jsonValue";
+import { errorText } from "../_shared/errors";
 
 const ENV_KEY = "POSTGRES_READ_REPLICA_URL";
 const CONNECT_TIMEOUT_MS = 10_000;
 const STATEMENT_TIMEOUT_MS = 30_000;
 // Keep the shaped payload well under Convex's function return size limits.
 const MAX_RESULT_BYTES = 1_000_000;
-
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
 
 // Superset of values node-postgres can produce per cell (driver rows are
 // untyped, but every value it emits fits one of these shapes).
@@ -156,7 +150,7 @@ export const runPostgresQuery = internalAction({
       return {
         ok: false,
         errorCode: "query_error",
-        error: err instanceof Error ? err.message : String(err),
+        error: errorText(err),
       };
     } finally {
       // Always roll back (read-only) and close; ignore failures on a

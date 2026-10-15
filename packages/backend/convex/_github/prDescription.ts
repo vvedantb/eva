@@ -27,6 +27,7 @@ import {
   insertPrDescription,
   stripPrDescription,
 } from "./prDescriptionPrompt";
+import { errorText } from "../_shared/errors";
 
 /** Claude CLI alias. Haiku (used for session summaries) misreads diffs when
  * asked to sketch their shape; the description is one short call per push. */
@@ -135,7 +136,7 @@ export const generatePrDescription = internalAction({
             });
           } catch (stopError) {
             console.error(
-              `[pr-description] ${label} re-stop failed: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
+              `[pr-description] ${label} re-stop failed: ${errorText(stopError)}`,
             );
           }
         }
@@ -164,9 +165,7 @@ export const generatePrDescription = internalAction({
         { body: insertPrDescription(latest.body ?? "", description) },
       );
     } catch (error) {
-      console.error(
-        `[pr-description] ${label} failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      console.error(`[pr-description] ${label} failed: ${errorText(error)}`);
     }
     return null;
   },

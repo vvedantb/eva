@@ -1,7 +1,7 @@
 import { ENTITY_ID, ENTITY_ID_FIELD, PROVIDER } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
 import type { JsonObject } from "../types.js";
-import { log } from "../utils.js";
+import { log, errorText } from "../utils.js";
 
 const PENDING_CAP = 200;
 const QUEUE_CAP = 20;
@@ -169,10 +169,7 @@ export async function flushBackgroundShellQueue(): Promise<void> {
     }
   } catch (error) {
     flushCooldownUntil = Date.now() + FLUSH_FAILURE_COOLDOWN_MS;
-    log(
-      "backgroundShells flush failed: " +
-        (error instanceof Error ? error.message : String(error)),
-    );
+    log("backgroundShells flush failed: " + errorText(error));
   } finally {
     flushInFlight = false;
   }

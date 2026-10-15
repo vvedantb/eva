@@ -1,5 +1,11 @@
 import { v } from "convex/values";
-import { authMutation, hasRepoAccess } from "./functions";
+import { authMutation } from "./functions";
+import {
+  patchSandboxOwner,
+  resolveSandboxOwnerOrThrow,
+  sandboxOwnerValidator,
+  type SandboxOwner,
+} from "./_sandbox/owner";
 
 /** Git's own ref-name ceiling is well under this; the cap is just a guard. */
 const BRANCH_MAX_CHARS = 255;
@@ -16,13 +22,11 @@ const BRANCH_MAX_CHARS = 255;
 export const reportBranch = authMutation({
   args: {
     target: v.union(
-      v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+      ...sandboxOwnerValidator.members,
       v.object({
         kind: v.literal("sessionChat"),
         chatId: v.id("sessionChats"),
       }),
-      v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
-      v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
     ),
     branch: v.string(),
   },
@@ -31,46 +35,24 @@ export const reportBranch = authMutation({
     const branch = args.branch.trim().slice(0, BRANCH_MAX_CHARS);
     if (branch.length === 0) return null;
     const target = args.target;
-
-    if (target.kind === "session" || target.kind === "sessionChat") {
-      // Session daemons run per chat; the branch belongs to the session.
-      const sessionId =
-        target.kind === "session"
-          ? target.sessionId
-          : (await ctx.db.get(target.chatId))?.sessionId;
-      const session = sessionId ? await ctx.db.get(sessionId) : null;
-      if (!session) throw new Error("Session not found");
-      if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      // One filesystem can be reported by several daemon processes, so the
-      // unchanged case must cost nothing.
-      if (session.sandboxBranch === branch) return null;
-      await ctx.db.patch(session._id, { sandboxBranch: branch });
-      return null;
+    // Session daemons run per chat; the branch belongs to the session.
+    let ownerTarget: SandboxOwner;
+    if (target.kind === "sessionChat") {
+      const chat = await ctx.db.get(target.chatId);
+      if (!chat) throw new Error("Session not found");
+      ownerTarget = { kind: "session", sessionId: chat.sessionId };
+    } else {
+      ownerTarget = target;
     }
-
-    if (target.kind === "task") {
-      const task = await ctx.db.get(target.taskId);
-      if (!task) throw new Error("Task not found");
-      if (
-        !task.repoId ||
-        !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
-      ) {
-        throw new Error("Not authorized");
-      }
-      if (task.sandboxBranch === branch) return null;
-      await ctx.db.patch(target.taskId, { sandboxBranch: branch });
-      return null;
-    }
-
-    const project = await ctx.db.get(target.projectId);
-    if (!project) throw new Error("Project not found");
-    if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    if (project.sandboxBranch === branch) return null;
-    await ctx.db.patch(target.projectId, { sandboxBranch: branch });
+    const owner = await resolveSandboxOwnerOrThrow(
+      ctx.db,
+      ctx.userId,
+      ownerTarget,
+    );
+    // One filesystem can be reported by several daemon processes, so the
+    // unchanged case must cost nothing.
+    if (owner.doc.sandboxBranch === branch) return null;
+    await patchSandboxOwner(ctx.db, owner, { sandboxBranch: branch });
     return null;
   },
 });

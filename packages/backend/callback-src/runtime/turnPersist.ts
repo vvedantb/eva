@@ -1,6 +1,6 @@
 import { REQUIRE_TASK_COMMIT, RUN_ID } from "../config.js";
 import { log } from "../utils.js";
-import { git } from "./gitExec.js";
+import { git, readCurrentBranch } from "./gitExec.js";
 
 const PUSH_TIMEOUT_MS = 60_000;
 
@@ -70,7 +70,7 @@ function synchronizeForPush(branch: string): BranchSyncResult {
       "origin",
       `+refs/heads/${branch}:${remoteRef}`,
     ],
-    PUSH_TIMEOUT_MS,
+    { timeoutMs: PUSH_TIMEOUT_MS },
   );
   if (!fetch.ok) {
     if (isMissingRemoteRef(fetch.out)) {
@@ -120,7 +120,9 @@ function synchronizeForPush(branch: string): BranchSyncResult {
       );
       return { status: "failed" };
     }
-    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
+    const merge = git(["merge", "--no-edit", remoteRef], {
+      timeoutMs: PUSH_TIMEOUT_MS,
+    });
     if (merge.ok) {
       return { status: "ready", remoteExists: true };
     }
@@ -160,10 +162,10 @@ export function persistTurnWork(): void {
   if (REQUIRE_TASK_COMMIT || RUN_ID) return;
   const startedAt = Date.now();
 
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch.ok || !branch.out.startsWith("eva/")) {
-    if (branch.ok && branch.out) {
-      log(`persistTurnWork: skipped — branch "${branch.out}" is not eva-owned`);
+  const branch = readCurrentBranch();
+  if (!branch.startsWith("eva/")) {
+    if (branch) {
+      log(`persistTurnWork: skipped — branch "${branch}" is not eva-owned`);
     }
     return;
   }
@@ -188,7 +190,7 @@ export function persistTurnWork(): void {
   // continuation, and the common case is a clean tree whose tip the tracking ref
   // already contains. The tracking ref only ever lags behind origin, so a zero
   // count here means origin genuinely has HEAD — no fetch or push needed.
-  if (tipAlreadyPublished([`refs/remotes/origin/${branch.out}`])) return;
+  if (tipAlreadyPublished([`refs/remotes/origin/${branch}`])) return;
 
   // The exact remote branch is refreshed below before the ahead-of-remote gate
   // and push, so a resumed sandbox cannot publish from a stale tracking ref.
@@ -196,33 +198,35 @@ export function persistTurnWork(): void {
   // branch currently points at and a bare name goes through the upstream, so
   // either could aim at the base branch; this names the exact ref to update and
   // cannot resolve anywhere else.
-  const refspec = `refs/heads/${branch.out}:refs/heads/${branch.out}`;
+  const refspec = `refs/heads/${branch}:refs/heads/${branch}`;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const sync = synchronizeForPush(branch.out);
+    const sync = synchronizeForPush(branch);
     if (sync.status === "failed") return;
 
     // Chat-only turns have nothing to publish. Once the branch exists, compare
     // to that exact ref; otherwise compare against all fetched origin refs.
     const exclusion = sync.remoteExists
-      ? [`refs/remotes/origin/${branch.out}`]
+      ? [`refs/remotes/origin/${branch}`]
       : ["--remotes=origin"];
     if (tipAlreadyPublished(exclusion)) return;
 
-    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
+    const push = git(["push", "origin", refspec], {
+      timeoutMs: PUSH_TIMEOUT_MS,
+    });
     if (push.ok) {
       log(
-        `persistTurnWork: push ok branch=${branch.out} in ${Date.now() - startedAt}ms`,
+        `persistTurnWork: push ok branch=${branch} in ${Date.now() - startedAt}ms`,
       );
       return;
     }
     if (attempt < 2 && isNonFastForwardPush(push.out)) {
       log(
-        `persistTurnWork: remote moved during push; refetching branch=${branch.out}`,
+        `persistTurnWork: remote moved during push; refetching branch=${branch}`,
       );
       continue;
     }
     log(
-      `persistTurnWork: push failed: ${push.out.slice(0, 200)} branch=${branch.out} in ${Date.now() - startedAt}ms`,
+      `persistTurnWork: push failed: ${push.out.slice(0, 200)} branch=${branch} in ${Date.now() - startedAt}ms`,
     );
     return;
   }

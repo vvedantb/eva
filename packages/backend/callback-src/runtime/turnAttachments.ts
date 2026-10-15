@@ -1,6 +1,6 @@
 import { writeFileSync } from "fs";
 import { fetchWithTimeout } from "../http/convexClient.js";
-import { log } from "../utils.js";
+import { log, errorText } from "../utils.js";
 
 /** Mirrors attachmentExtensionForMimeType in convex/_sandbox_runtime/attachments.ts. */
 function attachmentExtensionForMimeType(mimeType: string): string {
@@ -56,11 +56,7 @@ export async function materializeTurnAttachments(turn: {
       writeFileSync(path, new Uint8Array(await response.arrayBuffer()));
       paths.push(path);
     } catch (error) {
-      log(
-        `daemon: attachment download error ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      log(`daemon: attachment download error ${errorText(error)}`);
     }
   }
   if (paths.length === 0) return;

@@ -12,7 +12,7 @@ import {
   automationFindingValidator,
   findingTriageValidator,
   runStatusValidator,
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
@@ -24,21 +24,7 @@ import {
 } from "../_githubRepos/helpers";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
 
-/** Loads a run and its automation, throwing unless the user can access the repo. */
-async function loadRunWithAccess(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  runId: Id<"automationRuns">,
-): Promise<{ run: Doc<"automationRuns">; automation: Doc<"automations"> }> {
-  const run = await db.get(runId);
-  if (!run) throw new Error("Run not found");
-  const automation = await db.get(run.automationId);
-  if (!automation) throw new Error("Automation not found");
-  if (!(await hasRepoAccess(db, automation.repoId, userId))) {
-    throw new Error("Not authorized");
-  }
-  return { run, automation };
-}
+import { loadRunWithAccess } from "./helpers";
 import { taskCompleteEvent } from "../_taskWorkflow/events";
 import {
   clearStreamingActivity,
@@ -348,12 +334,7 @@ export const handleCompletion = authMutation({
   args: {
     automationRunId: v.id("automationRuns"),
     runId: v.optional(v.string()),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),

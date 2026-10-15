@@ -404,3 +404,31 @@ export const notificationUrgencyValidator = v.union(
   v.literal("normal"),
   v.literal("high"),
 );
+
+/** The chat surface a sandbox MCP token or activity row names. */
+export const chatEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+export type ChatEntityKind = Infer<typeof chatEntityKindValidator>;
+
+/** The table that owns a sandbox. */
+export const sandboxEntityTableValidator = v.union(
+  v.literal("sessions"),
+  v.literal("agentTasks"),
+  v.literal("projects"),
+);
+export type SandboxEntityTable = Infer<typeof sandboxEntityTableValidator>;
+
+/** The table that owns a chat daemon: a sandbox owner, or a session's chat. */
+export const daemonEntityTableValidator = v.union(
+  v.literal("sessionChats"),
+  ...sandboxEntityTableValidator.members,
+);
+export type DaemonEntityTable = Infer<typeof daemonEntityTableValidator>;
+
+export const presentationStatusValidator = v.union(
+  v.literal("live"),
+  v.literal("ended"),
+);

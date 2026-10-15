@@ -25,7 +25,12 @@ import {
 import { detectPackageManager } from "./devServer";
 import { ensureGitCredentialHelper } from "./gitCredentials";
 import { writeSandboxFile } from "./sandboxFiles";
-import { linkedRepoDir, primaryLinkPath } from "./workspaceLayout";
+import {
+  PRIMARY_REPO_DIR,
+  WORKSPACE_ROOT,
+  linkedRepoDir,
+  primaryLinkPath,
+} from "./workspaceLayout";
 import { formatEnvFile } from "./envFile";
 import {
   branchExistsRemoteCommand,
@@ -34,18 +39,14 @@ import {
 } from "./linkedRepoBranch";
 import { launchLinkedRepoDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
 import { resolveEnvVars } from "../envVarResolver";
+import { sandboxOwnerKey, sandboxStartupEntityId } from "../_sandbox/owner";
+import type { ProgressStep } from "../_sandbox/startupActivity";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
 function logLinkedRepo(message: string): void {
   console.log(`[sandbox][linkedRepos] ${message}`);
 }
-
-type ProgressStep = {
-  type: "tool";
-  label: string;
-  status: "active" | "complete";
-};
 
 /** Streams clone/install progress for one linked repo onto the session's startup timeline. */
 async function setLinkedRepoProgress(
@@ -54,7 +55,7 @@ async function setLinkedRepoProgress(
   steps: ProgressStep[],
 ): Promise<void> {
   await ctx.runMutation(internal.streaming.internalSet, {
-    entityId: `session-startup-${sessionId}`,
+    entityId: sandboxStartupEntityId({ kind: "session", sessionId }),
     currentActivity: JSON.stringify(steps),
   });
 }
@@ -102,7 +103,7 @@ export const prepareLinkedRepo = internalAction({
       // every linked repo's prep re-asserts the same link.
       await execHandle(
         sandbox,
-        `mkdir -p /tmp/workspace && ln -sfn /tmp/repo ${primaryLinkPath(primaryRepo.name)}`,
+        `mkdir -p ${WORKSPACE_ROOT} && ln -sfn ${PRIMARY_REPO_DIR} ${primaryLinkPath(primaryRepo.name)}`,
         10,
         "/",
       );
@@ -253,7 +254,7 @@ export const prepareLinkedRepo = internalAction({
       if (freshlyCloned && row.devCommand && row.devPort !== undefined) {
         await launchLinkedRepoDevServerInVercelConsole(
           sandbox,
-          `session-${args.sessionId}-${row.name}`,
+          `${sandboxOwnerKey({ kind: "session", sessionId: args.sessionId })}-${row.name}`,
           row.path,
           row.devCommand,
           row.devPort,

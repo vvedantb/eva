@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { internal } from "./_generated/api";
 import { action } from "./_generated/server";
+import { readAiGatewayKey } from "./_env/aiGateway";
 
 /**
  * Hardcoded streaming STT model. Swap here based on feedback — not a user
@@ -104,7 +105,7 @@ export const mintTranscriptionToken = action({
       throw new Error("Voice dictation is not enabled");
     }
 
-    const apiKey = process.env.AI_GATEWAY_API_KEY;
+    const apiKey = readAiGatewayKey();
     if (!apiKey) {
       throw new Error(
         "Voice dictation is not configured (missing AI Gateway key)",

@@ -4,12 +4,7 @@ import { cancelTrackedWorkflow } from "../workflowManager";
 import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { cleanUpStaleRun } from "./recovery";
-import {
-  clearStreamingActivity,
-  getTaskRunStreamingEntityId,
-  sendCompletionEvent,
-  snapshotStreamingActivityToLog,
-} from "./helpers";
+import { clearTaskRunStreaming, sendCompletionEvent } from "./helpers";
 
 
 /** Hard-timeout handler that kills a run after the maximum allowed duration (2 hours). */
@@ -59,15 +54,11 @@ export const handleStaleRun = internalMutation({
         activeWorkflowId: undefined,
         updatedAt: Date.now(),
       });
+      // The running branch's cleanUpStaleRun already snapshots and clears.
+      await clearTaskRunStreaming(ctx, args.taskId, args.runId, {
+        snapshot: true,
+      });
     }
-
-    await snapshotStreamingActivityToLog(
-      ctx,
-      getTaskRunStreamingEntityId(args.runId),
-      args.runId,
-    );
-    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(args.runId));
-    await clearStreamingActivity(ctx, String(args.taskId));
 
     if (task.projectId) {
       const project = await ctx.db.get(task.projectId);

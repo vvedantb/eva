@@ -60,6 +60,7 @@ import {
   isLegacyChatExecuting,
   isLegacySessionExecuting,
 } from "./_chat/turnProjection";
+import { errorText } from "./_shared/errors";
 
 const chatTurnStatusValidator = v.union(
   v.object({
@@ -650,7 +651,7 @@ export const reconcile = internalAction({
           );
         } catch (error) {
           console.log(
-            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${errorText(error)}`,
           );
         }
       }

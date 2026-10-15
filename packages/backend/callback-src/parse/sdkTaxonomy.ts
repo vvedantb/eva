@@ -1,22 +1,18 @@
 import { callbackState as S } from "../runtime/state.js";
 import { mergeClaudeRateLimitEvent } from "../runtime/usageLimits.js";
 import type { CanonicalEvent, JsonObject, JsonValue } from "../types.js";
-import { log } from "../utils.js";
+import { log, readTrimmedString } from "../utils.js";
 
 const loggedUnknownKinds = new Set<string>();
 
 /** Task ids seen in prior `background_tasks_changed` payloads (daemon session). */
 const knownBackgroundTaskIds = new Set<string>();
 
-function readString(value: JsonValue): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 function readStringArray(value: JsonValue): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
   for (const item of value) {
-    const s = readString(item);
+    const s = readTrimmedString(item);
     if (s) out.push(s);
   }
   return out;
@@ -89,7 +85,7 @@ function readFileNamesFromPersisted(event: JsonObject): string {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
       continue;
     }
-    const filename = readString(entry.filename);
+    const filename = readTrimmedString(entry.filename);
     if (filename) names.push(filename);
   }
   return names.join(", ");
@@ -103,7 +99,7 @@ function readBackgroundTaskIds(event: JsonObject): string[] {
     if (typeof task !== "object" || task === null || Array.isArray(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
+    const taskId = readTrimmedString(task.task_id);
     if (taskId) ids.push(taskId);
   }
   return ids;
@@ -119,8 +115,8 @@ function readBackgroundTaskDescriptions(
     if (typeof task !== "object" || task === null || Array.isArray(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
-    const description = readString(task.description);
+    const taskId = readTrimmedString(task.task_id);
+    const description = readTrimmedString(task.description);
     if (taskId && description) {
       descriptions.set(taskId, description);
     }
@@ -149,16 +145,16 @@ function logUnknownSdkKind(kind: string): void {
 }
 
 function parseModelReroute(event: JsonObject): CanonicalEvent[] | null {
-  const subtype = readString(event.subtype);
+  const subtype = readTrimmedString(event.subtype);
   if (subtype === "model_reroute" || subtype === "model_fallback") {
     const reason =
-      readString(event.reason) ??
-      readString(event.message) ??
-      readString(event.content);
+      readTrimmedString(event.reason) ??
+      readTrimmedString(event.message) ??
+      readTrimmedString(event.content);
     return pushNoticeStep("Model rerouted", reason);
   }
   if (subtype === "informational") {
-    const content = readString(event.content);
+    const content = readTrimmedString(event.content);
     if (
       content &&
       (content.toLowerCase().includes("rerouted") ||
@@ -206,7 +202,7 @@ export function consumesClaudeSdkTaxonomyMessage(event: JsonObject): boolean {
  * Called from `claudeParseLine` before assistant/tool parsing.
  */
 export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
-  const messageType = readString(event.type);
+  const messageType = readTrimmedString(event.type);
   if (!messageType) return [];
 
   if (
@@ -233,7 +229,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
 
   if (messageType === "tool_progress") {
     completeActiveStatusStep();
-    const toolUseId = readString(event.tool_use_id);
+    const toolUseId = readTrimmedString(event.tool_use_id);
     const elapsed = event.elapsed_time_seconds;
     if (toolUseId && typeof elapsed === "number" && Number.isFinite(elapsed)) {
       const seconds = Math.max(0, Math.floor(elapsed));
@@ -244,7 +240,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
 
   if (messageType === "tool_use_summary") {
     completeActiveStatusStep();
-    const summary = readString(event.summary);
+    const summary = readTrimmedString(event.summary);
     const ids = readStringArray(event.preceding_tool_use_ids);
     if (summary && ids.length > 0) {
       patchStepsWithSummary(ids, summary);
@@ -252,7 +248,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
     return [];
   }
 
-  const subtype = readString(event.subtype);
+  const subtype = readTrimmedString(event.subtype);
   if (!subtype) {
     logUnknownSdkKind(`${messageType}:?`);
     return [];
@@ -295,8 +291,8 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
   }
 
   if (subtype === "hook_started") {
-    const hookId = readString(event.hook_id);
-    const hookName = readString(event.hook_name) ?? "Hook";
+    const hookId = readTrimmedString(event.hook_id);
+    const hookName = readTrimmedString(event.hook_name) ?? "Hook";
     if (!hookId) return [];
     return [
       { kind: "mark_last_complete" },
@@ -314,11 +310,11 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
   }
 
   if (subtype === "hook_progress") {
-    const hookId = readString(event.hook_id);
+    const hookId = readTrimmedString(event.hook_id);
     const output =
-      readString(event.output) ??
-      readString(event.stdout) ??
-      readString(event.stderr);
+      readTrimmedString(event.output) ??
+      readTrimmedString(event.stdout) ??
+      readTrimmedString(event.stderr);
     if (hookId && output) {
       appendHookDetail(hookId, output);
     }
@@ -326,7 +322,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
   }
 
   if (subtype === "hook_response") {
-    const hookId = readString(event.hook_id);
+    const hookId = readTrimmedString(event.hook_id);
     if (!hookId) return [];
     return [{ kind: "complete_tool", trackingId: hookId }];
   }
@@ -365,7 +361,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
 
 /** Completes any active status step when a non-status SDK message arrives. */
 export function completeStatusOnNonStatusMessage(event: JsonObject): void {
-  const messageType = readString(event.type);
+  const messageType = readTrimmedString(event.type);
   if (messageType === "system" && event.subtype === "status") {
     return;
   }

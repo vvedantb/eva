@@ -25,6 +25,7 @@ import {
   type EvaluateOutcome,
 } from "./schema";
 import { jsonValue } from "./jsonValue";
+import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
 
 /** Jev answers in well under a second; anything past this is the gateway stalling. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -142,12 +143,8 @@ export async function evaluateDecision(
   input: EvaluateInputRaw,
   options: { tag: string },
 ): Promise<EvaluateOutcome> {
-  const apiKey = process.env.AI_GATEWAY_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
-    return failure(
-      "missing_config",
-      "AI_GATEWAY_API_KEY is not set on this Convex deployment.",
-    );
+  if (!readAiGatewayKey()) {
+    return failure("missing_config", AI_GATEWAY_KEY_MISSING);
   }
 
   const parsed = evaluateInput.safeParse(input);

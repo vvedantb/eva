@@ -4,7 +4,7 @@ import { ActionCache } from "@convex-dev/action-cache";
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
-import { getInstallationOctokit } from "../githubAuth";
+import { getInstallationOctokit, getRepoOctokit } from "../githubAuth";
 import { invalidatePrHeaderCache } from "./pullRequests";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
@@ -336,13 +336,7 @@ export const fetchPullRequestOverview = internalAction({
   },
   returns: pullRequestOverviewValidator,
   handler: async (ctx, args): Promise<PullRequestOverview> => {
-    const repoId: Id<"githubRepos"> = args.repoId;
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
 
     // Only checks and commit statuses need the head sha, so they chain off the
     // PR fetch while the other four calls start immediately — one round trip
@@ -607,8 +601,6 @@ export const getPullRequestOverview = action({
   },
   returns: pullRequestOverviewValidator,
   handler: async (ctx, args): Promise<PullRequestOverview> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prOverviewCache.fetch(
@@ -642,9 +634,7 @@ export const updatePullRequest = action({
   },
   returns: v.object({ title: v.string(), body: v.union(v.string(), v.null()) }),
   handler: async (ctx, args): Promise<{ title: string; body: string | null }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const title = args.title?.trim();
     if (title !== undefined && title.length === 0) {
@@ -657,11 +647,6 @@ export const updatePullRequest = action({
     ) {
       throw new Error("Nothing to update");
     }
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const data = await patchPullRequest(
@@ -725,12 +710,7 @@ export const fetchPullRequestCommits = internalAction({
   },
   returns: pullRequestCommitsValidator,
   handler: async (ctx, args): Promise<PullRequestCommits> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const commits = await octokit.paginate(octokit.rest.pulls.listCommits, {
       owner: repo.owner,
       repo: repo.name,
@@ -766,8 +746,6 @@ export const getPullRequestCommits = action({
   },
   returns: pullRequestCommitsValidator,
   handler: async (ctx, args): Promise<PullRequestCommits> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prCommitsCache.fetch(ctx, {
@@ -801,14 +779,7 @@ export const mergePullRequest = action({
     ctx,
     args,
   ): Promise<{ merged: boolean; sha: string | null; message: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const { data } = await octokit.rest.pulls.merge({

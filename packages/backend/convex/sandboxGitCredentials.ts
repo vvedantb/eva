@@ -10,6 +10,7 @@ import {
   isInstallationAllowed,
   parseRepoPath,
 } from "./_sandbox_runtime/gitCredentialsPath";
+import { findSandboxOwnerBySandboxId } from "./_sandbox/owner";
 
 /** Upserts the credential row for a sandbox, replacing any prior secret. */
 export const upsertForSandbox = internalMutation({
@@ -88,29 +89,19 @@ async function lookupSandboxOwner(
   /** Only sessions can carry linked repos (multi-repo sessions). */
   sessionId?: Id<"sessions">;
 } | null> {
-  const session = await db
-    .query("sessions")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (session) {
+  const owner = await findSandboxOwnerBySandboxId(db, sandboxId);
+  if (!owner) return null;
+  if (owner.kind === "session") {
     return {
-      userId: session.userId,
-      repoId: session.repoId,
-      sessionId: session._id,
+      userId: owner.doc.userId,
+      repoId: owner.doc.repoId,
+      sessionId: owner.doc._id,
     };
   }
-
-  const project = await db
-    .query("projects")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (project) return { userId: project.userId, repoId: project.repoId };
-
-  const task = await db
-    .query("agentTasks")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (!task) return null;
+  if (owner.kind === "project") {
+    return { userId: owner.doc.userId, repoId: owner.doc.repoId };
+  }
+  const task = owner.doc;
   if (task.repoId) return { userId: task.createdBy, repoId: task.repoId };
   if (task.projectId) {
     const taskProject = await db.get(task.projectId);

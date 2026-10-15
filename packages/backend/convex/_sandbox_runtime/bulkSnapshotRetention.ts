@@ -12,6 +12,8 @@ import {
   KEEP_LAST_SNAPSHOTS,
   SNAPSHOT_TTL_MS,
 } from "../_sandbox/vercelSnapshotOptions";
+import { sandboxEntityTableValidator } from "../_validators/enums";
+import { errorText } from "../_shared/errors";
 
 function snapshotStillExpiring(expiresAt: number | null | undefined): boolean {
   if (expiresAt === null || expiresAt === undefined) return false;
@@ -175,7 +177,8 @@ export const inspectSnapshotRetention = internalAction({
             name: vercel.name,
           });
           for await (const meta of listed) {
-            const expiresAtPresent = "expiresAt" in meta && meta.expiresAt != null;
+            const expiresAtPresent =
+              "expiresAt" in meta && meta.expiresAt != null;
             const expiresAt =
               expiresAtPresent && typeof meta.expiresAt === "number"
                 ? meta.expiresAt
@@ -226,7 +229,7 @@ export const inspectSnapshotRetention = internalAction({
               } catch (err) {
                 tombstoneGets.push({
                   id: snap.id,
-                  status: `get-failed:${err instanceof Error ? err.message : String(err)}`,
+                  status: `get-failed:${errorText(err)}`,
                   sizeBytes: -1,
                   expiresAt: null,
                 });
@@ -263,9 +266,7 @@ export const inspectSnapshotRetention = internalAction({
             ),
             error: null,
           };
-          console.log(
-            `[inspectSnapshotRetention] ${JSON.stringify(sample)}`,
-          );
+          console.log(`[inspectSnapshotRetention] ${JSON.stringify(sample)}`);
           samples.push(sample);
         } catch (err) {
           samples.push({
@@ -277,7 +278,7 @@ export const inspectSnapshotRetention = internalAction({
             snapshots: [],
             tombstoneGets: [],
             anyStillExpiring: false,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorText(err),
           });
         }
       }
@@ -320,13 +321,7 @@ type CandidateResult =
 export const bulkUpdateSnapshotRetention = internalAction({
   args: {
     cursor: v.optional(v.string()),
-    phase: v.optional(
-      v.union(
-        v.literal("sessions"),
-        v.literal("projects"),
-        v.literal("agentTasks"),
-      ),
-    ),
+    phase: v.optional(sandboxEntityTableValidator),
     cycleIfNeeded: v.optional(v.boolean()),
     cleared: v.optional(v.number()),
     stillExpiring: v.optional(v.number()),
@@ -372,7 +367,7 @@ export const bulkUpdateSnapshotRetention = internalAction({
           await handle.refresh();
         } catch (refreshErr) {
           console.log(
-            `[bulkUpdateSnapshotRetention] skip gone ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`,
+            `[bulkUpdateSnapshotRetention] skip gone ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${errorText(refreshErr)}`,
           );
           return { outcome: "skipped" };
         }
@@ -439,7 +434,7 @@ export const bulkUpdateSnapshotRetention = internalAction({
         return { outcome: "stillExpiring", cycled: true };
       } catch (err) {
         console.warn(
-          `[bulkUpdateSnapshotRetention] failed ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${err instanceof Error ? err.message : String(err)}`,
+          `[bulkUpdateSnapshotRetention] failed ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${errorText(err)}`,
         );
         return { outcome: "skipped" };
       }
@@ -562,9 +557,9 @@ export const purgeDeletedSnapshotTombstones = internalAction({
               return "deleted" as const;
             } catch (err) {
               console.warn(
-                `[purgeDeletedSnapshotTombstones] failed snapshotId=${snapshotId}: ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
+                `[purgeDeletedSnapshotTombstones] failed snapshotId=${snapshotId}: ${errorText(
+                  err,
+                )}`,
               );
               return "failed" as const;
             }
@@ -580,9 +575,9 @@ export const purgeDeletedSnapshotTombstones = internalAction({
       }
     } catch (err) {
       console.warn(
-        `[purgeDeletedSnapshotTombstones] skip repo=${repoId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `[purgeDeletedSnapshotTombstones] skip repo=${repoId}: ${errorText(
+          err,
+        )}`,
       );
     }
 
@@ -632,7 +627,9 @@ export const inspectSnapshotsByIds = internalAction({
     const groupSnapshotIds = new Set(
       await ctx.runQuery(internal.repoGroups.listAllGroupSnapshotNames, {}),
     );
-    const uniqueIds = [...new Set(args.snapshotIds.filter((id) => id.length > 0))];
+    const uniqueIds = [
+      ...new Set(args.snapshotIds.filter((id) => id.length > 0)),
+    ];
     const remaining = new Set(uniqueIds);
     const byId = new Map<string, SnapshotLookupRow>();
     for (const snapshotId of uniqueIds) {
@@ -663,9 +660,7 @@ export const inspectSnapshotsByIds = internalAction({
         credentials = await resolveSandboxCredentialsOnly(ctx, repoId);
       } catch (err) {
         console.warn(
-          `[inspectSnapshotsByIds] skip repo=${repoId}: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `[inspectSnapshotsByIds] skip repo=${repoId}: ${errorText(err)}`,
         );
         continue;
       }
@@ -688,9 +683,9 @@ export const inspectSnapshotsByIds = internalAction({
         }
       } catch (err) {
         console.warn(
-          `[inspectSnapshotsByIds] Sandbox.list failed project=${credentials.projectId}: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `[inspectSnapshotsByIds] Sandbox.list failed project=${credentials.projectId}: ${errorText(
+            err,
+          )}`,
         );
       }
 
@@ -732,8 +727,7 @@ export const inspectSnapshotsByIds = internalAction({
                 await snap.delete();
                 row.deleted = true;
               } catch (delErr) {
-                row.error =
-                  delErr instanceof Error ? delErr.message : String(delErr);
+                row.error = errorText(delErr);
               }
             }
           } else if (tryDelete && String(snap.status) !== "created") {

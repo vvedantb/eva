@@ -2,6 +2,7 @@ import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { resolveUserDisplayFirstName } from "./defaults";
 import { listTeammateUserIds } from "./sharing";
+import { MASKED_ENV_VAR_VALUE } from "../_envVars/documentStore";
 
 /**
  * Building the list of accounts a user may run on. Lives here rather than in
@@ -9,9 +10,6 @@ import { listTeammateUserIds } from "./sharing";
  * list — a popover that listed a different set of credentials from the picker
  * would be showing headroom for accounts the user cannot spend.
  */
-
-/** The masked stand-in for a credential value. Never the real one. */
-const MASKED_CREDENTIAL_VALUE = "••••••";
 
 /**
  * One user's accounts with credential values masked, labelled with that user's
@@ -46,7 +44,7 @@ export async function listAccountsFor(
       label: displayName,
       credentials: row.credentials.map((entry) => ({
         key: entry.key,
-        value: MASKED_CREDENTIAL_VALUE,
+        value: MASKED_ENV_VAR_VALUE,
       })),
       shared: row.shared === true,
       isOwn,

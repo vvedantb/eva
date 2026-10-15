@@ -6,15 +6,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
 import { buildAutomationEmailHtml } from "./emailTemplates";
-
-/** Reads a required environment variable, throwing a clear error when it is missing. */
-function getEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set in the Convex environment`);
-  }
-  return value;
-}
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 
 /**
  * Emails an automation's latest successful run summary to every user with email
@@ -31,7 +23,7 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = getEnv("WEB_APP_URL");
+    const appUrl = getEvaBaseUrl();
     const contentHtml = await marked.parse(run.content);
     const recipients = await ctx.runQuery(
       internal.users.listEmailRecipients,

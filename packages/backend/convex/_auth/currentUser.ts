@@ -26,3 +26,12 @@ export async function getCurrentUserId(
 
   return user?._id ?? null;
 }
+
+/** Resolves the signed-in user's row id, throwing if not authenticated. */
+export async function requireCurrentUserId(
+  ctx: QueryCtx | MutationCtx,
+): Promise<Id<"users">> {
+  const userId = await getCurrentUserId(ctx);
+  if (!userId) throw new Error("Not authenticated");
+  return userId;
+}

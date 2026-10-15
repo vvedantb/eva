@@ -42,8 +42,9 @@ export type RepoGroupFingerprintInput = {
  * stored alongside `seededSnapshotName`, the existing snapshot is still valid
  * and a rebuild is skipped.
  *
- * djb2 — cheap, deterministic, dependency-free (isolate functions cannot reach
- * `node:crypto`); mirrors `getSeedFingerprint` in `_repoSnapshots/config.ts`.
+ * djb2 over the JSON payload — cheap, deterministic, dependency-free
+ * (isolate functions cannot reach `node:crypto`). A false match only skips a
+ * rebuild.
  */
 export function computeRepoGroupFingerprint(
   input: RepoGroupFingerprintInput,

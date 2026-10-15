@@ -1,36 +1,13 @@
-import type { GenericDatabaseReader } from "convex/server";
 import { v } from "convex/values";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import {
+  authQuery,
+  authMutation,
+  getTeamMembership,
+  hasRepoAccess,
+  requireTeamOwner,
+} from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
-import { teamMemberRoleValidator } from "./validators";
-
-/** Fetches a user's membership row for a team, or null if they aren't a member. */
-function getTeamMembership(
-  db: GenericDatabaseReader<DataModel>,
-  teamId: Id<"teams">,
-  userId: Id<"users">,
-): Promise<Doc<"teamMembers"> | null> {
-  return db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-}
-
-/** Throws with the given message unless the user is an owner of the team. */
-async function requireTeamOwner(
-  db: GenericDatabaseReader<DataModel>,
-  teamId: Id<"teams">,
-  userId: Id<"users">,
-  errorMessage: string,
-): Promise<void> {
-  const membership = await getTeamMembership(db, teamId, userId);
-  if (!membership || membership.role !== "owner") {
-    throw new Error(errorMessage);
-  }
-}
+import { teamMemberFields, teamMemberRoleValidator } from "./validators";
 
 /** Lists all members of a team with their user profiles. Returns empty if the requester isn't a member. */
 export const list = authQuery({
@@ -39,10 +16,7 @@ export const list = authQuery({
     v.object({
       _id: v.id("teamMembers"),
       _creationTime: v.number(),
-      teamId: v.id("teams"),
-      userId: v.id("users"),
-      role: teamMemberRoleValidator,
-      joinedAt: v.number(),
+      ...teamMemberFields,
       user: v.union(
         v.object({
           _id: v.id("users"),

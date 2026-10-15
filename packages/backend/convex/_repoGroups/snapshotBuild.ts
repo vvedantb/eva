@@ -30,6 +30,7 @@ import {
 } from "../_sandbox_runtime/git";
 import { detectPackageManager } from "../_sandbox_runtime/devServer";
 import {
+  PRIMARY_REPO_DIR,
   WORKSPACE_ROOT,
   linkedRepoDir,
   primaryLinkPath,
@@ -38,6 +39,7 @@ import {
   computeRepoGroupFingerprint,
   type GroupForBuildResult,
 } from "./snapshot";
+import { errorText } from "../_shared/errors";
 
 // Large seeded snapshots take well over the SDK's 30s default to boot the
 // ephemeral builder sandbox — mirrors createSeedPrepSandbox's readyTimeoutSeconds.
@@ -176,7 +178,7 @@ export const buildGroupSnapshot = internalAction({
       await execHandle(sandbox, `mkdir -p ${WORKSPACE_ROOT}`, 15, "/");
       await execHandle(
         sandbox,
-        `ln -sfn /tmp/repo ${primaryLinkPath(primary.name)}`,
+        `ln -sfn ${PRIMARY_REPO_DIR} ${primaryLinkPath(primary.name)}`,
         15,
         "/",
       );
@@ -214,7 +216,7 @@ export const buildGroupSnapshot = internalAction({
       );
     } catch (e) {
       logBuild(
-        `build failed for group ${args.groupId}: ${e instanceof Error ? e.message : String(e)}`,
+        `build failed for group ${args.groupId}: ${errorText(e)}`,
       );
     } finally {
       if (sandbox) {
@@ -223,7 +225,7 @@ export const buildGroupSnapshot = internalAction({
         } catch (e) {
           logBuild(
             `failed to delete ephemeral builder sandbox for group ${args.groupId}: ${
-              e instanceof Error ? e.message : String(e)
+              errorText(e)
             }`,
           );
         }

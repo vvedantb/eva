@@ -6,8 +6,9 @@ import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import { authMutation } from "./functions";
+import { getDocWithAccess } from "./_docs/access";
 import {
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
 } from "./validators";
@@ -20,6 +21,7 @@ import {
 import { buildPrBody } from "./prBody";
 import { buildTestGenBranchName } from "./_git/branchNames";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { errorText } from "./_shared/errors";
 
 const testGenCompleteEvent = defineEvent({
   name: "testGenComplete",
@@ -162,7 +164,7 @@ export const testGenWorkflow = workflow.define({
           }
         } catch (error) {
           workflowSuccess = false;
-          workflowError = `Test generation completed locally, but Eva could not publish the branch or create a PR. ${error instanceof Error ? error.message : String(error)}`;
+          workflowError = `Test generation completed locally, but Eva could not publish the branch or create a PR. ${errorText(error)}`;
         }
       }
 
@@ -338,12 +340,7 @@ export const savePrUrl = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     docId: v.id("docs"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
@@ -388,8 +385,7 @@ export const cancelTestGen = authMutation({
   args: { docId: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
 
     await cancelTrackedWorkflow(ctx, doc.activeWorkflowId);
 
@@ -414,8 +410,7 @@ export const startTestGen = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");

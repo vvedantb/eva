@@ -32,10 +32,7 @@ function readPrivateJwk(): JWK {
  * deployment mistake cannot silently publish unauthenticated previews.
  */
 export function getPreviewGrantPublicJwk(): JWK {
-  const json = process.env.PREVIEW_GRANT_PRIVATE_KEY;
-  if (!json) throw new Error("Missing PREVIEW_GRANT_PRIVATE_KEY env var");
-  const jwk: JWK = JSON.parse(json);
-  const publicJwk: JWK = { ...jwk };
+  const publicJwk: JWK = { ...readPrivateJwk() };
   delete publicJwk.d;
   return publicJwk;
 }

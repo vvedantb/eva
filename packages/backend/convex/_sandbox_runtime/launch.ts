@@ -5,7 +5,8 @@ import { quote } from "shell-quote";
 import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
-import { execHandle, requireEnv } from "./helpers";
+import { execHandle } from "./helpers";
+import { requireEnv } from "../_env/requireEnv";
 import {
   resolvePublicConvexCloudUrl,
   resolvePublicConvexSiteUrl,
@@ -19,11 +20,12 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import {
   CLAUDE_CLI_INSTALL_DIR,
   CODEX_CLI_INSTALL_DIR,
-  EVA_ENV_FILE,
+  EVA_ENV_SOURCE_CMD,
 } from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
+import { errorText } from "../_shared/errors";
 
 // Paths baked into the callback script env for each CLI's config directory.
 // These originated as Daytona persistence-volume mount paths; the *_RUNTIME_*
@@ -205,9 +207,9 @@ async function resolveLatestCliVersion(
     }
   } catch (error) {
     console.log(
-      `[sandbox][cli] ${packageName} registry lookup failed, using floor ${floor}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `[sandbox][cli] ${packageName} registry lookup failed, using floor ${floor}: ${errorText(
+        error,
+      )}`,
     );
   }
   cachedCliVersions.set(packageName, { version: resolved, resolvedAt: now });
@@ -496,6 +498,7 @@ export async function launchScript(
     });
   }
   const uploadTasks: Array<Promise<void>> = [
+    // Mirrored by PROMPT_FILE in callback-src/config.ts.
     uploadWithTiming("/tmp/design-prompt.txt", prompt, "prompt"),
     uploadWithTiming("/tmp/run-design.mjs", CALLBACK_SCRIPT, "callback script"),
     uploadWithTiming(
@@ -640,7 +643,7 @@ export async function launchScript(
   const runnerLaunchScript = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
-    `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`,
+    EVA_ENV_SOURCE_CMD,
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/eva-mcp.json",
     ...exportLines,
     // The script carries per-launch credentials, so unlink it once this shell

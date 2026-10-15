@@ -11,7 +11,7 @@ import type {
   TodoItem,
   ToolCompleteResult,
 } from "../types.js";
-import { tryParseJson } from "../utils.js";
+import { tryParseJsonObject } from "../utils.js";
 import { headCap, STEP_FIELD_CAPS } from "./stepBudget.js";
 import {
   completeStatusOnNonStatusMessage,
@@ -311,10 +311,8 @@ export function applyCanonicalEvents(events: CanonicalEvent[]): boolean {
 
 /** Parses a single JSON stream event line and updates accumulated steps. */
 export function parseStreamEvent(line: string): boolean {
-  const event = tryParseJson(line);
-  if (!event || typeof event !== "object" || Array.isArray(event)) {
-    return false;
-  }
+  const event = tryParseJsonObject(line);
+  if (!event) return false;
   try {
     completeStatusOnNonStatusMessage(event);
     if (consumesClaudeSdkTaxonomyMessage(event)) {

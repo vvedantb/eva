@@ -8,6 +8,10 @@ import { getSandboxHandle } from "../_sandbox_runtime/helpers";
 import { launchPreviewDevServer } from "../_sandbox_runtime/sessions";
 import { vercelAppListenPort } from "../_sandbox_runtime/vercelAppPorts";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
+import {
+  buildFreePortLines,
+  buildPortListenProbeCommand,
+} from "../_sandbox_runtime/httpReadyProbe";
 
 // Sandbox-side halves of the chat-self MCP tools (chatSelfTools.ts). The tool
 // has already resolved and access-checked the chat; these only touch the VM.
@@ -32,11 +36,7 @@ async function portListening(
   port: number,
 ): Promise<boolean> {
   const result = await handle.exec(
-    [
-      `if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q ":${port} " && echo busy && exit 0; fi`,
-      `if command -v lsof >/dev/null 2>&1; then lsof -iTCP:${port} -sTCP:LISTEN >/dev/null 2>&1 && echo busy && exit 0; fi`,
-      "echo free",
-    ].join("; "),
+    buildPortListenProbeCommand(port, "busy", "free"),
     { cwd: "/", timeoutSeconds: 10 },
   );
   return result.output.trim() === "busy";
@@ -123,9 +123,7 @@ export const restartDevServer = internalAction({
     await handle.exec(
       [
         `tmux has-session -t ${sessionName} >/dev/null 2>&1 && tmux send-keys -t ${sessionName} C-c || true`,
-        `if command -v fuser >/dev/null 2>&1; then fuser -k ${listenPort}/tcp >/dev/null 2>&1 || true`,
-        `elif command -v lsof >/dev/null 2>&1; then for p in $(lsof -ti :${listenPort} 2>/dev/null || true); do kill "$p" 2>/dev/null || true; done`,
-        "fi",
+        ...buildFreePortLines(listenPort),
         `sleep ${PORT_RELEASE_WAIT_SECONDS}`,
       ].join("\n"),
       { cwd: "/", timeoutSeconds: 20 },

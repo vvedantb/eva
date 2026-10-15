@@ -19,12 +19,23 @@ test("preview sandbox prep launches the app server for every owner kind", () => 
   for (const step of [
     "reuseSessionSandbox.launchDevServer",
     "newSessionSandbox.launchDevServer",
-    "reuseTaskSandbox.launchDevServer",
-    "newTaskSandbox.launchDevServer",
-    "reuseProjectSandbox.launchDevServer",
-    "newProjectSandbox.launchDevServer",
   ]) {
     expect(sessionsSource).toContain(step);
   }
   expect(sessionsSource).toContain("launchPreviewDevServer(");
+
+  // Task and project share one preview path: reuse closure + create path.
+  const preview = functionBody(
+    sessionsSource,
+    "async function preparePreviewSandboxInternal(",
+  );
+  expect(preview.split("Sandbox.launchDevServer`").length - 1).toBe(2);
+  expect(preview.split("launchPreviewDevServer(").length - 1).toBe(2);
 });
+
+function functionBody(source: string, declaration: string): string {
+  const startAt = source.indexOf(declaration);
+  expect(startAt, `${declaration} moved or was renamed`).toBeGreaterThan(-1);
+  const endAt = source.indexOf("\n}", startAt);
+  return source.slice(startAt, endAt < 0 ? undefined : endAt);
+}

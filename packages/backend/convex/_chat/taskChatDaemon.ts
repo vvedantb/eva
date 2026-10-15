@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
@@ -18,7 +17,7 @@ import {
   scheduleQueueDrainAfterBackgroundAgents,
   startNextQueuedTaskChatMessage,
 } from "../_queues/helpers";
-import { TASK_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
+import { taskChatStreamEntityId } from "./surfaceAdapters";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
 import { resolveStorageUrls } from "./storageUrls";
 import {
@@ -26,7 +25,7 @@ import {
   isTurnClaimed,
   isUnclaimedOpenTurn,
 } from "../_sessions/pendingTurnRecovery";
-import { assistantReplyContent } from "../_sessions/resultTarget";
+import { syntheticTurnCompletionPatch } from "./chatResult";
 import {
   advanceTurn,
   claimStagedTurn,
@@ -36,10 +35,6 @@ import {
   openChatTurn,
   resolveCompletionTurn,
 } from "./turnStore";
-
-function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
-  return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
-}
 
 const emptyClaimReturn = {
   prompt: null,
@@ -361,38 +356,7 @@ export const completeSyntheticTurn = authMutation({
       return null;
     }
 
-    const patch: {
-      content: string;
-      activityLog?: string;
-      finishedAt: number;
-      pendingQuestion?: string;
-      model?: Doc<"messages">["model"];
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-    } = {
-      content: assistantReplyContent({
-        success: args.success,
-        result: args.result,
-        error: args.error,
-      }),
-      finishedAt: Date.now(),
-    };
-    if (args.activityLog) patch.activityLog = args.activityLog;
-    if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      patch.beforeSha = args.beforeSha;
-      patch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      patch.beforeShas = args.beforeShas;
-      patch.afterShas = args.afterShas;
-    }
-    // Drops the open-time stamp so a failed turn never becomes a checkpoint.
-    if (!args.success) {
-      patch.model = undefined;
-    }
+    const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
     // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {

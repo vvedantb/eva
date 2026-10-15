@@ -12,6 +12,7 @@ import {
   type GatewayFailure,
 } from "../_ai/gatewayErrors";
 import { buildTools } from "./tools";
+import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
 import type { EvaTool } from "./registry";
 
 /**
@@ -236,8 +237,8 @@ export const run = internalAction({
     });
 
     try {
-      if (!process.env.AI_GATEWAY_API_KEY?.trim()) {
-        throw new Error("AI_GATEWAY_API_KEY is not set on this Convex deployment.");
+      if (!readAiGatewayKey()) {
+        throw new Error(AI_GATEWAY_KEY_MISSING);
       }
       const tools = toAiTools(
         selectAveTools(

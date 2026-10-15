@@ -350,16 +350,14 @@ describe("chat log markdown", () => {
 });
 
 test("the turn prompt tells the agent to keep the Log", () => {
-  const prompt = buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/session-1",
-    "",
-    "continue",
-    "",
-    "",
-    undefined,
-    5173,
-  );
+  const prompt = buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/session-1",
+    message: "continue",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    devPort: 5173,
+  });
   expect(prompt).toContain("## Chat log (Documents tab):");
   expect(prompt).toContain("log_entry");
   expect(prompt).toContain("read_chat_log");
