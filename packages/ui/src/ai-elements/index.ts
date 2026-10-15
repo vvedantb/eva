@@ -4,6 +4,7 @@ export * from "./confirmation";
 export * from "./conversation";
 export * from "./message";
 export * from "./model-picker";
+export * from "./simple-model-ladder";
 export * from "./prompt-input";
 export * from "./provider-icon";
 export * from "./prompt-input-settings";
