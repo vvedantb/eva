@@ -2237,13 +2237,18 @@ var DAEMON_CLAIM_POLL_TIMING = {
   idleExitMs: 45 * 60 * 1e3,
   fencePollIntervalMs: 5e3,
   fastPollIntervalMs: 50,
+  // Mid-turn the claim only drains cancel/stop-task flags (no turn can be
+  // handed over), so 250ms keeps Stop instant while cutting the busiest
+  // phase's claim reads ~5x versus the 50ms handoff cadence.
+  busyPollIntervalMs: 250,
   idlePollIntervalMs: 1e3,
   fastPollWindowMs: 3e4
 };
 function selectClaimPollIntervalMs(params) {
+  if (params.busy) return DAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;
   const now = params.now ?? Date.now();
   const recentlyActive = now - params.lastIdleActivityAtMs < DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
-  return params.busy || recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
+  return recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
 }
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -7887,6 +7892,7 @@ var supervisor2 = new DaemonSupervisor();
 var activeTurnStartedAt = 0;
 var lastEventAt = 0;
 var lastIdleActivityAt = Date.now();
+var lastClaimAt = 0;
 var finalText = "";
 var exitWithError = false;
 var threadTotalUsage = null;
@@ -8150,39 +8156,47 @@ async function runCodexAppServerDaemon() {
         const completion = processNotification(notification);
         if (completion) await completion;
       }
-      const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
-      const claimed = await callConvexWithRetry(
-        "mutation",
-        CLAIM_MUTATION,
-        entityArgs({ model: MODEL, acceptTurn })
-      );
-      const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
-      if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
-        void client.request("turn/interrupt", {
-          threadId: callbackState.activeCodexThreadId,
-          turnId: providerTurnId
-        }).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          log("codex daemon: interrupt failed \\u2014 " + message);
-        });
-      }
-      const claimedTurn = readClaimedTurn(claimed);
-      if (claimedTurn) {
-        const currentLease = getCurrentTurnLease();
-        if (shouldParkClaimedTurn({
-          hasActiveRealTurn: supervisor2.currentTurn !== null,
-          isCancellationInFlight: supervisor2.isCancellationInFlight,
-          isFinalizing: false,
-          currentLeaseTurnId: currentLease?.turnId ?? null,
-          claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null
-        })) {
-          if (!supervisor2.parkClaim(claimedTurn)) {
-            log("codex daemon: duplicate claimed turn ignored");
+      const claimNow = Date.now();
+      if (claimNow - lastClaimAt >= selectClaimPollIntervalMs({
+        busy: supervisor2.hasWork,
+        lastIdleActivityAtMs: lastIdleActivityAt,
+        now: claimNow
+      })) {
+        lastClaimAt = claimNow;
+        const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
+        const claimed = await callConvexWithRetry(
+          "mutation",
+          CLAIM_MUTATION,
+          entityArgs({ model: MODEL, acceptTurn })
+        );
+        const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
+        if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
+          void client.request("turn/interrupt", {
+            threadId: callbackState.activeCodexThreadId,
+            turnId: providerTurnId
+          }).catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            log("codex daemon: interrupt failed \\u2014 " + message);
+          });
+        }
+        const claimedTurn = readClaimedTurn(claimed);
+        if (claimedTurn) {
+          const currentLease = getCurrentTurnLease();
+          if (shouldParkClaimedTurn({
+            hasActiveRealTurn: supervisor2.currentTurn !== null,
+            isCancellationInFlight: supervisor2.isCancellationInFlight,
+            isFinalizing: false,
+            currentLeaseTurnId: currentLease?.turnId ?? null,
+            claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null
+          })) {
+            if (!supervisor2.parkClaim(claimedTurn)) {
+              log("codex daemon: duplicate claimed turn ignored");
+            }
+          } else {
+            log(
+              "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
+            );
           }
-        } else {
-          log(
-            "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-          );
         }
       }
       if (supervisor2.currentTurn === null && supervisor2.pendingClaim !== null) {

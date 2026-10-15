@@ -1,5 +1,9 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type DatabaseReader,
+} from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
@@ -231,19 +235,41 @@ const activeSandboxEntityValidator = v.object({
 });
 
 /**
+ * Rows whose sandbox status says "active". Indexed on the status alone, so a
+ * sweep reads only the few live sandboxes instead of every historical row
+ * (and its heavy terminal/plan fields).
+ */
+export async function loadActiveSandboxRows(db: DatabaseReader) {
+  const [sessions, tasks, projects] = await Promise.all([
+    db
+      .query("sessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect(),
+    db
+      .query("agentTasks")
+      .withIndex("by_sandbox_status", (q) =>
+        q.eq("reviewTaskSandboxStatus", "active"),
+      )
+      .collect(),
+    db
+      .query("projects")
+      .withIndex("by_sandbox_status", (q) =>
+        q.eq("reviewProjectSandboxStatus", "active"),
+      )
+      .collect(),
+  ]);
+  return { sessions, tasks, projects };
+}
+
+/**
  * Every entity whose sandbox status says "active", with the fields the
- * reconcile sweep needs to verify that against the provider. Full scan —
- * these tables are small and the sweep runs on a coarse interval.
+ * reconcile sweep needs to verify that against the provider.
  */
 export const listActiveSandboxEntities = internalQuery({
   args: {},
   returns: v.array(activeSandboxEntityValidator),
   handler: async (ctx) => {
-    const [sessions, tasks, projects] = await Promise.all([
-      ctx.db.query("sessions").collect(),
-      ctx.db.query("agentTasks").collect(),
-      ctx.db.query("projects").collect(),
-    ]);
+    const { sessions, tasks, projects } = await loadActiveSandboxRows(ctx.db);
     const out: Array<{
       entityTable: "sessions" | "agentTasks" | "projects";
       entityId: string;
@@ -251,7 +277,7 @@ export const listActiveSandboxEntities = internalQuery({
       repoId: Id<"githubRepos">;
     }> = [];
     for (const s of sessions) {
-      if (s.status === "active" && typeof s.sandboxId === "string") {
+      if (typeof s.sandboxId === "string") {
         out.push({
           entityTable: "sessions",
           entityId: String(s._id),
@@ -261,11 +287,7 @@ export const listActiveSandboxEntities = internalQuery({
       }
     }
     for (const t of tasks) {
-      if (
-        t.reviewTaskSandboxStatus === "active" &&
-        typeof t.sandboxId === "string" &&
-        t.repoId !== undefined
-      ) {
+      if (typeof t.sandboxId === "string" && t.repoId !== undefined) {
         out.push({
           entityTable: "agentTasks",
           entityId: String(t._id),
@@ -275,11 +297,7 @@ export const listActiveSandboxEntities = internalQuery({
       }
     }
     for (const p of projects) {
-      if (
-        p.reviewProjectSandboxStatus === "active" &&
-        typeof p.sandboxId === "string" &&
-        p.repoId !== undefined
-      ) {
+      if (typeof p.sandboxId === "string" && p.repoId !== undefined) {
         out.push({
           entityTable: "projects",
           entityId: String(p._id),

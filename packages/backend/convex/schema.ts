@@ -107,6 +107,7 @@ const schema = defineSchema({
       "repoId",
       "reviewProjectSandboxStatus",
     ])
+    .index("by_sandbox_status", ["reviewProjectSandboxStatus"])
     .index("by_sandbox", ["sandboxId"]),
 
   projectDetails: defineTable(projectDetailsFields).index("by_project", [
@@ -122,6 +123,7 @@ const schema = defineSchema({
     .index("by_project_and_status", ["projectId", "status"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_repo_and_sandbox_status", ["repoId", "reviewTaskSandboxStatus"])
+    .index("by_sandbox_status", ["reviewTaskSandboxStatus"])
     .index("by_sandbox", ["sandboxId"]),
 
   agentRuns: defineTable(agentRunFields)
@@ -206,6 +208,7 @@ const schema = defineSchema({
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
+    .index("by_status", ["status"])
     .index("by_repo_and_archived", ["repoId", "archived"])
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_repo_and_numId", ["repoId", "numId"])
@@ -216,7 +219,8 @@ const schema = defineSchema({
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
-    .index("by_repo", ["repoId"]),
+    .index("by_repo", ["repoId"])
+    .index("by_repo_main_and_archived", ["repoId", "isMain", "archived"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.
