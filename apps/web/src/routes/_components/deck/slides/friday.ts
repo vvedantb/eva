@@ -25,6 +25,7 @@ import { FridayAutomations } from "./friday/b09-automations";
 import { FridayStandup } from "./friday/b10-standup";
 import { FridayWeeklyChangelog } from "./friday/b22-weekly-changelog";
 import { FridaySkills } from "./friday/b11-skills";
+import { FridayPredictions } from "./friday/b23-predictions";
 import { FridayAve } from "./friday/b12-ave";
 import { FridayReliability } from "./friday/b13-reliability";
 import { FridayMobile } from "./friday/b14-mobile";
@@ -129,6 +130,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     title: "Skills",
     Component: FridaySkills,
     steps: 1,
+  },
+  {
+    id: "friday-b23-predictions",
+    title: "Predictions",
+    Component: FridayPredictions,
+    steps: 3,
   },
 
   // ── On its own: what runs without being asked ───────────────────────

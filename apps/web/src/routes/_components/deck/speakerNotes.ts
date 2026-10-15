@@ -183,6 +183,14 @@ Next: And once a week, Eva writes up everything that shipped.`,
 → Step 1: the picker opens out of the composer and the commands stagger in. There is nothing to remember: type a slash and choose.
 Detail: skills are turned on per codebase from Settings, with no change to the code, and then appear for everyone in it. Claude's built-in skills joined the same picker a fortnight later. The six on screen are real commands from this codebase.
 Figures: Eva's own skills landed 6 August 2026; Claude's built-in skills joined the picker on 22 August 2026.
+Next: And sometimes Eva can guess what you will ask next.`,
+
+  "friday-b23-predictions": `When Eva finishes a reply, it guesses what you will probably say next, so the next step is often a single key.
+→ Step 1: the prediction appears in the empty message box as grey text, in place of the usual placeholder.
+→ Step 2: press Tab and it becomes your message. You can edit it or send it as it is.
+→ Step 3: the rules. It only appears when Eva is waiting on you, it reads the recent conversation to make its guess, and it never sends anything by itself.
+Detail: this is an experimental setting, switched on under Settings, Experimental, Composer predictions. A small, fast model reads the last 30 messages and suggests one short line. It makes one guess per reply and remembers it, so clearing the box shows the same guess again without asking twice. It stays quiet when the turn failed, is still running, or Eva asked you a question. The chat on screen is an example. It is a writing model, not Jev, because it has to produce words rather than score them.
+Figures: experimental flag added 10 October 2026 (Eva pull request 932). Suggestions are capped at 280 characters. Source: Eva git history and code.
 Next: So far, you have done the asking. From here, Eva starts to work on its own.`,
 
   "friday-b12-ave": `One permanent chat sits above all the others and keeps track of them for you.
