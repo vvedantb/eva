@@ -171,7 +171,7 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     id: "friday-b21-jev-carepulse",
     title: "Jev inside CarePulse",
     Component: FridayJevCarePulse,
-    steps: 3,
+    steps: 2,
   },
 
   // ── Trust and reach: when it breaks, and everywhere it goes ─────────

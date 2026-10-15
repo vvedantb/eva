@@ -26,9 +26,12 @@ import {
 } from "../../_components/motion";
 import { Fri2Chip } from "../_parts/Fri2Chip";
 
-const SCORE = 1;
-const FLAG = 2;
-const GUARD = 3;
+const TYPE = 1;
+const GUARD = 2;
+
+/** Seconds per typed character, and when the flag lands after the last one. */
+const CHAR = 0.028;
+const TYPE_START = 0.45;
 
 const FORM_W = 640;
 const W = 1088;
@@ -41,7 +44,10 @@ interface Field {
   score: number;
 }
 
-/** Three free-text fields from the referral form, judged one by one. */
+/**
+ * Three free-text fields from the referral form. Two are already filled and
+ * checked; the broker types the middle one live.
+ */
 const FIELDS: readonly Field[] = [
   {
     label: "Summary of care needs",
@@ -60,8 +66,12 @@ const FIELDS: readonly Field[] = [
   },
 ];
 
-const FLAGGED = 1;
+const TYPED = 1;
 const LINE = 50;
+
+const typedText = FIELDS[TYPED]?.text ?? "";
+/** The flag lands just after the last character. */
+const FLAG_AT = TYPE_START + typedText.length * CHAR + 0.25;
 
 interface Guard {
   icon: Icon;
@@ -76,23 +86,73 @@ const GUARDS: readonly Guard[] = [
 
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 6, rotateY: 5, translateZ: -30 },
-  { rotateY: 3 },
   { rotateY: 2, translateZ: 18, y: -6 },
   { translateZ: -24 },
 ];
 
 const GLOW = [
   { x: FORM_W / 2, y: H / 2, size: 560 },
-  { x: FORM_W - 60, y: H / 2, size: 520 },
   { x: FORM_W / 2, y: 180, size: 520 },
   { x: FORM_W + 220, y: H / 2, size: 620 },
 ];
 
+/** A blinking caret: at the start while empty, at the end once typed. */
+function Caret({ shown, delay }: { shown: boolean; delay: number }) {
+  return (
+    <m.span
+      aria-hidden
+      className="inline-block h-4 w-px translate-y-[3px] bg-foreground"
+      initial={false}
+      animate={{ opacity: shown ? [1, 1, 0, 0] : 0 }}
+      transition={
+        shown
+          ? {
+              duration: 1,
+              repeat: Infinity,
+              times: [0, 0.5, 0.5, 1],
+              delay,
+            }
+          : { duration: 0 }
+      }
+    />
+  );
+}
+
+/**
+ * The broker's typing, one character at a time. Untyped characters are
+ * invisible but keep their width, so there is no caret while typing.
+ */
+function TypedText({ typing }: { typing: boolean }) {
+  return (
+    <span>
+      {typing ? null : <Caret shown delay={0} />}
+      {typedText.split("").map((char, index) => (
+        <m.span
+          key={index}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: typing ? 1 : 0 }}
+          transition={{
+            duration: 0.01,
+            delay: typing ? TYPE_START + index * CHAR : 0,
+          }}
+        >
+          {char}
+        </m.span>
+      ))}
+      {typing ? <Caret shown delay={FLAG_AT - 0.25} /> : null}
+    </span>
+  );
+}
+
 function FieldRow({ field, index }: { field: Field; index: number }) {
   const step = useDeckStep();
-  const scored = step >= SCORE;
-  const flagged = index === FLAGGED && step >= FLAG;
-  const at = step === SCORE ? 0.5 + index * 0.35 : 0;
+  const live = index === TYPED;
+  const typing = step >= TYPE;
+  // The filled fields were checked before the slide; the typed one is
+  // checked the moment typing stops.
+  const scored = live ? typing : true;
+  const flagged = live && typing;
+  const at = live && step === TYPE ? FLAG_AT : 0.6 + index * 0.2;
   const above = field.score >= LINE;
 
   return (
@@ -120,29 +180,33 @@ function FieldRow({ field, index }: { field: Field; index: number }) {
         </m.span>
       </div>
       <m.div
-        className="rounded-lg border bg-card px-3 py-2.5 text-sm text-foreground"
+        className="h-[42px] rounded-lg border bg-card px-3 py-2.5 text-sm text-foreground"
         initial={false}
         animate={{
-          borderColor: flagged ? "rgb(245,158,11)" : "rgba(255,255,255,0.1)",
+          borderColor: flagged
+            ? "rgb(245,158,11)"
+            : live
+              ? "rgba(255,255,255,0.28)"
+              : "rgba(255,255,255,0.1)",
           boxShadow: flagged
             ? "0 0 0 3px rgba(245,158,11,0.25)"
             : "0 0 0 0 rgba(245,158,11,0)",
         }}
-        transition={cueTransition(flagged, 0.2, {
-          duration: DUR.slow,
+        transition={cueTransition(flagged, flagged ? FLAG_AT : 0, {
+          duration: DUR.base,
           ease: EASE.out,
         })}
       >
-        {field.text}
+        {live ? <TypedText typing={typing} /> : field.text}
       </m.div>
-      {index === FLAGGED ? (
+      {live ? (
         <m.div
           className="flex items-center gap-1.5 overflow-hidden text-xs text-amber-400"
           initial={{ opacity: 0, height: 0 }}
           animate={
             flagged ? { opacity: 1, height: 22 } : { opacity: 0, height: 0 }
           }
-          transition={cueTransition(flagged, 0.4, {
+          transition={cueTransition(flagged, FLAG_AT + 0.1, {
             duration: DUR.slow,
             ease: EASE.expo,
           })}
@@ -157,7 +221,8 @@ function FieldRow({ field, index }: { field: Field; index: number }) {
 
 function ReferralForm() {
   const step = useDeckStep();
-  const flagged = step >= FLAG;
+  const flagged = step >= TYPE;
+  const at = step === TYPE ? FLAG_AT + 0.2 : 0;
 
   return (
     <div
@@ -176,7 +241,7 @@ function ReferralForm() {
           className="ml-auto flex items-center gap-1.5 text-xs text-amber-400"
           initial={{ opacity: 0, x: 8 }}
           animate={flagged ? { opacity: 1, x: 0 } : { opacity: 0, x: 8 }}
-          transition={cueTransition(flagged, 0.6, {
+          transition={cueTransition(flagged, at, {
             duration: DUR.base,
             ease: EASE.out,
           })}
@@ -197,7 +262,7 @@ function ReferralForm() {
 /** The one question asked of every field, beside the form. */
 function Question() {
   const step = useDeckStep();
-  const asked = step >= SCORE;
+  const asked = step >= TYPE;
   const guarded = step >= GUARD;
 
   return (
@@ -212,20 +277,20 @@ function Question() {
         }}
         initial={{ opacity: 0, y: 14 }}
         animate={{
-          opacity: asked ? (guarded ? 0.5 : 1) : 0.35,
+          opacity: guarded ? 0.5 : asked ? 1 : 0.7,
           y: 0,
         }}
         transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.3 }}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-white/70">
-          <Pulse color={BRAND.blue} size={7} step={SCORE} delay={0.2} />
-          Jev, on every field
+          <Pulse color={BRAND.blue} size={7} step={TYPE} delay={0.2} />
+          PID checker, run by Jev
         </div>
         <div className="mt-3 text-xl leading-snug font-semibold text-balance text-white">
           “Could this text identify a specific person?”
         </div>
         <div className="mt-3 text-sm text-white/50">
-          Flagged at 50% or more. Checked 1.5 s after typing stops.
+          Flags the field the moment you stop typing.
         </div>
       </m.div>
 
@@ -249,7 +314,7 @@ export function FridayJevCarePulse() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        Personal details, <Accent>caught</Accent> as you type.
+        PID, <Accent>flagged</Accent> as you type.
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

@@ -234,10 +234,9 @@ Detail: each card shows the question Jev is given, shortened from the code. Real
 Figures: evaluate tool, task tags, findings triage, draft readiness, mention urgency and skill suggestions, 21 September 2026; scope check and chat panels, 22 September 2026; emoji reactions, 26 September 2026; teammate routing, 12 October 2026. Source: Eva git history.
 Next: And it has started to appear in CarePulse too.`,
 
-  "friday-b21-jev-carepulse": `CarePulse's first use of Jev protects people's privacy: it warns brokers when free text might identify someone.
-→ Step 1: Jev scores each free-text field on the referral form against one question: could this text identify a specific person?
-→ Step 2: one field scores high, so it gets an orange warning, the step is marked in the progress bar, and the preview repeats the warning before posting.
-→ Step 3: the safeguards. It only warns and never blocks posting; zero data retention is requested; and if Jev is unavailable, fixed pattern rules for things like NHS numbers and phone numbers still run.
+  "friday-b21-jev-carepulse": `CarePulse's first use of Jev is a PID checker: it reads what a broker types and flags personal details in the form straight away.
+→ Step 1: the broker types a note that names someone and gives a phone number. As soon as they stop typing, Jev scores the field against one question, "could this text identify a specific person?", and the field turns orange with "May contain personal details". The step is marked in the progress bar too.
+→ Step 2: the safeguards. It only warns and never blocks posting; zero data retention is requested; and if Jev is unavailable, fixed pattern rules for things like NHS numbers and phone numbers still run.
 Detail: the fields checked are the free-text ones a broker fills in: the unique ID, care needs, equipment, additional care, cultural and language notes, and the reasons for unselected homes or an area search. ICB contact fields are not sent. Abbreviations are spelled out first, the text is not logged or stored, and the check runs 1.5 seconds after typing stops. The 50% line is our own assumption and should be reviewed if brokers report false alarms or misses. Whether production calls Jev depends on the AI Gateway key being set there; without it only the pattern rules run. The example text is invented and identifies no one.
 Figures: merged to main 14 October 2026 (carepulse-ts pull request 2487); first built 6 October 2026. Flag line 50%; at most 120 checks an hour per user.
 Next: That is a lot running by itself, so the fair question is what happens when it goes wrong.`,
