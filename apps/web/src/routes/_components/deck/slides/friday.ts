@@ -32,6 +32,8 @@ import { FridayClose } from "./friday/b16-close";
 import { FridayJev } from "./friday/b17-jev";
 import { FridayLimits } from "./friday/b18-limits";
 import { FridayPipeline } from "./friday/b19-pipeline";
+import { FridayJevWhat } from "./friday/b20-jev-what";
+import { FridayJevCarePulse } from "./friday/b21-jev-carepulse";
 
 /**
  * Friday session deck order — the last three months, for a non-technical
@@ -154,9 +156,21 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
+    id: "friday-b20-jev-what",
+    title: "What Jev is",
+    Component: FridayJevWhat,
+    steps: 3,
+  },
+  {
     id: "friday-b17-jev",
-    title: "Jev decides",
+    title: "Jev inside Eva",
     Component: FridayJev,
+    steps: 2,
+  },
+  {
+    id: "friday-b21-jev-carepulse",
+    title: "Jev inside CarePulse",
+    Component: FridayJevCarePulse,
     steps: 3,
   },
 

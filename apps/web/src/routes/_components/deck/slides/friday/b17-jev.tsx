@@ -1,13 +1,15 @@
 import type { Icon } from "@tabler/icons-react";
 import {
-  IconAt,
   IconFileCheck,
   IconFilter,
   IconFlag,
-  IconListCheck,
+  IconLayoutDashboard,
   IconMoodSmile,
+  IconPlugConnected,
   IconSparkles,
   IconTag,
+  IconUserQuestion,
+  IconBellRinging,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
@@ -18,240 +20,234 @@ import {
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-import { Camera, Layer } from "../../_components/DeckCamera";
+import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   DUR,
   DrawPath,
   EASE,
-  GridBackdrop,
   Pulse,
-  Sheen,
   Spotlight,
   cueTransition,
 } from "../../_components/motion";
-import { FRI3_JEV_QUESTIONS, Fri3JevAnswers } from "../_parts/Fri3JevAnswers";
 import { Fri2Chip } from "../_parts/Fri2Chip";
 
-interface Use {
+interface Feature {
+  icon: Icon;
+  label: string;
+  /** The condition Jev is given, close to the wording in the code. */
+  asks: string;
+  kind: string;
+}
+
+/** The three the room will recognise, each with the question Jev answers. */
+const FEATURES: readonly Feature[] = [
+  {
+    icon: IconFileCheck,
+    label: "Is the prompt detailed enough?",
+    asks: "Does it state the expected outcome?",
+    kind: "Yes / no",
+  },
+  {
+    icon: IconSparkles,
+    label: "Which skill should it use?",
+    asks: "Which listed skill best fits this request?",
+    kind: "Pick one",
+  },
+  {
+    icon: IconUserQuestion,
+    label: "Who should answer this?",
+    asks: "Is this person one of the right people to answer?",
+    kind: "Yes / no, per person",
+  },
+];
+
+interface More {
   icon: Icon;
   label: string;
 }
 
-/** Every place Eva asks Jev today, in the order they shipped. */
-const USES: readonly Use[] = [
+/** Every other place Eva asks Jev, in the order they shipped. */
+const MORE: readonly More[] = [
   { icon: IconTag, label: "Tags tasks" },
-  { icon: IconFilter, label: "Sorts findings" },
-  { icon: IconFileCheck, label: "Checks drafts" },
-  { icon: IconAt, label: "Ranks mentions" },
-  { icon: IconSparkles, label: "Suggests skills" },
-  { icon: IconFlag, label: "Spots scope creep" },
+  { icon: IconFilter, label: "Sorts findings by severity" },
+  { icon: IconBellRinging, label: "Decides how urgent a mention is" },
+  { icon: IconPlugConnected, label: "Any agent can ask it" },
+  { icon: IconFlag, label: "Spots changes nobody asked for" },
+  { icon: IconLayoutDashboard, label: "Lays out panels in chat" },
   { icon: IconMoodSmile, label: "Picks reactions" },
 ];
 
+const FEATURES_STEP = 1;
+const MORE_STEP = 2;
+
 const W = 1088;
-const H = 360;
-const MID_Y = 130;
-const ITEM = { x: 0, w: 236, h: 116 };
-const NODE = { x: 320, size: 132 };
-const NODE_RIGHT = NODE.x + NODE.size;
-const NODE_CX = NODE.x + NODE.size / 2;
-const ANSWERS_X = 556;
-const USES_Y = 316;
-const COL = W / USES.length;
-const FAN = 3;
+const H = 380;
+const NODE = { x: 0, size: 120 };
+const NODE_CY = H / 2;
+const CARD = { x: 196, w: 452, h: 108, gap: 28 };
+const MORE_X = CARD.x + CARD.w + 48;
+const cardY = (index: number) => 8 + index * (CARD.h + CARD.gap);
 
-/**
- * Framed low on the judge while the fan is still empty, then the camera rises
- * and eases back to take in the six uses.
- */
 const SHOTS: readonly CameraShot[] = [
-  { rotateX: 5, rotateY: -5, translateZ: -24, y: 70 },
-  { rotateX: 2, rotateY: -2, y: 60 },
-  { y: 60 },
-  { rotateX: 3, translateZ: -18, y: -4 },
+  { rotateY: 8, translateZ: -30, x: 60 },
+  { rotateY: 3, x: 20 },
+  { rotateY: -3, translateZ: -20 },
 ];
 
-/** Behind the item, then the judge, then the judge again as the uses fan out. */
 const GLOW = [
-  { x: ITEM.w / 2, y: MID_Y, size: 380 },
-  { x: NODE_CX, y: MID_Y, size: 460 },
-  { x: ANSWERS_X + 300, y: MID_Y, size: 560 },
-  { x: NODE_CX, y: 220, size: 620 },
+  { x: NODE.size / 2, y: NODE_CY, size: 380 },
+  { x: CARD.x + CARD.w / 2, y: NODE_CY, size: 620 },
+  { x: MORE_X + 180, y: NODE_CY, size: 620 },
 ];
 
-const toQuestion = (y: number) =>
-  `M ${NODE_RIGHT + 4} ${MID_Y} C ${NODE_RIGHT + 50} ${MID_Y}, ${ANSWERS_X - 50} ${y}, ${ANSWERS_X - 8} ${y}`;
-const toUse = (index: number) => {
-  const x = COL * index + COL / 2;
-  return `M ${NODE_CX} ${MID_Y + NODE.size / 2 + 4} C ${NODE_CX} 262, ${x} 238, ${x} ${USES_Y - 26}`;
+const toCard = (index: number) => {
+  const y = cardY(index) + CARD.h / 2;
+  const from = NODE.x + NODE.size + 6;
+  return `M ${from} ${NODE_CY} C ${from + 40} ${NODE_CY}, ${CARD.x - 40} ${y}, ${CARD.x - 8} ${y}`;
 };
-
-function ItemCard() {
-  const fanned = useDeckStep() >= FAN;
-  return (
-    <m.div
-      className="absolute flex flex-col justify-between rounded-[20px] bg-white/[0.06] p-5 ring-1 ring-white/10 ring-inset"
-      style={{
-        left: ITEM.x,
-        top: MID_Y - ITEM.h / 2,
-        width: ITEM.w,
-        height: ITEM.h,
-      }}
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: fanned ? 0.4 : 1, y: 0 }}
-      transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.45 }}
-    >
-      <div className="flex items-center gap-2 text-xs text-white/45">
-        <IconListCheck size={15} stroke={1.7} aria-hidden />
-        Task
-      </div>
-      <div className="text-lg leading-snug font-medium text-white/90">
-        Export shows the wrong date
-      </div>
-    </m.div>
-  );
-}
 
 function JevNode() {
   const step = useDeckStep();
   return (
     <m.div
-      className="absolute"
+      className="absolute flex items-center justify-center rounded-[28px] ring-1 ring-white/15 ring-inset"
       style={{
         left: NODE.x,
-        top: MID_Y - NODE.size / 2,
+        top: NODE_CY - NODE.size / 2,
         width: NODE.size,
         height: NODE.size,
+        background: `linear-gradient(145deg, ${BRAND.purple}40, ${BRAND.blue}33)`,
       }}
       initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: step >= 1 ? 1.04 : 1 }}
-      transition={{
-        type: "spring",
-        bounce: 0,
-        duration: 0.8,
-        delay: step >= 1 ? 0.55 : 0.6,
-      }}
+      animate={{ opacity: 1, scale: step >= FEATURES_STEP ? 1.04 : 1 }}
+      transition={{ type: "spring", bounce: 0, duration: 0.8, delay: 0.4 }}
     >
-      <Sheen step={1} delay={0.7} className="size-full rounded-[30px]">
-        <div
-          className="relative flex size-full flex-col items-center justify-center rounded-[30px] ring-1 ring-white/15 ring-inset"
-          style={{
-            background: `linear-gradient(145deg, ${BRAND.purple}40, ${BRAND.blue}33)`,
-          }}
-        >
-          <span className="absolute top-4 right-4">
-            <Pulse color={BRAND.blue} size={7} step={1} delay={0.6} />
-          </span>
-          <span className="text-4xl font-semibold tracking-[-0.02em] text-white">
-            Jev
-          </span>
-        </div>
-      </Sheen>
+      <span className="absolute top-3.5 right-3.5">
+        <Pulse color={BRAND.blue} size={7} step={FEATURES_STEP} delay={0.3} />
+      </span>
+      <span className="text-4xl font-semibold tracking-[-0.02em] text-white">
+        Jev
+      </span>
     </m.div>
   );
 }
 
-function UseChip({ use, index }: { use: Use; index: number }) {
-  const fanned = useDeckStep() >= FAN;
-  const at = 0.75 + index * 0.09;
+function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
+  const step = useDeckStep();
+  const lit = step >= FEATURES_STEP;
+  const at = step === FEATURES_STEP ? 0.55 + index * 0.35 : 0;
+  const Glyph = feature.icon;
+
   return (
     <m.div
-      className="flex justify-center"
-      initial={{ opacity: 0, y: 12 }}
-      animate={fanned ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
-      transition={cueTransition(fanned, at, {
-        duration: DUR.slow,
-        ease: EASE.expo,
-      })}
+      className="absolute flex items-center gap-5 rounded-[22px] px-6 ring-1 ring-white/10 ring-inset"
+      style={{
+        left: CARD.x,
+        top: cardY(index),
+        width: CARD.w,
+        height: CARD.h,
+      }}
+      initial={{ opacity: 0, x: -16 }}
+      animate={{
+        opacity: lit ? 1 : 0.3,
+        x: lit ? 0 : -8,
+        backgroundColor: lit
+          ? "rgba(255,255,255,0.07)"
+          : "rgba(255,255,255,0.03)",
+      }}
+      transition={
+        lit
+          ? { duration: DUR.slow, ease: EASE.expo, delay: at }
+          : { duration: DUR.slow, ease: EASE.out, delay: 0.5 + index * 0.08 }
+      }
     >
-      <Fri2Chip icon={use.icon} label={use.label} lit={fanned} delay={at} />
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B3FB8]/35 to-[#3B7DD8]/35">
+        <Glyph size={22} stroke={1.6} className="text-white" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-xl leading-tight font-semibold text-white">
+          {feature.label}
+        </div>
+        <m.div
+          className="mt-2 flex items-center gap-2 text-sm text-white/55"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: lit ? 1 : 0 }}
+          transition={cueTransition(lit, at + 0.3, { duration: DUR.base })}
+        >
+          <span className="shrink-0 rounded-full bg-white/[0.08] px-2 py-0.5 text-xs whitespace-nowrap text-white/70">
+            {feature.kind}
+          </span>
+          <span className="truncate">“{feature.asks}”</span>
+        </m.div>
+      </div>
     </m.div>
   );
 }
 
 export function FridayJev() {
+  const step = useDeckStep();
+  const more = step >= MORE_STEP;
+
   return (
-    <Shell className="py-12">
+    <Shell className="py-14">
       <Title size="md">
-        One small model that <Accent>decides</Accent>.
+        Ten small decisions <Accent>inside Eva</Accent>.
       </Title>
 
-      <div className="flex flex-1 flex-col justify-center pb-10">
-        <Camera shots={SHOTS}>
-          <div
-            className="relative isolate"
-            style={{ width: W, height: H, transformStyle: "preserve-3d" }}
-          >
-            <Layer depth={-60} className="absolute -inset-x-12 -inset-y-10">
-              <GridBackdrop variant="dots" cell={26} period={10} />
-            </Layer>
-            <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
+      <Camera shots={SHOTS} className="mt-8">
+        <div className="relative isolate" style={{ width: W, height: H }}>
+          <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
 
-            {/* The item travels into the judge. */}
-            <div className="absolute inset-0">
+          {FEATURES.map((feature, index) => (
+            <div key={feature.label} className="absolute inset-0">
               <DrawPath
-                d={`M ${ITEM.w + 6} ${MID_Y} L ${NODE.x - 8} ${MID_Y}`}
+                d={toCard(index)}
                 width={W}
                 height={H}
-                step={1}
+                step={FEATURES_STEP}
+                delay={0.25 + index * 0.35}
                 duration={0.6}
                 dot
               />
             </div>
+          ))}
 
-            {/* The judge asks each typed question. */}
-            {FRI3_JEV_QUESTIONS.map((question, index) => (
-              <div key={question.kind} className="absolute inset-0">
-                <DrawPath
-                  d={toQuestion(question.y)}
-                  width={W}
-                  height={H}
-                  step={1}
-                  delay={0.45 + index * 0.1}
-                  duration={0.7}
-                />
-              </div>
-            ))}
+          <JevNode />
+          {FEATURES.map((feature, index) => (
+            <FeatureCard key={feature.label} feature={feature} index={index} />
+          ))}
 
-            {/* And the same judge answers for every use in Eva. */}
-            {USES.map((use, index) => (
-              <div key={use.label} className="absolute inset-0">
-                <DrawPath
-                  d={toUse(index)}
-                  width={W}
-                  height={H}
-                  step={FAN}
-                  delay={0.2 + index * 0.07}
-                  duration={0.8}
-                  dot
-                />
-              </div>
-            ))}
-
-            <ItemCard />
-            <JevNode />
-            <Fri3JevAnswers left={ANSWERS_X} />
-
-            <div
-              className="absolute inset-x-0 grid"
-              style={{
-                top: USES_Y - 22,
-                gridTemplateColumns: `repeat(${USES.length}, 1fr)`,
-              }}
+          <div
+            className="absolute flex flex-col gap-1.5"
+            style={{ left: MORE_X, top: 0, width: W - MORE_X }}
+          >
+            <m.div
+              className="mb-1.5 text-sm font-medium text-white/50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: more ? 1 : 0 }}
+              transition={cueTransition(more, 0.15, { duration: DUR.base })}
             >
-              {USES.map((use, index) => (
-                <UseChip key={use.label} use={use} index={index} />
-              ))}
-            </div>
+              And seven more
+            </m.div>
+            {MORE.map((item, index) => (
+              <Fri2Chip
+                key={item.label}
+                icon={item.icon}
+                label={item.label}
+                lit={more}
+                index={index}
+                delay={0.3 + index * 0.09}
+              />
+            ))}
           </div>
-        </Camera>
-      </div>
+        </div>
+      </Camera>
 
       <Footnote>
-        TypeSafe Jev joined Eva on 17 September 2026; the seven uses shipped
-        between 18 and 26 September 2026 (Eva changelog). The task and answers
-        shown are an illustration.
+        Uses shipped 21 September to 12 October 2026 (Eva git history). Teammate
+        routing sits behind the Ask teammates experiment. Questions are
+        shortened from the code.
       </Footnote>
     </Shell>
   );
