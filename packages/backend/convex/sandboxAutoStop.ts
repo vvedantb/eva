@@ -9,6 +9,7 @@ import { authMutation, authQuery } from "./functions";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
+import { loadActiveSandboxRows } from "./_sandbox_runtime/daemonEntitySnapshot";
 
 const DAY_MS = 86_400_000;
 
@@ -151,8 +152,7 @@ export const recordRun = internalMutation({
 /**
  * Internal: collects the ids of every sandbox currently in the `active` state
  * across the three user-facing sandbox surfaces. Shared by the daily sweep and
- * the idle sweep (`sandboxIdlePause.ts`). A full scan is fine here — these
- * tables are small and the sweeps run a handful of times an hour at most.
+ * the idle sweep (`sandboxIdlePause.ts`).
  */
 export const listActiveSandboxes = internalQuery({
   args: {},
@@ -162,19 +162,11 @@ export const listActiveSandboxes = internalQuery({
     sessionIds: v.array(v.id("sessions")),
   }),
   handler: async (ctx) => {
-    const tasks = await ctx.db.query("agentTasks").collect();
-    const projects = await ctx.db.query("projects").collect();
-    const sessions = await ctx.db.query("sessions").collect();
+    const { sessions, tasks, projects } = await loadActiveSandboxRows(ctx.db);
     return {
-      taskIds: tasks
-        .filter((t) => t.reviewTaskSandboxStatus === "active" && t.sandboxId)
-        .map((t) => t._id),
-      projectIds: projects
-        .filter((p) => p.reviewProjectSandboxStatus === "active" && p.sandboxId)
-        .map((p) => p._id),
-      sessionIds: sessions
-        .filter((s) => s.status === "active" && s.sandboxId)
-        .map((s) => s._id),
+      taskIds: tasks.filter((t) => t.sandboxId).map((t) => t._id),
+      projectIds: projects.filter((p) => p.sandboxId).map((p) => p._id),
+      sessionIds: sessions.filter((s) => s.sandboxId).map((s) => s._id),
     };
   },
 });

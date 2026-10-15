@@ -12,21 +12,26 @@ export const DAEMON_CLAIM_POLL_TIMING = {
   idleExitMs: 45 * 60 * 1000,
   fencePollIntervalMs: 5000,
   fastPollIntervalMs: 50,
+  // Mid-turn the claim only drains cancel/stop-task flags (no turn can be
+  // handed over), so 250ms keeps Stop instant while cutting the busiest
+  // phase's claim reads ~5x versus the 50ms handoff cadence.
+  busyPollIntervalMs: 250,
   idlePollIntervalMs: 1000,
   fastPollWindowMs: 30_000,
 } as const;
 
-/** Fast while a turn is busy or just finished; idle backoff otherwise. */
+/** Busy cadence mid-turn, fast just after a turn, idle backoff otherwise. */
 export function selectClaimPollIntervalMs(params: {
   busy: boolean;
   lastIdleActivityAtMs: number;
   now?: number;
 }): number {
+  if (params.busy) return DAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;
   const now = params.now ?? Date.now();
   const recentlyActive =
     now - params.lastIdleActivityAtMs <
     DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
-  return params.busy || recentlyActive
+  return recentlyActive
     ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs
     : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
 }

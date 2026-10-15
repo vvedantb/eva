@@ -35,15 +35,15 @@ test("callbackBundleWentStale is false when the fingerprint env is empty", () =>
   expect(callbackBundleWentStale("")).toBe(false);
 });
 
-test("selectClaimPollIntervalMs is fast while busy or recently active", () => {
+test("selectClaimPollIntervalMs is busy mid-turn, fast after a turn, idle otherwise", () => {
   const now = 100_000;
   expect(
     selectClaimPollIntervalMs({
       busy: true,
-      lastIdleActivityAtMs: 0,
+      lastIdleActivityAtMs: now - 1_000,
       now,
     }),
-  ).toBe(DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs);
+  ).toBe(DAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs);
   expect(
     selectClaimPollIntervalMs({
       busy: false,

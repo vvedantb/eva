@@ -131,9 +131,9 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 // coming, and those silent executions flood `convex logs`. Once no turn is in
 // flight and nothing has happened for the fast window, `selectClaimPollIntervalMs`
 // polls at the idle interval instead — worst case adds ~1s before an idle daemon
-// claims a fresh send, invisible next to model time-to-first-token. Any in-flight
-// turn keeps the 50ms cadence so cancel/stop-task drains (which ride the same
-// mutation) stay prompt even through long-silent tool runs.
+// claims a fresh send, invisible next to model time-to-first-token. An in-flight
+// turn polls at the busy interval (250ms) so cancel/stop-task drains (which ride
+// the same mutation) stay prompt even through long-silent tool runs.
 
 // Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
 // emitting a result would never send a completion event, so the workflow's
