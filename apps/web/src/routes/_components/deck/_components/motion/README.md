@@ -74,7 +74,7 @@ Never use a bouncy spring on a business slide. `bounce` above 0.2 reads as a toy
 | `MaskedText`         | Words (or `by="line"` lines) rise from behind clipping masks. The `Title` move, for statements and body lines.                   |
 | `SplitReveal`        | Per-character rise + fade + slight `rotateX` for one hero word of 20 characters or fewer. `accent` for gradient.                 |
 | `DrawPath`           | An SVG path draws itself. `dot` sends a glowing dot along it (CSS `offset-path`, no filter).                                     |
-| `Sheen`              | One band of light passes across whatever it wraps.                                                                               |
+| `Sheen`              | One band of light across what it wraps. Opt-in with `hero`: only the headline number of a deck, two per deck at most.            |
 | `Spotlight`          | A soft glow (`glow`, behind content) or a darkening with a hole (`dim`, above content) that glides to a new target on each step. |
 | `GridBackdrop`       | A faint perspective grid (`grid`) or dot field (`dots`) that drifts slowly. For data slides.                                     |
 | `Connector`          | A line between two points. It draws in, then carries a flowing brand dash.                                                       |

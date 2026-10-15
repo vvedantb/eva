@@ -98,7 +98,7 @@ export function AnnualAhead() {
       </div>
 
       <div className="mt-12 flex items-baseline gap-5">
-        <Sheen step={1} delay={1.1} className="rounded-lg">
+        <Sheen hero step={1} delay={1.1} className="rounded-lg">
           <CountRoll
             value={176}
             step={1}

@@ -20,12 +20,7 @@ interface HostRecord {
   hostKey: string;
 }
 
-export type LiveShareState =
-  | "none"
-  | "loading"
-  | "live"
-  | "ended"
-  | "notfound";
+export type LiveShareState = "none" | "loading" | "live" | "ended" | "notfound";
 
 export interface LiveShare {
   sessionCode: string | undefined;

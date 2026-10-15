@@ -103,7 +103,7 @@ function QueueBar({ focused }: { focused: boolean }) {
           className="pointer-events-none absolute inset-y-0"
           style={{ left: `${REVIEW_LEFT}%`, width: `${REVIEW_WIDTH}%` }}
         >
-          <Sheen step={1} delay={0.2} className="size-full">
+          <Sheen hero step={1} delay={0.2} className="size-full">
             {/* The only segment worth naming, named where it sits. */}
             <m.div
               className="flex size-full items-center justify-center text-sm font-medium text-black/70 tabular-nums"

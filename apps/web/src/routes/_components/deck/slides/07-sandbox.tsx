@@ -85,6 +85,7 @@ export function Slide07Sandbox() {
                 <IconBolt size={18} color={BRAND.blue} />
                 {/* The finish: one band of light across the winning time. */}
                 <Sheen
+                  hero
                   step={1}
                   delay={0.7}
                   className="-mx-2 rounded-[8px] px-2"

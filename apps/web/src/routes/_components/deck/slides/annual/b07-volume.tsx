@@ -54,7 +54,7 @@ export function AnnualVolume() {
 
         <div className="text-right">
           <Reveal step={2} distance={24}>
-            <Sheen delay={0.9} className="-mx-2 px-2">
+            <Sheen hero delay={0.9} className="-mx-2 px-2">
               <div className="text-7xl leading-none font-semibold tabular-nums">
                 <Accent>
                   <CountRoll value={4732} step={2} delay={0.1} duration={1.4} />

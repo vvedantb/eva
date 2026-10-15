@@ -12,6 +12,12 @@ export interface SheenProps {
   duration?: number;
   /** Put the rounding here so the band is clipped to the same shape as the child. */
   className?: string;
+  /**
+   * Plays the band. Off by default: a sheen on every card read as noise, so
+   * only a deck's one or two headline numbers opt in. Without it the wrapper
+   * just keeps the child's clip and rounding.
+   */
+  hero?: boolean;
 }
 
 const BAND = {
@@ -22,10 +28,10 @@ const BAND = {
 
 /**
  * Passes one band of light across whatever it wraps — the "this one" beat for
- * a key card or number. The band is a transformed layer clipped to the wrapper,
+ * a deck's headline number. Opt in with `hero`; everywhere else it is inert. The band is a transformed layer clipped to the wrapper,
  * so it costs one composited move and never repaints the child.
  *
- * @example <Sheen step={2} className="rounded-2xl"><Card>…</Card></Sheen>
+ * @example <Sheen hero step={2} className="rounded-2xl"><Card>…</Card></Sheen>
  */
 export function Sheen({
   children,
@@ -33,6 +39,7 @@ export function Sheen({
   delay = 0,
   duration = 1.1,
   className,
+  hero = false,
 }: SheenProps) {
   const { on, delay: start } = useMotionCue(step, delay);
   const band = BAND[useDeckTheme()];
@@ -40,18 +47,20 @@ export function Sheen({
   return (
     <div className={cn("relative isolate overflow-hidden", className)}>
       {children}
-      <m.span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-2/3"
-        // The skew leans the band like light off glass; the gradient runs flat
-        // so its left and right edges are fully transparent.
-        style={{ background: band, skewX: -14 }}
-        initial={{ x: "-100%" }}
-        animate={{ x: on ? "160%" : "-100%" }}
-        transition={
-          on ? { duration, ease: EASE.inOut, delay: start } : { duration: 0 }
-        }
-      />
+      {hero ? (
+        <m.span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-2/3"
+          // The skew leans the band like light off glass; the gradient runs flat
+          // so its left and right edges are fully transparent.
+          style={{ background: band, skewX: -14 }}
+          initial={{ x: "-100%" }}
+          animate={{ x: on ? "160%" : "-100%" }}
+          transition={
+            on ? { duration, ease: EASE.inOut, delay: start } : { duration: 0 }
+          }
+        />
+      ) : null}
     </div>
   );
 }
