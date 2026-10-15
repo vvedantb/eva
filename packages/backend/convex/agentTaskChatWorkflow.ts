@@ -39,6 +39,7 @@ import {
 } from "./workflowWatchdog";
 import { buildAgentTaskChatPrompt } from "./_agentTasks/chatPrompt";
 import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
+import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
@@ -157,6 +158,7 @@ async function buildTaskChatTurnPrompt(
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
+      askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
     },
   });
   if (prefixBlock) {

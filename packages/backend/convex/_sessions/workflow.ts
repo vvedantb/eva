@@ -29,6 +29,7 @@ import {
   scheduleQueueDrainAfterBackgroundAgents,
 } from "../_queues/helpers";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt } from "./prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
@@ -235,6 +236,7 @@ export async function buildSessionPrompt(
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
+      askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
     },
   );
   prompt = `${prompt}${parallelNote}`;

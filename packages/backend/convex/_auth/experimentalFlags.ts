@@ -29,5 +29,6 @@ export function resolveExperimentalFlags(
     disablePageMotion: flags?.disablePageMotion ?? false,
     viewVercelDeployment: flags?.viewVercelDeployment ?? false,
     disableAutoArchive: flags?.disableAutoArchive ?? false,
+    askTeammates: flags?.askTeammates ?? false,
   };
 }

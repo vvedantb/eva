@@ -275,6 +275,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("disablePageMotion"),
   v.literal("viewVercelDeployment"),
   v.literal("disableAutoArchive"),
+  v.literal("askTeammates"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -290,6 +291,7 @@ export const experimentalFlagsFields = {
   disablePageMotion: v.optional(v.boolean()),
   viewVercelDeployment: v.optional(v.boolean()),
   disableAutoArchive: v.optional(v.boolean()),
+  askTeammates: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -307,6 +309,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   disablePageMotion: v.boolean(),
   viewVercelDeployment: v.boolean(),
   disableAutoArchive: v.boolean(),
+  askTeammates: v.boolean(),
 });
 
 /**

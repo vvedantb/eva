@@ -8,7 +8,8 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { buildTools } from "./tools";
+import { ASK_TEAMMATE_TOOL_NAMES, buildTools } from "./tools";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
@@ -2383,7 +2384,13 @@ export const handleMcpRequest = internalAction({
         entityKind,
         chatId,
       };
-      const tools = buildTools(credentials, ctx);
+      const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+        clerkId: clerkUserId,
+      });
+      const askTeammates = resolveExperimentalFlags(user).askTeammates;
+      const tools = buildTools(credentials, ctx).filter(
+        (tool) => askTeammates || !ASK_TEAMMATE_TOOL_NAMES.has(tool.name),
+      );
       let supabase: EvaTool[] = [];
       try {
         supabase = await supabaseTools(credentials, ctx);

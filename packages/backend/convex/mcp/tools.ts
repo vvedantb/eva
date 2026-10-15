@@ -37,6 +37,12 @@ import {
   type RepoInfo,
 } from "./toolShared";
 
+/** Hidden unless the caller opts in to Experimental → Ask teammates. */
+export const ASK_TEAMMATE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "list_work_profiles",
+  "ask_teammate",
+]);
+
 interface RepoCredentials {
   convexUrl: string;
   deployKey: string;
