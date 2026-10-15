@@ -31,6 +31,7 @@ import { FridayArtifacts } from "./friday/b15-artifacts";
 import { FridayClose } from "./friday/b16-close";
 import { FridayJev } from "./friday/b17-jev";
 import { FridayLimits } from "./friday/b18-limits";
+import { FridayPipeline } from "./friday/b19-pipeline";
 
 /**
  * Friday session deck order — the last three months, for a non-technical
@@ -198,6 +199,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     title: "The bottleneck",
     Component: Slide11WhatsNext,
     steps: 2,
+  },
+  {
+    id: "friday-b19-pipeline",
+    title: "Code review to live",
+    Component: FridayPipeline,
+    steps: 3,
   },
   {
     id: "10-code-reviews",

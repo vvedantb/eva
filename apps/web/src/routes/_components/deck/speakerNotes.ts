@@ -73,6 +73,14 @@ Next: If most changes can be undone, the way we work starts to change.`,
 → Step 2: the four pipeline steps. The fix is not to review faster; it is to give CarePulse the pipeline Eva already runs on itself, the same auto-merge and nightly routines shown earlier.
 Detail: cancelled work is shown rather than hidden, because a queue that quietly drops items is not a queue.
 Figures: 141 quick tasks: 29 done, 43 waiting in code review, 14 in business check, 25 not started, 30 cancelled. CarePulse quick tasks created in Eva, 1 June to 10 September 2026, by status on 11 September 2026.
+Next: Eva already has the answer to that queue; here is how it works, and the goal for CarePulse.`,
+
+  "friday-b19-pipeline": `On Eva, moving a task to code review is the last thing a person does; the goal is the same for CarePulse.
+→ Step 1: Eva's route runs. The task moves to code review, the Grok bot is notified, it applies any database migrations and backend changes, deploys, then merges the pull request. Nobody waits on it.
+→ Step 2: CarePulse today. The task reaches code review and stops; the 43 from the last slide are sitting at this point.
+→ Step 3: the goal. The same route on CarePulse, so the moment a task moves to code review it is on the CarePulse repository a few minutes later.
+Detail: you saw the short version of this on the auto-merge slide; this is the full route. The trigger is a GitHub workflow that sends the Grok bot a message when a pull request leaves draft or gets a new push. The order matters: backend and migrations go first, so the merged code never runs against a database that is not ready. Be clear that the CarePulse route is a goal, not a date; it needs the checks and the human sign-off for risky changes from the next slide first.
+Figures: Eva auto-merge landed 3 September 2026. 43 CarePulse quick tasks in code review on 11 September 2026. "A few minutes" is the target, not a measured time.
 Next: The first step on that pipeline is letting the model do the first read.`,
 
   "12-future": `Three shifts to expect, each already true inside Eva rather than predicted.
