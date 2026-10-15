@@ -202,6 +202,19 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={10} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Ask teammates"
+            description="Let the agent route design and product questions to teammates through Manager Ave. Also shows your work profile and the waiting-on-teammates banner above the composer."
+            action={
+              <Switch
+                checked={flags.askTeammates}
+                onCheckedChange={(checked) => toggle("askTeammates", checked)}
+                aria-label="Ask teammates"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={11} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Simple view"
             description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
             action={

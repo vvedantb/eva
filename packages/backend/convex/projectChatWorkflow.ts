@@ -39,6 +39,7 @@ import {
   buildProjectBranchName,
   getProjectGeneratedSpec,
 } from "./_projects/helpers";
+import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
@@ -151,6 +152,7 @@ async function buildProjectChatTurnPrompt(
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
+      askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
     },
   });
   if (prefixBlock) {

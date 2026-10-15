@@ -16,6 +16,7 @@ import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { RolePresetPicker } from "./RolePresetPicker";
 import { WorkProfileSection } from "./WorkProfileSection";
+import { useAskTeammates } from "@/lib/hooks/useAskTeammates";
 import {
   catchMutationError,
   withMutationToast,
@@ -23,6 +24,7 @@ import {
 
 export function PersonalisationClient() {
   const personalisation = useQuery(api.auth.getPersonalisation);
+  const askTeammates = useAskTeammates();
   const setCustomInstructions = useMutation(
     api.auth.setCustomInstructions,
   ).withOptimisticUpdate((localStore, args) => {
@@ -136,7 +138,7 @@ export function PersonalisationClient() {
         </div>
       </SettingsSection>
 
-      <WorkProfileSection />
+      {askTeammates && <WorkProfileSection />}
 
       <SettingsSection
         title="Custom instructions"
