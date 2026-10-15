@@ -6,6 +6,7 @@ import { z } from "zod";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
+import { classifyGitHubFailure } from "./githubErrors";
 import { extractPrNumber } from "./helpers";
 import {
   decodeGitHubContent,
@@ -305,8 +306,6 @@ type CompareDiffResult = {
   unavailable: boolean;
 };
 
-const requestErrorSchema = z.object({ status: z.number() });
-
 /**
  * Uncached base...head compare fetch — wrapped by ActionCache. Auth is enforced
  * by the public `getCompareDiff` wrapper before `fetch`.
@@ -335,10 +334,9 @@ export const fetchCompareDiff = internalAction({
       });
       data = res.data;
     } catch (error) {
-      const parsed = requestErrorSchema.safeParse(error);
       // A sha GitHub has not received yet is not a failure to surface: the turn's
       // push is still pending (or failed — PublishRecoveryBanner covers that).
-      if (parsed.success && parsed.data.status === 404) {
+      if (classifyGitHubFailure(error)._tag === "GitHubNotFound") {
         return { diff: "", truncated: false, unavailable: true };
       }
       throw error;
@@ -421,6 +419,26 @@ const fileContentsSchema = z.object({
 });
 
 /**
+ * What a refused contents read means. GitHub reports both "this blob is over the
+ * contents API's own 1MB ceiling" and "you are throttled" as 403, and the two
+ * need opposite handling: only the first is a permanent property of the file.
+ */
+export function classifyContentFetchFailure(
+  error: unknown,
+): "not-found" | "too-large" | "rethrow" {
+  switch (classifyGitHubFailure(error)._tag) {
+    case "GitHubNotFound":
+      return "not-found";
+    case "GitHubForbidden":
+      return "too-large";
+    default:
+      // Throttling included: this result is written to the ActionCache, so
+      // answering "too-large" would poison it with a wrong permanent answer.
+      return "rethrow";
+  }
+}
+
+/**
  * Reads one file at one commit. A missing file is not an error: the same path is
  * absent at the base commit for added files and at the head commit for deleted
  * ones, so 404 maps to `null` contents.
@@ -442,15 +460,14 @@ async function readFileAtRef(
     });
     data = res.data;
   } catch (error) {
-    const parsed = requestErrorSchema.safeParse(error);
-    // 403 is how the contents API reports a blob over its own 1MB ceiling.
-    if (parsed.success && parsed.data.status === 404) {
-      return { contents: null, skipped: null };
+    switch (classifyContentFetchFailure(error)) {
+      case "not-found":
+        return { contents: null, skipped: null };
+      case "too-large":
+        return { contents: null, skipped: "too-large" };
+      case "rethrow":
+        throw error;
     }
-    if (parsed.success && parsed.data.status === 403) {
-      return { contents: null, skipped: "too-large" };
-    }
-    throw error;
   }
 
   const file = fileContentsSchema.safeParse(data);

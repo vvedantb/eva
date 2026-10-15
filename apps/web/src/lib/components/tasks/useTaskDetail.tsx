@@ -7,7 +7,10 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { useState } from "react";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
+import {
+  convexErrorPresentation,
+  type ConvexErrorPresentation,
+} from "@/lib/utils/convexErrorMessage";
 import { taskPrUrl } from "@/lib/githubPr";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -130,7 +133,10 @@ export function useTaskDetail(
     useState(false);
   const [internalActiveTab, setInternalActiveTab] =
     useState<TaskDetailTab>("activity");
-  const [executionError, setExecutionError] = useState<string | null>(null);
+  // Carries its own tone: "the branch has nothing to PR" is an outcome, not a
+  // failure, and must not render in destructive red.
+  const [executionError, setExecutionError] =
+    useState<ConvexErrorPresentation | null>(null);
 
   const activeTab: TaskDetailTab =
     routing?.mode === "quick-detail"
@@ -163,7 +169,7 @@ export function useTaskDetail(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to start execution";
-      setExecutionError(message);
+      setExecutionError({ message, tone: "error" });
     }
     setIsStarting(false);
   };
@@ -175,7 +181,7 @@ export function useTaskDetail(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to start execution";
-      setExecutionError(message);
+      setExecutionError({ message, tone: "error" });
     }
     setIsStarting(false);
   };
@@ -268,7 +274,7 @@ export function useTaskDetail(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to run dev server";
-      setExecutionError(message);
+      setExecutionError({ message, tone: "error" });
     }
     setIsRunningDevServer(false);
   };
@@ -282,7 +288,7 @@ export function useTaskDetail(
         err instanceof Error
           ? err.message
           : "Failed to run background commands";
-      setExecutionError(message);
+      setExecutionError({ message, tone: "error" });
     }
     setIsRunningBackgroundCommands(false);
   };
@@ -300,7 +306,7 @@ export function useTaskDetail(
     try {
       await createTaskPrAction({ taskId });
     } catch (err) {
-      setExecutionError(convexErrorMessage(err, "Failed to create PR"));
+      setExecutionError(convexErrorPresentation(err, "Failed to create PR"));
     }
     setIsCreatingPr(false);
   };

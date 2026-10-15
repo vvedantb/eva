@@ -1,11 +1,15 @@
 "use node";
 
 import { v } from "convex/values";
+import { Effect } from "effect";
 import { action } from "./_generated/server";
 import { resolveSandboxCredentials } from "./envVarResolver";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 import { unwrapVercelSandbox } from "./_sandbox/vercelProvider";
 import { ownerArg, resolveOwner } from "./_pty/owners";
+import { requireRunningSandbox } from "./_pty/ptyErrors";
+import { sandboxOwnerKey } from "./_sandbox/owner";
+import { runActionEffect } from "./_effect/action";
 import { getActionRepoWithAccess } from "./functions";
 import { internal } from "./_generated/api";
 import {
@@ -41,49 +45,60 @@ export const connectPty = action({
     ptyAuthToken?: string;
     sharedPtySessionName?: string;
     initialOutput?: string;
-  }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+  }> =>
+    runActionEffect(
+      // Auth, owner resolution and access stay defects: a failure there is an
+      // outage or a bug, not an answer the user can act on.
+      Effect.promise(async () => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
 
-    const resolved = await resolveOwner(ctx, args.owner);
-    await getActionRepoWithAccess(ctx, resolved.repoId);
-    // Never open a terminal against a stopping/closed sandbox: the setup exec
-    // (ensureVercelSharedTerminal) would lazily resume a stopped Vercel VM,
-    // resurrecting a sandbox the user stopped and defeating a manual stop. A
-    // reconnecting terminal tab is what kept an idle sandbox running with no
-    // active session.
-    if (resolved.isStoppingOrClosed) {
-      throw new Error("Sandbox is not running. Start the sandbox first.");
-    }
-    // Opening a terminal is a human interaction for the idle-pause sweep.
-    await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-      sandboxId: resolved.sandboxId,
-      source: "terminal",
-      clerkUserId: identity.subject,
-    });
-    await resolveSandboxCredentials(ctx, resolved.repoId);
+        const resolved = await resolveOwner(ctx, args.owner);
+        await getActionRepoWithAccess(ctx, resolved.repoId);
+        return { ...resolved, clerkUserId: identity.subject };
+      }).pipe(
+        // Never open a terminal against a stopping/closed sandbox: the setup
+        // exec (ensureVercelSharedTerminal) would lazily resume a stopped
+        // Vercel VM, resurrecting a sandbox the user stopped and defeating a
+        // manual stop. A reconnecting terminal tab is what kept an idle sandbox
+        // running with no active session.
+        Effect.flatMap(requireRunningSandbox),
+        Effect.flatMap((resolved) =>
+          Effect.promise(async () => {
+            // Opening a terminal is a human interaction for the idle-pause sweep.
+            await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+              sandboxId: resolved.sandboxId,
+              source: "terminal",
+              clerkUserId: resolved.clerkUserId,
+            });
+            await resolveSandboxCredentials(ctx, resolved.repoId);
 
-    const handle = await getSandboxHandle(
-      ctx,
-      resolved.repoId,
-      resolved.sandboxId,
-    );
-    const shared = await ensureVercelSharedTerminal(handle, args.ptyInstanceId);
-    const vercelSandbox = unwrapVercelSandbox(handle);
-    const { wsUrl, ptySessionId, authToken } = await connectVercelInteractive(
-      vercelSandbox,
-      shared.sessionName,
-    );
-    return {
-      wsUrl,
-      ptySessionId,
-      isNewPty: shared.isNewPty,
-      ptyProtocol: "vercel",
-      initialOutput: shared.initialOutput,
-      ptyAuthToken: authToken,
-      sharedPtySessionName: shared.sessionName,
-    };
-  },
+            const handle = await getSandboxHandle(
+              ctx,
+              resolved.repoId,
+              resolved.sandboxId,
+            );
+            const shared = await ensureVercelSharedTerminal(
+              handle,
+              args.ptyInstanceId,
+            );
+            const vercelSandbox = unwrapVercelSandbox(handle);
+            const { wsUrl, ptySessionId, authToken } =
+              await connectVercelInteractive(vercelSandbox, shared.sessionName);
+            return {
+              wsUrl,
+              ptySessionId,
+              isNewPty: shared.isNewPty,
+              ptyProtocol: "vercel" as const,
+              initialOutput: shared.initialOutput,
+              ptyAuthToken: authToken,
+              sharedPtySessionName: shared.sessionName,
+            };
+          }),
+        ),
+      ),
+      `pty.connectPty owner=${sandboxOwnerKey(args.owner)}`,
+    ),
 });
 
 /**

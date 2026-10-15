@@ -1,7 +1,10 @@
+import { Option, Schema } from "effect";
+import { NonEmptyText, Text, lenient } from "../parse/schemaHelpers.js";
 import { cursorSdkToolToStep } from "../parse/toolSteps.js";
 import {
   buildStepOutput,
   probeToolCompleteResult,
+  readObject,
 } from "../parse/toolResultCapture.js";
 import {
   syncCursorStateToPersist,
@@ -17,6 +20,116 @@ import type {
 } from "../types.js";
 import { log } from "../utils.js";
 import type { ProviderAdapter } from "./types.js";
+
+/** A key that is present and carries a value, as opposed to being absent. */
+const PresentValue = Schema.Unknown.pipe(
+  Schema.filter((value) => value !== undefined),
+);
+
+/** The `type` every Cursor stream event is dispatched on. */
+const CursorEnvelope = Schema.Struct({
+  type: Schema.optional(lenient(Schema.String)),
+});
+
+/** A tool result enveloped as `{status:"success", value}`. */
+const SuccessEnvelope = Schema.Struct({
+  status: Schema.Literal("success"),
+  value: PresentValue,
+});
+
+/** A tool result enveloped as `{status:"error", error}`. */
+const ErrorEnvelope = Schema.Struct({
+  status: Schema.Literal("error"),
+  error: PresentValue,
+});
+
+/**
+ * A failed tool's `{message}` payload. The trim is harmless: the message only
+ * reaches `buildStepOutput`, which trims what it caps.
+ */
+const ErrorMessagePayload = Schema.Struct({ message: Text });
+
+/**
+ * A successful tool's value payload: `diffString` for edits, `executionTime`
+ * for shell. Both are lenient so a malformed diff cannot lose the duration.
+ */
+const ValuePayload = Schema.Struct({
+  diffString: Schema.optional(lenient(Text)),
+  executionTime: Schema.optional(lenient(Schema.Finite)),
+});
+
+/**
+ * An assistant message's text blocks. `text` is accepted empty here — the
+ * stream-line hook only asks whether a text block arrived at all, and the
+ * parser drops the empty ones itself. `tool_use` blocks decode to nothing:
+ * tool lifecycle comes from `tool_call` events.
+ */
+const AssistantTextBlock = Schema.Struct({
+  type: Schema.Literal("text"),
+  text: Schema.String,
+});
+
+const AssistantMessage = Schema.Struct({
+  message: Schema.optional(
+    lenient(
+      Schema.Struct({
+        content: Schema.optional(
+          lenient(Schema.Array(lenient(AssistantTextBlock))),
+        ),
+      }),
+    ),
+  ),
+});
+
+/** A `thinking` event, whose text reaches the feed unmodified. */
+const ThinkingEvent = Schema.Struct({ text: NonEmptyText });
+
+/**
+ * A `tool_call` event's identity fields. `args` stays a raw JsonObject: it is
+ * freeform tool input, read key by key inside `cursorSdkToolToStep`.
+ */
+const ToolCall = Schema.Struct({
+  call_id: Schema.optional(lenient(Text)),
+  status: Schema.optional(lenient(Schema.String)),
+  name: Schema.optional(lenient(Schema.String)),
+});
+
+/** A `system` event's agent id, as persisted by the session store. */
+const SystemAgentId = Schema.Struct({ agent_id: Text });
+
+const decodeEnvelope = Schema.decodeUnknownOption(CursorEnvelope);
+const decodeSuccessEnvelope = Schema.decodeUnknownOption(SuccessEnvelope);
+const decodeErrorEnvelope = Schema.decodeUnknownOption(ErrorEnvelope);
+const decodeErrorMessagePayload =
+  Schema.decodeUnknownOption(ErrorMessagePayload);
+const decodeValuePayload = Schema.decodeUnknownOption(ValuePayload);
+const decodeAssistantMessage = Schema.decodeUnknownOption(AssistantMessage);
+const decodeThinkingEvent = Schema.decodeUnknownOption(ThinkingEvent);
+const decodeToolCall = Schema.decodeUnknownOption(ToolCall);
+const decodeSystemAgentId = Schema.decodeUnknownOption(SystemAgentId);
+
+/** Shapes whose every field is optional, so an object payload always decodes. */
+type ValueFields = Schema.Schema.Type<typeof ValuePayload>;
+type AssistantFields = Schema.Schema.Type<typeof AssistantMessage>;
+type ToolCallFields = Schema.Schema.Type<typeof ToolCall>;
+
+/** The event type, or `undefined` when the field is missing or not a string. */
+function readEventType(event: JsonObject): string | undefined {
+  return Option.getOrUndefined(decodeEnvelope(event))?.type;
+}
+
+/** Every text block of an assistant message, in order, empty ones included. */
+function readAssistantTexts(event: JsonObject): string[] {
+  const fields = Option.getOrElse(
+    decodeAssistantMessage(event),
+    (): AssistantFields => ({}),
+  );
+  const texts: string[] = [];
+  for (const block of fields.message?.content ?? []) {
+    if (block !== undefined) texts.push(block.text);
+  }
+  return texts;
+}
 
 /**
  * Unwraps a Cursor SDK tool result. Results arrive enveloped as
@@ -36,10 +149,9 @@ export function probeCursorSdkToolResult(
   let payload: JsonValue = result;
   let envelopeIsError = false;
   if (typeof result === "object" && !Array.isArray(result)) {
-    const envStatus = typeof result.status === "string" ? result.status : "";
-    if (envStatus === "success" && result.value !== undefined) {
+    if (Option.isSome(decodeSuccessEnvelope(result))) {
       payload = result.value;
-    } else if (envStatus === "error" && result.error !== undefined) {
+    } else if (Option.isSome(decodeErrorEnvelope(result))) {
       payload = result.error;
       envelopeIsError = true;
     }
@@ -52,39 +164,26 @@ export function probeCursorSdkToolResult(
     if (!output && !isError) return undefined;
     return { output, isError: isError ? true : undefined };
   }
-  if (
-    isError &&
-    payload &&
-    typeof payload === "object" &&
-    !Array.isArray(payload) &&
-    typeof payload.message === "string" &&
-    payload.message.trim()
-  ) {
-    return {
-      output: buildStepOutput(payload.message),
-      isError: true,
-    };
+  if (isError) {
+    const named = decodeErrorMessagePayload(payload);
+    if (Option.isSome(named)) {
+      return {
+        output: buildStepOutput(named.value.message),
+        isError: true,
+      };
+    }
   }
 
   const probed = probeToolCompleteResult(payload) ?? {};
-  if (
-    payload &&
-    typeof payload === "object" &&
-    !Array.isArray(payload)
-  ) {
-    if (
-      !probed.output &&
-      typeof payload.diffString === "string" &&
-      payload.diffString.trim()
-    ) {
-      probed.output = buildStepOutput(payload.diffString);
-    }
-    if (
-      typeof payload.executionTime === "number" &&
-      Number.isFinite(payload.executionTime)
-    ) {
-      probed.durationMs = payload.executionTime;
-    }
+  const value = Option.getOrElse(
+    decodeValuePayload(payload),
+    (): ValueFields => ({}),
+  );
+  if (!probed.output && value.diffString) {
+    probed.output = buildStepOutput(value.diffString);
+  }
+  if (value.executionTime !== undefined) {
+    probed.durationMs = value.executionTime;
   }
 
   if (isError) probed.isError = true;
@@ -106,16 +205,14 @@ export function probeCursorSdkToolResult(
  * `running` was never seen pushes then completes so no tool goes missing.
  */
 function cursorToolCallEvents(event: JsonObject): CanonicalEvent[] {
-  const callId =
-    typeof event.call_id === "string" && event.call_id.trim()
-      ? event.call_id.trim()
-      : undefined;
-  const status = typeof event.status === "string" ? event.status : "";
-  const name = typeof event.name === "string" ? event.name : "";
-  const args =
-    event.args && typeof event.args === "object" && !Array.isArray(event.args)
-      ? event.args
-      : {};
+  const fields = Option.getOrElse(
+    decodeToolCall(event),
+    (): ToolCallFields => ({}),
+  );
+  const callId = fields.call_id;
+  const status = fields.status ?? "";
+  const name = fields.name ?? "";
+  const args = readObject(event, ["args"]) ?? {};
 
   if (status === "running") {
     if (
@@ -202,7 +299,7 @@ const reportedSilentTypes = new Set<string>();
 export function cursorParseLine(event: JsonObject): CanonicalEvent[] {
   const events = cursorEventToCanonical(event);
   if (events.length === 0) {
-    const type = typeof event.type === "string" ? event.type : "(untyped)";
+    const type = readEventType(event) ?? "(untyped)";
     if (!SILENT_EVENT_TYPES.has(type) && !reportedSilentTypes.has(type)) {
       reportedSilentTypes.add(type);
       log(
@@ -217,7 +314,8 @@ export function cursorParseLine(event: JsonObject): CanonicalEvent[] {
 
 function cursorEventToCanonical(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
-  if (event.type === "system") {
+  const type = readEventType(event);
+  if (type === "system") {
     events.push({
       kind: "update_thinking",
       label: "Cursor agent ready",
@@ -225,50 +323,31 @@ function cursorEventToCanonical(event: JsonObject): CanonicalEvent[] {
     });
     return events;
   }
-  if (event.type === "assistant") {
-    const message =
-      event.message &&
-      typeof event.message === "object" &&
-      !Array.isArray(event.message)
-        ? event.message
-        : null;
-    const contentBlocks =
-      message && Array.isArray(message.content) ? message.content : [];
-    for (const block of contentBlocks) {
-      if (
-        block &&
-        typeof block === "object" &&
-        !Array.isArray(block) &&
-        block.type === "text" &&
-        typeof block.text === "string" &&
-        block.text
-      ) {
-        // The Cursor SDK emits one assistant event per text delta. Treating
-        // each event as a complete block inserts a Markdown paragraph between
-        // token fragments in the shared canonical assembler.
-        events.push({ kind: "stream_text_delta", text: block.text });
-      }
-      // tool_use blocks are ignored — tool lifecycle comes from tool_call events.
+  if (type === "assistant") {
+    for (const text of readAssistantTexts(event)) {
+      // The Cursor SDK emits one assistant event per text delta. Treating
+      // each event as a complete block inserts a Markdown paragraph between
+      // token fragments in the shared canonical assembler.
+      if (text) events.push({ kind: "stream_text_delta", text });
     }
     return events;
   }
-  if (
-    event.type === "thinking" &&
-    typeof event.text === "string" &&
-    event.text
-  ) {
-    events.push({ kind: "update_reasoning", text: event.text });
+  if (type === "thinking") {
+    const thinking = decodeThinkingEvent(event);
+    if (Option.isSome(thinking)) {
+      events.push({ kind: "update_reasoning", text: thinking.value.text });
+    }
     return events;
   }
-  if (event.type === "tool_call") {
+  if (type === "tool_call") {
     return cursorToolCallEvents(event);
   }
-  if (event.type === "result") {
+  if (type === "result") {
     events.push({ kind: "mark_last_complete" });
     return events;
   }
-  if (typeof event.type === "string") {
-    const compactionPhase = cursorCompactionEventPhase(event.type);
+  if (type !== undefined) {
+    const compactionPhase = cursorCompactionEventPhase(type);
     if (compactionPhase === "started") {
       events.push({
         kind: "update_thinking",
@@ -290,51 +369,33 @@ function cursorEventToCanonical(event: JsonObject): CanonicalEvent[] {
 }
 
 function onStreamLine(parsed: JsonObject): StreamLineResult {
+  const type = readEventType(parsed);
   // Belt-and-braces session capture — the runner persists agent.agentId right
   // after create/resume; this keeps the id fresh if the SDK ever rotates it.
-  if (
-    parsed.type === "system" &&
-    typeof parsed.agent_id === "string" &&
-    parsed.agent_id.trim()
-  ) {
-    const agentId = parsed.agent_id.trim();
-    if (agentId !== S.activeCursorSessionId) {
-      S.activeCursorSessionId = agentId;
-      writeCursorSessionState();
-      return { needsHeartbeat: true };
-    }
-    return {};
-  }
-  if (parsed.type === "assistant") {
-    if (S.firstAssistantEventAt === 0) S.firstAssistantEventAt = Date.now();
-    const message =
-      parsed.message &&
-      typeof parsed.message === "object" &&
-      !Array.isArray(parsed.message)
-        ? parsed.message
-        : null;
-    const contentBlocks =
-      message && Array.isArray(message.content) ? message.content : [];
-    for (const block of contentBlocks) {
-      if (
-        block &&
-        typeof block === "object" &&
-        !Array.isArray(block) &&
-        block.type === "text" &&
-        typeof block.text === "string" &&
-        S.firstTextBlockAt === 0
-      ) {
-        S.firstTextBlockAt = Date.now();
-        break;
+  if (type === "system") {
+    const system = decodeSystemAgentId(parsed);
+    if (Option.isSome(system)) {
+      const agentId = system.value.agent_id;
+      if (agentId !== S.activeCursorSessionId) {
+        S.activeCursorSessionId = agentId;
+        writeCursorSessionState();
+        return { needsHeartbeat: true };
       }
     }
     return {};
   }
-  if (parsed.type === "tool_call") {
+  if (type === "assistant") {
+    if (S.firstAssistantEventAt === 0) S.firstAssistantEventAt = Date.now();
+    if (S.firstTextBlockAt === 0 && readAssistantTexts(parsed).length > 0) {
+      S.firstTextBlockAt = Date.now();
+    }
+    return {};
+  }
+  if (type === "tool_call") {
     S.firstTextBlockAt = 0;
     return {};
   }
-  if (parsed.type === "result" && !S.resultEventSeen) {
+  if (type === "result" && !S.resultEventSeen) {
     S.resultEventSeen = true;
     syncCursorStateToPersist();
   }

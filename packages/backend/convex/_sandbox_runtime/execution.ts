@@ -60,6 +60,8 @@ import {
   isSandboxGoneError,
   isSandboxUnresponsiveError,
 } from "./sandboxErrors";
+import { previewProxyFailed, visiblePreviewFailure } from "./previewErrors";
+import { runActionEffect } from "../_effect/action";
 import {
   shouldDeferDaemonRespawn,
   type DaemonTurnSnapshot,
@@ -1052,9 +1054,7 @@ async function buildPreviewUrl(
       // key is configured, silently falling back to the unproxied service
       // port would serve with no auth gate at all. Fail loudly instead.
       if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
-        throw new Error(
-          `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
-        );
+        throw previewProxyFailed(fixedVercelProxyPort, proxyErrorMessage, e);
       }
     }
   }
@@ -1090,24 +1090,28 @@ async function buildPreviewUrl(
 export const getPreviewUrl = action({
   args: previewUrlArgs,
   returns: previewUrlResult,
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-    await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
-    // A Preview/custom-tab open is a human interaction for the idle-pause
-    // sweep. Readiness polls repeat every 3s, but the touch is throttled
-    // server-side so the steady state is read-only.
-    if (args.checkReady || args.navigationSync) {
-      await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
-        sandboxId: args.sandboxId,
-        source: "preview-tab",
-        clerkUserId: identity.subject,
-      });
-    }
-    return await buildPreviewUrl(ctx, args, identity.subject);
-  },
+  handler: async (ctx, args) =>
+    runActionEffect(
+      visiblePreviewFailure(async () => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+          throw new Error("Not authenticated");
+        }
+        await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
+        // A Preview/custom-tab open is a human interaction for the idle-pause
+        // sweep. Readiness polls repeat every 3s, but the touch is throttled
+        // server-side so the steady state is read-only.
+        if (args.checkReady || args.navigationSync) {
+          await ctx.runMutation(internal._sandbox.activity.touchBySandbox, {
+            sandboxId: args.sandboxId,
+            source: "preview-tab",
+            clerkUserId: identity.subject,
+          });
+        }
+        return await buildPreviewUrl(ctx, args, identity.subject);
+      }),
+      `sandbox.getPreviewUrl sandbox=${args.sandboxId} port=${args.port}`,
+    ),
 });
 
 /**

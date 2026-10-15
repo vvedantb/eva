@@ -3,6 +3,13 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { expect, test } from "vitest";
 import { applyCanonicalEvents, parseToCanonical } from "../parse/canonical.js";
+import {
+  extractClaudeEdits,
+  extractFilePaths,
+  probeOpencodeStateResult,
+  probeToolCompleteResult,
+} from "../parse/toolResultCapture.js";
+import { toolCallToStep } from "../parse/toolSteps.js";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import type { JsonObject } from "../types.js";
 import { tryParseJson } from "../utils.js";
@@ -110,4 +117,41 @@ test("opencode captures output, exit, error, and durationMs", () => {
   const err = S.accumulatedSteps.find((s) => s.toolUseId === "part_oc2");
   expect(err?.isError).toBe(true);
   expect(err?.output?.text).toContain("exit status 1");
+});
+
+test("a wrong-typed field never costs a sibling field", () => {
+  // Provider streams are unstable, so every field is read on its own: a bad
+  // `old_string` still leaves the `oldText` alias usable, and a bad `exit`
+  // still lets the next alias supply the code.
+  expect(extractClaudeEdits({ old_string: 1, new_string: "b" })).toBe(
+    undefined,
+  );
+  expect(
+    extractClaudeEdits({ edits: [{ old_string: 1, oldText: "a" }] }),
+  ).toEqual([{ oldText: "a", newText: "" }]);
+  expect(extractFilePaths({ files: ["a.ts", 2, "b.ts"] })).toEqual([
+    "a.ts",
+    "b.ts",
+  ]);
+  expect(
+    probeOpencodeStateResult({
+      output: "done",
+      metadata: { exit: "nope", exit_code: 2 },
+    })?.output?.exitCode,
+  ).toBe(2);
+  expect(
+    probeToolCompleteResult({ stdout: "out", result: { exit_code: 3 } })?.output
+      ?.exitCode,
+  ).toBe(3);
+});
+
+test("malformed payloads fall back instead of throwing", () => {
+  expect(probeToolCompleteResult(7)).toBe(undefined);
+  expect(probeToolCompleteResult([1, 2])).toBe(undefined);
+  expect(probeOpencodeStateResult({ time: { start: 5, end: 1 } })).toBe(
+    undefined,
+  );
+  // Empty strings stay empty details rather than dropping out of the payload.
+  expect(toolCallToStep("Glob", { pattern: "" }).detail).toBe("");
+  expect(toolCallToStep("Glob", { pattern: 3 }).detail).toBe(undefined);
 });

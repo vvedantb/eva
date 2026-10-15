@@ -1,11 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { isRetryableGitNetworkError } from "../convex/_sandbox_runtime/git";
+import { classifyGitFailure } from "../convex/_git/gitErrors";
 
 /**
  * Session 300 (7 Oct 2026): GitHub answered a push with a 500 and the whole
- * publish failed on the first try (fix #918). The push and fetch retry loops
- * only retry what this classifier matches, so it must catch GitHub's real 5xx
- * shapes — and must NOT widen to refusals a retry can never fix.
+ * publish failed on the first try (fix #918). The fetch retry loop only
+ * retries `GitNetworkError` and the push loop adds `GitNonFastForwardError`,
+ * so classifyGitFailure must tag GitHub's real 5xx shapes as network — and
+ * must NOT widen either tag to refusals a retry can never fix.
  */
 describe("retryable git network errors", () => {
   test.each([
@@ -15,7 +16,7 @@ describe("retryable git network errors", () => {
     ],
     ["an HTTP-status 500", "fatal: unable to access: status code 500"],
   ])("retries %s", (_label, message) => {
-    expect(isRetryableGitNetworkError(message)).toBe(true);
+    expect(classifyGitFailure(new Error(message))._tag).toBe("GitNetworkError");
   });
 
   test.each([
@@ -33,6 +34,8 @@ describe("retryable git network errors", () => {
     ],
     ["missing remote ref", "fatal: couldn't find remote ref eva/x"],
   ])("does not retry %s", (_label, message) => {
-    expect(isRetryableGitNetworkError(message)).toBe(false);
+    const tag = classifyGitFailure(new Error(message))._tag;
+    expect(tag).not.toBe("GitNetworkError");
+    expect(tag).not.toBe("GitNonFastForwardError");
   });
 });
