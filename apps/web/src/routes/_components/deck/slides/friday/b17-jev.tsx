@@ -5,6 +5,7 @@ import {
   IconFilter,
   IconFlag,
   IconListCheck,
+  IconMoodSmile,
   IconSparkles,
   IconTag,
 } from "@tabler/icons-react";
@@ -45,6 +46,7 @@ const USES: readonly Use[] = [
   { icon: IconAt, label: "Ranks mentions" },
   { icon: IconSparkles, label: "Suggests skills" },
   { icon: IconFlag, label: "Spots scope creep" },
+  { icon: IconMoodSmile, label: "Picks reactions" },
 ];
 
 const W = 1088;
@@ -247,9 +249,9 @@ export function FridayJev() {
       </div>
 
       <Footnote>
-        TypeSafe Jev joined Eva on 17 September 2026; the six uses shipped on 18
-        and 22 September 2026 (Eva changelog). The task and answers shown are an
-        illustration.
+        TypeSafe Jev joined Eva on 17 September 2026; the seven uses shipped
+        between 18 and 26 September 2026 (Eva changelog). The task and answers
+        shown are an illustration.
       </Footnote>
     </Shell>
   );
