@@ -2,7 +2,6 @@ import { IconCheck, IconFileCode } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -133,52 +132,53 @@ export function FridayReviews() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Trust and reach · Reviewing</Kicker>
         <Title size="md">Review it without leaving.</Title>
       </Reveal>
 
-      <Reveal delay={0.1} className="relative mt-10 mx-auto w-[900px]">
-        {/* Behind the search the review recedes a touch, so the palette reads as in front. */}
-        <m.div
-          initial={false}
-          animate={{ scale: searching ? 0.975 : 1 }}
-          transition={
-            searching ? { duration: DUR.slow, ease: EASE.expo } : LEAVE
-          }
-        >
-          <FriWindow
-            label="A bundle of changes · referral portal"
-            className="h-[330px] w-full"
-            bodyClassName="relative flex flex-col gap-2 px-6 py-4"
-            trailing={
-              <span className="flex items-center gap-1.5 rounded-full bg-[#3B7DD8]/20 px-2.5 py-1 text-[11px] text-white/80">
-                <IconCheck size={12} />
-                Ready
-              </span>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <Reveal delay={0.1} className="relative mx-auto w-[900px]">
+          {/* Behind the search the review recedes a touch, so the palette reads as in front. */}
+          <m.div
+            initial={false}
+            animate={{ scale: searching ? 0.975 : 1 }}
+            transition={
+              searching ? { duration: DUR.slow, ease: EASE.expo } : LEAVE
             }
           >
-            {FILES.map((file, index) => (
-              <FileLine key={file.name} file={file} index={index} />
-            ))}
-            <DrawPath
-              d={THREAD}
-              width={60}
-              height={260}
-              step={1}
-              delay={0.35}
-              duration={0.8}
-              strokeWidth={1.5}
-              dot
-              className="pointer-events-none absolute top-0 left-0"
-            />
-            <CommentCard />
-          </FriWindow>
-        </m.div>
+            <FriWindow
+              label="A bundle of changes · referral portal"
+              className="h-[330px] w-full"
+              bodyClassName="relative flex flex-col gap-2 px-6 py-4"
+              trailing={
+                <span className="flex items-center gap-1.5 rounded-full bg-[#3B7DD8]/20 px-2.5 py-1 text-[11px] text-white/80">
+                  <IconCheck size={12} />
+                  Ready
+                </span>
+              }
+            >
+              {FILES.map((file, index) => (
+                <FileLine key={file.name} file={file} index={index} />
+              ))}
+              <DrawPath
+                d={THREAD}
+                width={60}
+                height={260}
+                step={1}
+                delay={0.35}
+                duration={0.8}
+                strokeWidth={1.5}
+                dot
+                className="pointer-events-none absolute top-0 left-0"
+              />
+              <CommentCard />
+            </FriWindow>
+          </m.div>
 
-        <AnimatePresence>
-          {searching ? <MoF3SearchOverlay key="search" /> : null}
-        </AnimatePresence>
-      </Reveal>
+          <AnimatePresence>
+            {searching ? <MoF3SearchOverlay key="search" /> : null}
+          </AnimatePresence>
+        </Reveal>
+      </div>
 
       <Footnote>
         Bundles of changes reviewed and answered inside Eva, 3 August 2026. One

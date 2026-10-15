@@ -9,7 +9,7 @@ const HALO = `radial-gradient(circle, ${BRAND.purple}2e, ${BRAND.purple}14 30%, 
 /**
  * The mark arrives first: it turns into place out of a small scale while a
  * soft halo opens behind it and one ring spreads out as it lands. Then the
- * title rises word by word, and the line under it follows.
+ * title rises word by word.
  */
 function Emblem() {
   return (
@@ -81,12 +81,6 @@ export function AnnualTitle() {
             building <Accent>Eva.</Accent>
           </MaskedText>
         </h1>
-
-        <p className="mt-8 max-w-2xl text-xl leading-relaxed text-white/55">
-          <MaskedText delay={1.25} stagger={0.035} duration={0.9}>
-            From an empty repository to how we build software.
-          </MaskedText>
-        </p>
       </div>
     </Shell>
   );

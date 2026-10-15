@@ -3,7 +3,6 @@ import { FeatureSlide } from "./_parts";
 export function IntroSessions() {
   return (
     <FeatureSlide
-      kicker="Sessions"
       title="Persistent pair-programming"
       bullets={[
         "Agent session that survives page reloads",

@@ -1,7 +1,7 @@
 import { m } from "motion/react";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { Accent, BRAND, Shell, Title } from "../_components/DeckPrimitives";
-import { DUR, DrawPath, EASE, MaskedText } from "../_components/motion";
+import { DUR, DrawPath, EASE } from "../_components/motion";
 
 const RING = 160;
 const RADIUS = 72;
@@ -12,8 +12,7 @@ const LOGO_AT = 1.4;
 
 /**
  * The last word of both decks. No build steps, so the whole slide is one
- * sequence on entry: the statement rises word by word, the line under it
- * follows, then the mark turns into place as a ring draws round it.
+ * sequence on entry: the statement rises word by word, then the mark turns into place as a ring draws round it.
  */
 export function Slide15Closing() {
   return (
@@ -24,14 +23,8 @@ export function Slide15Closing() {
         by <Accent>Eva.</Accent>
       </Title>
 
-      <p className="mt-6 max-w-2xl text-xl leading-relaxed text-white/50">
-        <MaskedText delay={1.1} duration={DUR.slow + 0.2}>
-          Including this deck.
-        </MaskedText>
-      </p>
-
       <div
-        className="relative mt-12 flex items-center justify-center"
+        className="relative mt-14 flex items-center justify-center"
         style={{ width: RING, height: RING }}
       >
         {/* The slow turning halo. No blur: it spins for as long as the slide is up. */}

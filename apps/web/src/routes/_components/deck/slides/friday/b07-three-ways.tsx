@@ -7,7 +7,6 @@ import {
 import { m } from "motion/react";
 import {
   Accent,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -27,7 +26,6 @@ import { MoF1WayScene } from "../_parts/MoF1WayScene";
 interface Way {
   size: string;
   name: string;
-  label: string;
   glyph: Icon;
   width: number;
   height: number;
@@ -38,7 +36,6 @@ const WAYS: readonly Way[] = [
   {
     size: "Small",
     name: "Quick task",
-    label: "One job, start to finish",
     glyph: IconBolt,
     width: 290,
     height: 210,
@@ -46,7 +43,6 @@ const WAYS: readonly Way[] = [
   {
     size: "Medium",
     name: "Session",
-    label: "A running conversation",
     glyph: IconMessageCircle,
     width: 330,
     height: 250,
@@ -54,7 +50,6 @@ const WAYS: readonly Way[] = [
   {
     size: "Large",
     name: "Project",
-    label: "Several jobs, in order",
     glyph: IconListDetails,
     width: 370,
     height: 292,
@@ -122,20 +117,9 @@ function WayCard({ way, index }: { way: Way; index: number }) {
               <div className="flex flex-1 items-center">
                 <MoF1WayScene kind={index} step={index} />
               </div>
-              <div>
-                <div className="text-3xl leading-tight font-semibold text-balance text-white">
-                  <MaskedText step={index} delay={0.25}>
-                    {way.name}
-                  </MaskedText>
-                </div>
-                <MaskedText
-                  step={index}
-                  delay={0.4}
-                  stagger={0.04}
-                  duration={DUR.slow}
-                  className="mt-3 block text-sm text-white/50"
-                >
-                  {way.label}
+              <div className="text-3xl leading-tight font-semibold text-balance text-white">
+                <MaskedText step={index} delay={0.25}>
+                  {way.name}
                 </MaskedText>
               </div>
             </div>
@@ -150,21 +134,22 @@ export function FridayThreeWays() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Three sizes</Kicker>
         <Title size="md">Three sizes of ask.</Title>
       </Reveal>
 
-      <div className="mt-8 flex items-end gap-6">
-        {WAYS.map((way, index) => (
-          <WayCard key={way.name} way={way} index={index} />
-        ))}
-      </div>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <div className="flex items-end gap-6">
+          {WAYS.map((way, index) => (
+            <WayCard key={way.name} way={way} index={index} />
+          ))}
+        </div>
 
-      <p className="mt-10 text-3xl text-pretty text-white/85">
-        <MaskedText step={CLOSING_STEP} delay={0.1}>
-          Pick by the job, <Accent>not by the person.</Accent>
-        </MaskedText>
-      </p>
+        <p className="mt-10 text-3xl text-pretty text-white/85">
+          <MaskedText step={CLOSING_STEP} delay={0.1}>
+            Pick by the job, <Accent>not by the person.</Accent>
+          </MaskedText>
+        </p>
+      </div>
     </Shell>
   );
 }

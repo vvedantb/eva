@@ -4,7 +4,6 @@ import {
   IconChecklist,
   IconFileText,
   IconGitPullRequest,
-  IconMoonStars,
   IconStack2,
   IconTestPipe,
 } from "@tabler/icons-react";
@@ -12,9 +11,7 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Body,
   Footnote,
-  Kicker,
   Shell,
   Title,
   useDeckStep,
@@ -101,78 +98,69 @@ export function FridayAutomations() {
 
   return (
     <Shell className="py-12">
-      <Kicker>
-        <span className="inline-flex items-center gap-2">
-          <IconMoonStars size={15} aria-hidden />
-          On its own · Automations Hub
-        </span>
-      </Kicker>
       <Title size="md">
         Work that <Accent>starts itself</Accent>.
       </Title>
-      <Body className="mt-4 max-w-3xl">
-        <MaskedText delay={0.4} duration={0.8}>
-          Install a routine once, for everyone.
-        </MaskedText>
-      </Body>
 
-      {/* Edge to edge on the 1088px content width: dial, routines, results. */}
-      <div className="relative mt-16 h-[300px] w-full">
-        <div className="absolute top-0 left-0">
-          <MoF2Dial running={running} />
-        </div>
-
-        {ROUTINES.map((routine, index) => (
-          <div
-            key={routine.label}
-            className="absolute"
-            style={{ left: CHIPS_X, top: rowY(index) }}
-          >
-            <Fri2Chip
-              icon={routine.icon}
-              label={routine.label}
-              lit={running}
-              index={index}
-              delay={0.15 + (index * (MOF2_SWEEP - 0.3)) / ROUTINES.length}
-              className="w-[320px]"
-            />
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        {/* Edge to edge on the 1088px content width: dial, routines, results. */}
+        <div className="relative mt-12 h-[300px] w-full">
+          <div className="absolute top-0 left-0">
+            <MoF2Dial running={running} />
           </div>
-        ))}
 
-        <div
-          className="absolute -top-12 flex h-8 items-center text-2xl font-semibold text-white"
-          style={{ left: PRS_X }}
-        >
-          <MaskedText step={2} delay={0.05} duration={0.8}>
-            Opened for review
-          </MaskedText>
-        </div>
+          {ROUTINES.map((routine, index) => (
+            <div
+              key={routine.label}
+              className="absolute"
+              style={{ left: CHIPS_X, top: rowY(index) }}
+            >
+              <Fri2Chip
+                icon={routine.icon}
+                label={routine.label}
+                lit={running}
+                index={index}
+                delay={0.15 + (index * (MOF2_SWEEP - 0.3)) / ROUTINES.length}
+                className="w-[320px]"
+              />
+            </div>
+          ))}
 
-        {ROUTINES.map((routine, index) => (
           <div
-            key={routine.label}
-            className="absolute"
-            style={{
-              left: CHIPS_X + CHIP_W + 6,
-              top: rowY(index) + ROW / 2 - 1,
-            }}
+            className="absolute -top-12 flex h-8 items-center text-2xl font-semibold text-white"
+            style={{ left: PRS_X }}
           >
-            <DrawPath
-              d={`M0 1 L${LINE_W - 12} 1`}
-              width={LINE_W - 12}
-              height={2}
-              step={2}
-              delay={index * HAND_OFF}
-              duration={0.5}
-              strokeWidth={1.5}
-              dot
-            />
+            <MaskedText step={2} delay={0.05} duration={0.8}>
+              Opened for review
+            </MaskedText>
           </div>
-        ))}
 
-        {ROUTINES.map((routine, index) => (
-          <ReviewRow key={routine.label} index={index} />
-        ))}
+          {ROUTINES.map((routine, index) => (
+            <div
+              key={routine.label}
+              className="absolute"
+              style={{
+                left: CHIPS_X + CHIP_W + 6,
+                top: rowY(index) + ROW / 2 - 1,
+              }}
+            >
+              <DrawPath
+                d={`M0 1 L${LINE_W - 12} 1`}
+                width={LINE_W - 12}
+                height={2}
+                step={2}
+                delay={index * HAND_OFF}
+                duration={0.5}
+                strokeWidth={1.5}
+                dot
+              />
+            </div>
+          ))}
+
+          {ROUTINES.map((routine, index) => (
+            <ReviewRow key={routine.label} index={index} />
+          ))}
+        </div>
       </div>
 
       <Footnote>

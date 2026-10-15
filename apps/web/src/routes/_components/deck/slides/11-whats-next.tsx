@@ -1,9 +1,7 @@
 import { m } from "motion/react";
 import {
-  Body,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -128,69 +126,67 @@ export function Slide11WhatsNext() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>What&apos;s next · The queue</Kicker>
         <Title size="md">The bottleneck has moved.</Title>
-        <Body className="mt-4 max-w-3xl text-lg text-pretty">
-          Eva finishes work faster than we can check it in.
-        </Body>
       </Reveal>
 
-      <div
-        className="relative mt-14 grid"
-        style={{ gridTemplateColumns: `${BAR_COLUMN}px 1fr`, gap: GRID_GAP }}
-      >
-        <div>
-          <CountRoll
-            value={TOTAL}
-            delay={0.5}
-            duration={1.6}
-            className="text-7xl leading-none font-semibold"
-          />
+      <div className="my-auto pb-10">
+        <div
+          className="relative grid"
+          style={{ gridTemplateColumns: `${BAR_COLUMN}px 1fr`, gap: GRID_GAP }}
+        >
+          <div>
+            <CountRoll
+              value={TOTAL}
+              delay={0.5}
+              duration={1.6}
+              className="text-7xl leading-none font-semibold"
+            />
+            <m.div
+              className="mt-3 text-base text-white/50"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.75 }}
+            >
+              quick tasks on CarePulse since June
+            </m.div>
+            <QueueBar focused={step >= 1} />
+          </div>
+
+          <Reveal step={1} from="right" delay={0.15} distance={40}>
+            <Card>
+              <CountRoll
+                value={43}
+                step={1}
+                delay={0.35}
+                className="text-6xl leading-none font-semibold"
+              />
+              <div className="mt-4 text-lg leading-snug text-pretty text-white/75">
+                finished bundles waiting for a human
+              </div>
+            </Card>
+          </Reveal>
+
+          {/* The 43 in the bar and the 43 in the card are the same queue. */}
+          {/* Gated so the zero-length round cap never shows as a dot at rest. */}
           <m.div
-            className="mt-3 text-base text-white/50"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.75 }}
+            className="pointer-events-none absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: step >= 1 ? 1 : 0 }}
+            transition={{ duration: 0.01, delay: step >= 1 ? 0.3 : 0 }}
           >
-            quick tasks on CarePulse since June
+            <Connector
+              from={{ x: REVIEW_CENTRE, y: BAR_TOP - 6 }}
+              to={{ x: BAR_COLUMN + GRID_GAP - 10, y: 74 }}
+              bend={-36}
+              step={1}
+              delay={0.3}
+              flowPeriod={1.3}
+            />
           </m.div>
-          <QueueBar focused={step >= 1} />
         </div>
 
-        <Reveal step={1} from="right" delay={0.15} distance={40}>
-          <Card>
-            <CountRoll
-              value={43}
-              step={1}
-              delay={0.35}
-              className="text-6xl leading-none font-semibold"
-            />
-            <div className="mt-4 text-lg leading-snug text-pretty text-white/75">
-              finished bundles waiting for a human
-            </div>
-          </Card>
-        </Reveal>
-
-        {/* The 43 in the bar and the 43 in the card are the same queue. */}
-        {/* Gated so the zero-length round cap never shows as a dot at rest. */}
-        <m.div
-          className="pointer-events-none absolute inset-0"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: step >= 1 ? 1 : 0 }}
-          transition={{ duration: 0.01, delay: step >= 1 ? 0.3 : 0 }}
-        >
-          <Connector
-            from={{ x: REVIEW_CENTRE, y: BAR_TOP - 6 }}
-            to={{ x: BAR_COLUMN + GRID_GAP - 10, y: 74 }}
-            bend={-36}
-            step={1}
-            delay={0.3}
-            flowPeriod={1.3}
-          />
-        </m.div>
+        <MoF3NextSteps shown={step >= 2} />
       </div>
-
-      <MoF3NextSteps shown={step >= 2} />
 
       <Footnote>
         Counts are CarePulse quick tasks created in Eva between 1 June and 10

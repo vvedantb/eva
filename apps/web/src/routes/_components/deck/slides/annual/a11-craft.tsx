@@ -10,7 +10,6 @@ import {
   Accent,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -181,11 +180,10 @@ export function AnnualCraft() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Craft · Measurement</Kicker>
         <Title size="md">Measure it, do not guess.</Title>
       </Reveal>
 
-      <div className="mt-10">
+      <div className="mt-14">
         {RESULTS.map((result, index) => (
           <ResultRow
             key={result.label}
@@ -200,7 +198,7 @@ export function AnnualCraft() {
         step={1}
         delayChildren={0.1}
         staggerChildren={STAGGER.item}
-        className="mt-10 flex gap-4"
+        className="mt-12 flex gap-4"
       >
         {HABITS.map((habit) => (
           <StaggerItem key={habit.label} className="flex-1">
@@ -222,7 +220,7 @@ export function AnnualCraft() {
         ))}
       </Stagger>
 
-      <div className="mt-12 text-center">
+      <div className="mt-14 text-center">
         <MaskedText step={2} className="text-3xl text-white/85">
           Page scores: set up, <Accent>not yet a habit</Accent>.
         </MaskedText>

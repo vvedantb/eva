@@ -1,7 +1,6 @@
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -45,12 +44,9 @@ export function AnnualVolume() {
   const step = useDeckStep();
 
   return (
-    <Shell className="py-14">
+    <Shell className="justify-center py-14">
       <div className="flex items-start justify-between">
         <div>
-          <Reveal from="none">
-            <Kicker>Origin · The shape of the year</Kicker>
-          </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">It did not arrive evenly.</Title>
           </Reveal>
@@ -95,12 +91,6 @@ export function AnnualVolume() {
           />
         </div>
       </Camera>
-
-      <p className="mt-7 text-2xl leading-snug text-pretty text-white/85">
-        <MaskedText step={1} delay={0.35}>
-          March built the surface. July moved the work to the cloud.
-        </MaskedText>
-      </p>
 
       <Footnote>
         Changes shipped per calendar month. September is a part month.

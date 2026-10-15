@@ -3,7 +3,6 @@ import { FeatureSlide } from "./_parts";
 export function IntroQuickTasks() {
   return (
     <FeatureSlide
-      kicker="Quick Tasks"
       title="Fire-and-forget prompts"
       bullets={[
         "Write a prompt, Eva spins up a sandboxed agent",

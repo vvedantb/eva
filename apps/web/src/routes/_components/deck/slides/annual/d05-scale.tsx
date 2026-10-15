@@ -3,7 +3,6 @@ import {
   Accent,
   BRAND,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -65,11 +64,10 @@ export function AnnualScale() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Craft · Scale</Kicker>
         <Title size="md">A product now, not a prototype.</Title>
       </Reveal>
 
-      <div className="relative isolate mt-16 grid grid-cols-5 gap-6 py-2">
+      <div className="relative isolate mt-20 grid grid-cols-5 gap-6 py-2">
         <GridBackdrop
           cell={48}
           period={8}
@@ -114,7 +112,7 @@ export function AnnualScale() {
         duration={0.9}
         strokeWidth={1}
         color="rgba(255,255,255,0.14)"
-        className="mt-12"
+        className="mt-14"
       />
       <div className="mt-8 flex gap-16">
         {SUPPORTING.map((figure) => (
@@ -142,9 +140,9 @@ export function AnnualScale() {
         duration={1.1}
         strokeWidth={1.5}
         dot
-        className="mt-12"
+        className="mt-14"
       />
-      <p className="mt-7 text-center text-3xl text-white/85">
+      <p className="mt-8 text-center text-3xl text-white/85">
         <MaskedText step={2} delay={0.55}>
           Eight months, one codebase, <Accent>one person directing</Accent>.
         </MaskedText>

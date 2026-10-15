@@ -1,7 +1,5 @@
 import {
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -26,23 +24,18 @@ export function FridayPreview() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Preview</Kicker>
         <Title size="md">See it before it is real.</Title>
-        <Body className="mt-5 max-w-3xl">
-          Click through a change before anyone agrees to it.
-        </Body>
       </Reveal>
 
-      <Reveal
-        delay={0.15}
-        className="relative isolate mt-8 flex justify-center"
-      >
-        {/* A soft light gathers behind the heading when the note lands on it. */}
-        <Spotlight shots={[null, null, { x: 330, y: 110, size: 520 }]} />
-        <Camera shots={SHOTS}>
-          <MoF1PreviewFrame />
-        </Camera>
-      </Reveal>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <Reveal delay={0.15} className="relative isolate flex justify-center">
+          {/* A soft light gathers behind the heading when the note lands on it. */}
+          <Spotlight shots={[null, null, { x: 330, y: 110, size: 520 }]} />
+          <Camera shots={SHOTS}>
+            <MoF1PreviewFrame />
+          </Camera>
+        </Reveal>
+      </div>
 
       <Footnote>
         Click-to-comment and phone, tablet and desktop widths, 21 July 2026.

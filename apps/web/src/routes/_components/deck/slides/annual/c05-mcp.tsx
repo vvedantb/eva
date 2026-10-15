@@ -4,7 +4,6 @@ import type { CameraShot } from "../../_components/DeckCamera";
 import {
   BRAND,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -103,7 +102,6 @@ export function AnnualMcp() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>Platform · Control panel</Kicker>
         <Title size="md">Other tools can drive Eva.</Title>
       </Reveal>
 

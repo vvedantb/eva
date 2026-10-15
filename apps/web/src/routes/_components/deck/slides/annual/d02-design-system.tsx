@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -42,11 +41,10 @@ export function AnnualDesignSystem() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Craft · Design system</Kicker>
         <Title size="md">One visual language.</Title>
       </Reveal>
 
-      <div className="mt-9 grid grid-cols-6 gap-4">
+      <div className="mt-14 grid grid-cols-6 gap-4">
         {MOA3_TILES.map((tile, index) => {
           const from = scatter(index);
           const column = index % COLUMNS;
@@ -91,7 +89,7 @@ export function AnnualDesignSystem() {
       <Reveal
         step={1}
         distance={24}
-        className="mt-11 flex justify-center gap-28"
+        className="mt-14 flex justify-center gap-28"
       >
         <div className="text-center">
           <div className={FIGURE}>
@@ -112,7 +110,7 @@ export function AnnualDesignSystem() {
         </div>
       </Reveal>
 
-      <div className="mt-11 text-center">
+      <div className="mt-14 text-center">
         <MaskedText step={2} className="text-3xl text-white/85">
           Every new screen <Accent>starts consistent</Accent>.
         </MaskedText>

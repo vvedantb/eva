@@ -1,13 +1,10 @@
 import {
-  Accent,
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
 } from "../../_components/DeckPrimitives";
-import { CountRoll, MaskedText } from "../../_components/motion";
+import { CountRoll } from "../../_components/motion";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
 
@@ -23,9 +20,6 @@ export function AnnualQ2() {
     <Shell className="py-14">
       <div className="flex items-start justify-between">
         <div>
-          <Reveal from="none">
-            <Kicker>Origin · Chapter two</Kicker>
-          </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">Work together.</Title>
           </Reveal>
@@ -41,13 +35,7 @@ export function AnnualQ2() {
         </Reveal>
       </div>
 
-      <Body className="max-w-3xl text-2xl">
-        <MaskedText delay={0.35} stagger={0.05}>
-          The quietest quarter went on <Accent>consolidation</Accent>.
-        </MaskedText>
-      </Body>
-
-      <AnnABeats beats={BEATS} firstStep={1} className="mt-32" />
+      <AnnABeats beats={BEATS} firstStep={1} className="mt-40" />
 
       <Footnote>
         Changes shipped April to June 2026. Documents 10 June 2026; roadmap and

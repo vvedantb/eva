@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -64,7 +63,6 @@ export function AnnualQuality() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Craft · Quality</Kicker>
         <Title size="md">The bar is enforced, not remembered.</Title>
       </Reveal>
 

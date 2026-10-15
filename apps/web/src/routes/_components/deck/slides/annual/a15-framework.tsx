@@ -1,15 +1,11 @@
 import { IconMinus } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  MO_A4_TICK_GAP,
-  MoA4CapabilityCard,
-} from "../_parts/MoA4CapabilityCard";
+import { MoA4CapabilityCard } from "../_parts/MoA4CapabilityCard";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -54,9 +50,6 @@ const FRAMEWORK_SHOTS: readonly CameraShot[] = [
   {},
 ];
 
-/** When the last tick has landed; the caption follows it. */
-const TICKS_DONE = 0.25 + CAPABILITIES.length * MO_A4_TICK_GAP;
-
 const FIGURE_CLASS = "text-5xl leading-[1.3] font-semibold tracking-tight";
 
 export function AnnualFramework() {
@@ -67,11 +60,10 @@ export function AnnualFramework() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>Evidence · The framework</Kicker>
         <Title size="md">Senior engineer, mapped.</Title>
       </Reveal>
 
-      <Camera shots={FRAMEWORK_SHOTS} className="mt-7">
+      <Camera shots={FRAMEWORK_SHOTS} className="mt-10">
         {/* One band of light follows the ticks across the board. */}
         <Sheen
           step={1}
@@ -92,19 +84,13 @@ export function AnnualFramework() {
         </Sheen>
       </Camera>
 
-      <p className="mt-3 text-sm text-white/45">
-        <MaskedText step={1} delay={TICKS_DONE} duration={DUR.slow}>
-          Every one of these is a slide in this deck.
-        </MaskedText>
-      </p>
-
       {/* Grid, thin evidence and the closing line sit on one 40px rhythm, which
           leaves the closing line clear of the footnote. */}
-      <div className="mt-10">
+      <div className="mt-12">
         <Reveal step={2}>
-          <Kicker className="mb-0 text-xs tracking-[0.18em] text-white/35">
+          <div className="text-xs font-medium tracking-[0.18em] text-white/35 uppercase">
             Thin evidence
-          </Kicker>
+          </div>
         </Reveal>
         <div className="mt-3 flex gap-3">
           {THIN.map((gap, index) => {
@@ -146,7 +132,7 @@ export function AnnualFramework() {
 
       {/* Words and figures rise on transform-only masks: an opacity fade on an
           ancestor would fight the odometer columns mid-roll. */}
-      <p className="mt-10 text-center text-2xl text-white/85">
+      <p className="mt-12 text-center text-2xl text-white/85">
         <MaskedText step={3} stagger={0.05}>
           <span className={FIGURE_CLASS}>
             <Accent>

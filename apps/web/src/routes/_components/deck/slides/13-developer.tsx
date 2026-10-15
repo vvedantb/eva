@@ -12,7 +12,6 @@ import {
   Accent,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -153,13 +152,12 @@ export function Slide13Developer() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>What&apos;s next · Developers</Kicker>
         <Title size="md" className="text-balance">
           From writing code to <Accent>tending the garden</Accent>.
         </Title>
       </Reveal>
 
-      <div className="mt-12">
+      <div className="mt-16">
         <Stagger delayChildren={0.4} className="flex gap-4">
           {ARCHETYPES.map((archetype) => (
             <ArchetypeCard key={archetype.name} archetype={archetype} />
@@ -169,7 +167,7 @@ export function Slide13Developer() {
         <MoF3Gardening from={MIDDLE} width={ROW_WIDTH} />
       </div>
 
-      <div className="mt-14 flex items-center gap-4 text-2xl text-pretty text-white/85">
+      <div className="mt-20 flex items-center gap-4 text-2xl text-pretty text-white/85">
         {/* The seedling grows out of the soil line as the sentence rises. */}
         <m.span
           className="origin-bottom"

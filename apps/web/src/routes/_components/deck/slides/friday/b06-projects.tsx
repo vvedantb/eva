@@ -3,7 +3,6 @@ import { cn } from "@eva/ui";
 import { Camera } from "../../_components/DeckCamera";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -84,27 +83,31 @@ export function FridayProjects() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Projects</Kicker>
         <Title size="md">See the whole job at once.</Title>
       </Reveal>
 
-      <Camera shots={SHOTS} className="mt-10">
-        <Reveal delay={0.2} distance={28}>
-          <FriWindow
-            label="Referral portal"
-            className="h-[372px] w-full"
-            bodyClassName="relative flex flex-col gap-3 px-6 pt-5 pb-5"
-            trailing={<ZoomSwitch />}
-          >
-            <MoF2Axis />
-            <MoF2Today />
-            <div className="h-4 shrink-0" style={{ marginLeft: MOF2_LABEL }} />
-            {BARS.map((bar, index) => (
-              <MoF2RoadmapRow key={bar.label} bar={bar} index={index} />
-            ))}
-          </FriWindow>
-        </Reveal>
-      </Camera>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <Camera shots={SHOTS}>
+          <Reveal delay={0.2} distance={28}>
+            <FriWindow
+              label="Referral portal"
+              className="h-[372px] w-full"
+              bodyClassName="relative flex flex-col gap-3 px-6 pt-5 pb-5"
+              trailing={<ZoomSwitch />}
+            >
+              <MoF2Axis />
+              <MoF2Today />
+              <div
+                className="h-4 shrink-0"
+                style={{ marginLeft: MOF2_LABEL }}
+              />
+              {BARS.map((bar, index) => (
+                <MoF2RoadmapRow key={bar.label} bar={bar} index={index} />
+              ))}
+            </FriWindow>
+          </Reveal>
+        </Camera>
+      </div>
 
       <Footnote>
         The projects timeline became a roadmap with completion bars, zoom

@@ -3,9 +3,7 @@ import { m } from "motion/react";
 import type { Transition } from "motion/react";
 import {
   Accent,
-  Body,
   Footnote,
-  Kicker,
   Shell,
   Title,
   useDeckStep,
@@ -131,13 +129,9 @@ export function FridayArtifacts() {
 
   return (
     <Shell className="py-12">
-      <Kicker>Trust and reach · Artifacts</Kicker>
       <Title size="md">
         Pages you can <Accent>just open</Accent>.
       </Title>
-      <Body className="mt-4 max-w-3xl">
-        The agent saves a page. You get a link.
-      </Body>
 
       <div className="flex flex-1 items-center justify-center pb-10">
         <m.div

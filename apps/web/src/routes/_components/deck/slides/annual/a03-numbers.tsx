@@ -3,7 +3,6 @@ import {
   Accent,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -16,7 +15,6 @@ import {
   DUR,
   EASE,
   GridBackdrop,
-  MaskedText,
   Spotlight,
 } from "../../_components/motion";
 
@@ -51,8 +49,8 @@ const NUMBER_CLASS =
  * is only ever clipped by the slide edge.
  */
 const LIGHT = [
-  { x: 180, y: 262, size: 520 },
-  { x: 640, y: 420, size: 900 },
+  { x: 180, y: 296, size: 520 },
+  { x: 640, y: 472, size: 900 },
 ];
 
 export function AnnualNumbers() {
@@ -60,7 +58,6 @@ export function AnnualNumbers() {
     <Shell className="isolate py-12">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Kicker>In use · The numbers</Kicker>
         <Title size="md">What eight months produced.</Title>
       </Reveal>
 
@@ -73,7 +70,7 @@ export function AnnualNumbers() {
         transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.35 }}
       />
 
-      <div className="relative isolate mt-14">
+      <div className="relative isolate mt-28">
         <GridBackdrop
           variant="dots"
           cell={28}
@@ -110,7 +107,7 @@ export function AnnualNumbers() {
           ))}
         </Stagger>
 
-        <Reveal step={1} distance={24} className="mt-12">
+        <Reveal step={1} distance={24} className="mt-20">
           <Card>
             <Stagger
               step={1}
@@ -137,12 +134,6 @@ export function AnnualNumbers() {
           </Card>
         </Reveal>
       </div>
-
-      <p className="mt-10 text-lg text-white/45">
-        <MaskedText delay={2.1} duration={DUR.slow}>
-          About 19 changes a day, every day, for eight months.
-        </MaskedText>
-      </p>
 
       <Footnote>
         Eva&rsquo;s own records and project history, 11 January to 16 September

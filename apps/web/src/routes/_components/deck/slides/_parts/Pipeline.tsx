@@ -15,7 +15,6 @@ const CONNECTOR_WIDTH = 52;
 interface PipelineNodeProps {
   icon: ReactNode;
   label: string;
-  sub: string;
   /** false keeps the node in its resting, hidden state. */
   active: boolean;
   /** Seconds to wait after `active` turns true. */
@@ -42,7 +41,6 @@ interface PipelineNodeProps {
 export function PipelineNode({
   icon,
   label,
-  sub,
   active,
   delay = 0,
   glow = false,
@@ -150,7 +148,6 @@ export function PipelineNode({
             <div className="text-sm leading-tight font-medium text-white">
               {label}
             </div>
-            <div className="text-xs leading-tight text-white/45">{sub}</div>
           </Card>
         </Sheen>
       </m.div>

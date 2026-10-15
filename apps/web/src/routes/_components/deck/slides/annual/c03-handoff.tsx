@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -126,7 +125,6 @@ export function AnnualHandoff() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Platform · Handoff</Kicker>
         <Title size="md">Change your mind mid-job.</Title>
       </Reveal>
 

@@ -3,7 +3,6 @@ import type { TargetAndTransition, Transition } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -84,11 +83,10 @@ export function AnnualLessons() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>People · Lessons</Kicker>
         <Title size="md">Two lessons, one direction.</Title>
       </Reveal>
 
-      <div className="relative isolate mt-6 h-[400px] w-full">
+      <div className="relative isolate mt-20 h-[400px] w-full">
         <Spotlight shots={GLOW} className="-inset-x-24 -inset-y-32" />
 
         <Quote

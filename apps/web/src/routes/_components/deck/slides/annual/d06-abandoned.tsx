@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -185,11 +184,10 @@ export function AnnualAbandoned() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Craft · Decisions</Kicker>
         <Title size="md">Knowing what to stop.</Title>
       </Reveal>
 
-      <div className="relative isolate mt-10">
+      <div className="relative isolate mt-16">
         {/* Follows the plan being closed; goes out for the closing line. */}
         <Spotlight shots={SPOT_SHOTS} className="-inset-32" />
         <div className="flex gap-6">
@@ -210,7 +208,7 @@ export function AnnualAbandoned() {
         />
       </div>
 
-      <p className="mt-10 text-center text-3xl text-white/85">
+      <p className="mt-16 text-center text-3xl text-white/85">
         <MaskedText step={3} delay={0.1}>
           Written down, so nobody <Accent>re-argues it from memory</Accent>.
         </MaskedText>

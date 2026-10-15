@@ -8,7 +8,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -22,7 +21,6 @@ import {
   DUR,
   DrawPath,
   EASE,
-  MaskedText,
   Sheen,
   cueTransition,
 } from "../../_components/motion";
@@ -110,13 +108,12 @@ export function AnnualHow() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>In use · How it works</Kicker>
         <Title size="md" className="text-balance">
           Describe it. Eva builds it. Review it.
         </Title>
       </Reveal>
 
-      <div className="mt-14" style={{ width: TRACK_W }}>
+      <div className="mt-20" style={{ width: TRACK_W }}>
         <Stagger
           delayChildren={0.25}
           staggerChildren={0.1}
@@ -160,13 +157,7 @@ export function AnnualHow() {
         </div>
       </div>
 
-      <p className="mt-4 text-base text-white/55">
-        <MaskedText step={1} delay={DRAW - 0.2} duration={DUR.slow}>
-          The whole loop happens in a browser tab.
-        </MaskedText>
-      </p>
-
-      <div className="mt-10 flex gap-3">
+      <div className="mt-20 flex gap-3">
         {WAYS.map((way, index) => (
           <m.div
             key={way}

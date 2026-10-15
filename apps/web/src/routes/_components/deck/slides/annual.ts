@@ -43,8 +43,8 @@ import { AnnualDurable } from "./annual/d08-durable";
 /**
  * Annual CDM deck order: Eva's story and the evidence for it. Five acts, then
  * the close: origin, in use, the platform, craft, people, then the year ahead,
- * the framework map and the last word. Kickers carry the act name so the room
- * always knows where it is. The index here is the slide number minus one.
+ * the framework map and the last word. The index here is the slide number
+ * minus one.
  */
 export const ANNUAL_SLIDES: DeckSlide[] = [
   // ── Act one: origin. Day one, the shape of the year, three chapters, recap ──

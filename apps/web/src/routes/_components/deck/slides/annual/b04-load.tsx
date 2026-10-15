@@ -1,7 +1,6 @@
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -21,10 +20,7 @@ export function AnnualLoad() {
   const step = useDeckStep();
 
   return (
-    <Shell className="py-14">
-      <Reveal from="none">
-        <Kicker>Origin · March 2026</Kicker>
-      </Reveal>
+    <Shell className="justify-center py-14">
       <Reveal delay={0.1}>
         <Title size="md">Then make it load.</Title>
       </Reveal>

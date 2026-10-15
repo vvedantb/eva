@@ -1,7 +1,6 @@
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -31,10 +30,7 @@ const MARKS: readonly AnnADayMark[] = [
 
 export function AnnualFirstWeek() {
   return (
-    <Shell className="py-14">
-      <Reveal from="none">
-        <Kicker>Origin · Week one</Kicker>
-      </Reveal>
+    <Shell className="justify-center py-14">
       <Reveal delay={0.1}>
         <Title size="md">Four days set the shape.</Title>
       </Reveal>

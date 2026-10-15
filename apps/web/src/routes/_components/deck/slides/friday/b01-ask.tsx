@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import {
   Accent,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -138,29 +137,30 @@ export function FridayAsk() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Asking</Kicker>
         <Title size="md">Say what you want.</Title>
       </Reveal>
 
-      <div className="mt-10 flex items-start gap-3">
-        <Panel index={0}>
-          <MoF1AskPanel />
-        </Panel>
-        <Link step={1} />
-        <Panel index={1}>
-          <MoF1BuildPanel />
-        </Panel>
-        <Link step={2} />
-        <Panel index={2}>
-          <MoF1PreviewPanel />
-        </Panel>
-      </div>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <div className="flex items-start gap-3">
+          <Panel index={0}>
+            <MoF1AskPanel />
+          </Panel>
+          <Link step={1} />
+          <Panel index={1}>
+            <MoF1BuildPanel />
+          </Panel>
+          <Link step={2} />
+          <Panel index={2}>
+            <MoF1PreviewPanel />
+          </Panel>
+        </div>
 
-      <p className="mt-11 text-3xl text-pretty text-white/85">
-        <MaskedText step={CLOSING_STEP} delay={0.15}>
-          No forms. No tickets. <Accent>A sentence.</Accent>
-        </MaskedText>
-      </p>
+        <p className="mt-11 text-3xl text-pretty text-white/85">
+          <MaskedText step={CLOSING_STEP} delay={0.15}>
+            No forms. No tickets. <Accent>A sentence.</Accent>
+          </MaskedText>
+        </p>
+      </div>
     </Shell>
   );
 }

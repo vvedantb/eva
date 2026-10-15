@@ -1,6 +1,5 @@
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -21,9 +20,6 @@ export function AnnualQ3() {
     <Shell className="py-14">
       <div className="flex items-start justify-between">
         <div>
-          <Reveal from="none">
-            <Kicker>Origin · Chapter three</Kicker>
-          </Reveal>
           <Reveal delay={0.1}>
             <Title size="md">Make it dependable.</Title>
           </Reveal>

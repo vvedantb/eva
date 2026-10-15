@@ -29,8 +29,8 @@ Figures: dates are when each change landed in Eva's main branch, 9 July to 10 Se
 Next: The longer the job, the more it helps to write things down, so documents now live inside Eva.`,
 
   "05-simple-mode": `Most people opening Eva are not engineers, so the answer was to remove machinery rather than add explanation.
-→ Step 1: the picker becomes the five-step slider and the caption lands. The trimmed list was still the advanced surface, which is why it became one control.
-Detail: the picker on the right is the real shipped component. Simple Mode is an optional setting, not a separate product; it hides files, consoles, settings and meters and leaves the conversation. Choosing a model went from a long list to one slider.
+→ Step 1: the picker becomes the five-step slider. The trimmed list was still the advanced surface, which is why it became one control.
+Detail: the picker on the right is the real shipped component. Simple Mode is an optional setting, not a separate product; it hides files, consoles, settings and meters and leaves the conversation. Choosing a model went from a long list to one slider. On the slider, cheaper and faster models sit on the left and the strongest on the right; there is nothing to configure.
 Figures: Simple Mode landed 14 August 2026; the slider replaced the list on 24 August 2026.
 Next: The other way to save effort is to never explain the same job twice.`,
 
@@ -43,7 +43,7 @@ Next: Those overnight routines are the next story: work that starts itself.`,
 
   "07-sandbox": `Starting a workspace used to be a coffee break; now it is under a second.
 → Step 1: both lanes race, then the closing line arrives after the slow lane finishes. Let the four seconds run in silence; the wait is the argument.
-Detail: nothing was given up in the move. The same workspace still has a terminal, live preview, desktop and snapshots.
+Detail: every job gets its own cloud workspace. Nothing was given up in the move. The same workspace still has a terminal, live preview, desktop and snapshots.
 Figures: about 40 seconds before on Daytona against under one second now on Vercel Sandbox, more than 40 times faster. Timings are the product owner's own measurements before and after the move; the migration landed 6 to 8 July 2026.
 Next: So that is where the work happens. Now, how do you actually ask for some?`,
 
@@ -79,7 +79,7 @@ Next: The first step on that pipeline is letting the model do the first read.`,
 → Step 1: more automations. Routine work runs on a schedule or a trigger, and people set direction rather than tasks.
 → Step 2: mistakes become cheap. When a change can be remade in minutes, being wrong stops being expensive. Try more, worry less.
 → Step 3: everything in sandboxes, managed from chat, and the fleet lights up. Eva's own development already works this way, and the Grok bot merges its changes. Next, the same for all our work.
-Detail: say plainly that this is a direction of travel, not a plan with dates. Nothing here is a commitment.
+Detail: say plainly that this is a direction of travel, not a plan with dates. Nothing here is a commitment. The fleet picture is one person, many agents, each in its own sandbox.
 Next: That raises the obvious question: what is left for the developers?`,
 
   "13-developer": `The job did not disappear when the model started writing the code; it moved.
@@ -224,20 +224,20 @@ Next: it starts on a single evening in January.`,
 → Step 1: first use. The first session on 24 January and the first quick task on 1 February, two weeks from empty to usable.
 → Step 2: work moves to the cloud in July, and in August Eva starts opening its own work.
 → Step 3: the totals land. This is the evidence base for everything that follows.
-Detail: these dates come from Eva's own records of the first session and quick task created; the week-one dates are when the code landed, which is why they differ.
+Detail: eight months took us from an empty repository to most of how we build software. These dates come from Eva's own records of the first session and quick task created; the week-one dates are when the code landed, which is why they differ.
 Figures: empty repository 11 January 2026; 4,732 changes shipped and 1,348 sets of release notes, from Eva's own records and the project's history to 16 September 2026.
 Next: the total is one number; here is what sits beside it.`,
 
   "a03-numbers": `The total is one number; the rest of the ledger shows the tool was used, not just built.
 → Step 1: the secondary card. This answers whether anyone else uses it: sixteen accounts, nineteen automations and 504 automation runs.
-Detail: the headline row is output, the secondary card is use. The closing rate line is deliberately unglamorous: nineteen changes a day sustained for eight months matters more than any single peak.
+Detail: the headline row is output, the secondary card is use. Say the rate aloud, because it is no longer on the slide: about nineteen changes a day, every day, for eight months. It is deliberately unglamorous; a pace sustained that long matters more than any single peak.
 Figures: 4,732 changes, 887 quick tasks raised, 367 working sessions, 1,348 sets of release notes; 16 people with accounts, 19 automations, 504 automation runs, 107 documents. Eva's own records and project history, 11 January to 16 September 2026.
 Next: those sixteen accounts did not arrive at once, and the timing matters.`,
 
   "a04-adoption": `Adoption was not announced; it followed the tool becoming easy enough to use.
 → Step 1: July onward lights and the earlier months dim. The step change is July, when work moved to the cloud.
 → Step 2: the three figures count up. Read them as sentences: 13 people beyond the developer have raised work in Eva; 390 pieces of work were raised against CarePulse; 225 sessions ended in a bundle of changes ready to review. The tool left one person's hands.
-Detail: June is genuinely zero, not missing data, and the footnote says so. Volunteer the gap, because that is what makes the rest credible.
+Detail: from July, monthly sessions roughly tripled and stayed there. June is genuinely zero, not missing data, and the footnote says so. Volunteer the gap, because that is what makes the rest credible.
 Figures: sessions per month in 2026: Jan 13, Feb 11, Mar 31, Apr 28, May 9, Jun 0, Jul 75, Aug 109, Sep 91. 13 people, 390 pieces of work and 225 sessions ready to review, to 16 September 2026.
 Next: four of the people behind those numbers, and what they built.`,
 
@@ -250,7 +250,7 @@ Figures: 13 people other than the developer have raised work in Eva; 390 pieces 
 Next: what that looks like for the person using it.`,
 
   "a07-how": `The whole loop in one pass, so nobody has to guess what using the tool looks like.
-→ Step 1: the flow line runs and the browser tab line lands. No install, no ticket, no handover.
+→ Step 1: the flow line runs and lights each stage. The whole loop happens in a browser tab: no install, no ticket, no handover.
 → Step 2: the four ways to ask, as names only. A session is a running conversation; a quick task is one job start to finish; a project is several jobs in order; an automation is a job that runs itself. The choice is about the size of the job, not the type of user.
 Detail: the cards are headings only, so describe each stage. You describe it in plain English in a chat. Eva builds it in its own cloud workspace, with a live preview you can click through. You try it, ask for changes, then it goes live. The preview matters most to non-technical colleagues: it is the first point they can judge the work themselves.
 Next: behind that loop sits the first platform decision: never depend on one supplier.`,
@@ -309,7 +309,7 @@ Next: two lessons from the year, in the project's own words.`,
   "a08-ahead": `The constraint has moved from building to deciding, and the next year is about the steps either side of the build.
 → Step 1: the first strand lights and the queue figure arrives: finished work waiting to be checked in. Marking work ready should be the last human step, as it already is for Eva itself.
 → Step 2: the closing question. How fast can we build it becomes how fast can we decide.
-Detail: the three strands are headings only. Automate the release. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us: tools shaped around how we work rather than the other way round. None of the three is a dated commitment.
+Detail: Eva now finishes work faster than we can check it in. The three strands are headings only. Automate the release. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us: tools shaped around how we work rather than the other way round. None of the three is a dated commitment.
 Figures: 176 pieces of finished work waiting to be checked in, against 455 already finished. Quick task status across all 887 raised in Eva, at 16 September 2026.
 Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
@@ -367,7 +367,7 @@ Figures: July 1,052, August 877, September 102, totalling 2,031 changes shipped,
 Next: the whole story on one line, before we look at who used it.`,
 
   "annual-b07-volume": `The year was not steady, and its shape is the map for the three chapters that follow.
-→ Step 1: March and July stay lit and the line names them. March was the surface being built; July was the cutover that moved every workspace to a new engine.
+→ Step 1: March and July stay lit; name them aloud. March was the surface being built; July was the cutover that moved every workspace to a new engine.
 → Step 2: the total counts up. 4,732 changes across nine months, roughly nineteen a day including weekends.
 Detail: the troughs matter as much as the peaks. June is the low point of the consolidation quarter, and September only looks thin because it stops on the 16th. Say the part-month caveat aloud rather than leaving it to the footnote.
 Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 102. Total 4,732 changes shipped, September to the 16th.
@@ -459,7 +459,7 @@ Next: several suppliers only help if each connection is dependable.`,
   "annual-c02-sdks": `Every provider was moved off reading text out of a terminal and onto its own official connection.
 → Step 1: the three connections convert, one at a time: Cursor on 5 August, Codex on 12 August, OpenCode on 14 August.
 → Step 2: the old command-line runner is struck out, removed on 18 August, so no half-abandoned path is left to rot.
-Detail: the old method started each provider as a command-line program and read its printed output, so any change to that output broke Eva silently. The official connections report events, errors and completion directly, so failures now surface as failures instead of silence. The line to quote: the last command-line subprocess is gone.
+Detail: the old method started each provider as a command-line program and read its printed output, so any change to that output broke Eva silently. The official connections report events, errors and completion directly, so failures now surface as failures instead of silence. The switch also made replies faster. The line to quote: the last command-line subprocess is gone.
 Figures: Cursor 5 August 2026, Codex 12 August 2026, OpenCode 14 August 2026; the old runner deleted 18 August 2026.
 Next: with dependable connections, a job can switch supplier part-way through.`,
 
@@ -495,7 +495,7 @@ Next: the other thing that has to be controlled is cost.`,
 → Step 1: while the work is alive its snapshot never expires, and only the most recent one is kept.
 → Step 2: the hours count down and the bar drains. When a session or task ends, the workspace is deleted after a 48-hour grace period; reopening the work inside that window cancels the deletion.
 → Step 3: the beam circles the calendar. A weekly sweep clears anything the ordinary path missed.
-Detail: short-lived workspaces expire after a day. This is partly why the provider changed: the old provider's snapshots could not capture running processes or a seeded database, so every start re-ran the setup. Deleting a workspace now purges its snapshots rather than trusting the provider to cascade.
+Detail: nothing keeps billing once the work is finished. Short-lived workspaces expire after a day. This is partly why the provider changed: the old provider's snapshots could not capture running processes or a seeded database, so every start re-ran the setup. Deleting a workspace now purges its snapshots rather than trusting the provider to cascade.
 Figures: one snapshot retained per workspace, 48-hour grace period, weekly sweep, one-day expiry for short-lived workspaces. Snapshot lifecycle documented in the repository.
 Next: that is what was built; now, how the decisions were made, starting with the biggest.`,
 
@@ -509,10 +509,10 @@ Framework: debugs production issues; understands trade-offs.
 Next: beneath many stuck reports sat one structural fault, fixed once.`,
 
   "intro-01-title": `Welcome, and the one line to open on: Eva is a platform for AI agents that actually ship code.
-Detail: say what it is not before what it is. Not a chatbot that suggests diffs, and not an autocomplete. These are agents that clone your repo, run your tests, and open real pull requests. The word lands out of a blur, so let it settle before speaking.`,
+Detail: Eva is an open-source AI dev platform. Say what it is not before what it is. Not a chatbot that suggests diffs, and not an autocomplete. These are agents that clone your repo, run your tests, and open real pull requests. The word lands out of a blur, so let it settle before speaking.`,
 
   "intro-02-gap": `The gap between an AI demo and real work comes down to three things, and the rest of the deck answers each one.
-Detail: context, because the agent needs your codebase, your style and your CI. Execution, because it needs somewhere to run commands rather than only generate text. Review, because you need to see what it did rather than trust a summary. The slide names the symptom: context scattered across chat windows, browser tabs and terminal sessions.`,
+Detail: context, because the agent needs your codebase, your style and your CI. Execution, because it needs somewhere to run commands rather than only generate text. Review, because you need to see what it did rather than trust a summary. The symptom: context scattered across chat windows, browser tabs and terminal sessions. Eva brings that context together in one unified workspace.`,
 
   "intro-03-quick-tasks": `Quick tasks are the simplest unit of work in Eva: one prompt, one result.
 Detail: the examples to give are fix this bug, add a test, update this copy. Eva spins up an isolated sandbox, does the work and shows you the result. No boilerplate and no pull request dance — just a diff you can merge. The three bullets arrive one at a time, so pace the sentence to each.`,
@@ -539,7 +539,7 @@ Detail: it clones the code, respects your .gitignore and pushes to branches. You
 Detail: each task or session gets its own isolated environment. Your code runs, your tests run and your app runs, then it is gone.`,
 
   "intro-11-insight": `The sentence the deck exists to deliver: agents need execution, not just generation.
-Detail: they need to run npm install, run your build and see whether the tests pass. That is the difference between here is a diff and here is working code. The slide frames the same point as context being the expensive part, which is what Eva preserves across tasks, sessions and projects.`,
+Detail: they need to run npm install, run your build and see whether the tests pass. That is the difference between here is a diff and here is working code. Frame the same point as context being the expensive part, which is what Eva preserves across tasks, sessions and projects, so you spend less time re-explaining and more time shipping.`,
 
   "intro-12-demo": `Hand over to the live demo here rather than reading the slide.
 Detail: what the room will see is Eva taking a quick task, spinning up a sandbox, making the change, running the tests and opening a pull request — all from a one-line description.`,

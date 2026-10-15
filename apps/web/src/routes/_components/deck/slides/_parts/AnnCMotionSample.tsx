@@ -18,10 +18,8 @@ export interface AnnCMotionSampleSpec {
 /** Every sample settles on this once the house defaults are applied. */
 const HOUSE_DURATION = 0.55;
 const HOUSE_REST = 0.45;
-/** One full there-and-back on the house timing: the beat the room can feel. */
-export const ANN_C_HOUSE_CYCLE = (HOUSE_DURATION + HOUSE_REST) * 2;
 /** On the sync, all ten hold still together for this long before moving as one. */
-export const ANN_C_SYNC_HOLD = 0.55;
+const ANN_C_SYNC_HOLD = 0.55;
 
 /**
  * Ten one-property demonstrations, in the order they are read. Each one is the

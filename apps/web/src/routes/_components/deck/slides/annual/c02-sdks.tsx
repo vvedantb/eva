@@ -1,8 +1,6 @@
 import { m } from "motion/react";
 import {
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -22,13 +20,9 @@ export function AnnualSdks() {
   const removed = useDeckStep() >= 2;
 
   return (
-    <Shell className="py-12">
+    <Shell className="justify-center py-12">
       <Reveal>
-        <Kicker>Platform · Connections</Kicker>
         <Title size="md">Built on proper connections.</Title>
-        <Body className="mt-4 max-w-3xl text-lg">
-          Fewer silent failures, and faster replies.
-        </Body>
       </Reveal>
 
       <div className="mt-14">

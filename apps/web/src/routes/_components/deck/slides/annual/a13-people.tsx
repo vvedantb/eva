@@ -11,7 +11,6 @@ import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -52,11 +51,10 @@ export function AnnualPeople() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>People · Working with others</Kicker>
         <Title size="md">Their problems set the agenda.</Title>
       </Reveal>
 
-      <Camera shots={PEOPLE_SHOTS} className="mt-20">
+      <Camera shots={PEOPLE_SHOTS} className="mt-28">
         <m.div
           className="flex origin-center items-stretch justify-center"
           style={{ transformStyle: "preserve-3d" }}
@@ -82,18 +80,13 @@ export function AnnualPeople() {
         </m.div>
       </Camera>
 
-      <div className="mt-16 text-center">
+      <div className="mt-24 text-center">
         <p className="text-3xl text-white/90">
           <MaskedText step={3} delay={0.2}>
             Every one of these came from <Accent>a colleague</Accent>, not a
             test.
           </MaskedText>
         </p>
-        <Reveal step={3} delay={0.75} distance={10}>
-          <p className="mt-5 text-sm text-white/45">
-            Each fixed, pinned by a test, and written down.
-          </p>
-        </Reveal>
       </div>
 
       <Footnote>

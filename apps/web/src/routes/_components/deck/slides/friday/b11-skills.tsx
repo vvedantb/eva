@@ -2,16 +2,13 @@ import {
   IconArrowUp,
   IconCornerDownLeft,
   IconSlash,
-  IconSparkles,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Camera } from "../../_components/DeckCamera";
 import {
   Accent,
   BRAND,
-  Body,
   Footnote,
-  Kicker,
   Shell,
   Title,
   useDeckStep,
@@ -158,20 +155,9 @@ export function FridaySkills() {
 
   return (
     <Shell className="py-12">
-      <Kicker>
-        <span className="inline-flex items-center gap-2">
-          <IconSparkles size={15} aria-hidden />
-          Using Eva · Skills
-        </span>
-      </Kicker>
       <Title size="md">
         Never explain a job <Accent>twice</Accent>.
       </Title>
-      <Body className="mt-4">
-        <MaskedText delay={0.4} duration={0.8}>
-          Turned on per codebase, from Settings.
-        </MaskedText>
-      </Body>
 
       <Camera shots={SHOTS} className="relative flex-1">
         <div className="absolute bottom-14 left-0 flex h-16 items-center text-3xl font-semibold whitespace-nowrap text-white">

@@ -26,9 +26,9 @@ const TRACK_W = 880;
 /** Where the turn is interrupted, as a fraction of the track. */
 const BREAK_AT = 0.62;
 /** Seconds for the broken run: straight to the break, then nothing. */
-export const MOA3_BROKEN_RUN = 1.3;
+const MOA3_BROKEN_RUN = 1.3;
 /** The durable run: to the break, a held beat while it resumes, then on to the end. */
-export const MOA3_DURABLE_RUN = 2.6;
+const MOA3_DURABLE_RUN = 2.6;
 const DURABLE_TIMES = [0, 0.4, 0.56, 1];
 const HEAD_GLOW =
   "radial-gradient(circle, #fff 0 16%, rgba(59,125,216,0.55) 34%, transparent 70%)";

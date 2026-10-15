@@ -3,7 +3,7 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { Layer } from "../../_components/DeckCamera";
 import { useDeckStep } from "../../_components/DeckPrimitives";
-import { DUR, EASE, LEAVE, MaskedText, Sheen } from "../../_components/motion";
+import { DUR, EASE, LEAVE, Sheen } from "../../_components/motion";
 import { EvaChatWindow } from "./EvaChatWindow";
 
 const TILES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -91,16 +91,6 @@ export function AgentFleet() {
             ))}
           </div>
         </Sheen>
-        <div className="mt-5 w-[200px] text-xs leading-snug text-white/50">
-          <MaskedText
-            step={LIT_STEP}
-            delay={0.9}
-            stagger={0.03}
-            duration={DUR.slow}
-          >
-            One person, many agents. Each in its own sandbox.
-          </MaskedText>
-        </div>
       </Layer>
     </div>
   );

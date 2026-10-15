@@ -1,9 +1,7 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -80,14 +78,10 @@ export function AnnualDesign() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Craft · Design</Kicker>
         <Title size="md">Decided on paper first.</Title>
-        <Body className="mt-3 max-w-3xl text-lg">
-          The engine every workspace runs on, replaced in six phases.
-        </Body>
       </Reveal>
 
-      <div className="relative isolate mt-16">
+      <div className="relative isolate mt-24">
         {/* Graph paper under the plan: it drifts, the plan holds still. */}
         <m.div
           aria-hidden
@@ -103,7 +97,7 @@ export function AnnualDesign() {
         </Camera>
       </div>
 
-      <div className="mt-16 flex items-baseline justify-center gap-4">
+      <div className="mt-20 flex items-baseline justify-center gap-4">
         <MaskedText step={2} className="text-xl text-white/55">
           A 6GB workspace restores in
         </MaskedText>
@@ -121,7 +115,7 @@ export function AnnualDesign() {
         </Sheen>
       </div>
 
-      <div className="mt-16 flex justify-center gap-4">
+      <div className="mt-20 flex justify-center gap-4">
         {OPTIONS.map((option, index) => {
           const delay = index * STAGGER.block;
           return (

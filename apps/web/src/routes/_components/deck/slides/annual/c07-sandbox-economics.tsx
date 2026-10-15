@@ -1,8 +1,6 @@
 import { m } from "motion/react";
 import {
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -123,11 +121,7 @@ export function AnnualSandboxEconomics() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Platform · Running costs</Kicker>
         <Title size="md">Workspaces clean up after themselves.</Title>
-        <Body className="mt-4 max-w-3xl text-lg">
-          Nothing keeps billing once the work is finished.
-        </Body>
       </Reveal>
 
       <div className="relative isolate flex flex-1 flex-col justify-center pb-2">

@@ -1,6 +1,6 @@
 # Deck motion kit
 
-The house style for moving things on a slide. The frame (slide transitions, light wash, ambient backdrop) and the core primitives (`Title`, `Kicker`, `Accent`, `Card`, `Reveal`, `Stagger`, `CountUp`) already use it. Use this kit for anything bespoke on a slide, so the whole deck moves with one hand.
+The house style for moving things on a slide. The frame (slide transitions, light wash, ambient backdrop) and the core primitives (`Title`, `Accent`, `Card`, `Reveal`, `Stagger`, `CountUp`) already use it. Use this kit for anything bespoke on a slide, so the whole deck moves with one hand.
 
 ```ts
 import {
@@ -14,7 +14,7 @@ import {
 
 ## How cues work
 
-Every kit primitive, plus `Title`, `Kicker`, `Accent` and `Card`, is **step-aware**:
+Every kit primitive, plus `Title`, `Accent` and `Card`, is **step-aware**:
 
 - Pass `step={n}` and it plays when the deck reaches build step `n`. `delay` counts from that moment.
 - Leave `step` out and it follows the nearest `Reveal` or `Stagger`: same step, and its `delay` is added to theirs. Inside a `Stagger`, each child gets its own cue. An `Accent` in the fifth item sheens when the fifth item lands.
@@ -22,7 +22,7 @@ Every kit primitive, plus `Title`, `Kicker`, `Accent` and `Card`, is **step-awar
 
 `useMotionCue(step?, delay?)` returns `{ on, delay }` if you build your own primitive. Pair it with `cueTransition(on, delay, enter?)`. It enters with your transition and leaves fast with no delay.
 
-A `Reveal` that wraps only `Title`/`Kicker`/`MaskedText` does not animate itself. It only times them. So `<Reveal delay={0.1}><Title>…</Title></Reveal>` gives a clean masked title, not a title that rises inside a box that also rises.
+A `Reveal` that wraps only `Title`/`MaskedText` does not animate itself. It only times them. So `<Reveal delay={0.1}><Title>…</Title></Reveal>` gives a clean masked title, not a title that rises inside a box that also rises.
 
 ## Timing scale (`DUR`, seconds)
 

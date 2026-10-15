@@ -9,7 +9,6 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -93,55 +92,56 @@ export function FridayInbox() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Inbox</Kicker>
         <Title size="md">Everything that needs you, in one place.</Title>
       </Reveal>
 
-      <div className="mt-9 flex justify-end pr-10">
-        <MoF2BrowserTab />
-      </div>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <div className="flex justify-end pr-10">
+          <MoF2BrowserTab />
+        </div>
 
-      <Reveal delay={0.2} distance={28}>
-        <FriWindow
-          label="Inbox"
-          className="h-[340px] w-full"
-          bodyClassName="flex gap-4 p-0"
-          trailing={
-            <>
-              <MoF2KeyHint label="↑" />
-              <MoF2KeyHint label="↓" pressed />
-            </>
-          }
-        >
-          <Stagger
-            delayChildren={0.45}
-            staggerChildren={0.07}
-            className="w-[380px] shrink-0 border-r border-white/[0.06] px-2 py-2"
+        <Reveal delay={0.2} distance={28}>
+          <FriWindow
+            label="Inbox"
+            className="h-[340px] w-full"
+            bodyClassName="flex gap-4 p-0"
+            trailing={
+              <>
+                <MoF2KeyHint label="↑" />
+                <MoF2KeyHint label="↓" pressed />
+              </>
+            }
           >
-            {ROWS.map((entry, index) => (
-              <StaggerItem key={entry.title}>
-                <InboxRow
-                  row={entry}
-                  index={index}
-                  selected={index === selected}
-                />
-              </StaggerItem>
-            ))}
-          </Stagger>
+            <Stagger
+              delayChildren={0.45}
+              staggerChildren={0.07}
+              className="w-[380px] shrink-0 border-r border-white/[0.06] px-2 py-2"
+            >
+              {ROWS.map((entry, index) => (
+                <StaggerItem key={entry.title}>
+                  <InboxRow
+                    row={entry}
+                    index={index}
+                    selected={index === selected}
+                  />
+                </StaggerItem>
+              ))}
+            </Stagger>
 
-          <Morph
-            blur={false}
-            className="flex-1 p-6"
-            states={ROWS.slice(0, 2).map((row) => (
-              <MoF2InboxDetail
-                key={row.title}
-                title={row.title}
-                icon={row.icon}
-              />
-            ))}
-          />
-        </FriWindow>
-      </Reveal>
+            <Morph
+              blur={false}
+              className="flex-1 p-6"
+              states={ROWS.slice(0, 2).map((row) => (
+                <MoF2InboxDetail
+                  key={row.title}
+                  title={row.title}
+                  icon={row.icon}
+                />
+              ))}
+            />
+          </FriWindow>
+        </Reveal>
+      </div>
 
       <Footnote>
         List and detail in one view, driven by the arrow keys, 20 August 2026.

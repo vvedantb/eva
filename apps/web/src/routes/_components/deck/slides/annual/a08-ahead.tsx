@@ -7,10 +7,8 @@ import {
 import { m } from "motion/react";
 import {
   Accent,
-  Body,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -56,18 +54,12 @@ export function AnnualAhead() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>The year ahead</Kicker>
         <Title size="md" className="text-balance">
           The bottleneck has moved.
         </Title>
       </Reveal>
-      <Reveal delay={0.35}>
-        <Body className="mt-5 max-w-3xl text-pretty">
-          Eva finishes work faster than we can check it in.
-        </Body>
-      </Reveal>
 
-      <div className="relative isolate mt-12">
+      <div className="relative isolate mt-16">
         {/* The first strand lights as the queue figure arrives. */}
         <Spotlight shots={[null, FIRST_STRAND]} className="-inset-32" />
         <Magnify focus={queued ? 0 : null} dimTo={0.55} className="flex gap-6">
@@ -105,7 +97,7 @@ export function AnnualAhead() {
         </Magnify>
       </div>
 
-      <div className="mt-10 flex items-baseline gap-5">
+      <div className="mt-12 flex items-baseline gap-5">
         <Sheen step={1} delay={1.1} className="rounded-lg">
           <CountRoll
             value={176}
@@ -124,7 +116,7 @@ export function AnnualAhead() {
         </Reveal>
       </div>
 
-      <p className="mt-9 max-w-5xl text-3xl leading-snug text-pretty text-white/85">
+      <p className="mt-12 max-w-5xl text-3xl leading-snug text-pretty text-white/85">
         <MaskedText step={2} delay={0.1} stagger={0.05}>
           The question stops being <Accent>how fast can we build it</Accent> and
           becomes <Accent>how fast can we decide</Accent>.

@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -91,11 +90,10 @@ export function Slide02Numbers() {
   return (
     <Shell>
       <Reveal>
-        <Kicker>Three months · The numbers</Kicker>
         <Title>Twelve weeks of shipping.</Title>
       </Reveal>
 
-      <div className="relative isolate mt-24">
+      <div className="relative isolate my-auto pb-10">
         <GridBackdrop
           variant="grid"
           cell={64}
@@ -108,14 +106,6 @@ export function Slide02Numbers() {
           ))}
         </div>
       </div>
-
-      <MaskedText
-        delay={2.1}
-        stagger={0.04}
-        className="mt-24 block text-lg text-white/45"
-      >
-        About 23 changes a day, every day, including weekends.
-      </MaskedText>
 
       <Footnote>
         Source: Eva&rsquo;s git history, 12 June to 10 September 2026.

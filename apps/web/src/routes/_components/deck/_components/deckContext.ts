@@ -27,7 +27,7 @@ export function useDeckTheme(): DeckTheme {
 
 /**
  * When the nearest `Reveal` or `Stagger` shows its children, and after what
- * delay. Self-animating primitives (`Title`, `Kicker`, `Accent`, `Card` and the
+ * delay. Self-animating primitives (`Title`, `Accent`, `Card` and the
  * motion kit) read it, so a title inside `<Reveal step={2} delay={0.3}>` masks
  * in on step 2 at 0.3 s without being told twice. Outside any reveal the cue
  * is "on, now".

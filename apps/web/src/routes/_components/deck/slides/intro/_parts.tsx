@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 import {
   DeckThemeContext,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -19,9 +18,7 @@ import {
  */
 interface IntroPalette {
   surface: string;
-  kicker: string;
   title: string;
-  body: string;
   dot: string;
   bullet: string;
   tag: string;
@@ -31,9 +28,7 @@ interface IntroPalette {
 const PALETTES: Record<"dark" | "light", IntroPalette> = {
   dark: {
     surface: "bg-zinc-950",
-    kicker: "text-white/45",
     title: "text-white",
-    body: "text-white/65",
     dot: "bg-white/35",
     bullet: "text-white/80",
     tag: "bg-white/[0.07] text-white/75",
@@ -41,9 +36,7 @@ const PALETTES: Record<"dark" | "light", IntroPalette> = {
   },
   light: {
     surface: "bg-zinc-50",
-    kicker: "text-zinc-500",
     title: "text-zinc-900",
-    body: "text-zinc-600",
     dot: "bg-zinc-400",
     bullet: "text-zinc-700",
     tag: "bg-zinc-900/[0.06] text-zinc-700",
@@ -64,7 +57,10 @@ interface IntroBulletsProps {
  * The legacy deck revealed a whole bullet list as one block. Here each line
  * arrives on its own, which is the only motion these slides need.
  */
-export function IntroBullets({ items, delayChildren = 0.3 }: IntroBulletsProps) {
+export function IntroBullets({
+  items,
+  delayChildren = 0.3,
+}: IntroBulletsProps) {
   const palette = useIntroPalette();
   return (
     <Stagger
@@ -90,24 +86,20 @@ export function IntroBullets({ items, delayChildren = 0.3 }: IntroBulletsProps) 
 }
 
 interface FeatureSlideProps {
-  kicker: string;
   title: string;
   bullets: readonly string[];
 }
 
 /**
- * Seven of the intro slides are the same shape: a kicker, a headline and three
+ * Seven of the intro slides are the same shape: a headline and three
  * bullets. They keep one file each so they stay easy to diff against the deck
  * they came from, but the layout lives here once.
  */
-export function FeatureSlide({ kicker, title, bullets }: FeatureSlideProps) {
+export function FeatureSlide({ title, bullets }: FeatureSlideProps) {
   const palette = useIntroPalette();
   return (
     <Shell className={cn("justify-center", palette.surface)}>
       <Reveal>
-        <Kicker className={palette.kicker}>{kicker}</Kicker>
-      </Reveal>
-      <Reveal delay={0.1}>
         <Title className={palette.title}>{title}</Title>
       </Reveal>
       <IntroBullets items={bullets} />

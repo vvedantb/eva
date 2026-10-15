@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import type { TargetAndTransition, Transition } from "motion/react";
 import { MotionCueContext, useDeckStep } from "./deckContext";
-import { Body, Kicker, Title } from "./DeckText";
+import { Title } from "./DeckText";
 import { MaskedText } from "./motion/MaskedText";
 import { DUR, EASE } from "./motion/tokens";
 
@@ -22,7 +22,7 @@ export {
 export type { DeckTheme } from "./deckContext";
 export { BRAND, EASE_OUT } from "./motion/tokens";
 export { Accent } from "./DeckAccent";
-export { Body, Footnote, Kicker, Shell, Title } from "./DeckText";
+export { Footnote, Shell, Title } from "./DeckText";
 export { Card } from "./DeckSurface";
 
 type RevealFrom = "up" | "down" | "left" | "right" | "none";
@@ -55,19 +55,17 @@ function isTextual(children: ReactNode): boolean {
       typeof child === "string" ||
       typeof child === "number" ||
       (isValidElement(child) &&
-        ((typeof child.type === "string" && TEXT_TAGS.has(child.type)) ||
-          child.type === Body)),
+        typeof child.type === "string" &&
+        TEXT_TAGS.has(child.type)),
   );
 }
 
-/** Titles and kickers bring their own entrance; a reveal around them only times it. */
+/** Titles bring their own entrance; a reveal around them only times it. */
 function isSelfAnimating(children: ReactNode): boolean {
   return Children.toArray(children).every(
     (child) =>
       isValidElement(child) &&
-      (child.type === Title ||
-        child.type === Kicker ||
-        child.type === MaskedText),
+      (child.type === Title || child.type === MaskedText),
   );
 }
 
@@ -110,7 +108,7 @@ interface RevealProps {
 /**
  * Fades and rises its children in once the deck reaches `step`. Children are
  * never unmounted, so measured layout stays stable across the build. Wrapping
- * only a `Title`/`Kicker`, it leaves the motion to them and just times it.
+ * only a `Title`/`MaskedText`, it leaves the motion to them and just times it.
  */
 export function Reveal({
   children,

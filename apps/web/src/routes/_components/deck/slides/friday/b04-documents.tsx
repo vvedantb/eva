@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -138,18 +137,19 @@ export function FridayDocuments() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Documents</Kicker>
         <Title size="md">Write it down together.</Title>
       </Reveal>
 
-      <Camera shots={SHOTS} className="mt-10">
-        <div className="flex gap-6" style={{ transformStyle: "preserve-3d" }}>
-          <Reveal delay={0.1} className="relative">
-            <MoF1Document />
-          </Reveal>
-          <VersionList />
-        </div>
-      </Camera>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <Camera shots={SHOTS}>
+          <div className="flex gap-6" style={{ transformStyle: "preserve-3d" }}>
+            <Reveal delay={0.1} className="relative">
+              <MoF1Document />
+            </Reveal>
+            <VersionList />
+          </div>
+        </Camera>
+      </div>
 
       <Footnote>Collaborative documents, 10 June 2026.</Footnote>
     </Shell>

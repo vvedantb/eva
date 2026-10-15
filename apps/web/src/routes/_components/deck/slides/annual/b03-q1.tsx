@@ -1,20 +1,12 @@
-import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-import {
-  CountRoll,
-  DUR,
-  EASE,
-  MaskedText,
-  cueTransition,
-} from "../../_components/motion";
+import { CountRoll, MaskedText } from "../../_components/motion";
 import { AnnABarChart } from "../_parts/AnnABarChart";
 import type { AnnABar } from "../_parts/AnnABarChart";
 import { MoA1WriteDrop } from "../_parts/MoA1WriteDrop";
@@ -29,49 +21,11 @@ const Q1: readonly AnnABar[] = [
 /** March is the column the chart exists to point at. */
 const MARCH = [2];
 
-/** Inset geometry. March is the tallest, so its top sits under the value row. */
-const COL_W = 104;
-const GAP = 26;
-const BAR_MAX = 180;
-const CHART_W = Q1.length * COL_W + (Q1.length - 1) * GAP;
-/** Value row (20px) plus its 8px gap: the top of March's column. */
-const MARCH_TOP = 28;
-
-/** A short leader from March's top out to its caption. */
-function MarchCallout() {
-  const on = useDeckStep() >= 2;
-  return (
-    <div
-      className="absolute flex items-center"
-      style={{ left: CHART_W + 10, top: MARCH_TOP - 10 }}
-    >
-      <m.span
-        aria-hidden
-        className="h-px w-8 origin-left bg-white/35"
-        initial={{ scaleX: 0 }}
-        animate={{ scaleX: on ? 1 : 0 }}
-        transition={cueTransition(on, 1.05, {
-          duration: DUR.base,
-          ease: EASE.expo,
-        })}
-      />
-      <span className="ml-3 text-sm whitespace-nowrap text-white/70">
-        <MaskedText step={2} delay={1.2} stagger={0.04}>
-          The biggest month of the year
-        </MaskedText>
-      </span>
-    </div>
-  );
-}
-
 export function AnnualQ1() {
   const step = useDeckStep();
 
   return (
-    <Shell className="py-14">
-      <Reveal from="none">
-        <Kicker>Origin · Chapter one</Kicker>
-      </Reveal>
+    <Shell className="justify-center py-14">
       <Reveal delay={0.1}>
         <Title size="md">Build the surface.</Title>
       </Reveal>
@@ -92,19 +46,16 @@ export function AnnualQ1() {
           </div>
         </div>
 
-        <div className="relative">
-          <AnnABarChart
-            bars={Q1}
-            colWidth={COL_W}
-            gap={GAP}
-            barMax={BAR_MAX}
-            step={2}
-            focus={MARCH}
-            focused={step >= 2}
-            sheenStep={2}
-          />
-          <MarchCallout />
-        </div>
+        <AnnABarChart
+          bars={Q1}
+          colWidth={104}
+          gap={26}
+          barMax={180}
+          step={2}
+          focus={MARCH}
+          focused={step >= 2}
+          sheenStep={2}
+        />
       </div>
 
       <MoA1WriteDrop step={3} className="mt-14" />

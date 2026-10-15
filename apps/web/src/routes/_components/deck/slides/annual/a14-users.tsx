@@ -9,7 +9,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -121,11 +120,10 @@ export function AnnualUsers() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Kicker>People · Users</Kicker>
         <Title size="md">Built for who actually uses it.</Title>
       </Reveal>
 
-      <div className="mt-12 flex flex-col gap-8">
+      <div className="mt-16 flex flex-col gap-8">
         {CHANGES.map((change, index) => (
           <ChangeRow
             key={change.before}
@@ -136,7 +134,7 @@ export function AnnualUsers() {
         ))}
       </div>
 
-      <div className="mt-12 flex gap-3">
+      <div className="mt-14 flex gap-3">
         {CHIPS.map((chip, index) => {
           const at = index * 0.1;
           return (
@@ -182,7 +180,7 @@ export function AnnualUsers() {
         })}
       </div>
 
-      <p className="mt-10 text-center text-3xl font-medium text-white/90">
+      <p className="mt-14 text-center text-3xl font-medium text-white/90">
         <MaskedText step={2} delay={0.1}>
           Not cleverer.
         </MaskedText>{" "}

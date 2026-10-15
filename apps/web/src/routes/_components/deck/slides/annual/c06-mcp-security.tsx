@@ -2,7 +2,6 @@ import { IconCheck } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -71,9 +70,8 @@ function CheckLine({ text, at }: { text: string; at: number }) {
 
 export function AnnualMcpSecurity() {
   return (
-    <Shell className="py-12">
+    <Shell className="justify-center py-12">
       <Reveal>
-        <Kicker>Platform · Access</Kicker>
         <Title size="md">Locked down by design.</Title>
       </Reveal>
 

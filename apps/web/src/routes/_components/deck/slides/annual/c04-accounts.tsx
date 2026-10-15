@@ -4,7 +4,6 @@ import {
   Accent,
   BRAND,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -117,7 +116,6 @@ export function AnnualAccounts() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Platform · Accounts</Kicker>
         <Title size="md">Bring your own account.</Title>
       </Reveal>
 

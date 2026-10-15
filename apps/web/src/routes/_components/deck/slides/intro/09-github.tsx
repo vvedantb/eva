@@ -3,7 +3,6 @@ import { FeatureSlide } from "./_parts";
 export function IntroGitHub() {
   return (
     <FeatureSlide
-      kicker="GitHub Integration"
       title="Native GitHub flow"
       bullets={[
         "GitHub App for secure repo access",

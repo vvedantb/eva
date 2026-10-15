@@ -9,10 +9,8 @@ import {
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
-  Body,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -20,7 +18,7 @@ import {
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
-import { DUR, EASE, MaskedText, cueTransition } from "../_components/motion";
+import { DUR, EASE, cueTransition } from "../_components/motion";
 import { PipelineConnector, PipelineNode } from "./_parts/Pipeline";
 
 const ICON_SIZE = 26;
@@ -90,115 +88,100 @@ export function Slide06Automerge() {
 
   return (
     <Shell className="py-14">
-      <Kicker>On its own · Auto-merge</Kicker>
       <Title size="md">Changes that ship themselves.</Title>
-      <Body className="mt-4 max-w-3xl">
-        <MaskedText delay={0.4} duration={0.8}>
-          One click from you. The rest is automatic.
-        </MaskedText>
-      </Body>
 
-      <m.div
-        className="relative mt-14 flex items-stretch"
-        animate={{ opacity: sleeping ? 0.6 : 1, scale: sleeping ? 0.98 : 1 }}
-        transition={cueTransition(sleeping, 0, {
-          duration: DUR.slow,
-          ease: EASE.out,
-        })}
-      >
-        <PipelineNode
-          icon={<IconGitPullRequestDraft size={ICON_SIZE} />}
-          label="Eva drafts the change"
-          sub="a bundle of changes"
-          active
-          delay={0.5}
-        />
-        <PipelineConnector active delay={0.95} />
-        <PipelineNode
-          icon={<IconHandClick size={ICON_SIZE} />}
-          label="You mark it ready"
-          sub="the only human step"
-          active
-          delay={1.15}
-          glow
-          pulse={!running}
-          pressed={running}
-          pressAt={CLICK - 0.05}
-        />
-        <PipelineConnector active={running} delay={at(0)} />
-        <PipelineNode
-          icon={<IconRobot size={ICON_SIZE} />}
-          label="Grok bot wakes up"
-          sub="no waiting around"
-          active={running}
-          delay={at(0) + 0.3}
-          step={1}
-        />
-        <PipelineConnector active={running} delay={at(1)} />
-        <PipelineNode
-          icon={<IconGitMerge size={ICON_SIZE} />}
-          label="Merged into main"
-          sub="straight into the codebase"
-          active={running}
-          delay={at(1) + 0.3}
-          step={1}
-        />
-        <PipelineConnector active={running} delay={at(2)} />
-        <PipelineNode
-          icon={<IconRocket size={ICON_SIZE} />}
-          label="Live in production"
-          sub="deployed for everyone"
-          active={running}
-          delay={at(2) + 0.3}
-          step={1}
-          flash
-        />
-        <Cursor />
-      </m.div>
+      <div className="my-auto pb-6">
+        <m.div
+          className="relative flex items-stretch"
+          animate={{ opacity: sleeping ? 0.6 : 1, scale: sleeping ? 0.98 : 1 }}
+          transition={cueTransition(sleeping, 0, {
+            duration: DUR.slow,
+            ease: EASE.out,
+          })}
+        >
+          <PipelineNode
+            icon={<IconGitPullRequestDraft size={ICON_SIZE} />}
+            label="Eva drafts the change"
+            active
+            delay={0.5}
+          />
+          <PipelineConnector active delay={0.95} />
+          <PipelineNode
+            icon={<IconHandClick size={ICON_SIZE} />}
+            label="You mark it ready"
+            active
+            delay={1.15}
+            glow
+            pulse={!running}
+            pressed={running}
+            pressAt={CLICK - 0.05}
+          />
+          <PipelineConnector active={running} delay={at(0)} />
+          <PipelineNode
+            icon={<IconRobot size={ICON_SIZE} />}
+            label="Grok bot wakes up"
+            active={running}
+            delay={at(0) + 0.3}
+            step={1}
+          />
+          <PipelineConnector active={running} delay={at(1)} />
+          <PipelineNode
+            icon={<IconGitMerge size={ICON_SIZE} />}
+            label="Merged into main"
+            active={running}
+            delay={at(1) + 0.3}
+            step={1}
+          />
+          <PipelineConnector active={running} delay={at(2)} />
+          <PipelineNode
+            icon={<IconRocket size={ICON_SIZE} />}
+            label="Live in production"
+            active={running}
+            delay={at(2) + 0.3}
+            step={1}
+            flash
+          />
+          <Cursor />
+        </m.div>
 
-      <Reveal step={2} className="mt-10" distance={24}>
-        <Card className="p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-white/85">
-            <m.span
-              className="inline-flex"
-              initial={{ rotate: -40, opacity: 0 }}
-              animate={
-                sleeping
-                  ? { rotate: 0, opacity: 1 }
-                  : { rotate: -40, opacity: 0 }
-              }
-              transition={cueTransition(sleeping, 0.2, {
-                duration: DUR.hero,
-                ease: EASE.expo,
-              })}
-            >
-              <IconMoonStars size={18} />
-            </m.span>
-            And while you sleep
-          </div>
-          <Stagger
-            step={2}
-            delayChildren={0.3}
-            staggerChildren={0.06}
-            className="mt-3 flex flex-wrap gap-2"
-          >
-            {ROUTINES.map((routine) => (
-              <StaggerItem
-                key={routine}
-                className="rounded-full bg-white/[0.07] px-3 py-1 text-sm"
+        <Reveal step={2} className="mt-10" distance={24}>
+          <Card className="p-5">
+            <div className="flex items-center gap-2 text-sm font-medium text-white/85">
+              <m.span
+                className="inline-flex"
+                initial={{ rotate: -40, opacity: 0 }}
+                animate={
+                  sleeping
+                    ? { rotate: 0, opacity: 1 }
+                    : { rotate: -40, opacity: 0 }
+                }
+                transition={cueTransition(sleeping, 0.2, {
+                  duration: DUR.hero,
+                  ease: EASE.expo,
+                })}
               >
-                {routine}
-              </StaggerItem>
-            ))}
-          </Stagger>
-          <div className="mt-3 text-xs text-white/45">
-            <MaskedText step={2} delay={0.7} stagger={0.02} duration={0.7}>
-              Nightly routines that open their own bundles of changes, ready for
-              you to review in the morning.
-            </MaskedText>
-          </div>
-        </Card>
-      </Reveal>
+                <IconMoonStars size={18} />
+              </m.span>
+              And while you sleep
+            </div>
+            <Stagger
+              step={2}
+              delayChildren={0.3}
+              staggerChildren={0.06}
+              className="mt-3 flex flex-wrap gap-2"
+            >
+              {ROUTINES.map((routine) => (
+                <StaggerItem
+                  key={routine}
+                  className="rounded-full bg-white/[0.07] px-3 py-1 text-sm"
+                >
+                  {routine}
+                </StaggerItem>
+              ))}
+            </Stagger>
+          </Card>
+        </Reveal>
+      </div>
 
       <Footnote>
         Auto-merge workflow landed 3 September 2026. Always-on checks were

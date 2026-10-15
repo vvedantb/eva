@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -168,7 +167,6 @@ export function AnnualProviders() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Platform · Providers</Kicker>
         <Title size="md">Not tied to one supplier.</Title>
       </Reveal>
 

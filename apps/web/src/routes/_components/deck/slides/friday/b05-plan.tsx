@@ -4,7 +4,6 @@ import { cn } from "@eva/ui";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -191,30 +190,31 @@ export function FridayPlan() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Using Eva · Plans</Kicker>
         <Title size="md">Ask for a plan first.</Title>
       </Reveal>
 
-      <Reveal delay={0.1} className="mt-12 flex justify-center">
-        <FriWindow
-          label="Session"
-          className="h-[240px] w-[620px]"
-          bodyClassName="flex flex-col gap-6 px-6 py-5"
-          trailing={<TabStrip asked={asked} />}
-        >
-          <div className="relative flex min-h-[96px] items-center justify-center">
-            <PlanDropdown asked={asked} />
-            <PlanBubble asked={asked} />
-          </div>
-          <PromptBox asked={asked} />
-        </FriWindow>
-      </Reveal>
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <Reveal delay={0.1} className="flex justify-center">
+          <FriWindow
+            label="Session"
+            className="h-[240px] w-[620px]"
+            bodyClassName="flex flex-col gap-6 px-6 py-5"
+            trailing={<TabStrip asked={asked} />}
+          >
+            <div className="relative flex min-h-[96px] items-center justify-center">
+              <PlanDropdown asked={asked} />
+              <PlanBubble asked={asked} />
+            </div>
+            <PromptBox asked={asked} />
+          </FriWindow>
+        </Reveal>
 
-      <p className="mt-11 text-center text-3xl text-white/85">
-        <MaskedText step={1} delay={TAB_AT + 0.2}>
-          No setting. <Accent>Just ask.</Accent>
-        </MaskedText>
-      </p>
+        <p className="mt-11 text-center text-3xl text-white/85">
+          <MaskedText step={1} delay={TAB_AT + 0.2}>
+            No setting. <Accent>Just ask.</Accent>
+          </MaskedText>
+        </p>
+      </div>
 
       <Footnote>The plan mode control was removed on 23 August 2026.</Footnote>
     </Shell>

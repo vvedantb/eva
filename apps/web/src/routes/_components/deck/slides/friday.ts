@@ -32,9 +32,9 @@ import { FridayClose } from "./friday/b16-close";
 
 /**
  * Friday session deck order — the last three months, for a non-technical
- * audience. Five acts, each with its own kicker prefix: three months, using
- * Eva, on its own, trust and reach, and what's next; then the call to action.
- * The index here is the slide number minus one.
+ * audience. Five acts: three months, using Eva, on its own, trust and reach,
+ * and what's next; then the call to action. The index here is the slide
+ * number minus one.
  */
 export const FRIDAY_SLIDES: DeckSlide[] = [
   // ── Three months: the numbers, and where the work happens ───────────

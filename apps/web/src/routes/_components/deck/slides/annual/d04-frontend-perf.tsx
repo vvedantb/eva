@@ -3,7 +3,6 @@ import { AnnCCountDown } from "../_parts/AnnCCountDown";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -59,7 +58,7 @@ const DROPS: readonly Drop[] = [
 
 const TRACK_W = 380;
 const DURATION = 1.3;
-const ROW_H = 104;
+const ROW_H = 120;
 const BLEED = 260;
 const HEAD_GLOW =
   "radial-gradient(circle, #fff 0 16%, rgba(59,125,216,0.5) 34%, transparent 70%)";
@@ -188,11 +187,10 @@ export function AnnualFrontendPerf() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Kicker>Craft · Speed</Kicker>
         <Title size="md">Three waits, measured and cut.</Title>
       </Reveal>
 
-      <div className="relative isolate mt-16">
+      <div className="relative isolate mt-20">
         <div
           className="pointer-events-none absolute isolate -z-10"
           style={{ inset: -BLEED }}

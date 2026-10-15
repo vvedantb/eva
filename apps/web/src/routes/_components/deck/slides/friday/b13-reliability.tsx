@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Shell,
   Title,
   useDeckStep,
@@ -42,7 +41,6 @@ export function FridayReliability() {
 
   return (
     <Shell className="py-14">
-      <Kicker>Trust and reach · Reliability</Kicker>
       <Title size="md">
         When it breaks, <Accent>you know</Accent>.
       </Title>

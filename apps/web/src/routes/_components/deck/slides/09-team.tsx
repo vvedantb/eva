@@ -4,7 +4,6 @@ import {
   BRAND,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -49,7 +48,7 @@ const LIGHT = [
   null,
   ...PEOPLE.map((_, index) => ({
     x: 96 + CARD_W / 2 + index * (CARD_W + CARD_GAP),
-    y: 345,
+    y: 330,
     size: 520,
   })),
 ];
@@ -135,7 +134,6 @@ export function Slide09Team() {
       <Spotlight shots={LIGHT} />
 
       <Reveal>
-        <Kicker>In use · The team</Kicker>
         <Title size="md" className="text-balance">
           Built by the team, not just for them.
         </Title>
@@ -144,7 +142,7 @@ export function Slide09Team() {
       <Stagger
         delayChildren={0.3}
         staggerChildren={0.1}
-        className="mt-14 flex gap-6"
+        className="mt-20 flex gap-6"
       >
         {PEOPLE.map((person, index) => (
           <StaggerItem key={person.name}>
@@ -153,7 +151,7 @@ export function Slide09Team() {
         ))}
       </Stagger>
 
-      <p className="mt-12 text-3xl text-white/85">
+      <p className="mt-16 text-3xl text-white/85">
         <MaskedText step={4} delay={0.55}>
           <Accent>
             <CountRoll value={303} step={4} duration={1.2} delay={0.7} />

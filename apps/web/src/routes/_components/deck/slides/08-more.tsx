@@ -12,13 +12,7 @@ import {
 import { m } from "motion/react";
 import type { TargetAndTransition } from "motion/react";
 import { motionSpring } from "@eva/ui";
-import {
-  Card,
-  Kicker,
-  Reveal,
-  Shell,
-  Title,
-} from "../_components/DeckPrimitives";
+import { Card, Reveal, Shell, Title } from "../_components/DeckPrimitives";
 import { CountRoll, EASE, GridBackdrop } from "../_components/motion";
 
 interface Item {
@@ -108,7 +102,6 @@ export function Slide08More() {
     <Shell className="isolate">
       <GridBackdrop variant="dots" cell={28} period={9} className="top-1/4" />
       <Reveal>
-        <Kicker>Trust and reach · Also shipped</Kicker>
         <Title>And a great deal more.</Title>
       </Reveal>
 

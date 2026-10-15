@@ -2,7 +2,6 @@ import { cn } from "@eva/ui";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -36,9 +35,6 @@ export function IntroStack() {
   return (
     <Shell className={cn("justify-center", palette.surface)}>
       <Reveal>
-        <Kicker className={palette.kicker}>Tech Stack</Kicker>
-      </Reveal>
-      <Reveal delay={0.1}>
         <Title size="md" className={palette.title}>
           Built on proven foundations
         </Title>

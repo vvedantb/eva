@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -143,9 +142,6 @@ function CommitLog() {
 export function AnnualDayOne() {
   return (
     <Shell className="justify-center py-16">
-      <Reveal from="none">
-        <Kicker>Origin · Day one</Kicker>
-      </Reveal>
       <Reveal delay={0.1}>
         <Title size="xl">11 January 2026</Title>
       </Reveal>

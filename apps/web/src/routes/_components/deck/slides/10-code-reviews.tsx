@@ -5,7 +5,6 @@ import {
   Accent,
   BRAND,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -137,11 +136,10 @@ export function Slide10CodeReviews() {
     <Shell className="isolate py-14">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Kicker>What&apos;s next · Code reviews</Kicker>
         <Title size="md">Let the model find the bugs.</Title>
       </Reveal>
 
-      <div className="mt-14 grid grid-cols-[460px_1fr] gap-12">
+      <div className="mt-16 grid grid-cols-[460px_1fr] gap-12">
         {/* Once every line is struck, the old lane recedes. */}
         <m.div
           className="flex origin-left flex-col gap-3.5"
@@ -190,7 +188,7 @@ export function Slide10CodeReviews() {
         </div>
       </div>
 
-      <div className="mt-14 text-3xl text-pretty text-white/85">
+      <div className="mt-20 text-3xl text-pretty text-white/85">
         <MaskedText step={3} delay={0.1} stagger={0.05}>
           The question is no longer <Accent>is this perfect</Accent>, it is{" "}
           <Accent>can we undo it</Accent>.

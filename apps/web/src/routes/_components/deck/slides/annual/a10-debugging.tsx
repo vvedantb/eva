@@ -2,7 +2,6 @@ import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -150,11 +149,10 @@ export function AnnualDebugging() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Craft · Debugging</Kicker>
         <Title size="md">Symptom, cause, then a test.</Title>
       </Reveal>
 
-      <div className="relative mt-10 h-[340px] w-full">
+      <div className="relative mt-20 h-[340px] w-full">
         <AnimatePresence>
           {item ? (
             <CaseView key={item.date} item={item} />

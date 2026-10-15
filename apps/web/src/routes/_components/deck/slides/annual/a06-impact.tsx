@@ -4,7 +4,6 @@ import {
   Accent,
   Card,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -129,7 +128,6 @@ export function AnnualImpact() {
     <Shell className="isolate py-12">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Kicker>In use · Impact</Kicker>
         <Title size="md" className="text-balance">
           Not faster typing. A different job.
         </Title>

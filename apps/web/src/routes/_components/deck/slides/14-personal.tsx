@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -56,7 +55,6 @@ export function Slide14Personal() {
     <Shell className="isolate py-10">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Kicker>What&apos;s next · Eva and the rest</Kicker>
         <Title size="md" className="text-balance">
           Same idea. <Accent>Ours to shape.</Accent>
         </Title>

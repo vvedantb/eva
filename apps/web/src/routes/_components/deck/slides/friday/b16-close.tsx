@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Kicker,
   Shell,
   Title,
   useDeckStep,
@@ -95,7 +94,6 @@ export function FridayClose() {
       <BrandSweep />
 
       <div className="relative">
-        <Kicker>On Monday</Kicker>
         <Title size="md">Three things to try.</Title>
 
         <div className="mt-14 flex flex-col gap-7">

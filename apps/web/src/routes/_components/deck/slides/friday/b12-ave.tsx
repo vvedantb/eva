@@ -9,9 +9,7 @@ import {
 import { m } from "motion/react";
 import {
   Accent,
-  Body,
   Footnote,
-  Kicker,
   Shell,
   Title,
   useDeckStep,
@@ -22,7 +20,6 @@ import {
   DrawPath,
   EASE,
   GridBackdrop,
-  MaskedText,
   Pulse,
   SETTLE,
   Sheen,
@@ -121,82 +118,82 @@ function NodePill({ node, index }: { node: Node; index: number }) {
 export function FridayAve() {
   return (
     <Shell className="py-12">
-      <Kicker>On its own · Manager Ave</Kicker>
       <Title size="md">
         One chat that <Accent>runs the others</Accent>.
       </Title>
-      <Body className="mt-4 max-w-3xl">
-        <MaskedText delay={0.45} duration={0.8}>
-          It supervises. It does not write the code.
-        </MaskedText>
-      </Body>
 
-      <div className="relative isolate mt-10" style={{ width: W, height: H }}>
-        <GridBackdrop
-          variant="dots"
-          cell={26}
-          period={10}
-          className="-inset-8"
-        />
+      <div className="flex flex-1 flex-col justify-center pb-8">
+        <div className="relative isolate" style={{ width: W, height: H }}>
+          <GridBackdrop
+            variant="dots"
+            cell={26}
+            period={10}
+            className="-inset-8"
+          />
 
-        {/* Out: each wire draws from the hub with a light riding its tip. */}
-        {NODES.map((node, index) => (
-          <div key={`out-${node.y}`} className="absolute inset-0">
-            <DrawPath
-              d={out(node.y)}
-              width={W}
-              height={H}
-              step={1}
-              delay={index * LINE_STAGGER}
-              duration={DRAW}
-              dot
-            />
-          </div>
-        ))}
-
-        {/* Back: the two finished jobs send a green light home. */}
-        {REPORT_ORDER.map((node, order) => (
-          <div key={`back-${node.y}`} className="absolute inset-0">
-            <DrawPath
-              d={back(node.y)}
-              width={W}
-              height={H}
-              step={2}
-              delay={0.3 + order * 0.18}
-              duration={0.8}
-              color={DONE}
-              dot
-            />
-          </div>
-        ))}
-
-        <m.div
-          className="absolute top-[85px] left-0 h-[130px] w-[195px]"
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.5 }}
-        >
-          <Sheen step={2} delay={1.05} className="h-full rounded-[22px]">
-            <div className="flex h-full flex-col justify-between rounded-[22px] bg-white/[0.07] p-5 ring-1 ring-white/10 ring-inset">
-              <div className="flex items-start justify-between">
-                <IconMessageCircle
-                  size={26}
-                  stroke={1.6}
-                  aria-hidden
-                  className="text-white/75"
-                />
-                <Pulse color={BRAND.blue} size={8} delay={0.9} />
-              </div>
-              <div className="text-lg leading-tight font-semibold text-white">
-                Manager Ave
-              </div>
+          {/* Out: each wire draws from the hub with a light riding its tip. */}
+          {NODES.map((node, index) => (
+            <div key={`out-${node.y}`} className="absolute inset-0">
+              <DrawPath
+                d={out(node.y)}
+                width={W}
+                height={H}
+                step={1}
+                delay={index * LINE_STAGGER}
+                duration={DRAW}
+                dot
+              />
             </div>
-          </Sheen>
-        </m.div>
+          ))}
 
-        {NODES.map((node, index) => (
-          <NodePill key={`${node.label}-${node.y}`} node={node} index={index} />
-        ))}
+          {/* Back: the two finished jobs send a green light home. */}
+          {REPORT_ORDER.map((node, order) => (
+            <div key={`back-${node.y}`} className="absolute inset-0">
+              <DrawPath
+                d={back(node.y)}
+                width={W}
+                height={H}
+                step={2}
+                delay={0.3 + order * 0.18}
+                duration={0.8}
+                color={DONE}
+                dot
+              />
+            </div>
+          ))}
+
+          <m.div
+            className="absolute top-[85px] left-0 h-[130px] w-[195px]"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.5 }}
+          >
+            <Sheen step={2} delay={1.05} className="h-full rounded-[22px]">
+              <div className="flex h-full flex-col justify-between rounded-[22px] bg-white/[0.07] p-5 ring-1 ring-white/10 ring-inset">
+                <div className="flex items-start justify-between">
+                  <IconMessageCircle
+                    size={26}
+                    stroke={1.6}
+                    aria-hidden
+                    className="text-white/75"
+                  />
+                  <Pulse color={BRAND.blue} size={8} delay={0.9} />
+                </div>
+                <div className="text-lg leading-tight font-semibold text-white">
+                  Manager Ave
+                </div>
+              </div>
+            </Sheen>
+          </m.div>
+
+          {NODES.map((node, index) => (
+            <NodePill
+              key={`${node.label}-${node.y}`}
+              node={node}
+              index={index}
+            />
+          ))}
+        </div>
       </div>
 
       <Footnote>

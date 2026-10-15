@@ -6,7 +6,6 @@ import {
   DUR,
   DrawPath,
   EASE,
-  MaskedText,
   Sheen,
   cueTransition,
 } from "../../_components/motion";
@@ -163,12 +162,6 @@ export function AnnualAdoptionChart() {
           color="rgba(255,255,255,0.35)"
         />
       </div>
-
-      <p className="absolute top-2 left-0 max-w-[470px] text-sm leading-snug text-white/75">
-        <MaskedText step={1} delay={0.25} duration={DUR.slow} stagger={0.035}>
-          Cloud workspaces arrived in July. Use tripled and stayed there.
-        </MaskedText>
-      </p>
 
       <div className="relative flex items-end" style={{ gap: GAP }}>
         {MONTHS.map((bar, index) => (

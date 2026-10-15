@@ -2,9 +2,7 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Stagger,
@@ -36,19 +34,11 @@ const FIGURES: readonly { value: number; label: string; accent?: boolean }[] = [
 export function AnnualAdoption() {
   return (
     <Shell className="py-12">
-      <Reveal from="none">
-        <Kicker>In use · Adoption</Kicker>
-      </Reveal>
       <Reveal delay={0.1}>
         <Title size="md">From one person to the whole team.</Title>
       </Reveal>
-      <Reveal delay={0.25}>
-        <Body className="mt-4 max-w-4xl text-lg">
-          Sessions started each month. The habit spread from July.
-        </Body>
-      </Reveal>
 
-      <Camera shots={ADOPTION_SHOTS} className="mt-4">
+      <Camera shots={ADOPTION_SHOTS} className="mt-16">
         <AnnualAdoptionChart />
       </Camera>
 
@@ -56,7 +46,7 @@ export function AnnualAdoption() {
         step={2}
         delayChildren={0.05}
         staggerChildren={0.1}
-        className="mt-8 grid grid-cols-3 gap-6"
+        className="mt-12 grid grid-cols-3 gap-6"
       >
         {FIGURES.map((figure, index) => (
           <StaggerItem key={figure.label}>

@@ -2,9 +2,7 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import {
   Accent,
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -107,13 +105,9 @@ export function AnnualOcc() {
   const step = useDeckStep();
 
   return (
-    <Shell className="py-12">
+    <Shell className="justify-center py-12">
       <Reveal>
-        <Kicker>Craft · Performance</Kicker>
         <Title size="md">The database was fighting itself.</Title>
-        <Body className="mt-4 max-w-3xl text-lg">
-          Almost all the load was writes colliding, not reads.
-        </Body>
       </Reveal>
 
       <div className="relative mt-10 h-[340px]">

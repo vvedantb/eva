@@ -16,7 +16,6 @@ import { moA3InOutAt } from "../_parts/MoA3Timing";
 import {
   Accent,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -158,12 +157,11 @@ export function AnnualSecurity() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Kicker>Craft · Security</Kicker>
         <Title size="md">One guard on every door.</Title>
       </Reveal>
 
       <m.div
-        className="relative mt-10 overflow-hidden rounded-[14px]"
+        className="relative mt-14 overflow-hidden rounded-[14px]"
         animate={{ opacity: step >= 2 ? 0.7 : 1 }}
         transition={{ duration: DUR.slow, ease: EASE.out }}
       >
@@ -197,32 +195,22 @@ export function AnnualSecurity() {
         />
       </m.div>
 
-      <div className="relative mt-5 h-10">
-        <DrawPath
-          d={`M0 1.5 L${ROW_W} 1.5`}
-          width={ROW_W}
-          height={3}
-          step={1}
-          delay={SCAN_LEAD}
-          duration={SCAN}
-          strokeWidth={3}
-          dot
-        />
-        <div className="pt-3.5 text-center">
-          <MaskedText
-            step={1}
-            delay={SCAN_LEAD + SCAN - 0.2}
-            className="text-sm text-white/50"
-          >
-            Seven surfaces, one shared check
-          </MaskedText>
-        </div>
-      </div>
+      <DrawPath
+        d={`M0 1.5 L${ROW_W} 1.5`}
+        width={ROW_W}
+        height={3}
+        step={1}
+        delay={SCAN_LEAD}
+        duration={SCAN}
+        strokeWidth={3}
+        dot
+        className="mt-5"
+      />
 
       <Reveal
         step={2}
         distance={24}
-        className="mt-14 flex justify-center gap-28"
+        className="mt-16 flex justify-center gap-28"
       >
         <WarningCount
           from={2}
@@ -238,7 +226,7 @@ export function AnnualSecurity() {
         />
       </Reveal>
 
-      <div className="mt-14 text-center">
+      <div className="mt-16 text-center">
         <MaskedText step={3} className="text-3xl text-white/85">
           Checked against <Accent>production</Accent>, not only against tests.
         </MaskedText>

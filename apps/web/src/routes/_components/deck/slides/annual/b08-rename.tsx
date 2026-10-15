@@ -1,13 +1,7 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { accentSliceStyle } from "../../_components/DeckAccent";
-import {
-  Footnote,
-  Kicker,
-  Reveal,
-  Shell,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Footnote, Shell, useDeckStep } from "../../_components/DeckPrimitives";
 import {
   BRAND,
   DUR,
@@ -189,10 +183,6 @@ function Moments() {
 export function AnnualRename() {
   return (
     <Shell center className="py-14">
-      <Reveal from="none">
-        <Kicker>Origin · The name</Kicker>
-      </Reveal>
-
       <NameSwap />
 
       <Moments />

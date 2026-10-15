@@ -2,9 +2,7 @@ import type { ReactNode } from "react";
 import { IconArrowBackUp, IconCloud, IconRobot } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
-  Body,
   Footnote,
-  Kicker,
   Reveal,
   Shell,
   Title,
@@ -106,20 +104,14 @@ export function Slide12Future() {
       <div className="grid min-h-0 flex-1 grid-cols-[532px_1fr] gap-4 pb-8">
         <div>
           <Reveal>
-            <Kicker>What&apos;s next · Direction</Kicker>
             <Title size="lg" className="leading-[1.02] tracking-[-0.025em]">
               Manage agents,
               <br />
               not tasks.
             </Title>
           </Reveal>
-          <Reveal delay={0.6}>
-            <Body className="mt-5 text-lg">
-              Three shifts, each already true inside Eva.
-            </Body>
-          </Reveal>
 
-          <div className="mt-10 flex w-[500px] flex-col gap-4">
+          <div className="mt-14 flex w-[500px] flex-col gap-4">
             {SHIFTS.map((shift) => (
               <ShiftCard key={shift.heading} shift={shift} />
             ))}

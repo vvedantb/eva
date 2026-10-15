@@ -1,6 +1,6 @@
 import { m } from "motion/react";
 import { LogoMark } from "@/lib/components/LogoMark";
-import { Body, Shell } from "../_components/DeckPrimitives";
+import { Shell } from "../_components/DeckPrimitives";
 import {
   BRAND,
   DUR,
@@ -93,12 +93,6 @@ export function Slide01Title() {
             />
           </span>
         </h1>
-
-        <Body className="text-white/55">
-          <MaskedText delay={1.35} stagger={0.03}>
-            What changed this summer, and what it means for you.
-          </MaskedText>
-        </Body>
       </m.div>
     </Shell>
   );
