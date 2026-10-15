@@ -75,11 +75,11 @@ Detail: cancelled work is shown rather than hidden, because a queue that quietly
 Figures: 141 quick tasks: 29 done, 43 waiting in code review, 14 in business check, 25 not started, 30 cancelled. CarePulse quick tasks created in Eva, 1 June to 10 September 2026, by status on 11 September 2026.
 Next: Eva already has the answer to that queue; here is how it works, and the goal for CarePulse.`,
 
-  "friday-b19-pipeline": `On Eva, moving a task to code review is the last thing a person does; the goal is the same for CarePulse.
-→ Step 1: Eva's route runs. The task moves to code review, the Grok bot is notified, it applies any database migrations and backend changes, deploys, then merges the pull request. Nobody waits on it.
-→ Step 2: CarePulse today. The task reaches code review and stops; the 43 from the last slide are sitting at this point.
-→ Step 3: the goal. The same route on CarePulse, so the moment a task moves to code review it is on the CarePulse repository a few minutes later.
-Detail: you saw the short version of this on the auto-merge slide; this is the full route. The trigger is a GitHub workflow that sends the Grok bot a message when a pull request leaves draft or gets a new push. The order matters: backend and migrations go first, so the merged code never runs against a database that is not ready. Be clear that the CarePulse route is a goal, not a date; it needs the checks and the human sign-off for risky changes from the next slide first.
+  "friday-b19-pipeline": `On Eva, dragging a task into code review is the last thing a person does; the goal is the same for CarePulse.
+→ Step 1: the drag. The task moves from In Progress to Code Review, and that single move wakes the Grok bot.
+→ Step 2: the bot works. It applies the database migrations, deploys the backend, then merges the pull request. The task moves itself to Merged and the new button is live on the page.
+→ Step 3: the goal. Eva works like this today; next, the moment a CarePulse task moves to code review, it is on the CarePulse repository a few minutes later.
+Detail: you saw the short version of this on the auto-merge slide; this is the whole route. Under the hood a GitHub workflow sends the Grok bot a message when a pull request leaves draft or gets a new push. The order matters: backend and migrations go first, so merged code never runs against a database that is not ready. Be clear that CarePulse is a goal, not a date; it needs the model checks and the human sign-off for risky changes from the next slide first. The board, task and page are an illustration, not a recording.
 Figures: Eva auto-merge landed 3 September 2026. 43 CarePulse quick tasks in code review on 11 September 2026. "A few minutes" is the target, not a measured time.
 Next: The first step on that pipeline is letting the model do the first read.`,
 

@@ -1,12 +1,4 @@
-import type { Icon } from "@tabler/icons-react";
-import {
-  IconDatabase,
-  IconGitMerge,
-  IconGitPullRequest,
-  IconHourglassHigh,
-  IconRobot,
-  IconRocket,
-} from "@tabler/icons-react";
+import { IconArrowRight, IconCircleCheckFilled } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
@@ -18,117 +10,68 @@ import {
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
+  Connector,
   DUR,
   EASE,
-  LEAVE,
   Pulse,
+  Spotlight,
   cueTransition,
 } from "../../_components/motion";
-import { PipelineConnector, PipelineNode } from "../_parts/Pipeline";
+import {
+  BOARD_H,
+  BOARD_W,
+  DROP_AT,
+  DROP_POINT,
+  Fri4ReviewBoard,
+} from "../_parts/Fri4ReviewBoard";
+import { Fri4GrokRun, Fri4LivePage } from "../_parts/Fri4GrokRun";
 
-const ICON_SIZE = 26;
+const W = 1088;
+const SIDE_X = BOARD_W + 24;
+const CLOSING = 3;
 
-interface Stage {
-  icon: Icon;
-  label: string;
-}
-
-/** The route both repositories share; only the last label differs. */
-const ROUTE: readonly Stage[] = [
-  { icon: IconGitPullRequest, label: "Moved to code review" },
-  { icon: IconRobot, label: "Grok bot notified" },
-  { icon: IconDatabase, label: "Migrations and backend applied" },
-  { icon: IconRocket, label: "Deployed" },
-  { icon: IconGitMerge, label: "Pull request merged" },
-];
-
-const CAREPULSE_LAST = "On CarePulse in minutes";
-
-const HOP = 0.42;
-const START = 0.35;
-const nodeAt = (index: number) => START + index * HOP;
-
-/** Eva fills the frame, the camera drops to CarePulse, then pulls back on both. */
+/** Tilted on the board, square while the bot works, pulled back for the goal. */
 const SHOTS: readonly CameraShot[] = [
-  { translateZ: 30, y: 60 },
-  { translateZ: 20, y: 50 },
-  { y: -10 },
-  { translateZ: -30 },
+  { rotateX: 7, rotateY: 4, translateZ: -30 },
+  { rotateX: 3, rotateY: 2 },
+  { rotateY: -3, translateZ: 16 },
+  { translateZ: -36, y: -8 },
 ];
 
-interface LaneProps {
-  name: string;
-  /** The first node: the task arriving in code review. */
-  shown: boolean;
-  /** The rest of the route, lit one stop at a time. */
-  running: boolean;
-  /** The build step that lights the route, which cues each node's sheen. */
-  step: number;
-  lastLabel?: string;
-}
+/** The light follows the work: the card, the bot, the live page, then all. */
+const GLOW = [
+  { x: 110, y: 160, size: 520 },
+  { x: 330, y: 160, size: 560 },
+  { x: SIDE_X + 210, y: 230, size: 620 },
+  { x: W / 2, y: 200, size: 900 },
+];
 
-function Lane({ name, shown, running, step, lastLabel }: LaneProps) {
-  return (
-    <div>
-      <m.div
-        className="mb-3 text-sm font-medium text-white/50"
-        initial={{ opacity: 0, x: -12 }}
-        animate={shown ? { opacity: 1, x: 0 } : { opacity: 0, x: -12 }}
-        transition={cueTransition(shown, 0, {
-          duration: DUR.base,
-          ease: EASE.out,
-        })}
-      >
-        {name}
-      </m.div>
-      <div className="flex items-stretch">
-        {ROUTE.map((stage, index) => {
-          const last = index === ROUTE.length - 1;
-          const first = index === 0;
-          return (
-            <div key={stage.label} className="flex items-stretch">
-              {first ? null : (
-                <PipelineConnector
-                  active={running}
-                  delay={nodeAt(index) - 0.3}
-                />
-              )}
-              <PipelineNode
-                icon={<stage.icon size={ICON_SIZE} />}
-                label={last && lastLabel ? lastLabel : stage.label}
-                active={first ? shown : running}
-                delay={first ? 0.15 : nodeAt(index)}
-                step={first ? 0 : step}
-                flash={last}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+/** Eva today, CarePulse next: the one line the slide is building to. */
+function Goal() {
+  const shown = useDeckStep() >= CLOSING;
+  const chip = "flex items-center gap-2 rounded-full px-4 py-2 text-base";
 
-/**
- * The stalled CarePulse route: a chip sits over the empty stops while the
- * work waits for a person, and leaves when the route starts to run.
- */
-function Waiting({ shown }: { shown: boolean }) {
   return (
     <m.div
-      aria-hidden={!shown}
-      className="pointer-events-none absolute inset-y-0 right-0 left-[228px] flex items-end justify-center pb-[52px]"
-      initial={{ opacity: 0, scale: 0.94 }}
-      animate={shown ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.94 }}
-      transition={
-        shown ? { duration: DUR.slow, ease: EASE.expo, delay: 0.55 } : LEAVE
-      }
+      className="mt-6 flex items-center justify-center gap-4"
+      initial={{ opacity: 0, y: 18 }}
+      animate={shown ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+      transition={cueTransition(shown, 0.35, {
+        duration: DUR.slow,
+        ease: EASE.expo,
+      })}
     >
-      <div className="flex items-center gap-2.5 rounded-full bg-white/[0.08] px-5 py-2.5 text-base text-white/85">
-        <Pulse step={2} size={8} delay={0.7} />
-        <IconHourglassHigh size={18} className="text-white/60" aria-hidden />
-        <span className="tabular-nums">43 waiting for a person</span>
-      </div>
+      <span className={`${chip} bg-white/[0.07] text-white/80`}>
+        <IconCircleCheckFilled size={18} className="text-[#3fb37f]" />
+        Eva, today
+      </span>
+      <IconArrowRight size={20} className="text-white/35" aria-hidden />
+      <span
+        className={`${chip} bg-white/[0.1] text-white ring-1 ring-[#8B3FB8]/60`}
+      >
+        <Pulse step={CLOSING} delay={0.7} size={8} />
+        CarePulse, next: on the repo in minutes
+      </span>
     </m.div>
   );
 }
@@ -142,37 +85,52 @@ export function FridayPipeline() {
         Code review to live, in <Accent>minutes</Accent>.
       </Title>
 
-      <Camera shots={SHOTS} className="my-auto pb-8">
+      <Camera shots={SHOTS} className="mt-8">
         <m.div
-          animate={{ opacity: step >= 2 ? 0.55 : 1 }}
-          transition={cueTransition(step >= 2, 0, {
+          className="relative isolate"
+          style={{ width: W, height: BOARD_H }}
+          animate={{ opacity: step >= CLOSING ? 0.5 : 1 }}
+          transition={cueTransition(step >= CLOSING, 0, {
             duration: DUR.slow,
             ease: EASE.out,
           })}
         >
-          <Lane name="Eva, today" shown running={step >= 1} step={1} />
-        </m.div>
-
-        <m.div
-          className="relative mt-12"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: step >= 2 ? 1 : 0 }}
-          transition={cueTransition(step >= 2, 0, { duration: DUR.base })}
-        >
-          <Lane
-            name={step >= 3 ? "CarePulse, the goal" : "CarePulse, today"}
-            shown={step >= 2}
-            running={step >= 3}
-            step={3}
-            lastLabel={CAREPULSE_LAST}
-          />
-          <Waiting shown={step === 2} />
+          <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
+          <div className="absolute top-0 left-0">
+            <Fri4ReviewBoard />
+          </div>
+          <div
+            className="absolute top-0 flex flex-col gap-4"
+            style={{ left: SIDE_X, width: W - SIDE_X }}
+          >
+            <Fri4GrokRun />
+            <Fri4LivePage />
+          </div>
+          {/* The drop wakes the bot: a light runs from the card to its log. */}
+          <m.div
+            className="pointer-events-none absolute inset-0 z-30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: step === 1 ? 1 : 0 }}
+            transition={{ duration: DUR.fast, delay: step === 1 ? DROP_AT : 0 }}
+          >
+            <Connector
+              from={DROP_POINT}
+              to={{ x: SIDE_X - 4, y: 22 }}
+              bend={-40}
+              step={1}
+              delay={DROP_AT}
+              flowPeriod={1.1}
+            />
+          </m.div>
         </m.div>
       </Camera>
 
+      <Goal />
+
       <Footnote>
-        Auto-merge on Eva since 3 September 2026. CarePulse: 43 quick tasks in
-        code review on 11 September 2026. The CarePulse route is a goal.
+        Eva auto-merge since 3 September 2026. The board, task and page are an
+        illustration. 43 CarePulse quick tasks sat in code review on 11
+        September 2026.
       </Footnote>
     </Shell>
   );

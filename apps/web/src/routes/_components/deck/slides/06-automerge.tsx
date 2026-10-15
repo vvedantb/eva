@@ -4,7 +4,6 @@ import {
   IconHandClick,
   IconMoonStars,
   IconPointerFilled,
-  IconRobot,
   IconRocket,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
@@ -18,6 +17,7 @@ import {
   Title,
   useDeckStep,
 } from "../_components/DeckPrimitives";
+import { GrokMark } from "@/lib/components/grokBot/GrokMark";
 import { DUR, EASE, cueTransition } from "../_components/motion";
 import { PipelineConnector, PipelineNode } from "./_parts/Pipeline";
 
@@ -118,7 +118,7 @@ export function Slide06Automerge() {
           />
           <PipelineConnector active={running} delay={at(0)} />
           <PipelineNode
-            icon={<IconRobot size={ICON_SIZE} />}
+            icon={<GrokMark size={ICON_SIZE} className="text-white" />}
             label="Grok bot wakes up"
             active={running}
             delay={at(0) + 0.3}
