@@ -177,7 +177,7 @@ Next: One more routine runs at eight, and it is written for you.`,
 → Step 2: the Today and Yesterday timeline slides in. That is the /today page, where the summaries stack up day by day.
 Detail: the routine is read-only; it writes about what happened and cannot change anything. The first version read like an engineer's log, so the next day its instructions banned file names and jargon. The words on the card show the shape of a summary, not a real one.
 Figures: the 08:00 UTC weekday summary started 20 August 2026 and was rewritten for non-technical readers on 21 August 2026.
-Next: Underneath much of this, one small model makes the small decisions.`,
+Next: And once a week, Eva writes up everything that shipped.`,
 
   "friday-b11-skills": `A skill is a command someone has already written down, so nobody explains the same job twice.
 → Step 1: the picker opens out of the composer and the commands stagger in. There is nothing to remember: type a slash and choose.
@@ -219,6 +219,13 @@ Next: There is plenty more that never earned its own slide.`,
 → Step 3: review what is waiting, then the closing line lands. Say it and stop.
 Detail: do not add new material here. If anyone asks where to start, the answer is the smallest annoying thing they already know about. The gradient behind the list moves slowly on purpose; let it run while the room reads.
 Next: One last thing about how this deck itself was made.`,
+
+  "friday-b22-weekly-changelog": `Once a week, Eva tells everyone what changed, in plain English, without anyone writing it.
+→ Step 1: the email opens. This is the real template Eva sends, with example text. Sections for new features, things that got faster, and fixes, each a short sentence a non-developer can read.
+→ Step 2: the facts. It runs every Monday morning by itself, Eva writes it from what shipped that week, and it has gone out 35 times since April.
+Detail: the Eva Weekly Changelog is an ordinary automation, the same kind anyone can set up. Each Monday at 03:00 UTC it reads that week's entries in Eva's internal changelog, rewrites them in plain English, and emails it to everyone who has email notifications switched on. The same text appears as a pop-up in the app the next time you open it. The bullets on screen are an example in the real format, not a real edition.
+Figures: 39 runs, 35 successful, first run 11 April 2026, latest 12 October 2026; schedule Monday 03:00 UTC. Source: Eva production records, read 15 October 2026.
+Next: Underneath much of this, one small model makes the small decisions.`,
 
   "friday-b20-jev-what": `Most AI models write; Jev is the opposite kind of model. It never writes anything, it only judges.
 → Step 1: a typical model. You ask a question and it writes new text back. That is useful, but the wording changes every time and it is hard to act on automatically.

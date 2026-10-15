@@ -23,6 +23,7 @@ import { FridayThreeWays } from "./friday/b07-three-ways";
 import { FridayReviews } from "./friday/b08-reviews";
 import { FridayAutomations } from "./friday/b09-automations";
 import { FridayStandup } from "./friday/b10-standup";
+import { FridayWeeklyChangelog } from "./friday/b22-weekly-changelog";
 import { FridaySkills } from "./friday/b11-skills";
 import { FridayAve } from "./friday/b12-ave";
 import { FridayReliability } from "./friday/b13-reliability";
@@ -153,6 +154,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     id: "friday-b10-standup",
     title: "Daily standup",
     Component: FridayStandup,
+    steps: 2,
+  },
+  {
+    id: "friday-b22-weekly-changelog",
+    title: "Weekly changelog",
+    Component: FridayWeeklyChangelog,
     steps: 2,
   },
   {
