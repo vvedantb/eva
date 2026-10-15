@@ -29,6 +29,8 @@ import { FridayReliability } from "./friday/b13-reliability";
 import { FridayMobile } from "./friday/b14-mobile";
 import { FridayArtifacts } from "./friday/b15-artifacts";
 import { FridayClose } from "./friday/b16-close";
+import { FridayJev } from "./friday/b17-jev";
+import { FridayLimits } from "./friday/b18-limits";
 
 /**
  * Friday session deck order — the last three months, for a non-technical
@@ -150,6 +152,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     Component: FridayStandup,
     steps: 2,
   },
+  {
+    id: "friday-b17-jev",
+    title: "Jev decides",
+    Component: FridayJev,
+    steps: 3,
+  },
 
   // ── Trust and reach: when it breaks, and everywhere it goes ─────────
   {
@@ -179,6 +187,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
   },
 
   // ── What's next: the queue, and where this is heading ───────────────
+  {
+    id: "friday-b18-limits",
+    title: "Same problems",
+    Component: FridayLimits,
+    steps: 3,
+  },
   {
     id: "11-whats-next",
     title: "The bottleneck",

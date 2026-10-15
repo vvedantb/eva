@@ -155,7 +155,7 @@ Next: Sessions are where most of the summer's changes landed.`,
 → Step 2: the search overlay. One search reaches every codebase, team, project, task, session, document and artifact.
 Detail: keyboard shortcuts are rebindable, so heavy users can set it up the way their hands expect. The whole loop (ask, build, preview, review, merge) now happens in one browser tab.
 Figures: reviewing and answering bundles inside Eva, 3 August 2026; search across everything, 24 July 2026; rebindable shortcuts, 6 August 2026.
-Next: Reviewing is now easy, but there is more of it than we can keep up with.`,
+Next: Reviewing is now easy; the harder question is why so much still needs a person, even as the models keep improving.`,
 
   "friday-b09-automations": `Some work does not need a person to start it, so it now starts itself overnight.
 → Step 1: the dial sweeps from three to five in the morning and the five routines light up in order. They are ready-made; installing one takes a click, not retyping instructions.
@@ -169,7 +169,7 @@ Next: One more routine runs at eight, and it is written for you.`,
 → Step 2: the Today and Yesterday timeline slides in. That is the /today page, where the summaries stack up day by day.
 Detail: the routine is read-only; it writes about what happened and cannot change anything. The first version read like an engineer's log, so the next day its instructions banned file names and jargon. The words on the card show the shape of a summary, not a real one.
 Figures: the 08:00 UTC weekday summary started 20 August 2026 and was rewritten for non-technical readers on 21 August 2026.
-Next: That is a lot running by itself, so the fair question is what happens when it goes wrong.`,
+Next: Underneath much of this, one small model makes the small decisions.`,
 
   "friday-b11-skills": `A skill is a command someone has already written down, so nobody explains the same job twice.
 → Step 1: the picker opens out of the composer and the commands stagger in. There is nothing to remember: type a slash and choose.
@@ -211,6 +211,22 @@ Next: There is plenty more that never earned its own slide.`,
 → Step 3: review what is waiting, then the closing line lands. Say it and stop.
 Detail: do not add new material here. If anyone asks where to start, the answer is the smallest annoying thing they already know about. The gradient behind the list moves slowly on purpose; let it run while the room reads.
 Next: One last thing about how this deck itself was made.`,
+
+  "friday-b17-jev": `Jev is a small, fast model whose only job is to decide: it answers fixed questions with a probability, never with prose.
+→ Step 1: the task flows into Jev and three kinds of question light up: yes or no, pick one, or a score. It answers only the questions it is given.
+→ Step 2: the answers come back as probabilities, and the line is where Eva acts. Above it, Eva tags or sorts the item; below it, nothing happens. The questions are fixed, so the same item is judged the same way every time.
+→ Step 3: the six places Eva asks it today: tagging tasks, sorting findings from the overnight routines by severity and spotting duplicates, checking a quick-task draft is clear enough, deciding how urgent an @-mention is, suggesting skills as you type, and flagging changes in a turn that nobody asked for.
+Detail: Jev (TypeSafe Jev) is reached through Vercel's AI Gateway with zero data retention requested. A larger model writes the work; Jev only judges it, which keeps each decision quick and cheap enough to run on every item. Agents can also call it through Eva's evaluate tool and write their own questions each time. The task and the three answers on screen are an illustration, not a real call; real thresholds differ by use: tags at 60%, duplicate hints at 70%, the draft nudge below 50%. Jev also arranges the interactive panels agents can show in chat (21 September 2026).
+Figures: evaluate tool, 17 September 2026; task tags, findings triage, draft readiness, mention urgency and skill suggestions, 18 September 2026; scope check, 22 September 2026. Source: Eva changelog, September 2026, and the backend Jev client.
+Next: That is a lot running by itself, so the fair question is what happens when it goes wrong.`,
+
+  "friday-b18-limits": `This is my view, not a measured law: the models keep getting better, yet the problems we wrote about in February are still the ones we write about in September.
+→ Step 1: the ladder climbs. Each step is a new model added to Eva, ten from April to September, from Anthropic, OpenAI and xAI.
+→ Step 2: the four problems light up, each drawn from its first mention to its latest. Three were on record before the first model on the ladder arrived, and all four were still being fixed in late summer.
+→ Step 3: the closing line. If better models alone fixed these, the lines would end; they do not. That suggests fully automating software development is nearing a limit, and the work left is judgement, review and the systems around the model.
+Detail: loses the thread: 26 February 2026 (context lost when a workspace was recreated) to 28 August 2026 (a restarted agent still starts without the conversation). Gets stuck: 3 March 2026 (a quick task hanging on "Generating response") to 21 September 2026 (a turn left stalled). Needs a human guard: 4 March 2026 ("never push to main" written into the prompts) to 2 September 2026 (Eva refusing to force-push after an agent rewrote its branch). Waits for review: 28 April 2026 (only ping reviewers when work is ready) to 11 September 2026 (43 waiting against 29 merged). A fifth, changes nobody asked for, is newer on the record: Manager Ave doing the work itself on 24 August 2026, and the Jev scope check built for it on 22 September 2026, so it is left off the chart. The project's own design notes, first written 8 February 2026, say: "Most failures are not model failures. They are system design failures." Be fair about the limits of the picture: the ladder shows when models arrived in Eva, not a capability score, and the lanes show what was written about, not how often it happened.
+Figures: models by the day each first appeared in Eva's model picker, from git history: Opus 4.5 14 April, Opus 4.6 17 April, GPT-5.5 11 May, Fable 5 10 June, Grok 4.5 10 July, GPT-5.6 10 August, Grok 4.6 12 August, Fable 5.1 1 September, GPT-6 Astra 11 September, Grok 4.7 21 September 2026. Problems from Eva's changelog, February to September 2026; the review figures are CarePulse quick tasks by status on 11 September 2026.
+Next: The clearest of those problems is the review queue, which is where the bottleneck now sits.`,
 
   // ---------------------------------------------------------------------------
   // Annual CDM deck
