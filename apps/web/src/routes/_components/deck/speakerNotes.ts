@@ -224,7 +224,9 @@ Next: One last thing about how this deck itself was made.`,
 → Step 1: a typical model. You ask a question and it writes new text back. That is useful, but the wording changes every time and it is hard to act on automatically.
 → Step 2: Jev. You give it a set of items and one condition, here "is this urgent?", and it gives each item a score. You set the line; above it, Eva acts.
 → Step 3: the recipe. Your data, plus a condition, gives a score for each item. That is the whole idea.
+→ Step 4: why it matters. Because Jev is so small, each check costs fractions of a penny and comes back in under a second. That is what lets Eva run it on every item, every time, rather than on a sample.
 Detail: Jev is TypeSafe's decision model, reached through Vercel's AI Gateway with zero data retention requested. It answers three kinds of question: yes or no, pick one from a list, or a score on a scale. Because the questions are fixed, the same item gets the same judgement every time, which is what makes it safe to automate. It is small and fast, so it can run on every item rather than a sample. The four items and their scores are an illustration, not a real call.
+Figures: "fractions of a penny" is the product owner's own estimate per check, not a billed figure from this deck. "Under a second" matches the note in Eva's Jev client that Jev answers in well under a second.
 Next: So where does Eva use it?`,
 
   "friday-b17-jev": `Ten small decisions inside Eva, all made by the same model.

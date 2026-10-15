@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
-import { IconArrowRight, IconPlus } from "@tabler/icons-react";
+import type { Icon } from "@tabler/icons-react";
+import {
+  IconArrowRight,
+  IconBolt,
+  IconCoin,
+  IconFeather,
+  IconPlus,
+} from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
@@ -23,6 +30,7 @@ import {
 const WRITE = 1;
 const SCORE = 2;
 const RECIPE = 3;
+const WHY = 4;
 
 const PANEL_W = 524;
 const GAP = 40;
@@ -33,6 +41,7 @@ const SHOTS: readonly CameraShot[] = [
   { rotateY: 6, x: 40, translateZ: 10 },
   { rotateY: -6, x: -40, translateZ: 10 },
   { translateZ: -40, y: -10 },
+  { translateZ: -60, y: -18 },
 ];
 
 const GLOW = [
@@ -40,7 +49,65 @@ const GLOW = [
   { x: PANEL_W / 2, y: 170, size: 520 },
   { x: PANEL_W + GAP + PANEL_W / 2, y: 170, size: 560 },
   { x: PANEL_W + GAP / 2, y: 200, size: 900 },
+  { x: PANEL_W + GAP / 2, y: 320, size: 900 },
 ];
+
+interface Benefit {
+  icon: Icon;
+  label: string;
+}
+
+/** Why a model this size is worth having: the reason it can run on everything. */
+const BENEFITS: readonly Benefit[] = [
+  { icon: IconFeather, label: "Very small model" },
+  { icon: IconCoin, label: "Fractions of a penny per check" },
+  { icon: IconBolt, label: "Answers in under a second" },
+];
+
+function Benefits() {
+  const shown = useDeckStep() >= WHY;
+  return (
+    <div className="mt-4 flex items-center justify-center gap-3">
+      {BENEFITS.map((benefit, index) => {
+        const Glyph = benefit.icon;
+        const at = 0.25 + index * 0.16;
+        return (
+          <m.span
+            key={benefit.label}
+            className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5 text-lg text-white/90"
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={
+              shown
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 16, scale: 0.96 }
+            }
+            transition={cueTransition(shown, at, {
+              duration: DUR.slow,
+              ease: EASE.expo,
+            })}
+          >
+            <m.span
+              className="flex"
+              style={{ color: BRAND.blue }}
+              initial={{ rotate: -20, scale: 0.6 }}
+              animate={
+                shown ? { rotate: 0, scale: 1 } : { rotate: -20, scale: 0.6 }
+              }
+              transition={cueTransition(shown, at + 0.1, {
+                type: "spring",
+                bounce: 0.45,
+                duration: 0.6,
+              })}
+            >
+              <Glyph size={20} stroke={1.8} />
+            </m.span>
+            {benefit.label}
+          </m.span>
+        );
+      })}
+    </div>
+  );
+}
 
 /** What a writing model hands back: new words, a different answer each time. */
 const WRITTEN =
@@ -298,6 +365,7 @@ export function FridayJevWhat() {
       </Camera>
 
       <Recipe />
+      <Benefits />
 
       <Footnote>
         Jev is TypeSafe&apos;s decision model, reached through Vercel&apos;s AI

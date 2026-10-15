@@ -159,7 +159,7 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     id: "friday-b20-jev-what",
     title: "What Jev is",
     Component: FridayJevWhat,
-    steps: 3,
+    steps: 4,
   },
   {
     id: "friday-b17-jev",
