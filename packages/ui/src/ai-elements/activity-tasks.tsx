@@ -7,6 +7,7 @@ import { flushSync } from "react-dom";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import {
   IconBrain,
+  IconChevronRight,
   IconCircle,
   IconCircleCheck,
   IconGitBranch,
@@ -150,6 +151,34 @@ export type { ActivityStep };
 const RequestFullDetailContext = createContext<(() => void) | undefined>(
   undefined,
 );
+
+/**
+ * Opens a subagent's child thread by its `Agent` tool_use id. Provided by the
+ * chat surface that can show the thread; absent elsewhere, so subtask rows only
+ * offer "View" where it works.
+ */
+export const OpenSubagentContext = createContext<
+  ((toolUseId: string) => void) | undefined
+>(undefined);
+
+/** "View" link on a subtask row that opens its child thread. */
+function OpenSubagentButton({ toolUseId }: { toolUseId: string | undefined }) {
+  const open = useContext(OpenSubagentContext);
+  if (!open || !toolUseId) return null;
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        open(toolUseId);
+      }}
+      className="motion-press ml-auto flex shrink-0 items-center text-xs text-primary hover:underline active:scale-[0.97]"
+    >
+      View
+      <IconChevronRight aria-hidden className="size-3" />
+    </button>
+  );
+}
 
 /** `onOpenChange` handler that asks for the full payload the first time a fold opens. */
 function useRequestFullDetailOnOpen(): (open: boolean) => void {
@@ -348,7 +377,15 @@ function ActivityStepRow({
   if (step.type === "reasoning") return <ActivityReasoningLine step={step} />;
 
   const Icon = iconForStep(step);
-  const childRows = children ?? [];
+  // A subagent's own text (`response` children) belongs to its child thread
+  // view, not the parent's timeline.
+  const childRows = (children ?? []).filter(
+    (child) => !HIDDEN_TYPES.has(child.step.type),
+  );
+  const openSubagent =
+    step.type === "subtask" ? (
+      <OpenSubagentButton toolUseId={step.toolUseId} />
+    ) : null;
   const childOverflow = childRows.length - MAX_VISIBLE_CHILDREN;
   const shownChildren =
     childOverflow > 0 ? childRows.slice(0, MAX_VISIBLE_CHILDREN) : childRows;
@@ -388,6 +425,7 @@ function ActivityStepRow({
         {lineHead}
         {fileChip}
         {descriptionNode}
+        {openSubagent}
       </TraceLine>
     );
   }
@@ -402,10 +440,11 @@ function ActivityStepRow({
           a button inside the trigger button would be invalid HTML. */}
       <TraceCollapsibleTrigger
         trailing={
-          fileChip ? (
+          fileChip || openSubagent ? (
             <>
               {fileChip}
-              {descriptionNode}
+              {fileChip ? descriptionNode : null}
+              {openSubagent}
             </>
           ) : undefined
         }
@@ -634,7 +673,11 @@ export const ActivityTasks = memo(
     const inline = layout === "inline";
     const hiddenTypes = inline ? INLINE_HIDDEN_TYPES : HIDDEN_TYPES;
     const rows = buildActivityRows(steps).filter(
-      (row) => !hiddenTypes.has(row.step.type),
+      (row) =>
+        !hiddenTypes.has(row.step.type) &&
+        // A subagent's text whose Agent row is missing still belongs to its
+        // child thread, never to the parent's inline reply.
+        !(row.step.type === "response" && row.step.parentToolUseId),
     );
 
     if (rows.length === 0 && !isStreaming) return null;

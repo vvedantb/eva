@@ -228,6 +228,17 @@ test("serializeFinalSteps drops the response rows the final message repeats", ()
     serializeFinalSteps(steps, "First half.\n\nSecond half."),
   );
   expect(kept.map((s) => s.detail)).toEqual(["Let me look.", undefined, "hm"]);
+  // Subagent text has no `detail` and is never treated as an echo.
+  const subagentText: ProgressStep = {
+    type: "response",
+    label: "Agent message",
+    status: "complete",
+    parentToolUseId: "toolu_agent",
+    output: { text: "child reply" },
+  };
+  expect(
+    JSON.parse(serializeFinalSteps([subagentText], "Final answer.")),
+  ).toHaveLength(1);
   // No final text (a failed turn): every row stays.
   expect(JSON.parse(serializeFinalSteps(steps, ""))).toHaveLength(5);
 });

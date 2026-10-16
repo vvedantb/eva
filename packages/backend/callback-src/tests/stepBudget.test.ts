@@ -60,6 +60,29 @@ test("enforceStepBudget strips heavy fields oldest-first under budget", () => {
   expect(steps[0]?.command).toBe("echo one");
 });
 
+test("enforceStepBudget drops subagent messages before parent output", () => {
+  const fat = "x".repeat(350_000);
+  const steps: ProgressStep[] = [
+    {
+      type: "bash",
+      label: "Ran command",
+      status: "complete",
+      output: { text: fat },
+    },
+    {
+      type: "response",
+      label: "Agent message",
+      status: "complete",
+      parentToolUseId: "toolu_agent",
+      output: { text: fat },
+    },
+  ];
+
+  enforceStepBudget(steps);
+  expect(steps[0]?.output?.text).toBe(fat);
+  expect(steps[1]?.output).toBeUndefined();
+});
+
 test("serializeSteps returns JSON string under budget", () => {
   const steps: ProgressStep[] = [
     {

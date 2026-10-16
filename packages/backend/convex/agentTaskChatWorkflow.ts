@@ -42,6 +42,7 @@ import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
+import { bareHarnessCommandPrompt } from "./_mentions/bareHarnessCommand";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
 import { resolveMessageCredential } from "./_userProviderAccounts/credentialSource";
 import {
@@ -125,6 +126,13 @@ async function buildTaskChatTurnPrompt(
     args.message,
     task.repoId,
   );
+  const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
+  if (bareCommand !== null) {
+    return {
+      prompt: bareCommand,
+      attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
+    };
+  }
 
   const branchName = await resolveTaskBranchName(ctx.db, task);
 
@@ -1508,4 +1516,5 @@ export {
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,
+  updateGoal,
 } from "./_chat/taskChatDaemon";

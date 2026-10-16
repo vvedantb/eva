@@ -63,14 +63,29 @@ function stripHeavyField(step: ProgressStep, field: HeavyField): boolean {
   return false;
 }
 
+/** A subagent's own message: only its child thread view reads it. */
+function isSubagentText(step: ProgressStep): boolean {
+  return step.type === "response" && step.parentToolUseId !== undefined;
+}
+
 /**
  * Strips heavy detail fields oldest-first until JSON fits under the budget.
+ * Subagent messages go first so they never crowd out the parent's own steps.
  * Labels/types/status always survive.
  */
 export function enforceStepBudget(steps: ProgressStep[]): ProgressStep[] {
   let encoded = JSON.stringify(steps);
   if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
     return steps;
+  }
+
+  for (const step of steps) {
+    if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
+      return steps;
+    }
+    if (isSubagentText(step) && stripHeavyField(step, "output")) {
+      encoded = JSON.stringify(steps);
+    }
   }
 
   for (const field of HEAVY_FIELDS) {
@@ -105,7 +120,11 @@ export function serializeFinalSteps(
   const final = finalText.trim();
   const kept = final
     ? steps.filter((step) => {
-        if (step.type !== "response") return true;
+        // Only the agent's own text can echo the final message; subagent text
+        // (`parentToolUseId`, prose in `output`) belongs to its child thread.
+        if (step.type !== "response" || step.parentToolUseId !== undefined) {
+          return true;
+        }
         const detail = (step.detail ?? "").trim();
         return !final.includes(detail) && !detail.startsWith(final);
       })

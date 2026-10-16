@@ -1776,6 +1776,7 @@ type PrewarmEntityDaemonBaseParams = {
   openSyntheticTurnMutation: string;
   completeSyntheticTurnMutation: string;
   updateBackgroundAgentsMutation: string;
+  updateGoalMutation?: string;
   model?: string;
   reasoningLevel?: Infer<typeof reasoningLevelValidator>;
   thinkingEnabled?: boolean;
@@ -2084,6 +2085,7 @@ async function runPrewarmEntityDaemon(
           openSyntheticTurnMutation: args.openSyntheticTurnMutation,
           completeSyntheticTurnMutation: args.completeSyntheticTurnMutation,
           updateBackgroundAgentsMutation: args.updateBackgroundAgentsMutation,
+          updateGoalMutation: args.updateGoalMutation,
           extraEnvVars: {
             EVA_DAEMON_OPTS: optsSig,
             STREAMING_ENTITY_ID: streamingEntityId,
@@ -2134,6 +2136,8 @@ export const prewarmEntityDaemon = internalAction({
     openSyntheticTurnMutation: v.string(),
     completeSyntheticTurnMutation: v.string(),
     updateBackgroundAgentsMutation: v.string(),
+    // Optional: scheduled prewarms persisted before this field still validate.
+    updateGoalMutation: v.optional(v.string()),
     model: v.optional(v.string()),
     reasoningLevel: v.optional(reasoningLevelValidator),
     thinkingEnabled: v.optional(v.boolean()),

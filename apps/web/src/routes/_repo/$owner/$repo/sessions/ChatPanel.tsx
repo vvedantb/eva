@@ -17,6 +17,7 @@ import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
+import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
 import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
@@ -296,8 +297,13 @@ export function ChatPanel({
           onSwitchAccount: setStickyProviderAccountId,
           isSandboxActive,
         },
+    goal: chat.goal,
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
+    sendCommand: isReadOnly
+      ? undefined
+      : (command) =>
+          handleSend(command, undefined, { skipReviewComments: true }),
   };
 
   const activeQuestion = useHeldQuery(
@@ -458,100 +464,109 @@ export function ChatPanel({
       headerRight={headerRight}
       tabs={chatTabs}
     >
-      <ChatBody
-        repo={{ id: repo._id, basePath }}
-        conversationId={chatId}
-        chatParentId={chatId}
-        isRouteActive={isRouteActive}
+      <SubagentThreadLayer
+        surface={chatSurface}
+        parentTitle={title}
         messages={messages}
-        queuedMessages={queuedMessages}
-        queueLabel={queueGate.queueLabel(isExecuting)}
         streamingActivity={streamingActivity}
-        streamingContent={streamingContent}
-        streamingPendingQuestion={streamingPendingQuestion}
-        blockingQuestion={activeQuestion ?? undefined}
-        onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
-        isExecuting={isExecuting}
-        isInputDisabled={composer.isInputDisabled}
-        isArchived={isReadOnly}
-        placeholder={composer.placeholder}
-        emptyStateTitle={emptyStateTitle}
-        emptyStateDescription={emptyStateDescription}
-        disabledReason={composer.disabledReason}
-        onStartSandbox={
-          !isSandboxActive && !isSandboxToggling && !isReadOnly
-            ? () => onSandboxToggle("start")
-            : undefined
-        }
-        transcriptTail={transcriptTail}
-        underCardLeading={
-          <SandboxBranchChip
-            branch={sandboxBranch}
-            isSandboxActive={isSandboxActive}
-            intendedBranch={branchName}
-          />
-        }
-        preInputContent={preInputContent}
-        preConversationContent={
-          <SessionSummaryAccordion
-            summary={summary}
-            summaryStreamingActivity={summaryStreamingActivity}
-          />
-        }
-        modelPicker={{
-          model,
-          setModel: queueGate.setModel,
-          modelOptions,
-          accounts,
-          accountId: providerAccountId,
-          onAccountChange: queueGate.setAccount,
-          displayTraits,
-          onTraitsChange,
-        }}
-        onSend={handleSend}
-        onCancel={handleCancel}
-        onForkTranscript={handleForkTranscript}
-        afterMessage={(messageId) => {
-          // Only plans captured on a message render in the transcript, so a
-          // plan stays where it was proposed. Unanchored plan content (Edit,
-          // update_plan, a seeded implementation session) lives in the Plan tab.
-          const plan = proposedPlanForMessage(capturedPlans, messageId);
-          if (!plan) return null;
-          return (
-            <ProposedPlanCard
-              planMarkdown={plan.planMarkdown}
-              implemented={plan.implementedAt !== undefined}
-              onImplement={
-                isReadOnly || plan.implementedAt !== undefined
-                  ? undefined
-                  : () => implementPlan(plan)
-              }
-              onImplementInNewSession={
-                isReadOnly || plan.implementedAt !== undefined
-                  ? undefined
-                  : () => void implementInNewSession(plan.planMarkdown, plan)
-              }
-              onSave={isReadOnly ? undefined : savePlan}
-              onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
-              saveAsDocumentLabel={saveAsDocumentLabel}
-              isSaving={isSaving}
-              isSavingDoc={isSavingDoc}
-              isArchived={isReadOnly}
-            />
-          );
-        }}
-        draft={draftBundle}
-        isDraftLoading={!draftSeed.isReady}
-        onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
-        hasPendingContext={hasPendingReviewComments}
-        onOpenAgentsTab={onOpenAgentsTab}
-        backgroundAgents={backgroundAgents}
         sandboxRunning={isSandboxActive}
-        turnCheckpoint={
-          isReadOnly ? undefined : { sessionId, repoId: repo._id }
-        }
-      />
+        onOpenFile={onOpenFile}
+      >
+        <ChatBody
+          repo={{ id: repo._id, basePath }}
+          conversationId={chatId}
+          chatParentId={chatId}
+          isRouteActive={isRouteActive}
+          messages={messages}
+          queuedMessages={queuedMessages}
+          queueLabel={queueGate.queueLabel(isExecuting)}
+          streamingActivity={streamingActivity}
+          streamingContent={streamingContent}
+          streamingPendingQuestion={streamingPendingQuestion}
+          blockingQuestion={activeQuestion ?? undefined}
+          onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
+          isExecuting={isExecuting}
+          isInputDisabled={composer.isInputDisabled}
+          isArchived={isReadOnly}
+          placeholder={composer.placeholder}
+          emptyStateTitle={emptyStateTitle}
+          emptyStateDescription={emptyStateDescription}
+          disabledReason={composer.disabledReason}
+          onStartSandbox={
+            !isSandboxActive && !isSandboxToggling && !isReadOnly
+              ? () => onSandboxToggle("start")
+              : undefined
+          }
+          transcriptTail={transcriptTail}
+          underCardLeading={
+            <SandboxBranchChip
+              branch={sandboxBranch}
+              isSandboxActive={isSandboxActive}
+              intendedBranch={branchName}
+            />
+          }
+          preInputContent={preInputContent}
+          preConversationContent={
+            <SessionSummaryAccordion
+              summary={summary}
+              summaryStreamingActivity={summaryStreamingActivity}
+            />
+          }
+          modelPicker={{
+            model,
+            setModel: queueGate.setModel,
+            modelOptions,
+            accounts,
+            accountId: providerAccountId,
+            onAccountChange: queueGate.setAccount,
+            displayTraits,
+            onTraitsChange,
+          }}
+          onSend={handleSend}
+          onCancel={handleCancel}
+          onForkTranscript={handleForkTranscript}
+          afterMessage={(messageId) => {
+            // Only plans captured on a message render in the transcript, so a
+            // plan stays where it was proposed. Unanchored plan content (Edit,
+            // update_plan, a seeded implementation session) lives in the Plan tab.
+            const plan = proposedPlanForMessage(capturedPlans, messageId);
+            if (!plan) return null;
+            return (
+              <ProposedPlanCard
+                planMarkdown={plan.planMarkdown}
+                implemented={plan.implementedAt !== undefined}
+                onImplement={
+                  isReadOnly || plan.implementedAt !== undefined
+                    ? undefined
+                    : () => implementPlan(plan)
+                }
+                onImplementInNewSession={
+                  isReadOnly || plan.implementedAt !== undefined
+                    ? undefined
+                    : () => void implementInNewSession(plan.planMarkdown, plan)
+                }
+                onSave={isReadOnly ? undefined : savePlan}
+                onSaveAsDocument={isReadOnly ? undefined : saveAsDocument}
+                saveAsDocumentLabel={saveAsDocumentLabel}
+                isSaving={isSaving}
+                isSavingDoc={isSavingDoc}
+                isArchived={isReadOnly}
+              />
+            );
+          }}
+          draft={draftBundle}
+          isDraftLoading={!draftSeed.isReady}
+          onOpenFile={onOpenFile}
+          onViewDiff={onViewDiff}
+          hasPendingContext={hasPendingReviewComments}
+          onOpenAgentsTab={onOpenAgentsTab}
+          backgroundAgents={backgroundAgents}
+          sandboxRunning={isSandboxActive}
+          turnCheckpoint={
+            isReadOnly ? undefined : { sessionId, repoId: repo._id }
+          }
+        />
+      </SubagentThreadLayer>
       <SessionSummaryModal
         sessionId={sessionId}
         hasSummary={hasSummary}

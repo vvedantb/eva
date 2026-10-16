@@ -31,5 +31,6 @@ export function resolveExperimentalFlags(
     disableAutoArchive: flags?.disableAutoArchive ?? false,
     askTeammates: flags?.askTeammates ?? false,
     claudeStyleActivity: flags?.claudeStyleActivity ?? false,
+    openPrsOnGithub: flags?.openPrsOnGithub ?? false,
   };
 }

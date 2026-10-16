@@ -5,7 +5,6 @@ import { memo } from "react";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import type { Components } from "streamdown";
 import {
   Streamdown,
@@ -19,12 +18,13 @@ import { MarkdownBlockquote } from "./MarkdownBlockquote";
 import { MarkdownPre } from "./MarkdownCodeBlock";
 import { MarkdownInlineCode } from "./MarkdownInlineCode";
 import { MarkdownLink } from "./MarkdownLink";
+import { mermaidPlugin } from "./mermaid";
 import { copyMarkdownSelection } from "./markdownClipboard";
 import { rehypeGithubAlerts } from "./rehypeGithubAlerts";
 // The math plugin renders KaTeX markup but ships no stylesheet with it.
 import "katex/dist/katex.min.css";
 
-const PLUGINS = { cjk, code, math, mermaid };
+const PLUGINS = { cjk, code, math, mermaid: mermaidPlugin };
 
 /**
  * `remarkPlugins` / `rehypePlugins` REPLACE Streamdown's defaults rather than
