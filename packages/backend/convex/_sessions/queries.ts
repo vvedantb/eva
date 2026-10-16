@@ -26,6 +26,8 @@ const linkedFromValidator = v.object({
   owner: v.string(),
   name: v.string(),
   rootDirectory: v.optional(v.string()),
+  /** The app's custom display label, when set. */
+  label: v.optional(v.string()),
 });
 
 /**
@@ -87,6 +89,10 @@ const sessionListItemValidator = v.object({
   linkedRepoCount: v.optional(v.number()),
   /** Source session when this one came from "Fork session" (sidebar fork glyph). */
   forkedFromSessionId: v.optional(v.id("sessions")),
+  /** Linked-session group; the sidebar lists these rows in their own section. */
+  sessionGroupId: v.optional(v.id("sessionGroups")),
+  /** The group's user-set name, when it has one. */
+  sessionGroupName: v.optional(v.string()),
 });
 
 /** Maps a full session doc to the slim list payload. */
@@ -95,10 +101,15 @@ function toSessionListItem(
   openSessionIds: ReadonlySet<string>,
   awaitingAnswerIds: ReadonlySet<string>,
   hasUnread: boolean,
-  linkedFrom?: { owner: string; name: string; rootDirectory?: string },
+  linkedFrom: { owner: string; name: string; rootDirectory?: string } | undefined,
+  groupNames: ReadonlyMap<string, string>,
 ) {
   return {
     linkedFrom,
+    sessionGroupId: session.sessionGroupId,
+    sessionGroupName: session.sessionGroupId
+      ? groupNames.get(session.sessionGroupId)
+      : undefined,
     linkedRepoCount: session.linkedRepoCount,
     forkedFromSessionId: session.forkedFromSessionId,
     _id: session._id,
@@ -222,6 +233,22 @@ async function turnIdsIncludingLinked(
   return merged;
 }
 
+/** Names of the named linked-session groups these sessions belong to. */
+async function sessionGroupNames(
+  db: DatabaseReader,
+  sessions: Doc<"sessions">[],
+): Promise<Map<string, string>> {
+  const ids = new Set<Id<"sessionGroups">>();
+  for (const session of sessions) {
+    if (session.sessionGroupId) ids.add(session.sessionGroupId);
+  }
+  const names = new Map<string, string>();
+  for (const group of await Promise.all([...ids].map((id) => db.get(id)))) {
+    if (group?.name) names.set(group._id, group.name);
+  }
+  return names;
+}
+
 /**
  * Adds the sessions that link this repo, then maps everything to list rows.
  * Shared by `list` and `listArchived`, which differ only in `archived`.
@@ -247,8 +274,10 @@ async function toSessionListItems(
     linked.map((row) => [String(row.session._id), row.linkedFrom]),
   );
   const hasUnread = await unreadLookupForRepo(db, userId, repoId);
+  const rows = [...sessions, ...linked.map((row) => row.session)];
+  const groupNames = await sessionGroupNames(db, rows);
   return Promise.all(
-    [...sessions, ...linked.map((row) => row.session)]
+    rows
       .sort(byMostRecentlyUpdated)
       .map(async (session) =>
         toSessionListItem(
@@ -257,6 +286,7 @@ async function toSessionListItems(
           awaitingAnswerIds,
           await hasUnread(session),
           linkedFromBySession.get(String(session._id)),
+          groupNames,
         ),
       ),
   );
@@ -354,6 +384,7 @@ async function toForkLink(
       owner: repo.owner,
       name: repo.name,
       rootDirectory: repo.rootDirectory,
+      label: repo.label,
     },
   };
 }
@@ -393,6 +424,46 @@ export const getForkLinks = authQuery({
       )
     ).filter((link) => link !== null);
     return { forkedFrom, forks };
+  },
+});
+
+/**
+ * This session's linked-session group across repos: its name and every
+ * visible member, oldest first. Null when the session is in no group.
+ */
+export const listGroup = authQuery({
+  args: { id: v.id("sessions") },
+  returns: v.union(
+    v.object({
+      _id: v.id("sessionGroups"),
+      name: v.optional(v.string()),
+      members: v.array(
+        v.object({ ...forkLinkValidator.fields, archived: v.boolean() }),
+      ),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session?.sessionGroupId) return null;
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      return null;
+    }
+    const group = await ctx.db.get(session.sessionGroupId);
+    if (!group) return null;
+    const rows = await ctx.db
+      .query("sessions")
+      .withIndex("by_session_group", (q) => q.eq("sessionGroupId", group._id))
+      .take(50);
+    const members = (
+      await Promise.all(
+        rows.map(async (row) => {
+          const link = await toForkLink(ctx.db, ctx.userId, row);
+          return link ? { ...link, archived: row.archived === true } : null;
+        }),
+      )
+    ).filter((member) => member !== null);
+    return { _id: group._id, name: group.name, members };
   },
 });
 

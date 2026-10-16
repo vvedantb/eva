@@ -27,6 +27,10 @@ import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+import {
+  RepoAppMark,
+  type RepoAppMarkRepo,
+} from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
@@ -99,6 +103,11 @@ interface SidebarSessionItemProps {
   linkedFrom?: SessionLinkedFrom;
   /** Set on sessions made by "Fork session"; shows the fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
+  /**
+   * The session's own app on rows in a cross-repo linked group: its mark sits
+   * left of the title, and the hover card names it.
+   */
+  app?: RepoAppMarkRepo;
 }
 
 /** Fork glyph on rows made by "Fork session"; the hover card names the source. */
@@ -232,6 +241,7 @@ export function SidebarSessionItem({
   linkedRepoCount,
   linkedFrom,
   forkedFromSessionId,
+  app,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
   const simpleView = useSimpleView();
@@ -268,6 +278,12 @@ export function SidebarSessionItem({
     />
   ) : null;
 
+  const appMark = app ? (
+    <span className="flex shrink-0" title={repoDisplayLabel(app)}>
+      <RepoAppMark repo={app} />
+    </span>
+  ) : null;
+
   const link = (
     <DynamicLink
       to={href}
@@ -278,6 +294,7 @@ export function SidebarSessionItem({
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex min-w-0 items-center gap-2">
             {statusLeading}
+            {appMark}
             <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
@@ -309,6 +326,7 @@ export function SidebarSessionItem({
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           {statusLeading}
+          {appMark}
           <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
           <TitleRegeneratingHint show={isRegeneratingTitle} />
           <ForkedGlyph show={isFork} />
@@ -342,6 +360,7 @@ export function SidebarSessionItem({
           createdAt={createdAt}
           userId={userId}
           baseBranch={baseBranch}
+          app={app}
         />
       </HoverCardContent>
     </HoverCard>
