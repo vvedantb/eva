@@ -4,6 +4,7 @@ import {
   MAX_SESSION_PREVIEW_COUNT,
   MIN_SESSION_PREVIEW_COUNT,
   clampSessionPreviewCount,
+  filterSessionsStartedBy,
   isAppSortOrder,
   isSessionLayout,
   isSessionListMode,
@@ -103,5 +104,24 @@ describe("sidebar activity ordering", () => {
   test("keeps manual app order untouched", () => {
     const input = [newer, older, createdOnly];
     expect(sortAppsForSidebar(input, "manual", new Map())).toBe(input);
+  });
+});
+
+describe("only my sessions filter", () => {
+  const mine = { id: "mine", userId: "me", createdBy: "me" };
+  const legacyMine = { id: "legacy", userId: "me" };
+  const theirs = { id: "theirs", userId: "me", createdBy: "teammate" };
+
+  test("keeps sessions the user started, falling back to userId", () => {
+    expect(
+      filterSessionsStartedBy([mine, legacyMine, theirs], "me")?.map(
+        (row) => row.id,
+      ),
+    ).toEqual(["mine", "legacy"]);
+  });
+
+  test("stays loading until rows and the current user resolve", () => {
+    expect(filterSessionsStartedBy(undefined, "me")).toBeUndefined();
+    expect(filterSessionsStartedBy([mine], undefined)).toBeUndefined();
   });
 });
