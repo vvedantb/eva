@@ -16,9 +16,11 @@ import {
   DialogDescription,
   DialogBody,
   DialogFooter,
+  Badge,
 } from "@eva/ui";
-import { IconPencil } from "@tabler/icons-react";
+import { IconPencil, IconPlug } from "@tabler/icons-react";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
+import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export function McpConfigClient() {
@@ -30,6 +32,7 @@ export function McpConfigClient() {
   const [saving, setSaving] = useState(false);
 
   const prompt = repo.mcpRootPrompt ?? "";
+  const repoMcpServers = repo.evaConfig?.mcpServers ?? [];
 
   const handleOpen = () => {
     setDraft(prompt);
@@ -126,6 +129,36 @@ export function McpConfigClient() {
           <p className="text-xs text-muted-foreground">
             No root prompt configured. Select Edit to add one.
           </p>
+        )}
+      </SettingsSection>
+
+      <SettingsSection
+        title="Repo MCP servers (.eva/mcp.json)"
+        description="Extra MCP servers for agents, synced from the repo's default branch. Edit the file to change them."
+        bodyVariant="list"
+      >
+        {repoMcpServers.length > 0 ? (
+          repoMcpServers.map((server) => (
+            <div key={server.name} className="px-4 py-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <p className="text-sm font-medium max-sm:wrap-break-word">
+                  {server.name}
+                </p>
+                <Badge variant="secondary" className="text-xs">
+                  {server.kind}
+                </Badge>
+              </div>
+              <p className="mt-1.5 font-mono text-xs break-all text-muted-foreground">
+                {server.target}
+              </p>
+            </div>
+          ))
+        ) : (
+          <SettingsEmptyState
+            icon={IconPlug}
+            title="No repo MCP servers"
+            description="Add servers to .eva/mcp.json on the default branch to give agents more tools."
+          />
         )}
       </SettingsSection>
     </SettingsPage>

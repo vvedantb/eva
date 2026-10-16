@@ -10,6 +10,8 @@ import { LogoSettingsSection } from "./_components/LogoSettingsSection";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { SetUpWithEvaButton } from "@/lib/components/evaConfig/SetUpWithEvaButton";
+import { AppCommandsReadOnly } from "./_components/AppCommandsReadOnly";
 
 const COMMAND_TEXTAREA_CLASS = "resize-y bg-background font-mono text-xs";
 
@@ -38,9 +40,16 @@ export function AppClient() {
   const backgroundCommands = repo.backgroundCommands?.join("\n") ?? "";
   const stopCommands = repo.stopCommands?.join("\n") ?? "";
 
-  const saveConfig = (
-    args: Parameters<typeof updateConfig>[0],
-  ) => {
+  const saveConfig = (args: Parameters<typeof updateConfig>[0]) => {
+    // A repo with `.eva/config.json` owns its commands; the backend rejects
+    // command edits, so a late blur after the file synced is dropped here.
+    const sendsCommands =
+      args.devPort !== undefined ||
+      args.devCommand !== undefined ||
+      args.startupCommands !== undefined ||
+      args.backgroundCommands !== undefined ||
+      args.stopCommands !== undefined;
+    if (repo.evaConfig !== undefined && sendsCommands) return;
     void catchMutationError(
       updateConfig(args),
       "Couldn't save app settings",
@@ -113,98 +122,112 @@ export function AppClient() {
         />
       </SettingsSection>
 
-      <SettingsSection
-        title="Dev server"
-        description={
-          <>
-            Overrides auto-detection from <code>package.json</code>. Leave empty
-            to detect.
-          </>
-        }
-      >
-        <div className="grid gap-5 sm:grid-cols-2">
-          <SettingsField label="Port" description="Empty = auto-detect.">
-            <Input
-              key={`port-${repoId}`}
-              type="number"
-              className="h-9"
-              placeholder="5173 or 3000"
-              defaultValue={repo.devPort ?? ""}
-              onBlur={handleDevPortBlur}
-            />
-          </SettingsField>
-
-          <SettingsField
-            label="Command"
+      {repo.evaConfig !== undefined ? (
+        <AppCommandsReadOnly
+          evaConfig={repo.evaConfig}
+          devPort={repo.devPort}
+          devCommand={repo.devCommand}
+          startupCommands={repo.startupCommands}
+          backgroundCommands={repo.backgroundCommands}
+          stopCommands={repo.stopCommands}
+        />
+      ) : (
+        <>
+          <SettingsSection
+            title="Dev server"
+            action={<SetUpWithEvaButton />}
             description={
               <>
-                Runs as written. Include your own <code>cd</code> /{" "}
-                <code>PORT=</code> if needed.
+                Overrides auto-detection from <code>package.json</code>. Leave
+                empty to detect.
               </>
             }
           >
-            <Input
-              key={`cmd-${repoId}`}
-              className="h-9 font-mono text-xs"
-              placeholder="pnpm run dev"
-              defaultValue={repo.devCommand ?? ""}
-              onBlur={handleDevCommandBlur}
-            />
-          </SettingsField>
-        </div>
-      </SettingsSection>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <SettingsField label="Port" description="Empty = auto-detect.">
+                <Input
+                  key={`port-${repoId}`}
+                  type="number"
+                  className="h-9"
+                  placeholder="5173 or 3000"
+                  defaultValue={repo.devPort ?? ""}
+                  onBlur={handleDevPortBlur}
+                />
+              </SettingsField>
 
-      <SettingsSection
-        title="Sandbox lifecycle"
-        description="Commands for boot, daemons, and seeded snapshots. One per line."
-      >
-        <div className="grid gap-5">
-          <SettingsField
-            label="Startup"
-            description="Runs on every sandbox boot. Keep these idempotent. One-time seeding belongs in Snapshots."
-          >
-            <Textarea
-              key={`startup-${repoId}`}
-              defaultValue={startupCommands}
-              onBlur={handleStartupCommandsBlur}
-              className={`h-36 ${COMMAND_TEXTAREA_CLASS}`}
-              placeholder="npx supabase start"
-            />
-          </SettingsField>
+              <SettingsField
+                label="Command"
+                description={
+                  <>
+                    Runs as written. Include your own <code>cd</code> /{" "}
+                    <code>PORT=</code> if needed.
+                  </>
+                }
+              >
+                <Input
+                  key={`cmd-${repoId}`}
+                  className="h-9 font-mono text-xs"
+                  placeholder="pnpm run dev"
+                  defaultValue={repo.devCommand ?? ""}
+                  onBlur={handleDevCommandBlur}
+                />
+              </SettingsField>
+            </div>
+          </SettingsSection>
 
-          <SettingsField
-            label="Background"
-            description={
-              <>
-                Long-running daemons (e.g. <code>npx convex dev</code>). Eva
-                detaches them for you — no <code>nohup</code> or{" "}
-                <code>&amp;</code> needed.
-              </>
-            }
+          <SettingsSection
+            title="Sandbox lifecycle"
+            description="Commands for boot, daemons, and seeded snapshots. One per line."
           >
-            <Textarea
-              key={`background-${repoId}`}
-              defaultValue={backgroundCommands}
-              onBlur={handleBackgroundCommandsBlur}
-              className={`h-28 ${COMMAND_TEXTAREA_CLASS}`}
-              placeholder="npx convex dev"
-            />
-          </SettingsField>
+            <div className="grid gap-5">
+              <SettingsField
+                label="Startup"
+                description="Runs on every sandbox boot. Keep these idempotent. One-time seeding belongs in Snapshots."
+              >
+                <Textarea
+                  key={`startup-${repoId}`}
+                  defaultValue={startupCommands}
+                  onBlur={handleStartupCommandsBlur}
+                  className={`h-36 ${COMMAND_TEXTAREA_CLASS}`}
+                  placeholder="npx supabase start"
+                />
+              </SettingsField>
 
-          <SettingsField
-            label="Stop"
-            description="Run before a seeded snapshot so local DBs flush cleanly. Not used on normal boots."
-          >
-            <Textarea
-              key={`stop-${repoId}`}
-              defaultValue={stopCommands}
-              onBlur={handleStopCommandsBlur}
-              className={`h-28 ${COMMAND_TEXTAREA_CLASS}`}
-              placeholder="pkill -TERM -f 'convex dev'"
-            />
-          </SettingsField>
-        </div>
-      </SettingsSection>
+              <SettingsField
+                label="Background"
+                description={
+                  <>
+                    Long-running daemons (e.g. <code>npx convex dev</code>). Eva
+                    detaches them for you — no <code>nohup</code> or{" "}
+                    <code>&amp;</code> needed.
+                  </>
+                }
+              >
+                <Textarea
+                  key={`background-${repoId}`}
+                  defaultValue={backgroundCommands}
+                  onBlur={handleBackgroundCommandsBlur}
+                  className={`h-28 ${COMMAND_TEXTAREA_CLASS}`}
+                  placeholder="npx convex dev"
+                />
+              </SettingsField>
+
+              <SettingsField
+                label="Stop"
+                description="Run before a seeded snapshot so local DBs flush cleanly. Not used on normal boots."
+              >
+                <Textarea
+                  key={`stop-${repoId}`}
+                  defaultValue={stopCommands}
+                  onBlur={handleStopCommandsBlur}
+                  className={`h-28 ${COMMAND_TEXTAREA_CLASS}`}
+                  placeholder="pkill -TERM -f 'convex dev'"
+                />
+              </SettingsField>
+            </div>
+          </SettingsSection>
+        </>
+      )}
     </SettingsPage>
   );
 }
