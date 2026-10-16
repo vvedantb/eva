@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { m, type Variants } from "motion/react";
 import { cn } from "@eva/ui";
@@ -8,6 +8,7 @@ import {
   type LandingBootKind,
 } from "./landingContent";
 import {
+  LANDING_CARD,
   LandingReveal,
   LandingSection,
   LandingSectionHeading,
@@ -23,7 +24,6 @@ const BOOT_LINE: Variants = {
   show: { opacity: 1, x: 0, transition: { duration: 0.2 } },
 };
 
-/** No stagger and no slide when the visitor asks for less movement. */
 const BOOT_TONE: Record<LandingBootKind, string> = {
   command: "text-foreground",
   info: "text-muted-foreground",
@@ -37,41 +37,37 @@ const BOOT_TONE: Record<LandingBootKind, string> = {
  */
 export function LandingSandbox() {
   return (
-    <div
-      id="sandbox"
-      className="scroll-mt-16 border-y border-border bg-muted/30"
-    >
+    <div id="sandbox" className="scroll-mt-20 bg-muted/40">
       <LandingSection>
         <LandingReveal>
           <LandingSectionHeading
+            split
             eyebrow="The environment"
             heading="A real machine, not a toy sandbox."
             intro="Every task boots a cloud VM from a prebuilt snapshot. Docker runs inside it. So does a desktop and a real browser, which is how an agent takes a screenshot of the thing it just changed."
           />
 
-          <div className="mt-12 grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+          <div className="mt-14 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
             <SandboxTerminal />
 
-            <div className="overflow-hidden rounded-surface border border-border">
-              <div className="grid gap-px bg-border">
-                {LANDING_SANDBOX_SPEC.map((group) => (
-                  <div
-                    key={group.label}
-                    className="flex flex-col gap-1 bg-background px-5 py-3.5 sm:flex-row sm:items-baseline sm:gap-5"
-                  >
-                    <p className="w-24 shrink-0 font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground/70">
-                      {group.label}
-                    </p>
-                    <p className="text-pretty text-2sm leading-relaxed text-foreground">
-                      {group.items}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <dl className={cn(LANDING_CARD, "divide-y divide-border/60 px-6")}>
+              {LANDING_SANDBOX_SPEC.map((group) => (
+                <div
+                  key={group.label}
+                  className="flex flex-col gap-1 py-4 sm:flex-row sm:items-baseline sm:gap-6"
+                >
+                  <dt className="w-24 shrink-0 text-xs font-medium text-muted-foreground">
+                    {group.label}
+                  </dt>
+                  <dd className="text-pretty font-mono text-xs leading-relaxed text-foreground">
+                    {group.items}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
 
-          <p className="mt-6 text-sm text-muted-foreground">
+          <p className="mt-8 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Snapshot builds usually finish in about six minutes. Rebuild on a
             cron or on demand, and a missing snapshot falls back to a fresh
             clone rather than failing the run.
@@ -85,15 +81,15 @@ export function LandingSandbox() {
 /** Boot log that types itself out once, the first time it scrolls into view. */
 function SandboxTerminal() {
   return (
-    <div className="overflow-hidden rounded-surface bg-card">
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-2.5">
+    <div className="overflow-hidden rounded-surface bg-background smooth-shadow-ring-md">
+      <div className="flex items-center gap-2.5 border-b border-border/60 bg-muted/40 px-4 py-3">
         <span className="flex gap-1.5" aria-hidden>
           <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-border" />
         </span>
         <p className="font-mono text-2xs text-muted-foreground">
-          acme/web â€” sandbox
+          acme/web — sandbox
         </p>
         <span className="ml-auto flex items-center gap-1.5">
           <span
@@ -105,7 +101,7 @@ function SandboxTerminal() {
       </div>
 
       <m.div
-        className="space-y-1.5 p-4 font-mono text-[11.5px] leading-relaxed sm:p-5"
+        className="space-y-1.5 p-5 font-mono text-xs leading-relaxed sm:p-6"
         variants={BOOT_CONTAINER}
         initial="hidden"
         whileInView="show"
