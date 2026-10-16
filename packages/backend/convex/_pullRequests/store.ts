@@ -265,6 +265,8 @@ export async function recordPullRequest(
       headBranch: args.headBranch ?? existing.headBranch,
       baseBranch: args.baseBranch ?? existing.baseBranch,
       title: args.title ?? existing.title,
+      // A merged or closed PR has nothing left to watch.
+      ...(isLivePrState(args.state) ? {} : { watch: undefined }),
       updatedAt: now,
     });
   } else {
@@ -307,9 +309,23 @@ export async function setPullRequestState(
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.headBranch !== undefined ? { headBranch: patch.headBranch } : {}),
     ...(patch.baseBranch !== undefined ? { baseBranch: patch.baseBranch } : {}),
+    // A merged or closed PR has nothing left to watch.
+    ...(isLivePrState(patch.state) ? {} : { watch: undefined }),
     updatedAt: Date.now(),
   });
   await syncOwnerPrSummary(ctx, ownerRef(row.owner));
+}
+
+/**
+ * Starts, updates or (with undefined) ends the agent's watch on a PR. Leaves
+ * `updatedAt` alone: watch bookkeeping is not a change to the PR itself.
+ */
+export async function setPullRequestWatch(
+  ctx: MutationCtx,
+  pullRequestId: Id<"pullRequests">,
+  watch: Doc<"pullRequests">["watch"],
+): Promise<void> {
+  await ctx.db.patch(pullRequestId, { watch });
 }
 
 /** Removes a row (a foreign tip-copy merge) and refreshes the summary. */

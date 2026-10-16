@@ -420,6 +420,32 @@ export const prOriginValidator = v.union(
 );
 
 /**
+ * The agent's watch on one PR (`watch_pull_request`). Woken from GitHub
+ * webhooks, never polled; see `_pullRequests/watch.ts`. Only what the agent was
+ * last told is kept, so the next check reports just what changed.
+ */
+export const prWatchValidator = v.object({
+  startedAt: v.number(),
+  /** Session only: the chat that asked, which every wake goes to. */
+  sessionChatId: v.optional(v.id("sessionChats")),
+  /** Head commit the check fields below describe. Unset until first read. */
+  headSha: v.optional(v.string()),
+  /** Names of the checks already reported as failed on `headSha`. */
+  failedChecks: v.array(v.string()),
+  /** "All checks passed" was already reported for `headSha`. */
+  passed: v.boolean(),
+  conflicting: v.boolean(),
+  /** GitHub time of the newest comment already reported. */
+  remarksThrough: v.number(),
+  /** Comment-only wakes in a row; the watch ends at the cap. */
+  commentWakes: v.number(),
+  /** A debounced check is scheduled for this time. */
+  checkAt: v.optional(v.number()),
+  /** First failed GitHub read in a row; the watch ends after 15 minutes. */
+  unreadableSince: v.optional(v.number()),
+});
+
+/**
  * One pull request linked to a session, quick task or project. The single
  * source of truth for every PR Eva tracks: an owner may hold many. All writes
  * go through `_github/pullRequests.ts`, which also refreshes the owner's
@@ -443,6 +469,8 @@ export const pullRequestFields = {
   primary: v.boolean(),
   origin: prOriginValidator,
   owner: prOwnerValidator,
+  /** Set while the owner's agent watches this PR. Cleared once it is terminal. */
+  watch: v.optional(prWatchValidator),
   createdAt: v.number(),
   updatedAt: v.number(),
 };

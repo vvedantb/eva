@@ -138,7 +138,13 @@ const schema = defineSchema({
     .index("by_session", ["owner.sessionId"])
     .index("by_task", ["owner.taskId"])
     .index("by_project", ["owner.projectId"])
-    .index("by_repo_and_head_branch", ["repoId", "headBranch"]),
+    .index("by_repo_and_head_branch", ["repoId", "headBranch"])
+    // Watched PRs on a base branch: a push there may cause a merge conflict.
+    .index("by_repo_base_and_watch", [
+      "repoId",
+      "baseBranch",
+      "watch.startedAt",
+    ]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),
