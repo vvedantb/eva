@@ -297,8 +297,12 @@ export function ChatPanel({
           onSwitchAccount: setStickyProviderAccountId,
           isSandboxActive,
         },
+    goal: chat.goal,
     // Review comments are appended to normal sends; a slash command has to
     // reach the harness verbatim.
+    sendCommand: isReadOnly
+      ? undefined
+      : (command) => handleSend(command, undefined, { skipReviewComments: true }),
   };
 
   const activeQuestion = useHeldQuery(

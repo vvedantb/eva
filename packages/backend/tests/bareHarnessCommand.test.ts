@@ -16,7 +16,7 @@ describe("bareHarnessCommandPrompt", () => {
     );
     expect(bareHarnessCommandPrompt("set a /goal", "claude:opus")).toBe(null);
     expect(bareHarnessCommandPrompt("/simplify", "claude:opus")).toBe(null);
-    expect(bareHarnessCommandPrompt("/goal x", "codex:gpt-5")).toBe(null);
+    expect(bareHarnessCommandPrompt("/goal x", "codex:gpt-5.6-sol")).toBe(null);
   });
 });
 

@@ -322,8 +322,10 @@ export function ProjectSandboxChatPanel({
             isSandboxActive,
           }
         : undefined,
+    goal: project?.goal,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
+    sendCommand: (command) => handleSend(command),
   };
 
   return (

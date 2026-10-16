@@ -9,7 +9,10 @@ import {
   deriveSubagents,
   subagentTone,
 } from "@/lib/components/sandbox/agentActivity";
-import { isAssistantTurnInProgress, type ChatBodyMessage } from "./chatBodyUtils";
+import {
+  isAssistantTurnInProgress,
+  type ChatBodyMessage,
+} from "./chatBodyUtils";
 import type { SandboxChatSurface } from "./sandboxChatSurface";
 import { useStopBackgroundAgent } from "./useStopBackgroundAgent";
 import {

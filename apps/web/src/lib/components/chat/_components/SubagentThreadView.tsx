@@ -19,10 +19,7 @@ import {
   subagentTone,
   type SubagentView,
 } from "@/lib/components/sandbox/agentActivity";
-import {
-  buildSubagentThread,
-  isEmptySubagentThread,
-} from "../subagentThread";
+import { buildSubagentThread, isEmptySubagentThread } from "../subagentThread";
 
 /** A transcript message that holds some of this subagent's steps. */
 export interface SubagentSource {
@@ -91,14 +88,19 @@ export function SubagentThreadView({
   const steps = [...logs, liveActivity].flatMap(
     (log) => parseActivitySteps(log) ?? [],
   );
-  const thread = buildSubagentThread(steps, agent.toolUseId, !agent.backgrounded);
+  const thread = buildSubagentThread(
+    steps,
+    agent.toolUseId,
+    !agent.backgrounded,
+  );
   const running = subagentTone(agent.status) === "active";
   const lastBlock = thread.blocks.at(-1);
   // Older runs and non-Claude agents never recorded the prompt or messages.
   const onlyToolCalls =
     !running &&
     thread.prompt === undefined &&
-    !thread.blocks.some((block) => block.kind === "text");
+    thread.blocks.length > 0 &&
+    thread.blocks.every((block) => block.kind === "steps");
 
   return (
     <div className="absolute inset-0 z-10 flex flex-col bg-background">

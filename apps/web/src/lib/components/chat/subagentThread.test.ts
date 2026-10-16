@@ -29,7 +29,11 @@ describe("buildSubagentThread", () => {
         agentRow,
         child({ detail: "auth.ts" }),
         child({ type: "search_code", label: "Searched" }),
-        child({ type: "response", label: "Agent message", output: { text: "Checking." } }),
+        child({
+          type: "response",
+          label: "Agent message",
+          output: { text: "Checking." },
+        }),
         child({ detail: "login.ts" }),
         // Another agent's step and a main-agent step stay out.
         child({ parentToolUseId: "toolu_b" }),
@@ -67,8 +71,8 @@ describe("buildSubagentThread", () => {
   });
 
   it("is empty when nothing of the agent was recorded", () => {
-    expect(isEmptySubagentThread(buildSubagentThread([], "toolu_a", true))).toBe(
-      true,
-    );
+    expect(
+      isEmptySubagentThread(buildSubagentThread([], "toolu_a", true)),
+    ).toBe(true);
   });
 });
