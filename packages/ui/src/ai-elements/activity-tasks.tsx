@@ -346,27 +346,37 @@ function ActivityStepRow({
         ? formatElapsed(seconds)
         : undefined;
 
-  const line = (
-    <TraceLine status={traceStatusForStep(step)}>
+  const fileChip = presentation.fileChip ? (
+    <FileChip
+      name={presentation.fileChip.name}
+      path={presentation.fileChip.path}
+      onOpenFile={onOpenFile}
+    />
+  ) : undefined;
+  const lineHead = (
+    <>
       <TraceIcon iconKey={`${step.type}-${step.status}`}>
         <Icon />
       </TraceIcon>
       <TraceTitle shimmer={isActive} title={presentation.title}>
         {presentation.text}
       </TraceTitle>
-      {presentation.fileChip ? (
-        <FileChip
-          name={presentation.fileChip.name}
-          path={presentation.fileChip.path}
-          onOpenFile={onOpenFile}
-        />
-      ) : null}
-      {description ? <TraceDescription>{description}</TraceDescription> : null}
-    </TraceLine>
+    </>
   );
+  const descriptionNode = description ? (
+    <TraceDescription>{description}</TraceDescription>
+  ) : null;
 
   const hasDetail = stepHasRichDetail(step);
-  if (!hasDetail && shownChildren.length === 0) return line;
+  if (!hasDetail && shownChildren.length === 0) {
+    return (
+      <TraceLine status={traceStatusForStep(step)}>
+        {lineHead}
+        {fileChip}
+        {descriptionNode}
+      </TraceLine>
+    );
+  }
 
   // Subagent steps start open so their inner steps stay visible, as before.
   return (
@@ -374,7 +384,23 @@ function ActivityStepRow({
       defaultOpen={shownChildren.length > 0}
       onOpenChange={requestFullDetail}
     >
-      <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+      {/* The file chip opens the file viewer, so it sits beside the trigger:
+          a button inside the trigger button would be invalid HTML. */}
+      <TraceCollapsibleTrigger
+        trailing={
+          fileChip ? (
+            <>
+              {fileChip}
+              {descriptionNode}
+            </>
+          ) : undefined
+        }
+      >
+        <TraceLine status={traceStatusForStep(step)}>
+          {lineHead}
+          {fileChip ? null : descriptionNode}
+        </TraceLine>
+      </TraceCollapsibleTrigger>
       <TraceCollapsibleContent className="flex flex-col gap-2">
         {hasDetail ? (
           <ActivityStepDetail step={step} onOpenFile={onOpenFile} />

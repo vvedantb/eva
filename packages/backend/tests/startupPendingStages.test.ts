@@ -1,8 +1,6 @@
 import { describe, expect, test } from "vitest";
-import {
-  plannedStartupStages,
-  startupProgress,
-} from "../convex/_sandbox_runtime/prepareSandboxSteps";
+import { plannedStartupStages } from "../convex/_sandbox_runtime/prepareSandboxSteps";
+import { startupProgress } from "../convex/_sandbox_runtime/startupProgress";
 
 describe("startup stages ahead of the running one are pending", () => {
   const plan = plannedStartupStages({ branchName: "eva/task-1" });
@@ -42,6 +40,13 @@ describe("startup stages ahead of the running one are pending", () => {
       ["Launching background commands...", "pending"],
       ["Running startup commands...", "pending"],
     ]);
+  });
+
+  test("a stage outside the plan leaves nothing pending", () => {
+    const steps = startupProgress([], "Installing web dependencies...", [
+      "Cloning web...",
+    ]);
+    expect(steps.map((step) => step.status)).toEqual(["active"]);
   });
 
   test("the last stage leaves nothing pending", () => {

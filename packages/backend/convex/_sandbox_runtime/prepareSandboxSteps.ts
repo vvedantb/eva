@@ -3,12 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { ensureSandboxStartedSteps } from "./resumeSandboxSteps";
-
-type ProgressStep = {
-  type: "tool";
-  label: string;
-  status: "active" | "complete" | "pending";
-};
+import { type ProgressStep, startupProgress } from "./startupProgress";
 
 type PrepareSandboxArgs = {
   installationId: number;
@@ -57,22 +52,6 @@ export function plannedStartupStages(
         "Running startup commands...",
       ];
   return ["Fetching base branch...", ...branchStages, ...commandStages];
-}
-
-/** Finished stages, then the running one, then every planned stage after it as pending. */
-export function startupProgress(
-  completed: ReadonlyArray<ProgressStep>,
-  activeLabel: string,
-  plan: ReadonlyArray<string>,
-): Array<ProgressStep> {
-  const remaining = plan.slice(plan.indexOf(activeLabel) + 1);
-  return [
-    ...completed,
-    { type: "tool", label: activeLabel, status: "active" },
-    ...remaining.map(
-      (label): ProgressStep => ({ type: "tool", label, status: "pending" }),
-    ),
-  ];
 }
 
 /** Emits progress steps to the streaming entity for real-time UI updates. */

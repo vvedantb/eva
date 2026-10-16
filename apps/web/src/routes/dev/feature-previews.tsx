@@ -91,6 +91,14 @@ const DEMO_TRACE_STEPS: ActivityStep[] = [
     status: "complete",
   },
   {
+    type: "edit",
+    label: "Edited trace.tsx",
+    path: "packages/ui/src/ai-elements/trace.tsx",
+    edits: [{ oldText: "gap-1", newText: "gap-2" }],
+    durationMs: 1200,
+    status: "complete",
+  },
+  {
     type: "bash",
     label: "Ran command",
     detail: "pnpm tsc --noEmit",
@@ -158,15 +166,23 @@ const DEMO_STARTUP_ACTIVITY = JSON.stringify([
 ]);
 
 function ActivityTracePreview() {
+  const [openedFile, setOpenedFile] = useState<string>();
   return (
     <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Activity timeline
       </p>
       <h1 className="mt-1 text-xl font-semibold">Trace lines</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {openedFile ? `Opened ${openedFile}` : "Click a file chip to open it."}
+      </p>
       <div className="mt-8 grid max-w-5xl grid-cols-2 gap-10">
         <div className="space-y-8">
-          <ActivityTasks steps={DEMO_TRACE_STEPS} isStreaming />
+          <ActivityTasks
+            steps={DEMO_TRACE_STEPS}
+            isStreaming
+            onOpenFile={setOpenedFile}
+          />
         </div>
         <div className="space-y-8">
           <SandboxStartupSteps activity={DEMO_STARTUP_ACTIVITY} />

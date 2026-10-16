@@ -141,26 +141,72 @@ export function TraceCollapsible({
   );
 }
 
+const TRIGGER_FOCUS =
+  "rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45";
+
+/**
+ * `trailing` holds controls of their own (a clickable file chip). A button may
+ * not contain another button, so they render beside the trigger, not inside
+ * it. The trigger's `after:` overlay still makes the whole line clickable;
+ * buttons in `trailing` sit above that overlay so their own clicks
+ * land, and plain text in it lets clicks through to the trigger.
+ */
 export function TraceCollapsibleTrigger({
   className,
   children,
+  trailing,
   ...props
-}: ComponentProps<typeof CollapsibleTrigger>) {
+}: ComponentProps<typeof CollapsibleTrigger> & { trailing?: ReactNode }) {
+  const chevronClass = "transition-transform";
+  if (trailing === undefined) {
+    return (
+      <CollapsibleTrigger
+        data-slot="trace-collapsible-trigger"
+        className={cn(
+          "group/trace-trigger flex w-fit max-w-full min-w-0 items-center gap-1 text-left text-muted-foreground transition-colors hover:text-foreground has-[[data-status=error]]:text-destructive",
+          TRIGGER_FOCUS,
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        <TraceIcon
+          className={cn(chevronClass, "group-aria-expanded/trace-trigger:rotate-90")}
+        >
+          <IconChevronRight />
+        </TraceIcon>
+      </CollapsibleTrigger>
+    );
+  }
   return (
-    <CollapsibleTrigger
+    <div
       data-slot="trace-collapsible-trigger"
       className={cn(
-        "group/trace-trigger flex w-fit max-w-full min-w-0 items-center gap-1 rounded-md text-left text-muted-foreground transition-colors hover:text-foreground has-[[data-status=error]]:text-destructive",
-        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45",
+        "relative flex w-fit max-w-full min-w-0 items-center gap-2 text-muted-foreground transition-colors hover:text-foreground has-[[data-status=error]]:text-destructive",
         className,
       )}
-      {...props}
     >
-      {children}
-      <TraceIcon className="transition-transform group-aria-expanded/trace-trigger:rotate-90">
+      <CollapsibleTrigger
+        className={cn(
+          "peer/trace-trigger flex min-w-0 items-center text-left after:absolute after:inset-0",
+          TRIGGER_FOCUS,
+        )}
+        {...props}
+      >
+        {children}
+      </CollapsibleTrigger>
+      <span className="pointer-events-none relative z-10 flex min-w-0 items-center gap-2 [&_button]:pointer-events-auto">
+        {trailing}
+      </span>
+      <TraceIcon
+        className={cn(
+          chevronClass,
+          "pointer-events-none -ml-1 peer-aria-expanded/trace-trigger:rotate-90",
+        )}
+      >
         <IconChevronRight />
       </TraceIcon>
-    </CollapsibleTrigger>
+    </div>
   );
 }
 
