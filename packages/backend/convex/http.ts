@@ -337,10 +337,10 @@ http.route({
     }
     if (resolved.kind === "sibling") {
       console.log(
-        `[git-credentials][sibling-read] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+        `[git-credentials][sibling] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
       );
       const siblingToken: string = await ctx.runAction(
-        internal.githubAuth.mintReadOnlyRepoToken,
+        internal.githubAuth.mintSiblingRepoToken,
         {
           installationId: resolved.installationId,
           githubId: resolved.githubId,
