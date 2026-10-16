@@ -64,7 +64,11 @@ function hydratePersistedOpencodeState(): void {
       "hydratePersistedOpencodeState(auth)",
     );
   }
-  process.env.OPENCODE_PERMISSION = '"allow"';
+  // Object form, not '"allow"': opencode deep-merges this JSON into the config
+  // permission record, so a bare string becomes {0:"a",1:"l",...}. On 1.18.16
+  // that config fails validation and `GET /config` answers 400 forever, so the
+  // health probe never passes and a cold server start timed out after 60s.
+  process.env.OPENCODE_PERMISSION = '{"*":"allow"}';
   process.env.OPENCODE_DISABLE_AUTOUPDATE = "1";
 }
 
