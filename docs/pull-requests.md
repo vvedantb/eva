@@ -27,6 +27,14 @@ All writes go through `_pullRequests/store.ts`. Nothing else patches a PR row or
 - **Project:** draft/ready events on the primary PR move the review phase. Merging the PR of the current branch starts a new branch version. The project completes (or cancels) once every PR is terminal.
 - Opening a PR or refreshing one is decided by `isFirstTaskOnBranch`: is there a live PR on the branch the run pushes to.
 
+## Agent PR watch
+
+The agent calls the chat-self MCP tool `watch_pull_request` (or `unwatch_pull_request`) on one of its chat's own PRs. The state is the optional `pullRequests.watch` field; the Review pane's PR row shows an eye button that stops it.
+
+- No polling. `http.ts` hands the PRs from trusted human feedback and from any completed check suite, whatever its conclusion (`parseCiCompleted`), to `_pullRequests/watch.ts:noteActivity`. A final commit `status` (Vercel and the like) names branches, not PRs, so `noteHeadStatus` finds watched PRs by head branch (index `by_head_and_watch`). A push to a watched PR's base branch (`noteBasePush`, index `by_repo_base_and_watch`) is the cue for merge conflicts, since GitHub sends no event when a PR starts to conflict.
+- `startWatch` reads a baseline at once; that first read reports only new comments, so state that was already true never wakes the agent. Each burst then schedules one check 60s later (`watchCheck.ts`). It reads the PR's state, head, `mergeable` and all checks with `isRequired` in one GraphQL call, plus new feedback through the automation `fetchFeedback`. The pure `watchEvaluate.ts` decides what is new; the wake goes through `orchestratorSendMessage`, so it queues behind a running turn.
+- The watch ends when the PR merges or closes, on unwatch, after 10 comment-only wakes in a row, after 15 minutes of failed reads, or when the chat (or the session chat that asked) is archived or deleted. Bot comments, the agent's own included, never wake it.
+
 ## UI
 
 The sandbox Review pane has a Pull requests tab (`…/review/prs`) on all three chat surfaces. It lists every PR the chat holds; picking one points Summary, Timeline and Code at it (`?pr=<pullRequestId>`, else the primary). The "More" menu lists each PR when there is more than one.

@@ -102,6 +102,7 @@ import {
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
+import { trackClaudeGoalFrame } from "./claudeGoalSync.js";
 
 /** Reads the entity daemon pidfile; NaN when missing or unreadable. */
 function readDaemonPidFile(): number {
@@ -1221,6 +1222,7 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     recogniseSubagentToolUses(message);
     handleSystemTaskMessage(message);
     handleBackgroundTasksChanged(message);
+    trackClaudeGoalFrame(message);
 
     if (supervisor.isCancellationInFlight) {
       if (message.type !== "result") {

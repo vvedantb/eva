@@ -12,6 +12,7 @@ import {
 } from "../validators";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "../_sessions/backgroundAgents";
+import { agentGoalArg, agentGoalPatch } from "./agentGoal";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import {
@@ -232,6 +233,25 @@ export const updateBackgroundAgents = authMutation({
       args.taskId,
       backgroundAgents,
     );
+    return null;
+  },
+});
+
+/** Daemon mirrors Claude's native `/goal` onto the task (writes only on change). */
+export const updateGoal = authMutation({
+  args: { taskId: v.id("agentTasks"), goal: agentGoalArg },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+    if (
+      !task.repoId ||
+      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+    ) {
+      throw new Error("Not authorized");
+    }
+    const patch = agentGoalPatch(task.goal, args.goal);
+    if (patch) await ctx.db.patch(args.taskId, patch);
     return null;
   },
 });

@@ -17,6 +17,7 @@ export {
   completeSyntheticTurn,
   handleStaleSyntheticTurn,
   updateBackgroundAgents,
+  updateGoal,
   requestStopBackgroundAgent,
 } from "./_sessions/workflow";
 
