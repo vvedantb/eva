@@ -118,7 +118,7 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/confi
   3. Call `request_env_var` for each missing secret.
   4. Run the commands and prove the dev server answers on its port.
   5. Commit. Eva opens the PR.
-- Trigger: a "Set up with Eva" button, shown when the repo has no `.eva/config.json` (or `evaConfigError` is set). It starts a session on the default branch with the skill invoked. Button placement is a visible choice; ask before building.
+- Trigger: a "Set up with Eva" button, shown when the repo has no `.eva/config.json` (or `evaConfigError` is set). It starts a session on the default branch with the skill invoked. Placement: (1) a card above the New Session composer on the repo home (`routes/_repo/$owner/$repo/index.tsx` → `NewSessionComposer`), shown only while the file is missing or invalid; (2) the App settings page, in place of the read-only commands when the file is missing.
 
 ### Deferred (note only)
 
@@ -144,8 +144,9 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/confi
 - Convex fallback: remove it after all repos migrate.
 - File name: `.eva/config.json`.
 - Branch `mcp.json` edits apply on that branch's next agent launch.
+- Setup button: card above the New Session composer + App settings page.
 - Snapshots build from `defaultBaseBranch`; delete `repoSnapshots.workflowRef` and its Snapshots-page field.
 
 ## Unresolved questions
 
-1. Where does the "Set up with Eva" button go (repo home empty state, settings App page, or both)?
+None.
