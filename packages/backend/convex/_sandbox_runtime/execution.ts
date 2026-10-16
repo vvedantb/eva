@@ -646,13 +646,9 @@ export const runBackgroundCommands = internalAction({
     // undici's 300s headersTimeout when run as a single long exec).
     if (launchedConvex) {
       const sessionId = args.sessionId;
-      const stillWanted =
-        sessionId === undefined
-          ? true
-          : await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId);
-      if (!stillWanted) {
+      if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
         console.log(
-          `[sandbox] runBackgroundCommands: skipping Convex readiness watch, session not running ${args.sandboxId}`,
+          `[sandbox] runBackgroundCommands: skipping Convex readiness watch, sandbox stopped ${args.sandboxId}`,
         );
       } else {
         await ctx.scheduler.runAfter(0, internal.sandbox.watchConvexReadiness, {
@@ -675,12 +671,23 @@ export const runBackgroundCommands = internalAction({
 const CONVEX_READY_POLL_INTERVAL_MS = 10_000;
 const CONVEX_READY_TIMEOUT_MS = 360_000;
 
-/** False once the user has stopped this session or it no longer owns the VM. */
-async function sessionStillRunningSandbox(
+/**
+ * False once Eva has stopped the VM: the session is no longer active or no
+ * longer owns it, or (no session) every owner is stopping or closed. Any exec
+ * after that resumes the stopped VM (Vercel SDK `withResume`) and bills it.
+ */
+export async function sandboxStillWanted(
   ctx: ActionCtx,
-  sessionId: Id<"sessions">,
   sandboxId: string,
+  sessionId: Id<"sessions"> | undefined,
 ): Promise<boolean> {
+  if (sessionId === undefined) {
+    const state = await ctx.runQuery(
+      internal.sandboxIdlePause.getSandboxOwnerState,
+      { sandboxId },
+    );
+    return state !== "stopping" && state !== "closed";
+  }
   const session = await ctx.runQuery(internal.sessions.getInternal, {
     id: sessionId,
   });
@@ -715,12 +722,9 @@ export const watchConvexReadiness = internalAction({
     if (convexIndexes.length === 0) return null;
 
     const sessionId = args.sessionId;
-    if (
-      sessionId !== undefined &&
-      !(await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId))
-    ) {
+    if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
       console.log(
-        `[sandbox] watchConvexReadiness: aborted, session not running ${args.sandboxId}`,
+        `[sandbox] watchConvexReadiness: aborted, sandbox stopped ${args.sandboxId}`,
       );
       return null;
     }
@@ -750,12 +754,9 @@ export const watchConvexReadiness = internalAction({
 
     const startedAt = Date.now();
     while (Date.now() - startedAt < CONVEX_READY_TIMEOUT_MS) {
-      if (
-        sessionId !== undefined &&
-        !(await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId))
-      ) {
+      if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
         console.log(
-          `[sandbox] watchConvexReadiness: aborted, session not running ${args.sandboxId}`,
+          `[sandbox] watchConvexReadiness: aborted, sandbox stopped ${args.sandboxId}`,
         );
         return null;
       }
@@ -782,10 +783,7 @@ export const watchConvexReadiness = internalAction({
       await sleep(CONVEX_READY_POLL_INTERVAL_MS);
     }
 
-    if (
-      sessionId !== undefined &&
-      !(await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId))
-    ) {
+    if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
       console.log(
         `[sandbox] watchConvexReadiness: timed out after stop, not warning (${args.sandboxId})`,
       );
