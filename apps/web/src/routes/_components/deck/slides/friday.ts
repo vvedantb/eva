@@ -27,6 +27,7 @@ import { FridayWeeklyChangelog } from "./friday/b22-weekly-changelog";
 import { FridaySkills } from "./friday/b11-skills";
 import { FridayPredictions } from "./friday/b23-predictions";
 import { FridayAbstracted } from "./friday/b24-abstracted";
+import { FridayAskJudge } from "./friday/b25-ask-judge";
 import { FridayAve } from "./friday/b12-ave";
 import { FridayReliability } from "./friday/b13-reliability";
 import { FridayMobile } from "./friday/b14-mobile";
@@ -251,6 +252,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     id: "12-future",
     title: "Where this is heading",
     Component: Slide12Future,
+    steps: 3,
+  },
+  {
+    id: "friday-b25-ask-judge",
+    title: "What matters",
+    Component: FridayAskJudge,
     steps: 3,
   },
   {

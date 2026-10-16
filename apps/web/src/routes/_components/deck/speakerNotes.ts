@@ -95,6 +95,13 @@ Next: The first step on that pipeline is letting the model do the first read.`,
 → Step 2: mistakes become cheap. When a change can be remade in minutes, being wrong stops being expensive. Try more, worry less.
 → Step 3: everything in sandboxes, managed from chat, and the fleet lights up. Eva's own development already works this way, and the Grok bot merges its changes. Next, the same for all our work.
 Detail: say plainly that this is a direction of travel, not a plan with dates. Nothing here is a commitment. The fleet picture is one person, many agents, each in its own sandbox.
+Next: So if the machines do more of the doing, what is left for us?`,
+
+  "friday-b25-ask-judge": `When the model can do the doing, two skills are left, and they belong to everyone in the room, not only developers.
+→ Step 1: knowing what to ask. A clear request, with what is wrong today and what good looks like, is most of the work.
+→ Step 2: knowing how to judge the answer. Looking at the preview and saying "that is right" or "that is not what we need" is the other half.
+→ Step 3: and that matters more each month the models improve, because the doing gets cheaper and the asking and judging do not.
+Detail: this is the bridge from Eva's features to people. Every feature tonight serves one of these two halves: Jev's prompt check helps you ask, previews and reviews help you judge. Present it as an idea, not a quotation.
 Next: That raises the obvious question: what is left for the developers?`,
 
   "13-developer": `The job did not disappear when the model started writing the code; it moved.
