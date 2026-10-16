@@ -12,6 +12,7 @@ import {
 import { Markdown } from "@eva/ui/markdown";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
+import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -209,6 +210,7 @@ export const ChatMessage = memo(function ChatMessage({
   precedingUser,
   belowContent,
 }: ChatMessageProps) {
+  const activityLayout = useActivityLayout();
   const checkpoint = useTurnCheckpointActions({
     message,
     context: turnCheckpoint,
@@ -229,9 +231,15 @@ export const ChatMessage = memo(function ChatMessage({
   // While the turn is live the settled activityLog is not written yet, so the
   // just-answered question comes off the streaming payload instead — that is
   // what makes the record appear the moment the user submits.
-  const streamingQuestionSteps = isStreamingPlaceholder
-    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+  const streamingSteps = isStreamingPlaceholder
+    ? (parseActivitySteps(streamingActivity) ?? [])
     : [];
+  const streamingQuestionSteps = collectQuestionSteps(streamingSteps);
+  // Inline layout already shows the live text between the steps. Older
+  // callbacks send no response steps, so the text block stays for them.
+  const streamingTextIsInline =
+    activityLayout === "inline" &&
+    streamingSteps.some((step) => step.type === "response");
 
   const copySource =
     message.content.trim().length > 0
@@ -417,7 +425,7 @@ export const ChatMessage = memo(function ChatMessage({
                       />
                       {agentSpawnRow}
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
-                      {streamingContent ? (
+                      {streamingContent && !streamingTextIsInline ? (
                         <div data-assistant-cite-source={message._id}>
                           <Markdown className="mt-2">
                             {streamingContent}
