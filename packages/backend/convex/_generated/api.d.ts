@@ -499,6 +499,7 @@ import type * as sandboxGitCredentials from "../sandboxGitCredentials.js";
 import type * as sandboxHeal from "../sandboxHeal.js";
 import type * as sandboxIdlePause from "../sandboxIdlePause.js";
 import type * as sandboxJwt from "../sandboxJwt.js";
+import type * as sandboxLeakSweep from "../sandboxLeakSweep.js";
 import type * as sandboxPanes from "../sandboxPanes.js";
 import type * as sandboxWake from "../sandboxWake.js";
 import type * as scopeCheck from "../scopeCheck.js";
@@ -1041,6 +1042,7 @@ declare const fullApi: ApiFromModules<{
   sandboxHeal: typeof sandboxHeal;
   sandboxIdlePause: typeof sandboxIdlePause;
   sandboxJwt: typeof sandboxJwt;
+  sandboxLeakSweep: typeof sandboxLeakSweep;
   sandboxPanes: typeof sandboxPanes;
   sandboxWake: typeof sandboxWake;
   scopeCheck: typeof scopeCheck;
