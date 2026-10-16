@@ -7,7 +7,6 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -81,31 +80,6 @@ export const PlanTitle = ({ children, ...props }: PlanTitleProps) => {
     <CardTitle data-slot="plan-title" {...props}>
       {isStreaming ? <Shimmer>{children}</Shimmer> : children}
     </CardTitle>
-  );
-};
-
-export type PlanDescriptionProps = Omit<
-  ComponentProps<typeof CardDescription>,
-  "children"
-> & {
-  children: string;
-};
-
-export const PlanDescription = ({
-  className,
-  children,
-  ...props
-}: PlanDescriptionProps) => {
-  const { isStreaming } = usePlan();
-
-  return (
-    <CardDescription
-      className={cn("text-balance", className)}
-      data-slot="plan-description"
-      {...props}
-    >
-      {isStreaming ? <Shimmer>{children}</Shimmer> : children}
-    </CardDescription>
   );
 };
 

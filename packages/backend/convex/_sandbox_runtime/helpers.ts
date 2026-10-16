@@ -16,6 +16,7 @@ import {
 } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
 import {
+  buildDockerBootstrapLock,
   buildDockerdBackgroundStart,
   buildDockerdProcessCleanup,
   buildDockerdStaleRuntimeCleanup,
@@ -212,6 +213,7 @@ export async function ensureDockerDaemon(
         PACKAGE_HELPER_SCRIPT,
         `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || true`,
         "command -v docker >/dev/null 2>&1 || exit 1",
+        ...buildDockerBootstrapLock(60),
         ...buildDockerdProcessCleanup(),
         "sleep 1",
         buildDockerdStaleRuntimeCleanup(),
@@ -261,6 +263,7 @@ export async function bootstrapVercelDocker(
     PACKAGE_HELPER_SCRIPT,
     `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")}`,
     'command -v docker >/dev/null 2>&1 || { echo "bootstrap-docker:no-binary"; exit 1; }',
+    ...buildDockerBootstrapLock(150),
     ...buildDockerdProcessCleanup(true),
     buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",

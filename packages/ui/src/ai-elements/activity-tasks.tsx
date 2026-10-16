@@ -4,13 +4,9 @@ import { createContext, memo, useCallback, useContext, useRef, useState } from "
 import type { ComponentProps, ReactNode, Ref } from "react";
 import { flushSync } from "react-dom";
 
+import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "../ui/collapsible";
-import {
-  IconChevronDown,
+  IconBrain,
   IconChevronRight,
   IconCircle,
   IconCircleCheck,
@@ -49,8 +45,19 @@ import {
 } from "./activity-step-label";
 import { ActivityStepDetail } from "./activity-step-detail";
 import { Markdown } from "../markdown/Markdown";
-import { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
-import { Task, TaskContent, TaskItem, TaskItemFile, TaskTrigger } from "./task";
+import { FileChip } from "./file-chip";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+  type TraceStatus,
+} from "./trace";
+import { useStreamingDisclosure } from "./use-streaming-disclosure";
 
 const ActivityStreamingHeader = memo(function ActivityStreamingHeader({
   steps,
@@ -219,12 +226,18 @@ function TodoChecklist({
   fallback: string;
 }) {
   if (todos.length === 0) {
-    return <TaskItem>{fallback}</TaskItem>;
+    return <p className="text-muted-foreground text-sm">{fallback}</p>;
   }
   return (
-    <ul className="space-y-1">
+    <ul className="flex flex-col gap-2">
       {todos.map((todo, i) => (
-        <li key={i} className="flex items-start gap-2 text-sm">
+        <li
+          key={i}
+          className={cn(
+            "flex items-start gap-2 text-sm",
+            todo.status === "pending" && "opacity-60",
+          )}
+        >
           <TodoStatusIcon status={todo.status} />
           <span
             className={cn(
@@ -257,197 +270,192 @@ function iconForStep(step: ActivityStep) {
   return (stepConfig[step.type] ?? stepConfig.tool).icon;
 }
 
+function traceStatusForStep(step: ActivityStep): TraceStatus | undefined {
+  if (step.isError) return "error";
+  if (step.status === "active") return "running";
+  if (step.status === "pending") return "pending";
+  return undefined;
+}
+
+/** Whole seconds a finished step took; undefined when unknown or under 1s. */
+function stepSeconds(step: ActivityStep): number | undefined {
+  if (step.status !== "complete" || !step.durationMs) return undefined;
+  const seconds = Math.round(step.durationMs / 1000);
+  return seconds >= 1 ? seconds : undefined;
+}
+
 /**
- * One thinking block behind a "Thought for Ns" trigger. Streaming steps open
+ * One thinking block behind a "Thought  12s" line. Streaming steps open
  * themselves so live thinking is readable as it lands, then auto-close.
  */
-function ActivityReasoningDisclosure({ step }: { step: ActivityStep }) {
+function ActivityReasoningLine({ step }: { step: ActivityStep }) {
   const thoughts = step.detail?.trim() ?? "";
   const isActive = step.status === "active";
-  const seconds = step.durationMs
-    ? Math.max(1, Math.round(step.durationMs / 1000))
-    : undefined;
+  const disclosure = useStreamingDisclosure(isActive);
+  const seconds = stepSeconds(step);
+  const line = (
+    <TraceLine status={isActive ? "running" : undefined}>
+      <TraceIcon>
+        <IconBrain />
+      </TraceIcon>
+      <TraceTitle shimmer={isActive}>
+        {isActive ? "Thinking..." : "Thought"}
+      </TraceTitle>
+      {seconds ? (
+        <TraceDescription>{formatElapsed(seconds)}</TraceDescription>
+      ) : null}
+    </TraceLine>
+  );
+  if (!thoughts) return line;
   return (
-    <Reasoning
-      className="mb-0"
-      isStreaming={isActive}
-      defaultOpen={isActive}
-      duration={isActive ? undefined : seconds}
-    >
-      <ReasoningTrigger />
-      {thoughts ? <ReasoningContent>{thoughts}</ReasoningContent> : null}
-    </Reasoning>
+    <TraceCollapsible open={disclosure.open} onOpenChange={disclosure.onOpenChange}>
+      <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        <Markdown className="text-sm">{thoughts}</Markdown>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
-/** One per-call activity row with Synara-style humanized label. */
+/** The to-do snapshot as one line with done/total, folding open to the checklist. */
+function ActivityTodosLine({ step }: { step: ActivityStep }) {
+  const isActive = step.status === "active";
+  const todos = step.todos ?? [];
+  const done = todos.filter((todo) => todo.status === "completed").length;
+  const presentation = deriveStepRowPresentation(step, isActive);
+  const Icon = stepConfig.todos.icon;
+  return (
+    <TraceCollapsible defaultOpen={isActive}>
+      <TraceCollapsibleTrigger>
+        <TraceLine status={isActive ? "running" : undefined}>
+          <TraceIcon>
+            <Icon />
+          </TraceIcon>
+          <TraceTitle shimmer={isActive}>{presentation.text}</TraceTitle>
+          {todos.length > 0 ? (
+            <TraceDescription>
+              {done}/{todos.length}
+            </TraceDescription>
+          ) : null}
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
+        <TodoChecklist todos={todos} fallback={step.detail ?? step.label} />
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
+  );
+}
+
+/** One per-call activity line with Synara-style humanized label. */
 function ActivityStepRow({
   row,
   onOpenFile,
-  depth = 0,
 }: {
   row: ActivityRow;
   onOpenFile?: (path: string) => void;
-  depth?: number;
 }) {
   const { step, children } = row;
   const isActive = step.status === "active";
   const presentation = deriveStepRowPresentation(step, isActive);
   const requestFullDetail = useRequestFullDetailOnOpen();
 
-  if (step.type === "todos") {
-    return (
-      <Task defaultOpen={isActive} className="w-full">
-        <TaskTrigger
-          title={
-            isActive ? (
-              <Shimmer as="span" duration={2.5} spread={1.5}>
-                {presentation.text}
-              </Shimmer>
-            ) : (
-              <span>{presentation.text}</span>
-            )
-          }
-        />
-        <TaskContent>
-          <TodoChecklist
-            todos={step.todos ?? []}
-            fallback={step.detail ?? step.label}
-          />
-        </TaskContent>
-      </Task>
-    );
-  }
-
-  if (step.type === "reasoning") {
-    return <ActivityReasoningDisclosure step={step} />;
-  }
+  if (step.type === "todos") return <ActivityTodosLine step={step} />;
+  if (step.type === "reasoning") return <ActivityReasoningLine step={step} />;
 
   const Icon = iconForStep(step);
-
-  const label = (
-    <span className="min-w-0 truncate" title={presentation.title}>
-      {isActive ? (
-        <Shimmer as="span" duration={2.5} spread={1.5}>
-          {presentation.text}
-        </Shimmer>
-      ) : (
-        presentation.text
-      )}
-    </span>
-  );
-
-  const fileChip = presentation.fileChip ? (
-    presentation.fileChip.path && onOpenFile ? (
-      <button
-        type="button"
-        title={presentation.fileChip.path}
-        onClick={(event) => {
-          event.stopPropagation();
-          const path = presentation.fileChip?.path;
-          if (path) onOpenFile(path);
-        }}
-        className="inline-flex min-w-0 max-w-full cursor-pointer"
-      >
-        <TaskItemFile className="transition-colors hover:bg-muted">
-          {presentation.fileChip.name}
-        </TaskItemFile>
-      </button>
-    ) : (
-      <TaskItemFile>{presentation.fileChip.name}</TaskItemFile>
-    )
-  ) : null;
-
   // A subagent's own text (`response` children) belongs to its child thread
   // view, not the parent's timeline.
-  const visibleChildren = (children ?? []).filter(
+  const childRows = (children ?? []).filter(
     (child) => !HIDDEN_TYPES.has(child.step.type),
   );
   const openSubagent =
     step.type === "subtask" ? (
       <OpenSubagentButton toolUseId={step.toolUseId} />
     ) : null;
-  const childOverflow = visibleChildren.length - MAX_VISIBLE_CHILDREN;
+  const childOverflow = childRows.length - MAX_VISIBLE_CHILDREN;
   const shownChildren =
-    childOverflow > 0
-      ? visibleChildren.slice(0, MAX_VISIBLE_CHILDREN)
-      : visibleChildren;
+    childOverflow > 0 ? childRows.slice(0, MAX_VISIBLE_CHILDREN) : childRows;
+  const seconds = stepSeconds(step);
+  const description =
+    childRows.length > 0
+      ? `${childRows.length} ${childRows.length === 1 ? "step" : "steps"}`
+      : seconds
+        ? formatElapsed(seconds)
+        : undefined;
+
+  const fileChip = presentation.fileChip ? (
+    <FileChip
+      name={presentation.fileChip.name}
+      path={presentation.fileChip.path}
+      onOpenFile={onOpenFile}
+    />
+  ) : undefined;
+  const lineHead = (
+    <>
+      <TraceIcon iconKey={`${step.type}-${step.status}`}>
+        <Icon />
+      </TraceIcon>
+      <TraceTitle shimmer={isActive} title={presentation.title}>
+        {presentation.text}
+      </TraceTitle>
+    </>
+  );
+  const descriptionNode = description ? (
+    <TraceDescription>{description}</TraceDescription>
+  ) : null;
 
   const hasDetail = stepHasRichDetail(step);
+  if (!hasDetail && shownChildren.length === 0) {
+    return (
+      <TraceLine status={traceStatusForStep(step)}>
+        {lineHead}
+        {fileChip}
+        {descriptionNode}
+        {openSubagent}
+      </TraceLine>
+    );
+  }
 
-  const rowHeader = (
-    <div
-      className={cn(
-        "flex items-center gap-2 text-sm",
-        step.isError ? "text-destructive" : "text-muted-foreground",
-      )}
+  // Subagent steps start open so their inner steps stay visible, as before.
+  return (
+    <TraceCollapsible
+      defaultOpen={shownChildren.length > 0}
+      onOpenChange={requestFullDetail}
     >
-      <CrossfadeIconSlot
-        iconKey={`${step.type}-${step.status}`}
-        variant="soft"
-        className="relative flex size-4 shrink-0 items-center justify-center"
+      {/* The file chip opens the file viewer, so it sits beside the trigger:
+          a button inside the trigger button would be invalid HTML. */}
+      <TraceCollapsibleTrigger
+        trailing={
+          fileChip || openSubagent ? (
+            <>
+              {fileChip}
+              {fileChip ? descriptionNode : null}
+              {openSubagent}
+            </>
+          ) : undefined
+        }
       >
-        <Icon className="size-4" />
-      </CrossfadeIconSlot>
-      {label}
-      {fileChip}
-    </div>
-  );
-
-  const childrenBlock =
-    shownChildren.length > 0 ? (
-      <div
-        className={cn(
-          "space-y-1",
-          depth === 0 && "ml-1 border-l border-border pl-3",
-        )}
-      >
+        <TraceLine status={traceStatusForStep(step)}>
+          {lineHead}
+          {fileChip ? null : descriptionNode}
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent className="flex flex-col gap-2">
+        {hasDetail ? (
+          <ActivityStepDetail step={step} onOpenFile={onOpenFile} />
+        ) : null}
         {shownChildren.map((child, i) => (
           <ActivityStepRow
             key={activityRowKey(child, i)}
             row={child}
             onOpenFile={onOpenFile}
-            depth={depth + 1}
           />
         ))}
         {childOverflow > 0 ? (
           <p className="text-xs text-muted-foreground">+{childOverflow} more</p>
         ) : null}
-      </div>
-    ) : null;
-
-  if (hasDetail) {
-    return (
-      <div className="space-y-1">
-        <Collapsible className="group w-full" onOpenChange={requestFullDetail}>
-          <div className="flex items-center gap-2">
-            <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-foreground">
-              {rowHeader}
-              <IconChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            {openSubagent}
-          </div>
-          <CollapsibleContent className="mt-1.5 ml-6 space-y-1 border-l border-border pl-3 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
-            <ActivityStepDetail step={step} onOpenFile={onOpenFile} />
-          </CollapsibleContent>
-        </Collapsible>
-        {childrenBlock}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      {openSubagent ? (
-        <div className="flex items-center gap-2">
-          {rowHeader}
-          {openSubagent}
-        </div>
-      ) : (
-        rowHeader
-      )}
-      {childrenBlock}
-    </div>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
@@ -478,34 +486,21 @@ function ActivityActionGroup({
   const requestFullDetail = useRequestFullDetailOnOpen();
 
   return (
-    <Collapsible
-      className="group py-2 w-full"
-      defaultOpen={isActive}
-      onOpenChange={requestFullDetail}
-    >
+    <TraceCollapsible defaultOpen={isActive} onOpenChange={requestFullDetail}>
       {/* Summary stays muted even when a call inside failed: agents run failing
           commands on purpose, so one non-zero exit should not paint the run red.
-          The failed row itself is still red once the fold is open. */}
-      <CollapsibleTrigger className="flex w-full items-center gap-2 text-left text-muted-foreground text-sm transition-colors hover:text-foreground">
-        <CrossfadeIconSlot
-          iconKey={isActive ? "group-active" : "group-idle"}
-          variant="soft"
-          className="relative flex size-4 shrink-0 items-center justify-center"
-        >
-          <Icon className="size-4" />
-        </CrossfadeIconSlot>
-        <span className="min-w-0 truncate" title={summary}>
-          {isActive ? (
-            <Shimmer as="span" duration={2.5} spread={1.5}>
-              {summary}
-            </Shimmer>
-          ) : (
-            summary
-          )}
-        </span>
-        <IconChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1.5 ml-2 space-y-1.5 border-l border-border pl-3 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
+          The failed line itself is still red once the fold is open. */}
+      <TraceCollapsibleTrigger>
+        <TraceLine status={isActive ? "running" : undefined}>
+          <TraceIcon iconKey={isActive ? "group-active" : "group-idle"}>
+            <Icon />
+          </TraceIcon>
+          <TraceTitle shimmer={isActive} title={summary}>
+            {summary}
+          </TraceTitle>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent className="flex flex-col gap-2">
         {rows.map((row, i) => (
           <ActivityStepRow
             key={activityRowKey(row, i)}
@@ -513,8 +508,8 @@ function ActivityActionGroup({
             onOpenFile={onOpenFile}
           />
         ))}
-      </CollapsibleContent>
-    </Collapsible>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
 
@@ -662,16 +657,21 @@ export const ActivityTasks = memo(
             }}
             {...props}
           >
-            <CollapsibleTrigger className="flex w-full items-center gap-2 border-b border-border pb-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground">
-              <span>Worked for {duration}</span>
-              <IconChevronDown className="size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-1.5 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
-              <ActivityRowList
-                rows={rows}
-                isStreaming={false}
-                onOpenFile={onOpenFile}
-              />
+            <div className="border-b border-border pb-1.5">
+              <TraceCollapsibleTrigger>
+                <TraceLine>
+                  <TraceTitle>{`Worked for ${duration}`}</TraceTitle>
+                </TraceLine>
+              </TraceCollapsibleTrigger>
+            </div>
+            <CollapsibleContent>
+              <Trace className="mt-2">
+                <ActivityRowList
+                  rows={rows}
+                  isStreaming={false}
+                  onOpenFile={onOpenFile}
+                />
+              </Trace>
             </CollapsibleContent>
           </Collapsible>
         </RequestFullDetailContext>
@@ -680,7 +680,7 @@ export const ActivityTasks = memo(
 
     return (
       <RequestFullDetailContext value={onRequestFullDetail}>
-        <div className={cn("space-y-1.5 text-sm", className)} {...props}>
+        <Trace className={className} {...props}>
           {isStreaming && rows.length === 0 ? (
             <ActivityStreamingHeader
               steps={steps}
@@ -693,7 +693,7 @@ export const ActivityTasks = memo(
             isStreaming={isStreaming}
             onOpenFile={onOpenFile}
           />
-        </div>
+        </Trace>
       </RequestFullDetailContext>
     );
   },

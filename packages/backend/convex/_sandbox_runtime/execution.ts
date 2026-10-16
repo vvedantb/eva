@@ -2055,8 +2055,13 @@ async function runPrewarmEntityDaemon(
       }
 
       if (await skipIfStopped()) return { prewarmed: false };
+      // skipDocker: the agent daemon needs neither swap nor dockerd, and the
+      // sandbox's own startup path already provisions both. On a new session
+      // this wait (~4s measured) sat before the launch, racing the
+      // createSandbox bootstrap of the same dockerd.
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
+        skipDocker: true,
       });
 
       const claudeSessionId =

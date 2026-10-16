@@ -34,18 +34,13 @@ import {
 } from "./linkedRepoBranch";
 import { launchLinkedRepoDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
 import { resolveEnvVars } from "../envVarResolver";
+import { type ProgressStep, startupProgress } from "./startupProgress";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
 function logLinkedRepo(message: string): void {
   console.log(`[sandbox][linkedRepos] ${message}`);
 }
-
-type ProgressStep = {
-  type: "tool";
-  label: string;
-  status: "active" | "complete";
-};
 
 /** Streams clone/install progress for one linked repo onto the session's startup timeline. */
 async function setLinkedRepoProgress(
@@ -117,13 +112,6 @@ export const prepareLinkedRepo = internalAction({
         [row.installationId],
       );
 
-      const completed: ProgressStep[] = [];
-      const cloneLabel = `Cloning ${row.name}...`;
-      await setLinkedRepoProgress(ctx, args.sessionId, [
-        ...completed,
-        { type: "tool", label: cloneLabel, status: "active" },
-      ]);
-
       // 3. Clone (fresh sandbox) or catch the existing clone up to the base
       // branch and make sure the session branch is checked out (resumed
       // sandbox — this row was already cloned in a previous run).
@@ -137,6 +125,20 @@ export const prepareLinkedRepo = internalAction({
           )
         ).trim() === "yes";
       const freshlyCloned = !hasGitDir;
+      const completed: ProgressStep[] = [];
+      const cloneLabel = `Cloning ${row.name}...`;
+      const installLabel = `Installing ${row.name} dependencies...`;
+      // A fresh clone has no node_modules yet, so its install stage is certain
+      // and shows as pending; a resumed clone may skip it, so it is not planned.
+      const plan =
+        freshlyCloned && row.installDependencies
+          ? [cloneLabel, installLabel]
+          : [cloneLabel];
+      await setLinkedRepoProgress(
+        ctx,
+        args.sessionId,
+        startupProgress(completed, cloneLabel, plan),
+      );
       if (!hasGitDir) {
         await cloneRepoInto(
           sandbox,
@@ -207,11 +209,11 @@ export const prepareLinkedRepo = internalAction({
             )
           ).trim() === "yes";
         if (!hasNodeModules) {
-          const installLabel = `Installing ${row.name} dependencies...`;
-          await setLinkedRepoProgress(ctx, args.sessionId, [
-            ...completed,
-            { type: "tool", label: installLabel, status: "active" },
-          ]);
+          await setLinkedRepoProgress(
+            ctx,
+            args.sessionId,
+            startupProgress(completed, installLabel, plan),
+          );
           const pm = await detectPackageManager(sandbox, "", row.path);
           logLinkedRepo(
             `prepareLinkedRepo: detected package manager "${pm}" for ${row.owner}/${row.name}`,

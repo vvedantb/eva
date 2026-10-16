@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, type ComponentProps, type ReactNode } from "react";
-import { IconChevronDown } from "@tabler/icons-react";
+import { IconChevronRight } from "@tabler/icons-react";
 import { Button } from "../ui/button";
 import {
   Collapsible,
@@ -70,11 +70,13 @@ export const QueueSectionLabel = ({
   ...props
 }: QueueSectionLabelProps) => (
   <span className={cn("flex items-center gap-1.5", className)} {...props}>
-    <IconChevronDown className="size-3.5 opacity-70 transition-transform group-data-[state=closed]:-rotate-90" />
     {icon}
     <span>
       {count} {label}
     </span>
+    {/* Same chevron as the activity timeline's Trace lines: after the text,
+        pointing right, turning 90° when the section is open. */}
+    <IconChevronRight className="-ml-0.5 size-3.5 opacity-70 transition-transform group-data-[state=open]:rotate-90" />
   </span>
 );
 
