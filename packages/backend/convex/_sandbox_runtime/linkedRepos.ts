@@ -16,6 +16,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { execHandle, getSandboxHandle } from "./helpers";
+import { sandboxStillWanted } from "./execution";
 import {
   cloneRepoInto,
   installDependencies,
@@ -90,6 +91,14 @@ export const prepareLinkedRepo = internalAction({
         throw new Error(
           `prepareLinkedRepo: primary repo ${args.repoId} not found`,
         );
+      }
+      // Workflow retries can land after the user stopped the session; the
+      // first exec would resume the stopped VM and leave it billing.
+      if (!(await sandboxStillWanted(ctx, args.sandboxId, args.sessionId))) {
+        logLinkedRepo(
+          `prepareLinkedRepo: sandbox stopped, skipping (${details})`,
+        );
+        return;
       }
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 

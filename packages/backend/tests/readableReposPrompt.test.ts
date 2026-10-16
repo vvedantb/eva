@@ -5,7 +5,7 @@ import { buildAgentTaskChatPrompt } from "../convex/_agentTasks/chatPrompt";
 import { buildProjectChatPrompt } from "../convex/_projects/chatPrompt";
 import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
 
-const HEADING = "## Other repositories you may read";
+const HEADING = "## Other repositories you may use";
 
 const TWO_REPOS = [
   { owner: "vvedantb", name: "eva" },
@@ -24,8 +24,8 @@ test("buildReadableReposBlock lists every repo and clones the first one", () => 
   expect(block).toContain(
     "git clone https://github.com/vvedantb/eva.git /tmp/eva",
   );
-  // Clone/fetch only: the helper mints read-only tokens.
-  expect(block).toContain("clone/fetch only, no push");
+  // The helper mints contents-write tokens, so the block must say push works.
+  expect(block).toContain("clone, fetch and push these repositories");
 });
 
 function sessionPrompt(

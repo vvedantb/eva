@@ -48,16 +48,17 @@ Notes from earlier sessions live in \`${AGENT_MEMORY_DIR}/\` at the repo root. R
 ${AGENT_MEMORY_FORMAT}`;
 }
 
-/** Lists sibling repositories the sandbox's git credentials can read; empty when there are none. */
+/** Lists sibling repositories the sandbox's git credentials can clone and push; empty when there are none. */
 export function buildReadableReposBlock(
   repos: ReadonlyArray<{ owner: string; name: string }>,
 ): string {
   const [first] = repos;
   if (first === undefined) return "";
   const list = repos.map((repo) => `${repo.owner}/${repo.name}`).join(", ");
-  return `\n\n## Other repositories you may read
-Your git credentials can also read these repositories (clone/fetch only, no push): ${list}.
-Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`. \`gh\` cannot see them; use git.`;
+  return `\n\n## Other repositories you may use
+Your git credentials can also clone, fetch and push these repositories: ${list}.
+Clone one under /tmp when a task needs its code, e.g. \`git clone https://github.com/${first.owner}/${first.name}.git /tmp/${first.name}\`.
+Push only when the user asks, to a feature branch or an existing PR branch, never to the default branch unless told to. Never force-push a branch you did not create. \`gh\` cannot see these repositories, so you cannot open PRs there; give the user the branch's compare link instead.`;
 }
 
 /**
