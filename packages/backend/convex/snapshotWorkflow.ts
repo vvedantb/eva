@@ -74,6 +74,19 @@ export const snapshotBuildWorkflow = workflow.define({
     forceBaseSeed: v.optional(v.boolean()),
   },
   handler: async (step, args) => {
+    // Refresh the `.eva/config.json` cache first: the build and seed commands
+    // read below, and the fingerprint stored at capture, must be the file's
+    // values on the branch this build checks out.
+    const snapshotOwner = await step.runQuery(
+      internal.repoSnapshots.getRepoSnapshotInternal,
+      { repoSnapshotId: args.repoSnapshotId },
+    );
+    if (snapshotOwner) {
+      await step.runAction(internal._evaConfig.sync.syncEvaConfig, {
+        repoId: snapshotOwner.repoId,
+      });
+    }
+
     // Resolve config + repo (owner/name/installation drive git fetch auth).
     const config = await step.runQuery(
       internal.repoSnapshots.getRepoSnapshotInternal,
@@ -101,7 +114,7 @@ export const snapshotBuildWorkflow = workflow.define({
       });
       return;
     }
-    const branch = config.workflowRef ?? "main";
+    const branch = config.branch;
 
     const providerKind = await step.runAction(
       internal.sandbox.getSandboxProviderKind,

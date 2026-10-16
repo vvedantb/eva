@@ -5,8 +5,10 @@ import { describe, expect, test } from "vitest";
 
 const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
-const MARKER = "/tmp/.startup-commands-done";
-const WRITE_MARKER = `touch ${MARKER}`;
+// The marker path lives in `_sandbox_runtime/startupMarker.ts`; its content is
+// the startup fingerprint, so every raw write redirects into the path constant.
+const RAW_WRITE_MARKER = "> ${STARTUP_MARKER_PATH}";
+const LIVE_WRITE_MARKER = "writeStartupMarker(sandbox";
 
 /**
  * The marker file is a claim: "this sandbox's startup/seed sequence already ran
@@ -26,9 +28,12 @@ describe("the startup marker is only written by a clean run", () => {
    * own success proof, so it fails here first.
    */
   test("only two places write the marker", () => {
-    expect(markerWriters()).toEqual([
-      "_sandbox_runtime/execution.ts",
+    expect(filesContaining(RAW_WRITE_MARKER)).toEqual([
+      "_sandbox_runtime/startupMarker.ts",
       "snapshotActions.ts",
+    ]);
+    expect(filesContaining(LIVE_WRITE_MARKER)).toEqual([
+      "_sandbox_runtime/execution.ts",
     ]);
   });
 });
@@ -48,7 +53,7 @@ describe("runStartupCommandsDirect", () => {
   test("the marker is written inside the no-errors branch", () => {
     const guardAt = body.indexOf("if (errors.length === 0) {");
     const elseAt = body.indexOf("} else {", guardAt);
-    const writeAt = body.indexOf(WRITE_MARKER);
+    const writeAt = body.indexOf(LIVE_WRITE_MARKER);
 
     expect(guardAt, "the clean-run guard moved or was renamed").toBeGreaterThan(
       -1,
@@ -67,7 +72,7 @@ describe("runStartupCommandsDirect", () => {
   /** Errors have to be collected before the guard can mean anything. */
   test("the marker is written after every command has run", () => {
     expect(body.indexOf("errors.push(")).toBeLessThan(
-      body.indexOf(WRITE_MARKER),
+      body.indexOf(LIVE_WRITE_MARKER),
     );
   });
 
@@ -77,7 +82,7 @@ describe("runStartupCommandsDirect", () => {
    */
   test("the skip-if-present check is gated on force", () => {
     const forceAt = body.indexOf("if (!args.force) {");
-    const checkAt = body.indexOf(`test -f ${MARKER}`);
+    const checkAt = body.indexOf("startupMarkerMatches(");
     expect(forceAt, "the force gate moved").toBeGreaterThan(-1);
     expect(checkAt, "the marker check moved").toBeGreaterThan(forceAt);
   });
@@ -116,7 +121,7 @@ describe("the seed-run script cannot reach the marker after a failure", () => {
   /** The seed stage is the last thing that can fail before the marker. */
   test("the marker is pushed after the seed commands", () => {
     const seedStageAt = source.indexOf("SEEDRUN-STAGE:seed-commands");
-    const markerAt = source.indexOf(WRITE_MARKER);
+    const markerAt = source.indexOf(RAW_WRITE_MARKER);
     expect(seedStageAt, "the seed stage moved").toBeGreaterThan(-1);
     expect(markerAt, "the marker push moved").toBeGreaterThan(seedStageAt);
   });
@@ -127,20 +132,20 @@ describe("the seed-run script cannot reach the marker after a failure", () => {
    * be captured mid-flight.
    */
   test("the run-complete marker is the last thing pushed", () => {
-    expect(source.indexOf(WRITE_MARKER)).toBeLessThan(
+    expect(source.indexOf(RAW_WRITE_MARKER)).toBeLessThan(
       source.indexOf("touch /tmp/.seedrun-done"),
     );
   });
 });
 
-/** Convex files that write the marker, relative to `convex/`, sorted. */
-function markerWriters(): string[] {
+/** Convex files containing `needle`, relative to `convex/`, sorted. */
+function filesContaining(needle: string): string[] {
   const found: string[] = [];
   for (const file of convexSources()) {
     const source = stripComments(
       readFileSync(file, "utf8").replaceAll("\r\n", "\n"),
     );
-    if (!source.includes(WRITE_MARKER)) continue;
+    if (!source.includes(needle)) continue;
     found.push(file.slice(convexDir.length + 1).replaceAll("\\", "/"));
   }
   return found.sort();

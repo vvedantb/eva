@@ -16,8 +16,8 @@ import {
   RUN_ID,
   SCRIPT_STARTED_AT,
   WORK_DIR,
-  hasMcpConfig,
 } from "./config.js";
+import { hasEvaMcpConfig } from "./evaMcp.js";
 import { runSdkDaemon } from "./providers/claudeSdkDaemon.js";
 import { runCodexAppServerDaemon } from "./providers/codexAppServerDaemon.js";
 import {
@@ -172,7 +172,7 @@ log(
     " sessionId=" +
     (process.env.CLAUDE_SESSION_ID || "none") +
     " mcp=" +
-    (hasMcpConfig ? "yes" : "no"),
+    (hasEvaMcpConfig ? "yes" : "no"),
 );
 
 try {

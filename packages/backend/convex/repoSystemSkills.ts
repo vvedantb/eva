@@ -2,7 +2,7 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import { internalQuery } from "./_generated/server";
-import type { DataModel, Id } from "./_generated/dataModel";
+import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { resolveCanonicalRepoId } from "./_githubRepos/helpers";
 import {
@@ -11,7 +11,10 @@ import {
   listSystemSkills,
   SYSTEM_SKILLS,
   type SystemSkillHydration,
+  type SystemSkillName,
 } from "./_systemSkills/registry";
+import { buildEvaConfigDraft } from "./_evaConfig/config";
+import { findSnapshotForRepo } from "./_repoSnapshots/config";
 
 /**
  * Per-repo values baked into the served skill content. Runtime fields come from
@@ -21,6 +24,7 @@ import {
 async function buildHydration(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
+  skillName: SystemSkillName,
 ): Promise<SystemSkillHydration | null> {
   const repo = await db.get(repoId);
   if (!repo) return null;
@@ -39,7 +43,39 @@ async function buildHydration(
       canonical?.defaultBaseBranch ??
       repo.defaultBaseBranch ??
       FALLBACK_GIT_BASE_BRANCH,
+    ...(skillName === "eva-setup"
+      ? { evaConfigDraft: await buildDraftFromConvex(db, repo) }
+      : {}),
   };
+}
+
+/** Today's Convex commands for every app of the GitHub repo, as a draft file. */
+async function buildDraftFromConvex(
+  db: GenericDatabaseReader<DataModel>,
+  repo: Doc<"githubRepos">,
+): Promise<string> {
+  const siblings = await db
+    .query("githubRepos")
+    .withIndex("by_owner_and_name", (q) =>
+      q.eq("owner", repo.owner).eq("name", repo.name),
+    )
+    .collect();
+  // The monorepo root row is not an app unless it is the only row.
+  const parentIds = new Set(siblings.map((row) => row.parentRepoId));
+  const apps =
+    siblings.length > 1
+      ? siblings.filter((row) => !parentIds.has(row._id))
+      : siblings;
+  const snapshot = await findSnapshotForRepo(db, repo._id);
+  return buildEvaConfigDraft({
+    apps,
+    buildCommands: snapshot?.buildCommands,
+    seedCommands: snapshot?.seedCommands,
+  });
+}
+
+function isAlwaysInstalled(name: SystemSkillName): boolean {
+  return SYSTEM_SKILLS[name].alwaysInstalled === true;
 }
 
 async function isInstalled(
@@ -64,6 +100,7 @@ export const listForRepo = authQuery({
       name: v.string(),
       description: v.string(),
       installed: v.boolean(),
+      alwaysInstalled: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -80,7 +117,10 @@ export const listForRepo = authQuery({
     return listSystemSkills().map((definition) => ({
       name: definition.name,
       description: definition.description,
-      installed: installedNames.has(definition.name),
+      installed:
+        isAlwaysInstalled(definition.name) ||
+        installedNames.has(definition.name),
+      alwaysInstalled: isAlwaysInstalled(definition.name),
     }));
   },
 });
@@ -93,7 +133,7 @@ export const getContentByName = authQuery({
     if (!isSystemSkillName(args.name)) return null;
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return null;
 
-    const hydration = await buildHydration(ctx.db, args.repoId);
+    const hydration = await buildHydration(ctx.db, args.repoId, args.name);
     if (!hydration) return null;
 
     const definition = SYSTEM_SKILLS[args.name];
@@ -157,11 +197,18 @@ export const listStubsForLaunch = internalQuery({
       .withIndex("by_repo", (q) => q.eq("repoId", canonicalId))
       .collect();
 
-    return installed.flatMap((row) => {
-      if (!isSystemSkillName(row.name)) return [];
-      const definition = SYSTEM_SKILLS[row.name];
-      return [{ name: definition.name, stub: buildStubMarkdown(definition) }];
-    });
+    const names = new Set(
+      listSystemSkills()
+        .filter((definition) => isAlwaysInstalled(definition.name))
+        .map((definition) => definition.name),
+    );
+    for (const row of installed) {
+      if (isSystemSkillName(row.name)) names.add(row.name);
+    }
+    return [...names].map((name) => ({
+      name,
+      stub: buildStubMarkdown(SYSTEM_SKILLS[name]),
+    }));
   },
 });
 
@@ -184,11 +231,14 @@ export const resolveForMcp = internalQuery({
     if (!repoId) return { status: "repo_not_found" as const };
 
     const canonicalId = await resolveCanonicalRepoId(ctx.db, repoId);
-    if (!(await isInstalled(ctx.db, canonicalId, args.name))) {
+    if (
+      !isAlwaysInstalled(args.name) &&
+      !(await isInstalled(ctx.db, canonicalId, args.name))
+    ) {
       return { status: "not_installed" as const };
     }
 
-    const hydration = await buildHydration(ctx.db, repoId);
+    const hydration = await buildHydration(ctx.db, repoId, args.name);
     if (!hydration) return { status: "repo_not_found" as const };
 
     return {

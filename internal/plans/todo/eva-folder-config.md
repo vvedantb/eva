@@ -150,3 +150,17 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/confi
 ## Unresolved questions
 
 None.
+
+## Implementation notes (2026-10-16)
+
+Built in PR #977. Differences from the plan above:
+
+- **MCP:** the sandbox callback reads `.eva/mcp.json` straight from the checkout (`callback-src/evaMcp.ts`), so branch edits apply on the next agent launch with no backend read. Convex only caches server summaries for the settings page. http and stdio servers both work.
+- **Startup rerun:** the marker file `/tmp/.startup-commands-done` now holds the startup fingerprint (`_sandbox_runtime/startupMarker.ts`). A mismatch reruns startup on any surface; an empty legacy marker still counts as done.
+- **Seed mismatch:** `resolveSandboxContext` reads the branch file through the GitHub API and boots the base Image when the seed fingerprint differs. Seed commands do not run on that boot (they are build-only); the agent must seed by hand. Follow-up if this matters.
+- **Dev command/port** still come from the default-branch cache, not the session branch. Follow-up.
+- **Migration:** no PR-opening action. The `eva-setup` skill receives a draft built from today's Convex commands and writes the file itself; the same button serves new and existing repos.
+- **Inline secrets:** prod seed commands hold deploy keys, a service-role key and a DB password inline. The skill tells the agent to replace them with `$VAR` and request the env vars. These keys should also be rotated, because they have sat in Convex in plain text.
+- **Snapshot branch:** carepulse-ts snapshots move from `staging` to `main` (its default branch).
+- **Eva's own `.eva/config.json`** is not in this PR: its seed command needs a deploy key moved into a repo env var first. Run "Set up with Eva" on this repo after merge.
+- **Convex fallback removal** (unresolved decision: remove after all repos migrate) is not done yet.

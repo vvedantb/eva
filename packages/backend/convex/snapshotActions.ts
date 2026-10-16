@@ -1,14 +1,12 @@
 "use node";
 
 import { v } from "convex/values";
-import { z } from "zod";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   resolveSandboxCredentials,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
-import { getInstallationToken } from "./githubAuth";
 import {
   buildConfigFileDownloadCommands,
   filterDownloadableConfigFiles,
@@ -21,6 +19,8 @@ import {
   SESSION_LIFECYCLE,
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
+import { computeStartupFingerprint } from "./_evaConfig/config";
+import { STARTUP_MARKER_PATH } from "./_sandbox_runtime/startupMarker";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
 import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
@@ -188,97 +188,6 @@ function seededRuntimeStateCaptureLines(
     "fi",
   ];
 }
-
-// Bump when the Vercel seed-prep toolchain/build inputs change in a way that
-// should invalidate existing image fingerprints (see getImageFingerprint)
-// even though repo/config inputs are unchanged.
-const IMAGE_DEF_VERSION = 2;
-
-// Boundary schema for the small GitHub JSON responses this module reads.
-const shaResponseSchema = z.object({ sha: z.string() });
-
-/** Manifest files that affect baked install output (Node lockfiles + Python). */
-const FINGERPRINT_MANIFEST_FILES = [
-  "pnpm-lock.yaml",
-  "package-lock.json",
-  "yarn.lock",
-  "requirements.txt",
-  "pyproject.toml",
-] as const;
-
-/**
- * Fingerprint of the Image inputs: every dependency manifest blob sha found on
- * the build branch (Node lockfiles + Python), the build commands, the
- * config-file blobs baked into the image, and IMAGE_DEF_VERSION. When this
- * matches the value stored at the last successful Image build, the workflow
- * skips the ~11-15m rebuild — the output would be byte-identical (sandboxes
- * fetch fresh branches at boot, so a repo checkout that is a few commits stale
- * costs nothing; node_modules / site-packages only drift when a manifest
- * changes, which changes this fingerprint). Returns null when the inputs
- * cannot be determined (e.g. no manifests found) — callers must treat null as
- * "always rebuild".
- */
-export const getImageFingerprint = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args): Promise<string | null> => {
-    const config = await ctx.runQuery(
-      internal.repoSnapshots.getRepoSnapshotInternal,
-      { repoSnapshotId: args.repoSnapshotId },
-    );
-    if (!config) return null;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: config.repoId,
-    });
-    if (!repo) return null;
-    const branch = config.workflowRef ?? "main";
-    const manifestShas: string[] = [];
-    try {
-      const token = await getInstallationToken(repo.installationId);
-      for (const manifest of FINGERPRINT_MANIFEST_FILES) {
-        const resp = await fetch(
-          `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github+json",
-            },
-          },
-        );
-        if (resp.ok) {
-          const parsed = shaResponseSchema.safeParse(await resp.json());
-          if (parsed.success) {
-            manifestShas.push(`${manifest}:${parsed.data.sha}`);
-          }
-        }
-      }
-    } catch (e) {
-      console.error(
-        `[snapshot] image fingerprint: manifest lookup failed: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      );
-      return null;
-    }
-    if (manifestShas.length === 0) return null;
-    const fileKeys: string[] = await ctx.runQuery(
-      internal.sandboxConfigFiles.getConfigFileKeys,
-      { repoId: config.repoId },
-    );
-    const payload = JSON.stringify({
-      v: IMAGE_DEF_VERSION,
-      branch,
-      manifestShas,
-      buildCommands: config.buildCommands ?? [],
-      files: fileKeys,
-    });
-    let hash = 5381;
-    for (let i = 0; i < payload.length; i++) {
-      hash = (hash * 33) ^ payload.charCodeAt(i);
-    }
-    return `img-${(hash >>> 0).toString(36)}-${payload.length}`;
-  },
-});
 
 /**
  * Seeded-snapshot build — LAUNCH step. Composes the app's whole seed sequence
@@ -616,7 +525,11 @@ export const launchSeedRun = internalAction({
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
     // Marker so a sandbox booting from the captured snapshot skips the seed.
-    lines.push("touch /tmp/.startup-commands-done");
+    // It carries the startup fingerprint: a branch with other startup
+    // commands sees a mismatch and reruns them (runStartupCommandsDirect).
+    lines.push(
+      `printf %s ${computeStartupFingerprint(startupCommands ?? [])} > ${STARTUP_MARKER_PATH}`,
+    );
     (stopCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:stop-${i}"; exit 1; }`,

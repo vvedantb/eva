@@ -270,8 +270,8 @@ export const syncRepoInternal = internalAction({
 });
 
 /**
- * Schedules a staggered per-repo skill sync for every connected canonical
- * codebase. Invoked by the periodic cron in `crons.ts`.
+ * Schedules a staggered per-repo skill + `.eva/` config sync for every
+ * connected canonical codebase. Invoked by the periodic cron in `crons.ts`.
  */
 export const syncAllRepos = internalAction({
   args: {},
@@ -288,6 +288,13 @@ export const syncAllRepos = internalAction({
       await ctx.scheduler.runAfter(
         i * 2000,
         internal._repoSkills.sync.syncRepoInternal,
+        { repoId },
+      );
+      // Same daily pass converges the repo-owned `.eva/` config cache when a
+      // push webhook was missed.
+      await ctx.scheduler.runAfter(
+        i * 2000 + 1000,
+        internal._evaConfig.sync.syncEvaConfig,
         { repoId },
       );
     }

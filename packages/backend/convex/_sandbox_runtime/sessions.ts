@@ -1074,6 +1074,7 @@ async function prepareSessionSandboxInternal(
     () =>
       resolveSandboxContext(ctx, args.repoId, {
         repoGroupId: launchSession?.repoGroupId,
+        branch: args.branchName,
       }),
   );
   // A forked session's first sandbox is a Vercel fork of the source sandbox
@@ -2092,7 +2093,8 @@ async function prepareTaskPreviewSandboxInternal(
   const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
     "resolveTaskSandboxContext",
     actionDetails,
-    () => resolveSandboxContext(ctx, args.repoId),
+    () =>
+      resolveSandboxContext(ctx, args.repoId, { branch: args.branchName }),
   );
 
   await emitTaskProgress(
@@ -2576,7 +2578,8 @@ async function prepareProjectPreviewSandboxInternal(
   const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
     "resolveProjectSandboxContext",
     actionDetails,
-    () => resolveSandboxContext(ctx, args.repoId),
+    () =>
+      resolveSandboxContext(ctx, args.repoId, { branch: args.branchName }),
   );
 
   await emitProjectProgress(

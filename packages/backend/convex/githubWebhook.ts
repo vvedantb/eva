@@ -348,15 +348,17 @@ async function applyQuickTaskPrClosed(
 
 /**
  * On push to a repo's configured base branch, schedule a skill sync when the
- * commit set touches `.agents/skills` or `.claude/skills` (or when path lists
- * are empty — e.g. some force-pushes — so we still converge).
+ * commit set touches `.agents/skills` or `.claude/skills`, and a `.eva/` config
+ * sync when it touches `.eva/` (either also fires when path lists are empty —
+ * e.g. some force-pushes — so we still converge).
  */
-export const handlePushForSkillSync = internalMutation({
+export const handlePushToBaseBranch = internalMutation({
   args: {
     owner: v.string(),
     name: v.string(),
     branch: v.string(),
     touchedSkillsPath: v.boolean(),
+    touchedEvaConfig: v.boolean(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -380,13 +382,21 @@ export const handlePushForSkillSync = internalMutation({
     const baseBranch =
       workflowRepo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
     if (args.branch !== baseBranch) return null;
-    if (!args.touchedSkillsPath) return null;
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal._repoSkills.sync.syncRepoInternal,
-      { repoId: workflowRepo._id },
-    );
+    if (args.touchedSkillsPath) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._repoSkills.sync.syncRepoInternal,
+        { repoId: workflowRepo._id },
+      );
+    }
+    if (args.touchedEvaConfig) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._evaConfig.sync.syncEvaConfig,
+        { repoId: workflowRepo._id },
+      );
+    }
     return null;
   },
 });

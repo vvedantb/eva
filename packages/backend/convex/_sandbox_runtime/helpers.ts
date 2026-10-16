@@ -4,6 +4,13 @@ import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import {
+  EVA_CONFIG_PATH,
+  evaAppFingerprints,
+  findEvaApp,
+  parseEvaConfig,
+} from "../_evaConfig/config";
+import { readEvaFileAtRef } from "../_evaConfig/sync";
+import {
   resolveProviderAccountCredentials,
   resolveSandboxCredentials,
   resolveSandboxCredentialsOnly,
@@ -538,6 +545,36 @@ export async function resolveSandboxClientOnly(
   return client;
 }
 
+/**
+ * Seed fingerprint of `branch`'s own `.eva/config.json` entry for this app, or
+ * null when it cannot differ from the cache (default branch, branch not pushed
+ * yet, no or invalid file) or GitHub is unreachable — a null keeps the seeded
+ * snapshot, the fast and usually correct choice.
+ */
+async function branchSeedFingerprint(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  branch: string,
+): Promise<string | null> {
+  try {
+    const target = await ctx.runQuery(internal._evaConfig.cache.getSyncTarget, {
+      repoId,
+    });
+    if (!target || target.ref === branch) return null;
+    const text = await readEvaFileAtRef(target, EVA_CONFIG_PATH, branch);
+    if (text === null) return null;
+    const parsed = parseEvaConfig(text);
+    if (!parsed.ok) return null;
+    const app = findEvaApp(parsed.value, target.rootDirectory);
+    return app ? evaAppFingerprints(parsed.value, app).seed : null;
+  } catch (error) {
+    console.warn(
+      `[sandbox] branchSeedFingerprint repoId=${repoId} branch=${branch}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return null;
+  }
+}
+
 /** Resolves the provider client, sandbox env vars, and snapshot name for a repo. */
 export async function resolveSandboxContext(
   ctx: GenericActionCtx<DataModel>,
@@ -550,6 +587,12 @@ export async function resolveSandboxContext(
      * `getGroupSnapshotForBoot`.
      */
     repoGroupId?: Id<"repoGroups">;
+    /**
+     * Branch the sandbox will check out. When its `.eva/config.json` changes
+     * the seed inputs, the seeded snapshot's data is stale for it, so the
+     * sandbox boots the base Image instead.
+     */
+    branch?: string;
   },
 ): Promise<{
   client: SandboxClient;
@@ -562,10 +605,29 @@ export async function resolveSandboxContext(
     repoId,
   );
   const client = getSandboxClient(credentials);
-  const repoSnapshot = await ctx.runQuery(
+  let repoSnapshot = await ctx.runQuery(
     internal.repoSnapshots.getRepoSnapshotName,
     { repoId },
   );
+  if (opts?.branch && repoSnapshot?.seededFingerprint) {
+    const branchFingerprint = await branchSeedFingerprint(
+      ctx,
+      repoId,
+      opts.branch,
+    );
+    if (
+      branchFingerprint !== null &&
+      branchFingerprint !== repoSnapshot.seededFingerprint
+    ) {
+      console.log(
+        `[sandbox] resolveSandboxContext repoId=${repoId} branch=${opts.branch}: .eva/config.json changes the seed inputs — skipping the seeded snapshot`,
+      );
+      repoSnapshot = await ctx.runQuery(
+        internal.repoSnapshots.getRepoSnapshotName,
+        { repoId, skipSeeded: true },
+      );
+    }
+  }
   let snapshotName = repoSnapshot?.snapshotName;
   if (opts?.repoGroupId) {
     const groupSnapshotName = await ctx.runQuery(

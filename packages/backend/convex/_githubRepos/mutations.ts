@@ -2,7 +2,8 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
-import type { DatabaseWriter } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { authMutation, getRepoWithAccess, hasTeamAccess } from "../functions";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
@@ -106,7 +107,7 @@ interface CreateRepoArgs {
  * `createForInstallation` (GitHub-side: the user's own token proved access).
  */
 async function insertRepo(
-  ctx: { db: DatabaseWriter },
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
   args: CreateRepoArgs,
   userId: Id<"users">,
 ): Promise<Id<"githubRepos">> {
@@ -167,7 +168,7 @@ async function insertRepo(
     }
   }
 
-  return await ctx.db.insert("githubRepos", {
+  const repoId = await ctx.db.insert("githubRepos", {
     owner: args.owner,
     name: args.name,
     installationId: args.installationId,
@@ -177,6 +178,11 @@ async function insertRepo(
     rootDirectory: normalizedRoot,
     defaultBaseBranch: "staging",
   });
+  // A repo that already commits `.eva/config.json` is ready without setup.
+  await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
+    repoId,
+  });
+  return repoId;
 }
 
 const createRepoArgs = {
@@ -262,6 +268,18 @@ export const updateConfig = authMutation({
 
     await assertRepoWriteAccess(ctx.db, ctx.userId, repo);
 
+    const editsRunCommands =
+      args.devPort !== undefined ||
+      args.devCommand !== undefined ||
+      args.startupCommands !== undefined ||
+      args.backgroundCommands !== undefined ||
+      args.stopCommands !== undefined;
+    if (repo.evaConfig && editsRunCommands) {
+      throw new Error(
+        "This repo's commands live in .eva/config.json. Edit the file in the repo.",
+      );
+    }
+
     const sharedPatch: Record<string, string | boolean> = {};
     if (args.defaultBaseBranch !== undefined)
       sharedPatch.defaultBaseBranch = args.defaultBaseBranch;
@@ -287,6 +305,15 @@ export const updateConfig = authMutation({
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {
       await ctx.db.patch(siblingId, sharedPatch);
+    }
+    // `.eva/` is read from the default branch, so a new branch means a resync.
+    if (
+      args.defaultBaseBranch !== undefined &&
+      args.defaultBaseBranch !== repo.defaultBaseBranch
+    ) {
+      await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
+        repoId: args.repoId,
+      });
     }
 
     if (args.deploymentProjectName !== undefined) {

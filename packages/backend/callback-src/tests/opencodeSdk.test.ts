@@ -13,6 +13,7 @@ import type {
   OpencodeAssistantMessage,
   OpencodeClientLike,
   OpencodeEvent,
+  OpencodeMcpLocalConfig,
   OpencodeMcpRemoteConfig,
   OpencodePart,
 } from "../providers/opencodeSdkTypes.js";
@@ -280,9 +281,15 @@ test("opencodeErrorMessage prefers the server message, then the error name", () 
 
 function mcpClientStub(known: Record<string, { status: string } | undefined>): {
   client: Pick<OpencodeClientLike, "mcp">;
-  added: Array<{ name: string; config: OpencodeMcpRemoteConfig }>;
+  added: Array<{
+    name: string;
+    config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
+  }>;
 } {
-  const added: Array<{ name: string; config: OpencodeMcpRemoteConfig }> = [];
+  const added: Array<{
+    name: string;
+    config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
+  }> = [];
   return {
     added,
     client: {
@@ -317,6 +324,31 @@ test("ensureEvaMcpServers registers the eva server on the live opencode server",
         type: "remote",
         url: "https://example.convex.site/mcp",
         headers: { Authorization: "Bearer token-123" },
+        enabled: true,
+      },
+    },
+  ]);
+});
+
+test("ensureEvaMcpServers registers a repo stdio server as a local command", async () => {
+  const { client, added } = mcpClientStub({});
+
+  await ensureEvaMcpServers(client, {
+    "figma-dev": {
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "figma-developer-mcp"],
+      env: { FIGMA_API_KEY: "f-1" },
+    },
+  });
+
+  expect(added).toEqual([
+    {
+      name: "figma-dev",
+      config: {
+        type: "local",
+        command: ["npx", "-y", "figma-developer-mcp"],
+        environment: { FIGMA_API_KEY: "f-1" },
         enabled: true,
       },
     },

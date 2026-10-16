@@ -7,11 +7,7 @@ import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { extractPrNumber } from "./helpers";
-import {
-  decodeGitHubContent,
-  decodeGitHubContentBytes,
-  githubContentContainsNul,
-} from "../_repoSkills/decodeGitHubContent";
+import { readFileAtRef } from "./contents";
 import { isPrDiffTooLargeError, listFileToUnifiedDiff } from "./prDiffFallback";
 import { getActionRepoWithAccess } from "../functions";
 
@@ -406,68 +402,6 @@ type PrFileContents = {
   skipped: null | "too-large" | "binary";
 };
 
-type BlobResult = {
-  contents: string | null;
-  skipped: null | "too-large" | "binary";
-};
-
-// GitHub's contents API returns a union (file / directory / symlink / submodule);
-// only the file shape carries what we need, so parse at the boundary.
-const fileContentsSchema = z.object({
-  type: z.literal("file"),
-  encoding: z.string(),
-  content: z.string(),
-  size: z.number(),
-});
-
-/**
- * Reads one file at one commit. A missing file is not an error: the same path is
- * absent at the base commit for added files and at the head commit for deleted
- * ones, so 404 maps to `null` contents.
- */
-async function readFileAtRef(
-  octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
-  owner: string,
-  name: string,
-  path: string,
-  ref: string,
-): Promise<BlobResult> {
-  let data: unknown;
-  try {
-    const res = await octokit.rest.repos.getContent({
-      owner,
-      repo: name,
-      path,
-      ref,
-    });
-    data = res.data;
-  } catch (error) {
-    const parsed = requestErrorSchema.safeParse(error);
-    // 403 is how the contents API reports a blob over its own 1MB ceiling.
-    if (parsed.success && parsed.data.status === 404) {
-      return { contents: null, skipped: null };
-    }
-    if (parsed.success && parsed.data.status === 403) {
-      return { contents: null, skipped: "too-large" };
-    }
-    throw error;
-  }
-
-  const file = fileContentsSchema.safeParse(data);
-  if (!file.success) return { contents: null, skipped: null };
-  if (file.data.size > MAX_FILE_BYTES) {
-    return { contents: null, skipped: "too-large" };
-  }
-
-  const bytes = decodeGitHubContentBytes(file.data.content);
-  // A NUL byte is the same heuristic git uses to call a file binary.
-  if (githubContentContainsNul(bytes)) {
-    return { contents: null, skipped: "binary" };
-  }
-
-  return { contents: decodeGitHubContent(file.data.content), skipped: null };
-}
-
 /**
  * Uncached full-file fetch for both sides of a changed file — wrapped by
  * ActionCache. Auth is enforced by the public wrapper before `fetch`.
@@ -488,8 +422,20 @@ export const fetchPrFileContents = internalAction({
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const [old, next] = await Promise.all([
-      readFileAtRef(octokit, repo.owner, repo.name, args.path, args.baseSha),
-      readFileAtRef(octokit, repo.owner, repo.name, args.path, args.headSha),
+      readFileAtRef(octokit, {
+        owner: repo.owner,
+        name: repo.name,
+        path: args.path,
+        ref: args.baseSha,
+        maxBytes: MAX_FILE_BYTES,
+      }),
+      readFileAtRef(octokit, {
+        owner: repo.owner,
+        name: repo.name,
+        path: args.path,
+        ref: args.headSha,
+        maxBytes: MAX_FILE_BYTES,
+      }),
     ]);
 
     return {

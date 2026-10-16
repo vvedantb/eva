@@ -497,6 +497,9 @@ function buildSdkOptionsFromParts(
       ? { resume: sessionMode.sessionId }
       : {}),
     extraArgs,
+    // Eva hands over the merged servers (its own plus `.eva/mcp.json`); a
+    // repo's own `.mcp.json` would add duplicates, such as a second `eva`.
+    strictMcpConfig: true,
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
       : {}),

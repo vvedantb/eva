@@ -43,7 +43,7 @@ export type RepoGroupFingerprintInput = {
  * and a rebuild is skipped.
  *
  * djb2 — cheap, deterministic, dependency-free (isolate functions cannot reach
- * `node:crypto`); mirrors `getSeedFingerprint` in `_repoSnapshots/config.ts`.
+ * `node:crypto`); mirrors the hash in `_evaConfig/config.ts`.
  */
 export function computeRepoGroupFingerprint(
   input: RepoGroupFingerprintInput,

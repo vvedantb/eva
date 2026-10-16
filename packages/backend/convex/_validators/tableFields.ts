@@ -973,11 +973,28 @@ export const githubRepoFields = {
   // the DB already seeded), set by the seeded-snapshot build when it succeeds.
   // Preferred over the base Image snapshot at sandbox-create time for fast starts.
   seededSnapshotName: v.optional(v.string()),
-  // Fingerprint of the seed inputs (startup/background/stop commands + config
-  // file blobs) captured when seededSnapshotName was built. When unchanged, the
-  // build workflow skips re-seeding — the existing snapshot's data is identical
-  // and re-capturing it would only contend with the image build.
+  // computeSeedFingerprint (build/seed/background/stop commands) of the inputs
+  // seededSnapshotName was built from. A session branch whose `.eva/config.json`
+  // differs skips the seeded snapshot (see resolveSandboxContext).
   seededFingerprint: v.optional(v.string()),
+  // Last sync of the repo-owned `.eva/` folder on the default branch (see
+  // _evaConfig/sync.ts). Present ⇒ the repo owns its commands: the command
+  // fields above are a read-only cache of `.eva/config.json`.
+  evaConfig: v.optional(
+    v.object({
+      ref: v.string(),
+      syncedAt: v.number(),
+      // Parse error of the current file; the cache keeps the last good values.
+      error: v.optional(v.string()),
+      mcpServers: v.array(
+        v.object({
+          name: v.string(),
+          kind: v.union(v.literal("http"), v.literal("stdio")),
+          target: v.string(),
+        }),
+      ),
+    }),
+  ),
   devPort: v.optional(v.number()),
   devCommand: v.optional(v.string()),
   systemPrompt: v.optional(v.string()),

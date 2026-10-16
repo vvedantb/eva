@@ -435,6 +435,8 @@ const schema = defineSchema({
     schedule: snapshotScheduleValidator,
     enabled: v.optional(v.boolean()),
     cronJobId: v.optional(v.string()),
+    // Deprecated: snapshots build from githubRepos.defaultBaseBranch. Kept so
+    // existing documents still validate; nothing reads it.
     workflowRef: v.optional(v.string()),
     buildCommands: v.optional(v.array(v.string())),
     // Seed-once commands run ONLY during seeded-snapshot builds, in the

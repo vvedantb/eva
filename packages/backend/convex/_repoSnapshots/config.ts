@@ -6,6 +6,8 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
+import { computeSeedFingerprint } from "../_evaConfig/config";
+import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Converts a schedule string to a cron expression, returning null for "manual". */
 function resolveCronspec(schedule: string): string | null {
@@ -85,13 +87,28 @@ export const getRepoSnapshot = authQuery({
  * successful Image build exists.
  */
 export const getRepoSnapshotName = internalQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.union(v.object({ snapshotName: v.string() }), v.null()),
+  args: {
+    repoId: v.id("githubRepos"),
+    // Set when the session branch's `.eva/config.json` changes the seed inputs:
+    // the seeded data no longer matches, so boot the base Image instead.
+    skipSeeded: v.optional(v.boolean()),
+  },
+  returns: v.union(
+    v.object({
+      snapshotName: v.string(),
+      // Present only for a seeded snapshot (see computeSeedFingerprint).
+      seededFingerprint: v.optional(v.string()),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, args) => {
     // Per-app seeded snapshot takes precedence (fast start with seeded DB).
     const repo = await ctx.db.get(args.repoId);
-    if (repo?.seededSnapshotName) {
-      return { snapshotName: repo.seededSnapshotName };
+    if (repo?.seededSnapshotName && args.skipSeeded !== true) {
+      return {
+        snapshotName: repo.seededSnapshotName,
+        seededFingerprint: repo.seededFingerprint,
+      };
     }
 
     const snapshot = await findSnapshotForRepo(ctx.db, args.repoId);
@@ -298,20 +315,39 @@ function shouldCaptureSupabaseState(commands: string[]): boolean {
   });
 }
 
-/** Sets (or clears) an app repo's seeded snapshot name (+ input fingerprint). */
+/**
+ * Seed fingerprint of the commands a seeded snapshot is built from right now.
+ * The build syncs `.eva/` first, so these cached fields are the file's values.
+ */
+async function currentSeedFingerprint(
+  db: GenericDatabaseReader<DataModel>,
+  repo: Doc<"githubRepos">,
+): Promise<string> {
+  const snapshot = await findSnapshotForRepo(db, repo._id);
+  return computeSeedFingerprint({
+    build: snapshot?.buildCommands ?? [],
+    seed: snapshot?.seedCommands ?? [],
+    background: repo.backgroundCommands ?? [],
+    stop: repo.stopCommands ?? [],
+  });
+}
+
+/** Sets (or clears) an app repo's seeded snapshot name and its seed fingerprint. */
 export const setSeededSnapshotName = internalMutation({
   args: {
     repoId: v.id("githubRepos"),
     seededSnapshotName: v.union(v.string(), v.null()),
-    seededFingerprint: v.optional(v.union(v.string(), v.null())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) return null;
     await ctx.db.patch(args.repoId, {
       seededSnapshotName: args.seededSnapshotName ?? undefined,
-      ...(args.seededFingerprint !== undefined
-        ? { seededFingerprint: args.seededFingerprint ?? undefined }
-        : {}),
+      seededFingerprint:
+        args.seededSnapshotName === null
+          ? undefined
+          : await currentSeedFingerprint(ctx.db, repo),
     });
     return null;
   },
@@ -332,58 +368,17 @@ export const setSeededSnapshotNameForAll = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     for (const repoId of args.repoIds) {
+      const repo = await ctx.db.get(repoId);
+      if (!repo) continue;
       await ctx.db.patch(repoId, {
         seededSnapshotName: args.seededSnapshotName ?? undefined,
+        seededFingerprint:
+          args.seededSnapshotName === null
+            ? undefined
+            : await currentSeedFingerprint(ctx.db, repo),
       });
     }
     return null;
-  },
-});
-
-/**
- * Fingerprint of an app's seed inputs: its startup/background/stop commands
- * plus the config-file blobs of the app repo and the snapshot config's repo
- * (data.sql / backup zips live on the parent). When this matches the value
- * stored at the last successful seeded capture, the build workflow skips
- * re-seeding: the resulting snapshot's data would be identical, and rebuilding
- * it only contends with the concurrent base-image build on Vercel.
- */
-export const getSeedFingerprint = internalQuery({
-  args: {
-    repoSnapshotId: v.id("repoSnapshots"),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.string(),
-  handler: async (ctx, args) => {
-    const app = await ctx.db.get(args.repoId);
-    if (!app) return "missing-repo";
-    const config = await ctx.db.get(args.repoSnapshotId);
-    const fileKeys = async (repoId: Id<"githubRepos">): Promise<string[]> => {
-      const files = await ctx.db
-        .query("sandboxConfigFiles")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect();
-      return files
-        .map(
-          (f) =>
-            `${f.fileName}:${f.fileSize}:${(f.chunks ?? (f.storageId ? [f.storageId] : [])).join(",")}`,
-        )
-        .sort();
-    };
-    const payload = JSON.stringify({
-      startup: app.startupCommands ?? [],
-      background: app.backgroundCommands ?? [],
-      stop: app.stopCommands ?? [],
-      appFiles: await fileKeys(args.repoId),
-      parentFiles: config ? await fileKeys(config.repoId) : [],
-    });
-    // djb2 — cheap, deterministic, collision-resistant enough for a
-    // change-detection fingerprint (a false match only skips a re-seed).
-    let hash = 5381;
-    for (let i = 0; i < payload.length; i++) {
-      hash = (hash * 33) ^ payload.charCodeAt(i);
-    }
-    return `fp-${(hash >>> 0).toString(36)}-${payload.length}`;
   },
 });
 
@@ -394,7 +389,9 @@ export const getRepoSnapshotInternal = internalQuery({
     v.object({
       repoId: v.id("githubRepos"),
       snapshotName: v.string(),
-      workflowRef: v.optional(v.string()),
+      // Snapshots build from the repo's default branch — the same branch the
+      // `.eva/` config cache follows.
+      branch: v.string(),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
       imageFingerprint: v.optional(v.string()),
@@ -405,10 +402,11 @@ export const getRepoSnapshotInternal = internalQuery({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.repoSnapshotId);
     if (!doc) return null;
+    const repo = await ctx.db.get(doc.repoId);
     return {
       repoId: doc.repoId,
       snapshotName: doc.snapshotName,
-      workflowRef: doc.workflowRef,
+      branch: repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
       buildCommands: doc.buildCommands,
       seedCommands: doc.seedCommands,
       imageFingerprint: doc.imageFingerprint,
@@ -501,33 +499,28 @@ export const setBaseSnapshotId = internalMutation({
   },
 });
 
-/** Stores the image-input fingerprint after a successful Image build. */
-export const setImageFingerprint = internalMutation({
-  args: {
-    repoSnapshotId: v.id("repoSnapshots"),
-    imageFingerprint: v.union(v.string(), v.null()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.repoSnapshotId, {
-      imageFingerprint: args.imageFingerprint ?? undefined,
-    });
-    return null;
-  },
-});
-
 /** Creates or updates a snapshot config for a repo (app-specific), managing the cron job. */
 export const saveRepoSnapshot = authMutation({
   args: {
     repoId: v.id("githubRepos"),
     schedule: snapshotScheduleValidator,
-    workflowRef: v.optional(v.string()),
     buildCommands: v.optional(v.array(v.string())),
     seedCommands: v.optional(v.array(v.string())),
   },
   returns: v.id("repoSnapshots"),
   handler: async (ctx, args) => {
-    await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    const accessRepo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    // A repo that commits `.eva/config.json` owns its build/seed commands:
+    // the cache sync writes them, the settings form only edits the schedule.
+    const repoOwnsCommands = accessRepo.evaConfig !== undefined;
+    const commandFields = repoOwnsCommands
+      ? {}
+      : { buildCommands: args.buildCommands, seedCommands: args.seedCommands };
+    if (repoOwnsCommands) {
+      await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
+        repoId: args.repoId,
+      });
+    }
     // Check for an app-specific config first (per-app model).
     // During transition, fall back to a shared root config and create an app-scoped row from it.
     const appSpecific = await ctx.db
@@ -550,9 +543,7 @@ export const saveRepoSnapshot = authMutation({
       await ctx.db.patch(appSpecific._id, {
         schedule: args.schedule,
         cronJobId,
-        workflowRef: args.workflowRef,
-        buildCommands: args.buildCommands,
-        seedCommands: args.seedCommands,
+        ...commandFields,
         updatedAt: Date.now(),
       });
       return appSpecific._id;
@@ -583,9 +574,7 @@ export const saveRepoSnapshot = authMutation({
             snapshotName: siblingSnapshot.snapshotName,
             schedule: args.schedule,
             enabled: true,
-            workflowRef: args.workflowRef,
-            buildCommands: args.buildCommands,
-            seedCommands: args.seedCommands,
+            ...commandFields,
             baseSnapshotId: siblingSnapshot.baseSnapshotId,
             createdAt: now,
             updatedAt: now,
@@ -613,9 +602,7 @@ export const saveRepoSnapshot = authMutation({
       snapshotName,
       schedule: args.schedule,
       enabled: true,
-      workflowRef: args.workflowRef,
-      buildCommands: args.buildCommands,
-      seedCommands: args.seedCommands,
+      ...commandFields,
       createdAt: now,
       updatedAt: now,
     });

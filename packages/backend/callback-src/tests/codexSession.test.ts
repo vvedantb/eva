@@ -38,6 +38,21 @@ test("the eva MCP server is appended as its own table after account config", () 
   );
 });
 
+test("a repo stdio MCP server becomes a command table", () => {
+  const config = buildCodexRuntimeConfig("", "", false, {
+    "figma-dev": {
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "figma-developer-mcp"],
+      env: { FIGMA_API_KEY: "f-1" },
+    },
+  });
+
+  expect(config).toContain(
+    '\n[mcp_servers."figma-dev"]\ncommand = "npx"\nargs = ["-y", "figma-developer-mcp"]\nenv = { "FIGMA_API_KEY" = "f-1" }\n',
+  );
+});
+
 test("no MCP token leaves the codex config untouched", () => {
   expect(buildCodexRuntimeConfig("", "", false, {})).not.toContain(
     "mcp_servers",
