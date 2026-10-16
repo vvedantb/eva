@@ -19,7 +19,6 @@ import {
   WORKSPACE_DIR,
 } from "./helpers";
 import {
-  setupBranch,
   checkoutSessionBranch,
   getUserCheckedOutBranch,
   createSandboxAndPrepareRepo,
@@ -1162,8 +1161,7 @@ async function prepareSessionSandboxInternal(
             // need to be cloned/installed after this action returns (see
             // `sessionSandboxStartupWorkflow`), and the workflow — not this
             // action — clears the gate once they're done.
-            markSetupPending:
-              bootsFromImage || args.hasLinkedRepos === true,
+            markSetupPending: bootsFromImage || args.hasLinkedRepos === true,
             // Background + startup commands have not run yet on this fresh VM;
             // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
@@ -1280,22 +1278,10 @@ async function prepareSessionSandboxInternal(
       status: "complete",
     });
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Preparing branch...",
-    );
-    await runLoggedSessionStep(
-      "newSessionSandbox.setupBranch",
-      sandboxDetails,
-      () => setupBranch(handle, args.branchName, args.baseBranch),
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Preparing branch...",
-      status: "complete",
-    });
+    // No `setupBranch` here: the checkout above already left the session
+    // branch checked out with its upstream pinned, so setupBranch could only
+    // resolve `localBranch` and re-run `checkout -B <branch> <branch>` — ~1.5s
+    // of pure repeat on the first-turn gate.
 
     // Now on the latest base: reinstall only when the lockfile actually drifted
     // from the snapshot's baked commit, so the common no-dep-change session keeps
@@ -1363,7 +1349,7 @@ async function prepareSessionSandboxInternal(
     // Restore baked config files from /home/eva/sandbox-config into the workspace.
     // Skipped when usedSnapshot: createSandboxAndPrepareRepo already ran this
     // exact copy (force: true) on the snapshot-restore path, and the
-    // checkout/setupBranch steps above don't touch untracked files, so
+    // checkout step above does not touch untracked files, so
     // re-copying here would be a pure duplicate on the common Vercel path.
     await emitSessionProgress(
       ctx,

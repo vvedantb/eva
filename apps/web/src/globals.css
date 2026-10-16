@@ -408,6 +408,12 @@
   animation: landing-pulse-dot 2.4s ease-in-out infinite;
 }
 
+/* `AwaitingAnswerMark`: the "?" tilts twice, then rests, so a waiting row reads as asking. */
+@utility question-nudge {
+  animation: question-nudge 2.4s ease-in-out infinite;
+  transform-origin: 50% 70%;
+}
+
 @utility scrollbar {
   /* Matches global base scrollbar chrome; class kept for scroll-fade pairing.
      Do not put overscroll-behavior here: Chrome treats every overflow:auto
@@ -1090,6 +1096,23 @@
 }
 
 @layer utilities {
+  @keyframes question-nudge {
+    0%,
+    40%,
+    100% {
+      rotate: 0deg;
+    }
+    10% {
+      rotate: -14deg;
+    }
+    20% {
+      rotate: 12deg;
+    }
+    30% {
+      rotate: -6deg;
+    }
+  }
+
   @keyframes landing-pulse-dot {
     0%,
     100% {
@@ -2010,6 +2033,7 @@ html[data-page-hidden] .animate-pulse,
 html[data-page-hidden] .animate-bounce,
 html[data-page-hidden] .animate-ping,
 html[data-page-hidden] .landing-pulse-dot,
+html[data-page-hidden] .question-nudge,
 [aria-hidden="true"]:not([data-anim-chrome]) .beam::before,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-band,
 [aria-hidden="true"]:not([data-anim-chrome]) .shimmer-copy,
@@ -2019,6 +2043,7 @@ html[data-page-hidden] .landing-pulse-dot,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-bounce,
 [aria-hidden="true"]:not([data-anim-chrome]) .animate-ping,
 [aria-hidden="true"]:not([data-anim-chrome]) .landing-pulse-dot,
+[aria-hidden="true"]:not([data-anim-chrome]) .question-nudge,
 [data-anim-offscreen] .beam::before,
 [data-anim-offscreen] .shimmer-band,
 [data-anim-offscreen] .shimmer-copy,
@@ -2029,7 +2054,8 @@ html[data-page-hidden] .landing-pulse-dot,
 [data-anim-offscreen] .animate-pulse,
 [data-anim-offscreen] .animate-bounce,
 [data-anim-offscreen] .animate-ping,
-[data-anim-offscreen] .landing-pulse-dot {
+[data-anim-offscreen] .landing-pulse-dot,
+[data-anim-offscreen] .question-nudge {
   animation-play-state: paused;
 }
 

@@ -118,6 +118,18 @@ describe("isSandboxStartupActivity", () => {
     ).toBe(true);
   });
 
+  test("planned stages still pending keep the run collapsed", () => {
+    expect(
+      isSandboxStartupActivity(
+        payload(
+          step("Fetching base branch..."),
+          step("Restoring seeded runtime...", { status: "pending" }),
+          step("Running startup commands...", { status: "pending" }),
+        ),
+      ),
+    ).toBe(true);
+  });
+
   test("one step of real work keeps the whole run expanded", () => {
     expect(
       isSandboxStartupActivity(

@@ -39,6 +39,8 @@ interface SessionItem {
   /** Set when the last wake attempt failed; the row's dot reads as an error. */
   sandboxError?: string;
   isExecuting?: boolean;
+  /** A turn waits on a blocking question (`api.sessions.list`). */
+  isAwaitingAnswer?: boolean;
   /** Finished reply the user has not seen (`api.sessions.list`). */
   hasUnread?: boolean;
   updatedAt?: number;
@@ -127,6 +129,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 status={session.status}
                 sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
+                isAwaitingAnswer={session.isAwaitingAnswer === true}
                 hasUnread={session.hasUnread === true}
                 isSelected={isSelected}
                 onNavigate={onNavigate}

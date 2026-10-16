@@ -267,8 +267,8 @@ type CursorSdkSqliteModule = {
   SqliteLocalAgentStore: typeof SqliteLocalAgentStore;
 };
 
-let loadedSdk: CursorSdkModule | null = null;
-let loadedSdkSqlite: CursorSdkSqliteModule | null = null;
+let loadedSdk: Promise<CursorSdkModule> | null = null;
+let loadedSdkSqlite: Promise<CursorSdkSqliteModule> | null = null;
 
 /**
  * Imports the Cursor SDK version `cursorParseLine` was written against. Taking
@@ -276,20 +276,21 @@ let loadedSdkSqlite: CursorSdkSqliteModule | null = null;
  * 1.0.x message type names exactly, so a drifted SDK streams events it drops on
  * the floor and the turn renders as a bare "Working..." for its whole duration.
  */
-async function loadCursorSdk(): Promise<CursorSdkModule> {
-  // Memoized so the warm daemon pays the resolve (`npm root -g`, manifest
-  // reads) and the import once for the whole session instead of once per turn.
-  // The one-shot path calls this exactly once, so nothing changes there.
-  if (loadedSdk) return loadedSdk;
-  const mod: CursorSdkModule = await import(
+function loadCursorSdk(): Promise<CursorSdkModule> {
+  // Memoized (as the promise, so `preloadCursorSdk` and the attempt share one
+  // import) so the warm daemon pays the resolve and the import once for the
+  // whole session instead of once per turn. A failed import is not cached.
+  loadedSdk ??= import(
     resolvePinnedSdkEntry({
       packageName: SDK_PACKAGE,
       version: SDK_VERSION,
       entryRelPath: SDK_ENTRY_RELPATH,
     })
-  );
-  loadedSdk = mod;
-  return mod;
+  ).catch((error: Error) => {
+    loadedSdk = null;
+    throw error;
+  });
+  return loadedSdk;
 }
 
 /**
@@ -298,17 +299,33 @@ async function loadCursorSdk(): Promise<CursorSdkModule> {
  * the main entry does not pull in the sqlite driver, and the two imports must
  * stay independent for that to hold.
  */
-async function loadCursorSdkSqlite(): Promise<CursorSdkSqliteModule> {
-  if (loadedSdkSqlite) return loadedSdkSqlite;
-  const mod: CursorSdkSqliteModule = await import(
+function loadCursorSdkSqlite(): Promise<CursorSdkSqliteModule> {
+  loadedSdkSqlite ??= import(
     resolvePinnedSdkEntry({
       packageName: SDK_PACKAGE,
       version: SDK_VERSION,
       entryRelPath: SDK_SQLITE_ENTRY_RELPATH,
     })
-  );
-  loadedSdkSqlite = mod;
-  return mod;
+  ).catch((error: Error) => {
+    loadedSdkSqlite = null;
+    throw error;
+  });
+  return loadedSdkSqlite;
+}
+
+/**
+ * Starts both SDK imports (~0.45s measured) so they overlap the turn worker's
+ * preflight and token round trips. Failures resurface at the real await in
+ * `runCursorSdkAttempt`.
+ */
+export function preloadCursorSdk(): void {
+  try {
+    loadCursorSdk().catch(() => undefined);
+    loadCursorSdkSqlite().catch(() => undefined);
+  } catch {
+    // A failed resolve throws synchronously; the attempt retries it and posts
+    // the failure completion the user sees.
+  }
 }
 
 function readPromptText(): string {
