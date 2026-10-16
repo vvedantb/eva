@@ -15,7 +15,7 @@ import {
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { serializeSteps } from "../parse/stepBudget.js";
+import { serializeFinalSteps } from "../parse/stepBudget.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
 import {
   buildClaudeShapedResult,
@@ -205,7 +205,7 @@ async function finalizeTurn(
     success,
     result,
     error,
-    activityLog: serializeSteps(S.accumulatedSteps),
+    activityLog: serializeFinalSteps(S.accumulatedSteps, result),
     ...(RUN_ID ? { runId: RUN_ID } : {}),
     ...(usage
       ? {

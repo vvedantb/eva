@@ -70,7 +70,9 @@ const ActivityStreamingHeader = memo(function ActivityStreamingHeader({
 }) {
   const verb = useSpinnerVerb(true);
   const elapsed = useElapsedSeconds(startedAt, true);
-  const activeStep = steps.find((s) => s.status === "active") ?? steps[0];
+  // Reply text is not a status: label the header from the work steps only.
+  const work = steps.filter((s) => s.type !== "response");
+  const activeStep = work.find((s) => s.status === "active") ?? work[0];
   const headerText = `${
     activeStep?.label ?? `${name ?? "Eva"} is ${verb.toLowerCase()}...`
   }${startedAt ? ` (${formatElapsed(elapsed)})` : ""}`;
@@ -91,6 +93,16 @@ const MAX_VISIBLE_ROWS = 8;
 const MAX_VISIBLE_CHILDREN = 8;
 
 const HIDDEN_TYPES = new Set<ActivityStep["type"]>(["thinking", "response"]);
+
+/** Inline layout shows mid-turn reply text in the timeline; thinking stays hidden. */
+const INLINE_HIDDEN_TYPES = new Set<ActivityStep["type"]>(["thinking"]);
+
+/**
+ * `folded` (Codex-style): a settled turn collapses behind "Worked for …",
+ * long timelines cap behind "Show N more", and mid-turn text is hidden.
+ * `inline` (Claude-style): every step and the text between them stay open.
+ */
+export type ActivityLayout = "folded" | "inline";
 
 /** Nearest ancestor that actually scrolls — used to keep the overflow toggle pinned. */
 function findScrollParent(el: HTMLElement): HTMLElement | null {
@@ -196,6 +208,8 @@ export interface ActivityTasksProps extends ComponentProps<"div"> {
    * on every open, so the owner is responsible for fetching once.
    */
   onRequestFullDetail?: () => void;
+  /** Defaults to `folded`. See {@link ActivityLayout}. */
+  layout?: ActivityLayout;
 }
 
 /** Status glyph for one todo row. */
@@ -460,6 +474,20 @@ function ActivityStepRow({
 }
 
 /** Model reasoning, shown as ordinary prose rather than another muted row. */
+/** Reply text the agent wrote between tool runs, set like the final reply. */
+function ActivityResponseBlock({ step }: { step: ActivityStep }) {
+  const text = step.detail?.trim();
+  if (!text) return null;
+  return (
+    <Markdown
+      className="my-1 text-foreground"
+      mode={step.status === "active" ? "streaming" : "static"}
+    >
+      {text}
+    </Markdown>
+  );
+}
+
 function ActivityReasoningBlock({ step }: { step: ActivityStep }) {
   const thoughts = step.detail?.trim();
   if (!thoughts) return null;
@@ -523,6 +551,9 @@ function ActivitySegmentBlock({
   if (segment.kind === "reasoning") {
     return <ActivityReasoningBlock step={segment.step} />;
   }
+  if (segment.kind === "response") {
+    return <ActivityResponseBlock step={segment.step} />;
+  }
   if (segment.kind === "row") {
     return <ActivityStepRow row={segment.row} onOpenFile={onOpenFile} />;
   }
@@ -536,10 +567,12 @@ function ActivitySegmentBlock({
 function ActivityRowList({
   rows,
   isStreaming,
+  capped,
   onOpenFile,
 }: {
   rows: ActivityRow[];
   isStreaming?: boolean;
+  capped: boolean;
   onOpenFile?: (path: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -549,7 +582,7 @@ function ActivityRowList({
     segment,
     key: activitySegmentKey(segment, index),
   }));
-  const overflow = keyedSegments.length - MAX_VISIBLE_ROWS;
+  const overflow = capped ? keyedSegments.length - MAX_VISIBLE_ROWS : 0;
   const isCapped = overflow > 0 && !expanded;
   const visible = isCapped
     ? isStreaming
@@ -634,17 +667,24 @@ export const ActivityTasks = memo(
     finalText,
     onOpenFile,
     onRequestFullDetail,
+    layout = "folded",
     ...props
   }: ActivityTasksProps) => {
+    const inline = layout === "inline";
+    const hiddenTypes = inline ? INLINE_HIDDEN_TYPES : HIDDEN_TYPES;
     const rows = buildActivityRows(steps).filter(
-      (row) => !HIDDEN_TYPES.has(row.step.type),
+      (row) =>
+        !hiddenTypes.has(row.step.type) &&
+        // A subagent's text whose Agent row is missing still belongs to its
+        // child thread, never to the parent's inline reply.
+        !(row.step.type === "response" && row.step.parentToolUseId),
     );
 
     if (rows.length === 0 && !isStreaming) return null;
 
     void finalText;
 
-    if (!isStreaming && duration) {
+    if (!isStreaming && duration && !inline) {
       return (
         <RequestFullDetailContext value={onRequestFullDetail}>
           <Collapsible
@@ -669,6 +709,7 @@ export const ActivityTasks = memo(
                 <ActivityRowList
                   rows={rows}
                   isStreaming={false}
+                  capped
                   onOpenFile={onOpenFile}
                 />
               </Trace>
@@ -691,6 +732,7 @@ export const ActivityTasks = memo(
           <ActivityRowList
             rows={rows}
             isStreaming={isStreaming}
+            capped={!inline}
             onOpenFile={onOpenFile}
           />
         </Trace>
