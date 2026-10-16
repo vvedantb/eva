@@ -497,6 +497,13 @@ export const previewPortParser = parseAsInteger.withOptions(searchOptions);
  */
 export const chatParser = parseAsInteger.withOptions(tabOptions);
 
+/**
+ * Subagent child thread open over a sandbox chat (`?subagent=<toolUseId>`).
+ * Pushes history so Back returns to the parent chat. Not `?agent`: that key
+ * signs in the agent user.
+ */
+export const subagentParser = parseAsString.withOptions(tabOptions);
+
 export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);

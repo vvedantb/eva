@@ -246,6 +246,60 @@ export function parseCiPassed(githubEvent: string, body: string): CiPassed[] {
   }
 }
 
+const commitStatusSchema = z.object({
+  sha: z.string(),
+  state: z.string(),
+  branches: z
+    .array(z.object({ name: z.string(), commit: z.object({ sha: z.string() }) }))
+    .catch([]),
+  repository: repositorySchema,
+});
+
+/**
+ * CI finished on a commit, whatever the outcome. Not an automation trigger:
+ * only the agent's PR watch reads it, since the last check to finish may end
+ * cancelled, skipped or as a commit status (Vercel and the like).
+ */
+export type CiCompleted =
+  | { kind: "check_suite"; prUrls: string[] }
+  | { kind: "status"; owner: string; name: string; branches: string[] };
+
+export function parseCiCompleted(
+  githubEvent: string,
+  body: string,
+): CiCompleted | null {
+  try {
+    if (githubEvent === "check_suite") {
+      const parsed = checkSuiteSchema.safeParse(JSON.parse(body));
+      if (!parsed.success || parsed.data.action !== "completed") return null;
+      const { check_suite: suite, repository } = parsed.data;
+      const owner = repository.owner.login;
+      const name = repository.name;
+      return {
+        kind: "check_suite",
+        prUrls: suite.pull_requests.map((pr) => pullUrl(owner, name, pr.number)),
+      };
+    }
+    if (githubEvent === "status") {
+      const parsed = commitStatusSchema.safeParse(JSON.parse(body));
+      if (!parsed.success || parsed.data.state === "pending") return null;
+      const { sha, branches, repository } = parsed.data;
+      return {
+        kind: "status",
+        owner: repository.owner.login,
+        name: repository.name,
+        // Branches whose head is this commit; a PR's head branch is one.
+        branches: branches
+          .filter((branch) => branch.commit.sha === sha)
+          .map((branch) => branch.name),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function isBot(sender: z.infer<typeof senderSchema>): boolean {
   return sender?.type === "Bot";
 }

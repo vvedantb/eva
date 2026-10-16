@@ -170,6 +170,8 @@ export type DaemonMutationEnv = {
   openSyntheticTurnMutation: string;
   completeSyntheticTurnMutation: string;
   updateBackgroundAgentsMutation: string;
+  /** Mirrors Claude's native `/goal` onto the chat doc. */
+  updateGoalMutation: string;
 };
 
 export const SESSION_DAEMON_MUTATIONS: DaemonMutationEnv = {
@@ -177,6 +179,7 @@ export const SESSION_DAEMON_MUTATIONS: DaemonMutationEnv = {
   openSyntheticTurnMutation: "sessionWorkflow:openSyntheticTurn",
   completeSyntheticTurnMutation: "sessionWorkflow:completeSyntheticTurn",
   updateBackgroundAgentsMutation: "sessionWorkflow:updateBackgroundAgents",
+  updateGoalMutation: "sessionWorkflow:updateGoal",
 };
 
 export const TASK_CHAT_DAEMON_MUTATIONS: DaemonMutationEnv = {
@@ -185,6 +188,7 @@ export const TASK_CHAT_DAEMON_MUTATIONS: DaemonMutationEnv = {
   completeSyntheticTurnMutation: "agentTaskChatWorkflow:completeSyntheticTurn",
   updateBackgroundAgentsMutation:
     "agentTaskChatWorkflow:updateBackgroundAgents",
+  updateGoalMutation: "agentTaskChatWorkflow:updateGoal",
 };
 
 export const PROJECT_CHAT_DAEMON_MUTATIONS: DaemonMutationEnv = {
@@ -192,4 +196,5 @@ export const PROJECT_CHAT_DAEMON_MUTATIONS: DaemonMutationEnv = {
   openSyntheticTurnMutation: "projectChatWorkflow:openSyntheticTurn",
   completeSyntheticTurnMutation: "projectChatWorkflow:completeSyntheticTurn",
   updateBackgroundAgentsMutation: "projectChatWorkflow:updateBackgroundAgents",
+  updateGoalMutation: "projectChatWorkflow:updateGoal",
 };

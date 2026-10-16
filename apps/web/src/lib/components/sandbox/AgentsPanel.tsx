@@ -43,7 +43,7 @@ function AgentDuration({ agent }: { agent: SubagentView }) {
   return <span className="tabular-nums">{formatElapsed(seconds)}</span>;
 }
 
-function AgentStopButton({
+export function AgentStopButton({
   toolUseId,
   onRequestStop,
 }: {
@@ -98,7 +98,10 @@ function AgentRow({
   const running = tone === "active";
   const canStop =
     running && agent.backgrounded && !isReadOnly && onRequestStop !== undefined;
-  const stepCount = agent.steps.length;
+  // `response` steps are the agent's own messages, not steps it ran.
+  const stepCount = agent.steps.filter(
+    (step) => step.type !== "response",
+  ).length;
 
   return (
     <Collapsible defaultOpen={running} className="group rounded-xl bg-muted/50">
