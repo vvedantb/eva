@@ -3,6 +3,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
 import { IconX } from "@tabler/icons-react";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
+import { AveEyes } from "@/lib/components/ave/AveEyes";
 import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import {
@@ -88,6 +89,7 @@ export function AveLauncherButton({
               aria-hidden={isOpen}
             >
               <AveMark className="size-full" />
+              <AveEyes />
               <QueryErrorBoundary>
                 <AveActiveDot />
                 <AveQuestionsBadge />
