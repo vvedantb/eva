@@ -459,21 +459,6 @@ export async function createSandbox(
       await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
         execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
-      // Belt-and-suspenders for login shells; tmux Console already sources
-      // eva-env. Never fail create over this hook.
-      try {
-        await runLoggedGitStep(
-          "createSandbox.ensureEvaEnvInteractiveHook",
-          sandbox.id,
-          () =>
-            execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
-        );
-      } catch (hookError) {
-        console.warn(
-          `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
-        );
-      }
-
       const appSlug = process.env.GITHUB_APP_SLUG;
       const botUserId = process.env.GITHUB_BOT_USER_ID;
       if (!appSlug || !botUserId) {
@@ -481,61 +466,75 @@ export async function createSandbox(
           "GITHUB_APP_SLUG and GITHUB_BOT_USER_ID must be set in Convex env",
         );
       }
-      // Fresh Vercel sandboxes ship without `jq`, which the git credential
-      // helper (git-credential-eva) shells out to on every authenticated
-      // fetch/push. Without it, syncRepo/fetchBaseBranch fail with exit 128
-      // ("jq: command not found") before the seed toolchain stage ever runs.
-      // Timed individually (vs. one blanket log) so slow session creates can be
-      // attributed to a specific step from Convex logs alone.
-      await runLoggedGitStep("createSandbox.ensureJq", sandbox.id, () =>
-        execHandle(
-          sandbox,
-          `${PACKAGE_HELPER_SCRIPT}\ncommand -v jq >/dev/null 2>&1 || ${pkgInstall("jq")} || true`,
-          120,
+      // The steps below are independent of each other, so each group runs in
+      // parallel: every exec is a ~0.5s round trip, and this whole block sits
+      // before the session's first-turn gate (measured 7.3s serial). Two groups,
+      // not one: jq and a missing docker binary both go through the package
+      // manager, which must not run twice at once.
+      await Promise.all([
+        // Belt-and-suspenders for login shells; tmux Console already sources
+        // eva-env. Never fail create over this hook.
+        runLoggedGitStep(
+          "createSandbox.ensureEvaEnvInteractiveHook",
+          sandbox.id,
+          () =>
+            execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
+        ).catch((hookError) => {
+          console.warn(
+            `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+          );
+        }),
+        // Fresh Vercel sandboxes ship without `jq`, which the git credential
+        // helper (git-credential-eva) shells out to on every authenticated
+        // fetch/push. Without it, syncRepo/fetchBaseBranch fail with exit 128
+        // ("jq: command not found") before the seed toolchain stage ever runs.
+        // Timed individually (vs. one blanket log) so slow session creates can
+        // be attributed to a specific step from Convex logs alone.
+        runLoggedGitStep("createSandbox.ensureJq", sandbox.id, () =>
+          execHandle(
+            sandbox,
+            `${PACKAGE_HELPER_SCRIPT}\ncommand -v jq >/dev/null 2>&1 || ${pkgInstall("jq")} || true`,
+            120,
+          ),
         ),
-      );
-      await runLoggedGitStep(
-        "createSandbox.gitConfig",
-        sandbox.id,
-        async () => {
-          await execHandle(
+        runLoggedGitStep("createSandbox.gitConfig", sandbox.id, () =>
+          execHandle(
             sandbox,
-            `git config --global user.name "${appSlug}[bot]" && git config --global user.email "${botUserId}+${appSlug}[bot]@users.noreply.github.com"`,
+            [
+              `git config --global user.name "${appSlug}[bot]"`,
+              `git config --global user.email "${botUserId}+${appSlug}[bot]@users.noreply.github.com"`,
+              // Snapshot-restored /tmp/repo is owned by vercel-sandbox; session
+              // git commands run as a different uid and hit "dubious ownership"
+              // without this.
+              "git config --global --add safe.directory '*'",
+              // Agents (esp. Cursor ship skills) often run `git pull` without
+              // --rebase/--no-rebase; modern git fatals on divergent branches
+              // unless a default is set. Rebase keeps session history linear.
+              "git config --global pull.rebase true",
+            ].join(" && "),
             10,
-          );
-          // Snapshot-restored /tmp/repo is owned by vercel-sandbox; session git
-          // commands run as a different uid and hit "dubious ownership" without this.
-          await execHandle(
-            sandbox,
-            "git config --global --add safe.directory '*'",
-            10,
-          );
-          // Agents (esp. Cursor ship skills) often run `git pull` without
-          // --rebase/--no-rebase; modern git fatals on divergent branches unless
-          // a default is set. Rebase keeps session history linear when they do.
-          await execHandle(sandbox, "git config --global pull.rebase true", 10);
-        },
-      );
+          ),
+        ),
+      ]);
 
-      // Every sandbox eva creates — session, quick task, project chat or seed
-      // prep — starts here, and the memory-hungry stages that follow (snapshot
-      // dependency install, `next build`, the first Convex backend open) all run
-      // before any resume path could provision swap. ensureSandboxRunning covers
-      // later boots; this covers the first one.
-      await runLoggedGitStep("createSandbox.ensureSwap", sandbox.id, () =>
-        ensureSwapFile(sandbox),
-      );
-
-      // Start Docker daemon if available (for Docker-in-Docker / Supabase local
-      // dev). Idempotent — also re-invoked from ensureSandboxRunning on resume
-      // since dockerd doesn't survive auto-stop. Already fast-paths on an
-      // already-running daemon (`docker info` check first); the timing
-      // wrapper just makes that fast path visible in logs instead of assumed.
-      await runLoggedGitStep(
-        "createSandbox.bootstrapDocker",
-        sandbox.id,
-        () => bootstrapVercelDocker(sandbox),
-      );
+      await Promise.all([
+        // Every sandbox eva creates — session, quick task, project chat or seed
+        // prep — starts here, and the memory-hungry stages that follow
+        // (snapshot dependency install, `next build`, the first Convex backend
+        // open) all run before any resume path could provision swap.
+        // ensureSandboxRunning covers later boots; this covers the first one.
+        runLoggedGitStep("createSandbox.ensureSwap", sandbox.id, () =>
+          ensureSwapFile(sandbox),
+        ),
+        // Start Docker daemon if available (for Docker-in-Docker / Supabase
+        // local dev). Idempotent — also re-invoked from ensureSandboxRunning on
+        // resume since dockerd doesn't survive auto-stop. Already fast-paths on
+        // an already-running daemon (`docker info` check first); the timing
+        // wrapper just makes that fast path visible in logs instead of assumed.
+        runLoggedGitStep("createSandbox.bootstrapDocker", sandbox.id, () =>
+          bootstrapVercelDocker(sandbox),
+        ),
+      ]);
 
       return sandbox;
     } catch (error) {
@@ -1152,8 +1151,7 @@ export async function cloneRepoInto(
         throw error;
       }
       const shouldRetry =
-        attempt < maxCloneAttempts &&
-        isRetryableGitNetworkError(error.message);
+        attempt < maxCloneAttempts && isRetryableGitNetworkError(error.message);
       if (!shouldRetry) {
         throw error;
       }
