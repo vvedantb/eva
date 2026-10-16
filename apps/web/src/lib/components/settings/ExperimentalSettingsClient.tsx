@@ -215,6 +215,21 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={11} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Claude-style activity steps"
+            description="Keep a reply's activity steps open in chat after the agent finishes, instead of folding them under Worked for."
+            action={
+              <Switch
+                checked={flags.claudeStyleActivity}
+                onCheckedChange={(checked) =>
+                  toggle("claudeStyleActivity", checked)
+                }
+                aria-label="Claude-style activity steps"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={12} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Simple view"
             description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
             action={

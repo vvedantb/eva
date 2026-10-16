@@ -284,9 +284,15 @@ export function ActivityLogDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
+  const claudeStyleActivity =
+    useQuery(api.auth.getExperimentalFlags)?.claudeStyleActivity === true;
   const { fullLog, request } = useFullActivityLog(messageId);
+  // `ActivityTasks` folds a settled turn behind "Worked for …" only when it gets
+  // a duration; Claude-style keeps the steps open, so it withholds one.
   const duration =
-    startedAt && finishedAt ? formatDuration(startedAt, finishedAt) : undefined;
+    !claudeStyleActivity && startedAt && finishedAt
+      ? formatDuration(startedAt, finishedAt)
+      : undefined;
 
   if (simpleView) {
     return null;
