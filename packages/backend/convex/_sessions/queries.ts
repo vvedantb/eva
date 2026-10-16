@@ -15,6 +15,7 @@ import {
 } from "../validators";
 import { sessionValidator } from "./helpers";
 import {
+  awaitingAnswerEntityIdsForRepo,
   openChatEntityIdsForRepo,
   sessionIsExecuting,
 } from "../_chat/turnProjection";
@@ -76,6 +77,8 @@ const sessionListItemValidator = v.object({
    * or they opened it before. One `chatReads` read per list, not per row.
    */
   hasUnread: v.boolean(),
+  /** A turn is paused on a blocking question for the user (sidebar "?" mark). */
+  isAwaitingAnswer: v.boolean(),
   /**
    * Set only on rows this repo sees through a linked checkout rather than as
    * the session's own repo: the identity of the session's PRIMARY repo, so the
@@ -96,6 +99,7 @@ const sessionListItemValidator = v.object({
 function toSessionListItem(
   session: Doc<"sessions">,
   openSessionIds: ReadonlySet<string>,
+  awaitingAnswerIds: ReadonlySet<string>,
   hasUnread: boolean,
   linkedFrom: { owner: string; name: string; rootDirectory?: string } | undefined,
   groupNames: ReadonlyMap<string, string>,
@@ -135,6 +139,7 @@ function toSessionListItem(
     deploymentUrl: session.deploymentUrl,
     isExecuting: sessionIsExecuting(session, openSessionIds),
     hasUnread,
+    isAwaitingAnswer: awaitingAnswerIds.has(String(session._id)),
   };
 }
 
@@ -199,24 +204,29 @@ async function gatherLinkedSessions(
 }
 
 /**
- * Open-turn ids for every repo the listed sessions actually run under. Turns are
- * filed against a session's primary repo, so a linked-in row's turn is invisible
- * to this repo's own `by_repo_open` range.
+ * Per-repo turn ids (open, awaiting an answer) for every repo the listed
+ * sessions actually run under. Turns are filed against a session's primary
+ * repo, so a linked-in row's turn is invisible to this repo's own range.
  */
-async function openIdsIncludingLinked(
+async function turnIdsIncludingLinked(
   db: DatabaseReader,
-  ownOpenIds: ReadonlySet<string>,
+  repoId: Id<"githubRepos">,
   linked: ReadonlyArray<LinkedSession>,
+  idsForRepo: (
+    db: DatabaseReader,
+    repoId: Id<"githubRepos">,
+  ) => Promise<ReadonlySet<string>>,
 ): Promise<ReadonlySet<string>> {
-  if (linked.length === 0) return ownOpenIds;
-  const repoIds = new Map<string, Id<"githubRepos">>();
+  const repoIds = new Map<string, Id<"githubRepos">>([
+    [String(repoId), repoId],
+  ]);
   for (const row of linked) {
     repoIds.set(String(row.session.repoId), row.session.repoId);
   }
   const sets = await Promise.all(
-    [...repoIds.values()].map((id) => openChatEntityIdsForRepo(db, id)),
+    [...repoIds.values()].map((id) => idsForRepo(db, id)),
   );
-  const merged = new Set<string>(ownOpenIds);
+  const merged = new Set<string>();
   for (const set of sets) {
     for (const id of set) merged.add(id);
   }
@@ -256,11 +266,10 @@ async function toSessionListItems(
     archived,
     new Set(sessions.map((session) => String(session._id))),
   );
-  const openSessionIds = await openIdsIncludingLinked(
-    db,
-    await openChatEntityIdsForRepo(db, repoId),
-    linked,
-  );
+  const [openSessionIds, awaitingAnswerIds] = await Promise.all([
+    turnIdsIncludingLinked(db, repoId, linked, openChatEntityIdsForRepo),
+    turnIdsIncludingLinked(db, repoId, linked, awaitingAnswerEntityIdsForRepo),
+  ]);
   const linkedFromBySession = new Map(
     linked.map((row) => [String(row.session._id), row.linkedFrom]),
   );
@@ -274,6 +283,7 @@ async function toSessionListItems(
         toSessionListItem(
           session,
           openSessionIds,
+          awaitingAnswerIds,
           await hasUnread(session),
           linkedFromBySession.get(String(session._id)),
           groupNames,
@@ -406,9 +416,7 @@ export const getForkLinks = authQuery({
       : null;
     const children = await ctx.db
       .query("sessions")
-      .withIndex("by_forked_from", (q) =>
-        q.eq("forkedFromSessionId", args.id),
-      )
+      .withIndex("by_forked_from", (q) => q.eq("forkedFromSessionId", args.id))
       .take(20);
     const forks = (
       await Promise.all(

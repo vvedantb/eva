@@ -5533,12 +5533,11 @@ async function readSdkPlanUsage(handle) {
   }
   return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
 }
+var NODE_GLOBAL_ROOT = dirname(dirname(process.execPath)) + "/lib/node_modules";
 var cachedGlobalNpmRoots = null;
 function globalNpmRoots() {
   if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
-  const roots = [
-    dirname(dirname(process.execPath)) + "/lib/node_modules"
-  ];
+  const roots = [NODE_GLOBAL_ROOT];
   try {
     const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
     if (npmRoot) roots.push(npmRoot);
@@ -5567,6 +5566,10 @@ function installedPackageVersion(packageRoot) {
 function resolvePinnedSdkEntry(pin) {
   const localRoot = SDK_LOCAL_PREFIX + "/node_modules/" + pin.packageName;
   let driftedVersion = null;
+  const nodeRoot = NODE_GLOBAL_ROOT + "/" + pin.packageName;
+  if (installedPackageVersion(nodeRoot) === pin.version) {
+    return nodeRoot + pin.entryRelPath;
+  }
   for (const root of globalNpmRoots()) {
     const globalRoot = root + "/" + pin.packageName;
     const globalVersion = installedPackageVersion(globalRoot);
@@ -5679,7 +5682,13 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     DISABLE_AUTOUPDATER: "1",
     DISABLE_ERROR_REPORTING: "1",
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
-    ENABLE_TOOL_SEARCH: "auto"
+    ENABLE_TOOL_SEARCH: "auto",
+    // Do not hold the first turn until every HTTP MCP server (eva, linear,
+    // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
+    // first token ~3s sooner. The servers still join mid-turn; ToolSearch
+    // reaches them and the CLI tells the model a pending server "is still
+    // connecting" instead of reporting its tools missing.
+    CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0"
   };
   if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
@@ -8347,25 +8356,34 @@ function filterModeParamsByModel(candidates, model, opted) {
 }
 var loadedSdk = null;
 var loadedSdkSqlite = null;
-async function loadCursorSdk() {
-  if (loadedSdk) return loadedSdk;
-  const mod = await import(resolvePinnedSdkEntry({
+function loadCursorSdk() {
+  loadedSdk ??= import(resolvePinnedSdkEntry({
     packageName: SDK_PACKAGE2,
     version: SDK_VERSION2,
     entryRelPath: SDK_ENTRY_RELPATH
-  }));
-  loadedSdk = mod;
-  return mod;
+  })).catch((error) => {
+    loadedSdk = null;
+    throw error;
+  });
+  return loadedSdk;
 }
-async function loadCursorSdkSqlite() {
-  if (loadedSdkSqlite) return loadedSdkSqlite;
-  const mod = await import(resolvePinnedSdkEntry({
+function loadCursorSdkSqlite() {
+  loadedSdkSqlite ??= import(resolvePinnedSdkEntry({
     packageName: SDK_PACKAGE2,
     version: SDK_VERSION2,
     entryRelPath: SDK_SQLITE_ENTRY_RELPATH
-  }));
-  loadedSdkSqlite = mod;
-  return mod;
+  })).catch((error) => {
+    loadedSdkSqlite = null;
+    throw error;
+  });
+  return loadedSdkSqlite;
+}
+function preloadCursorSdk() {
+  try {
+    loadCursorSdk().catch(() => void 0);
+    loadCursorSdkSqlite().catch(() => void 0);
+  } catch {
+  }
 }
 function readPromptText3() {
   return readFileSync8("/tmp/design-prompt.txt", "utf8");
@@ -9276,12 +9294,15 @@ async function runCursorTurnWorker() {
   resetTurnState3();
   startClaimedTurn(turn);
   try {
-    const preflightOk2 = await runPreflightHeartbeat();
+    preloadCursorSdk();
+    const [preflightOk2] = await Promise.all([
+      runPreflightHeartbeat(),
+      refreshGithubToken3()
+    ]);
     if (!preflightOk2) {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-    await refreshGithubToken3();
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();
@@ -9948,23 +9969,25 @@ async function ensureEvaMcpServers(client, servers = evaMcpServers) {
       log("opencode mcp.status failed: " + resultFailure(status));
       return;
     }
-    for (const [name, server] of configured) {
-      if (status.data[name]) continue;
-      const added = await client.mcp.add({
-        body: {
-          name,
-          config: {
-            type: "remote",
-            url: server.url,
-            headers: server.headers,
-            enabled: true
+    const known = status.data;
+    await Promise.all(
+      configured.filter(([name]) => !known[name]).map(async ([name, server]) => {
+        const added = await client.mcp.add({
+          body: {
+            name,
+            config: {
+              type: "remote",
+              url: server.url,
+              headers: server.headers,
+              enabled: true
+            }
           }
-        }
-      });
-      log(
-        added.data ? "opencode mcp server " + name + " registered (" + (added.data[name]?.status ?? "unknown") + ")" : "opencode mcp.add " + name + " failed: " + resultFailure(added)
-      );
-    }
+        });
+        log(
+          added.data ? "opencode mcp server " + name + " registered (" + (added.data[name]?.status ?? "unknown") + ")" : "opencode mcp.add " + name + " failed: " + resultFailure(added)
+        );
+      })
+    );
   } catch (error) {
     log(
       "opencode mcp registration failed: " + (error instanceof Error ? error.message : String(error))
@@ -10005,7 +10028,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
     // rebuild needed.
     directory: AGENT_CWD
   });
-  await ensureEvaMcpServers(client);
+  const mcpRegistered = ensureEvaMcpServers(client);
   const persistSessionId = (sessionId2) => {
     callbackState.activeOpencodeSessionId = sessionId2;
     writeOpencodeSessionState();
@@ -10163,6 +10186,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
     const consumed2 = consumeEvents(events.stream);
     consumed2.catch(() => {
     });
+    await mcpRegistered;
     const accepted = await client.session.promptAsync({
       path: { id: sessionId },
       body: {

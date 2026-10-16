@@ -272,6 +272,7 @@ import type * as _sandbox_runtime_services from "../_sandbox_runtime/services.js
 import type * as _sandbox_runtime_sessionFork from "../_sandbox_runtime/sessionFork.js";
 import type * as _sandbox_runtime_sessions from "../_sandbox_runtime/sessions.js";
 import type * as _sandbox_runtime_snapshotStates from "../_sandbox_runtime/snapshotStates.js";
+import type * as _sandbox_runtime_startupProgress from "../_sandbox_runtime/startupProgress.js";
 import type * as _sandbox_runtime_swap from "../_sandbox_runtime/swap.js";
 import type * as _sandbox_runtime_turnRevert from "../_sandbox_runtime/turnRevert.js";
 import type * as _sandbox_runtime_typecheckCommand from "../_sandbox_runtime/typecheckCommand.js";
@@ -808,6 +809,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox_runtime/sessionFork": typeof _sandbox_runtime_sessionFork;
   "_sandbox_runtime/sessions": typeof _sandbox_runtime_sessions;
   "_sandbox_runtime/snapshotStates": typeof _sandbox_runtime_snapshotStates;
+  "_sandbox_runtime/startupProgress": typeof _sandbox_runtime_startupProgress;
   "_sandbox_runtime/swap": typeof _sandbox_runtime_swap;
   "_sandbox_runtime/turnRevert": typeof _sandbox_runtime_turnRevert;
   "_sandbox_runtime/typecheckCommand": typeof _sandbox_runtime_typecheckCommand;

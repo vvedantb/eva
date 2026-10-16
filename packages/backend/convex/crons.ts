@@ -30,12 +30,13 @@ crons.interval(
   {},
 );
 
-// Rescan supported skill roots on every connected codebase every 6 hours. Push
-// webhooks also trigger an immediate sync when the base branch changes skills;
-// this cron is the backup when push events are not subscribed or a sync fails.
-crons.interval(
+// Rescan supported skill roots on every connected codebase once a day at 04:00
+// UTC. Push webhooks also trigger an immediate sync when the base branch changes
+// skills; this cron is the backup when push events are not subscribed or a sync
+// fails.
+crons.cron(
   "repo skills github sync",
-  { hours: 6 },
+  "0 4 * * *",
   internal._repoSkills.sync.syncAllRepos,
   {},
 );
