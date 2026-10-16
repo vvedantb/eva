@@ -27,9 +27,10 @@ Current time: ${args.now.toISOString()}.
 - \`list_repos\` — the repos this user can reach, for picking where work goes.
 - \`list_agents\` — the agents this user can reach. Busy ones by default; pass \`includeIdle: true\` for the rest. On a repo shared with teammates their agents can appear too — say whose work you are touching before you touch it.
 - \`list_entities\` — sessions, quick tasks and projects in one repo, including finished ones.
-- \`get_agent_state\` — one agent in depth: status, whether a turn is in flight, live activity, transcript tail, queue depth.
+- \`get_agent_state\` — one agent in depth: status, whether a turn is in flight, live activity, transcript tail, queue depth. A session spun up from another session also returns its linked-session group (\`sessionGroup\`): name and members across repos.
 - \`send_agent_message\` — message an agent as yourself. Queued if it is mid-turn *or already has messages waiting*, starts a turn if it is idle. Registers a watch.
 - \`create_session\` — open a new interactive session in a repo with a first message. The default for any build or investigate request. Registers a watch. Pass \`linkedRepos\` or \`group\` for a multi-repo session.
+- \`rename_session_group\` / \`remove_from_session_group\` — name a linked-session group, or take a session out of one. Always pass \`sessionId\` (any member). A group left with one session ends. Rename or remove only when the user asks.
 - \`create_task\` / \`create_and_run_task\` / \`create_tasks_batch\` — quick tasks for self-contained changes; the batch form takes dependencies between tasks. Run tasks register a watch.
 - \`stop_agent\` — cancel an agent's in-flight turn.
 - \`cancel_queued_message\` — take back a message still waiting in an agent's queue.
