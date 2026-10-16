@@ -58,13 +58,14 @@ export async function getInstallationToken(
 }
 
 /**
- * Read-only token for exactly one repository in an installation (contents +
+ * Token for exactly one repository in an installation (contents write +
  * metadata read). Used when a sandbox asks for credentials for a repository
- * other than its own, so the token cannot write and cannot reach the rest of
- * the installation. Scopes by repository id when known; GitHub also accepts the
- * repository name for installations whose id we never recorded.
+ * other than its own: it can clone and push that repository, but cannot reach
+ * the rest of the installation or touch PRs, issues or workflows. Scopes by
+ * repository id when known; GitHub also accepts the repository name for
+ * installations whose id we never recorded.
  */
-export async function getReadOnlyRepoInstallationToken(
+export async function getSiblingRepoInstallationToken(
   installationId: number,
   repo: { githubId: number | undefined; name: string },
 ): Promise<string> {
@@ -73,7 +74,7 @@ export async function getReadOnlyRepoInstallationToken(
   const installationAuth = await auth({
     type: "installation",
     installationId,
-    permissions: { contents: "read", metadata: "read" },
+    permissions: { contents: "write", metadata: "read" },
     ...(repo.githubId !== undefined
       ? { repositoryIds: [repo.githubId] }
       : { repositoryNames: [repo.name] }),
@@ -107,8 +108,8 @@ export const mintInstallationToken = internalAction({
   },
 });
 
-/** Internal action wrapper for the single-repository read-only token. */
-export const mintReadOnlyRepoToken = internalAction({
+/** Internal action wrapper for the single-repository sibling token. */
+export const mintSiblingRepoToken = internalAction({
   args: {
     installationId: v.number(),
     githubId: v.optional(v.number()),
@@ -116,7 +117,7 @@ export const mintReadOnlyRepoToken = internalAction({
   },
   returns: v.string(),
   handler: async (_ctx, args) => {
-    return await getReadOnlyRepoInstallationToken(args.installationId, {
+    return await getSiblingRepoInstallationToken(args.installationId, {
       githubId: args.githubId,
       name: args.name,
     });

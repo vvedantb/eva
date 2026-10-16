@@ -165,7 +165,11 @@ export async function mcpListUserRepos(
 }
 
 /** `owner/name` for a plain repo, `owner/name/app` for one app of a monorepo. */
-export function repoRefLabel(repo: RepoInfo): string {
+export function repoRefLabel(repo: {
+  owner: string;
+  name: string;
+  rootDirectory?: string | null;
+}): string {
   if (!repo.rootDirectory) return `${repo.owner}/${repo.name}`;
   const app = repo.rootDirectory.split("/").pop() ?? repo.rootDirectory;
   return `${repo.owner}/${repo.name}/${app}`;
