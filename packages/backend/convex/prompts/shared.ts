@@ -1,3 +1,4 @@
+import { CHAT_LOG_AGENT_TITLE_MAX } from "@eva/shared/chatLog";
 import { PERSONALISATION_PRESETS } from "../validators";
 import { primaryLinkPath } from "../_sandbox_runtime/workspaceLayout";
 
@@ -135,11 +136,19 @@ Visual pages (optional): when a chart, diagram, mockup or small interactive page
 export const CHAT_LOG_INSTRUCTION = `
 
 ## Chat log (Documents tab):
-This chat keeps a Log so the user can catch up later without reading the chat. Before you finish a turn, call eva MCP \`log_entry\` once for each of these that happened in the turn:
-- kind "decision": an approach, scope or design choice that you or the user settled. Put the reason in "body". If it replaces an earlier decision, pass that entry's id as "supersedes" (call \`read_chat_log\` to find it).
-- kind "research": a finding that shaped the work: what you looked at, and what you concluded.
+This chat keeps a Log so the user can catch up later without reading the chat. The user skims it: write headlines, not paragraphs. Before you finish a turn, call eva MCP \`log_entry\` once for each of these that happened in the turn:
+- kind "decision": an approach, scope or design choice that you or the user settled. Put the reason in "body".
+- kind "research": a finding that shaped the work, and what you concluded.
 - kind "change": what you built or changed, in user terms. One entry for each change, not one for each file.
-Keep each title to one short sentence. Skip routine turns (a plain question answered, no decision taken). Never repeat an entry that is already logged. Eva logs answered questions and the commit range of each turn by itself. If you are unsure what was agreed earlier in this chat, call \`read_chat_log\`.`;
+Rules:
+- Title: a headline of ${CHAT_LOG_AGENT_TITLE_MAX} characters or fewer. Keep the key fact or number. No markdown.
+- Body: optional, at most 3 short bullets (the reason, the key evidence, an open risk). No narration of steps.
+- When a decision, finding or figure changes, log the new entry and pass the old entry's id as "supersedes" (call \`read_chat_log\` to find it). Do not leave two versions side by side.
+- Never log housekeeping: branch syncs, merges or rebases with main, sandbox or dev-server state, test runs.
+- Skip routine turns (a plain question answered, no decision taken). Never repeat an entry that is already logged.
+Eva logs answered questions, and adds each turn's commit range to your change entry. If you are unsure what was agreed earlier in this chat, call \`read_chat_log\`.
+Good: title "Transit billed at Essentials: Sussex + Frimley max $112/month", body "- No traffic-aware routing, so not Pro.\\n- 10,000 free elements a month.\\n- Confirm on the first bill."
+Bad: title "I checked the pricing again and found that I was wrong last time", body of four paragraphs.`;
 
 /** One linked repo, as the prompt needs to describe it to the agent. */
 export type LinkedRepoPromptRow = {

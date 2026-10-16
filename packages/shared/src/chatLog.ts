@@ -19,6 +19,10 @@ export type ChatLogRow = {
   supersededById?: string;
 };
 
+/** Caps on agent entries: a headline title and at most a few bullets. */
+export const CHAT_LOG_AGENT_TITLE_MAX = 80;
+export const CHAT_LOG_AGENT_BODY_MAX = 600;
+
 export const CHAT_LOG_KIND_LABELS: Record<ChatLogKind, string> = {
   decision: "Decision",
   change: "Change",
@@ -68,7 +72,8 @@ function entryLines(row: ChatLogRow): string[] {
   if (row.beforeSha && row.afterSha) {
     lines.push(`  Commits ${shortSha(row.beforeSha)}..${shortSha(row.afterSha)}`);
   }
-  if (row.body) {
+  // A replaced entry keeps its title only; its replacement has the detail.
+  if (row.body && !replaced) {
     for (const line of row.body.trim().split("\n")) lines.push(`  ${line}`);
   }
   return lines;
