@@ -56,20 +56,26 @@ export function SubagentThreadLayer({
   const sources: SubagentSource[] = [];
   let liveActivity: string | undefined;
   if (subagentId) {
-    for (const message of messages) {
-      if (message.activityLog?.includes(subagentId)) {
-        sources.push({
-          messageId: message._id,
-          activityLog: message.activityLog,
-        });
-      }
-    }
     // Streaming payloads can outlive their turn; only read one while it runs.
     if (
       isAssistantTurnInProgress(messages) &&
       streamingActivity?.includes(subagentId)
     ) {
       liveActivity = streamingActivity;
+    }
+    // The live payload already holds the running turn's steps; reading that
+    // message's stored log too would repeat them in the thread.
+    const runningMessageId = liveActivity
+      ? messages.filter((message) => !message.isSystemAlert).at(-1)?._id
+      : undefined;
+    for (const message of messages) {
+      if (message._id === runningMessageId) continue;
+      if (message.activityLog?.includes(subagentId)) {
+        sources.push({
+          messageId: message._id,
+          activityLog: message.activityLog,
+        });
+      }
     }
   }
   const agent = subagentId
@@ -91,8 +97,11 @@ export function SubagentThreadLayer({
   return (
     <OpenSubagentContext value={openSubagent}>
       <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* aria-hidden as well as inert: `isComposerVisible` reads it, so
+            type-to-focus cannot write keystrokes into the hidden draft. */}
         <div
           inert={isOpen}
+          aria-hidden={isOpen || undefined}
           className={cn("flex min-h-0 flex-1 flex-col", isOpen && "invisible")}
         >
           {children}

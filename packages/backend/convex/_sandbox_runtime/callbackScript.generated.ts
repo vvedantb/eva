@@ -1231,10 +1231,21 @@ function stripHeavyField(step, field) {
   }
   return false;
 }
+function isSubagentText(step) {
+  return step.type === "response" && step.parentToolUseId !== void 0;
+}
 function enforceStepBudget(steps) {
   let encoded = JSON.stringify(steps);
   if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
     return steps;
+  }
+  for (const step of steps) {
+    if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
+      return steps;
+    }
+    if (isSubagentText(step) && stripHeavyField(step, "output")) {
+      encoded = JSON.stringify(steps);
+    }
   }
   for (const field of HEAVY_FIELDS) {
     for (const step of steps) {

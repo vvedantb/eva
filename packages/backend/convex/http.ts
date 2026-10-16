@@ -8,7 +8,11 @@ import {
   previewActivityHmacMessage,
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
-import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
+import {
+  parseCiCompleted,
+  parseCiPassed,
+  parseRepoEvents,
+} from "./_automationEvents/events";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 
 const http = httpRouter();
@@ -642,13 +646,26 @@ http.route({
         { passed },
       );
     }
-    // The agent's PR watch reads the same parsed events (no second parse).
-    const watchUrls = prWatchUrls(repoEvents, ciPassed);
+    // The agent's PR watch: trusted feedback, plus any CI that finished,
+    // whatever its outcome (the last check to finish may end cancelled).
+    const ciCompleted = parseCiCompleted(event ?? "", body);
+    const watchUrls = prWatchUrls(repoEvents, ciCompleted);
     if (watchUrls.length > 0) {
       await ctx.scheduler.runAfter(
         0,
         internal._pullRequests.watch.noteActivity,
         { prUrls: watchUrls },
+      );
+    }
+    if (ciCompleted?.kind === "status" && ciCompleted.branches.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watch.noteHeadStatus,
+        {
+          owner: ciCompleted.owner,
+          name: ciCompleted.name,
+          branches: ciCompleted.branches,
+        },
       );
     }
 

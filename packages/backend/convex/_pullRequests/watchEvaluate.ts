@@ -1,6 +1,6 @@
 import type { Infer } from "convex/values";
 import type { prWatchValidator } from "../validators";
-import type { CiPassed, RepoEvent } from "../_automationEvents/events";
+import type { CiCompleted, RepoEvent } from "../_automationEvents/events";
 import {
   capLength,
   quoteFeedback,
@@ -66,21 +66,22 @@ export interface PrWatchReport {
 }
 
 /**
- * PRs a webhook may have changed for a watch: a check suite that failed or
- * passed, or trusted human feedback. Reuses the automation parse, so bot
- * senders (Eva's own agent included) and untrusted commenters never count.
+ * PRs a webhook may have changed for a watch: a check suite that completed,
+ * whatever its conclusion, or trusted human feedback. Reuses the automation
+ * parse, so bot senders (Eva's own agent included) and untrusted commenters
+ * never count. Commit statuses name branches, not PRs: see `noteHeadStatus`.
  */
 export function prWatchUrls(
   events: ReadonlyArray<RepoEvent>,
-  passed: ReadonlyArray<CiPassed>,
+  ci: CiCompleted | null,
 ): string[] {
   const urls = new Set<string>();
   for (const event of events) {
-    if (event.kind === "ci_failed" || event.kind === "pr_feedback") {
-      urls.add(event.prUrl);
-    }
+    if (event.kind === "pr_feedback") urls.add(event.prUrl);
   }
-  for (const suite of passed) urls.add(suite.prUrl);
+  if (ci?.kind === "check_suite") {
+    for (const prUrl of ci.prUrls) urls.add(prUrl);
+  }
   return [...urls];
 }
 
@@ -101,7 +102,8 @@ export function newPrWatch(now: number, sessionChatId?: PrWatch["sessionChatId"]
  * Compares the PR with what the agent was last told. Each check is reported as
  * soon as it fails, so one slow check cannot hold the news back. "Passed" is
  * reported once the required checks all passed, or every check when none is
- * required. A new head commit starts the check record over.
+ * required. A new head commit starts the check record over. The first read
+ * (no `headSha` yet) only records the baseline, plus any new comments.
  */
 export function evaluatePrWatch(
   watch: PrWatch,
@@ -144,6 +146,13 @@ export function evaluatePrWatch(
   if (snapshot.mergeability === "conflicting" && !watch.conflicting) {
     changes.push({ kind: "conflicting" });
   }
+  // The first read is the baseline: checks and conflicts that were already
+  // there when the watch started are not news. Comments are, since the cursor
+  // starts at the watch's start.
+  const reported =
+    watch.headSha === undefined
+      ? changes.filter((change) => change.kind === "remarks")
+      : changes;
   // "unknown" is GitHub still computing; only a clear answer changes the state.
   const conflicting =
     snapshot.mergeability === "unknown"
@@ -151,13 +160,14 @@ export function evaluatePrWatch(
       : snapshot.mergeability === "conflicting";
 
   const commentsOnly =
-    changes.length > 0 && changes.every((change) => change.kind === "remarks");
-  const progress = headMoved || (changes.length > 0 && !commentsOnly);
+    reported.length > 0 &&
+    reported.every((change) => change.kind === "remarks");
+  const progress = headMoved || (reported.length > 0 && !commentsOnly);
   const commentWakes =
     (progress ? 0 : watch.commentWakes) + (commentsOnly ? 1 : 0);
 
   return {
-    changes,
+    changes: reported,
     next: {
       startedAt: watch.startedAt,
       ...(watch.sessionChatId === undefined

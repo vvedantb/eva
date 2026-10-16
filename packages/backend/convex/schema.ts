@@ -144,7 +144,9 @@ const schema = defineSchema({
       "repoId",
       "baseBranch",
       "watch.startedAt",
-    ]),
+    ])
+    // Watched PRs by head branch: a commit status there names no PR.
+    .index("by_head_and_watch", ["headBranch", "watch.startedAt"]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),

@@ -50,7 +50,7 @@ async function scheduleWatchCheck(
   );
 }
 
-/** A webhook (check suite, trusted review or comment) touched these PRs. */
+/** A webhook (completed check suite, trusted review or comment) touched these PRs. */
 export const noteActivity = internalMutation({
   args: { prUrls: v.array(v.string()) },
   returns: v.null(),
@@ -59,6 +59,38 @@ export const noteActivity = internalMutation({
       const row = await findPullRequestByUrl(ctx.db, prUrl);
       if (row?.watch !== undefined && isLivePrState(row.state)) {
         await scheduleWatchCheck(ctx, row, PR_WATCH_DEBOUNCE_MS);
+      }
+    }
+    return null;
+  },
+});
+
+/**
+ * A commit status (Vercel and the like) reached a final state on these branch
+ * heads. Statuses name no PR, so the head branch finds the watched ones; the
+ * index holds only watched rows, so an unwatched branch reads nothing.
+ */
+export const noteHeadStatus = internalMutation({
+  args: { owner: v.string(), name: v.string(), branches: v.array(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, { owner, name, branches }) => {
+    for (const branch of branches) {
+      const watched = await ctx.db
+        .query("pullRequests")
+        .withIndex("by_head_and_watch", (q) =>
+          q.eq("headBranch", branch).gt("watch.startedAt", 0),
+        )
+        .collect();
+      for (const row of watched) {
+        if (!isLivePrState(row.state)) continue;
+        const repo = await ctx.db.get(row.repoId);
+        if (
+          repo !== null &&
+          repo.owner.toLowerCase() === owner.toLowerCase() &&
+          repo.name.toLowerCase() === name.toLowerCase()
+        ) {
+          await scheduleWatchCheck(ctx, row, PR_WATCH_DEBOUNCE_MS);
+        }
       }
     }
     return null;
@@ -174,17 +206,21 @@ export const startWatch = internalMutation({
         ? (ctx.db.normalizeId("sessionChats", args.sessionChatId) ?? undefined)
         : undefined;
     const fresh = newPrWatch(Date.now(), sessionChatId);
-    await setPullRequestWatch(
-      ctx,
-      row._id,
-      row.watch === undefined
-        ? fresh
-        : {
-            ...row.watch,
-            sessionChatId: fresh.sessionChatId,
-            commentWakes: 0,
-          },
-    );
+    if (row.watch === undefined) {
+      await setPullRequestWatch(ctx, row._id, fresh);
+      // Read the baseline now, so what is already true is never reported.
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watchCheck.check,
+        { pullRequestId: row._id, checkAt: fresh.startedAt },
+      );
+    } else {
+      await setPullRequestWatch(ctx, row._id, {
+        ...row.watch,
+        sessionChatId: fresh.sessionChatId,
+        commentWakes: 0,
+      });
+    }
     return { ok: true, prUrl: row.prUrl, prNumber: row.prNumber };
   },
 });
@@ -294,7 +330,13 @@ export const claimCheck = internalMutation({
   handler: async (ctx, { pullRequestId, checkAt }) => {
     const row = await ctx.db.get(pullRequestId);
     const watch = row?.watch;
-    if (!row || watch === undefined || watch.checkAt !== checkAt) return null;
+    if (!row || watch === undefined) return null;
+    const debounced = watch.checkAt === checkAt;
+    // `startWatch` schedules the baseline read outside the debounce, keyed by
+    // `startedAt`, so a webhook meanwhile cannot cancel it.
+    const baseline =
+      watch.headSha === undefined && checkAt === watch.startedAt;
+    if (!debounced && !baseline) return null;
     const repo = await ctx.db.get(row.repoId);
     const target = await wakeTarget(ctx, row, watch);
     if (!isLivePrState(row.state) || repo === null || target === null) {
@@ -302,7 +344,7 @@ export const claimCheck = internalMutation({
       return null;
     }
     const { checkAt: _claimed, ...rest } = watch;
-    await setPullRequestWatch(ctx, row._id, rest);
+    if (debounced) await setPullRequestWatch(ctx, row._id, rest);
     return {
       watch: rest,
       prUrl: row.prUrl,

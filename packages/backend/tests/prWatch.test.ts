@@ -10,6 +10,7 @@ import {
   type WatchedCheck,
 } from "../convex/_pullRequests/watchEvaluate";
 import type { FeedbackItem } from "../convex/_automationEvents/messages";
+import { parseCiCompleted } from "../convex/_automationEvents/events";
 
 const PR_URL = "https://github.com/acme/app/pull/12";
 
@@ -175,6 +176,53 @@ describe("evaluatePrWatch", () => {
     expect(report.exhausted).toBe(true);
   });
 
+  test("the first read records the baseline without reporting old state", () => {
+    const baseline = evaluatePrWatch(
+      newPrWatch(1_000),
+      snapshot({
+        checks: [check("build", "failed"), check("lint", "passed")],
+        mergeability: "conflicting",
+      }),
+    );
+    expect(baseline.changes).toEqual([]);
+    expect(baseline.next).toMatchObject({
+      headSha: "abc1234def",
+      failedChecks: ["build"],
+      passed: false,
+      conflicting: true,
+    });
+    const passedBaseline = evaluatePrWatch(
+      newPrWatch(1_000),
+      snapshot({ checks: [check("build", "passed")] }),
+    );
+    expect(passedBaseline.changes).toEqual([]);
+    expect(passedBaseline.next.passed).toBe(true);
+    // Later news is still reported against that baseline.
+    const later = evaluatePrWatch(
+      baseline.next,
+      snapshot({
+        checks: [check("build", "failed"), check("lint", "failed")],
+        mergeability: "conflicting",
+      }),
+    );
+    expect(later.changes).toEqual([
+      { kind: "checks_failed", failed: [check("lint", "failed")] },
+    ]);
+  });
+
+  test("the first read still reports comments made since the watch began", () => {
+    const report = evaluatePrWatch(
+      newPrWatch(1_000),
+      snapshot({
+        checks: [check("build", "failed")],
+        remarks: [remark],
+        remarksNewestAt: 5_000,
+      }),
+    );
+    expect(report.changes).toEqual([{ kind: "remarks", remarks: [remark] }]);
+    expect(report.next.remarksThrough).toBe(5_000);
+  });
+
   test("check news resets the comment-only count", () => {
     const report = evaluatePrWatch(
       seen({ commentWakes: PR_WATCH_COMMENT_WAKE_LIMIT - 1 }),
@@ -246,17 +294,73 @@ describe("buildPrWatchMessage", () => {
 });
 
 describe("prWatchUrls", () => {
-  test("CI and trusted feedback events name their PR once each", () => {
-    const base = { owner: "acme", name: "app", prUrl: PR_URL, prNumber: 12 };
+  const base = { owner: "acme", name: "app", prUrl: PR_URL, prNumber: 12 };
+  const OTHER_URL = "https://github.com/acme/app/pull/13";
+
+  test("completed suites and trusted feedback name their PR once each", () => {
     expect(
       prWatchUrls(
         [
-          { kind: "ci_failed", ...base, headSha: "abc" },
           { kind: "pr_feedback", ...base },
           { kind: "pr_opened", ...base, title: "x" },
         ],
-        [{ ...base, headSha: "abc" }],
+        { kind: "check_suite", prUrls: [PR_URL, OTHER_URL] },
       ),
-    ).toEqual([PR_URL]);
+    ).toEqual([PR_URL, OTHER_URL]);
+  });
+
+  test("a commit status names no PR", () => {
+    expect(
+      prWatchUrls([], {
+        kind: "status",
+        owner: "acme",
+        name: "app",
+        branches: ["feature"],
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("parseCiCompleted", () => {
+  const repository = { name: "app", owner: { login: "acme" } };
+
+  test.each(["success", "failure", "cancelled", "skipped", "neutral", "stale"])(
+    "a check suite completed as %s names its PRs",
+    (conclusion) => {
+      const body = JSON.stringify({
+        action: "completed",
+        check_suite: {
+          conclusion,
+          head_sha: "abc",
+          pull_requests: [{ number: 12 }],
+        },
+        repository,
+      });
+      expect(parseCiCompleted("check_suite", body)).toEqual({
+        kind: "check_suite",
+        prUrls: [PR_URL],
+      });
+    },
+  );
+
+  test("a final commit status names the branches whose head it is", () => {
+    const body = (state: string) =>
+      JSON.stringify({
+        sha: "abc",
+        state,
+        branches: [
+          { name: "feature", commit: { sha: "abc" } },
+          { name: "main", commit: { sha: "def" } },
+        ],
+        repository,
+      });
+    expect(parseCiCompleted("status", body("error"))).toEqual({
+      kind: "status",
+      owner: "acme",
+      name: "app",
+      branches: ["feature"],
+    });
+    expect(parseCiCompleted("status", body("pending"))).toBeNull();
+    expect(parseCiCompleted("check_suite", "not json")).toBeNull();
   });
 });
