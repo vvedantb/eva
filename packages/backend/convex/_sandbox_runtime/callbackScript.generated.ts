@@ -6227,7 +6227,7 @@ function sameGoal(a, b) {
 }
 
 // callback-src/providers/claudeGoalSync.ts
-var goal = null;
+var goal;
 var modelWorkedThisTurn = false;
 var backgroundTaskCount = 0;
 var writeChain = Promise.resolve();
@@ -6241,7 +6241,7 @@ function goalJson(value) {
   };
 }
 function setGoal(next) {
-  if (sameGoal(goal, next)) return;
+  if (goal !== void 0 && sameGoal(goal, next)) return;
   goal = next;
   const mutation = UPDATE_GOAL_MUTATION;
   if (!mutation) return;
@@ -6259,18 +6259,18 @@ function trackClaudeGoalFrame(message) {
     backgroundTaskCount = message.tasks.length;
   }
   if (isGoalWorkFrame(message)) modelWorkedThisTurn = true;
-  const next = nextClaudeGoal(goal, message);
+  const next = nextClaudeGoal(goal ?? null, message);
   if (next !== void 0) setGoal(next);
   if (message.type !== "result" || isZeroWorkTaskNotificationResult(message)) {
     return;
   }
-  setGoal(
-    goalAfterTurn(goal, {
-      modelWorked: modelWorkedThisTurn,
-      endedCleanly: isCleanTurnEnd(message),
-      backgroundWorkRunning: backgroundTaskCount > 0
-    })
-  );
+  const current = goal ?? null;
+  const after = goalAfterTurn(current, {
+    modelWorked: modelWorkedThisTurn,
+    endedCleanly: isCleanTurnEnd(message),
+    backgroundWorkRunning: backgroundTaskCount > 0
+  });
+  if (after !== current) setGoal(after);
   modelWorkedThisTurn = false;
 }
 

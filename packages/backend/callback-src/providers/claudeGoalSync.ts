@@ -15,11 +15,12 @@ import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
 /**
  * The warm daemon's view of Claude's native `/goal`, mirrored onto the chat
- * doc through UPDATE_GOAL_MUTATION. Starts unknown (null) on every daemon
- * boot: a goal stored before a restart stays shown until the next goal frame,
- * and `/goal clear` replies "No goal set", which clears it either way.
+ * doc through UPDATE_GOAL_MUTATION. Starts unknown (`undefined`) on every
+ * daemon boot: a goal stored before a restart stays shown until the next goal
+ * frame, and `/goal clear` replies "No goal set", which then still writes the
+ * clear (an in-memory `null` here would dedupe it away).
  */
-let goal: ClaudeGoal | null = null;
+let goal: ClaudeGoal | null | undefined;
 let modelWorkedThisTurn = false;
 /** Size of the SDK's latest `background_tasks_changed` roster (agents + shells). */
 let backgroundTaskCount = 0;
@@ -38,7 +39,7 @@ function goalJson(value: ClaudeGoal | null): JsonValue {
 }
 
 function setGoal(next: ClaudeGoal | null): void {
-  if (sameGoal(goal, next)) return;
+  if (goal !== undefined && sameGoal(goal, next)) return;
   goal = next;
   const mutation = UPDATE_GOAL_MUTATION;
   if (!mutation) return;
@@ -65,18 +66,19 @@ export function trackClaudeGoalFrame(message: JsonObject): void {
     backgroundTaskCount = message.tasks.length;
   }
   if (isGoalWorkFrame(message)) modelWorkedThisTurn = true;
-  const next = nextClaudeGoal(goal, message);
+  const next = nextClaudeGoal(goal ?? null, message);
   if (next !== undefined) setGoal(next);
   // A zero-work task-notification result is a stream boundary, not a turn end.
   if (message.type !== "result" || isZeroWorkTaskNotificationResult(message)) {
     return;
   }
-  setGoal(
-    goalAfterTurn(goal, {
-      modelWorked: modelWorkedThisTurn,
-      endedCleanly: isCleanTurnEnd(message),
-      backgroundWorkRunning: backgroundTaskCount > 0,
-    }),
-  );
+  const current = goal ?? null;
+  const after = goalAfterTurn(current, {
+    modelWorked: modelWorkedThisTurn,
+    endedCleanly: isCleanTurnEnd(message),
+    backgroundWorkRunning: backgroundTaskCount > 0,
+  });
+  // Unchanged keeps an unknown (post-boot) goal unknown.
+  if (after !== current) setGoal(after);
   modelWorkedThisTurn = false;
 }

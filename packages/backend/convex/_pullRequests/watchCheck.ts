@@ -141,15 +141,31 @@ function toMergeability(value: string): Mergeability {
   return "unknown";
 }
 
+/**
+ * GitHub answers UNKNOWN while it computes mergeability, which the first read
+ * after a base push often starts. No webhook follows, so re-read a few times.
+ */
+const MERGEABLE_READS = 3;
+const MERGEABLE_WAIT_MS = 5_000;
+
 async function readPullRequest(ref: RepoRef, prNumber: number) {
-  const data = prWatchResponseSchema.parse(
-    await ref.octokit.graphql(PR_WATCH_QUERY, {
-      owner: ref.owner,
-      name: ref.repo,
-      number: prNumber,
-    }),
-  );
-  const pr = data.repository.pullRequest;
+  const read = async () =>
+    prWatchResponseSchema.parse(
+      await ref.octokit.graphql(PR_WATCH_QUERY, {
+        owner: ref.owner,
+        name: ref.repo,
+        number: prNumber,
+      }),
+    ).repository.pullRequest;
+  let pr = await read();
+  for (
+    let reads = 1;
+    reads < MERGEABLE_READS && pr.state === "OPEN" && pr.mergeable === "UNKNOWN";
+    reads++
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, MERGEABLE_WAIT_MS));
+    pr = await read();
+  }
   const nodes =
     pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? [];
   return {

@@ -183,7 +183,9 @@ function checkLine(check: WatchedCheck): string {
       ? ""
       : ` (${check.conclusion})`;
   const link = check.url === null ? "" : ` ([details](${check.url}))`;
-  return `  - ${check.name}${how}${link}`;
+  // Check names come from workflow files a PR can edit: keep each on one line.
+  const name = check.name.replace(/\s+/g, " ").trim();
+  return `  - ${name}${how}${link}`;
 }
 
 function changeLines(

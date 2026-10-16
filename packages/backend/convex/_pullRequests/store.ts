@@ -371,6 +371,7 @@ export async function closeLivePullRequests(
     await ctx.db.patch(row._id, {
       state: "closed",
       stateOnArchive: row.state,
+      watch: undefined,
       updatedAt: Date.now(),
     });
   }
