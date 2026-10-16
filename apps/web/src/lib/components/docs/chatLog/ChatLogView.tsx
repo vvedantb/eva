@@ -24,21 +24,48 @@ import { ChatLogEntryCard } from "./ChatLogEntryCard";
 import { ChatLogIcon } from "./ChatLogIcon";
 import type { ChatLogEntry } from "./useChatLog";
 
-/** Entries grouped by day, newest day first; entries within a day oldest first. */
-function groupByDay(entries: ChatLogEntry[]) {
-  const days: Array<{ day: string; entries: ChatLogEntry[] }> = [];
-  for (const entry of entries) {
-    const day = chatLogDay(entry.createdAt);
+type LogItem = { entry: ChatLogEntry; history: ChatLogEntry[] };
+
+/**
+ * Entries nothing has replaced, each with the older versions it replaced
+ * (newest first), so the timeline shows one row per finding or decision.
+ */
+function currentWithHistory(entries: ChatLogEntry[]): LogItem[] {
+  const byId = new Map(entries.map((entry) => [entry._id, entry]));
+  const olderThan = (entry: ChatLogEntry) =>
+    entry.supersedesId ? byId.get(entry.supersedesId) : undefined;
+  return entries
+    .filter((entry) => entry.supersededById === undefined)
+    .map((entry) => {
+      const history: ChatLogEntry[] = [];
+      // Bounded by the entry count, so a malformed chain cannot loop.
+      for (
+        let older = olderThan(entry);
+        older && history.length < entries.length;
+        older = olderThan(older)
+      ) {
+        history.push(older);
+      }
+      return { entry, history };
+    });
+}
+
+/** Items grouped by day, newest day first; items within a day oldest first. */
+function groupByDay(items: LogItem[]) {
+  const days: Array<{ day: string; items: LogItem[] }> = [];
+  for (const item of items) {
+    const day = chatLogDay(item.entry.createdAt);
     const last = days[days.length - 1];
-    if (last && last.day === day) last.entries.push(entry);
-    else days.push({ day, entries: [entry] });
+    if (last && last.day === day) last.items.push(item);
+    else days.push({ day, items: [item] });
   }
   return days.reverse();
 }
 
 /**
  * The chat Log, opened from the pinned row of the Documents tab: current
- * decisions on top, then every entry by day. Read-only except Add.
+ * decisions on top, then the current version of each entry by day, titles
+ * first. Read-only except Add.
  */
 export function ChatLogView({
   source,
@@ -55,10 +82,9 @@ export function ChatLogView({
   );
   const [isAddOpen, setIsAddOpen] = useState(false);
   const decisions = currentDecisions(entries);
-  const visible =
-    kindFilter === null
-      ? entries
-      : entries.filter((entry) => entry.kind === kindFilter);
+  const visible = currentWithHistory(entries).filter(
+    (item) => kindFilter === null || item.entry.kind === kindFilter,
+  );
 
   const download = () =>
     downloadMarkdownFile(
@@ -145,8 +171,12 @@ export function ChatLogView({
                 <h3 className="px-1 text-xs font-medium text-muted-foreground">
                   {group.day}
                 </h3>
-                {group.entries.map((entry) => (
-                  <ChatLogEntryCard key={entry._id} entry={entry} />
+                {group.items.map(({ entry, history }) => (
+                  <ChatLogEntryCard
+                    key={entry._id}
+                    entry={entry}
+                    history={history}
+                  />
                 ))}
               </section>
             ))}
