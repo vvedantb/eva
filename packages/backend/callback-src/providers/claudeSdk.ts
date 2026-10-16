@@ -493,6 +493,10 @@ function buildSdkOptionsFromParts(
     // Emit token-level partial (`stream_event`) messages so claudeParseLine can
     // stream text deltas into the reply live (dedup guards the final message).
     includePartialMessages: true,
+    // Forward each subagent's text too (not only its tool calls), so its child
+    // thread view can show the whole transcript. claudeParseLine keeps it out
+    // of the parent's reply.
+    forwardSubagentText: true,
     ...allowedToolsOption,
     env,
     ...(sessionMode.mode === "session" && sessionMode.sessionId

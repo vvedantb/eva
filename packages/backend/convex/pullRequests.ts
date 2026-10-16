@@ -1,5 +1,6 @@
 export {
   listForOwner,
+  stopWatch,
   listForOwnerInternal,
   getByUrlInternal,
   record,

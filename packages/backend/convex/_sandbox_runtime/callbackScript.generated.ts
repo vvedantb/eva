@@ -190,6 +190,7 @@ var CLAIM_MUTATION = process.env.CLAIM_MUTATION;
 var OPEN_SYNTHETIC_TURN_MUTATION = process.env.OPEN_SYNTHETIC_TURN_MUTATION;
 var COMPLETE_SYNTHETIC_TURN_MUTATION = process.env.COMPLETE_SYNTHETIC_TURN_MUTATION;
 var UPDATE_BACKGROUND_AGENTS_MUTATION = process.env.UPDATE_BACKGROUND_AGENTS_MUTATION;
+var UPDATE_GOAL_MUTATION = process.env.UPDATE_GOAL_MUTATION;
 var REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
@@ -1230,10 +1231,21 @@ function stripHeavyField(step, field) {
   }
   return false;
 }
+function isSubagentText(step) {
+  return step.type === "response" && step.parentToolUseId !== void 0;
+}
 function enforceStepBudget(steps) {
   let encoded = JSON.stringify(steps);
   if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
     return steps;
+  }
+  for (const step of steps) {
+    if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
+      return steps;
+    }
+    if (isSubagentText(step) && stripHeavyField(step, "output")) {
+      encoded = JSON.stringify(steps);
+    }
   }
   for (const field of HEAVY_FIELDS) {
     for (const step of steps) {
@@ -1875,6 +1887,10 @@ function toolCallToStep(name, input) {
         type: "subtask",
         label: "Running agent...",
         detail: typeof input.description === "string" ? String(input.description) : typeof input.subagent_type === "string" ? String(input.subagent_type) : void 0,
+        // The prompt the subagent was spawned with: the opening message of
+        // its child thread view. Trimmed from the chat transcript query like
+        // any other preview, so it costs nothing until a reader opens it.
+        contentPreview: typeof input.prompt === "string" && input.prompt.trim() ? capContentPreview(input.prompt.trim()) : void 0,
         status: "active"
       };
     case "TodoWrite":
@@ -3539,6 +3555,9 @@ function claudeParseLine(event) {
   }
   const events = [];
   if (event.type === "stream_event") {
+    if (typeof event.parent_tool_use_id === "string" && event.parent_tool_use_id.trim()) {
+      return events;
+    }
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
@@ -3610,6 +3629,22 @@ function claudeParseLine(event) {
           kind: "set_pending_question",
           data: JSON.stringify(block.input)
         });
+      }
+    } else if (parentToolUseId) {
+      if (block.type === "text" && "text" in block && block.text) {
+        const output = buildStepOutput(String(block.text));
+        if (output) {
+          events.push({
+            kind: "push_subagent_text",
+            step: {
+              type: "response",
+              label: "Agent message",
+              status: "complete",
+              parentToolUseId,
+              output
+            }
+          });
+        }
       }
     } else if (block.type === "thinking" && "thinking" in block && block.thinking) {
       events.push({ kind: "update_reasoning", text: String(block.thinking) });
@@ -4499,6 +4534,10 @@ function applyCanonicalEvents(events) {
       case "append_text":
         clearThinkingStep();
         appendStreamedContent(ev.text, true);
+        break;
+      case "push_subagent_text":
+        clearThinkingStep();
+        callbackState.accumulatedSteps.push(ev.step);
         break;
       case "stream_text_delta":
         clearThinkingStep();
@@ -5722,6 +5761,10 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // Emit token-level partial (\`stream_event\`) messages so claudeParseLine can
     // stream text deltas into the reply live (dedup guards the final message).
     includePartialMessages: true,
+    // Forward each subagent's text too (not only its tool calls), so its child
+    // thread view can show the whole transcript. claudeParseLine keeps it out
+    // of the parent's reply.
+    forwardSubagentText: true,
     ...allowedToolsOption,
     env,
     ...sessionMode.mode === "session" && sessionMode.sessionId ? { sessionId: sessionMode.sessionId } : {},
@@ -6090,6 +6133,171 @@ var DaemonSupervisor = class {
     return { action: "exit" };
   }
 };
+
+// callback-src/parse/claudeGoal.ts
+var GOAL_SET_PREFIX = "Goal set: ";
+var GOAL_CLEARED_PREFIX = "Goal cleared: ";
+var NO_GOAL_SET = "No goal set";
+var GOAL_ACTIVE = /^Goal active: ([\\s\\S]+?) \\((?:not yet evaluated|(\\d+) turns?)\\)/;
+var STOP_HOOK_FEEDBACK_PREFIX = "Stop hook feedback:\\n[";
+var UNRECOVERABLE_CLEAR_PREFIX = "Goal cleared after an unrecoverable error";
+var FEEDBACK_CONDITION_LIMIT = 500;
+var LAST_CHECK_LIMIT = 500;
+function textOf(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  let text = "";
+  for (const part of content) {
+    if (typeof part === "object" && part !== null && !Array.isArray(part) && part.type === "text" && typeof part.text === "string") {
+      text += part.text;
+    }
+  }
+  return text;
+}
+function isRootFrame(message) {
+  const parent = message.parent_tool_use_id;
+  return parent === void 0 || parent === null;
+}
+function assistantModel(message) {
+  const inner = message.message;
+  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+    return void 0;
+  }
+  return typeof inner.model === "string" ? inner.model : void 0;
+}
+function messageContent(message) {
+  const inner = message.message;
+  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+    return void 0;
+  }
+  return inner.content;
+}
+function isGoalWorkFrame(message) {
+  if (message.type !== "assistant" || !isRootFrame(message)) return false;
+  const model = assistantModel(message);
+  return model !== void 0 && model !== "<synthetic>";
+}
+function stopHookReason(text, objective) {
+  if (!text.startsWith(STOP_HOOK_FEEDBACK_PREFIX)) return void 0;
+  const rest = text.slice(STOP_HOOK_FEEDBACK_PREFIX.length);
+  const full = objective + "]: ";
+  if (rest.startsWith(full)) return rest.slice(full.length).trim();
+  if (objective.length <= FEEDBACK_CONDITION_LIMIT) return void 0;
+  const head = objective.slice(0, FEEDBACK_CONDITION_LIMIT - 100);
+  if (!rest.startsWith(head)) return void 0;
+  const end = rest.indexOf("]: ", head.length);
+  return end === -1 ? void 0 : rest.slice(end + 3).trim();
+}
+function nextClaudeGoal(current, message) {
+  if (!isRootFrame(message)) return void 0;
+  if (message.type === "assistant") {
+    if (assistantModel(message) !== "<synthetic>") return void 0;
+    const text = textOf(messageContent(message)).trim();
+    if (text.startsWith(GOAL_SET_PREFIX)) {
+      const objective2 = text.slice(GOAL_SET_PREFIX.length).trim();
+      return objective2 ? { objective: objective2, status: "active", checks: 0 } : void 0;
+    }
+    if (text.startsWith(GOAL_CLEARED_PREFIX)) return null;
+    if (text === NO_GOAL_SET || text.startsWith(NO_GOAL_SET + ". ")) {
+      return null;
+    }
+    const active = GOAL_ACTIVE.exec(text);
+    const objective = active?.[1];
+    if (objective === void 0) return void 0;
+    const sameGoal2 = current?.objective === objective;
+    return {
+      objective,
+      status: "active",
+      checks: Number(active?.[2] ?? 0),
+      ...sameGoal2 && current?.lastCheck !== void 0 ? { lastCheck: current.lastCheck } : {}
+    };
+  }
+  if (message.type === "system" && message.subtype === "informational") {
+    const content = message.content;
+    return typeof content === "string" && content.startsWith(UNRECOVERABLE_CLEAR_PREFIX) ? null : void 0;
+  }
+  if (message.type === "user" && message.isSynthetic === true && current?.status === "active") {
+    const reason = stopHookReason(
+      textOf(messageContent(message)),
+      current.objective
+    );
+    if (reason === void 0) return void 0;
+    return {
+      ...current,
+      checks: current.checks + 1,
+      ...reason ? { lastCheck: reason.slice(0, LAST_CHECK_LIMIT) } : {}
+    };
+  }
+  return void 0;
+}
+function goalAfterTurn(current, turn) {
+  if (current?.status !== "active" || !turn.modelWorked || !turn.endedCleanly || turn.backgroundWorkRunning) {
+    return current;
+  }
+  return {
+    objective: current.objective,
+    status: "complete",
+    checks: current.checks
+  };
+}
+function isCleanTurnEnd(result) {
+  if (result.type !== "result") return false;
+  if (result.subtype !== "success" || result.is_error === true) return false;
+  const reason = result.terminal_reason;
+  return reason === void 0 || reason === null || reason === "completed";
+}
+function sameGoal(a, b) {
+  if (a === null || b === null) return a === b;
+  return a.objective === b.objective && a.status === b.status && a.checks === b.checks && a.lastCheck === b.lastCheck;
+}
+
+// callback-src/providers/claudeGoalSync.ts
+var goal;
+var modelWorkedThisTurn = false;
+var backgroundTaskCount = 0;
+var writeChain = Promise.resolve();
+function goalJson(value) {
+  if (value === null) return null;
+  return {
+    objective: value.objective,
+    status: value.status,
+    checks: value.checks,
+    ...value.lastCheck === void 0 ? {} : { lastCheck: value.lastCheck }
+  };
+}
+function setGoal(next) {
+  if (goal !== void 0 && sameGoal(goal, next)) return;
+  goal = next;
+  const mutation = UPDATE_GOAL_MUTATION;
+  if (!mutation) return;
+  log("daemon: goal " + (next === null ? "cleared" : next.status));
+  const args = buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, {
+    goal: goalJson(next)
+  });
+  writeChain = writeChain.then(async () => {
+    await callConvexWithRetry("mutation", mutation, args);
+  }).catch(() => {
+  });
+}
+function trackClaudeGoalFrame(message) {
+  if (message.type === "system" && message.subtype === "background_tasks_changed" && Array.isArray(message.tasks)) {
+    backgroundTaskCount = message.tasks.length;
+  }
+  if (isGoalWorkFrame(message)) modelWorkedThisTurn = true;
+  const next = nextClaudeGoal(goal ?? null, message);
+  if (next !== void 0) setGoal(next);
+  if (message.type !== "result" || isZeroWorkTaskNotificationResult(message)) {
+    return;
+  }
+  const current = goal ?? null;
+  const after = goalAfterTurn(current, {
+    modelWorked: modelWorkedThisTurn,
+    endedCleanly: isCleanTurnEnd(message),
+    backgroundWorkRunning: backgroundTaskCount > 0
+  });
+  if (after !== current) setGoal(after);
+  modelWorkedThisTurn = false;
+}
 
 // callback-src/providers/claudeSdkDaemon.ts
 function readDaemonPidFile() {
@@ -6854,6 +7062,7 @@ async function runDaemonMessagePump(agentRunner) {
     recogniseSubagentToolUses(message);
     handleSystemTaskMessage(message);
     handleBackgroundTasksChanged(message);
+    trackClaudeGoalFrame(message);
     if (supervisor.isCancellationInFlight) {
       if (message.type !== "result") {
         continue;

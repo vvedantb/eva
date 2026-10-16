@@ -8,8 +8,8 @@ import { useDevChangelogPreview } from "@/lib/dev/preview";
 /**
  * Decides whether the changelog dialog is needed before its code is fetched.
  *
- * `ChangelogDialog` renders markdown through streamdown + mermaid + katex, which is
- * roughly 930 kB gzip of JS. A `lazy()` import alone does not help when the component
+ * `ChangelogDialog` renders markdown through streamdown + shiki + katex, a large
+ * chunk of JS (mermaid loads separately, only when a diagram renders). A `lazy()` import alone does not help when the component
  * is mounted on every page: React requests the chunk immediately and the dialog only
  * then discovers it has nothing to show. Running the (already reactive, already cached)
  * `getLatestChangelog` query out here means the chunk is fetched on the rare load that
