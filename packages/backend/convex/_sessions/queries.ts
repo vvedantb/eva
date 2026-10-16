@@ -25,6 +25,8 @@ const linkedFromValidator = v.object({
   owner: v.string(),
   name: v.string(),
   rootDirectory: v.optional(v.string()),
+  /** The app's custom display label, when set. */
+  label: v.optional(v.string()),
 });
 
 /**
@@ -84,6 +86,8 @@ const sessionListItemValidator = v.object({
   linkedRepoCount: v.optional(v.number()),
   /** Source session when this one came from "Fork session" (sidebar fork glyph). */
   forkedFromSessionId: v.optional(v.id("sessions")),
+  /** Linked-session group (root session id); the sidebar groups these rows. */
+  sessionGroupRootId: v.optional(v.id("sessions")),
 });
 
 /** Maps a full session doc to the slim list payload. */
@@ -97,6 +101,7 @@ function toSessionListItem(
     linkedFrom,
     linkedRepoCount: session.linkedRepoCount,
     forkedFromSessionId: session.forkedFromSessionId,
+    sessionGroupRootId: session.sessionGroupRootId,
     _id: session._id,
     _creationTime: session._creationTime,
     numId: session.numId,
@@ -344,6 +349,7 @@ async function toForkLink(
       owner: repo.owner,
       name: repo.name,
       rootDirectory: repo.rootDirectory,
+      label: repo.label,
     },
   };
 }
@@ -385,6 +391,37 @@ export const getForkLinks = authQuery({
       )
     ).filter((link) => link !== null);
     return { forkedFrom, forks };
+  },
+});
+
+/**
+ * Every visible session in this session's linked-session group, root first,
+ * across repos. Empty when the session is not linked to any other session.
+ */
+export const listGroup = authQuery({
+  args: { id: v.id("sessions") },
+  returns: v.array(forkLinkValidator),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session?.sessionGroupRootId) return [];
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return [];
+    const rootId = session.sessionGroupRootId;
+    const members = await ctx.db
+      .query("sessions")
+      .withIndex("by_session_group_root", (q) =>
+        q.eq("sessionGroupRootId", rootId),
+      )
+      .take(50);
+    const links = (
+      await Promise.all(
+        members.map((member) => toForkLink(ctx.db, ctx.userId, member)),
+      )
+    ).filter((link) => link !== null);
+    return links.length > 1
+      ? links.sort(
+          (a, b) => Number(b._id === rootId) - Number(a._id === rootId),
+        )
+      : [];
   },
 });
 

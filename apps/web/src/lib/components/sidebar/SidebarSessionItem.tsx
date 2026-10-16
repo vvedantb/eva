@@ -96,6 +96,8 @@ interface SidebarSessionItemProps {
   linkedFrom?: SessionLinkedFrom;
   /** Set on sessions made by "Fork session"; shows the fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
+  /** The session's own repo, named on rows in a cross-repo linked group. */
+  repoHint?: SessionLinkedFrom;
 }
 
 /** Fork glyph on rows made by "Fork session"; the hover card names the source. */
@@ -123,12 +125,23 @@ function LinkedRepoCountBadge({ count }: { count?: number }) {
   );
 }
 
-/** Muted hint on a row linked in from another repo's session. */
-function LinkedFromHint({ linkedFrom }: { linkedFrom?: SessionLinkedFrom }) {
-  if (!linkedFrom) return null;
+/**
+ * Muted repo name: "via X" on a row linked in from another repo's session, or
+ * the session's own repo on a row in a cross-repo linked group.
+ */
+function RepoHint({
+  linkedFrom,
+  repoHint,
+}: {
+  linkedFrom?: SessionLinkedFrom;
+  repoHint?: SessionLinkedFrom;
+}) {
+  const repo = linkedFrom ?? repoHint;
+  if (!repo) return null;
   return (
     <span className="shrink-0 truncate text-3xs text-muted-foreground/70">
-      via {repoDisplayLabel(linkedFrom)}
+      {linkedFrom ? "via " : ""}
+      {repoDisplayLabel(repo)}
     </span>
   );
 }
@@ -217,6 +230,7 @@ export function SidebarSessionItem({
   linkedRepoCount,
   linkedFrom,
   forkedFromSessionId,
+  repoHint,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
   const simpleView = useSimpleView();
@@ -273,8 +287,8 @@ export function SidebarSessionItem({
             )}
           >
             <div className="min-w-0 flex-1">
-              {linkedFrom ? (
-                <LinkedFromHint linkedFrom={linkedFrom} />
+              {linkedFrom || repoHint ? (
+                <RepoHint linkedFrom={linkedFrom} repoHint={repoHint} />
               ) : (
                 <SessionFolderAuthor userId={userId} />
               )}
@@ -295,7 +309,7 @@ export function SidebarSessionItem({
           <TitleRegeneratingHint show={isRegeneratingTitle} />
           <ForkedGlyph show={isFork} />
           <LinkedRepoCountBadge count={linkedRepoCount} />
-          <LinkedFromHint linkedFrom={linkedFrom} />
+          <RepoHint linkedFrom={linkedFrom} repoHint={repoHint} />
           <SessionPrIcon prUrl={prUrl} prState={prState} />
           <RelativeDateTime
             at={activityAt}

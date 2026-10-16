@@ -72,6 +72,8 @@ interface SidebarSessionRowProps<T extends SessionItem> {
   /** Shows Fork session (active and archived lists); opens the fork. */
   onForkNavigate?: (pathSegment: string) => void;
   onRenameRequest?: (session: T) => void;
+  /** Name the row's repo (rows in a cross-repo linked-session group). */
+  showRepo?: boolean;
 }
 
 /**
@@ -88,6 +90,7 @@ export function SidebarSessionRow<T extends SessionItem>({
   onUnarchive,
   onForkNavigate,
   onRenameRequest,
+  showRepo = false,
 }: SidebarSessionRowProps<T>) {
   const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
@@ -136,6 +139,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 linkedFrom={session.linkedFrom}
                 linkedRepoCount={session.linkedRepoCount}
                 forkedFromSessionId={session.forkedFromSessionId}
+                repoHint={showRepo ? repo : undefined}
               />
             </SharedLayoutNavSurface>
           </m.div>

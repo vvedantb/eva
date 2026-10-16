@@ -2198,6 +2198,8 @@ export const orchestratorCreateSession = internalAction({
     /** Saved codebase group whose members prefill the selection. */
     repoGroupId: v.optional(v.string()),
     installDependencies: v.optional(v.boolean()),
+    /** Calling session; the new session joins its linked-session group. */
+    fromSessionId: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -2216,6 +2218,7 @@ export const orchestratorCreateSession = internalAction({
       linkedRepoIds,
       repoGroupId,
       installDependencies,
+      fromSessionId,
     },
   ) => {
     // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
@@ -2235,6 +2238,7 @@ export const orchestratorCreateSession = internalAction({
     if (installDependencies !== undefined) {
       createArgs.installDependencies = installDependencies;
     }
+    if (fromSessionId) createArgs.fromSessionId = fromSessionId;
 
     const created = createdSessionSchema.parse(
       await runMutationAsUser(

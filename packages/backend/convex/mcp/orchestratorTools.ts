@@ -223,7 +223,7 @@ export function fleetTools(
     defineTool({
       name: "create_session",
       description:
-        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes.",
+        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes. Called from a session, the new session is linked to yours (a linked-session group in the UI).",
       mutating: true,
       input: {
         repoName: z
@@ -347,6 +347,10 @@ export function fleetTools(
             linkedRepoIds,
             repoGroupId,
             installDependencies,
+            // A session's agent links what it spins up, so the UI can group them.
+            ...(credentials.entityKind === "session" && entityId
+              ? { fromSessionId: entityId }
+              : {}),
           },
         );
 

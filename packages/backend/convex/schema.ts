@@ -213,7 +213,8 @@ const schema = defineSchema({
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
-    .index("by_forked_from", ["forkedFromSessionId"]),
+    .index("by_forked_from", ["forkedFromSessionId"])
+    .index("by_session_group_root", ["sessionGroupRootId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)

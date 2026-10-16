@@ -755,6 +755,11 @@ export const sessionFields = {
   /** Session this one was forked from ("Fork session"). Informational. */
   forkedFromSessionId: v.optional(v.id("sessions")),
   /**
+   * Linked-session group, keyed by its root session's id (the root points at
+   * itself). Set when a session's agent spins up another via `create_session`.
+   */
+  sessionGroupRootId: v.optional(v.id("sessions")),
+  /**
    * Source sandbox to Vercel-fork for this session's first sandbox, instead of
    * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
    * state) carry over.

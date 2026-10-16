@@ -18,6 +18,8 @@ import {
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
+import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
+import { linkedSessionGroups } from "@/lib/components/sidebar/_utils/linkedSessionGroups";
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
 import {
   sessionActivityAt,
@@ -131,6 +133,42 @@ export function GlobalSessionsSidebar({
       ? undefined
       : sortAppsForSidebar(repos, settings.appSortOrder, latestActivityByAppId);
 
+  // Linked sessions (one agent spun up another) leave their repo lists for a
+  // cross-repo group of their own. Active list only.
+  const linkedGroups =
+    settings.listMode === "active" && repos !== undefined
+      ? linkedSessionGroups(
+          repos.map((repo) => ({
+            repo,
+            sessions: listedSessions(sessionsByRepoId[repo._id]) ?? [],
+          })),
+        )
+      : [];
+  const linkedSessionIds = new Set<string>(
+    linkedGroups.flatMap((group) =>
+      group.members.map((member) => member.session._id),
+    ),
+  );
+  const onRenameRequest = (session: SessionListItem, groupRepo: RepoRow) => {
+    setSessionToRename({ session, repo: groupRepo });
+    setRenameValue(session.title);
+  };
+  const onArchiveRequest = (session: SessionListItem, groupRepo: RepoRow) => {
+    const pathSegment = entityPathSegment(session);
+    if (!pathSegment) return;
+    const target = { session, repo: groupRepo, pathSegment };
+    requestConfirm(
+      altHeld,
+      () => setSessionToArchive(target),
+      () => {
+        void archive(target, pathname, () => {
+          setSessionToArchive(null);
+          if (onNavigate) onNavigate();
+        });
+      },
+    );
+  };
+
   return (
     <>
       <div className="flex-1 px-0 pb-1">
@@ -165,6 +203,16 @@ export function GlobalSessionsSidebar({
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {linkedGroups.map((group) => (
+                    <LinkedSessionGroupSection
+                      key={group.rootId}
+                      group={group}
+                      pathname={pathname}
+                      onNavigate={onNavigate}
+                      onRenameRequest={onRenameRequest}
+                      onArchiveRequest={onArchiveRequest}
+                    />
+                  ))}
                   {orderedRepos.map((repo) => (
                     <GlobalSessionGroup
                       key={repo._id}
@@ -172,6 +220,8 @@ export function GlobalSessionsSidebar({
                       pathname={pathname}
                       activeSessions={listedSessions(
                         sessionsByRepoId[repo._id],
+                      )?.filter(
+                        (session) => !linkedSessionIds.has(session._id),
                       )}
                       open={isGroupOpen(repo)}
                       onOpenChange={(open) => {
@@ -181,25 +231,8 @@ export function GlobalSessionsSidebar({
                       sessionSortOrder={settings.sessionSortOrder}
                       sessionPreviewCount={settings.sessionPreviewCount}
                       listMode={settings.listMode}
-                      onRenameRequest={(session, groupRepo) => {
-                        setSessionToRename({ session, repo: groupRepo });
-                        setRenameValue(session.title);
-                      }}
-                      onArchiveRequest={(session, groupRepo) => {
-                        const pathSegment = entityPathSegment(session);
-                        if (!pathSegment) return;
-                        const target = { session, repo: groupRepo, pathSegment };
-                        requestConfirm(
-                          altHeld,
-                          () => setSessionToArchive(target),
-                          () => {
-                            void archive(target, pathname, () => {
-                              setSessionToArchive(null);
-                              if (onNavigate) onNavigate();
-                            });
-                          },
-                        );
-                      }}
+                      onRenameRequest={onRenameRequest}
+                      onArchiveRequest={onArchiveRequest}
                     />
                   ))}
                 </div>
