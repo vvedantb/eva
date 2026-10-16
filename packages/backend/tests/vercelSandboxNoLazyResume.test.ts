@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 /**
  * The unpatched SDK resumes a stopped sandbox on any exec (`withResume`). A
  * background job that ran after Stop woke the VM and it billed for hours while
- * Eva showed it closed (Oct 2026). `patches/@vercel__sandbox@3.5.1.patch` adds
+ * Eva showed it closed (Oct 2026). `patches/@vercel__sandbox.patch` adds
  * `setAutoResume(false)`; Eva sets it on every handle (`withoutLazyResume`).
  * These tests drive the patched SDK against a fake Vercel API.
  */

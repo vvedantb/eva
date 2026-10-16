@@ -491,7 +491,7 @@ function mountFallbackLadder(
 /** A handle to one Vercel sandbox, exposing the neutral {@link SandboxHandle}. */
 /**
  * Turns the SDK's lazy resume off (patched SDK, see
- * `patches/@vercel__sandbox@3.5.1.patch`). Unpatched, every exec, file read
+ * `patches/@vercel__sandbox.patch`). Unpatched, every exec, file read
  * or write on a stopped sandbox resumes it (`withResume`), so a background
  * job that ran after Stop woke the VM and left it billing while Eva showed it
  * closed. With this off, such calls throw `SandboxNotRunningError`; only
