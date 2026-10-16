@@ -45,6 +45,7 @@ import {
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { UnreadDot } from "@/lib/components/ui/UnreadDot";
+import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
@@ -68,6 +69,8 @@ interface ProjectCardProps {
   sandboxStatus?: SandboxStatus;
   /** Finished project chat reply the user has not seen (`api.projects.list`). */
   hasUnread?: boolean;
+  /** The project chat waits on a blocking question; the "?" mark replaces the status dot. */
+  isAwaitingAnswer?: boolean;
   isActive?: boolean;
   isSelecting?: boolean;
   isSelected?: boolean;
@@ -100,6 +103,7 @@ export function ProjectCard({
   isBuilding = false,
   sandboxStatus,
   hasUnread = false,
+  isAwaitingAnswer = false,
   isActive,
   isSelecting,
   isSelected,
@@ -262,7 +266,17 @@ export function ProjectCard({
             </p>
           ) : null}
         </div>
-        {sandboxStatus && showsSandboxStatusDot(sandboxStatus, simpleView) ? (
+        {isAwaitingAnswer ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="relative mt-[3px] flex items-center hit-target">
+                <AwaitingAnswerMark />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Eva asked you a question</TooltipContent>
+          </Tooltip>
+        ) : sandboxStatus &&
+          showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span
@@ -399,11 +413,7 @@ export function ProjectCard({
   );
 
   const wrappedCard = isBuilding ? (
-    <BorderBeam
-      active
-      colorVariant="progress"
-      className="rounded-surface"
-    >
+    <BorderBeam active colorVariant="progress" className="rounded-surface">
       {cardContent}
     </BorderBeam>
   ) : (

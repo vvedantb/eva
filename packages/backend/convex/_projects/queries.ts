@@ -18,6 +18,7 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { unreadLookupForRepo } from "../chatReads";
+import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Builds a project's detail payload (conversation history + optional generated
@@ -55,11 +56,16 @@ export const list = authQuery({
       ctx.userId,
       args.repoId,
     );
+    const awaitingAnswerIds = await awaitingAnswerEntityIdsForRepo(
+      ctx.db,
+      args.repoId,
+    );
     return await Promise.all(
       projects.map(async (project) => ({
         ...project,
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
+        isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
       })),
     );
   },
@@ -241,13 +247,8 @@ export const getProjectPrCreationData = internalQuery({
       // Only a live PR on the current branch counts: a merged one belongs to
       // an earlier branch version, and the next cycle needs its own PR.
       existingPrUrl:
-        (
-          await findLivePullRequestOnBranch(
-            ctx.db,
-            project.repoId,
-            branchName,
-          )
-        )?.prUrl ?? null,
+        (await findLivePullRequestOnBranch(ctx.db, project.repoId, branchName))
+          ?.prUrl ?? null,
       completedTasks,
     };
   },

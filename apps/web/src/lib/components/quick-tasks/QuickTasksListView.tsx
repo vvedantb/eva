@@ -324,6 +324,7 @@ export function QuickTasksListView({
                                     status={task.status}
                                     isAgentActive={task.isExecuting}
                                     hasUnread={task.hasUnread}
+                                    isAwaitingAnswer={task.isAwaitingAnswer}
                                     priority={task.priority}
                                     numId={task.numId}
                                     projectNumId={
