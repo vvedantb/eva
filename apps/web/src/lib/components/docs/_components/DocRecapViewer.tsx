@@ -8,8 +8,8 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   api,
   INCOMPLETE_PR_RECAP_MESSAGE,
+  hasStoredRecap,
   isIncompleteReadyRecap,
-  isViewableRecap,
 } from "@eva/backend";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -287,7 +287,7 @@ export function DocRecapViewer({
       ) : null}
       {doc.prUrl !== undefined &&
       doc.headSha !== undefined &&
-      isViewableRecap(doc) &&
+      hasStoredRecap(doc) &&
       !isRecapPending ? (
         <div className="mx-3 mb-2 overflow-hidden rounded-surface sm:mx-4">
           <RecapStaleBanner

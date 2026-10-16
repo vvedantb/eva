@@ -28,8 +28,12 @@ export const INCOMPLETE_PR_RECAP_ERROR =
 export const INCOMPLETE_PR_RECAP_MESSAGE =
   "The walkthrough wasn't saved. Generate again to retry.";
 
-/** A recap is only viewable when it carries steps or a non-blank HTML page. */
-function hasRecapWalkthrough(doc: RecapWalkthroughFields): boolean {
+/**
+ * True when a run has stored a recap on this doc at some point. A later pending
+ * or failed run keeps it, so this is the test for "is the content a real recap",
+ * whatever the status says.
+ */
+export function hasStoredRecap(doc: RecapWalkthroughFields): boolean {
   if (doc.recapWalkthrough !== undefined && doc.recapWalkthrough.length > 0) {
     return true;
   }
@@ -43,14 +47,14 @@ function hasRecapWalkthrough(doc: RecapWalkthroughFields): boolean {
 export function isIncompleteReadyRecap(
   doc: RecapWalkthroughFields & { prRecapStatus?: PrRecapStatus },
 ): boolean {
-  return doc.prRecapStatus === "ready" && !hasRecapWalkthrough(doc);
+  return doc.prRecapStatus === "ready" && !hasStoredRecap(doc);
 }
 
 /** A recap the reader can actually open: ready and carrying its walkthrough. */
 export function isViewableRecap(
   doc: RecapWalkthroughFields & { prRecapStatus?: PrRecapStatus },
 ): boolean {
-  return doc.prRecapStatus === "ready" && hasRecapWalkthrough(doc);
+  return doc.prRecapStatus === "ready" && hasStoredRecap(doc);
 }
 
 /**
@@ -65,7 +69,7 @@ export function resolvePrRecapWrite(
   },
 ): { prRecapStatus: PrRecapStatus; prRecapError: string | undefined } {
   if (input.prRecapStatus === "ready") {
-    return hasRecapWalkthrough(input)
+    return hasStoredRecap(input)
       ? { prRecapStatus: "ready", prRecapError: undefined }
       : {
           prRecapStatus: "error",

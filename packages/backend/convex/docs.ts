@@ -27,7 +27,10 @@ import {
   docFields,
   evaluationStatusValidator,
 } from "./validators";
-import { resolvePrRecapWrite } from "./_prRecapWorkflow/recapState";
+import {
+  hasStoredRecap,
+  resolvePrRecapWrite,
+} from "./_prRecapWorkflow/recapState";
 import {
   recapWalkthroughStepValidator,
   type RecapWalkthroughStep,
@@ -617,9 +620,32 @@ async function upsertPrRecapDocImpl(
 
   const markdownJson = markdownToDocJson(args.content);
 
+  // A run starting on an existing recap only flips it to pending. The recap on
+  // show — summary, walkthrough and the commit it was written for — stays
+  // until the run's ready write replaces it, so a failed run leaves it intact
+  // instead of a "Generating…" placeholder and a commit it never covered.
+  if (existing && args.prRecapStatus === "pending") {
+    await ctx.db.patch(existing._id, {
+      title: args.title,
+      updatedAt: now,
+      kind: "pr-recap",
+      prUrl: args.prUrl,
+      prNumber: args.prNumber,
+      headSha: existing.headSha ?? args.headSha,
+      prRecapStatus: "pending",
+      prRecapError: undefined,
+      ...(args.prRecapOrigin !== undefined
+        ? { prRecapOrigin: args.prRecapOrigin }
+        : {}),
+    });
+    return existing._id;
+  }
+
   if (existing) {
+    // Status no longer says whether the content is a real recap (a pending or
+    // failed run keeps the last one), so history is kept for any stored recap.
     const shouldSnapshot =
-      existing.prRecapStatus === "ready" &&
+      hasStoredRecap(existing) &&
       existing.content.trim().length > 0 &&
       existing.content !== args.content;
 
@@ -665,13 +691,7 @@ async function upsertPrRecapDocImpl(
       kind: "pr-recap",
       prUrl: args.prUrl,
       prNumber: args.prNumber,
-      // A pending run has no recap for its commit yet. Keep the commit of the
-      // recap still on show, so a failed run cannot hide the stale banner;
-      // the ready write records the new commit.
-      headSha:
-        args.prRecapStatus === "pending" && existing.headSha !== undefined
-          ? existing.headSha
-          : args.headSha,
+      headSha: args.headSha,
       prRecapStatus: resolved.prRecapStatus,
       prRecapError: resolved.prRecapError,
       // Only overwrite the walkthrough when the agent produced one, so a failed

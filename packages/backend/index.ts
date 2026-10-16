@@ -20,6 +20,7 @@ export {
 } from "./convex/_automationEvents/labels";
 export {
   INCOMPLETE_PR_RECAP_MESSAGE,
+  hasStoredRecap,
   isIncompleteReadyRecap,
   isViewableRecap,
 } from "./convex/_prRecapWorkflow/recapState";

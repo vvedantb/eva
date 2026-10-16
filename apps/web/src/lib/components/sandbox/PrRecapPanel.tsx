@@ -8,8 +8,8 @@ import {
   api,
   DEFAULT_AI_MODEL,
   INCOMPLETE_PR_RECAP_MESSAGE,
+  hasStoredRecap,
   isIncompleteReadyRecap,
-  isViewableRecap,
   normalizeAIModel,
   type AIModel,
   type Id,
@@ -226,7 +226,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
               isGenerating={isGenerating}
               disabled={isPending && !isStalled}
               variant="ghost"
-              label={isViewableRecap(recapDoc) ? "Regenerate" : "Generate"}
+              label={hasStoredRecap(recapDoc) ? "Regenerate" : "Generate"}
             />
           </div>
         }
@@ -261,7 +261,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       ) : null}
 
       {recapDoc.headSha !== undefined &&
-      isViewableRecap(recapDoc) &&
+      hasStoredRecap(recapDoc) &&
       !isPending ? (
         // No action here: the toolbar's Regenerate (with its model picker)
         // sits right above, and two buttons for one action read as two.
