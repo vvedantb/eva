@@ -29,6 +29,7 @@ import {
   scheduleQueueDrainAfterBackgroundAgents,
 } from "../_queues/helpers";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
+import { bareHarnessCommandPrompt } from "../_mentions/bareHarnessCommand";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt } from "./prompts";
@@ -54,6 +55,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
+import { agentGoalArg, agentGoalPatch } from "../_chat/agentGoal";
 import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { isDaemonClaimPaused } from "../_chat/daemonClaimPause";
 import { isStreamingActivityStale } from "../_chat/turnLease";
@@ -190,6 +192,8 @@ export async function buildSessionPrompt(
     args.message,
     session.repoId,
   );
+  const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
+  if (bareCommand !== null) return { prompt: bareCommand, branchName };
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // session owner, whose access the credential helper mints tokens against).
@@ -1285,6 +1289,23 @@ export const updateBackgroundAgents = authMutation({
       chat._id,
       backgroundAgents,
     );
+    return null;
+  },
+});
+
+/** Daemon mirrors Claude's native `/goal` onto the chat (writes only on change). */
+export const updateGoal = authMutation({
+  args: { ...daemonChatTargetArgs, goal: agentGoalArg },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) return null;
+    const chat = await ctx.db.get(chatId);
+    if (!chat) throw new Error("Chat not found");
+    if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
+      throw new Error("Not authorized");
+    const patch = agentGoalPatch(chat.goal, args.goal);
+    if (patch) await ctx.db.patch(chat._id, patch);
     return null;
   },
 });

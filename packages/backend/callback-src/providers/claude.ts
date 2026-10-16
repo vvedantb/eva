@@ -189,6 +189,14 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
   }
   const events: CanonicalEvent[] = [];
   if (event.type === "stream_event") {
+    // Subagent partials must never stream into the parent's reply. Their
+    // finished text arrives as whole assistant messages (forwardSubagentText).
+    if (
+      typeof event.parent_tool_use_id === "string" &&
+      event.parent_tool_use_id.trim()
+    ) {
+      return events;
+    }
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
@@ -322,6 +330,26 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
           kind: "set_pending_question",
           data: JSON.stringify(block.input),
         });
+      }
+    } else if (parentToolUseId) {
+      // forwardSubagentText also sends the subagent's own text and thinking.
+      // Its text becomes a `response` step under the Agent row (the child
+      // thread view reads it); its thinking is dropped so it never lands in
+      // the parent's reasoning or reply.
+      if (block.type === "text" && "text" in block && block.text) {
+        const output = buildStepOutput(String(block.text));
+        if (output) {
+          events.push({
+            kind: "push_subagent_text",
+            step: {
+              type: "response",
+              label: "Agent message",
+              status: "complete",
+              parentToolUseId,
+              output,
+            },
+          });
+        }
       }
     } else if (
       block.type === "thinking" &&

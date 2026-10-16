@@ -276,6 +276,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("viewVercelDeployment"),
   v.literal("disableAutoArchive"),
   v.literal("askTeammates"),
+  v.literal("openPrsOnGithub"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -292,6 +293,7 @@ export const experimentalFlagsFields = {
   viewVercelDeployment: v.optional(v.boolean()),
   disableAutoArchive: v.optional(v.boolean()),
   askTeammates: v.optional(v.boolean()),
+  openPrsOnGithub: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -310,6 +312,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   viewVercelDeployment: v.boolean(),
   disableAutoArchive: v.boolean(),
   askTeammates: v.boolean(),
+  openPrsOnGithub: v.boolean(),
 });
 
 /**

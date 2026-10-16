@@ -260,6 +260,13 @@ export function applyCanonicalEvents(events: CanonicalEvent[]): boolean {
         // paragraph break separates it from any prior block.
         appendStreamedContent(ev.text, true);
         break;
+      case "push_subagent_text":
+        // Pushed directly: pushProgressStep would treat a `response` step as
+        // thinking filler, and closing the last step could end a sibling tool
+        // that is still running in the parent or another subagent.
+        clearThinkingStep();
+        S.accumulatedSteps.push(ev.step);
+        break;
       case "stream_text_delta":
         clearThinkingStep();
         // Live provider token delta. Appends exactly like append_text but marks

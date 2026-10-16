@@ -1,4 +1,9 @@
-import type { AIModel, BackgroundAgentEntry, Id } from "@eva/backend";
+import type {
+  AgentGoal,
+  AIModel,
+  BackgroundAgentEntry,
+  Id,
+} from "@eva/backend";
 import type { ModelAccount } from "@eva/ui";
 import type { ChatBodyMessage } from "./chatBodyUtils";
 
@@ -78,4 +83,11 @@ export interface SandboxChatSurface {
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   /** What the usage-limit recovery card needs, or nothing when it cannot show. */
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
+  /** Claude's native `/goal` for this chat, mirrored by the daemon. */
+  goal: AgentGoal | undefined;
+  /**
+   * Sends a harness slash command (e.g. `/goal clear`) as a normal chat
+   * message, verbatim. Undefined when the chat cannot be written to.
+   */
+  sendCommand: ((command: string) => Promise<void>) | undefined;
 }
