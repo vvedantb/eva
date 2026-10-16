@@ -9,6 +9,7 @@ export {
   getOrphanedSeededApps,
   getSeededAppStatus,
   setSeededSnapshotName,
+  getCurrentSeedFingerprint,
   setSeededSnapshotNameForAll,
   setBaseSnapshotId,
   setSeedCommandsInternal,

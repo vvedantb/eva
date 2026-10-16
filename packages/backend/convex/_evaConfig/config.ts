@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizePath } from "../repoUtils";
 
 /**
  * Repo-owned run config: `.eva/config.json` and `.eva/mcp.json`.
@@ -16,6 +17,10 @@ export const EVA_MCP_PATH = ".eva/mcp.json";
 
 const commandListSchema = z.array(z.string().trim().min(1)).default([]);
 
+const snapshotCommandsSchema = z
+  .object({ build: commandListSchema, seed: commandListSchema })
+  .strict();
+
 const evaAppSchema = z
   .object({
     /** Repo-relative app folder; "" for a single-app repo or the repo root. */
@@ -31,6 +36,8 @@ const evaAppSchema = z
     background: commandListSchema,
     /** Clean-shutdown commands; non-empty gives the app a seeded snapshot. */
     stop: commandListSchema,
+    /** This app's own snapshot commands; replaces the top-level block. */
+    snapshot: snapshotCommandsSchema.optional(),
   })
   .strict();
 
@@ -38,16 +45,23 @@ const evaConfigSchema = z
   .object({
     $schema: z.string().optional(),
     version: z.literal(1),
-    snapshot: z
-      .object({ build: commandListSchema, seed: commandListSchema })
-      .strict()
-      .default({}),
+    /** Snapshot commands shared by every app without its own block. */
+    snapshot: snapshotCommandsSchema.default({}),
     apps: z.array(evaAppSchema).min(1),
   })
   .strict();
 
 export type EvaConfig = z.infer<typeof evaConfigSchema>;
 export type EvaApp = z.infer<typeof evaAppSchema>;
+export type EvaSnapshotCommands = z.infer<typeof snapshotCommandsSchema>;
+
+/** The snapshot build/seed commands that apply to one app. */
+export function appSnapshotCommands(
+  config: EvaConfig,
+  app: EvaApp | null,
+): EvaSnapshotCommands {
+  return app?.snapshot ?? config.snapshot;
+}
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -62,20 +76,29 @@ function formatZodError(error: z.ZodError): string {
     .join("; ");
 }
 
-function parseJson(text: string, file: string): ParseResult<unknown> {
-  try {
-    return { ok: true, value: JSON.parse(text) };
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "invalid JSON";
-    return { ok: false, error: `${file}: ${reason}` };
-  }
+/** JSON text → schema, as one Zod pipeline (no untyped intermediate value). */
+function jsonText<T extends z.ZodTypeAny>(schema: T) {
+  return z
+    .string()
+    .transform((text, ctx) => {
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: error instanceof Error ? error.message : "invalid JSON",
+        });
+        return z.NEVER;
+      }
+    })
+    .pipe(schema);
 }
+
+const evaConfigTextSchema = jsonText(evaConfigSchema);
 
 /** Parses `.eva/config.json` text. Errors are readable, one line per issue. */
 export function parseEvaConfig(text: string): ParseResult<EvaConfig> {
-  const json = parseJson(text, EVA_CONFIG_PATH);
-  if (!json.ok) return json;
-  const parsed = evaConfigSchema.safeParse(json.value);
+  const parsed = evaConfigTextSchema.safeParse(text);
   if (!parsed.success) {
     return {
       ok: false,
@@ -93,14 +116,14 @@ export function parseEvaConfig(text: string): ParseResult<EvaConfig> {
   return { ok: true, value: parsed.data };
 }
 
-/** "./apps/web/" → "apps/web"; "." and undefined → "". */
+/**
+ * Same normalisation as `githubRepos.rootDirectory` (normalizePath), plus the
+ * "./" spellings: "./apps/web/" → "apps/web"; ".", "/" and undefined → "".
+ */
 export function normalizeAppPath(path: string | undefined): string {
   if (!path) return "";
-  const trimmed = path
-    .trim()
-    .replace(/^\.\/+/, "")
-    .replace(/\/+$/, "");
-  return trimmed === "." ? "" : trimmed;
+  const withoutDot = path.trim().replace(/^\.(?:\/+|$)/, "");
+  return normalizePath(withoutDot) ?? "";
 }
 
 /** The app entry for a `githubRepos.rootDirectory`, or null. */
@@ -130,9 +153,9 @@ const mcpServerSchema = z.union([
   }),
 ]);
 
-const mcpFileSchema = z.object({
-  mcpServers: z.record(mcpServerSchema),
-});
+const mcpFileTextSchema = jsonText(
+  z.object({ mcpServers: z.record(mcpServerSchema) }),
+);
 
 export type EvaMcpServerSummary = {
   name: string;
@@ -141,23 +164,26 @@ export type EvaMcpServerSummary = {
   target: string;
 };
 
-/** Eva injects these itself; repo entries with the same name are dropped. */
-export const RESERVED_MCP_SERVER_NAMES = ["eva", "linear", "figma"];
+/**
+ * Eva injects these itself; the sandbox callback drops repo entries with the
+ * same name (`callback-src/evaMcp.ts` keeps its own copy — no shared import).
+ */
+const RESERVED_MCP_SERVER_NAMES = new Set(["eva", "linear", "figma"]);
 
 /** Parses `.eva/mcp.json` into display summaries (no secrets resolved). */
 export function parseEvaMcpSummary(
   text: string,
 ): ParseResult<EvaMcpServerSummary[]> {
-  const json = parseJson(text, EVA_MCP_PATH);
-  if (!json.ok) return json;
-  const parsed = mcpFileSchema.safeParse(json.value);
+  const parsed = mcpFileTextSchema.safeParse(text);
   if (!parsed.success) {
     return {
       ok: false,
       error: `${EVA_MCP_PATH}: ${formatZodError(parsed.error)}`,
     };
   }
-  const servers = Object.entries(parsed.data.mcpServers).map(
+  const servers = Object.entries(parsed.data.mcpServers)
+    .filter(([name]) => !RESERVED_MCP_SERVER_NAMES.has(name))
+    .map(
     ([name, server]): EvaMcpServerSummary =>
       "url" in server
         ? { name, kind: "http", target: server.url }
@@ -218,10 +244,11 @@ export function evaAppFingerprints(
   config: EvaConfig,
   app: EvaApp,
 ): { seed: string; startup: string } {
+  const snapshot = appSnapshotCommands(config, app);
   return {
     seed: computeSeedFingerprint({
-      build: config.snapshot.build,
-      seed: config.snapshot.seed,
+      build: snapshot.build,
+      seed: snapshot.seed,
       background: app.background,
       stop: app.stop,
     }),
@@ -240,18 +267,20 @@ export type ConvexAppCommands = {
   startupCommands?: string[];
   backgroundCommands?: string[];
   stopCommands?: string[];
+  /** This app's own snapshot config commands, when it has one. */
+  buildCommands?: string[];
+  seedCommands?: string[];
 };
 
 /**
  * Builds `.eva/config.json` text from the commands stored in Convex, so the
- * setup agent starts from the exact values a repo runs today.
+ * setup agent starts from the exact values a repo runs today. Snapshot
+ * commands are per app in Convex, so each app keeps its own block.
  */
-export function buildEvaConfigDraft(input: {
-  apps: ReadonlyArray<ConvexAppCommands>;
-  buildCommands?: string[];
-  seedCommands?: string[];
-}): string {
-  const apps = input.apps
+export function buildEvaConfigDraft(
+  apps: ReadonlyArray<ConvexAppCommands>,
+): string {
+  const entries = apps
     .map((app) => ({
       path: normalizeAppPath(app.rootDirectory),
       ...(app.devCommand || app.devPort
@@ -265,16 +294,23 @@ export function buildEvaConfigDraft(input: {
       startup: app.startupCommands ?? [],
       background: app.backgroundCommands ?? [],
       stop: app.stopCommands ?? [],
+      ...(app.buildCommands?.length || app.seedCommands?.length
+        ? {
+            snapshot: {
+              build: app.buildCommands ?? [],
+              seed: app.seedCommands ?? [],
+            },
+          }
+        : {}),
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
   return `${JSON.stringify(
     {
       version: 1,
-      snapshot: {
-        build: input.buildCommands ?? [],
-        seed: input.seedCommands ?? [],
-      },
-      apps: apps.length > 0 ? apps : [{ path: "", startup: [], background: [], stop: [] }],
+      apps:
+        entries.length > 0
+          ? entries
+          : [{ path: "", startup: [], background: [], stop: [] }],
     },
     null,
     2,

@@ -456,6 +456,12 @@ export const snapshotBuildWorkflow = workflow.define({
         { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
       );
 
+      // The inputs launchSeedRun is about to read, stamped on the snapshot.
+      const seededFingerprint = await step.runQuery(
+        internal.repoSnapshots.getCurrentSeedFingerprint,
+        { repoId: appRepoId },
+      );
+
       // Launch the whole pipeline detached; poll its outcome markers. The
       // launch is idempotent (live-process guard), so retries can't race a
       // second copy of the script.
@@ -582,6 +588,7 @@ export const snapshotBuildWorkflow = workflow.define({
       await step.runMutation(internal.repoSnapshots.setSeededSnapshotName, {
         repoId: appRepoId,
         seededSnapshotName: effectiveSeededName,
+        ...(seededFingerprint !== null ? { seededFingerprint } : {}),
       });
       await step.runMutation(internal.repoSnapshots.recordSeededApp, {
         buildId: args.buildId,

@@ -547,8 +547,8 @@ export async function resolveSandboxClientOnly(
 
 /**
  * Seed fingerprint of `branch`'s own `.eva/config.json` entry for this app, or
- * null when it cannot differ from the cache (default branch, branch not pushed
- * yet, no or invalid file) or GitHub is unreachable — a null keeps the seeded
+ * null when it cannot differ from the cache (default branch, repo without
+ * `.eva/`, branch not pushed yet, no or invalid file) or GitHub is unreachable — a null keeps the seeded
  * snapshot, the fast and usually correct choice.
  */
 async function branchSeedFingerprint(
@@ -560,7 +560,9 @@ async function branchSeedFingerprint(
     const target = await ctx.runQuery(internal._evaConfig.cache.getSyncTarget, {
       repoId,
     });
-    if (!target || target.ref === branch) return null;
+    // Default branch = the cache itself. A repo that never adopted `.eva/`
+    // skips the GitHub read on this hot path.
+    if (!target || !target.hasEvaConfig || target.ref === branch) return null;
     const text = await readEvaFileAtRef(target, EVA_CONFIG_PATH, branch);
     if (text === null) return null;
     const parsed = parseEvaConfig(text);

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  appSnapshotCommands,
   buildEvaConfigDraft,
   computeSeedFingerprint,
   computeStartupFingerprint,
@@ -86,7 +87,26 @@ describe("findEvaApp", () => {
   test("normalises root spellings to the empty path", () => {
     expect(normalizeAppPath(".")).toBe("");
     expect(normalizeAppPath("./")).toBe("");
+    expect(normalizeAppPath("/")).toBe("");
     expect(normalizeAppPath(undefined)).toBe("");
+  });
+
+  test("matches rootDirectory's own normalisation (leading slash)", () => {
+    expect(normalizeAppPath("/apps/web")).toBe("apps/web");
+    expect(normalizeAppPath("./apps/web/")).toBe("apps/web");
+  });
+
+  test("an app's own snapshot block replaces the shared one", () => {
+    const parsed = parseEvaConfig(
+      JSON.stringify({
+        version: 1,
+        snapshot: { seed: ["shared"] },
+        apps: [{ path: "a", snapshot: { seed: ["own"] } }, { path: "b" }],
+      }),
+    );
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(appSnapshotCommands(parsed.value, findEvaApp(parsed.value, "a")).seed).toEqual(["own"]);
+    expect(appSnapshotCommands(parsed.value, findEvaApp(parsed.value, "b")).seed).toEqual(["shared"]);
   });
 });
 
@@ -140,7 +160,8 @@ describe("parseEvaMcpSummary", () => {
             url: "https://mcp.sentry.dev/mcp",
             headers: { Authorization: "Bearer ${SENTRY_TOKEN}" },
           },
-          figma: { command: "npx", args: ["-y", "figma-developer-mcp"] },
+          "figma-dev": { command: "npx", args: ["-y", "figma-developer-mcp"] },
+          eva: { url: "https://dropped.example/mcp" },
         },
       }),
     );
@@ -148,7 +169,7 @@ describe("parseEvaMcpSummary", () => {
       ok: true,
       value: [
         { name: "sentry", kind: "http", target: "https://mcp.sentry.dev/mcp" },
-        { name: "figma", kind: "stdio", target: "npx -y figma-developer-mcp" },
+        { name: "figma-dev", kind: "stdio", target: "npx -y figma-developer-mcp" },
       ],
     });
   });
@@ -156,18 +177,16 @@ describe("parseEvaMcpSummary", () => {
 
 describe("buildEvaConfigDraft", () => {
   test("round-trips today's Convex commands into a valid file", () => {
-    const draft = buildEvaConfigDraft({
-      apps: [
-        {
-          rootDirectory: "apps/web",
-          devCommand: "pnpm dev",
-          devPort: 5173,
-          startupCommands: ["a"],
-          backgroundCommands: ["b"],
-        },
-      ],
-      buildCommands: ["pnpm install"],
-    });
+    const draft = buildEvaConfigDraft([
+      {
+        rootDirectory: "apps/web",
+        devCommand: "pnpm dev",
+        devPort: 5173,
+        startupCommands: ["a"],
+        backgroundCommands: ["b"],
+        buildCommands: ["pnpm install"],
+      },
+    ]);
     const parsed = parseEvaConfig(draft);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
@@ -177,11 +196,11 @@ describe("buildEvaConfigDraft", () => {
       startup: ["a"],
       background: ["b"],
       stop: [],
+      snapshot: { build: ["pnpm install"], seed: [] },
     });
-    expect(parsed.value.snapshot).toEqual({ build: ["pnpm install"], seed: [] });
   });
 
   test("an unconfigured repo still yields a valid single-app file", () => {
-    expect(parseEvaConfig(buildEvaConfigDraft({ apps: [] })).ok).toBe(true);
+    expect(parseEvaConfig(buildEvaConfigDraft([])).ok).toBe(true);
   });
 });

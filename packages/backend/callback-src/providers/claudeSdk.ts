@@ -24,7 +24,7 @@ import {
   normalizedClaudeModel,
   settingsJson,
 } from "../config.js";
-import { evaMcpServers } from "../evaMcp.js";
+import { evaMcpServers, hasRepoMcpFile } from "../evaMcp.js";
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import { updateThinkingStep } from "../parse/canonical.js";
@@ -497,9 +497,10 @@ function buildSdkOptionsFromParts(
       ? { resume: sessionMode.sessionId }
       : {}),
     extraArgs,
-    // Eva hands over the merged servers (its own plus `.eva/mcp.json`); a
-    // repo's own `.mcp.json` would add duplicates, such as a second `eva`.
-    strictMcpConfig: true,
+    // A repo with `.eva/mcp.json` gets the merged set from Eva; its own
+    // `.mcp.json` would then add duplicates, such as a second `eva`. Repos
+    // without one keep loading `.mcp.json` as before.
+    ...(hasRepoMcpFile ? { strictMcpConfig: true } : {}),
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
       : {}),

@@ -355,6 +355,26 @@ test("ensureEvaMcpServers registers a repo stdio server as a local command", asy
   ]);
 });
 
+test("ensureEvaMcpServers registers a repo SSE server as remote", async () => {
+  const { client, added } = mcpClientStub({});
+
+  await ensureEvaMcpServers(client, {
+    events: { type: "sse", url: "https://example.com/sse", headers: {} },
+  });
+
+  expect(added).toEqual([
+    {
+      name: "events",
+      config: {
+        type: "remote",
+        url: "https://example.com/sse",
+        headers: {},
+        enabled: true,
+      },
+    },
+  ]);
+});
+
 test("ensureEvaMcpServers skips servers the opencode server already knows", async () => {
   const registered = mcpClientStub({ eva: { status: "connected" } });
   await ensureEvaMcpServers(registered.client, {

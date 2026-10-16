@@ -38,7 +38,7 @@ export async function readFileAtRef(
     maxBytes: number;
   },
 ): Promise<BlobResult> {
-  let data: unknown;
+  let file: z.infer<typeof fileContentsSchema>;
   try {
     const res = await octokit.rest.repos.getContent({
       owner: args.owner,
@@ -46,7 +46,9 @@ export async function readFileAtRef(
       path: args.path,
       ref: args.ref,
     });
-    data = res.data;
+    const parsed = fileContentsSchema.safeParse(res.data);
+    if (!parsed.success) return { contents: null, skipped: null };
+    file = parsed.data;
   } catch (error) {
     const parsed = requestErrorSchema.safeParse(error);
     // 403 is how the contents API reports a blob over its own 1MB ceiling.
@@ -59,17 +61,15 @@ export async function readFileAtRef(
     throw error;
   }
 
-  const file = fileContentsSchema.safeParse(data);
-  if (!file.success) return { contents: null, skipped: null };
-  if (file.data.size > args.maxBytes) {
+  if (file.size > args.maxBytes) {
     return { contents: null, skipped: "too-large" };
   }
 
-  const bytes = decodeGitHubContentBytes(file.data.content);
+  const bytes = decodeGitHubContentBytes(file.content);
   // A NUL byte is the same heuristic git uses to call a file binary.
   if (githubContentContainsNul(bytes)) {
     return { contents: null, skipped: "binary" };
   }
 
-  return { contents: decodeGitHubContent(file.data.content), skipped: null };
+  return { contents: decodeGitHubContent(file.content), skipped: null };
 }

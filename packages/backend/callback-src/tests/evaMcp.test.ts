@@ -136,7 +136,7 @@ test("parseRepoMcpConfig infers the type and defaults optional fields", () => {
   expect(parseRepoMcpConfig(text, {}).servers).toEqual({
     local: { type: "stdio", command: "./bin/mcp", args: [], env: {} },
     remote: { type: "http", url: "https://example.com/mcp", headers: {} },
-    events: { type: "http", url: "https://example.com/sse", headers: {} },
+    events: { type: "sse", url: "https://example.com/sse", headers: {} },
   });
 });
 

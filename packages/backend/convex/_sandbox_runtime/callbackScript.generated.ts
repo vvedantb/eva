@@ -904,7 +904,7 @@ function parseRepoMcpServer(raw, env) {
   if (kind === "http" || kind === "sse") {
     if (typeof url !== "string") throw new SkipServer("url must be a string");
     return {
-      type: "http",
+      type: kind,
       url: substituteVars(url, env),
       headers: stringRecord(raw.headers, "headers", env)
     };
@@ -960,12 +960,13 @@ function mergeRepoMcpServers(evaServers, repoServers) {
   }
   return { servers: { ...kept, ...evaServers }, warnings };
 }
+var REPO_MCP_PATH = join(WORK_DIR, ".eva", "mcp.json");
+var hasRepoMcpFile = existsSync3(REPO_MCP_PATH);
 function loadRepoMcpServers(evaServers) {
-  const path3 = join(WORK_DIR, ".eva", "mcp.json");
-  if (!existsSync3(path3)) return evaServers;
+  if (!hasRepoMcpFile) return evaServers;
   let text;
   try {
-    text = readFileSync2(path3, "utf8");
+    text = readFileSync2(REPO_MCP_PATH, "utf8");
   } catch (error) {
     log(".eva/mcp.json unreadable: " + String(error));
     return evaServers;
@@ -5839,9 +5840,10 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     ...sessionMode.mode === "session" && sessionMode.sessionId ? { sessionId: sessionMode.sessionId } : {},
     ...sessionMode.mode === "resume" && sessionMode.sessionId ? { resume: sessionMode.sessionId } : {},
     extraArgs,
-    // Eva hands over the merged servers (its own plus \`.eva/mcp.json\`); a
-    // repo's own \`.mcp.json\` would add duplicates, such as a second \`eva\`.
-    strictMcpConfig: true,
+    // A repo with \`.eva/mcp.json\` gets the merged set from Eva; its own
+    // \`.mcp.json\` would then add duplicates, such as a second \`eva\`. Repos
+    // without one keep loading \`.mcp.json\` as before.
+    ...hasRepoMcpFile ? { strictMcpConfig: true } : {},
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...effortOption,
     ...thinkingOption

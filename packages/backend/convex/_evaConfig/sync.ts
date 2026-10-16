@@ -51,10 +51,21 @@ export const syncEvaConfig = internalAction({
       repoId: args.repoId,
     });
     if (!target) return null;
-    const [configText, mcpText] = await Promise.all([
-      readEvaFileAtRef(target, EVA_CONFIG_PATH, target.ref),
-      readEvaFileAtRef(target, EVA_MCP_PATH, target.ref),
-    ]);
+    // Best-effort: a GitHub outage keeps the last synced cache instead of
+    // failing the caller (the snapshot build runs this as its first step).
+    let files: [string | null, string | null];
+    try {
+      files = await Promise.all([
+        readEvaFileAtRef(target, EVA_CONFIG_PATH, target.ref),
+        readEvaFileAtRef(target, EVA_MCP_PATH, target.ref),
+      ]);
+    } catch (error) {
+      console.error(
+        `[evaConfig] sync ${target.owner}/${target.name}@${target.ref} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+    const [configText, mcpText] = files;
     await ctx.runMutation(internal._evaConfig.cache.applyEvaConfig, {
       owner: target.owner,
       name: target.name,

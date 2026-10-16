@@ -332,11 +332,26 @@ async function currentSeedFingerprint(
   });
 }
 
-/** Sets (or clears) an app repo's seeded snapshot name and its seed fingerprint. */
+/** The seed fingerprint of an app's current cached commands. */
+export const getCurrentSeedFingerprint = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    const repo = await ctx.db.get(args.repoId);
+    return repo ? await currentSeedFingerprint(ctx.db, repo) : null;
+  },
+});
+
+/**
+ * Sets (or clears) an app repo's seeded snapshot name and its seed fingerprint.
+ * The build passes the fingerprint it read at seed launch, so a `.eva/` push
+ * that lands mid-build cannot stamp the old snapshot with the new inputs.
+ */
 export const setSeededSnapshotName = internalMutation({
   args: {
     repoId: v.id("githubRepos"),
     seededSnapshotName: v.union(v.string(), v.null()),
+    seededFingerprint: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -347,7 +362,8 @@ export const setSeededSnapshotName = internalMutation({
       seededFingerprint:
         args.seededSnapshotName === null
           ? undefined
-          : await currentSeedFingerprint(ctx.db, repo),
+          : (args.seededFingerprint ??
+            (await currentSeedFingerprint(ctx.db, repo))),
     });
     return null;
   },

@@ -3,6 +3,7 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { internalMutation, internalQuery } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import {
+  appSnapshotCommands,
   findEvaApp,
   parseEvaConfig,
   parseEvaMcpSummary,
@@ -23,6 +24,8 @@ export const getSyncTarget = internalQuery({
       installationId: v.number(),
       ref: v.string(),
       rootDirectory: v.optional(v.string()),
+      // False while the repo has never synced a `.eva/config.json`.
+      hasEvaConfig: v.boolean(),
     }),
     v.null(),
   ),
@@ -35,6 +38,7 @@ export const getSyncTarget = internalQuery({
       installationId: repo.installationId,
       ref: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
       rootDirectory: repo.rootDirectory,
+      hasEvaConfig: repo.evaConfig !== undefined,
     };
   },
 });
@@ -45,6 +49,8 @@ export const getSyncTarget = internalQuery({
  *
  * - No `config.json`: the repo is Convex-managed again; commands are untouched.
  * - Invalid `config.json`: the last good commands stay; the error is shown.
+ * - An app row the file does not list stays Convex-managed.
+ * - Snapshot commands go to each app's own snapshot config (per app in Convex).
  */
 export const applyEvaConfig = internalMutation({
   args: {
@@ -89,37 +95,39 @@ export const applyEvaConfig = internalMutation({
     };
 
     for (const row of siblings) {
+      const app = parsed.ok
+        ? findEvaApp(parsed.value, row.rootDirectory)
+        : null;
+      // A broken file keeps the last good commands and shows the error.
       if (!parsed.ok) {
         await ctx.db.patch(row._id, { evaConfig });
         continue;
       }
-      const app = findEvaApp(parsed.value, row.rootDirectory);
+      // An app row the file does not list (the monorepo root, a newly added
+      // app) stays Convex-managed: editable, commands untouched.
+      if (!app) {
+        if (row.evaConfig) await ctx.db.patch(row._id, { evaConfig: undefined });
+        continue;
+      }
       await ctx.db.patch(row._id, {
         evaConfig,
-        startupCommands: nonEmpty(app?.startup ?? []),
-        backgroundCommands: nonEmpty(app?.background ?? []),
-        stopCommands: nonEmpty(app?.stop ?? []),
-        // An app absent from the file keeps its dev settings: the root row of
-        // a monorepo is not an app and has no dev server of its own.
-        ...(app
-          ? { devCommand: app.dev?.command, devPort: app.dev?.port }
-          : {}),
+        startupCommands: nonEmpty(app.startup),
+        backgroundCommands: nonEmpty(app.background),
+        stopCommands: nonEmpty(app.stop),
+        devCommand: app.dev?.command,
+        devPort: app.dev?.port,
       });
-    }
-
-    if (parsed.ok) {
-      for (const row of siblings) {
-        const snapshotConfigs = await ctx.db
-          .query("repoSnapshots")
-          .withIndex("by_repo", (q) => q.eq("repoId", row._id))
-          .collect();
-        for (const config of snapshotConfigs) {
-          await ctx.db.patch(config._id, {
-            buildCommands: nonEmpty(parsed.value.snapshot.build),
-            seedCommands: nonEmpty(parsed.value.snapshot.seed),
-            updatedAt: Date.now(),
-          });
-        }
+      const snapshot = appSnapshotCommands(parsed.value, app);
+      const snapshotConfigs = await ctx.db
+        .query("repoSnapshots")
+        .withIndex("by_repo", (q) => q.eq("repoId", row._id))
+        .collect();
+      for (const config of snapshotConfigs) {
+        await ctx.db.patch(config._id, {
+          buildCommands: nonEmpty(snapshot.build),
+          seedCommands: nonEmpty(snapshot.seed),
+          updatedAt: Date.now(),
+        });
       }
     }
     return null;

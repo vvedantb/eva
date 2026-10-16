@@ -66,12 +66,16 @@ async function buildDraftFromConvex(
     siblings.length > 1
       ? siblings.filter((row) => !parentIds.has(row._id))
       : siblings;
-  const snapshot = await findSnapshotForRepo(db, repo._id);
-  return buildEvaConfigDraft({
-    apps,
-    buildCommands: snapshot?.buildCommands,
-    seedCommands: snapshot?.seedCommands,
-  });
+  const drafts = [];
+  for (const app of apps) {
+    const snapshot = await findSnapshotForRepo(db, app._id);
+    drafts.push({
+      ...app,
+      buildCommands: snapshot?.buildCommands,
+      seedCommands: snapshot?.seedCommands,
+    });
+  }
+  return buildEvaConfigDraft(drafts);
 }
 
 function isAlwaysInstalled(name: SystemSkillName): boolean {

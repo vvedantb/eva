@@ -52,7 +52,8 @@ ${draft.trimEnd()}
       "dev": { "command": "pnpm dev", "port": 3000 },
       "startup": [],                  // run on boot, from the repo root, after background services start
       "background": [],               // long-running services (e.g. "npx convex dev"), relaunched on every boot
-      "stop": []                      // clean shutdown before a snapshot; non-empty enables a seeded snapshot
+      "stop": [],                     // clean shutdown before a snapshot; non-empty enables a seeded snapshot
+      "snapshot": { "build": [], "seed": [] }  // optional: this app's own snapshot commands, replacing the top-level block
     }
   ]
 }

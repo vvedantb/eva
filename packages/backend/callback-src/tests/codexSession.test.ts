@@ -53,6 +53,16 @@ test("a repo stdio MCP server becomes a command table", () => {
   );
 });
 
+test("a repo SSE MCP server is written as a url table", () => {
+  const config = buildCodexRuntimeConfig("", "", false, {
+    events: { type: "sse", url: "https://example.com/sse", headers: {} },
+  });
+
+  expect(config).toContain(
+    '\n[mcp_servers."events"]\nurl = "https://example.com/sse"\nhttp_headers = {  }\n',
+  );
+});
+
 test("no MCP token leaves the codex config untouched", () => {
   expect(buildCodexRuntimeConfig("", "", false, {})).not.toContain(
     "mcp_servers",

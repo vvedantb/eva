@@ -6,6 +6,7 @@ import { log, tryParseJson } from "./utils.js";
 
 export type McpServerDefinition =
   | { type: "http"; url: string; headers: Record<string, string> }
+  | { type: "sse"; url: string; headers: Record<string, string> }
   | {
       type: "stdio";
       command: string;
@@ -160,12 +161,10 @@ function parseRepoMcpServer(
   const { type, url, command, args } = raw;
   const kind =
     type ?? (command !== undefined ? "stdio" : url !== undefined ? "http" : "");
-  // SSE servers are descriptor-compatible with http for every provider Eva
-  // drives, so they ride the same shape.
   if (kind === "http" || kind === "sse") {
     if (typeof url !== "string") throw new SkipServer("url must be a string");
     return {
-      type: "http",
+      type: kind,
       url: substituteVars(url, env),
       headers: stringRecord(raw.headers, "headers", env),
     };
@@ -239,16 +238,22 @@ export function mergeRepoMcpServers(
   return { servers: { ...kept, ...evaServers }, warnings };
 }
 
+const REPO_MCP_PATH = join(WORK_DIR, ".eva", "mcp.json");
+/**
+ * True when the repo commits `.eva/mcp.json`, even an empty one. Only then does
+ * Eva own the repo's MCP set; otherwise the repo's own `.mcp.json` still loads.
+ */
+export const hasRepoMcpFile = existsSync(REPO_MCP_PATH);
+
 /**
  * Reads `<WORK_DIR>/.eva/mcp.json`. The Cursor turn worker re-imports this
  * module and re-reads the file itself, so repo servers need no handoff.
  */
 function loadRepoMcpServers(evaServers: McpServers): McpServers {
-  const path = join(WORK_DIR, ".eva", "mcp.json");
-  if (!existsSync(path)) return evaServers;
+  if (!hasRepoMcpFile) return evaServers;
   let text: string;
   try {
-    text = readFileSync(path, "utf8");
+    text = readFileSync(REPO_MCP_PATH, "utf8");
   } catch (error) {
     log(".eva/mcp.json unreadable: " + String(error));
     return evaServers;
