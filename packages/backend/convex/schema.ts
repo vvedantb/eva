@@ -17,6 +17,7 @@ import {
   pullRequestFields,
   sessionFields,
   sessionRepoFields,
+  sessionGroupFields,
   repoGroupFields,
   githubRepoFields,
   teamFields,
@@ -213,7 +214,8 @@ const schema = defineSchema({
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
-    .index("by_forked_from", ["forkedFromSessionId"]),
+    .index("by_forked_from", ["forkedFromSessionId"])
+    .index("by_session_group", ["sessionGroupId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
@@ -233,6 +235,8 @@ const schema = defineSchema({
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
     .index("by_repo", ["repoId"]),
+  // Linked-session groups (members: `sessions.by_session_group`).
+  sessionGroups: defineTable(sessionGroupFields),
   // Saved codebase groups that prefill a new session's repo selection.
   repoGroups: defineTable(repoGroupFields)
     .index("by_created_by", ["createdBy"])
