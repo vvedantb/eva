@@ -32,6 +32,13 @@ Next: The longer the job, the more it helps to write things down, so documents n
 → Step 1: the picker becomes the five-step slider. The trimmed list was still the advanced surface, which is why it became one control.
 Detail: the picker on the right is the real shipped component. Simple Mode is an optional setting, not a separate product; it hides files, consoles, settings and meters and leaves the conversation. Choosing a model went from a long list to one slider. On the slider, cheaper and faster models sit on the left and the strongest on the right; there is nothing to configure.
 Figures: Simple Mode landed 14 August 2026; the slider replaced the list on 24 August 2026.
+Next: And the slider is only the visible part of what Simple Mode hides.`,
+
+  "friday-b24-abstracted": `In Simple Mode, the only things that matter are what you ask for and what you get back. Everything in between is Eva's job.
+→ Step 1: the machinery is tucked away. Which model to use, how hard it should think, its thinking, how much it can hold in memory at once, which connected tools it can reach, and which skills to load: all of it goes inside Eva.
+→ Step 2: what is left is the line from your prompt to the result. That is the whole experience.
+Detail: each of these is a real setting in tools like Eva, and each one used to be the user's problem. A context window is how much of the conversation and code the model can keep in view; the reasoning level is how long it thinks before answering; MCP tools are the connections to other systems; skills are saved instructions for repeat jobs. In Simple Mode, Eva chooses sensible defaults, Jev suggests the right skill, and the tools are already connected. Be accurate if asked: Simple Mode still offers the one model slider for people who want it, and Advanced view shows every control.
+Figures: Simple Mode landed 14 August 2026; the slider replaced the model list on 24 August 2026; skill suggestions by Jev, 21 September 2026.
 Next: The other way to save effort is to never explain the same job twice.`,
 
   "06-automerge": `One click from a person, and everything after it is automatic.

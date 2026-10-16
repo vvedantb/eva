@@ -26,6 +26,7 @@ import { FridayStandup } from "./friday/b10-standup";
 import { FridayWeeklyChangelog } from "./friday/b22-weekly-changelog";
 import { FridaySkills } from "./friday/b11-skills";
 import { FridayPredictions } from "./friday/b23-predictions";
+import { FridayAbstracted } from "./friday/b24-abstracted";
 import { FridayAve } from "./friday/b12-ave";
 import { FridayReliability } from "./friday/b13-reliability";
 import { FridayMobile } from "./friday/b14-mobile";
@@ -124,6 +125,12 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     title: "Simple Mode",
     Component: Slide05SimpleMode,
     steps: 1,
+  },
+  {
+    id: "friday-b24-abstracted",
+    title: "All you see",
+    Component: FridayAbstracted,
+    steps: 2,
   },
   {
     id: "friday-b11-skills",
