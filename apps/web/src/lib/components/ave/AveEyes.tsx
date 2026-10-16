@@ -1,28 +1,24 @@
 "use client";
 
-import { m, useSpring } from "motion/react";
+import { m, useSpring, useTransform } from "motion/react";
 
-/** Furthest a pupil travels from the eye's centre, in px. Keeps it inside. */
-const MAX_TRAVEL_PX = 2;
-/** Cursor distance at which the pupils reach full travel. Closer reads as nearer. */
+/** Furthest the eyes travel from rest, in px. */
+const MAX_TRAVEL_PX = 4;
+/** Cursor distance at which the eyes reach full travel. Closer reads as nearer. */
 const FULL_TRAVEL_DISTANCE_PX = 160;
+/** Sideways glances lean the eyes, like the reference's "slant" eyes. */
+const MAX_SKEW_DEG = 14;
 /**
  * Bouncy on purpose: the user's cursor drives this, so overshoot is feedback
  * to their gesture (see `motionSpring` for why non-gesture motion has none).
  */
 const EYE_SPRING = { stiffness: 320, damping: 16, mass: 0.6 };
 
-/**
- * White eye, dark pupil: dark eyes alone vanished into the purple and blue
- * star. The outline keeps the white readable where an eye crosses the disc.
- */
-const EYE_CLASS =
-  "flex h-[10px] w-[7px] items-center overflow-hidden justify-center rounded-full bg-white ring-1 ring-zinc-900/80";
-const PUPIL_CLASS = "size-[4px] rounded-full bg-zinc-900";
+const EYE_CLASS = "h-[10px] w-[6px] rounded-full bg-zinc-900";
 
 /**
- * Two eyes over Ave's star whose pupils follow the cursor anywhere on the
- * page. Absolutely positioned over whichever disc hosts it.
+ * Two eyes over Ave's star that follow the cursor anywhere on the page.
+ * Absolutely positioned over whichever disc hosts it.
  *
  * The pointer listener writes motion values, never React state, so tracking
  * costs no renders. It lives in a ref callback because the window listener
@@ -32,6 +28,11 @@ const PUPIL_CLASS = "size-[4px] rounded-full bg-zinc-900";
 export function AveEyes() {
   const x = useSpring(0, EYE_SPRING);
   const y = useSpring(0, EYE_SPRING);
+  const skewX = useTransform(
+    x,
+    [-MAX_TRAVEL_PX, MAX_TRAVEL_PX],
+    [MAX_SKEW_DEG, -MAX_SKEW_DEG],
+  );
 
   return (
     <span
@@ -61,14 +62,10 @@ export function AveEyes() {
       className="pointer-events-none absolute inset-0 flex items-center justify-center"
       aria-hidden
     >
-      <span className="flex gap-[3px]">
-        <span className={EYE_CLASS}>
-          <m.span className={PUPIL_CLASS} style={{ x, y }} />
-        </span>
-        <span className={EYE_CLASS}>
-          <m.span className={PUPIL_CLASS} style={{ x, y }} />
-        </span>
-      </span>
+      <m.span className="flex gap-[6px]" style={{ x, y, skewX }}>
+        <span className={EYE_CLASS} />
+        <span className={EYE_CLASS} />
+      </m.span>
     </span>
   );
 }
