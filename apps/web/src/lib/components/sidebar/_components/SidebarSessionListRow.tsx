@@ -28,7 +28,7 @@ interface SidebarSessionListRowProps {
   onForkNavigate: (pathSegment: string) => void;
   onRenameRequest: (session: SessionListItem, repo: RepoWithLogo) => void;
   onArchiveRequest: (session: SessionListItem, repo: RepoWithLogo) => void;
-  /** Linked-session group rows: name the repo, offer "Remove from group". */
+  /** Linked-session group rows: show the app mark, offer "Remove from group". */
   inGroup?: boolean;
 }
 
@@ -63,7 +63,7 @@ export function SidebarSessionListRow({
   );
   const groupProps = inGroup
     ? {
-        showRepo: true,
+        app: repo,
         onRemoveFromGroup: async (s: SessionListItem) => {
           try {
             await removeFromGroup({ sessionId: s._id });
