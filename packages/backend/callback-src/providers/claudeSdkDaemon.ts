@@ -212,6 +212,8 @@ const unsettledBackgroundAgents = new Map<string, BackgroundAgentEntry>();
 const pendingAgentStops = new Set<string>();
 let currentAgentRunner: WarmRunner | null = null;
 let usageRefreshInFlight = false;
+/** Resolves the message pump's idle wait; set only while it sleeps. */
+let wakeIdlePump: (() => void) | null = null;
 
 function entityMutationArgs(
   fields: Record<string, JsonValue>,
@@ -1138,7 +1140,9 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
               claimedLeaseTurnId: turn.turnLease?.turnId ?? null,
             })
           ) {
-            if (!supervisor.parkClaim(turn)) {
+            if (supervisor.parkClaim(turn)) {
+              wakeIdlePump?.();
+            } else {
               log("daemon: duplicate claimed turn ignored");
             }
           } else {
@@ -1180,7 +1184,13 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     }
 
     if (supervisor.currentTurn === null && !agentRunner.hasPending()) {
-      await sleep(PROMPT_POLL_INTERVAL_MS);
+      // The claim watcher wakes this early when it parks a turn, so a claimed
+      // prompt no longer waits out the rest of the 50ms tick (~25ms average).
+      await new Promise<void>((resolve) => {
+        wakeIdlePump = resolve;
+        setTimeout(resolve, PROMPT_POLL_INTERVAL_MS);
+      });
+      wakeIdlePump = null;
       continue;
     }
 
@@ -1532,12 +1542,20 @@ export async function runSdkDaemon(): Promise<void> {
     process.exit(1);
   }
   startStreamingLoops();
-  await refreshGithubToken();
 
+  // The GitHub token round trip (~0.3–0.45s) and the SDK import (~0.2s, CPU)
+  // are independent, so overlap them. The fetch must reach the wire first:
+  // the import blocks the event loop and, started in the same tick, held the
+  // request back until it finished (measured: no overlap at all). One
+  // setImmediate lets fetch send; then the overlap saved ~0.16s. The token
+  // still lands before buildSdkOptions copies process.env, since the CLI's
+  // tool shells inherit `GH_TOKEN` from it. refreshGithubToken never rejects.
+  const tokenRefreshed = refreshGithubToken();
+  await new Promise<void>((resolve) => setImmediate(resolve));
   // Session mode establishes/continues the Claude session id used for resume.
   const sessionMode = prepareClaudeSessionState();
+  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
   const options = buildSdkOptions(sessionMode);
-  const sdk = await loadSdk();
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
 
