@@ -1,6 +1,7 @@
 import { convexTest } from "convex-test";
 import prosemirrorSync from "@convex-dev/prosemirror-sync/test";
-import { expect, test } from "vitest";
+import workflow from "@convex-dev/workflow/test";
+import { expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
@@ -17,18 +18,23 @@ const PR_URL = "https://github.com/vvedantb/eva/pull/1";
 const STEPS = [{ title: "Core", summary: "The idea.", files: ["a.ts"] }];
 
 test(
-  "a pending and then failed run keeps the recap on show",
+  "a started and then failed run keeps the recap, commit and model on show",
   async () => {
+    // Hold the workflow `startPrRecap` schedules: this test is about the doc
+    // writes, not the run, and a background run would race the assertions.
+    vi.useFakeTimers();
     const t = convexTest(schema, modules);
     prosemirrorSync.register(t);
-    const repoId = await t.run(async (ctx) => {
+    workflow.register(t);
+    const { repoId, userId } = await t.run(async (ctx) => {
       const userId = await ctx.db.insert("users", { clerkId: "clerk|recap" });
-      return await ctx.db.insert("githubRepos", {
+      const repoId = await ctx.db.insert("githubRepos", {
         owner: "vvedantb",
         name: "eva",
         installationId: 1,
         connectedBy: userId,
       });
+      return { repoId, userId };
     });
     const base = {
       repoId,
@@ -42,14 +48,22 @@ test(
       headSha: "old",
       content: "## Summary\nFirst recap.",
       recapWalkthrough: STEPS,
+      run: { model: "claude:sonnet", fastMode: true },
       prRecapStatus: "ready",
     });
 
-    await t.mutation(internal.docs.upsertPrRecapDoc, {
-      ...base,
+    // The real start path: flips the doc to pending and starts the workflow.
+    await t.mutation(internal.docs.startPrRecap, {
+      repoId,
+      userId,
+      installationId: 1,
+      owner: "vvedantb",
+      name: "eva",
+      prUrl: PR_URL,
+      prNumber: 1,
+      prTitle: "Recap",
       headSha: "new",
-      content: "_Generating recap…_",
-      prRecapStatus: "pending",
+      model: "claude:opus",
     });
     await t.mutation(internal.docs.patchPrRecapStatus, {
       docId,
@@ -63,12 +77,16 @@ test(
     expect(failed?.recapWalkthrough).toEqual(STEPS);
     expect(failed?.headSha).toBe("old");
     expect(failed?.prRecapStatus).toBe("error");
+    // The badge still names the run that wrote the recap on show.
+    expect(failed?.prRecapModel).toBe("claude:sonnet");
+    expect(failed?.fastMode).toBe(true);
 
     await t.mutation(internal.docs.upsertPrRecapDoc, {
       ...base,
       headSha: "new",
       content: "## Summary\nSecond recap.",
       recapWalkthrough: STEPS,
+      run: { model: "claude:opus" },
       prRecapStatus: "ready",
     });
 
@@ -81,10 +99,14 @@ test(
     }));
     expect(ready.doc?.content).toBe("## Summary\nSecond recap.");
     expect(ready.doc?.headSha).toBe("new");
+    expect(ready.doc?.prRecapModel).toBe("claude:opus");
+    // A trait the new run did not set is cleared, not carried over.
+    expect(ready.doc?.fastMode).toBeUndefined();
     // The replaced recap went to history, even though its status was "error".
     expect(ready.versions.map((version) => version.content)).toEqual([
       "## Summary\nFirst recap.",
     ]);
+    vi.useRealTimers();
   },
   TIMEOUT_MS,
 );

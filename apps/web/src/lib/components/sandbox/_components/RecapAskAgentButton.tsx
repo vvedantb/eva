@@ -16,10 +16,20 @@ interface RecapAskAgentButtonProps {
   step: RecapWalkthroughStep;
   prUrl: string;
   prNumber: number;
+  /**
+   * Branch a new session starts on: the head branch of an open PR from this
+   * repo, so the agent reads the code under review. Null starts on the repo's
+   * default branch (a fork, or a closed PR whose change is on the base).
+   */
+  workBranch: string | null;
 }
 
 /** The prompt both paths send: the step as context, then a default question. */
-function stepPrompt({ step, prUrl, prNumber }: RecapAskAgentButtonProps) {
+function stepPrompt({
+  step,
+  prUrl,
+  prNumber,
+}: Pick<RecapAskAgentButtonProps, "step" | "prUrl" | "prNumber">) {
   const files =
     step.files.length > 0
       ? `\nFiles: ${step.files.map((path) => `\`${path}\``).join(", ")}`
@@ -34,7 +44,8 @@ Explain this step in more depth: what changed, why, and what could break.`;
 /**
  * "Ask agent" on a recap step. Beside a chat (a sandbox's Review tab), the
  * question goes into that chat's draft so the reader can edit it before
- * sending. Elsewhere there is no chat to use, so it starts a new session.
+ * sending. Elsewhere there is no chat to use, so it starts a new session on
+ * the PR's branch when it has one.
  */
 export function RecapAskAgentButton(props: RecapAskAgentButtonProps) {
   const target = useReviewChatTarget();
@@ -63,6 +74,7 @@ function AskInNewSession(props: RecapAskAgentButtonProps) {
       repoId,
       title: `PR #${props.prNumber}: ${props.step.title}`,
       message: stepPrompt(props),
+      ...(props.workBranch !== null ? { baseBranch: props.workBranch } : {}),
     });
     await navigate({
       to: toInternalRepoHref(`${basePath}/sessions/${numId}`),

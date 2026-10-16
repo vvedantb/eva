@@ -1,4 +1,5 @@
 import {
+  fallbackRecapWalkthrough,
   parseRecapWalkthrough,
   type RecapWalkthroughStep,
 } from "./walkthrough";
@@ -91,10 +92,7 @@ Output ONLY the markdown, then a line with the marker, then the JSON object. No 
 ${params.diffText}`;
 }
 
-export type PrRecapParseFailure =
-  | "missing_marker"
-  | "invalid_markdown"
-  | "invalid_walkthrough";
+export type PrRecapParseFailure = "missing_marker" | "invalid_markdown";
 
 export type ParsedPrRecap =
   | { ok: true; markdown: string; walkthrough: RecapWalkthroughStep[] }
@@ -104,9 +102,9 @@ const MARKDOWN_HEADING = /^#{1,3}\s+\S/m;
 
 /**
  * Splits raw agent output into the markdown recap and the walkthrough, holding
- * the walkthrough to `changedFiles` (see `parseRecapWalkthrough`). Incomplete
- * output is rejected so the workflow can store an error instead of a false
- * "ready".
+ * the walkthrough to `changedFiles` (see `parseRecapWalkthrough`). Output with
+ * no marker or no markdown recap is rejected so the workflow can store an
+ * error instead of a false "ready".
  */
 export function parsePrRecapOutput(
   raw: string,
@@ -122,13 +120,13 @@ export function parsePrRecapOutput(
     return { ok: false, reason: "invalid_markdown" };
   }
 
-  const walkthrough = parseRecapWalkthrough(
-    raw.slice(markerIndex + PR_RECAP_WALKTHROUGH_MARKER.length),
-    changedFiles,
-  );
-  if (walkthrough === null) {
-    return { ok: false, reason: "invalid_walkthrough" };
-  }
+  // Broken walkthrough JSON does not sink a good markdown recap: the reader
+  // gets every file in one step instead (see `fallbackRecapWalkthrough`).
+  const walkthrough =
+    parseRecapWalkthrough(
+      raw.slice(markerIndex + PR_RECAP_WALKTHROUGH_MARKER.length),
+      changedFiles,
+    ) ?? fallbackRecapWalkthrough(changedFiles);
 
   return { ok: true, markdown, walkthrough };
 }

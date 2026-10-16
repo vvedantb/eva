@@ -395,9 +395,7 @@ export function DocRecapViewer({
                 value="recap"
                 className="mt-0 h-full min-h-0 overflow-hidden"
               >
-                <div className="h-full overflow-auto">
-                  <RecapTourBody doc={doc} repoId={repoId} />
-                </div>
+                <RecapTourBody doc={doc} repoId={repoId} />
               </TabsContent>
             </m.div>
           ) : (

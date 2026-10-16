@@ -28,6 +28,7 @@ describe("toPrDiffData", () => {
       truncated: true,
       baseSha: "base",
       headSha: "head",
+      workBranch: null,
       repoUrl: "https://github.com/eva/eva",
     });
 
@@ -50,6 +51,7 @@ describe("toPrDiffData", () => {
       truncated: true,
       baseSha: "base",
       headSha: "head",
+      workBranch: null,
       repoUrl: "https://github.com/eva/eva",
     });
   });
@@ -60,6 +62,7 @@ describe("toPrDiffData", () => {
       truncated: false,
       baseSha: "base",
       headSha: "head",
+      workBranch: null,
       repoUrl: "https://github.com/eva/eva",
     });
 
@@ -69,7 +72,9 @@ describe("toPrDiffData", () => {
 
 describe("prErrorMessage", () => {
   test("prefers the error's own message, falling back when there is none", () => {
-    expect(prErrorMessage(new Error("Not Found"), "fallback")).toBe("Not Found");
+    expect(prErrorMessage(new Error("Not Found"), "fallback")).toBe(
+      "Not Found",
+    );
     // A rejected action can carry an empty message; the panels still need words.
     expect(prErrorMessage(new Error(""), "fallback")).toBe("fallback");
     expect(prErrorMessage(null, "fallback")).toBe("fallback");

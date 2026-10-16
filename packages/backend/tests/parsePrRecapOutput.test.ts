@@ -3,7 +3,10 @@ import {
   parsePrRecapOutput,
   PR_RECAP_WALKTHROUGH_MARKER,
 } from "../convex/_prRecapWorkflow/prompts";
-import { OTHER_CHANGES_STEP_TITLE } from "../convex/_prRecapWorkflow/walkthrough";
+import {
+  ALL_CHANGES_STEP_TITLE,
+  OTHER_CHANGES_STEP_TITLE,
+} from "../convex/_prRecapWorkflow/walkthrough";
 
 const VALID_MARKDOWN = `## Summary
 
@@ -153,15 +156,26 @@ describe("parsePrRecapOutput", () => {
     ).toEqual({ ok: false, reason: "invalid_markdown" });
   });
 
-  test("rejects a walkthrough that is not JSON or has no steps", () => {
-    expect(
-      parsePrRecapOutput(
-        recapOutput(VALID_MARKDOWN, "<!doctype html><html></html>"),
+  test("keeps the markdown and lists every file when the walkthrough is unusable", () => {
+    for (const walkthrough of [
+      "<!doctype html><html></html>",
+      `{"steps":[]}`,
+      `{"steps":[{"title":"Cut off","summary":"The JSON en`,
+    ]) {
+      const parsed = parsePrRecapOutput(
+        recapOutput(VALID_MARKDOWN, walkthrough),
         CHANGED,
-      ),
-    ).toEqual({ ok: false, reason: "invalid_walkthrough" });
-    expect(
-      parsePrRecapOutput(recapOutput(VALID_MARKDOWN, `{"steps":[]}`), CHANGED),
-    ).toEqual({ ok: false, reason: "invalid_walkthrough" });
+      );
+      expect(parsed).toEqual({
+        ok: true,
+        markdown: VALID_MARKDOWN.trim(),
+        walkthrough: [
+          expect.objectContaining({
+            title: ALL_CHANGES_STEP_TITLE,
+            files: CHANGED,
+          }),
+        ],
+      });
+    }
   });
 });

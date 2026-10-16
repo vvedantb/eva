@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   INCOMPLETE_PR_RECAP_MESSAGE,
   isIncompleteReadyRecap,
@@ -25,20 +26,28 @@ interface RecapTourBodyProps {
  * The Recap tab body, shared by the sandbox panel and Documents: the native
  * walkthrough, else the HTML page a recap stored before walkthroughs existed,
  * else why there is nothing to show.
+ *
+ * The walkthrough scrolls in its own box, which this owns: its file diffs mount
+ * only when near that box (see `DiffFileLazyBody`), so they need the element.
  */
 export function RecapTourBody({ doc, repoId }: RecapTourBodyProps) {
+  // State, not a ref: the diffs need it as their IntersectionObserver root.
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const prNumber =
     doc.prUrl !== undefined ? prNumberFromGithubUrl(doc.prUrl) : undefined;
   const steps = doc.recapWalkthrough ?? [];
 
   if (steps.length > 0 && doc.prUrl !== undefined && prNumber !== undefined) {
     return (
-      <RecapWalkthrough
-        steps={steps}
-        prUrl={doc.prUrl}
-        prNumber={prNumber}
-        repoId={repoId}
-      />
+      <div ref={setScrollRoot} className="h-full min-h-0 overflow-auto">
+        <RecapWalkthrough
+          steps={steps}
+          prUrl={doc.prUrl}
+          prNumber={prNumber}
+          repoId={repoId}
+          scrollRoot={scrollRoot}
+        />
+      </div>
     );
   }
   if (doc.html) {

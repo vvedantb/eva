@@ -21,6 +21,27 @@ export type RecapWalkthroughStep = Infer<typeof recapWalkthroughStepValidator>;
 /** Title of the step the server adds for files the agent left out. */
 export const OTHER_CHANGES_STEP_TITLE = "Other changes";
 
+/** Title of the one step stored when the agent's walkthrough is unusable. */
+export const ALL_CHANGES_STEP_TITLE = "All changes";
+
+/**
+ * The walkthrough stored when the agent's JSON cannot be used: one step with
+ * every changed file. The markdown recap is still good, so the run succeeds
+ * and the reader still gets every diff, just without a guided order.
+ */
+export function fallbackRecapWalkthrough(
+  changedFiles: readonly string[],
+): RecapWalkthroughStep[] {
+  return [
+    {
+      title: ALL_CHANGES_STEP_TITLE,
+      summary:
+        "The guided walkthrough could not be built for this run. These are all the changed files. Regenerate to try again.",
+      files: [...changedFiles],
+    },
+  ];
+}
+
 const agentStepSchema = z.object({
   title: z.string().trim().min(1),
   summary: z.string().trim().min(1),

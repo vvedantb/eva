@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   authAction,
@@ -591,6 +591,26 @@ export const getByPrUrl = internalQuery({
   },
 });
 
+/** The run setup a ready recap records: shown in the badge, reused to revise. */
+const recapRunValidator = v.object({
+  model: aiModelValidator,
+  ...modelTraitsExecutionFields,
+});
+
+/**
+ * Every field is written, so a trait the run did not set is cleared rather
+ * than left over from an older run.
+ */
+function recapRunPatch(run: Infer<typeof recapRunValidator>) {
+  return {
+    prRecapModel: run.model,
+    reasoningLevel: run.reasoningLevel,
+    thinkingEnabled: run.thinkingEnabled,
+    use1mContext: run.use1mContext,
+    fastMode: run.fastMode,
+  };
+}
+
 /** Creates or updates a system-owned PR recap doc and resets its ProseMirror content. */
 async function upsertPrRecapDocImpl(
   ctx: MutationCtx,
@@ -602,6 +622,8 @@ async function upsertPrRecapDocImpl(
     headSha: string;
     content: string;
     recapWalkthrough?: RecapWalkthroughStep[];
+    /** Model and traits of the run that produced this recap (ready writes). */
+    run?: Infer<typeof recapRunValidator>;
     prRecapStatus: "pending" | "ready" | "error";
     prRecapError?: string;
     clearActiveWorkflowId?: boolean;
@@ -700,6 +722,7 @@ async function upsertPrRecapDocImpl(
       ...(args.recapWalkthrough !== undefined
         ? { recapWalkthrough: args.recapWalkthrough, html: undefined }
         : {}),
+      ...(args.run !== undefined ? recapRunPatch(args.run) : {}),
       ...(args.clearActiveWorkflowId ? { activeWorkflowId: undefined } : {}),
       ...(args.prRecapOrigin !== undefined
         ? { prRecapOrigin: args.prRecapOrigin }
@@ -719,6 +742,7 @@ async function upsertPrRecapDocImpl(
     title: args.title,
     content: args.content,
     recapWalkthrough: args.recapWalkthrough,
+    ...(args.run !== undefined ? recapRunPatch(args.run) : {}),
     prUrl: args.prUrl,
     prNumber: args.prNumber,
     headSha: args.headSha,
@@ -745,6 +769,7 @@ export const upsertPrRecapDoc = internalMutation({
     headSha: v.string(),
     content: v.string(),
     recapWalkthrough: v.optional(v.array(recapWalkthroughStepValidator)),
+    run: v.optional(recapRunValidator),
     prRecapStatus: prRecapStatusValidator,
     prRecapError: v.optional(v.string()),
     clearActiveWorkflowId: v.optional(v.boolean()),
@@ -829,7 +854,7 @@ export const startPrRecap = internalMutation({
     pendingPlaceholder: v.optional(v.string()),
     reviewerFeedback: v.optional(v.array(reviewerFeedbackItemValidator)),
     consumeAgentCommentIds: v.optional(v.array(v.id("docComments"))),
-    /** Absent falls back to the repo default; resolved here so the doc records the real model. */
+    /** Absent falls back to the repo default; resolved here so the run (and its ready write) carries the real model. */
     model: v.optional(aiModelValidator),
     ...modelTraitsExecutionFields,
   },
@@ -878,14 +903,8 @@ export const startPrRecap = internalMutation({
       ...(prRecapOrigin !== undefined ? { prRecapOrigin } : {}),
     });
 
-    // Written unconditionally so unsetting a trait clears it from the doc.
-    await ctx.db.patch(docId, {
-      prRecapModel: model,
-      reasoningLevel: args.reasoningLevel,
-      thinkingEnabled: args.thinkingEnabled,
-      use1mContext: args.use1mContext,
-      fastMode: args.fastMode,
-    });
+    // The model and traits are recorded by the ready write (`recapRunPatch`),
+    // not here: a run that fails must not relabel the recap still on show.
 
     const workflowId = await workflow.start(
       ctx,
