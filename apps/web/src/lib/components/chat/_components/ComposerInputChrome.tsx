@@ -40,6 +40,11 @@ import { isComposerVisible } from "@/lib/components/chat/_components/composerVis
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
+import { usePendingPullRequests } from "@/lib/contexts/PendingPullRequestsContext";
+import {
+  PULL_REQUEST_DRAG_MIME,
+  decodePullRequestDragPayload,
+} from "@/lib/components/chat/pullRequestContext";
 
 // `whitespace-pre!` rather than `nowrap`: both keep the pill on one line, but
 // `nowrap` still collapses whitespace, and Chrome then eats the trailing space
@@ -106,6 +111,9 @@ export function ComposerInputChrome({
   onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
+  // A PR row dropped here becomes a context chip. Absent outside ChatBody
+  // (Manager Ave), where the drop is left to the browser.
+  const pullRequests = usePendingPullRequests();
   // `layoutId` is global unless a LayoutGroup namespaces it, and several
   // composers stay mounted at once (cached session shells, Manager Ave). Two
   // composers sharing an id put one in the follower slot of Motion's shared
@@ -232,6 +240,17 @@ export function ComposerInputChrome({
             maxFiles={MAX_CHAT_ATTACHMENTS}
             maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
             onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
+            dataDrop={
+              pullRequests
+                ? {
+                    type: PULL_REQUEST_DRAG_MIME,
+                    onDrop: (payload) => {
+                      const pr = decodePullRequestDragPayload(payload);
+                      if (pr) pullRequests.add(pr);
+                    },
+                  }
+                : undefined
+            }
             inputGroupClassName={cn(
               // Height interpolates to/from `auto` so the conversation viewport
               // grows with the composer instead of jumping when the pill snaps.

@@ -29,6 +29,8 @@ import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
+import { PendingPullRequestChips } from "@/lib/components/chat/PendingPullRequestChips";
+import { appendPullRequestsToPrompt } from "@/lib/components/chat/pullRequestContext";
 import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
 import {
   collectThreadFindDocuments,
@@ -51,6 +53,10 @@ import {
 } from "@/lib/contexts/PendingCitationsContext";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
+import {
+  PendingPullRequestsProvider,
+  usePendingPullRequests,
+} from "@/lib/contexts/PendingPullRequestsContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
@@ -285,7 +291,9 @@ interface ChatBodyProps {
 export function ChatBody(props: ChatBodyProps) {
   return (
     <PendingCitationsProvider>
-      <ChatBodyInner {...props} />
+      <PendingPullRequestsProvider>
+        <ChatBodyInner {...props} />
+      </PendingPullRequestsProvider>
     </PendingCitationsProvider>
   );
 }
@@ -338,6 +346,7 @@ function ChatBodyInner({
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
   const webmcp = usePendingWebMcp();
+  const pullRequests = usePendingPullRequests();
   const sendWithPendingContext = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
@@ -345,9 +354,14 @@ function ChatBodyInner({
     const sentCitations = citations?.items ?? [];
     const sentSnapshots = snapshots?.items ?? [];
     const sentWebMcp = webmcp?.items ?? [];
+    const sentPullRequests = pullRequests?.items ?? [];
     const withCitations = appendCitationsToPrompt(content, sentCitations);
-    const withSnapshots = appendSnapshotsToPrompt(
+    const withPullRequests = appendPullRequestsToPrompt(
       withCitations,
+      sentPullRequests,
+    );
+    const withSnapshots = appendSnapshotsToPrompt(
+      withPullRequests,
       sentSnapshots.map((item) => item.snapshot),
     );
     const withWebMcp = appendWebMcpToPrompt(
@@ -369,6 +383,7 @@ function ChatBodyInner({
         for (const citation of sentCitations) citations?.remove(citation.id);
         for (const item of sentSnapshots) snapshots?.remove(item.id);
         for (const item of sentWebMcp) webmcp?.remove(item.id);
+        for (const pr of sentPullRequests) pullRequests?.remove(pr.url);
       },
       () => {
         // The send handler already raised the failure toast (with the typed
@@ -381,7 +396,8 @@ function ChatBodyInner({
     (hasPendingContext ?? false) ||
     (citations?.items.length ?? 0) > 0 ||
     (snapshots?.items.length ?? 0) > 0 ||
-    (webmcp?.items.length ?? 0) > 0;
+    (webmcp?.items.length ?? 0) > 0 ||
+    (pullRequests?.items.length ?? 0) > 0;
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
@@ -1001,6 +1017,7 @@ function ChatBodyInner({
                     <PendingCitationChips />
                     <PendingSnapshotChips />
                     <PendingWebMcpChips />
+                    <PendingPullRequestChips />
                     {preInputContent}
                   </>
                 }
