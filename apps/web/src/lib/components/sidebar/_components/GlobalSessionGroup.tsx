@@ -32,6 +32,7 @@ import {
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { previewSessions } from "@/lib/components/sidebar/_utils/sessionListPreview";
 import {
+  filterSessionsStartedBy,
   sortSessionsForSidebar,
   type SessionListMode,
   type SessionSortOrder,
@@ -63,6 +64,8 @@ interface GlobalSessionGroupProps {
   sessionSortOrder: SessionSortOrder;
   sessionPreviewCount: number;
   listMode: SessionListMode;
+  /** Show only sessions the current user started. */
+  onlyMine: boolean;
 }
 
 /**
@@ -73,7 +76,7 @@ interface GlobalSessionGroupProps {
 export function GlobalSessionGroup({
   repo,
   pathname,
-  activeSessions,
+  activeSessions: allActiveSessions,
   open,
   onOpenChange,
   onNavigate,
@@ -82,13 +85,21 @@ export function GlobalSessionGroup({
   sessionSortOrder,
   sessionPreviewCount,
   listMode,
+  onlyMine,
 }: GlobalSessionGroupProps) {
   const navigate = useNavigate();
   const [isListExpanded, setIsListExpanded] = useState(false);
-  const archivedSessions = useQuery(
+  const allArchivedSessions = useQuery(
     api.sessions.listArchived,
     listMode === "archived" ? { repoId: repo._id } : "skip",
   );
+  const currentUserId = useQuery(api.auth.me, onlyMine ? {} : "skip");
+  const activeSessions = onlyMine
+    ? filterSessionsStartedBy(allActiveSessions, currentUserId)
+    : allActiveSessions;
+  const archivedSessions = onlyMine
+    ? filterSessionsStartedBy(allArchivedSessions, currentUserId)
+    : allArchivedSessions;
   // Parallel chats beyond Main, grouped under their session row. One query
   // per repo group (not per session), plus one for which chats are running.
   const extraChats = useQuery(

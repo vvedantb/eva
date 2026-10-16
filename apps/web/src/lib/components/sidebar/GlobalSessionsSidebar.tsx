@@ -181,6 +181,7 @@ export function GlobalSessionsSidebar({
                       sessionSortOrder={settings.sessionSortOrder}
                       sessionPreviewCount={settings.sessionPreviewCount}
                       listMode={settings.listMode}
+                      onlyMine={settings.onlyMine}
                       onRenameRequest={(session, groupRepo) => {
                         setSessionToRename({ session, repo: groupRepo });
                         setRenameValue(session.title);
