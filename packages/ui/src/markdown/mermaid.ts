@@ -14,7 +14,8 @@ import type { DiagramPlugin } from "streamdown";
  */
 
 type MermaidTheme = Extract<MermaidConfig["theme"], "default" | "dark">;
-type RenderResult = { svg: string };
+/** `id` is the element id mermaid baked into `svg` (its styles and markers use it). */
+type RenderResult = { svg: string; id: string };
 type Entry = {
   promise: Promise<RenderResult>;
   status: "pending" | "done" | "error";
@@ -47,7 +48,10 @@ function renderNow(theme: MermaidTheme, code: string): Promise<RenderResult> {
   const job = queue.then(async () => {
     const plugin = await loadPlugin();
     renderCount += 1;
-    return plugin.getMermaid({ theme }).render(`eva-mermaid-${renderCount}`, code);
+    // The `-svg` suffix keeps one id from being a prefix of another.
+    const id = `eva-mermaid-${renderCount}-svg`;
+    const { svg } = await plugin.getMermaid({ theme }).render(id, code);
+    return { svg, id };
   });
   queue = job.catch(() => undefined);
   return job;
@@ -60,9 +64,11 @@ function cacheKey(theme: MermaidTheme, code: string): string {
 function store(key: string, entry: Entry): void {
   cache.delete(key);
   cache.set(key, entry);
-  if (cache.size <= CACHE_LIMIT) return;
-  const oldest = cache.keys().next().value;
-  if (oldest !== undefined && !listeners.has(oldest)) cache.delete(oldest);
+  // Drop the oldest entries nobody is watching; mounted diagrams stay.
+  for (const candidate of cache.keys()) {
+    if (cache.size <= CACHE_LIMIT) return;
+    if (!listeners.has(candidate)) cache.delete(candidate);
+  }
 }
 
 function request(theme: MermaidTheme, code: string): Entry {
@@ -74,6 +80,8 @@ function request(theme: MermaidTheme, code: string): Entry {
   const entry: Entry = { promise, status: "pending" };
   store(key, entry);
   const settle = (status: Entry["status"]) => {
+    // An entry evicted (or replaced) while pending stays gone.
+    if (cache.get(key)?.promise !== promise) return;
     store(key, { promise, status });
     for (const notify of listeners.get(key) ?? []) notify();
   };
@@ -118,7 +126,13 @@ export const mermaidPlugin: DiagramPlugin = {
   language: "mermaid",
   getMermaid: () => ({
     initialize: () => {},
-    render: (_id, code) => request(readTheme(), code).promise,
+    // The cached SVG is shared, so give each copy the caller's unique id:
+    // two copies with one id (inline + fullscreen, or a repeated diagram)
+    // would share `#id` styles and `url(#id_marker)` references.
+    render: (id, code) =>
+      request(readTheme(), code).promise.then((result) => ({
+        svg: result.svg.replaceAll(result.id, id),
+      })),
   }),
 };
 

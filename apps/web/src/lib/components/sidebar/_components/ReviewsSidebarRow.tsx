@@ -17,7 +17,10 @@ import {
   SharedLayoutNavSurface,
   sidebarNavLinkClass,
 } from "@/lib/components/sidebar/SharedLayoutNav";
-import { useOpenPrOnGithubClick } from "@/lib/hooks/useOpenPrsOnGithub";
+import {
+  useOpenPrOnGithubClick,
+  useOpenPrsOnGithub,
+} from "@/lib/hooks/useOpenPrsOnGithub";
 
 /** How long the pointer must rest on a row before it counts as intent. */
 const HOVER_INTENT_MS = 90;
@@ -56,6 +59,8 @@ export function ReviewsSidebarRow({
   onRename,
 }: ReviewsSidebarRowProps) {
   const openPrOnGithubClick = useOpenPrOnGithubClick();
+  // A plain click leaves Eva for GitHub, so warming the in-app review is waste.
+  const prefetch = useOpenPrsOnGithub() ? undefined : onPrefetch;
   // Sweeping the pointer down the list should not fire a fetch per row, so the
   // warm-up waits for the pointer to settle.
   const intentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,10 +88,11 @@ export function ReviewsSidebarRow({
             }}
             onPointerEnter={() => {
               cancelIntent();
-              intentTimer.current = setTimeout(onPrefetch, HOVER_INTENT_MS);
+              if (prefetch === undefined) return;
+              intentTimer.current = setTimeout(prefetch, HOVER_INTENT_MS);
             }}
             onPointerLeave={cancelIntent}
-            onFocus={onPrefetch}
+            onFocus={prefetch}
             className={cn(
               sidebarNavLinkClass(isActive),
               "flex-col items-start gap-0.5 py-2.5",
