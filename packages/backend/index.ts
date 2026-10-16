@@ -24,6 +24,10 @@ export {
   isViewableRecap,
 } from "./convex/_prRecapWorkflow/recapState";
 export {
+  OTHER_CHANGES_STEP_TITLE,
+  type RecapWalkthroughStep,
+} from "./convex/_prRecapWorkflow/walkthrough";
+export {
   CONNECTOR_ENV_KEYS,
   CONNECTOR_PROVIDERS,
   CONNECTOR_LABEL,

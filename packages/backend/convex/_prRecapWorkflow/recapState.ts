@@ -1,9 +1,10 @@
 /**
  * The one definition of "this recap is really ready".
  *
- * `prRecapStatus: "ready"` cannot express that the HTML walkthrough actually
- * arrived, so ready-with-no-html was a storable illegal state (a model that
- * returned narration instead of HTML). The write path now enforces the
+ * `prRecapStatus: "ready"` cannot express that the walkthrough actually
+ * arrived, so ready-with-no-walkthrough was a storable illegal state (a model
+ * that returned narration instead of a walkthrough). A walkthrough is the
+ * structured `recapWalkthrough` steps, or the HTML page older recaps stored. The write path now enforces the
  * invariant here, and the recap views read the same helper so a row written
  * before enforcement still renders as a failure rather than a blank tab.
  *
@@ -13,6 +14,12 @@
 
 type PrRecapStatus = "pending" | "ready" | "error";
 
+/** The fields that can carry a walkthrough: structured steps, or legacy HTML. */
+type RecapWalkthroughFields = {
+  recapWalkthrough?: ReadonlyArray<object>;
+  html?: string;
+};
+
 /** Stored on the recap doc when the model response is not a complete recap. */
 export const INCOMPLETE_PR_RECAP_ERROR =
   "We couldn't generate a complete recap. Generate again to retry.";
@@ -21,28 +28,29 @@ export const INCOMPLETE_PR_RECAP_ERROR =
 export const INCOMPLETE_PR_RECAP_MESSAGE =
   "The walkthrough wasn't saved. Generate again to retry.";
 
-/** A recap is only viewable when it carries a non-blank HTML walkthrough. */
-function hasRecapWalkthrough(html: string | undefined): boolean {
-  return html !== undefined && html.trim() !== "";
+/** A recap is only viewable when it carries steps or a non-blank HTML page. */
+function hasRecapWalkthrough(doc: RecapWalkthroughFields): boolean {
+  if (doc.recapWalkthrough !== undefined && doc.recapWalkthrough.length > 0) {
+    return true;
+  }
+  return doc.html !== undefined && doc.html.trim() !== "";
 }
 
 /**
  * A doc stored "ready" without a walkthrough — the illegal state this module
  * exists to name. New writes cannot produce it; older rows still can.
  */
-export function isIncompleteReadyRecap(doc: {
-  prRecapStatus?: PrRecapStatus;
-  html?: string;
-}): boolean {
-  return doc.prRecapStatus === "ready" && !hasRecapWalkthrough(doc.html);
+export function isIncompleteReadyRecap(
+  doc: RecapWalkthroughFields & { prRecapStatus?: PrRecapStatus },
+): boolean {
+  return doc.prRecapStatus === "ready" && !hasRecapWalkthrough(doc);
 }
 
 /** A recap the reader can actually open: ready and carrying its walkthrough. */
-export function isViewableRecap(doc: {
-  prRecapStatus?: PrRecapStatus;
-  html?: string;
-}): boolean {
-  return doc.prRecapStatus === "ready" && hasRecapWalkthrough(doc.html);
+export function isViewableRecap(
+  doc: RecapWalkthroughFields & { prRecapStatus?: PrRecapStatus },
+): boolean {
+  return doc.prRecapStatus === "ready" && hasRecapWalkthrough(doc);
 }
 
 /**
@@ -50,13 +58,14 @@ export function isViewableRecap(doc: {
  * walkthrough becomes an error so the doc never claims a recap it cannot show;
  * a genuine "ready" drops any stale error text.
  */
-export function resolvePrRecapWrite(input: {
-  prRecapStatus: PrRecapStatus;
-  html: string | undefined;
-  prRecapError: string | undefined;
-}): { prRecapStatus: PrRecapStatus; prRecapError: string | undefined } {
+export function resolvePrRecapWrite(
+  input: RecapWalkthroughFields & {
+    prRecapStatus: PrRecapStatus;
+    prRecapError: string | undefined;
+  },
+): { prRecapStatus: PrRecapStatus; prRecapError: string | undefined } {
   if (input.prRecapStatus === "ready") {
-    return hasRecapWalkthrough(input.html)
+    return hasRecapWalkthrough(input)
       ? { prRecapStatus: "ready", prRecapError: undefined }
       : {
           prRecapStatus: "error",

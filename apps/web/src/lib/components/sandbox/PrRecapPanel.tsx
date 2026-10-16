@@ -18,6 +18,7 @@ import {
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
   ActivityTasks,
+  Button,
   Spinner,
   Surface,
   Tabs,
@@ -32,9 +33,10 @@ import {
 } from "@tabler/icons-react";
 import { Markdown } from "@eva/ui/markdown";
 import { DynamicLink } from "@/lib/components/DynamicLink";
-import { HtmlPreviewFrame } from "@/lib/components/docs/_components/HtmlPreviewFrame";
 import { RecapGenerateControls } from "@/lib/components/sandbox/_components/RecapGenerateControls";
 import { RecapRunBadge } from "@/lib/components/sandbox/_components/RecapRunBadge";
+import { RecapStaleBanner } from "@/lib/components/sandbox/_components/RecapStaleBanner";
+import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBody";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -259,6 +261,30 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
         </div>
       ) : null}
 
+      {recapDoc.headSha !== undefined &&
+      isViewableRecap(recapDoc) &&
+      !isPending ? (
+        <RecapStaleBanner
+          prUrl={prUrl}
+          repoId={repoId}
+          recapSha={recapDoc.headSha}
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 shrink-0"
+              disabled={isGenerating}
+              onClick={() => {
+                void handleGenerate();
+              }}
+            >
+              {isGenerating ? <Spinner size="sm" /> : null}
+              Regenerate
+            </Button>
+          }
+        />
+      ) : null}
+
       {isPending && !isStalled && (
         <div className="shrink-0 px-3 py-2">
           <Surface density="tight" className="space-y-2">
@@ -283,20 +309,10 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
 
       <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
         {view === "recap" ? (
-          recapDoc.html ? (
-            <HtmlPreviewFrame html={recapDoc.html} title="PR recap" />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {isIncompleteReady || isErrored
-                ? INCOMPLETE_PR_RECAP_MESSAGE
-                : "No recap yet. It is created the next time this review runs."}
-            </p>
-          )
+          <RecapTourBody doc={recapDoc} repoId={repoId} />
         ) : (
           <Surface>
-            <Markdown className="text-sm">
-              {recapDoc.content}
-            </Markdown>
+            <Markdown className="text-sm">{recapDoc.content}</Markdown>
           </Surface>
         )}
       </div>

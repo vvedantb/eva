@@ -9,6 +9,7 @@ import {
   api,
   INCOMPLETE_PR_RECAP_MESSAGE,
   isIncompleteReadyRecap,
+  isViewableRecap,
 } from "@eva/backend";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -46,7 +47,9 @@ import {
 } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocContentTab } from "./DocContentTab";
-import { HtmlPreviewFrame } from "./HtmlPreviewFrame";
+import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBody";
+import { RecapStaleBanner } from "@/lib/components/sandbox/_components/RecapStaleBanner";
+import { DocRecapRegenerateButton } from "./DocRecapRegenerateButton";
 import { DocPresenceFacepile } from "./DocPresenceFacepile";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -62,7 +65,7 @@ export function DocRecapViewer({
   activeTab: DocViewerTab;
 }) {
   const navigate = useNavigate();
-  const { basePath } = useRepo();
+  const { basePath, repoId } = useRepo();
   const streaming = useQuery(api.streaming.get, {
     entityId: `pr-recap:${doc._id}`,
   });
@@ -282,6 +285,25 @@ export function DocRecapViewer({
           ) : null}
         </div>
       ) : null}
+      {doc.prUrl !== undefined &&
+      doc.headSha !== undefined &&
+      isViewableRecap(doc) &&
+      !isRecapPending ? (
+        <div className="mx-3 mb-2 overflow-hidden rounded-surface sm:mx-4">
+          <RecapStaleBanner
+            prUrl={doc.prUrl}
+            repoId={repoId}
+            recapSha={doc.headSha}
+            action={
+              <DocRecapRegenerateButton
+                doc={doc}
+                prUrl={doc.prUrl}
+                repoId={repoId}
+              />
+            }
+          />
+        </div>
+      ) : null}
       <AnimatePresence>
         {isRecapPending && !isRecapStalled ? (
           <m.div
@@ -373,15 +395,9 @@ export function DocRecapViewer({
                 value="recap"
                 className="mt-0 h-full min-h-0 overflow-hidden"
               >
-                {doc.html ? (
-                  <HtmlPreviewFrame html={doc.html} title="PR recap" />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {isRecapIncompleteReady || isRecapErrored
-                      ? INCOMPLETE_PR_RECAP_MESSAGE
-                      : "No recap generated yet. It is created the next time this review runs."}
-                  </p>
-                )}
+                <div className="h-full overflow-auto">
+                  <RecapTourBody doc={doc} repoId={repoId} />
+                </div>
               </TabsContent>
             </m.div>
           ) : (

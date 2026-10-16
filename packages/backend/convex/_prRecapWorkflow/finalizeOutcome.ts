@@ -1,9 +1,10 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
+import type { RecapWalkthroughStep } from "./walkthrough";
 
 export type PrRecapOutcome =
-  | { kind: "ready"; content: string; html: string }
+  | { kind: "ready"; content: string; walkthrough: RecapWalkthroughStep[] }
   | { kind: "error"; message: string }
   | { kind: "skipped"; message: string };
 
@@ -34,7 +35,7 @@ export async function finalizePrRecapOutcome(
       title: `PR #${params.prNumber} — ${params.prTitle}`,
       headSha: params.headSha,
       content: params.outcome.content,
-      html: params.outcome.html,
+      recapWalkthrough: params.outcome.walkthrough,
       prRecapStatus: "ready",
       clearActiveWorkflowId: true,
     });
