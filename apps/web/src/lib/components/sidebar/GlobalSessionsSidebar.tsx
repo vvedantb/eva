@@ -23,6 +23,7 @@ import { linkedSessionGroups } from "@/lib/components/sidebar/_utils/linkedSessi
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
+  filterSessionsStartedBy,
   sessionActivityAt,
   sortAppsForSidebar,
   SESSIONS_APP_GROUPS_OPEN_KEY,
@@ -145,6 +146,14 @@ export function GlobalSessionsSidebar({
   // The only watch on the lists: the rows are handed to each group as a prop.
   // The list mode picks active or archived rows, so linked groups form in both.
   const sessionsByRepoId = useQueries(sessionListQueries(listMode, repos));
+  const currentUserId = useQuery(api.auth.me, settings.onlyMine ? {} : "skip");
+  // "Only my sessions" drops a teammate's rows before any group sees them.
+  const visibleSessions = (repoId: RepoRow["_id"]) => {
+    const rows = listedSessions(sessionsByRepoId[repoId]);
+    return settings.onlyMine
+      ? filterSessionsStartedBy(rows, currentUserId)
+      : rows;
+  };
 
   const latestActivityByAppId = new Map<string, number>();
   for (const [repoId, result] of Object.entries(sessionsByRepoId)) {
@@ -170,7 +179,7 @@ export function GlobalSessionsSidebar({
       : linkedSessionGroups(
           repos.map((repo) => ({
             repo,
-            sessions: listedSessions(sessionsByRepoId[repo._id]) ?? [],
+            sessions: visibleSessions(repo._id) ?? [],
           })),
         );
   const linkedSessionIds = new Set<string>(
@@ -248,9 +257,7 @@ export function GlobalSessionsSidebar({
                       key={repo._id}
                       repo={repo}
                       pathname={pathname}
-                      sessions={listedSessions(
-                        sessionsByRepoId[repo._id],
-                      )?.filter(
+                      sessions={visibleSessions(repo._id)?.filter(
                         (session) => !linkedSessionIds.has(session._id),
                       )}
                       open={isGroupOpen(repo)}
