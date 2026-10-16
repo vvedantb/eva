@@ -17,7 +17,11 @@ import {
   type ChatSourceStoredFields,
   type RepoCache,
 } from "./_chatSource/helpers";
-import { renderChatLogMarkdown } from "@eva/shared/chatLog";
+import {
+  CHAT_LOG_AGENT_BODY_MAX,
+  CHAT_LOG_AGENT_TITLE_MAX,
+  renderChatLogMarkdown,
+} from "@eva/shared/chatLog";
 
 /**
  * A chat's Log: append-only decisions, changes, research, answered questions
@@ -29,10 +33,15 @@ import { renderChatLogMarkdown } from "@eva/shared/chatLog";
  * AskUserQuestion) and `recordTurnChange` (a turn that committed).
  */
 
-const TITLE_LIMIT = 200;
-const BODY_LIMIT = 4_000;
-/** System change entries keep only the start of the turn's reply. */
-const CHANGE_BODY_LIMIT = 1_200;
+/** User notes may run longer; agent and system entries stay skimmable. */
+const LIMITS: Record<
+  Doc<"chatLogEntries">["author"],
+  { title: number; body: number }
+> = {
+  user: { title: 200, body: 4_000 },
+  agent: { title: CHAT_LOG_AGENT_TITLE_MAX, body: CHAT_LOG_AGENT_BODY_MAX },
+  system: { title: CHAT_LOG_AGENT_TITLE_MAX, body: 4_000 },
+};
 /** Cap on the catch-up block a fresh agent session gets. */
 export const CHAT_LOG_DIGEST_BUDGET = 8_000;
 
@@ -105,14 +114,15 @@ async function insertEntry(
     afterSha?: string;
   },
 ): Promise<Id<"chatLogEntries">> {
-  const body = entry.body ? clip(entry.body, BODY_LIMIT) : "";
+  const limits = LIMITS[entry.author];
+  const body = entry.body ? clip(entry.body, limits.body) : "";
   const repoId = await repoIdForSource(ctx, source);
   return ctx.db.insert("chatLogEntries", {
     ...source,
     ...(repoId ? { repoId } : {}),
     kind: entry.kind,
     author: entry.author,
-    title: clip(entry.title, TITLE_LIMIT) || "Untitled",
+    title: clip(entry.title, limits.title) || "Untitled",
     ...(body ? { body } : {}),
     ...(entry.supersedesId ? { supersedesId: entry.supersedesId } : {}),
     ...(entry.messageId ? { messageId: entry.messageId } : {}),
@@ -328,9 +338,25 @@ export async function recordAnsweredQuestion(
   });
 }
 
+/** First sentence of the reply, without list or emphasis markup. */
+function turnHeadline(content: string): string {
+  const line =
+    content
+      .split("\n")
+      .map((text) => text.trim())
+      .find(Boolean) ?? "";
+  const plain = line
+    .replace(/^(?:[-*]|\d+\.)\s+/, "")
+    .replaceAll("**", "")
+    .replaceAll("`", "");
+  return plain.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? plain;
+}
+
 /**
- * Logs the commits one turn made, once per reply. Skipped when the turn
- * committed nothing.
+ * Logs the commits one turn made, once per reply. The commit range goes onto
+ * the agent's own change entry from this turn when there is one; otherwise
+ * Eva adds a one-line entry. Skipped when the turn committed nothing, or when
+ * HEAD only moved back to an already-logged commit (a branch switch).
  */
 export async function recordTurnChange(
   ctx: MutationCtx,
@@ -344,17 +370,33 @@ export async function recordTurnChange(
     .query("chatLogEntries")
     .withIndex("by_message", (q) => q.eq("messageId", message._id))
     .collect();
-  if (existing.some((row) => row.kind === "change" && row.author === "system")) {
+  if (existing.some((row) => row.kind === "change")) return;
+  const source = await chatSourceFieldsForEntityId(ctx.db, parentId);
+  const sourceArg = source ? chatSourceArgFromFields(source) : null;
+  if (!source || !sourceArg) return;
+  const rows = await listRowsForChatSource(ctx, "chatLogEntries", sourceArg);
+  if (rows.some((row) => row.afterSha === afterSha)) return;
+  // Newest first; the reply row exists from the turn's start, so later agent
+  // entries belong to this turn.
+  const agentChange = rows.find(
+    (row) =>
+      row.kind === "change" &&
+      row.author === "agent" &&
+      row.afterSha === undefined &&
+      row._creationTime >= message._creationTime,
+  );
+  if (agentChange) {
+    await ctx.db.patch(agentChange._id, {
+      messageId: message._id,
+      beforeSha,
+      afterSha,
+    });
     return;
   }
-  const source = await chatSourceFieldsForEntityId(ctx.db, parentId);
-  if (!source) return;
-  const firstLine = message.content.trim().split("\n")[0] ?? "";
   await insertEntry(ctx, source, {
     kind: "change",
     author: "system",
-    title: firstLine || "Committed changes",
-    body: clip(message.content, CHANGE_BODY_LIMIT),
+    title: turnHeadline(message.content) || "Committed changes",
     messageId: message._id,
     beforeSha,
     afterSha,
