@@ -44,6 +44,7 @@ import {
 } from "@/lib/components/priority/priorityMeta";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
 import {
   FieldsSection,
@@ -105,6 +106,7 @@ export function StatusFieldsSection({
   isOwner,
   allTags,
 }: StatusFieldsSectionProps) {
+  const simpleView = useSimpleView();
   const viewVercelDeployment = useViewVercelDeployment();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
@@ -399,45 +401,47 @@ export function StatusFieldsSection({
           </SelectContent>
         </Select>
 
-        <div className={FIELD_ROW_CLASS}>
-          <ModelSelectWithTraits
-            value={currentModel}
-            options={modelOptions}
-            onValueChange={() => undefined}
-            accounts={accounts}
-            accountId={task?.providerAccountId ?? null}
-            onSelectionChange={(nextModel, nextAccountId) => {
-              if (modelLockReason) return;
-              if (isOwner) {
-                updateTask({
-                  id: taskId,
-                  model: nextModel,
-                  providerAccountId: resolveAccountId(nextAccountId) ?? null,
-                });
-                return;
+        {simpleView ? null : (
+          <div className={FIELD_ROW_CLASS}>
+            <ModelSelectWithTraits
+              value={currentModel}
+              options={modelOptions}
+              onValueChange={() => undefined}
+              accounts={accounts}
+              accountId={task?.providerAccountId ?? null}
+              onSelectionChange={(nextModel, nextAccountId) => {
+                if (modelLockReason) return;
+                if (isOwner) {
+                  updateTask({
+                    id: taskId,
+                    model: nextModel,
+                    providerAccountId: resolveAccountId(nextAccountId) ?? null,
+                  });
+                  return;
+                }
+                updateTask({ id: taskId, model: nextModel });
+              }}
+              canSelectTeamWhilePersonal={isOwner}
+              disabled={modelLockReason !== undefined}
+              traits={storedRunTraits(task)}
+              onTraitsChange={(partial) =>
+                updateTask({ id: taskId, ...toRunTraitArgs(partial) })
               }
-              updateTask({ id: taskId, model: nextModel });
-            }}
-            canSelectTeamWhilePersonal={isOwner}
-            disabled={modelLockReason !== undefined}
-            traits={storedRunTraits(task)}
-            onTraitsChange={(partial) =>
-              updateTask({ id: taskId, ...toRunTraitArgs(partial) })
-            }
-            className={`px-0 ${FIELD_TEXT_CLASS}`}
-          />
-          {modelLockReason ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <IconInfoCircle
-                  size={12}
-                  className="cursor-help text-muted-foreground"
-                />
-              </TooltipTrigger>
-              <TooltipContent>{modelLockReason}</TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
+              className={`px-0 ${FIELD_TEXT_CLASS}`}
+            />
+            {modelLockReason ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <IconInfoCircle
+                    size={12}
+                    className="cursor-help text-muted-foreground"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{modelLockReason}</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+        )}
 
         <AnimatePresence initial={false}>
           {!task?.projectId ? (
@@ -458,7 +462,9 @@ export function StatusFieldsSection({
                   className={`h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent [&>svg:last-child]:hidden ${FIELD_TEXT_CLASS}`}
                 />
               ) : (
-                <div className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}>
+                <div
+                  className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}
+                >
                   <IconGitBranch size={14} className="text-muted-foreground" />
                   <span>{baseBranch}</span>
                   <Tooltip>

@@ -157,7 +157,7 @@ export function fleetTools(
     defineTool({
       name: "get_agent_state",
       description:
-        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight.',
+        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight. A session in a linked-session group also returns "sessionGroup": its name and every member across repos.',
       mutating: false,
       input: {
         kind: agentKindArg,
@@ -223,7 +223,7 @@ export function fleetTools(
     defineTool({
       name: "create_session",
       description:
-        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes.",
+        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes. Called from a session, the new session joins your linked-session group (see rename_session_group and remove_from_session_group).",
       mutating: true,
       input: {
         repoName: z
@@ -347,6 +347,10 @@ export function fleetTools(
             linkedRepoIds,
             repoGroupId,
             installDependencies,
+            // A session's agent links what it spins up, so the UI can group them.
+            ...(credentials.entityKind === "session" && entityId
+              ? { fromSessionId: entityId }
+              : {}),
           },
         );
 
@@ -364,6 +368,79 @@ export function fleetTools(
           linkedRepos: created.linkedRepos,
           status: "created",
         });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // rename_session_group / remove_from_session_group
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const sessionGroupTargetArg = z
+    .string()
+    .optional()
+    .describe(
+      "Session id of any member of the group. Omit to use your own session.",
+    );
+
+  /** The session a group tool acts on: the given id, or the caller's own. */
+  const groupTargetSessionId = (sessionId: string | undefined) =>
+    sessionId ??
+    (credentials.entityKind === "session" ? entityId : undefined);
+
+  tools.push(
+    defineTool({
+      name: "rename_session_group",
+      description:
+        'Name the linked-session group a session belongs to (sessions spun up from one another with create_session). The name shows in the Eva sidebar and session header. Pass an empty name to clear it; the group then shows its oldest session\'s title. get_agent_state returns a session\'s group as "sessionGroup".',
+      mutating: true,
+      input: {
+        sessionId: sessionGroupTargetArg,
+        name: z.string().describe("The new group name. Empty clears it."),
+      },
+      handler: async ({ sessionId, name }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        const target = groupTargetSessionId(sessionId);
+        if (!target) {
+          return errorResult(
+            'Pass "sessionId": you are not running in a session.',
+          );
+        }
+        const result = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorUpdateSessionGroup,
+          {
+            clerkUserId,
+            sessionId: target,
+            change: { kind: "rename", name },
+          },
+        );
+        return textResult({ sessionId: target, ...result });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "remove_from_session_group",
+      description:
+        "Take a session out of its linked-session group. The session itself keeps running. A group left with one session dissolves, so removing the second-last member ends the group.",
+      mutating: true,
+      input: {
+        sessionId: sessionGroupTargetArg,
+      },
+      handler: async ({ sessionId }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        const target = groupTargetSessionId(sessionId);
+        if (!target) {
+          return errorResult(
+            'Pass "sessionId": you are not running in a session.',
+          );
+        }
+        await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorUpdateSessionGroup,
+          { clerkUserId, sessionId: target, change: { kind: "remove" } },
+        );
+        return textResult({ sessionId: target, status: "removed" });
       },
     }),
   );

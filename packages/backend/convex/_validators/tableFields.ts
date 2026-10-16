@@ -799,6 +799,11 @@ export const sessionFields = {
   /** Session this one was forked from ("Fork session"). Informational. */
   forkedFromSessionId: v.optional(v.id("sessions")),
   /**
+   * Linked-session group. Set when a session's agent spins up another via
+   * `create_session`; cleared by "Remove from group".
+   */
+  sessionGroupId: v.optional(v.id("sessionGroups")),
+  /**
    * Source sandbox to Vercel-fork for this session's first sandbox, instead of
    * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
    * state) carry over.
@@ -811,6 +816,17 @@ export const sessionFields = {
    * something Vercel documents.
    */
   forkRestartsSource: v.optional(v.boolean()),
+};
+
+/**
+ * Linked sessions across repos: one agent spun up the others. Members point
+ * here through `sessions.sessionGroupId`. A group always has two or more
+ * members; removing the second-last one dissolves it.
+ */
+export const sessionGroupFields = {
+  /** User-set name. Unset: the UI shows the oldest member's title. */
+  name: v.optional(v.string()),
+  createdBy: v.id("users"),
 };
 
 /**
