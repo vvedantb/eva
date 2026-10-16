@@ -19,6 +19,7 @@ import {
 import {
   execHandle,
   resolveSandboxContext,
+  getRunningSandboxHandle,
   getSandboxHandle,
   ensureSandboxRunning,
   ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
@@ -2166,8 +2167,8 @@ export const prewarmEntityDaemon = internalAction({
  * killed mid-work with no snapshot (filesystem rolls back to the pre-turn
  * snapshot on the next resume). A durable turn's lease renewal schedules
  * this (`renewTurnLease`) for every turn, quick-task runs included. Best-effort: a failed extension must
- * never fail the turn, and it must not resume a stopped sandbox (getting a
- * handle does not exec; extendTimeout on a stopped sandbox errors harmlessly).
+ * never fail the turn, and it must not resume a stopped sandbox — the SDK's
+ * extendTimeout auto-resumes, so it runs only on a VM reported running.
  */
 export const extendSandboxDeadline = internalAction({
   args: {
@@ -2178,7 +2179,12 @@ export const extendSandboxDeadline = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (!sandbox) return null;
       await sandbox.extendTimeout(args.durationMs);
     } catch (error) {
       console.log(
@@ -2263,14 +2269,20 @@ export const killEntityDaemon = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      // No daemon survives a stop, and an exec would resume the VM.
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (!sandbox) return null;
       await execHandle(
         sandbox,
         buildKillEntityDaemonCmd(args.entityIdField, args.entityId),
         10,
       );
     } catch {
-      /* sandbox may be stopped */
+      /* sandbox may be deleted */
     }
     return null;
   },

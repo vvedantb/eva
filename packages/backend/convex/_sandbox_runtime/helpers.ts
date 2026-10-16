@@ -594,6 +594,21 @@ export async function getSandboxHandle(
   return getSandboxClient(credentials).get(sandboxId);
 }
 
+/**
+ * Handle for a best-effort job (kill, diagnostics, deadline extension) that
+ * must never wake a stopped VM: `null` unless the provider reports it running.
+ * The Vercel SDK resumes a stopped sandbox on any exec (`withResume`), so these
+ * jobs used to restart a VM the user had just stopped and leave it billing.
+ */
+export async function getRunningSandboxHandle(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  sandboxId: string,
+): Promise<SandboxHandle | null> {
+  const sandbox = await getSandboxHandle(ctx, repoId, sandboxId);
+  return sandbox.state === "running" ? sandbox : null;
+}
+
 /** Signs sandbox and MCP tokens, then launches the AI agent script on the sandbox. */
 export async function signAndLaunchScript(
   ctx: GenericActionCtx<DataModel>,
