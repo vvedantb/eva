@@ -60,6 +60,7 @@ import {
   variationValidator,
 } from "./shapes";
 import { shortcutOverridesValidator } from "./shortcuts";
+import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 
 export const userFields = {
   clerkId: v.optional(v.string()),
@@ -1621,7 +1622,10 @@ export const docFields = {
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
+  // PR recaps wrote their walkthrough here before `recapWalkthrough`.
   html: v.optional(v.string()),
+  // PR recap walkthrough, rendered natively over the PR diff.
+  recapWalkthrough: v.optional(v.array(recapWalkthroughStepValidator)),
   prUrl: v.optional(v.string()),
   prNumber: v.optional(v.number()),
   headSha: v.optional(v.string()),

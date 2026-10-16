@@ -25,6 +25,7 @@ import { DiffsToolbar } from "./DiffsToolbar";
 import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
+import { useDiffIgnoreWhitespace } from "./useDiffIgnoreWhitespace";
 import { applyIgnoreWhitespace, type DiffFileEntry } from "./diffFiles";
 
 interface DiffsPanelProps {
@@ -99,10 +100,7 @@ export function DiffsPanel({
   });
 
   const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", true);
-  const [ignoreWhitespace, setIgnoreWhitespace] = useLocalStorage(
-    "eva:pr-diff-ignore-ws",
-    false,
-  );
+  const [ignoreWhitespace, setIgnoreWhitespace] = useDiffIgnoreWhitespace();
   const [treeOpen, setTreeOpen] = useLocalStorage(
     "eva:pr-diff-tree-open",
     true,
