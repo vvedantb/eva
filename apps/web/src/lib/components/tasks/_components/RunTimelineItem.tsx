@@ -10,9 +10,12 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  Reasoning,
-  ReasoningTrigger,
-  ReasoningContent,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
   ActivityTasks,
   formatElapsed,
   ProviderIcon,
@@ -22,7 +25,7 @@ import {
   CircleSpinner,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconPlayerStop } from "@tabler/icons-react";
+import { IconBrain, IconPlayerStop } from "@tabler/icons-react";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import dayjs, { formatExactDateTime } from "@eva/shared/dates";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -271,16 +274,21 @@ export function RunTimelineItem({
                     return steps ? (
                       <ActivityTasks steps={steps} isStreaming />
                     ) : (
-                      <Reasoning isStreaming defaultOpen>
-                        <ReasoningTrigger
-                          getThinkingMessage={(s) =>
-                            s ? "Working..." : "Processing complete"
-                          }
-                        />
-                        <ReasoningContent>
-                          {streaming.currentActivity}
-                        </ReasoningContent>
-                      </Reasoning>
+                      <TraceCollapsible defaultOpen>
+                        <TraceCollapsibleTrigger>
+                          <TraceLine status="running">
+                            <TraceIcon>
+                              <IconBrain />
+                            </TraceIcon>
+                            <TraceTitle shimmer>Working...</TraceTitle>
+                          </TraceLine>
+                        </TraceCollapsibleTrigger>
+                        <TraceCollapsibleContent>
+                          <Markdown className="text-sm">
+                            {streaming.currentActivity}
+                          </Markdown>
+                        </TraceCollapsibleContent>
+                      </TraceCollapsible>
                     );
                   })()}
                 <RunActivityLog
