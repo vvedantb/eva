@@ -3,6 +3,7 @@
 import {
   Button,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -50,6 +51,7 @@ export function SessionsSidebarOptionsMenu() {
     setSessionSortOrder,
     setSessionPreviewCount,
     setLayout,
+    setOnlyMine,
   } = useSessionsSidebarSettings();
 
   return (
@@ -132,6 +134,14 @@ export function SessionsSidebarOptionsMenu() {
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+
+        <DropdownMenuCheckboxItem
+          checked={settings.onlyMine}
+          onCheckedChange={(checked) => setOnlyMine(checked === true)}
+          onSelect={(e) => e.preventDefault()}
+        >
+          Only my sessions
+        </DropdownMenuCheckboxItem>
 
         <DropdownMenuSeparator />
 
