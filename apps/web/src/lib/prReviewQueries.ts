@@ -53,6 +53,8 @@ export interface PrDiffData {
   readonly baseSha: string;
   readonly headSha: string;
   readonly repoUrl: string;
+  /** Branch a session can start on for this PR; null when there is none. */
+  readonly workBranch: string | null;
 }
 
 /** Exported because the forced-refresh path must transform the payload too. */
@@ -63,6 +65,7 @@ export function toPrDiffData(payload: PrDiffPayload): PrDiffData {
     baseSha: payload.baseSha,
     headSha: payload.headSha,
     repoUrl: payload.repoUrl,
+    workBranch: payload.workBranch,
   };
 }
 
