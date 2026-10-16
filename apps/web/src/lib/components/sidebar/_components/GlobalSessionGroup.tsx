@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQueryState } from "nuqs";
-import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
+import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
   Collapsible,
@@ -18,29 +15,20 @@ import { IconChevronDown, IconPlus } from "@tabler/icons-react";
 import { AnimatePresence } from "motion/react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
-import { SidebarSessionRow } from "@/lib/components/sidebar/SidebarSessionRow";
-import { SidebarChatRow } from "@/lib/components/sidebar/SidebarChatRow";
-import { chatParser } from "@/lib/search-params";
+import { SidebarSessionListRow } from "@/lib/components/sidebar/_components/SidebarSessionListRow";
 import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";
 import {
   repoBasePaths,
   repoSessionsIndexPath,
-  selectedChatNumber,
-  sessionHrefForRow,
   sessionRowMatchesPath,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { previewSessions } from "@/lib/components/sidebar/_utils/sessionListPreview";
 import {
-  filterSessionsStartedBy,
   sortSessionsForSidebar,
   type SessionListMode,
   type SessionSortOrder,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { isSessionSidebarActive } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
@@ -51,11 +39,11 @@ interface GlobalSessionGroupProps {
   repo: RepoWithLogo;
   pathname: string;
   /**
-   * This app's active sessions, already watched once by the sidebar. The group
-   * used to run its own `sessions.list` watch through a different cache, so
+   * This app's sessions for the current list mode, already watched once by the
+   * sidebar. The group used to run its own watch through a different cache, so
    * every app in the list held two live subscriptions to the same rows.
    */
-  activeSessions: SessionListItem[] | undefined;
+  sessions: SessionListItem[] | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
@@ -64,8 +52,6 @@ interface GlobalSessionGroupProps {
   sessionSortOrder: SessionSortOrder;
   sessionPreviewCount: number;
   listMode: SessionListMode;
-  /** Show only sessions the current user started. */
-  onlyMine: boolean;
 }
 
 /**
@@ -76,7 +62,7 @@ interface GlobalSessionGroupProps {
 export function GlobalSessionGroup({
   repo,
   pathname,
-  activeSessions: allActiveSessions,
+  sessions: sourceSessions,
   open,
   onOpenChange,
   onNavigate,
@@ -85,41 +71,9 @@ export function GlobalSessionGroup({
   sessionSortOrder,
   sessionPreviewCount,
   listMode,
-  onlyMine,
 }: GlobalSessionGroupProps) {
   const navigate = useNavigate();
   const [isListExpanded, setIsListExpanded] = useState(false);
-  const allArchivedSessions = useQuery(
-    api.sessions.listArchived,
-    listMode === "archived" ? { repoId: repo._id } : "skip",
-  );
-  const currentUserId = useQuery(api.auth.me, onlyMine ? {} : "skip");
-  const activeSessions = onlyMine
-    ? filterSessionsStartedBy(allActiveSessions, currentUserId)
-    : allActiveSessions;
-  const archivedSessions = onlyMine
-    ? filterSessionsStartedBy(allArchivedSessions, currentUserId)
-    : allArchivedSessions;
-  // Parallel chats beyond Main, grouped under their session row. One query
-  // per repo group (not per session), plus one for which chats are running.
-  const extraChats = useQuery(
-    api.sessionChats.listExtraForRepo,
-    listMode === "active" ? { repoId: repo._id } : "skip",
-  );
-  const runningChatIds = useQuery(
-    api.turns.listRunningChatIdsForRepo,
-    listMode === "active" ? { repoId: repo._id } : "skip",
-  );
-  const [chatParam] = useQueryState("chat", chatParser);
-  const activeChatNumber = selectedChatNumber(chatParam);
-  const chatsBySessionId = new Map<string, typeof extraChats>();
-  for (const chat of extraChats ?? []) {
-    const list = chatsBySessionId.get(chat.sessionId) ?? [];
-    list.push(chat);
-    chatsBySessionId.set(chat.sessionId, list);
-  }
-  const runningChatIdSet = new Set<string>(runningChatIds ?? []);
-  const unarchiveSession = useMutation(api.sessions.unarchive);
   const label = repoDisplayLabel(repo);
   const baseUrl = `${repoBasePaths(repo)[0]}/sessions`;
   const openFork = (segment: string) => {
@@ -127,8 +81,6 @@ export function GlobalSessionGroup({
     onNavigate?.();
   };
 
-  const sourceSessions =
-    listMode === "archived" ? archivedSessions : activeSessions;
   const isLoading = sourceSessions === undefined;
   const sortedSessions = sortSessionsForSidebar(
     sourceSessions ?? [],
@@ -149,7 +101,7 @@ export function GlobalSessionGroup({
   });
   const simpleView = useSimpleView();
   const runningCount =
-    activeSessions?.filter(
+    sourceSessions?.filter(
       (s) => s.status === "active" && isSessionSidebarActive(s),
     ).length ?? 0;
   // Simple view wakes sandboxes from the Preview tab, so it shows no awake count.
@@ -244,75 +196,19 @@ export function GlobalSessionGroup({
               className="space-y-1"
             >
               <AnimatePresence initial={false}>
-                {visibleSessions.map((session) => {
-                  const isSessionOpen = sessionRowMatchesPath(
-                    repo,
-                    session,
-                    pathname,
-                  );
-                  const sessionChats =
-                    chatsBySessionId.get(session._id) ?? [];
-                  // The session row is Main; a chat row takes the highlight
-                  // while its tab is the one open.
-                  const isSelected = isSessionOpen && activeChatNumber === 1;
-                  if (listMode === "archived") {
-                    return (
-                      <SidebarSessionRow
-                        key={session._id}
-                        session={session}
-                        isSelected={isSessionOpen}
-                        repo={repo}
-                        onNavigate={onNavigate}
-                        onForkNavigate={openFork}
-                        onUnarchive={async (s) => {
-                          try {
-                            await unarchiveSession({ id: s._id });
-                            mutationSuccess(
-                              "Session restored",
-                              "session-unarchive",
-                            );
-                          } catch {
-                            mutationError(
-                              "Couldn't restore session",
-                              "session-unarchive",
-                            );
-                          }
-                        }}
-                      />
-                    );
-                  }
-                  return (
-                    <div key={session._id}>
-                      <SidebarSessionRow
-                        session={session}
-                        isSelected={isSelected}
-                        repo={repo}
-                        onNavigate={onNavigate}
-                        onRename={async () => {}}
-                        onRenameRequest={(s) => onRenameRequest(s, repo)}
-                        onArchiveRequest={(s) => onArchiveRequest(s, repo)}
-                        onForkNavigate={openFork}
-                      />
-                      {sessionChats.length > 0 ? (
-                        <div className="mt-1 space-y-1">
-                          {sessionChats.map((chat) => (
-                            <SidebarChatRow
-                              key={chat._id}
-                              chat={chat}
-                              sessionHref={sessionHrefForRow(repo, session)}
-                              isSelected={
-                                isSessionOpen &&
-                                activeChatNumber === chat.number
-                              }
-                              isRunning={runningChatIdSet.has(chat._id)}
-                              onNavigate={onNavigate}
-                            />
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                {visibleSessions.map((session) => (
+                  <SidebarSessionListRow
+                    key={session._id}
+                    session={session}
+                    repo={repo}
+                    pathname={pathname}
+                    listMode={listMode}
+                    onNavigate={onNavigate}
+                    onForkNavigate={openFork}
+                    onRenameRequest={onRenameRequest}
+                    onArchiveRequest={onArchiveRequest}
+                  />
+                ))}
               </AnimatePresence>
               {hasOverflow ? (
                 <SessionListShowMore

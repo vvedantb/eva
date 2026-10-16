@@ -48,6 +48,7 @@ import {
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   IconFileText,
   IconTrash,
@@ -127,6 +128,7 @@ export function QuickTaskModal({
   initialDraft,
 }: QuickTaskModalProps) {
   const { repo } = useRepo();
+  const simpleView = useSimpleView();
   const {
     baseBranch,
     setBaseBranch,
@@ -564,24 +566,30 @@ export function QuickTaskModal({
               setAssignedTo={setAssignedTo}
             />
 
-            <ModelSelectWithTraits
-              value={model}
-              options={modelOptions}
-              onValueChange={(next) => {
-                setModel(next);
-                setProviderAccountId(
-                  providerAccountIdForModel(accounts, providerAccountId, next),
-                );
-              }}
-              accounts={accounts}
-              accountId={providerAccountId}
-              onAccountChange={setProviderAccountId}
-              traits={traits}
-              onTraitsChange={(partial) =>
-                setTraits((prev) => ({ ...prev, ...partial }))
-              }
-              className={QUICK_TASK_OPTION_BADGE_CLASS}
-            />
+            {simpleView ? null : (
+              <ModelSelectWithTraits
+                value={model}
+                options={modelOptions}
+                onValueChange={(next) => {
+                  setModel(next);
+                  setProviderAccountId(
+                    providerAccountIdForModel(
+                      accounts,
+                      providerAccountId,
+                      next,
+                    ),
+                  );
+                }}
+                accounts={accounts}
+                accountId={providerAccountId}
+                onAccountChange={setProviderAccountId}
+                traits={traits}
+                onTraitsChange={(partial) =>
+                  setTraits((prev) => ({ ...prev, ...partial }))
+                }
+                className={QUICK_TASK_OPTION_BADGE_CLASS}
+              />
+            )}
 
             {branchLockedToProject ? (
               <Tooltip>
