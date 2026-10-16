@@ -1196,6 +1196,8 @@ var STEP_FIELD_CAPS = {
   /** Reasoning prose per burst; head-capped so one turn's thinking cannot
    * dominate the payload. Prose rides \`detail\` (see applyReasoningSnapshot). */
   reasoning: 6e3,
+  /** Reply text the agent writes between tool runs, per run; head-capped. */
+  response: 4e3,
   /** Soft ceiling for the whole steps JSON payload (under Convex 1 MiB). */
   jsonBytes: 600 * 1024
 };
@@ -1261,6 +1263,17 @@ function enforceStepBudget(steps) {
 }
 function serializeSteps(steps) {
   return JSON.stringify(enforceStepBudget(steps));
+}
+function serializeFinalSteps(steps, finalText2) {
+  const final = finalText2.trim();
+  const kept = final ? steps.filter((step) => {
+    if (step.type !== "response" || step.parentToolUseId !== void 0) {
+      return true;
+    }
+    const detail = (step.detail ?? "").trim();
+    return !final.includes(detail) && !detail.startsWith(final);
+  }) : steps;
+  return serializeSteps(kept);
 }
 
 // callback-src/parse/toolResultCapture.ts
@@ -4411,10 +4424,11 @@ function completeToolStep(trackingId, result) {
       }
     }
   }
-  if (callbackState.accumulatedSteps.length > 0) {
-    const last = callbackState.accumulatedSteps[callbackState.accumulatedSteps.length - 1];
-    if (result) mergeToolResult(last, result);
-    markStepComplete(last);
+  for (let i = callbackState.accumulatedSteps.length - 1; i >= 0; i--) {
+    const step = callbackState.accumulatedSteps[i];
+    if (step.type === "response") continue;
+    if (result) mergeToolResult(step, result);
+    markStepComplete(step);
     return;
   }
 }
@@ -4463,6 +4477,28 @@ function applyReasoningSnapshot(text) {
   callbackState.accumulatedSteps.push(step);
   stepStartedAt.set(step, Date.now());
   callbackState.lastStepType = "thinking";
+}
+function appendResponseText(added) {
+  if (!added) return;
+  const last = callbackState.accumulatedSteps[callbackState.accumulatedSteps.length - 1];
+  if (last && last.type === "response" && last.status === "active") {
+    last.detail = headCap(
+      (last.detail ?? "") + added,
+      STEP_FIELD_CAPS.response
+    ).text;
+    return;
+  }
+  const text = added.trimStart();
+  if (!text) return;
+  markLastComplete();
+  const step = {
+    type: "response",
+    label: "Response",
+    status: "active",
+    detail: headCap(text, STEP_FIELD_CAPS.response).text
+  };
+  callbackState.accumulatedSteps.push(step);
+  stepStartedAt.set(step, Date.now());
 }
 function pushNoticeStep2(label, detail) {
   pushProgressStep({ type: "notice", label, detail, status: "complete" });
@@ -4592,6 +4628,11 @@ function parseStreamEvent(line) {
   }
 }
 function appendStreamedContent(text, isBlockBoundary = false) {
+  const before = callbackState.currentStreamedContent;
+  writeStreamedContent(text, isBlockBoundary);
+  appendResponseText(callbackState.currentStreamedContent.slice(before.length));
+}
+function writeStreamedContent(text, isBlockBoundary) {
   const nextText = String(text);
   if (!nextText) {
     return;
@@ -6453,7 +6494,10 @@ function resetTurnState() {
 async function finalizeTurn(output, readUsage) {
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    callbackState.accumulatedSteps,
+    resultEvent?.result ?? ""
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = buildTurnCompletionPayload({
     success,
@@ -6855,7 +6899,10 @@ async function finalizeSyntheticTurn(output) {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    callbackState.accumulatedSteps,
+    resultEvent?.result ?? ""
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = entityMutationArgs({
     messageId,
@@ -8190,7 +8237,7 @@ async function finalizeTurn2(success, error) {
     success,
     result,
     error,
-    activityLog: serializeSteps(callbackState.accumulatedSteps),
+    activityLog: serializeFinalSteps(callbackState.accumulatedSteps, result),
     ...RUN_ID ? { runId: RUN_ID } : {},
     ...usage ? {
       rawResultEvent: buildClaudeShapedResult({
@@ -9315,7 +9362,10 @@ async function finalizeTurn3(attempt) {
     success,
     result: resultEvent?.result ?? callbackState.rawOutput,
     error,
-    activityLog: serializeSteps(callbackState.accumulatedSteps),
+    activityLog: serializeFinalSteps(
+      callbackState.accumulatedSteps,
+      resultEvent?.result ?? ""
+    ),
     resultEvent
   });
   appendClaimedTurnCompletion(completionArgs);
@@ -10623,22 +10673,11 @@ try {
   const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
   const { success: runSucceededWithResult, error: resolvedError } = resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
   let errorValue = resolvedError;
-  const finalResultText = (finalResultEvent?.result ?? "").trim();
-  if (finalResultText) {
-    let lastIdx = callbackState.accumulatedSteps.length - 1;
-    while (lastIdx >= 0 && callbackState.accumulatedSteps[lastIdx].type === "thinking") {
-      lastIdx--;
-    }
-    const candidate = lastIdx >= 0 ? callbackState.accumulatedSteps[lastIdx] : void 0;
-    if (candidate && candidate.type === "response") {
-      const detail = (candidate.detail ?? "").trim();
-      if (detail && (finalResultText === detail || finalResultText.startsWith(detail) || detail.startsWith(finalResultText))) {
-        callbackState.accumulatedSteps.splice(lastIdx, 1);
-      }
-    }
-  }
   for (const step of callbackState.accumulatedSteps) step.status = "complete";
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    callbackState.accumulatedSteps,
+    finalResultEvent?.result ?? ""
+  );
   let completionSuccess = agentWasInterrupted ? false : finalResultEvent ? !finalResultEvent.isError : finalCode === 0;
   if (attemptEndedDueToTimeout && !runSucceededWithResult) {
     completionSuccess = false;

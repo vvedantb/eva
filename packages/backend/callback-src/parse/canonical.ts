@@ -82,10 +82,12 @@ function completeToolStep(
       }
     }
   }
-  if (S.accumulatedSteps.length > 0) {
-    const last = S.accumulatedSteps[S.accumulatedSteps.length - 1];
-    if (result) mergeToolResult(last, result);
-    markStepComplete(last);
+  // Fallback: the newest tool row. Text streamed meanwhile is never the target.
+  for (let i = S.accumulatedSteps.length - 1; i >= 0; i--) {
+    const step = S.accumulatedSteps[i];
+    if (step.type === "response") continue;
+    if (result) mergeToolResult(step, result);
+    markStepComplete(step);
     return;
   }
 }
@@ -155,6 +157,35 @@ function applyReasoningSnapshot(text: string): void {
   S.accumulatedSteps.push(step);
   stepStartedAt.set(step, Date.now());
   S.lastStepType = "thinking";
+}
+
+/**
+ * Mirrors newly streamed reply text into ONE "response" step per run of text,
+ * so the activity log keeps the words the agent wrote between tool runs in
+ * timeline order (the final message only carries the last run). Like
+ * reasoning, a tool push completes the row and the next text opens a new one.
+ */
+function appendResponseText(added: string): void {
+  if (!added) return;
+  const last = S.accumulatedSteps[S.accumulatedSteps.length - 1];
+  if (last && last.type === "response" && last.status === "active") {
+    last.detail = headCap(
+      (last.detail ?? "") + added,
+      STEP_FIELD_CAPS.response,
+    ).text;
+    return;
+  }
+  const text = added.trimStart();
+  if (!text) return;
+  markLastComplete();
+  const step: ProgressStep = {
+    type: "response",
+    label: "Response",
+    status: "active",
+    detail: headCap(text, STEP_FIELD_CAPS.response).text,
+  };
+  S.accumulatedSteps.push(step);
+  stepStartedAt.set(step, Date.now());
 }
 
 /**
@@ -334,8 +365,16 @@ export function parseStreamEvent(line: string): boolean {
   }
 }
 
-/** Appends new text to the current streamed content buffer. */
+/** Appends new text to the streamed buffer and its timeline response row. */
 function appendStreamedContent(text: string, isBlockBoundary = false): void {
+  const before = S.currentStreamedContent;
+  writeStreamedContent(text, isBlockBoundary);
+  // Both branches below only ever extend the buffer, so the suffix is exactly
+  // what this call added (a snapshot adds just its unseen tail).
+  appendResponseText(S.currentStreamedContent.slice(before.length));
+}
+
+function writeStreamedContent(text: string, isBlockBoundary: boolean): void {
   const nextText = String(text);
   if (!nextText) {
     return;

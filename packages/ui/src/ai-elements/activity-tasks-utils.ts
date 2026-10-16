@@ -76,6 +76,7 @@ const STANDALONE_TYPES = new Set<ActivityStep["type"]>([
 /** One block in the activity timeline: prose, a lone row, or a folded run. */
 export type ActivitySegment =
   | { kind: "reasoning"; step: ActivityStep }
+  | { kind: "response"; step: ActivityStep }
   | { kind: "row"; row: ActivityRow }
   | { kind: "actions"; rows: ActivityRow[] };
 
@@ -91,6 +92,11 @@ export function groupActivityRows(rows: ActivityRow[]): ActivitySegment[] {
   for (const row of rows) {
     if (row.step.type === "reasoning") {
       segments.push({ kind: "reasoning", step: row.step });
+      continue;
+    }
+    // Mid-turn reply text: it ends the tool run before it, like reasoning.
+    if (row.step.type === "response") {
+      segments.push({ kind: "response", step: row.step });
       continue;
     }
     if (STANDALONE_TYPES.has(row.step.type)) {
@@ -136,8 +142,8 @@ export function activitySegmentKey(
   segment: ActivitySegment,
   occurrence: number,
 ): string {
-  if (segment.kind === "reasoning") {
-    return `reasoning:${activityStepKey(segment.step, occurrence)}`;
+  if (segment.kind === "reasoning" || segment.kind === "response") {
+    return `${segment.kind}:${activityStepKey(segment.step, occurrence)}`;
   }
   if (segment.kind === "row") {
     return `row:${activityRowKey(segment.row, occurrence)}`;

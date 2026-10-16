@@ -15,7 +15,7 @@ import {
 import { evaMcpWorkerHandoffEnv } from "../evaMcp.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
-import { serializeSteps } from "../parse/stepBudget.js";
+import { serializeFinalSteps, serializeSteps } from "../parse/stepBudget.js";
 import {
   appendDiagnosticTail,
   buildTurnCompletionPayload,
@@ -285,7 +285,10 @@ async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {
     success,
     result: resultEvent?.result ?? S.rawOutput,
     error,
-    activityLog: serializeSteps(S.accumulatedSteps),
+    activityLog: serializeFinalSteps(
+      S.accumulatedSteps,
+      resultEvent?.result ?? "",
+    ),
     resultEvent,
   });
   appendClaimedTurnCompletion(completionArgs);
