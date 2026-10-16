@@ -60,6 +60,7 @@ import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
+import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import {
   startTransition,
   useDeferredValue,
@@ -651,6 +652,9 @@ function ChatBodyInner({
     api.envVarRequests.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const visibleMessageIds = new Set(
+    displayMessages.map((message) => message._id),
+  );
   const panelPlacement = placeChatUiPanels(
     [
       ...(chatUiPanels ?? []).map(
@@ -678,8 +682,26 @@ function ChatBodyInner({
         }),
       ),
     ],
-    new Set(displayMessages.map((message) => message._id)),
+    visibleMessageIds,
   );
+
+  // Artifacts saved in this chat (`create_artifact`). Placed by the same rule
+  // as the cards above, but kept apart: an artifact sits with the turn's
+  // output and never trades places with its prose.
+  const chatArtifacts = useQuery(
+    api.artifacts.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const artifactPlacement = placeChatUiPanels(
+    chatArtifacts ?? [],
+    visibleMessageIds,
+  );
+  const renderChatArtifacts = (artifacts: typeof artifactPlacement.trailing) =>
+    artifacts.length === 0
+      ? undefined
+      : artifacts.map((artifact) => (
+          <ChatArtifactCard key={artifact._id} artifact={artifact} />
+        ));
 
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
   const users = useQuery(
@@ -829,6 +851,9 @@ function ChatBodyInner({
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
           )}
+          artifacts={renderChatArtifacts(
+            artifactPlacement.byMessageId.get(message._id) ?? [],
+          )}
         />
         {afterMessage?.(message._id)}
       </div>
@@ -905,6 +930,7 @@ function ChatBodyInner({
           )}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
+          {renderChatArtifacts(artifactPlacement.trailing)}
         </ConversationContent>
         {newBoundaryId ? (
           <ChatNewMessagesPill

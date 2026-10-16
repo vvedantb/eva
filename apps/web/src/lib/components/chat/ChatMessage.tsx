@@ -179,6 +179,11 @@ interface ChatMessageProps {
    * is never dropped.
    */
   belowContent?: ReactNode;
+  /**
+   * Artifacts saved in this turn (`create_artifact`). They sit with the turn's
+   * output, like media, and never take the prose's slot behind a tab.
+   */
+  artifacts?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -208,6 +213,7 @@ export const ChatMessage = memo(function ChatMessage({
   onRetryTurn,
   precedingUser,
   belowContent,
+  artifacts,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -396,6 +402,11 @@ export const ChatMessage = memo(function ChatMessage({
                     {belowContent}
                   </div>
                 ) : null}
+                {artifacts ? (
+                  <div className="mt-1 flex w-full flex-col gap-2">
+                    {artifacts}
+                  </div>
+                ) : null}
                 <UserMessageMeta
                   align={isOtherUser ? "start" : "end"}
                   copyPlain={copyPlain}
@@ -495,6 +506,9 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {artifacts ? (
+                  <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+                ) : null}
                 {/* Sits above `belowContent` so agent-composed panels keep
                     their promised slot directly over the meta row, and so the
                     chip stays next to the changed-files card it judges.

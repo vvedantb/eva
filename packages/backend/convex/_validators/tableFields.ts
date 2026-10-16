@@ -1753,6 +1753,11 @@ export const artifactFields = {
   // Chat that created this artifact (`create_artifact` from a sandbox token).
   // Manual uploads leave these unset. Indexes skip rows with no source.
   ...chatSourceFields,
+  // The chat thread and turn the artifact was created in, for its inline card
+  // in the transcript. Same anchor as a `render_html` page. Rows made before
+  // the card existed, and manual uploads, have neither.
+  chatParentId: v.optional(messageFields.parentId),
+  messageId: v.optional(v.id("messages")),
 };
 
 // Persistent key/value state for one hosted artifact, read and written through
