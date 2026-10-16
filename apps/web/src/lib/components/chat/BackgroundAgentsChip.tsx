@@ -8,11 +8,12 @@ import {
   PopoverTrigger,
   motionFast,
   CircleSpinner,
+  OpenSubagentContext,
 } from "@eva/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
-import { useState } from "react";
+import { use, useState } from "react";
 import { CountPop } from "@/lib/components/ui/CountPop";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
@@ -35,6 +36,9 @@ export function BackgroundAgentsChip({
   const [stoppingIds, setStoppingIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  // Set by `SubagentThreadLayer` on the sandbox chats that can show the thread.
+  const openSubagent = use(OpenSubagentContext);
 
   const runningAgents = (backgroundAgents ?? []).filter(
     isVisibleBackgroundAgent,
@@ -73,7 +77,7 @@ export function BackgroundAgentsChip({
           exit={{ opacity: 0, y: 8 }}
           transition={motionFast}
         >
-          <Popover>
+          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
@@ -111,6 +115,20 @@ export function BackgroundAgentsChip({
                           {agent.backgrounded ? " · backgrounded" : ""}
                         </p>
                       </div>
+                      {openSubagent ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => {
+                            setPopoverOpen(false);
+                            openSubagent(agent.toolUseId);
+                          }}
+                        >
+                          View
+                        </Button>
+                      ) : null}
                       {!isReadOnly ? (
                         <Button
                           type="button"
