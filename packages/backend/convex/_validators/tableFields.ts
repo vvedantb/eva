@@ -237,6 +237,20 @@ export const backgroundAgentEntryValidator = v.object(
 
 export type BackgroundAgentEntry = Infer<typeof backgroundAgentEntryValidator>;
 
+/**
+ * Claude's native `/goal` for a chat, mirrored by the warm daemon (parsed in
+ * `callback-src/parse/claudeGoal.ts`). Absent = no goal.
+ */
+export const agentGoalValidator = v.object({
+  objective: v.string(),
+  status: v.union(v.literal("active"), v.literal("complete")),
+  /** Stop hook evaluations that said "not met yet". */
+  checks: v.number(),
+  lastCheck: v.optional(v.string()),
+});
+
+export type AgentGoal = Infer<typeof agentGoalValidator>;
+
 export const turnStateValidator = v.union(
   v.literal("staged"),
   v.literal("launching"),
@@ -358,6 +372,8 @@ export const chatDaemonEntityFields = {
   pendingTurn: pendingTurnValidator,
   syntheticTurnMessageId: v.optional(v.id("messages")),
   backgroundAgents: v.optional(v.array(backgroundAgentEntryValidator)),
+  // Written only when the goal changes (set, check, met, cleared).
+  goal: v.optional(agentGoalValidator),
   pendingTaskStops: v.optional(v.array(v.string())),
   // Interrupt-cancel signal for a warm Claude daemon: cancelExecution sets this
   // instead of killing the sandbox process; claimPendingTurn drains it

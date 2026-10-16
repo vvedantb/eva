@@ -19,6 +19,7 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { canonicalPrUrl } from "./sessionRef";
 import type { ChatDetails } from "./chatSelfQueries";
 
 const DEFAULT_LOG_LINES = 200;
@@ -708,6 +709,112 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           ...summary,
           rerun: "scheduled",
           note: "Startup commands are running in the background. There is no progress signal: check the effect (for example, the seeded data) after a few minutes.",
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // watch_pull_request / unwatch_pull_request
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** The chat this agent runs in. Watches always wake the chat that asked. */
+  async function ownChat(): Promise<
+    EntityTarget | ReturnType<typeof errorResult>
+  > {
+    const { entityId, entityKind } = credentials;
+    if (entityId === undefined || entityKind === undefined) {
+      return errorResult(
+        "Only an agent running inside an Eva session, quick task or project can watch a pull request.",
+      );
+    }
+    const { userId } = await mcpGetContext(ctx, clerkUserId);
+    const resolved = await resolveEntityTarget(
+      { id: entityId, kind: entityKind },
+      userId,
+    );
+    return "isError" in resolved ? resolved : resolved.target;
+  }
+
+  /** The canonical link, undefined for "default", or null when malformed. */
+  function watchPrUrl(prUrl: string | undefined): string | undefined | null {
+    return prUrl === undefined ? undefined : canonicalPrUrl(prUrl);
+  }
+  const BAD_PR_URL =
+    'prUrl must be a GitHub pull request link, e.g. "https://github.com/acme/app/pull/12".';
+
+  const watchPrArgs = {
+    prUrl: z
+      .string()
+      .optional()
+      .describe(
+        "One of this chat's own pull requests. Omit it for the chat's main open pull request.",
+      ),
+  };
+
+  tools.push(
+    defineTool({
+      name: "watch_pull_request",
+      description: `Watch one of this chat's pull requests after you open or update it. Eva wakes this chat with a message when something needs you:
+- a check newly fails on the PR's head commit,
+- all required checks pass (all checks when none is required),
+- a reviewer with write access comments or reviews (your own and other bots' comments never wake you),
+- the branch starts to conflict with its base branch.
+Several changes close together arrive as one message, queued after any turn already running. Act on it, then end your turn; Eva keeps watching.
+
+The watch ends when the PR merges or closes, when you call unwatch_pull_request, after 10 comment-only wakes in a row, or when GitHub cannot read the PR for 15 minutes. It does not report the current state: run \`gh pr checks\` now if you need it. Only pull requests linked to this chat can be watched.`,
+      mutating: true,
+      input: watchPrArgs,
+      handler: async ({ prUrl }) => {
+        const url = watchPrUrl(prUrl);
+        if (url === null) return errorResult(BAD_PR_URL);
+        const target = await ownChat();
+        if ("isError" in target) return target;
+        const reply = await ctx.runMutation(
+          internal._pullRequests.watch.startWatch,
+          {
+            kind: target.kind,
+            id: target.targetId,
+            ...(target.kind === "session" && credentials.chatId !== undefined
+              ? { sessionChatId: credentials.chatId }
+              : {}),
+            ...(url === undefined ? {} : { prUrl: url }),
+          },
+        );
+        if (!reply.ok) return errorResult(reply.error);
+        return textResult({
+          watching: { url: reply.prUrl, number: reply.prNumber },
+          note: "Eva wakes this chat on the next failed or passing checks, new review feedback, or a merge conflict. End your turn when you have nothing else to do.",
+        });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "unwatch_pull_request",
+      description: `Stop watching this chat's pull requests (see watch_pull_request). Name one with prUrl, or omit it to stop every watch this chat has.`,
+      mutating: true,
+      input: watchPrArgs,
+      handler: async ({ prUrl }) => {
+        const url = watchPrUrl(prUrl);
+        if (url === null) return errorResult(BAD_PR_URL);
+        const target = await ownChat();
+        if ("isError" in target) return target;
+        const stopped = await ctx.runMutation(
+          internal._pullRequests.watch.stopWatchForChat,
+          {
+            kind: target.kind,
+            id: target.targetId,
+            ...(url === undefined ? {} : { prUrl: url }),
+          },
+        );
+        return textResult({
+          stopped,
+          note:
+            stopped.length === 0
+              ? "No watched pull request matched; nothing changed."
+              : "Eva no longer wakes this chat for these pull requests.",
         });
       },
     }),

@@ -1,9 +1,14 @@
 "use client";
 
 import type { FunctionReturnType } from "convex/server";
+import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
-import { Badge, LIST_ROW_CONTROL_CLASS, ListRow, cn } from "@eva/ui";
-import { IconExternalLink, IconGitPullRequest } from "@tabler/icons-react";
+import { Badge, LIST_ROW_CONTROL_CLASS, ListRow, cn, toast } from "@eva/ui";
+import {
+  IconExternalLink,
+  IconEye,
+  IconGitPullRequest,
+} from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
@@ -21,6 +26,11 @@ const STATE_LABEL: Record<ReviewPullRequest["state"], string> = {
   merged: "Merged",
   closed: "Closed",
 };
+
+const ROW_ICON_BUTTON_CLASS = cn(
+  LIST_ROW_CONTROL_CLASS,
+  "shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
+);
 
 /**
  * The Pull requests tab: every PR the session, quick task or project holds —
@@ -129,20 +139,41 @@ function PullRequestRow({
             </span>
           </div>
         </div>
+        {pr.watching ? <StopWatchButton pr={pr} /> : null}
         <a
           href={pr.prUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`Open #${pr.prNumber} on GitHub`}
           title="Open on GitHub"
-          className={cn(
-            LIST_ROW_CONTROL_CLASS,
-            "shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-          )}
+          className={ROW_ICON_BUTTON_CLASS}
         >
           <IconExternalLink size={14} />
         </a>
       </div>
     </ListRow>
+  );
+}
+
+/**
+ * Shown while the agent watches the PR (`watch_pull_request`): checks,
+ * reviews and conflicts wake its chat. Clicking stops the watch.
+ */
+function StopWatchButton({ pr }: { pr: ReviewPullRequest }) {
+  const stopWatch = useMutation(api.pullRequests.stopWatch);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        stopWatch({ pullRequestId: pr._id }).catch(() => {
+          toast.error("Could not stop watching this pull request");
+        });
+      }}
+      aria-label={`Stop watching #${pr.prNumber}`}
+      title="The agent is watching this PR for checks, reviews and conflicts. Click to stop."
+      className={ROW_ICON_BUTTON_CLASS}
+    >
+      <IconEye size={14} />
+    </button>
   );
 }

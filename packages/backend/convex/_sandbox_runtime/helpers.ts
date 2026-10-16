@@ -620,6 +620,7 @@ export async function signAndLaunchScript(
     openSyntheticTurnMutation?: string;
     completeSyntheticTurnMutation?: string;
     updateBackgroundAgentsMutation?: string;
+    updateGoalMutation?: string;
   } = {},
 ): Promise<void> {
   const launchStartedAt = Date.now();

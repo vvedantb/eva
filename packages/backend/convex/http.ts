@@ -9,6 +9,7 @@ import {
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
 import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
+import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 
 const http = httpRouter();
 
@@ -625,18 +626,29 @@ http.route({
 
     // Event-triggered automations (CI auto-fix, review responder, issue to
     // task, user automations). Independent of the state sync below.
-    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+    const repoEvents = parseRepoEvents(event ?? "", body);
+    const ciPassed = parseCiPassed(event ?? "", body);
+    for (const repoEvent of repoEvents) {
       await ctx.scheduler.runAfter(
         0,
         internal._automationEvents.dispatch.dispatch,
         { event: repoEvent },
       );
     }
-    for (const passed of parseCiPassed(event ?? "", body)) {
+    for (const passed of ciPassed) {
       await ctx.scheduler.runAfter(
         0,
         internal._automationEvents.dispatch.noteCiPassed,
         { passed },
+      );
+    }
+    // The agent's PR watch reads the same parsed events (no second parse).
+    const watchUrls = prWatchUrls(repoEvents, ciPassed);
+    if (watchUrls.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watch.noteActivity,
+        { prUrls: watchUrls },
       );
     }
 
@@ -720,6 +732,16 @@ http.route({
       const parsed = pushWebhookSchema.safeParse(JSON.parse(body));
       if (parsed.success && parsed.data.ref.startsWith("refs/heads/")) {
         const branch = parsed.data.ref.slice("refs/heads/".length);
+        // A push to a watched PR's base branch may cause a merge conflict.
+        await ctx.scheduler.runAfter(
+          0,
+          internal._pullRequests.watch.noteBasePush,
+          {
+            owner: parsed.data.repository.owner.login,
+            name: parsed.data.repository.name,
+            branch,
+          },
+        );
         await ctx.scheduler.runAfter(
           0,
           internal.githubWebhook.handlePushForSkillSync,

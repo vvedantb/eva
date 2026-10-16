@@ -11,6 +11,7 @@ import {
 } from "../ui/collapsible";
 import {
   IconChevronDown,
+  IconChevronRight,
   IconCircle,
   IconCircleCheck,
   IconGitBranch,
@@ -131,6 +132,34 @@ export type { ActivityStep };
 const RequestFullDetailContext = createContext<(() => void) | undefined>(
   undefined,
 );
+
+/**
+ * Opens a subagent's child thread by its `Agent` tool_use id. Provided by the
+ * chat surface that can show the thread; absent elsewhere, so subtask rows only
+ * offer "View" where it works.
+ */
+export const OpenSubagentContext = createContext<
+  ((toolUseId: string) => void) | undefined
+>(undefined);
+
+/** "View" link on a subtask row that opens its child thread. */
+function OpenSubagentButton({ toolUseId }: { toolUseId: string | undefined }) {
+  const open = useContext(OpenSubagentContext);
+  if (!open || !toolUseId) return null;
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        open(toolUseId);
+      }}
+      className="motion-press ml-auto flex shrink-0 items-center text-xs text-primary hover:underline active:scale-[0.97]"
+    >
+      View
+      <IconChevronRight aria-hidden className="size-3" />
+    </button>
+  );
+}
 
 /** `onOpenChange` handler that asks for the full payload the first time a fold opens. */
 function useRequestFullDetailOnOpen(): (open: boolean) => void {
@@ -329,7 +358,15 @@ function ActivityStepRow({
     )
   ) : null;
 
-  const visibleChildren = children ?? [];
+  // A subagent's own text (`response` children) belongs to its child thread
+  // view, not the parent's timeline.
+  const visibleChildren = (children ?? []).filter(
+    (child) => !HIDDEN_TYPES.has(child.step.type),
+  );
+  const openSubagent =
+    step.type === "subtask" ? (
+      <OpenSubagentButton toolUseId={step.toolUseId} />
+    ) : null;
   const childOverflow = visibleChildren.length - MAX_VISIBLE_CHILDREN;
   const shownChildren =
     childOverflow > 0
@@ -383,10 +420,13 @@ function ActivityStepRow({
     return (
       <div className="space-y-1">
         <Collapsible className="group w-full" onOpenChange={requestFullDetail}>
-          <CollapsibleTrigger className="flex w-full items-center gap-2 text-left transition-colors hover:text-foreground">
-            {rowHeader}
-            <IconChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-          </CollapsibleTrigger>
+          <div className="flex items-center gap-2">
+            <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-foreground">
+              {rowHeader}
+              <IconChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            {openSubagent}
+          </div>
           <CollapsibleContent className="mt-1.5 ml-6 space-y-1 border-l border-border pl-3 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0">
             <ActivityStepDetail step={step} onOpenFile={onOpenFile} />
           </CollapsibleContent>
@@ -398,7 +438,14 @@ function ActivityStepRow({
 
   return (
     <div className="space-y-1">
-      {rowHeader}
+      {openSubagent ? (
+        <div className="flex items-center gap-2">
+          {rowHeader}
+          {openSubagent}
+        </div>
+      ) : (
+        rowHeader
+      )}
       {childrenBlock}
     </div>
   );
