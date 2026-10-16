@@ -8,8 +8,8 @@ import {
   api,
   DEFAULT_AI_MODEL,
   INCOMPLETE_PR_RECAP_MESSAGE,
+  hasStoredRecap,
   isIncompleteReadyRecap,
-  isViewableRecap,
   normalizeAIModel,
   type AIModel,
   type Id,
@@ -32,9 +32,10 @@ import {
 } from "@tabler/icons-react";
 import { Markdown } from "@eva/ui/markdown";
 import { DynamicLink } from "@/lib/components/DynamicLink";
-import { HtmlPreviewFrame } from "@/lib/components/docs/_components/HtmlPreviewFrame";
 import { RecapGenerateControls } from "@/lib/components/sandbox/_components/RecapGenerateControls";
 import { RecapRunBadge } from "@/lib/components/sandbox/_components/RecapRunBadge";
+import { RecapStaleBanner } from "@/lib/components/sandbox/_components/RecapStaleBanner";
+import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBody";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -225,7 +226,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
               isGenerating={isGenerating}
               disabled={isPending && !isStalled}
               variant="ghost"
-              label={isViewableRecap(recapDoc) ? "Regenerate" : "Generate"}
+              label={hasStoredRecap(recapDoc) ? "Regenerate" : "Generate"}
             />
           </div>
         }
@@ -259,6 +260,18 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
         </div>
       ) : null}
 
+      {recapDoc.headSha !== undefined &&
+      hasStoredRecap(recapDoc) &&
+      !isPending ? (
+        // No action here: the toolbar's Regenerate (with its model picker)
+        // sits right above, and two buttons for one action read as two.
+        <RecapStaleBanner
+          prUrl={prUrl}
+          repoId={repoId}
+          recapSha={recapDoc.headSha}
+        />
+      ) : null}
+
       {isPending && !isStalled && (
         <div className="shrink-0 px-3 py-2">
           <Surface density="tight" className="space-y-2">
@@ -283,20 +296,10 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
 
       <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
         {view === "recap" ? (
-          recapDoc.html ? (
-            <HtmlPreviewFrame html={recapDoc.html} title="PR recap" />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {isIncompleteReady || isErrored
-                ? INCOMPLETE_PR_RECAP_MESSAGE
-                : "No recap yet. It is created the next time this review runs."}
-            </p>
-          )
+          <RecapTourBody doc={recapDoc} repoId={repoId} />
         ) : (
           <Surface>
-            <Markdown className="text-sm">
-              {recapDoc.content}
-            </Markdown>
+            <Markdown className="text-sm">{recapDoc.content}</Markdown>
           </Surface>
         )}
       </div>

@@ -6,6 +6,7 @@ import { api } from "@eva/backend";
 import type { BackgroundAgentEntry, Id, SandboxOwner } from "@eva/backend";
 import { isSessionSandboxTab, type SandboxTab } from "@/lib/search-params";
 import { SandboxTabBar } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabBar";
+import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
@@ -215,39 +216,41 @@ export function TaskSandboxPanel({
             agents={agents}
           />
         </div>
-        <SandboxPaneSlots
-          activeTab={tabBarValue}
-          panes={panes}
-          preview={preview}
-          owner={owner}
-          sandboxId={sandboxId}
-          isActive={isActive}
-          repoId={repoId}
-          cacheKey={taskIdStr}
-          devCommand={devCommand}
-          prUrl={prUrl}
-          agentBrowsingAt={viewState?.agentBrowsingAt}
-          onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-          // Backend starts the app in the Console tmux session after startup.
-          runConsoleDevCommandOnConnect={false}
-          onStartSandbox={onStartSandbox}
-          isSandboxStarting={isSandboxStarting}
-          autoWakeEligible={autoWakeEligible}
-          // A collapsed rail is not on screen: no presence beacon, no auto-wake.
-          presenceEnabled={!collapsed}
-          stickyPreviewPath={viewState?.previewPath}
-          onStickyPreviewPathChange={(path) => {
-            void setPreviewPath({ owner, path });
-          }}
-          stickyTerminalHistoryTail={
-            viewState === undefined
-              ? undefined
-              : (viewState?.terminalHistoryTail ?? "")
-          }
-          onStickyTerminalHistoryTailChange={(tail) => {
-            void setTerminalHistoryTail({ owner, tail });
-          }}
-        />
+        <ReviewChatTargetProvider value={{ kind: "taskChat", taskId }}>
+          <SandboxPaneSlots
+            activeTab={tabBarValue}
+            panes={panes}
+            preview={preview}
+            owner={owner}
+            sandboxId={sandboxId}
+            isActive={isActive}
+            repoId={repoId}
+            cacheKey={taskIdStr}
+            devCommand={devCommand}
+            prUrl={prUrl}
+            agentBrowsingAt={viewState?.agentBrowsingAt}
+            onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
+            // Backend starts the app in the Console tmux session after startup.
+            runConsoleDevCommandOnConnect={false}
+            onStartSandbox={onStartSandbox}
+            isSandboxStarting={isSandboxStarting}
+            autoWakeEligible={autoWakeEligible}
+            // A collapsed rail is not on screen: no presence beacon, no auto-wake.
+            presenceEnabled={!collapsed}
+            stickyPreviewPath={viewState?.previewPath}
+            onStickyPreviewPathChange={(path) => {
+              void setPreviewPath({ owner, path });
+            }}
+            stickyTerminalHistoryTail={
+              viewState === undefined
+                ? undefined
+                : (viewState?.terminalHistoryTail ?? "")
+            }
+            onStickyTerminalHistoryTailChange={(tail) => {
+              void setTerminalHistoryTail({ owner, tail });
+            }}
+          />
+        </ReviewChatTargetProvider>
       </div>
     </SandboxPanelFrame>
   );
