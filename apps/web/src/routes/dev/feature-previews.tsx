@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button, WebPreview } from "@eva/ui";
+import { ActivityTasks, Button, WebPreview, type ActivityStep } from "@eva/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
@@ -28,6 +28,7 @@ import { RepoGate, RepoProvider } from "@/lib/contexts/RepoContext";
 import { PreviewPanelNavBar } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPanelNavBar";
 import { FILL_PREVIEW_VIEWPORT } from "@/routes/_repo/$owner/$repo/sessions/_utils/previewViewport";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
   DEMO_FORK_MESSAGES,
   DEMO_FORK_PREFIX,
@@ -43,6 +44,7 @@ const FEATURES = [
   "thread-find",
   "message-fork",
   "preview-tools",
+  "activity-trace",
 ] as const;
 
 // `.catch` keeps an unknown ?feature= on the default preview instead of
@@ -71,7 +73,108 @@ function FeaturePreviewsPage() {
   if (feature === "thread-find") return <ThreadFindPreview />;
   if (feature === "message-fork") return <MessageForkPreview />;
   if (feature === "preview-tools") return <PreviewToolsPreview />;
+  if (feature === "activity-trace") return <ActivityTracePreview />;
   return <CitePreview />;
+}
+
+const DEMO_TRACE_STEPS: ActivityStep[] = [
+  {
+    type: "thinking",
+    label: "Thought",
+    detail: "I will read the activity code first, then run the type check.",
+    status: "complete",
+  },
+  {
+    type: "read",
+    label: "Read activity-tasks.tsx",
+    path: "packages/ui/src/ai-elements/activity-tasks.tsx",
+    status: "complete",
+  },
+  {
+    type: "bash",
+    label: "Ran command",
+    detail: "pnpm tsc --noEmit",
+    command: "pnpm tsc --noEmit",
+    output: { text: "src/a.tsx(12,3): error TS2322", exitCode: 2 },
+    isError: true,
+    durationMs: 8200,
+    status: "complete",
+  },
+  {
+    type: "thinking",
+    label: "Thought",
+    detail: "The type check failed. A subagent can find every caller.",
+    status: "complete",
+  },
+  {
+    type: "subtask",
+    label: "Explore: find activity consumers",
+    toolUseId: "demo-agent",
+    status: "active",
+  },
+  {
+    type: "search_code",
+    label: "Searched code",
+    detail: "ActivityTasks",
+    parentToolUseId: "demo-agent",
+    durationMs: 1400,
+    status: "complete",
+  },
+  {
+    type: "thinking",
+    label: "Thought",
+    detail: "Two callers render the old Reasoning fold. Both move to Trace.",
+    parentToolUseId: "demo-agent",
+    durationMs: 12000,
+    status: "complete",
+  },
+  {
+    type: "search_code",
+    label: "Searching code",
+    detail: "Reasoning",
+    parentToolUseId: "demo-agent",
+    status: "active",
+  },
+  {
+    type: "todos",
+    label: "Updated task list",
+    status: "active",
+    todos: [
+      { content: "Read activity code", status: "completed" },
+      { content: "Build the Trace line", status: "completed" },
+      { content: "Move reasoning onto Trace", status: "in_progress" },
+      { content: "Verify in the browser", status: "pending" },
+    ],
+  },
+];
+
+const DEMO_STARTUP_ACTIVITY = JSON.stringify([
+  { type: "tool", label: "Creating sandbox...", status: "complete" },
+  { type: "tool", label: "Fetching base branch...", status: "complete" },
+  { type: "tool", label: "Setting up branch...", status: "active" },
+  { type: "tool", label: "Restoring seeded runtime...", status: "pending" },
+  { type: "tool", label: "Launching background commands...", status: "pending" },
+  { type: "tool", label: "Running startup commands...", status: "pending" },
+]);
+
+function ActivityTracePreview() {
+  return (
+    <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Activity timeline
+      </p>
+      <h1 className="mt-1 text-xl font-semibold">Trace lines</h1>
+      <div className="mt-8 grid max-w-5xl grid-cols-2 gap-10">
+        <div className="space-y-8">
+          <ActivityTasks steps={DEMO_TRACE_STEPS} isStreaming />
+        </div>
+        <div className="space-y-8">
+          <SandboxStartupSteps activity={DEMO_STARTUP_ACTIVITY} />
+          <ActivityTasks steps={DEMO_TRACE_STEPS} duration="1m 32s" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CitePreview() {

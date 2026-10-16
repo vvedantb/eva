@@ -76,8 +76,12 @@ const SANDBOX_STARTUP_LABELS = new Set([
   "Cloning repository...",
   "Installing dependencies...",
   "Fetching base branch...",
+  "Fetching task branch...",
   "Checking out base branch...",
   "Setting up branch...",
+  "Restoring seeded runtime...",
+  "Launching background commands...",
+  "Running startup commands...",
   "Starting desktop...",
   "Retrying sandbox setup...",
 ]);

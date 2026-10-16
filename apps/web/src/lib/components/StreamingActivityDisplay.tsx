@@ -2,13 +2,17 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
+import { IconBrain } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import {
   ActivityTasks,
-  Reasoning,
-  ReasoningTrigger,
-  CollapsibleContent,
   Shimmer,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
   Spinner,
   formatElapsed,
   useElapsedSeconds,
@@ -314,13 +318,20 @@ export function ActivityLogDisplay({
   }
 
   return (
-    <Reasoning defaultOpen={false}>
-      <ReasoningTrigger getThinkingMessage={() => "View logs"} />
-      <CollapsibleContent className="mt-4 text-sm text-muted-foreground">
+    <TraceCollapsible defaultOpen={false}>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceIcon>
+            <IconBrain />
+          </TraceIcon>
+          <TraceTitle>View logs</TraceTitle>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
         <pre className="whitespace-pre-wrap max-sm:wrap-break-word font-mono text-xs max-h-64 overflow-y-auto scroll-fade">
           {activityLog}
         </pre>
-      </CollapsibleContent>
-    </Reasoning>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }
