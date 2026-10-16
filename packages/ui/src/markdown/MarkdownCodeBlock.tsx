@@ -1,7 +1,7 @@
 "use client";
 
-import type { ComponentProps } from "react";
-import { cloneElement, isValidElement, useState } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { Fragment, cloneElement, isValidElement, useState } from "react";
 import {
   IconCheck,
   IconCopy,
@@ -12,12 +12,11 @@ import type { ExtraProps } from "streamdown";
 import { useIsCodeFenceIncomplete } from "streamdown";
 
 import { MessageAction } from "../ai-elements/message";
+import type { FencedCode } from "./codeFence";
 import { readFencedCode } from "./codeFence";
 import type { CodeLine, HighlightToken } from "./codeHighlight";
 import { useHighlightedLines } from "./codeHighlight";
-
-/** Languages Streamdown renders itself (diagrams), not as highlighted code. */
-const STREAMDOWN_RENDERED_LANGUAGES = new Set(["mermaid"]);
+import { useMermaidRender } from "./mermaid";
 const COPIED_MS = 1200;
 
 /**
@@ -123,19 +122,46 @@ function MarkdownCodeBlock({
 }
 
 /**
+ * A mermaid fence: the plain code block until the diagram has rendered, then
+ * Streamdown's diagram view (pan, zoom, fullscreen, download). A fence still
+ * streaming, or one that will not parse, stays code — no error box.
+ */
+function MarkdownMermaid({
+  fenced,
+  diagram,
+}: {
+  fenced: FencedCode;
+  diagram: ReactNode;
+}) {
+  const isIncomplete = useIsCodeFenceIncomplete();
+  const { theme, status } = useMermaidRender(fenced.code, !isIncomplete);
+  if (status === "done") {
+    // Streamdown renders once per mount, so a theme change remounts it.
+    return <Fragment key={theme}>{diagram}</Fragment>;
+  }
+  return (
+    <MarkdownCodeBlock
+      code={fenced.code}
+      language={fenced.language}
+      title={fenced.title}
+    />
+  );
+}
+
+/**
  * `pre` renderer: fenced code becomes our code block (header with file name or
- * language, wrap toggle, copy). Diagram fences fall through to Streamdown's own
- * `code` renderer, which is what its default `pre` does too.
+ * language, wrap toggle, copy). Mermaid fences become diagrams once they
+ * render, through Streamdown's own `code` renderer, which is what its default
+ * `pre` does too.
  */
 export function MarkdownPre({ children, node }: ComponentProps<"pre"> & ExtraProps) {
   const fenced = node ? readFencedCode(node) : null;
-  if (
-    fenced === null ||
-    STREAMDOWN_RENDERED_LANGUAGES.has(fenced.language.toLowerCase())
-  ) {
-    return isValidElement<{ "data-block"?: string }>(children)
-      ? cloneElement(children, { "data-block": "true" })
-      : <pre>{children}</pre>;
+  const passthrough = isValidElement<{ "data-block"?: string }>(children)
+    ? cloneElement(children, { "data-block": "true" })
+    : <pre>{children}</pre>;
+  if (fenced === null) return passthrough;
+  if (fenced.language.toLowerCase() === "mermaid") {
+    return <MarkdownMermaid fenced={fenced} diagram={passthrough} />;
   }
   return (
     <MarkdownCodeBlock

@@ -31,7 +31,9 @@ const pullRequestContextSchema = z
   .object({
     number: z.number().int().positive(),
     title: z.string().max(MAX_TITLE_LENGTH),
-    url: z.string().regex(/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+$/),
+    url: z
+      .string()
+      .regex(/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+$/),
     headBranch: z.string().min(1).max(MAX_BRANCH_LENGTH).optional(),
     baseBranch: z.string().min(1).max(MAX_BRANCH_LENGTH).optional(),
     state: z.enum(["open", "merged", "closed"]),
@@ -67,14 +69,12 @@ export function encodePullRequestDragPayload(pr: PullRequestContext): string {
 export function decodePullRequestDragPayload(
   raw: string,
 ): PullRequestContext | null {
-  let json: ReturnType<typeof JSON.parse>;
   try {
-    json = JSON.parse(raw);
+    const parsed = pullRequestContextSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
-  const parsed = pullRequestContextSchema.safeParse(json);
-  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -87,7 +87,10 @@ export function setPullRequestDragData(
   pr: PullRequestContext,
 ): void {
   dataTransfer.effectAllowed = "copyLink";
-  dataTransfer.setData(PULL_REQUEST_DRAG_MIME, encodePullRequestDragPayload(pr));
+  dataTransfer.setData(
+    PULL_REQUEST_DRAG_MIME,
+    encodePullRequestDragPayload(pr),
+  );
   dataTransfer.setData("text/uri-list", pr.url);
   dataTransfer.setData("text/plain", pr.url);
 }
@@ -97,15 +100,18 @@ export function addPullRequestContext(
   current: ReadonlyArray<PullRequestContext>,
   pr: PullRequestContext,
 ): ReadonlyArray<PullRequestContext> {
-  return current.some((item) => item.url === pr.url) ? current : [...current, pr];
+  return current.some((item) => item.url === pr.url)
+    ? current
+    : [...current, pr];
 }
 
 export function pullRequestStateLabel(pr: PullRequestContext): string {
   return pr.isDraft ? "draft" : pr.state;
 }
 
+/** One line per field: a newline in a title must not forge another field. */
 function escapePullRequestText(value: string): string {
-  return value.replaceAll("<", "\\u003c");
+  return value.replace(/\s+/g, " ").replaceAll("<", "\\u003c");
 }
 
 export function formatPullRequestBlock(pr: PullRequestContext): string {

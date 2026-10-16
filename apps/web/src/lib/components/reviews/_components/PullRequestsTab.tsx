@@ -6,6 +6,10 @@ import { Badge, LIST_ROW_CONTROL_CLASS, ListRow, cn } from "@eva/ui";
 import { IconExternalLink, IconGitPullRequest } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
+import {
+  pullRequestContextFromRow,
+  setPullRequestDragData,
+} from "@/lib/components/chat/pullRequestContext";
 
 export type ReviewPullRequest = FunctionReturnType<
   typeof api.pullRequests.listForOwner
@@ -23,7 +27,8 @@ const STATE_LABEL: Record<ReviewPullRequest["state"], string> = {
  * the one Eva opened, each linked repo's, and any the agent opened on a side
  * branch. Picking one points Summary, Timeline and Code at it. Rows reuse the
  * sidebar Reviews row's layout (state-coloured icon, title, then number and
- * age) so a PR reads the same in both places.
+ * age) so a PR reads the same in both places. Dragging a row into the
+ * composer attaches the PR as context for the next prompt.
  */
 export function PullRequestsTab({
   items,
@@ -79,6 +84,13 @@ function PullRequestRow({
     <ListRow
       selected={selected}
       onClick={onSelect}
+      draggable
+      onDragStart={(event) =>
+        setPullRequestDragData(
+          event.dataTransfer,
+          pullRequestContextFromRow(pr),
+        )
+      }
       aria-label={`Review #${pr.prNumber} ${title}`}
     >
       <div className="flex min-w-0 items-start gap-2">
