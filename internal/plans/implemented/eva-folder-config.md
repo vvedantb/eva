@@ -2,7 +2,7 @@
 
 Goal: move app run commands and MCP server definitions out of Convex and into an `.eva/` folder in each repo. Secrets, env vars, uploaded config files and Eva's runtime wrappers stay in Convex/code. Add an `eva-setup` system skill that writes the folder for new repos and migrates old ones.
 
-Supersedes the table design in [custom-mcp-servers.md](./custom-mcp-servers.md) (servers now come from `.eva/mcp.json`, not a `repoMcpServers` table).
+Supersedes the table design in [custom-mcp-servers.md](../todo/custom-mcp-servers.md) (servers now come from `.eva/mcp.json`, not a `repoMcpServers` table).
 
 ## Confirmed current behaviour (anchors)
 
@@ -157,6 +157,7 @@ Built in PR #977. Differences from the plan above:
 
 - **MCP:** the sandbox callback reads `.eva/mcp.json` straight from the checkout (`callback-src/evaMcp.ts`), so branch edits apply on the next agent launch with no backend read. Convex only caches server summaries for the settings page. http and stdio servers both work.
 - **Startup rerun:** the marker file `/tmp/.startup-commands-done` now holds the startup fingerprint (`_sandbox_runtime/startupMarker.ts`). A mismatch reruns startup on any surface; an empty legacy marker still counts as done.
+- **Review fixes:** apps can carry their own `snapshot` block (carepulse-ts has different seed commands per app); app rows the file does not list stay Convex-managed; the sync is best-effort; the seed fingerprint is read at seed launch; `strictMcpConfig` applies only when `.eva/mcp.json` exists; SSE servers keep their transport.
 - **Seed mismatch:** `resolveSandboxContext` reads the branch file through the GitHub API and boots the base Image when the seed fingerprint differs. Seed commands do not run on that boot (they are build-only); the agent must seed by hand. Follow-up if this matters.
 - **Dev command/port** still come from the default-branch cache, not the session branch. Follow-up.
 - **Migration:** no PR-opening action. The `eva-setup` skill receives a draft built from today's Convex commands and writes the file itself; the same button serves new and existing repos.
