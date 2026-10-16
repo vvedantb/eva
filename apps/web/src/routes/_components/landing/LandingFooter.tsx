@@ -1,23 +1,22 @@
 "use client";
 
 import { IconBrandGithub } from "@tabler/icons-react";
-import { EvaIcon } from "@/lib/components/EvaIcon";
 import {
   EVA_GITHUB_URL,
   EVA_SETUP_URL,
   LANDING_NAV_LINKS,
 } from "./landingContent";
+import { LandingBrand } from "./LandingBrand";
 
 /** Hairline footer: brand line, the same anchors as the nav, and the repository. */
 export function LandingFooter() {
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-10 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-10">
-        <div className="flex items-center gap-2.5">
-          <EvaIcon size={20} label={null} className="size-5 rounded-full" />
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-12 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-10">
+        <div className="flex flex-col gap-2">
+          <LandingBrand href="#top" />
           <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Eva</span> — MIT
-            licensed and free to self-host.
+            MIT licensed and free to self-host.
           </p>
         </div>
 
