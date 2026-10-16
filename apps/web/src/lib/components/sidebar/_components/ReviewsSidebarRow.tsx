@@ -17,6 +17,7 @@ import {
   SharedLayoutNavSurface,
   sidebarNavLinkClass,
 } from "@/lib/components/sidebar/SharedLayoutNav";
+import { useOpenPrOnGithubClick } from "@/lib/hooks/useOpenPrsOnGithub";
 
 /** How long the pointer must rest on a row before it counts as intent. */
 const HOVER_INTENT_MS = 90;
@@ -31,6 +32,8 @@ interface ReviewsSidebarRowProps {
     updatedAt: string;
   };
   href: string;
+  /** The PR on github.com; plain clicks go here when `openPrsOnGithub` is on. */
+  githubUrl: string;
   isActive: boolean;
   onNavigate?: () => void;
   /**
@@ -46,11 +49,13 @@ interface ReviewsSidebarRowProps {
 export function ReviewsSidebarRow({
   pr,
   href,
+  githubUrl,
   isActive,
   onNavigate,
   onPrefetch,
   onRename,
 }: ReviewsSidebarRowProps) {
+  const openPrOnGithubClick = useOpenPrOnGithubClick();
   // Sweeping the pointer down the list should not fire a fetch per row, so the
   // warm-up waits for the pointer to settle.
   const intentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +77,10 @@ export function ReviewsSidebarRow({
         <SharedLayoutNavSurface itemId={String(pr.number)} isActive={isActive}>
           <Link
             to={href}
-            onClick={() => onNavigate?.()}
+            onClick={(event) => {
+              openPrOnGithubClick(event, githubUrl);
+              onNavigate?.();
+            }}
             onPointerEnter={() => {
               cancelIntent();
               intentTimer.current = setTimeout(onPrefetch, HOVER_INTENT_MS);
