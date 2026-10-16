@@ -22,7 +22,7 @@ Supersedes the table design in [custom-mcp-servers.md](./custom-mcp-servers.md) 
 
 One root file, one entry per app (mirrors `launch.json`). Paths match `githubRepos.rootDirectory`.
 
-`.eva/setup.json`:
+`.eva/config.json`:
 
 ```jsonc
 {
@@ -56,26 +56,26 @@ Stays in Convex: `workflowRef`, schedule, env vars, `sandboxConfigFiles`, per-se
 
 ### 1. One parser, one fingerprint
 
-- New `convex/_evaConfig/schema.ts`: Zod schemas for `setup.json` and `mcp.json` (parse at the boundary; no casts). Export `parseEvaSetup(text)` → typed result or a list of readable errors.
+- New `convex/_evaConfig/schema.ts`: Zod schemas for `config.json` and `mcp.json` (parse at the boundary; no casts). Export `parseEvaSetup(text)` → typed result or a list of readable errors.
 - New `convex/_evaConfig/fingerprint.ts`: two djb2 hashes (reuse the existing djb2 body; delete the dead `getSeedFingerprint` / `getImageFingerprint`):
   - `seedFingerprint(app)` = `snapshot.build`, `snapshot.seed`, `app.stop`, `app.background`, config-file keys. Mismatch ⇒ seeded data is wrong.
   - `startupFingerprint(app)` = `app.startup`. Mismatch ⇒ rerun startup only.
 
 ### 2. Base-branch cache in Convex (keeps all current readers working)
 
-- Keep the existing `githubRepos` command fields and `repoSnapshots.buildCommands/seedCommands` as a **read cache** of the file on the snapshot branch. Add `githubRepos.configSource: "repo" | "convex"` and `evaConfigSha`.
-- Sync on push: extend the `githubWebhook.ts` push handler. When a push to `workflowRef` touches `.eva/`, schedule `syncEvaConfig(repoId)`. It reads the file through the GitHub contents API, parses it, and patches every sibling app row (matched by `path` ↔ `rootDirectory`). Also run it on connect and in the daily `syncAllRepos` cron.
+- Keep the existing `githubRepos` command fields and `repoSnapshots.buildCommands/seedCommands` as a **read cache** of the file on the repo's default branch (`defaultBaseBranch`). Add `githubRepos.configSource: "repo" | "convex"` and `evaConfigSha`.
+- Sync on push: extend the `githubWebhook.ts` push handler. When a push to `defaultBaseBranch` touches `.eva/`, schedule `syncEvaConfig(repoId)`. It reads the file through the GitHub contents API, parses it, and patches every sibling app row (matched by `path` ↔ `rootDirectory`). Also run it on connect and in the daily `syncAllRepos` cron.
 - Extract the unexported `readFileAtRef` (`_github/prDiff.ts:428-469`) into `_github/contents.ts` and reuse it.
 - Parse errors: keep the last good cache, store `evaConfigError`, show it in settings.
 
 ### 3. Snapshot build records what it used
 
-- `launchSeedRun` already reads commands from `githubRepos` (`snapshotActions.ts:314-325`). After the sync, that is the file's content. At capture, `setSeededSnapshotName` also stores `seededFingerprint = seedFingerprint(app)` and new `seededStartupFingerprint`.
+- `launchSeedRun` must read `.eva/config.json` from the branch it builds (`git show origin/<branch>:.eva/config.json` in the prep sandbox), not from the cache, because `workflowRef` can differ from `defaultBaseBranch`. Fall back to the cache only while a repo has no file. At capture, `setSeededSnapshotName` also stores `seededFingerprint = seedFingerprint(app)` and new `seededStartupFingerprint`.
 - Optional (not v1): skip a rebuild when the fingerprint and lockfile SHAs are unchanged.
 
 ### 4. Branch override at sandbox boot
 
-After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/setup.json` in the sandbox (reads the real branch, including unpushed commits) and parse it. Then:
+After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/config.json` in the sandbox (reads the real branch, including unpushed commits) and parse it. Then:
 
 | Branch file vs snapshot | Action |
 |---|---|
@@ -90,7 +90,7 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/setup
 
 ### 5. MCP from `.eva/mcp.json`
 
-- `signAndLaunchScript` (`_sandbox_runtime/helpers.ts`): read the cached `mcp.json` (synced like `setup.json`), substitute `${VAR}` from `resolveAllEnvVars`, skip a server with a missing var (warn, do not fail), and pass the servers in launch opts.
+- `signAndLaunchScript` (`_sandbox_runtime/helpers.ts`): read the cached `mcp.json` (synced like `config.json`), substitute `${VAR}` from `resolveAllEnvVars`, skip a server with a missing var (warn, do not fail), and pass the servers in launch opts.
 - `callback-src/evaMcp.ts`: merge them into the in-memory record. Reserved names `eva`, `linear`, `figma` always win; drop repo entries with those names.
 - Claude: set `strictMcpConfig: true` so the repo's `.mcp.json` does not load inside Eva. This ends the clash. Verify Cursor ignores `.cursor/mcp.json` when servers are passed; Codex/OpenCode already take only what Eva gives.
 - Rebuild `callbackScript.generated.ts`.
@@ -98,27 +98,27 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/setup
 
 ### 6. Settings UI
 
-- `AppClient.tsx` (startup, background, stop, dev command/port) and the build/seed fields in `SnapshotsClient.tsx`: when `configSource === "repo"`, show the values read-only with an "Edit in repo" link to the file on GitHub at `workflowRef`, plus any `evaConfigError`.
+- `AppClient.tsx` (startup, background, stop, dev command/port) and the build/seed fields in `SnapshotsClient.tsx`: when `configSource === "repo"`, show the values read-only with an "Edit in repo" link to the file on GitHub at `defaultBaseBranch`, plus any `evaConfigError`.
 - When `configSource === "convex"`, keep today's editors and add a "Move to repo" action (step 7).
 - `McpConfigClient.tsx`: list servers from `mcp.json` read-only.
 
 ### 7. Migration
 
-- Internal action `exportEvaConfig(repoId)`: build `setup.json` from today's Convex fields (all siblings + snapshot config). Open a PR `eva/move-config-to-repo` through the installation Octokit. Strip the redundant Convex wait loops (`convexLocalBackend` already handles readiness).
+- Internal action `exportEvaConfig(repoId)`: build `config.json` from today's Convex fields (all siblings + snapshot config). Open a PR `eva/move-config-to-repo` through the installation Octokit. Strip the redundant Convex wait loops (`convexLocalBackend` already handles readiness).
 - Run it for every connected repo. The "Move to repo" button calls the same action.
 - On merge, the webhook sync flips `configSource` to `"repo"`.
-- After all repos migrate, delete the Convex edit paths (`updateConfig` command fields, `setRepoCommandsInternal`, `saveRepoSnapshot` command fields). Keep the fields as cache.
+- After all repos migrate, remove the Convex fallback: delete the edit paths (`updateConfig` command fields, `setRepoCommandsInternal`, `saveRepoSnapshot` command fields), the "Move to repo" action and the `configSource === "convex"` branches. Keep the fields only as cache. A repo with no `.eva/config.json` then shows the "Set up with Eva" button.
 
 ### 8. `eva-setup` system skill
 
 - Add `eva-setup` to `_systemSkills/registry.ts`. Make it always available (no opt-in), because every repo needs it.
 - The skill tells the agent to:
   1. Detect the package manager, apps (`detectAppsForRepo`), services and DB.
-  2. Write `.eva/setup.json` and `.eva/mcp.json`. Convert any `.mcp.json` / `.cursor/mcp.json` servers to `${VAR}` form and leave out `eva`.
+  2. Write `.eva/config.json` and `.eva/mcp.json`. Convert any `.mcp.json` / `.cursor/mcp.json` servers to `${VAR}` form and leave out `eva`.
   3. Call `request_env_var` for each missing secret.
   4. Run the commands and prove the dev server answers on its port.
   5. Commit. Eva opens the PR.
-- Trigger: see unresolved question 1.
+- Trigger: a "Set up with Eva" button, shown when the repo has no `.eva/config.json` (or `evaConfigError` is set). It starts a session on the default branch with the skill invoked. Button placement is a visible choice; ask before building.
 
 ### Deferred (note only)
 
@@ -137,10 +137,15 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/setup
 9. `npx convex codegen --typecheck enable`, vitest, web `tsc`; `/changelog`.
 10. `/ship`.
 
+## Decided (2026-10-16)
+
+- Setup trigger: a "Set up with Eva" button, not an auto-start.
+- Cache source: the repo's default branch (`defaultBaseBranch`).
+- Convex fallback: remove it after all repos migrate.
+- File name: `.eva/config.json`.
+
 ## Unresolved questions
 
-1. Setup skill trigger: auto-start a setup session on repo connect, or a "Set up with Eva" button on the repo page?
-2. Should `.eva/mcp.json` also apply from the session branch (like `setup.json`), or only after merge (v1 plan)?
-3. Which branch is the cache's source of truth: `workflowRef` (snapshot branch, plan default) or `defaultBaseBranch`? They differ for new repos (`main` vs `staging`).
-4. Keep the Convex fallback forever for repos that cannot commit, or remove it once all repos migrate?
-5. File name: `.eva/setup.json` (plan) vs `.eva/config.json`?
+1. Should `.eva/mcp.json` edits on a session branch apply on that branch's next boot (like `config.json`), or only after merge (v1 plan)?
+2. Snapshots build from `workflowRef` (default `main`) but the cache follows `defaultBaseBranch` (default `staging`). Drop `workflowRef` and build snapshots from `defaultBaseBranch` too, so one branch drives everything?
+3. Where does the "Set up with Eva" button go (repo home empty state, settings App page, or both)?
