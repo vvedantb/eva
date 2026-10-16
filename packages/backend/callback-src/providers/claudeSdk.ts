@@ -95,6 +95,10 @@ export async function readSdkPlanUsage(
   return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
 }
 
+/** Node's own global prefix (node is `<prefix>/bin/node`); see `globalNpmRoots`. */
+const NODE_GLOBAL_ROOT =
+  dirname(dirname(process.execPath)) + "/lib/node_modules";
+
 /** Memoized: the warm daemon resolves pins repeatedly and `npm root -g` spawns a process. */
 let cachedGlobalNpmRoots: string[] | null = null;
 
@@ -116,9 +120,7 @@ let cachedGlobalNpmRoots: string[] | null = null;
  */
 function globalNpmRoots(): string[] {
   if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
-  const roots: string[] = [
-    dirname(dirname(process.execPath)) + "/lib/node_modules",
-  ];
+  const roots: string[] = [NODE_GLOBAL_ROOT];
   try {
     const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
     if (npmRoot) roots.push(npmRoot);
@@ -179,6 +181,12 @@ export function resolvePinnedSdkEntry(pin: {
   // the search has failed everywhere, so a stale copy in one root stays quiet
   // while another root serves the pin.
   let driftedVersion: string | null = null;
+  // Probe the node-derived root before `globalNpmRoots` spawns `npm root -g`
+  // (~100–250ms on the daemon boot path) — the seeded image always hits here.
+  const nodeRoot = NODE_GLOBAL_ROOT + "/" + pin.packageName;
+  if (installedPackageVersion(nodeRoot) === pin.version) {
+    return nodeRoot + pin.entryRelPath;
+  }
   for (const root of globalNpmRoots()) {
     const globalRoot = root + "/" + pin.packageName;
     const globalVersion = installedPackageVersion(globalRoot);
@@ -423,6 +431,12 @@ function buildSdkOptionsFromParts(
     DISABLE_ERROR_REPORTING: "1",
     // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
     ENABLE_TOOL_SEARCH: "auto",
+    // Do not hold the first turn until every HTTP MCP server (eva, linear,
+    // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
+    // first token ~3s sooner. The servers still join mid-turn; ToolSearch
+    // reaches them and the CLI tells the model a pending server "is still
+    // connecting" instead of reporting its tools missing.
+    CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0",
   };
   if (
     CLAIM_MUTATION ||

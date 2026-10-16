@@ -2,14 +2,17 @@
 
 import {
   CircleSpinner,
-  cn,
-  CrossfadeIconSlot,
   formatElapsed,
   Shimmer,
+  Trace,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
   useElapsedSeconds,
   type ActivityStep,
+  type TraceStatus,
 } from "@eva/ui";
-import { IconCheck, IconX } from "@tabler/icons-react";
+import { IconCheck, IconCircle, IconX } from "@tabler/icons-react";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
 
@@ -18,33 +21,34 @@ function stageLabel(label: string): string {
   return label.replace(/(\.{3}|…)$/, "");
 }
 
-function StageIcon({ step }: { step: ActivityStep }) {
-  const state = step.isError
-    ? "failed"
-    : step.status === "active"
-      ? "running"
-      : "done";
-  return (
-    <CrossfadeIconSlot
-      iconKey={state}
-      variant="soft"
-      className="relative flex size-4 shrink-0 items-center justify-center"
-    >
-      {state === "running" ? (
-        <CircleSpinner size="sm" className="size-3.5" />
-      ) : state === "failed" ? (
-        <IconX className="size-4" />
-      ) : (
-        <IconCheck className="size-4" />
-      )}
-    </CrossfadeIconSlot>
-  );
+type StageState = "pending" | "running" | "failed" | "done";
+
+function stageState(step: ActivityStep): StageState {
+  if (step.isError) return "failed";
+  if (step.status === "active") return "running";
+  if (step.status === "pending") return "pending";
+  return "done";
+}
+
+const STAGE_TRACE_STATUS: Record<StageState, TraceStatus | undefined> = {
+  pending: "pending",
+  running: "running",
+  failed: "error",
+  done: undefined,
+};
+
+function StageIcon({ state }: { state: StageState }) {
+  if (state === "running") return <CircleSpinner size="sm" className="size-3.5" />;
+  if (state === "failed") return <IconX />;
+  if (state === "pending") return <IconCircle className="size-3.5" />;
+  return <IconCheck />;
 }
 
 /**
  * Sandbox startup as a header plus one row per stage (create, fetch, branch…),
  * modelled on t3code's worktree setup card. The header shimmers while the run
- * is live; finished stages keep a check so the reader sees how far it got.
+ * is live; finished stages keep a check so the reader sees how far it got, and
+ * planned stages show faded so the reader sees what is left.
  */
 export function SandboxStartupSteps({
   activity,
@@ -76,32 +80,24 @@ export function SandboxStartupSteps({
         ) : null}
       </div>
       {steps.length > 0 ? (
-        <ul className="space-y-1">
+        <Trace>
           {steps.map((step, index) => {
-            const label = stageLabel(step.label);
-            const running = step.status === "active" && !step.isError;
+            const state = stageState(step);
             return (
-              <li
+              <TraceLine
                 key={`${step.label}:${index}`}
-                className={cn(
-                  "flex min-w-0 items-center gap-2 text-sm",
-                  step.isError ? "text-destructive" : "text-muted-foreground",
-                )}
+                status={STAGE_TRACE_STATUS[state]}
               >
-                <StageIcon step={step} />
-                <span className="min-w-0 truncate">
-                  {running ? (
-                    <Shimmer as="span" duration={2.5} spread={1.5}>
-                      {label}
-                    </Shimmer>
-                  ) : (
-                    label
-                  )}
-                </span>
-              </li>
+                <TraceIcon iconKey={state}>
+                  <StageIcon state={state} />
+                </TraceIcon>
+                <TraceTitle shimmer={state === "running"}>
+                  {stageLabel(step.label)}
+                </TraceTitle>
+              </TraceLine>
             );
           })}
-        </ul>
+        </Trace>
       ) : null}
     </section>
   );

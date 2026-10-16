@@ -66,7 +66,7 @@ import {
   startClaimedTurn,
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
-import { runCursorSdkAttempt } from "./cursorSdk.js";
+import { preloadCursorSdk, runCursorSdkAttempt } from "./cursorSdk.js";
 import { resolveDaemonPaths } from "./daemonPaths.js";
 
 // Same knobs as the Claude/Codex daemons (see claudeSdkDaemon.ts for the
@@ -530,12 +530,17 @@ export async function runCursorTurnWorker(): Promise<void> {
   resetTurnState();
   startClaimedTurn(turn);
   try {
-    const preflightOk = await runPreflightHeartbeat();
+    // A fresh process per turn: import the SDK while the two independent
+    // Convex round trips (lease preflight, GitHub token) run side by side.
+    preloadCursorSdk();
+    const [preflightOk] = await Promise.all([
+      runPreflightHeartbeat(),
+      refreshGithubToken(),
+    ]);
     if (!preflightOk) {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-    await refreshGithubToken();
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();

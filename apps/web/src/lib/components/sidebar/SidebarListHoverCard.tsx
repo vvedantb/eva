@@ -10,6 +10,11 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@eva/ui";
 import { IconGitBranch, IconGitFork } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { sessionHrefForRow } from "@/lib/components/sidebar/_utils/repoSessionPaths";
+import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+import {
+  RepoAppMark,
+  type RepoAppMarkRepo,
+} from "@/lib/components/RepoLogo";
 
 function authorDisplayName(user: {
   firstName?: string | null;
@@ -138,6 +143,8 @@ interface SessionHoverCardBodyProps {
   userId: Id<"users">;
   /** Branch chosen at session creation. Absent on sessions predating the field. */
   baseBranch?: string;
+  /** The session's app, named above the title (rows in a linked group). */
+  app?: RepoAppMarkRepo;
 }
 
 /**
@@ -151,6 +158,7 @@ export function SessionHoverCardBody({
   createdAt,
   userId,
   baseBranch,
+  app,
 }: SessionHoverCardBodyProps) {
   const fetchedPreview = useQuery(
     api.sessions.getFirstMessagePreview,
@@ -161,6 +169,14 @@ export function SessionHoverCardBody({
 
   return (
     <>
+      {app ? (
+        <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
+          <RepoAppMark repo={app} />
+          <span className="truncate text-xs text-muted-foreground">
+            {repoDisplayLabel(app)}
+          </span>
+        </div>
+      ) : null}
       <p className="text-sm font-medium text-foreground">{title}</p>
       {preview ? (
         <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">

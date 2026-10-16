@@ -13,6 +13,7 @@ import {
   IconGitBranch,
   IconGitFork,
   IconLink,
+  IconLinkOff,
   IconPencil,
   IconSparkles,
 } from "@tabler/icons-react";
@@ -60,6 +61,8 @@ interface SessionMenuItemsProps {
   onArchiveRequest?: () => void;
   /** Archived list: unarchive. */
   onUnarchive?: () => Promise<void>;
+  /** Rows in a linked-session group: take the session out of the group. */
+  onRemoveFromGroup?: () => void;
 }
 
 /**
@@ -76,6 +79,7 @@ export function SessionMenuItems({
   onSendForReview,
   onArchiveRequest,
   onUnarchive,
+  onRemoveFromGroup,
 }: SessionMenuItemsProps) {
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
   const forkSession = useAction(api.sandbox.forkSession);
@@ -195,6 +199,15 @@ export function SessionMenuItems({
             <IconEye size={16} className="text-status-code-review" />
             Send for Review
             <ConfirmSkipHint />
+          </ContextMenuItem>
+        </>
+      ) : null}
+      {onRemoveFromGroup ? (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={onRemoveFromGroup}>
+            <IconLinkOff size={16} />
+            Remove from group
           </ContextMenuItem>
         </>
       ) : null}

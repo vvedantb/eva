@@ -5,6 +5,7 @@ export {
   getByNumId,
   getFirstMessagePreview,
   getForkLinks,
+  listGroup,
   countActive,
 } from "./_sessions/queries";
 
@@ -42,6 +43,7 @@ export {
 } from "./_sessions/sandbox";
 
 export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
+export { renameGroup, removeFromGroup } from "./_sessions/groups";
 
 export {
   getForkSource,
