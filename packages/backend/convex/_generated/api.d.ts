@@ -184,6 +184,7 @@ import type * as _prRecapWorkflow_prompts from "../_prRecapWorkflow/prompts.js";
 import type * as _prRecapWorkflow_recapState from "../_prRecapWorkflow/recapState.js";
 import type * as _prRecapWorkflow_staleDoc from "../_prRecapWorkflow/staleDoc.js";
 import type * as _prRecapWorkflow_start from "../_prRecapWorkflow/start.js";
+import type * as _prRecapWorkflow_walkthrough from "../_prRecapWorkflow/walkthrough.js";
 import type * as _previewToolCalls_calls from "../_previewToolCalls/calls.js";
 import type * as _projects_chatPrompt from "../_projects/chatPrompt.js";
 import type * as _projects_development from "../_projects/development.js";
@@ -727,6 +728,7 @@ declare const fullApi: ApiFromModules<{
   "_prRecapWorkflow/recapState": typeof _prRecapWorkflow_recapState;
   "_prRecapWorkflow/staleDoc": typeof _prRecapWorkflow_staleDoc;
   "_prRecapWorkflow/start": typeof _prRecapWorkflow_start;
+  "_prRecapWorkflow/walkthrough": typeof _prRecapWorkflow_walkthrough;
   "_previewToolCalls/calls": typeof _previewToolCalls_calls;
   "_projects/chatPrompt": typeof _projects_chatPrompt;
   "_projects/development": typeof _projects_development;
