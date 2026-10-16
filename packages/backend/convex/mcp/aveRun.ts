@@ -36,6 +36,8 @@ export const AVE_TOOL_NAMES = [
   "get_agent_state",
   "send_agent_message",
   "create_session",
+  "rename_session_group",
+  "remove_from_session_group",
   "create_task",
   "create_and_run_task",
   "create_tasks_batch",
