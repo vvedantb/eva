@@ -94,7 +94,7 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/confi
 - `callback-src/evaMcp.ts`: merge them into the in-memory record. Reserved names `eva`, `linear`, `figma` always win; drop repo entries with those names.
 - Claude: set `strictMcpConfig: true` so the repo's `.mcp.json` does not load inside Eva. This ends the clash. Verify Cursor ignores `.cursor/mcp.json` when servers are passed; Codex/OpenCode already take only what Eva gives.
 - Rebuild `callbackScript.generated.ts`.
-- Branch-local `mcp.json` changes apply from the cache only after merge (v1). Note in the skill.
+- Branch-local `mcp.json` changes apply on that branch's next agent launch: read `.eva/mcp.json` from the sandbox checkout at launch, fall back to the default-branch cache when absent.
 
 ### 6. Settings UI
 
@@ -143,9 +143,9 @@ After checkout, in `sessions.ts` / `prepareSandboxSteps.ts`, run `cat .eva/confi
 - Cache source: the repo's default branch (`defaultBaseBranch`).
 - Convex fallback: remove it after all repos migrate.
 - File name: `.eva/config.json`.
+- Branch `mcp.json` edits apply on that branch's next agent launch.
+- Snapshots build from `defaultBaseBranch`; delete `repoSnapshots.workflowRef` and its Snapshots-page field.
 
 ## Unresolved questions
 
-1. Should `.eva/mcp.json` edits on a session branch apply on that branch's next boot (like `config.json`), or only after merge (v1 plan)?
-2. Snapshots build from `workflowRef` (default `main`) but the cache follows `defaultBaseBranch` (default `staging`). Drop `workflowRef` and build snapshots from `defaultBaseBranch` too, so one branch drives everything?
-3. Where does the "Set up with Eva" button go (repo home empty state, settings App page, or both)?
+1. Where does the "Set up with Eva" button go (repo home empty state, settings App page, or both)?
