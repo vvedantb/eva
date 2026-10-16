@@ -301,7 +301,7 @@ describe("the cursor daemon's per-turn ordering", () => {
       "async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {",
     );
     const flushAt = finalize.indexOf("await drainStreamingAndCompleteSteps()");
-    const serializeAt = finalize.indexOf("serializeSteps(S.accumulatedSteps)");
+    const serializeAt = finalize.indexOf("serializeFinalSteps(");
     const deliverAt = finalize.indexOf("deliverCompletionWithMedia(");
     expect(flushAt, "the pre-completion drain is gone").toBeGreaterThan(-1);
     expect(serializeAt, "the activity log build moved").toBeGreaterThan(-1);

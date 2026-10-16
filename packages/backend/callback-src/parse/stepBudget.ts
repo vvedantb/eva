@@ -11,6 +11,8 @@ export const STEP_FIELD_CAPS = {
   /** Reasoning prose per burst; head-capped so one turn's thinking cannot
    * dominate the payload. Prose rides `detail` (see applyReasoningSnapshot). */
   reasoning: 6000,
+  /** Reply text the agent writes between tool runs, per run; head-capped. */
+  response: 4000,
   /** Soft ceiling for the whole steps JSON payload (under Convex 1 MiB). */
   jsonBytes: 600 * 1024,
 } as const;
@@ -103,4 +105,29 @@ export function enforceStepBudget(steps: ProgressStep[]): ProgressStep[] {
 /** Budget-enforce then stringify — use for every activityLog / heartbeat payload. */
 export function serializeSteps(steps: ProgressStep[]): string {
   return JSON.stringify(enforceStepBudget(steps));
+}
+
+/**
+ * Serializes a finished turn's steps without the response rows its final
+ * message already shows, so no words are printed twice. Codex can fall back
+ * to the whole streamed buffer as its result, so every row is checked, not
+ * only the trailing ones.
+ */
+export function serializeFinalSteps(
+  steps: ProgressStep[],
+  finalText: string,
+): string {
+  const final = finalText.trim();
+  const kept = final
+    ? steps.filter((step) => {
+        // Only the agent's own text can echo the final message; subagent text
+        // (`parentToolUseId`, prose in `output`) belongs to its child thread.
+        if (step.type !== "response" || step.parentToolUseId !== undefined) {
+          return true;
+        }
+        const detail = (step.detail ?? "").trim();
+        return !final.includes(detail) && !detail.startsWith(final);
+      })
+    : steps;
+  return serializeSteps(kept);
 }

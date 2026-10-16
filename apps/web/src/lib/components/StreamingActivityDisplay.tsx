@@ -24,6 +24,7 @@ import {
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
 import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
@@ -171,6 +172,7 @@ export function StreamingActivityDisplay({
   isSandboxStartup?: boolean;
 }) {
   const simpleView = useSimpleView();
+  const layout = useActivityLayout();
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
   const streamIsSilent = useSilentStreamNotice(
     activity,
@@ -219,6 +221,7 @@ export function StreamingActivityDisplay({
       icon={icon}
       startedAt={startedAt}
       onOpenFile={onOpenFile}
+      layout={layout}
     />
   );
 }
@@ -284,6 +287,7 @@ export function ActivityLogDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
+  const layout = useActivityLayout();
   const { fullLog, request } = useFullActivityLog(messageId);
   const duration =
     startedAt && finishedAt ? formatDuration(startedAt, finishedAt) : undefined;
@@ -304,6 +308,7 @@ export function ActivityLogDisplay({
         finalText={finalText}
         onOpenFile={onOpenFile}
         onRequestFullDetail={request}
+        layout={layout}
       />
     );
   }
