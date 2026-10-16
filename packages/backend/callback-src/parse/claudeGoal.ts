@@ -43,7 +43,8 @@ export type ClaudeGoal = {
 const GOAL_SET_PREFIX = "Goal set: ";
 const GOAL_CLEARED_PREFIX = "Goal cleared: ";
 const NO_GOAL_SET = "No goal set";
-const GOAL_ACTIVE = /^Goal active: ([\s\S]+?) \((?:not yet evaluated|(\d+) turns?)\)/;
+const GOAL_ACTIVE =
+  /^Goal active: ([\s\S]+?) \((?:not yet evaluated|(\d+) turns?)\)/;
 const STOP_HOOK_FEEDBACK_PREFIX = "Stop hook feedback:\n[";
 const UNRECOVERABLE_CLEAR_PREFIX = "Goal cleared after an unrecoverable error";
 /** Claude truncates the repeated condition in Stop hook feedback to this. */

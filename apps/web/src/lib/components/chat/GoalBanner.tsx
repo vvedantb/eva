@@ -67,7 +67,10 @@ export function GoalBanner({
                 {goal.status === "complete" ? "Met" : "Active"}
               </Badge>
             </div>
-            <p className="line-clamp-2 text-sm font-medium" title={goal.objective}>
+            <p
+              className="line-clamp-2 text-sm font-medium"
+              title={goal.objective}
+            >
               {goal.objective}
             </p>
             <p className="truncate text-xs text-muted-foreground">

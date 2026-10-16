@@ -1,8 +1,5 @@
 import { v } from "convex/values";
-import {
-  agentGoalValidator,
-  type AgentGoal,
-} from "../_validators/tableFields";
+import { agentGoalValidator, type AgentGoal } from "../_validators/tableFields";
 
 /** Daemon `updateGoal` argument: the chat's goal now, or null once cleared. */
 export const agentGoalArg = v.union(agentGoalValidator, v.null());

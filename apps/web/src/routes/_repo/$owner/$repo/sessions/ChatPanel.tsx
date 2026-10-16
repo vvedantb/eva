@@ -302,7 +302,8 @@ export function ChatPanel({
     // reach the harness verbatim.
     sendCommand: isReadOnly
       ? undefined
-      : (command) => handleSend(command, undefined, { skipReviewComments: true }),
+      : (command) =>
+          handleSend(command, undefined, { skipReviewComments: true }),
   };
 
   const activeQuestion = useHeldQuery(
