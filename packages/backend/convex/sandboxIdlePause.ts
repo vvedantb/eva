@@ -470,7 +470,7 @@ export const inspectCandidate = internalQuery({
  *   - `stopping` — an owner is mid-stop and nothing wants the VM.
  *   - `closed`   — every owner is stopped and idle, so a running VM is a leak.
  *
- * The Vercel SDK resumes a stopped sandbox on any exec (`withResume`), so a
+ * The Vercel SDK resumes a stopped sandbox on any exec (lazy resume), so a
  * background job that runs a command after Stop silently wakes the VM while
  * the owner row still says `closed`. Idle pause only scans `active` rows, so
  * those VMs used to bill until someone stopped them by hand.

@@ -10,8 +10,10 @@
  *   `handle.id === sandbox.name` and resolve `get(sandboxId)` via `Sandbox.get({ name })`.
  * - Resources: the neutral create params carry no vCPU count, so we default it
  *   (Vercel gives 2 GB RAM per vCPU). Override via SANDBOX_VERCEL_VCPUS if needed.
- * - Lifecycle: Vercel is persistent-by-default and auto-resumes on `get`, so
- *   `start()` is a no-op and `archive()` maps to `stop()` (stop auto-snapshots).
+ * - Lifecycle: Vercel is persistent-by-default and the SDK auto-resumes on
+ *   `get` and on any exec. Eva turns both off (`resume: false`,
+ *   `withoutLazyResume`), so only `start()` wakes a stopped sandbox.
+ *   `archive()` maps to `stop()` (stop auto-snapshots).
  * - git: no native git client — implemented over the shell via runCommand.
  * - PTY: implemented, but NOT via the neutral `SandboxPty` interface, so
  *   `this.pty` stays undefined here. Vercel's PTY is a client-connect WebSocket
@@ -398,9 +400,9 @@ class VercelDesktop implements SandboxDesktop {
  * even though the env still points there. createSandbox runs the setup only
  * once, at create, so without this the cache lasts only until the first stop.
  *
- * Wired as the SDK's `onResume`, which fires on BOTH resume paths: the explicit
- * `Sandbox.get({ resume: true })` in start(), and the lazy resume `withResume`
- * performs when a command hits a stopped session. The SDK holds the callback
+ * Wired as the SDK's `onResume`, which fires on the explicit
+ * `Sandbox.get({ resume: true })` in start() (lazy resume is off, see
+ * `withoutLazyResume`). The SDK holds the callback
  * per Sandbox object rather than on the server, so it is passed at every
  * `Sandbox.get`/`Sandbox.create` in this file.
  *
@@ -487,13 +489,29 @@ function mountFallbackLadder(
 }
 
 /** A handle to one Vercel sandbox, exposing the neutral {@link SandboxHandle}. */
+/**
+ * Turns the SDK's lazy resume off (patched SDK, see
+ * `patches/@vercel__sandbox@3.5.1.patch`). Unpatched, every exec, file read
+ * or write on a stopped sandbox resumes it (`withResume`), so a background
+ * job that ran after Stop woke the VM and left it billing while Eva showed it
+ * closed. With this off, such calls throw `SandboxNotRunningError`; only
+ * `start()` (explicit `Sandbox.get({ resume: true })`) or create wakes a VM.
+ * Every `Sandbox` a handle holds must pass through here.
+ */
+function withoutLazyResume(sandbox: Sandbox): Sandbox {
+  sandbox.setAutoResume(false);
+  return sandbox;
+}
+
 class VercelSandboxHandle implements SandboxHandle {
   readonly desktop: SandboxDesktop;
+  private sandbox: Sandbox;
 
   constructor(
-    private sandbox: Sandbox,
+    sandbox: Sandbox,
     private readonly creds: VercelCredentials,
   ) {
+    this.sandbox = withoutLazyResume(sandbox);
     this.desktop = new VercelDesktop(this);
   }
 
@@ -888,12 +906,14 @@ class VercelSandboxHandle implements SandboxHandle {
         continue;
       }
       try {
-        this.sandbox = await Sandbox.get({
-          ...this.creds,
-          onResume: rewireDriveCacheOnResume,
-          name: this.sandbox.name,
-          resume: true,
-        });
+        this.sandbox = withoutLazyResume(
+          await Sandbox.get({
+            ...this.creds,
+            onResume: rewireDriveCacheOnResume,
+            name: this.sandbox.name,
+            resume: true,
+          }),
+        );
         observed = this.state;
         if (observed === "running") return;
       } catch (e) {
@@ -1102,12 +1122,14 @@ class VercelSandboxHandle implements SandboxHandle {
     // sandbox silently resumes it server-side — status polls (preview checks,
     // stop preflights) were waking sandboxes the user had just stopped. Reads
     // must be side-effect free; only start() resumes explicitly.
-    this.sandbox = await Sandbox.get({
-      ...this.creds,
-      onResume: rewireDriveCacheOnResume,
-      name: this.sandbox.name,
-      resume: false,
-    });
+    this.sandbox = withoutLazyResume(
+      await Sandbox.get({
+        ...this.creds,
+        onResume: rewireDriveCacheOnResume,
+        name: this.sandbox.name,
+        resume: false,
+      }),
+    );
   }
 
   async previewUrl(port: number): Promise<PreviewUrl> {
@@ -1357,8 +1379,8 @@ class VercelSandboxClient implements SandboxClient {
   async get(sandboxId: string): Promise<SandboxHandle> {
     // resume:false — the SDK default (true) silently RESUMES a stopped sandbox
     // on lookup, so status checks / preview polls were waking sandboxes the
-    // user had just stopped. Resume happens only via handle.start() or lazily
-    // on the first exec (the SDK's withResume).
+    // user had just stopped. Resume happens only via handle.start(); lazy
+    // resume on exec is off (see withoutLazyResume).
     const sandbox = await Sandbox.get({
       ...this.creds,
       onResume: rewireDriveCacheOnResume,

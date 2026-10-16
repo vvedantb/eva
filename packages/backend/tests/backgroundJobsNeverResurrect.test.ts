@@ -52,3 +52,20 @@ describe("background jobs never resurrect a stopped sandbox", () => {
     expect(guardAt).toBeLessThan(handleAt);
   });
 });
+
+describe("every Vercel sandbox handle has lazy resume off", () => {
+  const provider = convexSource("_sandbox/vercelProvider.ts");
+
+  test("each reassignment of the held Sandbox goes through withoutLazyResume", () => {
+    const assignments = provider.match(/this\.sandbox = [^;]*/g) ?? [];
+    expect(assignments.length).toBeGreaterThan(0);
+    for (const assignment of assignments) {
+      expect(assignment).toContain("withoutLazyResume(");
+    }
+  });
+
+  test("the handle constructor turns it off for get() and create()", () => {
+    const ctor = exportBody(provider, "class VercelSandboxHandle");
+    expect(ctor).toContain("this.sandbox = withoutLazyResume(sandbox)");
+  });
+});
