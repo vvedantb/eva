@@ -38,7 +38,7 @@ import {
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { serializeSteps } from "../parse/stepBudget.js";
+import { serializeFinalSteps, serializeSteps } from "../parse/stepBudget.js";
 import { trimBufferHead } from "../runtime/buffers.js";
 import {
   syncClaudeStateToPersist,
@@ -433,7 +433,10 @@ async function finalizeTurn(
   // loop has parsed this turn's tool steps — yielding an empty "[]" activityLog.
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(S.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    S.accumulatedSteps,
+    resultEvent?.result ?? "",
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = buildTurnCompletionPayload({
     success,
@@ -968,7 +971,10 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(S.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    S.accumulatedSteps,
+    resultEvent?.result ?? "",
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs: Record<string, JsonValue> = entityMutationArgs({
     messageId,

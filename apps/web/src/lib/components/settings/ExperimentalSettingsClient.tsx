@@ -216,7 +216,7 @@ export function ExperimentalSettingsClient() {
         <ListEnter index={11} fast staggerMax={8}>
           <SettingsToggleRow
             title="Claude-style activity steps"
-            description="Keep a reply's activity steps open in chat after the agent finishes, instead of folding them under Worked for."
+            description="Keep a reply's activity steps open in chat after the agent finishes, instead of folding them under Worked for. Text the agent writes between tool runs shows in order, between the steps (new turns only)."
             action={
               <Switch
                 checked={flags.claudeStyleActivity}
