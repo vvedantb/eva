@@ -4,46 +4,66 @@ import { linkedSessionGroups } from "./linkedSessionGroups";
 const row = (
   id: string,
   createdAt: number,
-  extra: { root?: string; linkedFrom?: object } = {},
+  extra: { group?: string; name?: string; linkedFrom?: object } = {},
 ) => ({
   _id: id,
   _creationTime: createdAt,
   title: `title ${id}`,
-  sessionGroupRootId: extra.root,
+  sessionGroupId: extra.group,
+  sessionGroupName: extra.name,
   linkedFrom: extra.linkedFrom,
 });
 
 describe("linkedSessionGroups", () => {
-  test("groups linked sessions across repos, root first", () => {
+  test("groups linked sessions across repos, oldest first", () => {
     const groups = linkedSessionGroups([
-      { repo: "ts", sessions: [row("child", 2, { root: "root" }), row("solo", 9)] },
-      { repo: "v2", sessions: [row("root", 1, { root: "root" })] },
+      {
+        repo: "ts",
+        sessions: [row("child", 2, { group: "g" }), row("solo", 9)],
+      },
+      { repo: "v2", sessions: [row("origin", 1, { group: "g" })] },
     ]);
     expect(groups).toEqual([
       {
-        rootId: "root",
-        title: "title root",
+        groupId: "g",
+        name: undefined,
+        label: "title origin",
         members: [
-          { session: row("root", 1, { root: "root" }), repo: "v2" },
-          { session: row("child", 2, { root: "root" }), repo: "ts" },
+          { session: row("origin", 1, { group: "g" }), repo: "v2" },
+          { session: row("child", 2, { group: "g" }), repo: "ts" },
         ],
       },
     ]);
   });
 
-  test("a lone visible member forms no group", () => {
+  test("a user-set name labels the group", () => {
+    const [group] = linkedSessionGroups([
+      {
+        repo: "ts",
+        sessions: [row("a", 1, { group: "g", name: "Referrals" })],
+      },
+    ]);
+    expect(group.label).toBe("Referrals");
+  });
+
+  test("a lone visible member still shows as its group", () => {
     expect(
       linkedSessionGroups([
-        { repo: "ts", sessions: [row("child", 2, { root: "root" })] },
-      ]),
-    ).toEqual([]);
+        { repo: "ts", sessions: [row("child", 2, { group: "g" })] },
+      ]).map((group) => group.members.length),
+    ).toEqual([1]);
   });
 
   test("a session listed twice keeps its own repo's row", () => {
-    const own = row("b", 2, { root: "a" });
     const [group] = linkedSessionGroups([
-      { repo: "other", sessions: [row("b", 2, { root: "a", linkedFrom: {} })] },
-      { repo: "home", sessions: [row("a", 1, { root: "a" }), own] },
+      {
+        repo: "other",
+        sessions: [row("b", 2, { group: "g", linkedFrom: {} })],
+      },
+      {
+        repo: "home",
+        sessions: [row("a", 1, { group: "g" }), row("b", 2, { group: "g" })],
+      },
     ]);
     expect(group.members.map((m) => m.repo)).toEqual(["home", "home"]);
   });

@@ -74,6 +74,8 @@ interface SidebarSessionRowProps<T extends SessionItem> {
   onRenameRequest?: (session: T) => void;
   /** Name the row's repo (rows in a cross-repo linked-session group). */
   showRepo?: boolean;
+  /** Rows in a linked-session group: shows "Remove from group". */
+  onRemoveFromGroup?: (session: T) => void;
 }
 
 /**
@@ -91,6 +93,7 @@ export function SidebarSessionRow<T extends SessionItem>({
   onForkNavigate,
   onRenameRequest,
   showRepo = false,
+  onRemoveFromGroup,
 }: SidebarSessionRowProps<T>) {
   const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
@@ -174,6 +177,9 @@ export function SidebarSessionRow<T extends SessionItem>({
               isArchivedList && onUnarchive
                 ? () => onUnarchive(session)
                 : undefined
+            }
+            onRemoveFromGroup={
+              onRemoveFromGroup ? () => onRemoveFromGroup(session) : undefined
             }
             onArchiveRequest={
               !isArchivedList && onArchiveRequest

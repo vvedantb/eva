@@ -289,6 +289,7 @@ import type * as _sessions_backgroundAgents from "../_sessions/backgroundAgents.
 import type * as _sessions_baseBranch from "../_sessions/baseBranch.js";
 import type * as _sessions_execution from "../_sessions/execution.js";
 import type * as _sessions_fork from "../_sessions/fork.js";
+import type * as _sessions_groups from "../_sessions/groups.js";
 import type * as _sessions_helpers from "../_sessions/helpers.js";
 import type * as _sessions_internal from "../_sessions/internal.js";
 import type * as _sessions_mutations from "../_sessions/mutations.js";
@@ -824,6 +825,7 @@ declare const fullApi: ApiFromModules<{
   "_sessions/baseBranch": typeof _sessions_baseBranch;
   "_sessions/execution": typeof _sessions_execution;
   "_sessions/fork": typeof _sessions_fork;
+  "_sessions/groups": typeof _sessions_groups;
   "_sessions/helpers": typeof _sessions_helpers;
   "_sessions/internal": typeof _sessions_internal;
   "_sessions/mutations": typeof _sessions_mutations;

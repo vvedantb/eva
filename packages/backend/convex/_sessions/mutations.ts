@@ -105,19 +105,22 @@ export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
 /**
  * The linked-session group a new session spun up from `sourceId` joins. A
- * source not yet in a group becomes the root of a new one.
+ * source not yet in a group gets a new one.
  */
 async function joinSessionGroup(
   ctx: AuthMutationCtx,
   sourceId: Id<"sessions">,
-): Promise<Id<"sessions">> {
+): Promise<Id<"sessionGroups">> {
   const source = await ctx.db.get(sourceId);
   if (!source || !(await hasRepoAccess(ctx.db, source.repoId, ctx.userId))) {
     throw new Error("Source session not found");
   }
-  if (source.sessionGroupRootId) return source.sessionGroupRootId;
-  await ctx.db.patch(source._id, { sessionGroupRootId: source._id });
-  return source._id;
+  if (source.sessionGroupId) return source.sessionGroupId;
+  const groupId = await ctx.db.insert("sessionGroups", {
+    createdBy: ctx.userId,
+  });
+  await ctx.db.patch(source._id, { sessionGroupId: groupId });
+  return groupId;
 }
 
 /**
@@ -166,7 +169,7 @@ export async function createSession(
   }
   const installDependencies =
     args.installDependencies ?? group?.installDependencies ?? true;
-  const sessionGroupRootId =
+  const sessionGroupId =
     args.fromSessionId === undefined
       ? undefined
       : await joinSessionGroup(ctx, args.fromSessionId);
@@ -205,7 +208,7 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
-    ...(sessionGroupRootId ? { sessionGroupRootId } : {}),
+    ...(sessionGroupId ? { sessionGroupId } : {}),
     ...(fork
       ? {
           forkedFromSessionId: fork.sourceSessionId,

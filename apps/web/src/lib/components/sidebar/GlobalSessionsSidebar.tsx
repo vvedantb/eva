@@ -4,7 +4,7 @@ import { useMutation, useQueries } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Dialog,
@@ -21,6 +21,7 @@ import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalS
 import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
 import { linkedSessionGroups } from "@/lib/components/sidebar/_utils/linkedSessionGroups";
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
+import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
   sessionActivityAt,
   sortAppsForSidebar,
@@ -44,6 +45,45 @@ interface GlobalSessionsSidebarProps {
   onNavigate?: () => void;
 }
 
+const SESSION_LIST_QUERIES = {
+  active: api.sessions.list,
+  archived: api.sessions.listArchived,
+} satisfies Record<SessionListMode, unknown>;
+
+type SessionListQueries = Record<
+  string,
+  {
+    query: (typeof SESSION_LIST_QUERIES)[SessionListMode];
+    args: { repoId: RepoRow["_id"] };
+  }
+>;
+
+const sessionListQueryCache = new Map<string, SessionListQueries>();
+
+/**
+ * One list query per repo for the mode. `useQueries` resubscribes, and sets
+ * state in render, whenever its argument changes identity. A render-local memo
+ * did not hold across React's render-phase retry and looped ("Too many
+ * re-renders"), so the maps are cached here by their value.
+ */
+function sessionListQueries(
+  mode: SessionListMode,
+  repos: RepoRow[] | undefined,
+): SessionListQueries {
+  const ids = (repos ?? []).map((repo) => repo._id);
+  const key = `${mode}:${ids.join(",")}`;
+  const cached = sessionListQueryCache.get(key);
+  if (cached) return cached;
+  const queries: SessionListQueries = Object.fromEntries(
+    ids.map((repoId) => [
+      repoId,
+      { query: SESSION_LIST_QUERIES[mode], args: { repoId } },
+    ]),
+  );
+  sessionListQueryCache.set(key, queries);
+  return queries;
+}
+
 /**
  * One app's rows out of the `useQueries` map. A failed query is reported as an
  * `Error` value; a group treats that the same as "still loading" rather than
@@ -64,6 +104,7 @@ export function GlobalSessionsSidebar({
   onNavigate,
 }: GlobalSessionsSidebarProps) {
   const { settings, setListMode } = useSessionsSidebarSettings();
+  const { listMode } = settings;
   const altHeld = useAltHeld();
   const { archive, isArchiving } = useArchiveSession();
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
@@ -101,21 +142,9 @@ export function GlobalSessionsSidebar({
   };
   const updateSession = useMutation(api.sessions.update);
 
-  // Stable identity required by useQueries. This is the only watch on the
-  // list: the rows are handed to each group as a prop.
-  const sessionListQueries = useMemo(() => {
-    if (repos === undefined) return {};
-    return Object.fromEntries(
-      repos.map((repo) => [
-        repo._id,
-        {
-          query: api.sessions.list,
-          args: { repoId: repo._id },
-        },
-      ]),
-    );
-  }, [repos]);
-  const sessionsByRepoId = useQueries(sessionListQueries);
+  // The only watch on the lists: the rows are handed to each group as a prop.
+  // The list mode picks active or archived rows, so linked groups form in both.
+  const sessionsByRepoId = useQueries(sessionListQueries(listMode, repos));
 
   const latestActivityByAppId = new Map<string, number>();
   for (const [repoId, result] of Object.entries(sessionsByRepoId)) {
@@ -134,16 +163,16 @@ export function GlobalSessionsSidebar({
       : sortAppsForSidebar(repos, settings.appSortOrder, latestActivityByAppId);
 
   // Linked sessions (one agent spun up another) leave their repo lists for a
-  // cross-repo group of their own. Active list only.
+  // cross-repo group of their own, in both list modes.
   const linkedGroups =
-    settings.listMode === "active" && repos !== undefined
-      ? linkedSessionGroups(
+    repos === undefined
+      ? []
+      : linkedSessionGroups(
           repos.map((repo) => ({
             repo,
             sessions: listedSessions(sessionsByRepoId[repo._id]) ?? [],
           })),
-        )
-      : [];
+        );
   const linkedSessionIds = new Set<string>(
     linkedGroups.flatMap((group) =>
       group.members.map((member) => member.session._id),
@@ -205,9 +234,10 @@ export function GlobalSessionsSidebar({
                 <div className="space-y-3">
                   {linkedGroups.map((group) => (
                     <LinkedSessionGroupSection
-                      key={group.rootId}
+                      key={group.groupId}
                       group={group}
                       pathname={pathname}
+                      listMode={settings.listMode}
                       onNavigate={onNavigate}
                       onRenameRequest={onRenameRequest}
                       onArchiveRequest={onArchiveRequest}
@@ -218,7 +248,7 @@ export function GlobalSessionsSidebar({
                       key={repo._id}
                       repo={repo}
                       pathname={pathname}
-                      activeSessions={listedSessions(
+                      sessions={listedSessions(
                         sessionsByRepoId[repo._id],
                       )?.filter(
                         (session) => !linkedSessionIds.has(session._id),
