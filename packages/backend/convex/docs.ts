@@ -665,7 +665,13 @@ async function upsertPrRecapDocImpl(
       kind: "pr-recap",
       prUrl: args.prUrl,
       prNumber: args.prNumber,
-      headSha: args.headSha,
+      // A pending run has no recap for its commit yet. Keep the commit of the
+      // recap still on show, so a failed run cannot hide the stale banner;
+      // the ready write records the new commit.
+      headSha:
+        args.prRecapStatus === "pending" && existing.headSha !== undefined
+          ? existing.headSha
+          : args.headSha,
       prRecapStatus: resolved.prRecapStatus,
       prRecapError: resolved.prRecapError,
       // Only overwrite the walkthrough when the agent produced one, so a failed

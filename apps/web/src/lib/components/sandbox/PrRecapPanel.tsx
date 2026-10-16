@@ -18,7 +18,6 @@ import {
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
   ActivityTasks,
-  Button,
   Spinner,
   Surface,
   Tabs,
@@ -264,24 +263,12 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       {recapDoc.headSha !== undefined &&
       isViewableRecap(recapDoc) &&
       !isPending ? (
+        // No action here: the toolbar's Regenerate (with its model picker)
+        // sits right above, and two buttons for one action read as two.
         <RecapStaleBanner
           prUrl={prUrl}
           repoId={repoId}
           recapSha={recapDoc.headSha}
-          action={
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 shrink-0"
-              disabled={isGenerating}
-              onClick={() => {
-                void handleGenerate();
-              }}
-            >
-              {isGenerating ? <Spinner size="sm" /> : null}
-              Regenerate
-            </Button>
-          }
         />
       ) : null}
 
