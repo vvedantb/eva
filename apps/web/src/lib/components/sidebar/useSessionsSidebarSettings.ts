@@ -37,6 +37,7 @@ function parseSettings(raw: SessionsSidebarSettings): SessionsSidebarSettings {
     sessionPreviewCount: clampSessionPreviewCount(raw.sessionPreviewCount),
     listMode,
     layout,
+    onlyMine: raw.onlyMine === true,
   };
 }
 
@@ -67,6 +68,9 @@ export function useSessionsSidebarSettings() {
     },
     setLayout: (layout: SessionLayout) => {
       setRaw((prev) => ({ ...parseSettings(prev), layout }));
+    },
+    setOnlyMine: (onlyMine: boolean) => {
+      setRaw((prev) => ({ ...parseSettings(prev), onlyMine }));
     },
   };
 }
