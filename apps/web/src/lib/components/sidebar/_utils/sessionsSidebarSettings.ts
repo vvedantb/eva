@@ -43,6 +43,8 @@ export interface SessionsSidebarSettings {
   sessionPreviewCount: number;
   listMode: SessionListMode;
   layout: SessionLayout;
+  /** Hide sessions another teammate started. */
+  onlyMine: boolean;
 }
 
 export const DEFAULT_SESSIONS_SIDEBAR_SETTINGS: SessionsSidebarSettings = {
@@ -51,6 +53,7 @@ export const DEFAULT_SESSIONS_SIDEBAR_SETTINGS: SessionsSidebarSettings = {
   sessionPreviewCount: DEFAULT_SESSION_PREVIEW_COUNT,
   listMode: "active",
   layout: "list",
+  onlyMine: false,
 };
 
 export function isAppSortOrder(value: string): value is AppSortOrder {
@@ -95,6 +98,25 @@ export function sessionActivityAt(session: {
   _creationTime: number;
 }): number {
   return session.updatedAt ?? session._creationTime;
+}
+
+/** The user who started a session; older rows have no `createdBy`. */
+export function sessionStartedBy<T extends string>(session: {
+  userId: T;
+  createdBy?: T;
+}): T {
+  return session.createdBy ?? session.userId;
+}
+
+/**
+ * Keeps only sessions `userId` started. Stays `undefined` (loading) while the
+ * rows or the current user are still loading.
+ */
+export function filterSessionsStartedBy<
+  T extends { userId: string; createdBy?: string },
+>(sessions: T[] | undefined, userId: string | undefined): T[] | undefined {
+  if (sessions === undefined || userId === undefined) return undefined;
+  return sessions.filter((session) => sessionStartedBy(session) === userId);
 }
 
 /**
