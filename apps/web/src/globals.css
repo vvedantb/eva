@@ -317,58 +317,80 @@
   background-color: rgb(var(--background));
   background-image:
     radial-gradient(
-      ellipse 90% 55% at 50% -12%,
-      rgb(var(--primary) / 0.13),
-      transparent 58%
+      ellipse 70% 50% at 50% -8%,
+      rgb(var(--primary) / 0.16),
+      transparent 62%
     ),
     radial-gradient(
-      ellipse 45% 35% at 100% 100%,
-      rgb(var(--primary) / 0.05),
-      transparent 55%
+      ellipse 40% 40% at 88% 18%,
+      rgb(var(--chart-2) / 0.08),
+      transparent 60%
     ),
-    linear-gradient(rgb(var(--foreground) / 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(var(--foreground) / 0.04) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    100% 100%,
-    56px 56px,
-    56px 56px;
+    radial-gradient(
+      ellipse 40% 40% at 10% 30%,
+      rgb(var(--chart-3) / 0.07),
+      transparent 60%
+    );
 
   .dark & {
     background-image:
       radial-gradient(
-        ellipse 90% 55% at 50% -12%,
-        rgb(var(--primary) / 0.09),
-        transparent 58%
+        ellipse 70% 50% at 50% -8%,
+        rgb(var(--primary) / 0.12),
+        transparent 62%
       ),
       radial-gradient(
-        ellipse 45% 35% at 100% 100%,
-        rgb(var(--primary) / 0.04),
-        transparent 55%
+        ellipse 40% 40% at 88% 18%,
+        rgb(var(--chart-2) / 0.06),
+        transparent 60%
       ),
-      linear-gradient(rgb(var(--foreground) / 0.055) 1px, transparent 1px),
-      linear-gradient(
-        90deg,
-        rgb(var(--foreground) / 0.055) 1px,
-        transparent 1px
+      radial-gradient(
+        ellipse 40% 40% at 10% 30%,
+        rgb(var(--chart-3) / 0.05),
+        transparent 60%
       );
   }
+}
 
-  .dark.neutral & {
-    background-image:
-      radial-gradient(
-        ellipse 90% 55% at 50% -12%,
-        rgb(var(--primary) / 0.1),
-        transparent 58%
-      ),
-      radial-gradient(
-        ellipse 45% 35% at 100% 100%,
-        rgb(var(--primary) / 0.045),
-        transparent 55%
-      ),
-      linear-gradient(rgb(var(--foreground) / 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(var(--foreground) / 0.06) 1px, transparent 1px);
-  }
+/* Hairline grid that fades out from the top centre, layered over
+ * `landing-atmosphere` as its own element so the mask only hits the lines. */
+@utility landing-grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgb(var(--foreground) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--foreground) / 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center top;
+  mask-image: radial-gradient(
+    ellipse 70% 60% at 50% 0%,
+    black 30%,
+    transparent 100%
+  );
+}
+
+/* Second half of the hero headline: foreground fading into the muted tone. */
+@utility landing-headline-tail {
+  background-image: linear-gradient(
+    100deg,
+    rgb(var(--foreground)) 10%,
+    rgb(var(--muted-foreground)) 95%
+  );
+  background-clip: text;
+  color: transparent;
+}
+
+/* Soft glow that sits behind a hero mock. Static — never animate this blur. */
+@utility landing-glow {
+  pointer-events: none;
+  position: absolute;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--primary) / 0.22),
+    transparent
+  );
+  filter: blur(40px);
 }
 
 @utility landing-grain {
@@ -395,7 +417,7 @@
 
 @utility landing-display {
   font-family: "Geist Sans", var(--font-sans);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
 }
 
 @utility landing-mock-body {
