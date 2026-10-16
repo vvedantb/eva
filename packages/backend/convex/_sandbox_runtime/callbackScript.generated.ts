@@ -474,6 +474,14 @@ import {
   writeFileSync
 } from "fs";
 
+// callback-src/jsonGuards.ts
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function trimmedString(value) {
+  return typeof value === "string" ? value.trim() || void 0 : void 0;
+}
+
 // callback-src/parse/questionInput.ts
 function parseQuestionOptions(value) {
   if (!Array.isArray(value)) return [];
@@ -505,8 +513,75 @@ function parseQuestionInput(input) {
 }
 
 // callback-src/runtime/state.ts
+function nonEmptyString(value) {
+  return typeof value === "string" && value ? value : void 0;
+}
+function parsePriorOutput(value) {
+  if (!isJsonObject(value) || typeof value.text !== "string") {
+    return void 0;
+  }
+  return {
+    text: value.text,
+    exitCode: typeof value.exitCode === "number" ? value.exitCode : void 0,
+    truncated: value.truncated === true ? true : void 0
+  };
+}
+function parsePriorEdits(values) {
+  const edits = [];
+  for (const edit of values) {
+    if (!isJsonObject(edit)) continue;
+    if (typeof edit.oldText !== "string" || typeof edit.newText !== "string") {
+      continue;
+    }
+    edits.push({ oldText: edit.oldText, newText: edit.newText });
+  }
+  return edits.length > 0 ? edits : void 0;
+}
+function parsePriorFiles(values) {
+  const files = [];
+  for (const file of values) {
+    const trimmed = trimmedString(file);
+    if (trimmed) {
+      files.push(trimmed);
+    }
+  }
+  return files.length > 0 ? files : void 0;
+}
+function parsePriorTodos(values) {
+  const todos = [];
+  for (const item of values) {
+    if (!isJsonObject(item)) continue;
+    if (typeof item.content !== "string" || !item.content) continue;
+    const status = item.status === "in_progress" || item.status === "completed" ? item.status : "pending";
+    todos.push({ content: item.content, status });
+  }
+  return todos.length > 0 ? todos : void 0;
+}
+function parsePriorAnswers(value) {
+  const answers = {};
+  for (const [question, answer] of Object.entries(value)) {
+    if (typeof answer === "string") {
+      answers[question] = answer;
+    }
+  }
+  return Object.keys(answers).length > 0 ? answers : void 0;
+}
+function addPriorStepPayload(step, value) {
+  const output = parsePriorOutput(value.output);
+  if (output) step.output = output;
+  const edits = Array.isArray(value.edits) ? parsePriorEdits(value.edits) : void 0;
+  if (edits) step.edits = edits;
+  const files = Array.isArray(value.files) ? parsePriorFiles(value.files) : void 0;
+  if (files) step.files = files;
+  const todos = Array.isArray(value.todos) ? parsePriorTodos(value.todos) : void 0;
+  if (todos) step.todos = todos;
+  const questions = Array.isArray(value.questions) ? parseQuestionInput({ questions: value.questions }) : void 0;
+  if (questions) step.questions = questions;
+  const answers = isJsonObject(value.answers) ? parsePriorAnswers(value.answers) : void 0;
+  if (answers) step.answers = answers;
+}
 function parsePriorStep(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
   const label = value.label;
@@ -526,84 +601,21 @@ function parsePriorStep(value) {
     path: typeof path3 === "string" ? path3 : void 0,
     status: "complete"
   };
-  if (typeof value.toolUseId === "string" && value.toolUseId.trim()) {
-    step.toolUseId = value.toolUseId.trim();
-  }
-  if (typeof value.parentToolUseId === "string" && value.parentToolUseId.trim()) {
-    step.parentToolUseId = value.parentToolUseId.trim();
-  }
-  if (typeof value.command === "string" && value.command) {
-    step.command = value.command;
-  }
-  if (typeof value.contentPreview === "string" && value.contentPreview) {
-    step.contentPreview = value.contentPreview;
-  }
+  const toolUseId = trimmedString(value.toolUseId);
+  if (toolUseId) step.toolUseId = toolUseId;
+  const parentToolUseId = trimmedString(value.parentToolUseId);
+  if (parentToolUseId) step.parentToolUseId = parentToolUseId;
+  const command = nonEmptyString(value.command);
+  if (command) step.command = command;
+  const contentPreview = nonEmptyString(value.contentPreview);
+  if (contentPreview) step.contentPreview = contentPreview;
   if (value.isError === true) {
     step.isError = true;
   }
   if (typeof value.durationMs === "number" && Number.isFinite(value.durationMs)) {
     step.durationMs = value.durationMs;
   }
-  if (value.output && typeof value.output === "object" && !Array.isArray(value.output) && typeof value.output.text === "string") {
-    step.output = {
-      text: value.output.text,
-      exitCode: typeof value.output.exitCode === "number" ? value.output.exitCode : void 0,
-      truncated: value.output.truncated === true ? true : void 0
-    };
-  }
-  if (Array.isArray(value.edits)) {
-    const edits = [];
-    for (const edit of value.edits) {
-      if (!edit || typeof edit !== "object" || Array.isArray(edit)) continue;
-      if (typeof edit.oldText !== "string" || typeof edit.newText !== "string") {
-        continue;
-      }
-      edits.push({ oldText: edit.oldText, newText: edit.newText });
-    }
-    if (edits.length > 0) {
-      step.edits = edits;
-    }
-  }
-  if (Array.isArray(value.files)) {
-    const files = [];
-    for (const file of value.files) {
-      if (typeof file === "string" && file.trim()) {
-        files.push(file.trim());
-      }
-    }
-    if (files.length > 0) {
-      step.files = files;
-    }
-  }
-  if (Array.isArray(value.todos)) {
-    const todos = [];
-    for (const item of value.todos) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      if (typeof item.content !== "string" || !item.content) continue;
-      const status = item.status === "in_progress" || item.status === "completed" ? item.status : "pending";
-      todos.push({ content: item.content, status });
-    }
-    if (todos.length > 0) {
-      step.todos = todos;
-    }
-  }
-  if (Array.isArray(value.questions)) {
-    const questions = parseQuestionInput({ questions: value.questions });
-    if (questions) {
-      step.questions = questions;
-    }
-  }
-  if (value.answers && typeof value.answers === "object" && !Array.isArray(value.answers)) {
-    const answers = {};
-    for (const [question, answer] of Object.entries(value.answers)) {
-      if (typeof answer === "string") {
-        answers[question] = answer;
-      }
-    }
-    if (Object.keys(answers).length > 0) {
-      step.answers = answers;
-    }
-  }
+  addPriorStepPayload(step, value);
   return step;
 }
 var callbackState = {
@@ -763,7 +775,7 @@ function log(msg) {
   }
 }
 function asJsonObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isJsonObject(value) ? value : {};
 }
 function tryParseJson(text) {
   try {
@@ -1544,17 +1556,17 @@ function opencodeToolToStep(part) {
   }
   return step;
 }
-function cursorSdkToolToStep(name, args) {
-  const pickString = (keys) => {
-    for (const key of keys) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return value;
-      }
+function pickCursorString(args, keys) {
+  for (const key of keys) {
+    const value = args[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
     }
-    return "";
-  };
-  const rawPath = pickString([
+  }
+  return "";
+}
+function getCursorToolFields(args) {
+  const rawPath = pickCursorString(args, [
     "path",
     "file_path",
     "filePath",
@@ -1563,26 +1575,72 @@ function cursorSdkToolToStep(name, args) {
     "relativePath",
     "relative_path"
   ]);
-  const path3 = rawPath ? shortenPath(rawPath) : "";
-  const command = pickString(["command", "cmd"]);
-  const query = pickString([
-    "query",
-    "pattern",
-    "url",
-    "glob_pattern",
-    "globPattern"
+  return {
+    args,
+    rawPath,
+    path: rawPath ? shortenPath(rawPath) : "",
+    command: pickCursorString(args, ["command", "cmd"]),
+    query: pickCursorString(args, [
+      "query",
+      "pattern",
+      "url",
+      "glob_pattern",
+      "globPattern"
+    ])
+  };
+}
+function pathStep(type, label, detail, rawPath) {
+  return {
+    type,
+    label,
+    detail: detail || void 0,
+    path: rawPath || void 0,
+    status: "active"
+  };
+}
+function detailStep(type, label, detail) {
+  return { type, label, detail: detail || void 0, status: "active" };
+}
+function cursorShellStep(fields) {
+  const { command } = fields;
+  return {
+    type: "bash",
+    label: "Running command...",
+    detail: command ? command.slice(0, 300) : void 0,
+    command: command ? capCommand(command) : void 0,
+    status: "active"
+  };
+}
+function cursorTasksStep() {
+  return { type: "tool", label: "Updating tasks...", status: "active" };
+}
+function cursorMcpStep(fields) {
+  const server = pickCursorString(fields.args, [
+    "server",
+    "serverName",
+    "server_name",
+    "toolName",
+    "tool_name"
   ]);
-  switch (name) {
-    case "read":
-      return {
-        type: "read",
-        label: "Reading file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
-    case "write": {
-      const fileText = pickString([
+  return {
+    type: "tool",
+    label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
+    status: "active"
+  };
+}
+function cursorSearchCodeStep(fields) {
+  return detailStep(
+    "search_code",
+    "Searching code...",
+    fields.query || fields.path
+  );
+}
+var CURSOR_KNOWN_TOOL_STEPS = /* @__PURE__ */ new Map([
+  ["read", (f) => pathStep("read", "Reading file...", f.path, f.rawPath)],
+  [
+    "write",
+    (f) => {
+      const fileText = pickCursorString(f.args, [
         "fileText",
         "file_text",
         "content",
@@ -1591,179 +1649,109 @@ function cursorSdkToolToStep(name, args) {
       return {
         type: "write",
         label: "Creating file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
+        detail: f.path || void 0,
+        path: f.rawPath || void 0,
         contentPreview: fileText ? capContentPreview(fileText) : void 0,
         status: "active"
       };
     }
-    case "edit":
-      return {
-        type: "edit",
-        label: "Editing file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        edits: extractClaudeEdits(args),
-        status: "active"
-      };
-    case "delete":
-      return {
-        type: "edit",
-        label: "Deleting file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
-    case "glob":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: query || path3 || void 0,
-        status: "active"
-      };
-    case "ls":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: path3 || void 0,
-        status: "active"
-      };
-    case "grep":
-    case "semSearch":
-      return {
-        type: "search_code",
-        label: "Searching code...",
-        detail: query || path3 || void 0,
-        status: "active"
-      };
-    case "shell":
-      return {
-        type: "bash",
-        label: "Running command...",
-        detail: command ? command.slice(0, 300) : void 0,
-        command: command ? capCommand(command) : void 0,
-        status: "active"
-      };
-    case "task":
-      return {
-        type: "subtask",
-        label: "Running agent...",
-        detail: pickString(["description", "prompt"]) || void 0,
-        status: "active"
-      };
-    case "createPlan":
-    case "updateTodos":
-      return { type: "tool", label: "Updating tasks...", status: "active" };
-    case "mcp": {
-      const server = pickString([
-        "server",
-        "serverName",
-        "server_name",
-        "toolName",
-        "tool_name"
-      ]);
-      return {
-        type: "tool",
-        label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-        status: "active"
-      };
-    }
-  }
-  const tool = name.toLowerCase();
-  if (tool.includes("read")) {
-    return {
-      type: "read",
-      label: "Reading file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("write") || tool.includes("create")) {
-    return {
-      type: "write",
-      label: "Creating file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("edit") || tool.includes("patch") || tool.includes("apply") || tool.includes("replace")) {
-    return {
+  ],
+  [
+    "edit",
+    (f) => ({
       type: "edit",
       label: "Editing file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active",
-      edits: extractClaudeEdits(args)
-    };
-  }
-  if (tool.includes("delete") || tool.includes("remove")) {
-    return {
-      type: "edit",
-      label: "Deleting file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
+      detail: f.path || void 0,
+      path: f.rawPath || void 0,
+      edits: extractClaudeEdits(f.args),
       status: "active"
-    };
+    })
+  ],
+  ["delete", (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)],
+  [
+    "glob",
+    (f) => detailStep("search_files", "Searching files...", f.query || f.path)
+  ],
+  ["ls", (f) => detailStep("search_files", "Searching files...", f.path)],
+  ["grep", cursorSearchCodeStep],
+  ["semSearch", cursorSearchCodeStep],
+  ["shell", cursorShellStep],
+  [
+    "task",
+    (f) => detailStep(
+      "subtask",
+      "Running agent...",
+      pickCursorString(f.args, ["description", "prompt"])
+    )
+  ],
+  ["createPlan", cursorTasksStep],
+  ["updateTodos", cursorTasksStep],
+  ["mcp", cursorMcpStep]
+]);
+var CURSOR_HEURISTIC_TOOL_STEPS = [
+  {
+    matches: (tool) => tool.includes("read"),
+    toStep: (f) => pathStep("read", "Reading file...", f.path, f.rawPath)
+  },
+  {
+    matches: (tool) => tool.includes("write") || tool.includes("create"),
+    toStep: (f) => pathStep("write", "Creating file...", f.path, f.rawPath)
+  },
+  {
+    matches: (tool) => tool.includes("edit") || tool.includes("patch") || tool.includes("apply") || tool.includes("replace"),
+    toStep: (f) => ({
+      ...pathStep("edit", "Editing file...", f.path, f.rawPath),
+      edits: extractClaudeEdits(f.args)
+    })
+  },
+  {
+    matches: (tool) => tool.includes("delete") || tool.includes("remove"),
+    toStep: (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)
+  },
+  {
+    matches: (tool) => tool.includes("glob") || tool.includes("list"),
+    toStep: (f) => detailStep("search_files", "Searching files...", f.query || f.path)
+  },
+  // Before grep/search: every web-search name also contains "search".
+  {
+    matches: (tool) => tool.includes("websearch") || tool.includes("web_search"),
+    toStep: (f) => detailStep("web_search", "Searching web...", f.query)
+  },
+  {
+    matches: (tool) => tool.includes("grep") || tool.includes("search"),
+    toStep: (f, tool) => detailStep(
+      tool.includes("file") ? "search_files" : "search_code",
+      tool.includes("file") ? "Searching files..." : "Searching code...",
+      f.query || f.path
+    )
+  },
+  {
+    matches: (tool) => tool.includes("bash") || tool.includes("shell") || tool.includes("exec") || tool.includes("command") || tool.includes("terminal"),
+    toStep: cursorShellStep
+  },
+  {
+    matches: (tool) => tool.includes("webfetch") || tool.includes("web_fetch") || tool.includes("fetch") && !tool.includes("search"),
+    toStep: (f) => detailStep("web_fetch", "Fetching URL...", f.query)
+  },
+  {
+    matches: (tool) => tool.includes("todo") || tool.includes("plan"),
+    toStep: cursorTasksStep
+  },
+  {
+    matches: (tool) => tool.includes("mcp"),
+    toStep: cursorMcpStep
   }
-  if (tool.includes("glob") || tool.includes("list")) {
-    return {
-      type: "search_files",
-      label: "Searching files...",
-      detail: query || path3 || void 0,
-      status: "active"
-    };
+];
+function cursorSdkToolToStep(name, args) {
+  const fields = getCursorToolFields(args);
+  const known = CURSOR_KNOWN_TOOL_STEPS.get(name);
+  if (known) {
+    return known(fields);
   }
-  if (tool.includes("grep") || tool.includes("search")) {
-    return {
-      type: tool.includes("file") ? "search_files" : "search_code",
-      label: tool.includes("file") ? "Searching files..." : "Searching code...",
-      detail: query || path3 || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("bash") || tool.includes("shell") || tool.includes("exec") || tool.includes("command") || tool.includes("terminal")) {
-    return {
-      type: "bash",
-      label: "Running command...",
-      detail: command ? command.slice(0, 300) : void 0,
-      command: command ? capCommand(command) : void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("webfetch") || tool.includes("web_fetch") || tool.includes("fetch") && !tool.includes("search")) {
-    return {
-      type: "web_fetch",
-      label: "Fetching URL...",
-      detail: query || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("websearch") || tool.includes("web_search")) {
-    return {
-      type: "web_search",
-      label: "Searching web...",
-      detail: query || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("todo") || tool.includes("plan")) {
-    return { type: "tool", label: "Updating tasks...", status: "active" };
-  }
-  if (tool.includes("mcp")) {
-    const server = pickString([
-      "server",
-      "serverName",
-      "server_name",
-      "toolName",
-      "tool_name"
-    ]);
-    return {
-      type: "tool",
-      label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-      status: "active"
-    };
+  const tool = name.toLowerCase();
+  const rule = CURSOR_HEURISTIC_TOOL_STEPS.find((r) => r.matches(tool));
+  if (rule) {
+    return rule.toStep(fields, tool);
   }
   return {
     type: "tool",
@@ -1945,9 +1933,8 @@ function getCodexAgentMessageText(item) {
   }
   return parts.join("");
 }
-function codexItemToStep(item) {
+function getCodexItemFields(item) {
   const itemType = item && typeof item.type === "string" && item.type.trim() ? item.type.trim() : "tool";
-  const normalizedType = itemType.toLowerCase();
   const pathValue = getCodexFieldValue(item, [
     "file_path",
     "path",
@@ -1955,130 +1942,116 @@ function codexItemToStep(item) {
     "target_path",
     "notebook_path"
   ]);
-  const queryValue = getCodexFieldValue(item, ["query", "pattern", "url"]);
-  const commandValue = getCodexFieldValue(item, ["command", "cmd"]);
-  const descriptionValue = getCodexFieldValue(item, [
-    "description",
-    "name",
-    "tool",
-    "skill"
-  ]);
-  const normalizedDescription = descriptionValue.toLowerCase();
-  const pathDetail = pathValue ? shortenPath(String(pathValue)) : "";
-  const itemId = typeof item.id === "string" && item.id.trim() ? item.id.trim() : void 0;
-  const withId = (step) => {
-    if (itemId) step.toolUseId = itemId;
-    return step;
+  return {
+    item,
+    itemType,
+    pathValue,
+    queryValue: getCodexFieldValue(item, ["query", "pattern", "url"]),
+    commandValue: getCodexFieldValue(item, ["command", "cmd"]),
+    descriptionValue: getCodexFieldValue(item, [
+      "description",
+      "name",
+      "tool",
+      "skill"
+    ]),
+    pathDetail: pathValue ? shortenPath(String(pathValue)) : ""
   };
-  if (normalizedType.includes("file_change") || normalizedType === "filechange") {
-    const files = extractFilePaths(item);
-    return withId({
-      type: "edit",
-      label: "Editing file...",
-      detail: files[0] ? shortenPath(files[0]) : pathDetail || void 0,
-      path: files[0] || pathValue || void 0,
-      files: files.length > 0 ? files : void 0,
-      status: "active"
-    });
+}
+function codexFileChangeStep(fields) {
+  const files = extractFilePaths(fields.item);
+  return {
+    type: "edit",
+    label: "Editing file...",
+    detail: files[0] ? shortenPath(files[0]) : fields.pathDetail || void 0,
+    path: files[0] || fields.pathValue || void 0,
+    files: files.length > 0 ? files : void 0,
+    status: "active"
+  };
+}
+function codexMcpToolStep(fields) {
+  const { descriptionValue } = fields;
+  const normalizedDescription = descriptionValue.toLowerCase();
+  if (normalizedDescription.includes("fetch_file")) {
+    return detailStep("read", "Reading file...", descriptionValue);
   }
-  if (normalizedType === "mcp_tool_call" || normalizedType === "mcptoolcall") {
-    if (normalizedDescription.includes("fetch_file")) {
-      return withId({
-        type: "read",
-        label: "Reading file...",
-        detail: descriptionValue || void 0,
-        status: "active"
-      });
-    }
-    if (normalizedDescription.includes("search") || normalizedDescription.includes("list_repositories") || normalizedDescription.includes("list_mcp_resources")) {
-      return withId({
-        type: "search_code",
-        label: "Searching code...",
-        detail: descriptionValue || void 0,
-        status: "active"
-      });
-    }
-    return withId({
-      type: "tool",
-      label: "Using MCP...",
-      detail: descriptionValue || void 0,
-      status: "active"
-    });
+  if (normalizedDescription.includes("search") || normalizedDescription.includes("list_repositories") || normalizedDescription.includes("list_mcp_resources")) {
+    return detailStep("search_code", "Searching code...", descriptionValue);
   }
-  if (normalizedType.includes("web")) {
-    return withId({
-      type: normalizedType.includes("search") ? "web_search" : "web_fetch",
-      label: normalizedType.includes("search") ? "Searching web..." : "Fetching URL...",
-      detail: queryValue || pathDetail || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("read")) {
-    return withId({
-      type: "read",
-      label: "Reading file...",
-      detail: pathDetail || void 0,
-      path: pathValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("grep") || normalizedType.includes("search")) {
-    return withId({
-      type: normalizedType.includes("file") ? "search_files" : "search_code",
-      label: normalizedType.includes("file") ? "Searching files..." : "Searching code...",
-      detail: queryValue || pathDetail || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("glob") || normalizedType.includes("list")) {
-    return withId({
-      type: "search_files",
-      label: "Searching files...",
-      detail: queryValue || pathDetail || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("write") || normalizedType.includes("create")) {
-    return withId({
-      type: "write",
-      label: "Creating file...",
-      detail: pathDetail || void 0,
-      path: pathValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("edit") || normalizedType.includes("patch") || normalizedType.includes("apply")) {
-    return withId({
-      type: "edit",
-      label: "Editing file...",
-      detail: pathDetail || void 0,
-      path: pathValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("command") || normalizedType.includes("shell") || normalizedType.includes("bash") || normalizedType.includes("exec")) {
-    return withId({
+  return detailStep("tool", "Using MCP...", descriptionValue);
+}
+var CODEX_ITEM_STEPS = [
+  {
+    matches: (type) => type.includes("file_change") || type === "filechange",
+    toStep: codexFileChangeStep
+  },
+  {
+    matches: (type) => type === "mcp_tool_call" || type === "mcptoolcall",
+    toStep: codexMcpToolStep
+  },
+  {
+    matches: (type) => type.includes("web"),
+    toStep: (f, type) => detailStep(
+      type.includes("search") ? "web_search" : "web_fetch",
+      type.includes("search") ? "Searching web..." : "Fetching URL...",
+      f.queryValue || f.pathDetail
+    )
+  },
+  {
+    matches: (type) => type.includes("read"),
+    toStep: (f) => pathStep("read", "Reading file...", f.pathDetail, f.pathValue)
+  },
+  {
+    matches: (type) => type.includes("grep") || type.includes("search"),
+    toStep: (f, type) => detailStep(
+      type.includes("file") ? "search_files" : "search_code",
+      type.includes("file") ? "Searching files..." : "Searching code...",
+      f.queryValue || f.pathDetail
+    )
+  },
+  {
+    matches: (type) => type.includes("glob") || type.includes("list"),
+    toStep: (f) => detailStep(
+      "search_files",
+      "Searching files...",
+      f.queryValue || f.pathDetail
+    )
+  },
+  {
+    matches: (type) => type.includes("write") || type.includes("create"),
+    toStep: (f) => pathStep("write", "Creating file...", f.pathDetail, f.pathValue)
+  },
+  {
+    matches: (type) => type.includes("edit") || type.includes("patch") || type.includes("apply"),
+    toStep: (f) => pathStep("edit", "Editing file...", f.pathDetail, f.pathValue)
+  },
+  {
+    matches: (type) => type.includes("command") || type.includes("shell") || type.includes("bash") || type.includes("exec"),
+    toStep: (f) => ({
       type: "bash",
       label: "Running command...",
-      detail: commandValue || descriptionValue || void 0,
-      command: commandValue ? capCommand(commandValue) : void 0,
+      detail: f.commandValue || f.descriptionValue || void 0,
+      command: f.commandValue ? capCommand(f.commandValue) : void 0,
       status: "active"
-    });
+    })
+  },
+  {
+    matches: (type) => type.includes("agent") || type === "collabtoolcall",
+    toStep: (f) => detailStep("subtask", "Running agent...", f.descriptionValue)
   }
-  if (normalizedType.includes("agent") || normalizedType === "collabtoolcall") {
-    return withId({
-      type: "subtask",
-      label: "Running agent...",
-      detail: descriptionValue || void 0,
-      status: "active"
-    });
-  }
-  return withId({
+];
+function codexItemToStep(item) {
+  const fields = getCodexItemFields(item);
+  const normalizedType = fields.itemType.toLowerCase();
+  const itemId = typeof item.id === "string" && item.id.trim() ? item.id.trim() : void 0;
+  const rule = CODEX_ITEM_STEPS.find((r) => r.matches(normalizedType));
+  const step = rule ? rule.toStep(fields, normalizedType) : {
     type: "tool",
-    label: "Using " + itemType + "...",
-    detail: descriptionValue || pathDetail || queryValue || void 0,
+    label: "Using " + fields.itemType + "...",
+    detail: fields.descriptionValue || fields.pathDetail || fields.queryValue || void 0,
     status: "active"
-  });
+  };
+  if (itemId) step.toolUseId = itemId;
+  return step;
 }
 
 // callback-src/runtime/sandboxMedia.ts
@@ -3466,7 +3439,7 @@ function extractToolResultText(content) {
       parts.push(item);
       continue;
     }
-    if (item && typeof item === "object" && !Array.isArray(item) && item.type === "text" && typeof item.text === "string") {
+    if (isJsonObject(item) && item.type === "text" && typeof item.text === "string") {
       parts.push(item.text);
     }
   }
@@ -3504,21 +3477,21 @@ function reduceTodoState(name, input) {
 }
 function parseClaudeStreamEvent(event) {
   const events = [];
-  const inner = event.event && typeof event.event === "object" && !Array.isArray(event.event) ? event.event : null;
+  const inner = isJsonObject(event.event) ? event.event : null;
   if (!inner) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
     return events;
   }
   if (inner.type === "content_block_start") {
-    const contentBlock = inner.content_block && typeof inner.content_block === "object" && !Array.isArray(inner.content_block) ? inner.content_block : null;
+    const contentBlock = isJsonObject(inner.content_block) ? inner.content_block : null;
     if (contentBlock && contentBlock.type === "text") {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta = inner.delta && typeof inner.delta === "object" && !Array.isArray(inner.delta) ? inner.delta : null;
+  const delta = isJsonObject(inner.delta) ? inner.delta : null;
   if (!delta) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
@@ -3533,93 +3506,108 @@ function parseClaudeStreamEvent(event) {
   }
   return events;
 }
+function messageContentBlocks(event) {
+  const content = asJsonObject(event.message).content;
+  if (!Array.isArray(content)) return [];
+  return content.filter(isJsonObject);
+}
+function claudeToolResultEvent(toolUseId, content, isError) {
+  const resultText = content !== void 0 ? extractToolResultText(content) : "";
+  if (toolUseId) {
+    trackClaudeToolResult(toolUseId, resultText, isError);
+  }
+  const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+  return result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId };
+}
+function parseClaudeUserEvent(event) {
+  const events = [];
+  for (const block of messageContentBlocks(event)) {
+    const toolUseId = trimmedString(block.tool_use_id);
+    if (block.type === "tool_result" && toolUseId) {
+      events.push(
+        claudeToolResultEvent(
+          toolUseId,
+          block.content,
+          block.is_error === true
+        )
+      );
+    }
+  }
+  return events;
+}
+var TODO_TOOL_NAMES = /* @__PURE__ */ new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
+var SILENT_TOOL_NAMES = /* @__PURE__ */ new Set([
+  "TodoRead",
+  "TaskGet",
+  "TaskList",
+  "ExitPlanMode"
+]);
+function pushClaudeToolUseEvents(events, block, name, parentToolUseId) {
+  const input = asJsonObject(block.input);
+  if (TODO_TOOL_NAMES.has(name)) {
+    events.push({ kind: "set_todos", todos: reduceTodoState(name, input) });
+    return;
+  }
+  if (SILENT_TOOL_NAMES.has(name)) return;
+  const step = toolCallToStep(name, input);
+  const trackingId = trimmedString(block.id);
+  if (trackingId) {
+    step.toolUseId = trackingId;
+    trackClaudeToolUse(name, input, trackingId);
+  }
+  if (parentToolUseId) step.parentToolUseId = parentToolUseId;
+  events.push(
+    trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step }
+  );
+  if (!BLOCKING_QUESTIONS_ENABLED && name === "AskUserQuestion" && block.input) {
+    events.push({
+      kind: "set_pending_question",
+      data: JSON.stringify(block.input)
+    });
+  }
+}
+function pushClaudeAssistantBlockEvents(events, block, parentToolUseId) {
+  if (block.type === "tool_use" && typeof block.name === "string") {
+    pushClaudeToolUseEvents(events, block, block.name, parentToolUseId);
+  } else if (block.type === "thinking" && "thinking" in block && block.thinking) {
+    events.push({ kind: "update_reasoning", text: String(block.thinking) });
+  } else if (block.type === "text" && "text" in block && block.text) {
+    if (!callbackState.streamedAssistantTextThisMessage) {
+      events.push({ kind: "append_text", text: String(block.text) });
+    }
+  }
+}
+function parseClaudeAssistantEvent(event) {
+  const events = [];
+  if (callbackState.waitingForFirstAssistantEvent) {
+    events.push({ kind: "mark_first_assistant" });
+  }
+  const blocks = messageContentBlocks(event);
+  const parentToolUseId = trimmedString(event.parent_tool_use_id);
+  for (const block of blocks) {
+    pushClaudeAssistantBlockEvents(events, block, parentToolUseId);
+  }
+  return events;
+}
 function claudeParseLine(event) {
   if (consumesClaudeSdkTaxonomyMessage(event)) {
     return parseClaudeSdkTaxonomy(event);
   }
-  const events = [];
   if (event.type === "stream_event") {
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
-    const toolUseId = typeof event.tool_use_id === "string" && event.tool_use_id.trim() ? event.tool_use_id.trim() : void 0;
-    const resultText = event.content !== void 0 ? extractToolResultText(event.content) : "";
-    const isError = event.is_error === true;
-    if (toolUseId) {
-      trackClaudeToolResult(toolUseId, resultText, isError);
-    }
-    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-    events.push(
-      result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
-    );
-    return events;
+    return [
+      claudeToolResultEvent(
+        trimmedString(event.tool_use_id),
+        event.content,
+        event.is_error === true
+      )
+    ];
   }
-  if (event.type === "user") {
-    const message2 = event.message && typeof event.message === "object" && !Array.isArray(event.message) ? event.message : null;
-    const content2 = message2 && Array.isArray(message2.content) ? message2.content : [];
-    for (const block of content2) {
-      if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-      if (block.type === "tool_result" && typeof block.tool_use_id === "string" && block.tool_use_id.trim()) {
-        const toolUseId = block.tool_use_id.trim();
-        const resultText = block.content !== void 0 ? extractToolResultText(block.content) : "";
-        const isError = block.is_error === true;
-        trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-        events.push(
-          result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
-        );
-      }
-    }
-    if (events.length > 0) {
-      return events;
-    }
-  }
-  if (event.type !== "assistant") return events;
-  if (callbackState.waitingForFirstAssistantEvent) {
-    events.push({ kind: "mark_first_assistant" });
-  }
-  const message = event.message && typeof event.message === "object" && !Array.isArray(event.message) ? event.message : null;
-  const content = message && Array.isArray(message.content) ? message.content : [];
-  const parentToolUseId = typeof event.parent_tool_use_id === "string" && event.parent_tool_use_id.trim() ? event.parent_tool_use_id.trim() : void 0;
-  for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    if (block.type === "tool_use" && typeof block.name === "string") {
-      const input = block.input && typeof block.input === "object" && !Array.isArray(block.input) ? block.input : {};
-      if (block.name === "TodoWrite" || block.name === "TaskCreate" || block.name === "TaskUpdate") {
-        events.push({
-          kind: "set_todos",
-          todos: reduceTodoState(block.name, input)
-        });
-        continue;
-      }
-      if (block.name === "TodoRead" || block.name === "TaskGet" || block.name === "TaskList" || block.name === "ExitPlanMode") {
-        continue;
-      }
-      const step = toolCallToStep(block.name, input);
-      const trackingId = typeof block.id === "string" && block.id.trim() ? block.id.trim() : void 0;
-      if (trackingId) {
-        step.toolUseId = trackingId;
-        trackClaudeToolUse(block.name, input, trackingId);
-      }
-      if (parentToolUseId) step.parentToolUseId = parentToolUseId;
-      events.push(
-        trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step }
-      );
-      if (!BLOCKING_QUESTIONS_ENABLED && block.name === "AskUserQuestion" && block.input) {
-        events.push({
-          kind: "set_pending_question",
-          data: JSON.stringify(block.input)
-        });
-      }
-    } else if (block.type === "thinking" && "thinking" in block && block.thinking) {
-      events.push({ kind: "update_reasoning", text: String(block.thinking) });
-    } else if (block.type === "text" && "text" in block && block.text) {
-      if (!callbackState.streamedAssistantTextThisMessage) {
-        events.push({ kind: "append_text", text: String(block.text) });
-      }
-    }
-  }
-  return events;
+  if (event.type === "user") return parseClaudeUserEvent(event);
+  if (event.type !== "assistant") return [];
+  return parseClaudeAssistantEvent(event);
 }
 function onStreamLine(parsed) {
   if (parsed.type === "system" && parsed.subtype === "init" && typeof parsed.session_id === "string" && parsed.session_id.trim()) {
@@ -3641,10 +3629,10 @@ function onStreamLine(parsed) {
         "first assistant event after " + String(callbackState.firstAssistantEventAt - callbackState.activeAttemptStartedAt) + "ms"
       );
     }
-    const message = parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) ? parsed.message : null;
+    const message = isJsonObject(parsed.message) ? parsed.message : null;
     const contentBlocks = message && Array.isArray(message.content) ? message.content : [];
     for (const block of contentBlocks) {
-      if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
+      if (isJsonObject(block) && block.type === "text" && typeof block.text === "string") {
         if (callbackState.firstTextBlockAt === 0) {
           callbackState.firstTextBlockAt = Date.now();
           log(
@@ -3849,84 +3837,86 @@ function prepareCodexSessionState() {
 }
 
 // callback-src/providers/codex.ts
+var isCodexAgentMessageType = (type) => type === "agent_message" || type === "agentMessage";
+function nonEmptyDelta(event) {
+  return typeof event.delta === "string" && event.delta ? event.delta : void 0;
+}
+function codexStepEvent(item) {
+  const step = codexItemToStep(item);
+  const trackingId = step.type !== "thinking" && typeof item.id === "string" ? item.id : void 0;
+  return trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step };
+}
+function codexToolCompleteEvent(item, failed) {
+  const result = probeCodexItemResult(item, failed);
+  if (typeof item.id === "string") {
+    return result ? { kind: "complete_tool", trackingId: item.id, result } : { kind: "complete_tool", trackingId: item.id };
+  }
+  if (result) return { kind: "complete_tool", result };
+  return { kind: "mark_last_complete" };
+}
+function codexItemEvents(type, item) {
+  const isAgentMessage = isCodexAgentMessageType(item.type);
+  if (type === "item.started" && isAgentMessage) {
+    return [{ kind: "mark_message_start" }];
+  }
+  if (item.type === "reasoning" && type !== "item.failed") {
+    return typeof item.text === "string" && item.text.trim() ? [{ kind: "update_reasoning", text: item.text }] : [];
+  }
+  const isToolItem = typeof item.type === "string" && !isAgentMessage;
+  if (type === "item.started" && isToolItem) {
+    return [codexStepEvent(item)];
+  }
+  if (type === "item.completed" && isAgentMessage) {
+    const messageText = getCodexAgentMessageText(item);
+    return messageText && !callbackState.streamedAssistantTextThisMessage ? [{ kind: "append_text", text: messageText }] : [];
+  }
+  if (type !== "item.updated" && isToolItem) {
+    return [codexToolCompleteEvent(item, type === "item.failed")];
+  }
+  return [];
+}
+var CODEX_ITEM_EVENT_TYPES = /* @__PURE__ */ new Set([
+  "item.started",
+  "item.updated",
+  "item.completed",
+  "item.failed"
+]);
 function codexParseLine(event) {
-  const events = [];
   const threadId = getCodexThreadId(event);
   if (event.type === "thread.started" && threadId) {
-    events.push({ kind: "set_codex_thread", threadId });
-    events.push({
-      kind: "update_thinking",
-      label: "Starting Codex SDK...",
-      detail: "Restoring saved context..."
-    });
-    return events;
+    return [
+      { kind: "set_codex_thread", threadId },
+      {
+        kind: "update_thinking",
+        label: "Starting Codex SDK...",
+        detail: "Restoring saved context..."
+      }
+    ];
   }
   if (event.type === "turn.started") {
-    events.push({
-      kind: "update_thinking",
-      label: "Starting Codex SDK...",
-      detail: "Codex is reasoning..."
-    });
-    return events;
+    return [
+      {
+        kind: "update_thinking",
+        label: "Starting Codex SDK...",
+        detail: "Codex is reasoning..."
+      }
+    ];
   }
-  if (event.type === "item.agent_message.delta" && typeof event.delta === "string" && event.delta) {
-    events.push({ kind: "stream_text_delta", text: event.delta });
-    return events;
+  const delta = nonEmptyDelta(event);
+  if (event.type === "item.agent_message.delta" && delta) {
+    return [{ kind: "stream_text_delta", text: delta }];
   }
-  if (event.type === "item.reasoning.delta" && typeof event.delta === "string" && event.delta) {
-    events.push({ kind: "update_reasoning", text: event.delta });
-    return events;
+  if (event.type === "item.reasoning.delta" && delta) {
+    return [{ kind: "update_reasoning", text: delta }];
   }
-  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && (event.item.type === "agent_message" || event.item.type === "agentMessage")) {
-    events.push({ kind: "mark_message_start" });
-    return events;
-  }
-  if ((event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && event.item.type === "reasoning") {
-    if (typeof event.item.text === "string" && event.item.text.trim()) {
-      events.push({ kind: "update_reasoning", text: event.item.text });
-    }
-    return events;
-  }
-  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message" && event.item.type !== "agentMessage") {
-    const step = codexItemToStep(event.item);
-    const trackingId = step.type !== "thinking" && typeof event.item.id === "string" ? event.item.id : void 0;
-    events.push(
-      trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step }
-    );
-    return events;
-  }
-  if (event.type === "item.completed" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && (event.item.type === "agent_message" || event.item.type === "agentMessage")) {
-    const messageText = getCodexAgentMessageText(event.item);
-    if (messageText && !callbackState.streamedAssistantTextThisMessage) {
-      events.push({ kind: "append_text", text: messageText });
-    }
-    return events;
-  }
-  if ((event.type === "item.completed" || event.type === "item.failed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message" && event.item.type !== "agentMessage") {
-    const result = probeCodexItemResult(
-      event.item,
-      event.type === "item.failed"
-    );
-    if (typeof event.item.id === "string") {
-      events.push(
-        result ? {
-          kind: "complete_tool",
-          trackingId: event.item.id,
-          result
-        } : { kind: "complete_tool", trackingId: event.item.id }
-      );
-    } else if (result) {
-      events.push({ kind: "complete_tool", result });
-    } else {
-      events.push({ kind: "mark_last_complete" });
-    }
-    return events;
+  const item = event.item;
+  if (typeof event.type === "string" && CODEX_ITEM_EVENT_TYPES.has(event.type) && isJsonObject(item)) {
+    return codexItemEvents(event.type, item);
   }
   if (event.type === "turn.completed") {
-    events.push({ kind: "mark_last_complete" });
-    return events;
+    return [{ kind: "mark_last_complete" }];
   }
-  return events;
+  return [];
 }
 function onStreamLine2(parsed) {
   const threadId = getCodexThreadId(parsed);
@@ -7117,7 +7107,7 @@ async function createOutputSchemaFile(schema) {
     return { cleanup: async () => {
     } };
   }
-  if (!isJsonObject(schema)) {
+  if (!isJsonObject2(schema)) {
     throw new Error("outputSchema must be a plain JSON object");
   }
   const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
@@ -7136,7 +7126,7 @@ async function createOutputSchemaFile(schema) {
     throw error;
   }
 }
-function isJsonObject(value) {
+function isJsonObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 var Thread = class {

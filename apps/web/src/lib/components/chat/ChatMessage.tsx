@@ -224,30 +224,110 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  const { isStreamingPlaceholder, changedFiles, questionSteps } =
-    getAssistantTurnState(message);
-  // While the turn is live the settled activityLog is not written yet, so the
-  // just-answered question comes off the streaming payload instead — that is
-  // what makes the record appear the moment the user submits.
-  const streamingQuestionSteps = isStreamingPlaceholder
-    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
-    : [];
-
-  const copySource =
-    message.content.trim().length > 0
-      ? message.content
-      : (streamingContent ?? "");
+  const copySource = turnCopySource(message.content, streamingContent);
   const copyPlain = copySource ? tokenizedToDisplayText(copySource) : undefined;
-  const forkAction: ChatMessageActionItem | undefined = onFork
+  const forkAction = buildForkAction(onFork, message._id);
+  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
+
+  return (
+    <>
+      <ChatMessageContextMenu content={copySource} extraItems={rowActions}>
+        <m.div
+          data-message-id={message._id}
+          initial={animateIn ? { opacity: 0, y: 10 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={motionFast}
+          className={
+            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
+          }
+        >
+          <AIMessage
+            from={message.role}
+            className={
+              isOtherUser ? "ml-0 mr-auto justify-start gap-1.5" : undefined
+            }
+          >
+            {message.role === "user" ? (
+              <UserTurn
+                message={message}
+                repo={repo}
+                isOtherUser={isOtherUser}
+                senderFirstName={senderFirstName}
+                isHandoffBoundary={isHandoffBoundary}
+                belowContent={belowContent}
+                copyPlain={copyPlain}
+                forkAction={forkAction}
+              />
+            ) : (
+              <AssistantTurn
+                message={message}
+                isLatestAssistantTurn={isLatestAssistantTurn}
+                showChangedFiles={showChangedFiles}
+                changedFilesExpanded={changedFilesExpanded}
+                onChangedFilesExpandedChange={onChangedFilesExpandedChange}
+                turnModel={turnModel}
+                turnReasoningLevel={turnReasoningLevel}
+                turnCredentialSourceLabel={turnCredentialSourceLabel}
+                streamingActivity={streamingActivity}
+                streamingContent={streamingContent}
+                onOpenFile={onOpenFile}
+                onViewDiff={onViewDiff}
+                onOpenAgentsTab={onOpenAgentsTab}
+                backgroundAgents={backgroundAgents}
+                sandboxRunning={sandboxRunning}
+                onRetryTurn={onRetryTurn}
+                precedingUser={precedingUser}
+                belowContent={belowContent}
+                copyPlain={copyPlain}
+                rowActions={rowActions}
+              />
+            )}
+          </AIMessage>
+        </m.div>
+      </ChatMessageContextMenu>
+      {checkpoint.dialogs}
+    </>
+  );
+});
+
+/** What Copy takes: the settled prose, else whatever has streamed so far. */
+function turnCopySource(content: string, streamingContent?: string): string {
+  return content.trim().length > 0 ? content : (streamingContent ?? "");
+}
+
+function buildForkAction(
+  onFork: ChatMessageProps["onFork"],
+  messageId: ChatBodyMessage["_id"],
+): ChatMessageActionItem | undefined {
+  return onFork
     ? {
         key: "fork",
         label: "Fork from here",
         icon: <IconGitFork className="size-4" />,
-        onClick: () => onFork(message._id),
+        onClick: () => onFork(messageId),
       }
     : undefined;
-  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
+}
 
+function UserTurn({
+  message,
+  repo,
+  isOtherUser,
+  senderFirstName,
+  isHandoffBoundary,
+  belowContent,
+  copyPlain,
+  forkAction,
+}: {
+  message: ChatBodyMessage;
+  repo?: ChatRepo;
+  isOtherUser: boolean;
+  senderFirstName?: string;
+  isHandoffBoundary: boolean;
+  belowContent?: ReactNode;
+  copyPlain?: string;
+  forkAction?: ChatMessageActionItem;
+}) {
   // Two MCP provenances, never both on one row: a child chat shows the turns
   // posted from outside the composer, Eva shows the wake-ups its children fired.
   const isOrchestratorNotification = message.orchestratorNotification === true;
@@ -257,6 +337,258 @@ export const ChatMessage = memo(function ChatMessage({
     : sentViaMcp
       ? "via MCP"
       : undefined;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-0.5",
+        isOtherUser ? "items-start" : "items-end",
+      )}
+    >
+      {isOtherUser && senderFirstName ? (
+        <span
+          data-pii
+          className={cn(
+            "text-2xs font-medium text-muted-foreground",
+            // Avatar (16) + gap (8) + bubble px-3 (12) → align with bubble text
+            "pl-9",
+          )}
+        >
+          {senderFirstName}
+        </span>
+      ) : null}
+      {orchestratorTag ? (
+        <span
+          className={cn(
+            "rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground",
+            isOtherUser ? "ml-9" : undefined,
+          )}
+        >
+          {orchestratorTag}
+        </span>
+      ) : null}
+      <UserTurnBubble
+        message={message}
+        repo={repo}
+        isOtherUser={isOtherUser}
+        isMcpProvenance={isOrchestratorNotification || sentViaMcp}
+      />
+      {isHandoffBoundary && message.model !== undefined ? (
+        <HandoffModelChip
+          model={message.model}
+          className={isOtherUser ? "ml-6" : undefined}
+        />
+      ) : null}
+      {belowContent ? (
+        <div className="mt-1 flex w-full flex-col gap-2">{belowContent}</div>
+      ) : null}
+      <UserMessageMeta
+        align={isOtherUser ? "start" : "end"}
+        copyPlain={copyPlain}
+        actions={forkAction ? [forkAction] : []}
+        timestamp={message.timestamp}
+        className={isOtherUser ? "pl-6" : undefined}
+      />
+    </div>
+  );
+}
+
+function UserTurnBubble({
+  message,
+  repo,
+  isOtherUser,
+  isMcpProvenance,
+}: {
+  message: ChatBodyMessage;
+  repo?: ChatRepo;
+  isOtherUser: boolean;
+  isMcpProvenance: boolean;
+}) {
+  // min-w-0 stops the default `min-width: auto` on this flex item from letting
+  // one unbreakable token (a JWT, a long URL) stretch the bubble past the
+  // message column.
+  return (
+    <div className="flex min-w-0 max-w-full items-end gap-2">
+      {isOtherUser ? (
+        <div className="shrink-0">
+          <UserMessageAvatar userId={message.userId} />
+        </div>
+      ) : null}
+      <MessageContent
+        className={cn(
+          "group px-3 py-2 text-foreground",
+          isOtherUser
+            ? "bg-secondary group-[.is-user]:ml-0 group-[.is-user]:bg-secondary"
+            : isMcpProvenance
+              ? // Not typed in the Eva composer — drop it a tone
+                // step off the accent bubble.
+                "rounded-surface bg-muted group-[.is-user]:bg-muted"
+              : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
+        )}
+        style={
+          isOtherUser ? { borderRadius: otherUserBubbleRadius() } : undefined
+        }
+      >
+        <UserMessageBody message={message} repo={repo} />
+      </MessageContent>
+    </div>
+  );
+}
+
+interface AssistantTurnProps {
+  message: ChatBodyMessage;
+  isLatestAssistantTurn: boolean;
+  showChangedFiles: boolean;
+  changedFilesExpanded?: boolean;
+  onChangedFilesExpandedChange: ChatMessageProps["onChangedFilesExpandedChange"];
+  turnModel?: string;
+  turnReasoningLevel?: string;
+  turnCredentialSourceLabel?: string;
+  streamingActivity?: string;
+  streamingContent?: string;
+  onOpenFile?: (path: string) => void;
+  onViewDiff?: (repoRelativePath?: string) => void;
+  onOpenAgentsTab?: () => void;
+  backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
+  sandboxRunning?: boolean;
+  onRetryTurn?: ChatMessageProps["onRetryTurn"];
+  precedingUser?: ChatMessageProps["precedingUser"];
+  belowContent?: ReactNode;
+  copyPlain?: string;
+  rowActions: ChatMessageActionItem[];
+}
+
+function AssistantTurn({
+  message,
+  isLatestAssistantTurn,
+  showChangedFiles,
+  changedFilesExpanded,
+  onChangedFilesExpandedChange,
+  turnModel,
+  turnReasoningLevel,
+  turnCredentialSourceLabel,
+  streamingActivity,
+  streamingContent,
+  onOpenFile,
+  onViewDiff,
+  onOpenAgentsTab,
+  backgroundAgents,
+  sandboxRunning,
+  onRetryTurn,
+  precedingUser,
+  belowContent,
+  copyPlain,
+  rowActions,
+}: AssistantTurnProps) {
+  const turnErrorTitle = getTurnErrorTitle({
+    errorType: message.errorType,
+    turnModel,
+    messageModel: message.model,
+  });
+  // A panel and the prose that introduced it are two renderings of one answer,
+  // so the panel takes the slot and the prose moves behind a tab. Needs real
+  // prose to switch to, and a failed turn shows its error notice instead.
+  const panelTabs =
+    belowContent !== undefined &&
+    turnErrorTitle === null &&
+    message.content.trim().length > 0;
+
+  return (
+    <>
+      <AssistantTurnContent
+        message={message}
+        isLatestAssistantTurn={isLatestAssistantTurn}
+        showChangedFiles={showChangedFiles}
+        changedFilesExpanded={changedFilesExpanded}
+        onChangedFilesExpandedChange={onChangedFilesExpandedChange}
+        streamingActivity={streamingActivity}
+        streamingContent={streamingContent}
+        onOpenFile={onOpenFile}
+        onViewDiff={onViewDiff}
+        onOpenAgentsTab={onOpenAgentsTab}
+        backgroundAgents={backgroundAgents}
+        sandboxRunning={sandboxRunning}
+        onRetryTurn={onRetryTurn}
+        precedingUser={precedingUser}
+        belowContent={belowContent}
+        turnErrorTitle={turnErrorTitle}
+        panelTabs={panelTabs}
+      />
+      {/* Sits above `belowContent` so agent-composed panels keep
+          their promised slot directly over the meta row, and so the
+          chip stays next to the changed-files card it judges.
+          Deliberately not gated on `showChangedFiles`: the verdict is
+          a safety signal, and simple view hiding it is exactly the
+          reader who needs it. The hover card's per-hunk rows only
+          link out when the diff surface exists — simple view bounces
+          away from that tab, so they degrade to plain rows there. */}
+      {message.scopeCheck ? (
+        <div className="mt-1">
+          <ScopeCheckChip
+            check={message.scopeCheck}
+            {...(showChangedFiles && onViewDiff ? { onViewDiff } : {})}
+          />
+        </div>
+      ) : null}
+      {/* Only the panels the tab strip did not claim — a still-
+          streaming or failed turn has no prose to trade places with. */}
+      {belowContent && !panelTabs ? (
+        <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+      ) : null}
+      <AssistantTurnMeta
+        message={message}
+        turnModel={turnModel}
+        turnReasoningLevel={turnReasoningLevel}
+        turnCredentialSourceLabel={turnCredentialSourceLabel}
+        copyPlain={copyPlain}
+        rowActions={rowActions}
+      />
+    </>
+  );
+}
+
+/**
+ * Streaming and settled bodies stay one ternary of fragments in one component
+ * so the rows they share by position (sub-agent CTA, question cards) keep
+ * their state when the turn settles.
+ */
+function AssistantTurnContent({
+  message,
+  isLatestAssistantTurn,
+  showChangedFiles,
+  changedFilesExpanded,
+  onChangedFilesExpandedChange,
+  streamingActivity,
+  streamingContent,
+  onOpenFile,
+  onViewDiff,
+  onOpenAgentsTab,
+  backgroundAgents,
+  sandboxRunning,
+  onRetryTurn,
+  precedingUser,
+  belowContent,
+  turnErrorTitle,
+  panelTabs,
+}: Omit<
+  AssistantTurnProps,
+  | "turnModel"
+  | "turnReasoningLevel"
+  | "turnCredentialSourceLabel"
+  | "copyPlain"
+  | "rowActions"
+> & {
+  turnErrorTitle: string | null;
+  panelTabs: boolean;
+}) {
+  const { isStreamingPlaceholder, changedFiles, questionSteps } =
+    getAssistantTurnState(message);
+  // While the turn is live the settled activityLog is not written yet, so the
+  // just-answered question comes off the streaming payload instead — that is
+  // what makes the record appear the moment the user submits.
+  const streamingQuestionSteps = isStreamingPlaceholder
+    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+    : [];
 
   const mediaEntries = message.media ?? [];
 
@@ -274,18 +606,83 @@ export const ChatMessage = memo(function ChatMessage({
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
 
-  const turnErrorTitle = getTurnErrorTitle({
-    errorType: message.errorType,
-    turnModel,
-    messageModel: message.model,
-  });
-  // A panel and the prose that introduced it are two renderings of one answer,
-  // so the panel takes the slot and the prose moves behind a tab. Needs real
-  // prose to switch to, and a failed turn shows its error notice instead.
-  const panelTabs =
-    belowContent !== undefined &&
-    turnErrorTitle === null &&
-    message.content.trim().length > 0;
+  return (
+    <MessageContent className="px-1 py-2">
+      {isStreamingPlaceholder ? (
+        <>
+          <StreamingActivityDisplay
+            activity={streamingActivity}
+            name="Eva"
+            startedAt={message.timestamp}
+            onOpenFile={onOpenFile}
+          />
+          {agentSpawnRow}
+          <AssistantQuestionCards steps={streamingQuestionSteps} />
+          {streamingContent ? (
+            <div data-assistant-cite-source={message._id}>
+              <Markdown className="mt-2">{streamingContent}</Markdown>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {message.activityLog && (
+            <ActivityLogDisplay
+              activityLog={message.activityLog}
+              messageId={message._id}
+              name="Eva"
+              icon={EVA_ICON}
+              startedAt={message.timestamp}
+              finishedAt={message.finishedAt}
+              finalText={message.content}
+              onOpenFile={onOpenFile}
+            />
+          )}
+          {agentSpawnRow}
+          <AssistantQuestionCards steps={questionSteps} />
+          <AssistantTurnOutcome
+            message={message}
+            turnErrorTitle={turnErrorTitle}
+            panelTabs={panelTabs}
+            belowContent={belowContent}
+            onRetryTurn={onRetryTurn}
+            precedingUser={precedingUser}
+          />
+          {showChangedFiles && changedFiles.length > 0 ? (
+            <ChangedFilesCard
+              files={changedFiles}
+              isLatestAssistantTurn={isLatestAssistantTurn}
+              expanded={changedFilesExpanded}
+              onExpandedChange={(nextExpanded) =>
+                onChangedFilesExpandedChange(message._id, nextExpanded)
+              }
+              onOpenFile={onOpenFile}
+              onViewDiff={onViewDiff}
+            />
+          ) : null}
+          <AgentMedia entries={mediaEntries} />
+        </>
+      )}
+    </MessageContent>
+  );
+}
+
+/** Settled reply: the error notice for a failed turn, else the prose (or panel tabs). */
+function AssistantTurnOutcome({
+  message,
+  turnErrorTitle,
+  panelTabs,
+  belowContent,
+  onRetryTurn,
+  precedingUser,
+}: {
+  message: ChatBodyMessage;
+  turnErrorTitle: string | null;
+  panelTabs: boolean;
+  belowContent?: ReactNode;
+  onRetryTurn?: ChatMessageProps["onRetryTurn"];
+  precedingUser?: ChatMessageProps["precedingUser"];
+}) {
   /* wrap-anywhere: without it a long unbreakable token is silently clipped by
      MessageContent's overflow-hidden. */
   // Settled text: "static" skips Streamdown's streaming pass (repair of
@@ -307,259 +704,88 @@ export const ChatMessage = memo(function ChatMessage({
       : null;
 
   return (
-    <>
-      <ChatMessageContextMenu content={copySource} extraItems={rowActions}>
+    <AnimatePresence mode="wait" initial={false}>
+      {turnErrorTitle !== null ? (
         <m.div
-          data-message-id={message._id}
-          initial={animateIn ? { opacity: 0, y: 10 } : false}
-          animate={{ opacity: 1, y: 0 }}
+          key="turn-error"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           transition={motionFast}
-          className={
-            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
-          }
         >
-          <AIMessage
-            from={message.role}
-            className={
-              isOtherUser ? "ml-0 mr-auto justify-start gap-1.5" : undefined
-            }
-          >
-            {message.role === "user" ? (
-              <div
-                className={cn(
-                  "flex flex-col gap-0.5",
-                  isOtherUser ? "items-start" : "items-end",
-                )}
-              >
-                {isOtherUser && senderFirstName ? (
-                  <span
-                    data-pii
-                    className={cn(
-                      "text-2xs font-medium text-muted-foreground",
-                      // Avatar (16) + gap (8) + bubble px-3 (12) → align with bubble text
-                      "pl-9",
-                    )}
-                  >
-                    {senderFirstName}
-                  </span>
-                ) : null}
-                {orchestratorTag ? (
-                  <span
-                    className={cn(
-                      "rounded-md bg-muted px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground",
-                      isOtherUser ? "ml-9" : undefined,
-                    )}
-                  >
-                    {orchestratorTag}
-                  </span>
-                ) : null}
-                {/* min-w-0 stops the default `min-width: auto` on this flex item
-                  from letting one unbreakable token (a JWT, a long URL) stretch
-                  the bubble past the message column. */}
-                <div className="flex min-w-0 max-w-full items-end gap-2">
-                  {isOtherUser ? (
-                    <div className="shrink-0">
-                      <UserMessageAvatar userId={message.userId} />
-                    </div>
-                  ) : null}
-                  <MessageContent
-                    className={cn(
-                      "group px-3 py-2 text-foreground",
-                      isOtherUser
-                        ? "bg-secondary group-[.is-user]:ml-0 group-[.is-user]:bg-secondary"
-                        : isOrchestratorNotification || sentViaMcp
-                          ? // Not typed in the Eva composer — drop it a tone
-                            // step off the accent bubble.
-                            "rounded-surface bg-muted group-[.is-user]:bg-muted"
-                          : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
-                    )}
-                    style={
-                      isOtherUser
-                        ? { borderRadius: otherUserBubbleRadius() }
-                        : undefined
-                    }
-                  >
-                    <UserMessageBody
-                      message={message}
-                      repo={repo}
-                    />
-                  </MessageContent>
-                </div>
-                {isHandoffBoundary && message.model !== undefined ? (
-                  <HandoffModelChip
-                    model={message.model}
-                    className={isOtherUser ? "ml-6" : undefined}
-                  />
-                ) : null}
-                {belowContent ? (
-                  <div className="mt-1 flex w-full flex-col gap-2">
-                    {belowContent}
-                  </div>
-                ) : null}
-                <UserMessageMeta
-                  align={isOtherUser ? "start" : "end"}
-                  copyPlain={copyPlain}
-                  actions={forkAction ? [forkAction] : []}
-                  timestamp={message.timestamp}
-                  className={isOtherUser ? "pl-6" : undefined}
-                />
-              </div>
-            ) : (
-              <>
-                <MessageContent className="px-1 py-2">
-                  {isStreamingPlaceholder ? (
-                    <>
-                      <StreamingActivityDisplay
-                        activity={streamingActivity}
-                        name="Eva"
-                        startedAt={message.timestamp}
-                        onOpenFile={onOpenFile}
-                      />
-                      {agentSpawnRow}
-                      <AssistantQuestionCards steps={streamingQuestionSteps} />
-                      {streamingContent ? (
-                        <div data-assistant-cite-source={message._id}>
-                          <Markdown className="mt-2">
-                            {streamingContent}
-                          </Markdown>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      {message.activityLog && (
-                        <ActivityLogDisplay
-                          activityLog={message.activityLog}
-                          messageId={message._id}
-                          name="Eva"
-                          icon={EVA_ICON}
-                          startedAt={message.timestamp}
-                          finishedAt={message.finishedAt}
-                          finalText={message.content}
-                          onOpenFile={onOpenFile}
-                        />
-                      )}
-                      {agentSpawnRow}
-                      <AssistantQuestionCards steps={questionSteps} />
-                      <AnimatePresence mode="wait" initial={false}>
-                        {turnErrorTitle !== null ? (
-                          <m.div
-                            key="turn-error"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={motionFast}
-                          >
-                            <TurnErrorNotice
-                              title={turnErrorTitle}
-                              detail={stripErrorPrefix(message.content)}
-                              {...(retryAction ? { action: retryAction } : {})}
-                            />
-                          </m.div>
-                        ) : (
-                          <m.div
-                            key="turn-content"
-                            data-assistant-cite-source={message._id}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={motionFast}
-                          >
-                            {panelTabs ? (
-                              <ChatUiPanelTabs
-                                panel={belowContent}
-                                text={turnProse}
-                              />
-                            ) : (
-                              turnProse
-                            )}
-                          </m.div>
-                        )}
-                      </AnimatePresence>
-                      {showChangedFiles && changedFiles.length > 0 ? (
-                        <ChangedFilesCard
-                          files={changedFiles}
-                          isLatestAssistantTurn={isLatestAssistantTurn}
-                          expanded={changedFilesExpanded}
-                          onExpandedChange={(nextExpanded) =>
-                            onChangedFilesExpandedChange(
-                              message._id,
-                              nextExpanded,
-                            )
-                          }
-                          onOpenFile={onOpenFile}
-                          onViewDiff={onViewDiff}
-                        />
-                      ) : null}
-                      <AgentMedia entries={mediaEntries} />
-                    </>
-                  )}
-                </MessageContent>
-                {/* Sits above `belowContent` so agent-composed panels keep
-                    their promised slot directly over the meta row, and so the
-                    chip stays next to the changed-files card it judges.
-                    Deliberately not gated on `showChangedFiles`: the verdict is
-                    a safety signal, and simple view hiding it is exactly the
-                    reader who needs it. The hover card's per-hunk rows only
-                    link out when the diff surface exists — simple view bounces
-                    away from that tab, so they degrade to plain rows there. */}
-                {message.scopeCheck ? (
-                  <div className="mt-1">
-                    <ScopeCheckChip
-                      check={message.scopeCheck}
-                      {...(showChangedFiles && onViewDiff
-                        ? { onViewDiff }
-                        : {})}
-                    />
-                  </div>
-                ) : null}
-                {/* Only the panels the tab strip did not claim — a still-
-                    streaming or failed turn has no prose to trade places with. */}
-                {belowContent && !panelTabs ? (
-                  <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
-                ) : null}
-                {turnModel || copyPlain || rowActions.length > 0 ? (
-                  <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
-                    {turnModel ? (
-                      <MessageModelIcon
-                        model={turnModel}
-                        reasoningLevel={turnReasoningLevel}
-                        credentialSourceLabel={turnCredentialSourceLabel}
-                      />
-                    ) : null}
-                    {copyPlain || rowActions.length > 0 ? (
-                      <>
-                        <ChatMessageActions
-                          copyText={copyPlain}
-                          actions={rowActions}
-                          className="ml-0.5"
-                          revealOnHover={false}
-                        />
-                        {message.finishedAt && message.timestamp ? (
-                          <span className="text-2xs tabular-nums text-muted-foreground/60">
-                            {/* The turn's clock time is when Eva finished, not
-                                when it started — the duration next to it already
-                                says how long the reply took. */}
-                            {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
-                            {formatDuration(
-                              message.timestamp,
-                              message.finishedAt,
-                            )}
-                          </span>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            )}
-          </AIMessage>
+          <TurnErrorNotice
+            title={turnErrorTitle}
+            detail={stripErrorPrefix(message.content)}
+            {...(retryAction ? { action: retryAction } : {})}
+          />
         </m.div>
-      </ChatMessageContextMenu>
-      {checkpoint.dialogs}
-    </>
+      ) : (
+        <m.div
+          key="turn-content"
+          data-assistant-cite-source={message._id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionFast}
+        >
+          {panelTabs ? (
+            <ChatUiPanelTabs panel={belowContent} text={turnProse} />
+          ) : (
+            turnProse
+          )}
+        </m.div>
+      )}
+    </AnimatePresence>
   );
-});
+}
+
+function AssistantTurnMeta({
+  message,
+  turnModel,
+  turnReasoningLevel,
+  turnCredentialSourceLabel,
+  copyPlain,
+  rowActions,
+}: {
+  message: ChatBodyMessage;
+  turnModel?: string;
+  turnReasoningLevel?: string;
+  turnCredentialSourceLabel?: string;
+  copyPlain?: string;
+  rowActions: ChatMessageActionItem[];
+}) {
+  if (!(turnModel || copyPlain || rowActions.length > 0)) return null;
+  return (
+    <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
+      {turnModel ? (
+        <MessageModelIcon
+          model={turnModel}
+          reasoningLevel={turnReasoningLevel}
+          credentialSourceLabel={turnCredentialSourceLabel}
+        />
+      ) : null}
+      {copyPlain || rowActions.length > 0 ? (
+        <>
+          <ChatMessageActions
+            copyText={copyPlain}
+            actions={rowActions}
+            className="ml-0.5"
+            revealOnHover={false}
+          />
+          {message.finishedAt && message.timestamp ? (
+            <span className="text-2xs tabular-nums text-muted-foreground/60">
+              {/* The turn's clock time is when Eva finished, not
+                  when it started — the duration next to it already
+                  says how long the reply took. */}
+              {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
+              {formatDuration(message.timestamp, message.finishedAt)}
+            </span>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 function UserMessageBody({
   message,

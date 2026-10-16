@@ -29,8 +29,7 @@ export function HomeTeamsNav({
   onNavigate?: () => void;
 }) {
   const teams = useQuery(api.teams.list);
-  const onTeams =
-    pathname === "/teams" || pathname.startsWith("/teams/");
+  const onTeams = pathname === "/teams" || pathname.startsWith("/teams/");
   const [open, setOpen] = useState(onTeams);
   const hasTeams = teams !== undefined && teams.length > 0;
   const indexActive = pathname === "/teams";

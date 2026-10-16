@@ -107,9 +107,7 @@ function RenameForm({
         </Button>
         <Button
           onClick={submit}
-          disabled={
-            trimmed.length === 0 || trimmed === pr.title || edit.saving
-          }
+          disabled={trimmed.length === 0 || trimmed === pr.title || edit.saving}
         >
           {edit.saving ? <Spinner size="sm" /> : null}
           Rename

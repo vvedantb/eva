@@ -19,7 +19,13 @@ import type {
   TodoItem,
   ToolCompleteResult,
 } from "../types.js";
-import { elapsedAttemptMs, log } from "../utils.js";
+import {
+  asJsonObject,
+  elapsedAttemptMs,
+  isJsonObject,
+  log,
+  trimmedString,
+} from "../utils.js";
 import type { ProviderAdapter } from "./types.js";
 import {
   parseClaudeSdkTaxonomy,
@@ -63,9 +69,7 @@ function extractToolResultText(content: JsonValue): string {
       continue;
     }
     if (
-      item &&
-      typeof item === "object" &&
-      !Array.isArray(item) &&
+      isJsonObject(item) &&
       item.type === "text" &&
       typeof item.text === "string"
     ) {
@@ -134,12 +138,7 @@ function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
  */
 function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
-  const inner =
-    event.event &&
-    typeof event.event === "object" &&
-    !Array.isArray(event.event)
-      ? event.event
-      : null;
+  const inner = isJsonObject(event.event) ? event.event : null;
   if (!inner) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
@@ -150,24 +149,16 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
     // text → thinking → text with no message_start between) needs a paragraph
     // break so the blocks do not clump. Only text blocks — thinking/tool blocks
     // are not appended to the streamed content.
-    const contentBlock =
-      inner.content_block &&
-      typeof inner.content_block === "object" &&
-      !Array.isArray(inner.content_block)
-        ? inner.content_block
-        : null;
+    const contentBlock = isJsonObject(inner.content_block)
+      ? inner.content_block
+      : null;
     if (contentBlock && contentBlock.type === "text") {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta =
-    inner.delta &&
-    typeof inner.delta === "object" &&
-    !Array.isArray(inner.delta)
-      ? inner.delta
-      : null;
+  const delta = isJsonObject(inner.delta) ? inner.delta : null;
   if (!delta) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
@@ -183,164 +174,155 @@ function parseClaudeStreamEvent(event: JsonObject): CanonicalEvent[] {
   return events;
 }
 
+/** Object blocks of `event.message.content`; non-object entries are skipped. */
+function messageContentBlocks(event: JsonObject): JsonObject[] {
+  const content = asJsonObject(event.message).content;
+  if (!Array.isArray(content)) return [];
+  return content.filter(isJsonObject);
+}
+
+/** Builds the `complete_tool` event for one Claude tool_result payload. */
+function claudeToolResultEvent(
+  toolUseId: string | undefined,
+  content: JsonValue | undefined,
+  isError: boolean,
+): CanonicalEvent {
+  const resultText =
+    content !== undefined ? extractToolResultText(content) : "";
+  if (toolUseId) {
+    trackClaudeToolResult(toolUseId, resultText, isError);
+  }
+  const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+  return result
+    ? { kind: "complete_tool", trackingId: toolUseId, result }
+    : { kind: "complete_tool", trackingId: toolUseId };
+}
+
+function parseClaudeUserEvent(event: JsonObject): CanonicalEvent[] {
+  const events: CanonicalEvent[] = [];
+  for (const block of messageContentBlocks(event)) {
+    const toolUseId = trimmedString(block.tool_use_id);
+    if (block.type === "tool_result" && toolUseId) {
+      events.push(
+        claudeToolResultEvent(
+          toolUseId,
+          block.content,
+          block.is_error === true,
+        ),
+      );
+    }
+  }
+  return events;
+}
+
+const TODO_TOOL_NAMES = new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
+const SILENT_TOOL_NAMES = new Set([
+  "TodoRead",
+  "TaskGet",
+  "TaskList",
+  "ExitPlanMode",
+]);
+
+function pushClaudeToolUseEvents(
+  events: CanonicalEvent[],
+  block: JsonObject,
+  name: string,
+  parentToolUseId: string | undefined,
+): void {
+  const input = asJsonObject(block.input);
+  // Todo tools drive a single evolving checklist, not one activity row per
+  // call. Read-only variants add nothing to the timeline.
+  if (TODO_TOOL_NAMES.has(name)) {
+    events.push({ kind: "set_todos", todos: reduceTodoState(name, input) });
+    return;
+  }
+  if (SILENT_TOOL_NAMES.has(name)) return;
+  const step = toolCallToStep(name, input);
+  const trackingId = trimmedString(block.id);
+  if (trackingId) {
+    step.toolUseId = trackingId;
+    trackClaudeToolUse(name, input, trackingId);
+  }
+  if (parentToolUseId) step.parentToolUseId = parentToolUseId;
+  events.push(
+    trackingId
+      ? { kind: "push_step", step, trackingId }
+      : { kind: "push_step", step },
+  );
+  // Fire-and-forget question metadata (surfaced after the turn). Skipped in
+  // blocking mode, where canUseTool owns the question round-trip and driving
+  // this too would double-render the question in the UI.
+  if (
+    !BLOCKING_QUESTIONS_ENABLED &&
+    name === "AskUserQuestion" &&
+    block.input
+  ) {
+    events.push({
+      kind: "set_pending_question",
+      data: JSON.stringify(block.input),
+    });
+  }
+}
+
+function pushClaudeAssistantBlockEvents(
+  events: CanonicalEvent[],
+  block: JsonObject,
+  parentToolUseId: string | undefined,
+): void {
+  if (block.type === "tool_use" && typeof block.name === "string") {
+    pushClaudeToolUseEvents(events, block, block.name, parentToolUseId);
+  } else if (
+    block.type === "thinking" &&
+    "thinking" in block &&
+    block.thinking
+  ) {
+    events.push({ kind: "update_reasoning", text: String(block.thinking) });
+  } else if (block.type === "text" && "text" in block && block.text) {
+    // Dedup: when text was already streamed live via text_delta partials
+    // (flag set in applyCanonicalEvents), the final assistant message repeats
+    // the same complete text — skip it to avoid doubling. When no deltas
+    // streamed (flag false — non-partial path or other frames), append as the
+    // fallback so text is never lost.
+    if (!S.streamedAssistantTextThisMessage) {
+      events.push({ kind: "append_text", text: String(block.text) });
+    }
+  }
+}
+
+function parseClaudeAssistantEvent(event: JsonObject): CanonicalEvent[] {
+  const events: CanonicalEvent[] = [];
+  if (S.waitingForFirstAssistantEvent) {
+    events.push({ kind: "mark_first_assistant" });
+  }
+  const blocks = messageContentBlocks(event);
+  // Set on messages produced INSIDE a subagent — the parent `Agent` tool_use id.
+  // The UI nests these steps under the matching `subtask` row.
+  const parentToolUseId = trimmedString(event.parent_tool_use_id);
+  for (const block of blocks) {
+    pushClaudeAssistantBlockEvents(events, block, parentToolUseId);
+  }
+  return events;
+}
+
 export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
   if (consumesClaudeSdkTaxonomyMessage(event)) {
     return parseClaudeSdkTaxonomy(event);
   }
-  const events: CanonicalEvent[] = [];
   if (event.type === "stream_event") {
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
-    const toolUseId =
-      typeof event.tool_use_id === "string" && event.tool_use_id.trim()
-        ? event.tool_use_id.trim()
-        : undefined;
-    const resultText =
-      event.content !== undefined ? extractToolResultText(event.content) : "";
-    const isError = event.is_error === true;
-    if (toolUseId) {
-      trackClaudeToolResult(toolUseId, resultText, isError);
-    }
-    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-    events.push(
-      result
-        ? { kind: "complete_tool", trackingId: toolUseId, result }
-        : { kind: "complete_tool", trackingId: toolUseId },
-    );
-    return events;
+    return [
+      claudeToolResultEvent(
+        trimmedString(event.tool_use_id),
+        event.content,
+        event.is_error === true,
+      ),
+    ];
   }
-  if (event.type === "user") {
-    const message =
-      event.message &&
-      typeof event.message === "object" &&
-      !Array.isArray(event.message)
-        ? event.message
-        : null;
-    const content =
-      message && Array.isArray(message.content) ? message.content : [];
-    for (const block of content) {
-      if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-      if (
-        block.type === "tool_result" &&
-        typeof block.tool_use_id === "string" &&
-        block.tool_use_id.trim()
-      ) {
-        const toolUseId = block.tool_use_id.trim();
-        const resultText =
-          block.content !== undefined
-            ? extractToolResultText(block.content)
-            : "";
-        const isError = block.is_error === true;
-        trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-        events.push(
-          result
-            ? { kind: "complete_tool", trackingId: toolUseId, result }
-            : { kind: "complete_tool", trackingId: toolUseId },
-        );
-      }
-    }
-    if (events.length > 0) {
-      return events;
-    }
-  }
-  if (event.type !== "assistant") return events;
-
-  if (S.waitingForFirstAssistantEvent) {
-    events.push({ kind: "mark_first_assistant" });
-  }
-  const message =
-    event.message &&
-    typeof event.message === "object" &&
-    !Array.isArray(event.message)
-      ? event.message
-      : null;
-  const content =
-    message && Array.isArray(message.content) ? message.content : [];
-  // Set on messages produced INSIDE a subagent — the parent `Agent` tool_use id.
-  // The UI nests these steps under the matching `subtask` row.
-  const parentToolUseId =
-    typeof event.parent_tool_use_id === "string" &&
-    event.parent_tool_use_id.trim()
-      ? event.parent_tool_use_id.trim()
-      : undefined;
-  for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    if (block.type === "tool_use" && typeof block.name === "string") {
-      const input =
-        block.input &&
-        typeof block.input === "object" &&
-        !Array.isArray(block.input)
-          ? block.input
-          : {};
-      // Todo tools drive a single evolving checklist, not one activity row per
-      // call. Read-only variants add nothing to the timeline.
-      if (
-        block.name === "TodoWrite" ||
-        block.name === "TaskCreate" ||
-        block.name === "TaskUpdate"
-      ) {
-        events.push({
-          kind: "set_todos",
-          todos: reduceTodoState(block.name, input),
-        });
-        continue;
-      }
-      if (
-        block.name === "TodoRead" ||
-        block.name === "TaskGet" ||
-        block.name === "TaskList" ||
-        block.name === "ExitPlanMode"
-      ) {
-        continue;
-      }
-      const step = toolCallToStep(block.name, input);
-      const trackingId =
-        typeof block.id === "string" && block.id.trim()
-          ? block.id.trim()
-          : undefined;
-      if (trackingId) {
-        step.toolUseId = trackingId;
-        trackClaudeToolUse(block.name, input, trackingId);
-      }
-      if (parentToolUseId) step.parentToolUseId = parentToolUseId;
-      events.push(
-        trackingId
-          ? { kind: "push_step", step, trackingId }
-          : { kind: "push_step", step },
-      );
-      // Fire-and-forget question metadata (surfaced after the turn). Skipped in
-      // blocking mode, where canUseTool owns the question round-trip and driving
-      // this too would double-render the question in the UI.
-      if (
-        !BLOCKING_QUESTIONS_ENABLED &&
-        block.name === "AskUserQuestion" &&
-        block.input
-      ) {
-        events.push({
-          kind: "set_pending_question",
-          data: JSON.stringify(block.input),
-        });
-      }
-    } else if (
-      block.type === "thinking" &&
-      "thinking" in block &&
-      block.thinking
-    ) {
-      events.push({ kind: "update_reasoning", text: String(block.thinking) });
-    } else if (block.type === "text" && "text" in block && block.text) {
-      // Dedup: when text was already streamed live via text_delta partials
-      // (flag set in applyCanonicalEvents), the final assistant message repeats
-      // the same complete text — skip it to avoid doubling. When no deltas
-      // streamed (flag false — non-partial path or other frames), append as the
-      // fallback so text is never lost.
-      if (!S.streamedAssistantTextThisMessage) {
-        events.push({ kind: "append_text", text: String(block.text) });
-      }
-    }
-  }
-  return events;
+  if (event.type === "user") return parseClaudeUserEvent(event);
+  if (event.type !== "assistant") return [];
+  return parseClaudeAssistantEvent(event);
 }
 
 function onStreamLine(parsed: JsonObject): StreamLineResult {
@@ -373,19 +355,12 @@ function onStreamLine(parsed: JsonObject): StreamLineResult {
           "ms",
       );
     }
-    const message =
-      parsed.message &&
-      typeof parsed.message === "object" &&
-      !Array.isArray(parsed.message)
-        ? parsed.message
-        : null;
+    const message = isJsonObject(parsed.message) ? parsed.message : null;
     const contentBlocks =
       message && Array.isArray(message.content) ? message.content : [];
     for (const block of contentBlocks) {
       if (
-        block &&
-        typeof block === "object" &&
-        !Array.isArray(block) &&
+        isJsonObject(block) &&
         block.type === "text" &&
         typeof block.text === "string"
       ) {

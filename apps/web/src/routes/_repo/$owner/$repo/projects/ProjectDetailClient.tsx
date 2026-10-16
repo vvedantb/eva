@@ -5,96 +5,46 @@ import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useAction, useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import { isLivePrState } from "@/lib/githubPr";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DialogBody,
-  CenteredSpinner,
-  toast,
-  motionFast,
-  CircleSpinner,
-} from "@eva/ui";
-import { AnimatePresence, m } from "motion/react";
+import { CenteredSpinner, toast } from "@eva/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
-import type { Id, SandboxOwner } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
-import { ProjectActiveLayout } from "@/lib/components/projects/ProjectActiveLayout";
 import {
   ProjectMainTabs,
   type ProjectMainTab,
 } from "@/lib/components/projects/ProjectMainTabs";
-import { ProjectOverviewTab } from "@/lib/components/projects/ProjectOverviewTab";
-import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
-import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
-import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
-import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
-import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
-import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
-import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
-import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
-import {
-  SandboxWorkspace,
-  type TerminalPanelApi,
-} from "@/lib/components/sandbox/SandboxWorkspace";
-import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
-import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
-
-import {
-  IconHammer,
-  IconPlayerStop,
-  IconTerminal2,
-  IconChevronDown,
-  IconCalendarClock,
-  IconDots,
-  IconRefresh,
-  IconFileText,
-  IconMessage,
-  IconServerBolt,
-} from "@tabler/icons-react";
-import dayjs from "@eva/shared/dates";
-import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
-import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
 import { StopConfirmDialog } from "@/lib/components/tasks/_components/StopConfirmDialog";
 import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/ResolveConfirmDialog";
 import { StartupCommandsConfirmDialog } from "@/lib/components/tasks/_components/StartupCommandsConfirmDialog";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
-import { parseSpec } from "@/lib/utils/parseSpec";
+import { useAltHeld } from "@/lib/confirm";
 import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
-import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+  getAgentBrowsingAt,
+  getProjectPrFlags,
+  isProjectDraftOrFinalized,
+  parseProjectSpec,
+} from "./_components/projectDetailHelpers";
+import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
+import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
+import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
+import {
+  ProjectInterviewHistoryDialog,
+  ProjectPlanDialog,
+  RunEvaDialog,
+} from "./_components/ProjectDetailDialogs";
 
 export function ProjectDetailClient({
   projectId,
@@ -134,7 +84,6 @@ export function ProjectDetailClient({
   const [prError, setPrError] = useState<string | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
-  const startBuild = useMutation(api.buildWorkflow.startBuild);
   const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
   const resolveProjectConflicts = useMutation(
     api.projects.resolveProjectConflicts,
@@ -153,6 +102,12 @@ export function ProjectDetailClient({
     { projectId: projectId },
   );
 
+  const sandbox = useProjectSandbox(
+    projectId,
+    project?.phase,
+    project?.sandboxId,
+    project?.reviewProjectSandboxStatus,
+  );
   const {
     canStartSandbox,
     isSandboxActive,
@@ -160,18 +115,9 @@ export function ProjectDetailClient({
     isSandboxStopping,
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
-    handleStartSandbox,
-    handleStopSandbox,
     handleRetryStartupCommands,
     isRetryingStartupCommands,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
-  } = useProjectSandbox(
-    projectId,
-    project?.phase,
-    project?.sandboxId,
-    project?.reviewProjectSandboxStatus,
-  );
+  } = sandbox;
 
   const prewarmChatDaemon = useMutation(
     api.projectChatWorkflow.prewarmChatDaemon,
@@ -217,10 +163,7 @@ export function ProjectDetailClient({
   // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
   // user if they switch away mid-lock.
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const agentBrowsingAt =
-    project === null || project === undefined
-      ? undefined
-      : project.agentBrowsingAt;
+  const agentBrowsingAt = getAgentBrowsingAt(project);
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
@@ -273,16 +216,10 @@ export function ProjectDetailClient({
     setIsCreatingPr(false);
   };
 
-  // Written with optional chaining so the hook can run above the early
-  // returns below (both read `project` / `latestDeployment`, which load late).
-  const hasDeployedPreview =
-    latestDeployment?.deploymentStatus === "deployed" &&
-    Boolean(latestDeployment.deploymentUrl);
-  // A merged PR stays linked as history, so only a live one blocks a new PR.
-  const canCreatePr =
-    !isLivePrState(project?.prState) &&
-    !project?.activeBuildWorkflowId &&
-    (project?.phase === "business_review" || project?.phase === "in_progress");
+  const { hasDeployedPreview, canCreatePr } = getProjectPrFlags(
+    project,
+    latestDeployment,
+  );
   const prLinks = usePrLinkMenuItems({
     createPr: {
       enabled: canCreatePr,
@@ -317,141 +254,9 @@ export function ProjectDetailClient({
     );
   }
 
-  const isDraftOrFinalized =
-    project.phase === "draft" || project.phase === "finalized";
-  const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-
-  const showRetryStartupCommands =
-    canStartSandbox && !isSandboxStarting && !isSandboxStopping;
-  const showRunBackgroundCommands = isSandboxActive;
-  const showResolveConflicts =
-    isLivePrState(project.prState) &&
-    !project.activeBuildWorkflowId &&
-    (project.phase === "business_review" || project.phase === "code_review");
-  const parsedSpec = (() => {
-    if (!project.generatedSpec) return null;
-    try {
-      return parseSpec(project.generatedSpec);
-    } catch {
-      return null;
-    }
-  })();
+  const isDraftOrFinalized = isProjectDraftOrFinalized(project);
+  const parsedSpec = parseProjectSpec(project.generatedSpec);
   const hasPlanContext = Boolean(parsedSpec);
-  const hasSandboxCommandItems =
-    showRetryStartupCommands || showRunBackgroundCommands;
-
-  const tab = sandboxTab ?? "preview";
-  // Always mount the sandbox panel when the project can have one so tabs
-  // stay reachable while stopped — same as sessions. Panes self-gate.
-  const projectSandboxPanel = (
-    panes: SandboxPanesApi,
-    owner: SandboxOwner,
-    terminalPanel: TerminalPanelApi,
-    collapsed: boolean,
-    onToggle: () => void,
-  ) =>
-    canStartSandbox ||
-    projectSandboxId ||
-    isSandboxActive ||
-    isSandboxStarting ||
-    isSandboxStopping ? (
-      <ProjectSandboxPanel
-        projectId={projectId}
-        projectNumId={projectNumId}
-        sandboxId={projectSandboxId}
-        isActive={isSandboxActive}
-        repoId={repo._id}
-        prUrl={project.prUrl}
-        devPort={project.devPort}
-        devCommand={project.devCommand}
-        owner={owner}
-        panes={panes}
-        terminalPanel={terminalPanel}
-        backgroundAgents={project.backgroundAgents}
-        sandboxTab={tab}
-        onStartSandbox={
-          canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
-        }
-        isSandboxStarting={isSandboxStarting}
-        autoWakeEligible={
-          project.reviewProjectSandboxStatus === "closed" &&
-          projectSandboxId !== undefined &&
-          canStartSandbox &&
-          project.activeBuildWorkflowId === undefined &&
-          // Still loading counts as busy: never wake under a live turn.
-          chatTurnOpen === false
-        }
-        collapsed={collapsed}
-        onToggle={onToggle}
-      />
-    ) : (
-      <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
-        <div className="flex flex-col items-center gap-3 text-center">
-          <IconTerminal2 size={32} className="text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Sandbox is not available for this project yet
-          </p>
-        </div>
-      </SandboxEmptyRailFrame>
-    );
-
-  const projectSandboxContent = (
-    <PendingPreviewSnapshotsProvider>
-      <PendingWebMcpProvider>
-        <OpenSandboxFileProvider onOpenFile={openFile}>
-          <SandboxWorkspace
-            ownerKind="project"
-            ownerId={projectId}
-            storageScope={`project:${projectId}`}
-            sandboxId={projectSandboxId}
-            isActive={isSandboxActive}
-            terminalPanes={project.terminalPanes}
-          >
-            {(panes, owner, terminalPanel) => (
-              <ResizablePanelLayout
-                storageKey="project-sandbox-panel"
-                leftDefaultSize="40%"
-                leftMinWidthPx={350}
-                rightMinWidthPx={300}
-                rightCollapsedSizePx={sandboxRailWidthPx}
-                defaultRightCollapsed={false}
-                expandRightSignal={expandRightSignal}
-                mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-                leftPanel={() => (
-                  <ProjectSandboxChatPanel
-                    projectId={projectId}
-                    isSandboxActive={isSandboxActive}
-                    isSandboxToggling={isSandboxStarting || isSandboxStopping}
-                    sandboxStartupActivity={sandboxStartupActivity}
-                    onOpenFile={openFile}
-                    onViewDiff={openDiffs}
-                    onOpenAgentsTab={openAgentsTab}
-                    onSandboxToggle={
-                      canStartSandbox || isSandboxActive
-                        ? (action) => {
-                            if (action === "start") void handleStartSandbox();
-                            else void handleStopSandbox();
-                          }
-                        : undefined
-                    }
-                  />
-                )}
-                rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
-                  projectSandboxPanel(
-                    panes,
-                    owner,
-                    terminalPanel,
-                    rightPanelCollapsed,
-                    onToggleRightPanel,
-                  )
-                }
-              />
-            )}
-          </SandboxWorkspace>
-        </OpenSandboxFileProvider>
-      </PendingWebMcpProvider>
-    </PendingPreviewSnapshotsProvider>
-  );
 
   return (
     <PageWrapper
@@ -478,284 +283,68 @@ export function ProjectDetailClient({
       childPadding={false}
       headerRight={
         !isDraftOrFinalized ? (
-          <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
-            {prError && <p className="text-xs text-destructive">{prError}</p>}
-            <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
-              <ProjectContextUsage repoId={repo._id} projectId={projectId} />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" size="icon-sm" aria-label="More">
-                    <IconDots size={16} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {showResolveConflicts && (
-                    <DropdownMenuItem
-                      title={skipConfirmTitle("Resolve Conflicts")}
-                      onClick={() =>
-                        requestConfirm(
-                          altHeld,
-                          () => setShowResolveConfirm(true),
-                          () => {
-                            void handleResolveConflicts();
-                          },
-                        )
-                      }
-                      disabled={isResolvingConflicts}
-                    >
-                      {isResolvingConflicts ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
-                      ) : (
-                        <IconHammer size={14} />
-                      )}
-                      Resolve Conflicts
-                      <ConfirmSkipHint />
-                    </DropdownMenuItem>
-                  )}
-                  {showResolveConflicts && hasSandboxCommandItems ? (
-                    <DropdownMenuSeparator />
-                  ) : null}
-                  {showRetryStartupCommands && (
-                    <DropdownMenuItem
-                      title={skipConfirmTitle("Run Startup Commands")}
-                      onClick={() =>
-                        requestConfirm(
-                          altHeld,
-                          () => setShowStartupCommandsConfirm(true),
-                          handleRetryStartupCommands,
-                        )
-                      }
-                      disabled={isRetryingStartupCommands}
-                    >
-                      {isRetryingStartupCommands ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
-                      ) : (
-                        <IconRefresh size={14} />
-                      )}
-                      Run Startup Commands
-                      <ConfirmSkipHint />
-                    </DropdownMenuItem>
-                  )}
-                  {showRunBackgroundCommands && (
-                    <DropdownMenuItem
-                      onClick={handleRunBackgroundCommands}
-                      disabled={isRunningBackgroundCommands}
-                    >
-                      {isRunningBackgroundCommands ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
-                      ) : (
-                        <IconServerBolt size={14} />
-                      )}
-                      Run Background Commands
-                    </DropdownMenuItem>
-                  )}
-                  {(showResolveConflicts || hasSandboxCommandItems) &&
-                  prLinks.hasItems ? (
-                    <DropdownMenuSeparator />
-                  ) : null}
-                  {prLinks.items}
-                  {hasPlanContext && (
-                    <>
-                      {(showResolveConflicts ||
-                        hasSandboxCommandItems ||
-                        prLinks.hasItems) && <DropdownMenuSeparator />}
-                      <DropdownMenuItem onClick={() => setShowPlanModal(true)}>
-                        <IconFileText size={14} />
-                        View Plan
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setShowChatModal(true)}>
-                        <IconMessage size={14} />
-                        View Interview History
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  {(showResolveConflicts ||
-                    hasSandboxCommandItems ||
-                    prLinks.hasItems ||
-                    hasPlanContext) && <DropdownMenuSeparator />}
-                  <CopyLinkMenuItem />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {/* One control for both directions — see `SandboxStartStopButton`.
-                  Inert while a chat turn is in flight; a running build keeps its
-                  own confirmed "Stop Build", so it is not gated here. This is the
-                  only wake/sleep control now, the sandbox chat header carries
-                  usage alone. */}
-              {isSandboxActive || canStartSandbox ? (
-                <SandboxStartStopButton
-                  isActive={isSandboxActive}
-                  isToggling={isSandboxStarting || isSandboxStopping}
-                  onToggle={(action) => {
-                    if (action === "start") void handleStartSandbox();
-                    else void handleStopSandbox();
-                  }}
-                  isAssistantResponding={chatTurnOpen === true}
-                />
-              ) : null}
-              {canBuildProject ? (
-                project.activeBuildWorkflowId ? (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    aria-label="Stop build"
-                    title={skipConfirmTitle("Stop Build")}
-                    onClick={() =>
-                      requestConfirm(
-                        altHeld,
-                        () => setShowStopBuildConfirm(true),
-                        () => {
-                          void handleStopBuild();
-                        },
-                      )
-                    }
-                    disabled={isStoppingBuild}
-                  >
-                    {isStoppingBuild ? (
-                      <CircleSpinner size="sm" aria-hidden />
-                    ) : (
-                      <IconPlayerStop size={16} aria-hidden />
-                    )}
-                    <span className="hidden sm:inline">Stop Build</span>
-                    <ConfirmSkipHint />
-                  </Button>
-                ) : (
-                  <SplitBuildButton
-                    projectId={projectId}
-                    scheduledBuildAt={project.scheduledBuildAt}
-                    hasActiveBuild={!!project.activeBuildWorkflowId}
-                    onBuild={() => setIsBuildModalOpen(true)}
-                  />
-                )
-              ) : null}
-            </div>
-          </div>
+          <ProjectDetailHeaderActions
+            projectId={projectId}
+            project={project}
+            repoId={repo._id}
+            sandbox={sandbox}
+            chatTurnOpen={chatTurnOpen}
+            altHeld={altHeld}
+            prError={prError}
+            prLinks={prLinks}
+            hasPlanContext={hasPlanContext}
+            isResolvingConflicts={isResolvingConflicts}
+            isStoppingBuild={isStoppingBuild}
+            onResolveConflicts={handleResolveConflicts}
+            onStopBuild={handleStopBuild}
+            setShowResolveConfirm={setShowResolveConfirm}
+            setShowStartupCommandsConfirm={setShowStartupCommandsConfirm}
+            setShowStopBuildConfirm={setShowStopBuildConfirm}
+            setShowPlanModal={setShowPlanModal}
+            setShowChatModal={setShowChatModal}
+            setIsBuildModalOpen={setIsBuildModalOpen}
+          />
         ) : null
       }
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        <AnimatePresence mode="wait" initial={false}>
-          {isSandboxSurface ? (
-            <m.div
-              key="sandbox"
-              className="min-h-0 flex-1 overflow-hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionFast}
-            >
-              {projectSandboxContent}
-            </m.div>
-          ) : mainTab === "overview" ? (
-            <m.div
-              key="overview"
-              className="flex min-h-0 flex-1 flex-col"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionFast}
-            >
-              <ProjectOverviewTab
-                projectId={projectId}
-                title={project.title}
-                description={project.description}
-              />
-            </m.div>
-          ) : isDraftOrFinalized ? (
-            <m.div
-              key="plan"
-              className="flex min-h-0 flex-1 flex-col"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionFast}
-            >
-              <ProjectTabs
-                projectId={projectId}
-                projectPhase={project.phase}
-                activeWorkflowId={project.activeWorkflowId}
-                rawInput={project.rawInput}
-                generatedSpec={project.generatedSpec}
-                conversationHistory={project.conversationHistory}
-                streamingActivity={streaming?.currentActivity}
-                sandboxStartupActivity={sandboxStartupActivity}
-                basePath={basePath}
-                repoId={repo._id}
-              />
-            </m.div>
-          ) : (
-            <m.div
-              key="tasks"
-              className="flex min-h-0 flex-1 flex-col"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionFast}
-            >
-              <ProjectActiveLayout
-                projectId={projectId}
-                project={project}
-                basePath={basePath}
-                selectedTaskId={selectedTaskId}
-                selectedTaskStatus={selectedTaskStatus}
-                detailTab={detailTab}
-              />
-            </m.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <ProjectDetailMainContent
+        projectId={projectId}
+        project={project}
+        isSandboxSurface={isSandboxSurface}
+        mainTab={mainTab}
+        isDraftOrFinalized={isDraftOrFinalized}
+        sandboxContent={
+          <ProjectDetailSandboxContent
+            projectId={projectId}
+            projectNumId={projectNumId}
+            project={project}
+            repoId={repo._id}
+            sandboxTab={sandboxTab}
+            sandbox={sandbox}
+            chatTurnOpen={chatTurnOpen}
+            sandboxRailWidthPx={sandboxRailWidthPx}
+            expandRightSignal={expandRightSignal}
+            openFile={openFile}
+            openDiffs={openDiffs}
+            openAgentsTab={openAgentsTab}
+          />
+        }
+        streamingActivity={streaming?.currentActivity}
+        sandboxStartupActivity={sandboxStartupActivity}
+        basePath={basePath}
+        repoId={repo._id}
+        selectedTaskId={selectedTaskId}
+        selectedTaskStatus={selectedTaskStatus}
+        detailTab={detailTab}
+      />
 
-      <Dialog
+      <RunEvaDialog
+        projectId={projectId}
         open={isBuildModalOpen}
-        onOpenChange={(v) => {
-          if (!v) setIsBuildModalOpen(false);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Run Eva</DialogTitle>
-          </DialogHeader>
-          <div>
-            <p className="text-muted-foreground">
-              This will allow Eva to autonomously work through all tasks in
-              sequence until the project is fully built.
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Best suited for projects with well-defined requirements. If Eva
-              makes an error on an earlier task, it may carry forward into
-              subsequent tasks.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsBuildModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={isStartingBuild}
-              onClick={async () => {
-                setIsStartingBuild(true);
-                try {
-                  await withMutationToast(
-                    startBuild({
-                      projectId: projectId,
-                    }),
-                    "Build started",
-                    "Couldn't start build",
-                    "project-build-start",
-                  );
-                  setIsBuildModalOpen(false);
-                } catch {
-                  setIsStartingBuild(false);
-                  return;
-                }
-                setIsStartingBuild(false);
-              }}
-            >
-              <IconHammer size={16} />
-              {isStartingBuild ? "Starting..." : "Start cooking"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        setOpen={setIsBuildModalOpen}
+        isStarting={isStartingBuild}
+        setIsStarting={setIsStartingBuild}
+      />
 
       <StopConfirmDialog
         open={showStopBuildConfirm}
@@ -779,134 +368,18 @@ export function ProjectDetailClient({
       />
 
       {parsedSpec && (
-        <Dialog open={showPlanModal} onOpenChange={setShowPlanModal}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Plan</DialogTitle>
-            </DialogHeader>
-            <DialogBody>
-              <div className="space-y-3">
-                <div>
-                  <h3 className="font-semibold text-lg">{parsedSpec.title}</h3>
-                  <p className="text-muted-foreground">
-                    {parsedSpec.description}
-                  </p>
-                </div>
-                <div className="space-y-1.5">
-                  <h4 className="font-medium">
-                    Tasks ({parsedSpec.tasks.length})
-                  </h4>
-                  {parsedSpec.tasks.map((task, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2 p-2 bg-muted rounded"
-                    >
-                      <span className="text-muted-foreground font-mono">
-                        {i + 1}.
-                      </span>
-                      <span>{task.title}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </DialogBody>
-          </DialogContent>
-        </Dialog>
+        <ProjectPlanDialog
+          parsedSpec={parsedSpec}
+          open={showPlanModal}
+          onOpenChange={setShowPlanModal}
+        />
       )}
 
-      <Dialog open={showChatModal} onOpenChange={setShowChatModal}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader className="pb-4">
-            <DialogTitle>
-              <div className="flex items-center gap-2">
-                <IconMessage size={20} />
-                Interview History
-                <span className="text-sm font-normal text-muted-foreground">
-                  ({project.conversationHistory.length} messages)
-                </span>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <div className="flex flex-col gap-3 py-2">
-              <ProjectChatMessageList messages={project.conversationHistory} />
-            </div>
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
-    </PageWrapper>
-  );
-}
-
-// `max-sm:h-10`: the two halves abut, so the `hit-target` bleed each `size="sm"`
-// carries would be spent on the other half rather than on the tap target.
-const SPLIT_BUTTON_HALF =
-  "hover:translate-y-0 active:scale-100 group-hover/split:bg-primary/92 max-sm:h-10";
-
-function SplitBuildButton({
-  projectId,
-  scheduledBuildAt,
-  hasActiveBuild,
-  onBuild,
-}: {
-  projectId: Id<"projects">;
-  scheduledBuildAt: number | undefined;
-  hasActiveBuild: boolean;
-  onBuild: () => void;
-}) {
-  const chevronRef = useRef<HTMLButtonElement>(null);
-  const isScheduled = scheduledBuildAt !== undefined;
-  // Hidden below `sm`, so it doubles as the button's accessible name there.
-  const buildLabel = isScheduled
-    ? dayjs(scheduledBuildAt).format("MMM D, h:mm A")
-    : "Run Eva";
-
-  // Halves cancel their own press so the wrapper scales as one unit — see the
-  // twin in `TaskFooter`. `motion-press` replaces a hand-listed
-  // `transition-[transform,background-color]` that named `transform` and so
-  // never matched the `scale` property `scale-[0.96]` compiles to.
-  return (
-    <div className="group/split motion-press flex items-center active:scale-[0.96]">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Button
-              size="sm"
-              aria-label={buildLabel}
-              onClick={
-                isScheduled ? () => chevronRef.current?.click() : onBuild
-              }
-              className={`rounded-r-none ${SPLIT_BUTTON_HALF}`}
-            >
-              {isScheduled ? (
-                <IconCalendarClock size={16} aria-hidden />
-              ) : (
-                <IconHammer size={16} aria-hidden />
-              )}
-              <span className="hidden sm:inline">{buildLabel}</span>
-            </Button>
-          </div>
-        </TooltipTrigger>
-        {isScheduled ? (
-          <TooltipContent>Click to change or remove schedule</TooltipContent>
-        ) : null}
-      </Tooltip>
-      <ScheduleBuildPopover
-        projectId={projectId}
-        scheduledBuildAt={scheduledBuildAt}
-        disabled={hasActiveBuild}
-        trigger={
-          <Button
-            ref={chevronRef}
-            size="sm"
-            aria-label="Schedule build"
-            disabled={hasActiveBuild}
-            className={`rounded-l-none border-l border-l-primary-foreground/20 px-2 max-sm:px-3 ${SPLIT_BUTTON_HALF}`}
-          >
-            <IconChevronDown size={14} aria-hidden />
-          </Button>
-        }
+      <ProjectInterviewHistoryDialog
+        conversationHistory={project.conversationHistory}
+        open={showChatModal}
+        onOpenChange={setShowChatModal}
       />
-    </div>
+    </PageWrapper>
   );
 }

@@ -2,7 +2,6 @@
 
 import { Link } from "@tanstack/react-router";
 import type { ComponentType } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
   DocumentsIcon,
@@ -13,7 +12,6 @@ import {
   StatsIcon,
   TestingArenaIcon,
 } from "@/lib/components/sidebar/icons/AnimatedNavIcons";
-import { type api } from "@eva/backend";
 import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
 import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksBadge";
 import { BuildingProjectsBadge } from "@/lib/components/sidebar/BuildingProjectsBadge";
@@ -29,7 +27,7 @@ import {
 } from "@/lib/components/sidebar/contextSidebarModes";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
+import type { RepoDoc } from "@/lib/components/sidebar/sidebarPanelState";
 
 type RepoMainNavIcon = ComponentType<{
   size?: number;

@@ -36,10 +36,7 @@ import {
   type SessionListMode,
   type SessionSortOrder,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { isSessionSidebarActive } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
@@ -239,8 +236,7 @@ export function GlobalSessionGroup({
                     session,
                     pathname,
                   );
-                  const sessionChats =
-                    chatsBySessionId.get(session._id) ?? [];
+                  const sessionChats = chatsBySessionId.get(session._id) ?? [];
                   // The session row is Main; a chat row takes the highlight
                   // while its tab is the one open.
                   const isSelected = isSessionOpen && activeChatNumber === 1;

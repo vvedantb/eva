@@ -16,6 +16,7 @@ import {
   CLAUDE_SYNC_TIMEOUT_MS,
   WORK_DIR,
 } from "./config.js";
+import { isJsonObject } from "./jsonGuards.js";
 import { callbackState as S } from "./runtime/state.js";
 import type { JsonObject, JsonValue } from "./types.js";
 
@@ -78,11 +79,11 @@ export function log(msg: string): void {
   }
 }
 
+export { isJsonObject, trimmedString } from "./jsonGuards.js";
+
 /** Coerces a JSON value to an object; non-objects become `{}`. */
 export function asJsonObject(value: JsonValue | undefined): JsonObject {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
+  return isJsonObject(value) ? value : {};
 }
 
 /** Attempts to parse a JSON string, returning null on failure. */
