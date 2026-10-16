@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, ReactNode, Ref } from "react";
 import { Fragment, cloneElement, isValidElement, useState } from "react";
 import {
   IconCheck,
@@ -52,10 +52,12 @@ function MarkdownCodeBlock({
   code,
   language,
   title,
+  ref,
 }: {
   code: string;
   language: string;
   title: string | null;
+  ref?: Ref<HTMLDivElement>;
 }) {
   const isIncomplete = useIsCodeFenceIncomplete();
   const lines = useHighlightedLines(code, language, isIncomplete);
@@ -71,6 +73,7 @@ function MarkdownCodeBlock({
 
   return (
     <div
+      ref={ref}
       className="markdown-code"
       data-language={language || undefined}
       data-wrap={wrap || undefined}
@@ -121,10 +124,15 @@ function MarkdownCodeBlock({
   );
 }
 
+/** Start a diagram render this far before it scrolls into view. */
+const MERMAID_PRELOAD_MARGIN = "400px";
+
 /**
  * A mermaid fence: the plain code block until the diagram has rendered, then
  * Streamdown's diagram view (pan, zoom, fullscreen, download). A fence still
- * streaming, or one that will not parse, stays code — no error box.
+ * streaming, or one that will not parse, stays code — no error box. Nothing
+ * renders (or loads mermaid) until the block nears the viewport, so a long
+ * chat does not render every diagram in its history on open.
  */
 function MarkdownMermaid({
   fenced,
@@ -134,13 +142,29 @@ function MarkdownMermaid({
   diagram: ReactNode;
 }) {
   const isIncomplete = useIsCodeFenceIncomplete();
-  const { theme, status } = useMermaidRender(fenced.code, !isIncomplete);
+  const [isNearView, setIsNearView] = useState(false);
+  const { theme, status } = useMermaidRender(
+    fenced.code,
+    !isIncomplete && isNearView,
+  );
+  const observeView = (element: HTMLDivElement | null) => {
+    if (element === null || isNearView) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setIsNearView(true);
+      },
+      { rootMargin: MERMAID_PRELOAD_MARGIN },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  };
   if (status === "done") {
     // Streamdown renders once per mount, so a theme change remounts it.
     return <Fragment key={theme}>{diagram}</Fragment>;
   }
   return (
     <MarkdownCodeBlock
+      ref={observeView}
       code={fenced.code}
       language={fenced.language}
       title={fenced.title}
