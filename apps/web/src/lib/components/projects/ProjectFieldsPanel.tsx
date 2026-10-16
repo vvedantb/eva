@@ -47,6 +47,7 @@ import {
 } from "@/lib/hooks/useAvailableAiModels";
 import { ProjectTagsPopover } from "./_components/ProjectTagsPopover";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useUpdateProject } from "./useUpdateProject";
 import { projectStoredTraits, useSetProjectTraits } from "./useProjectTraits";
 
@@ -60,6 +61,7 @@ export function ProjectFieldsPanel({
   projectId: Id<"projects">;
 }) {
   const { repo } = useRepo();
+  const simpleView = useSimpleView();
   const project = useQuery(api.projects.get, { id: projectId });
   const users = useQuery(api.users.listAll);
   const currentUserId = useQuery(api.auth.me);
@@ -267,27 +269,29 @@ export function ProjectFieldsPanel({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className={FIELD_ROW_CLASS}>
-          <ModelSelectWithTraits
-            value={currentModel}
-            options={modelOptions}
-            onValueChange={(nextModel) =>
-              updateProject({ id: projectId, model: nextModel })
-            }
-            accounts={displayAccounts}
-            accountId={project.providerAccountId ?? null}
-            onAccountChange={(nextAccountId) => {
-              if (!isOwner) return;
-              updateProject({
-                id: projectId,
-                providerAccountId: resolveAccountId(nextAccountId) ?? null,
-              });
-            }}
-            traits={projectStoredTraits(project)}
-            onTraitsChange={setProjectTraits}
-            className={`px-0 ${FIELD_TEXT_CLASS}`}
-          />
-        </div>
+        {simpleView ? null : (
+          <div className={FIELD_ROW_CLASS}>
+            <ModelSelectWithTraits
+              value={currentModel}
+              options={modelOptions}
+              onValueChange={(nextModel) =>
+                updateProject({ id: projectId, model: nextModel })
+              }
+              accounts={displayAccounts}
+              accountId={project.providerAccountId ?? null}
+              onAccountChange={(nextAccountId) => {
+                if (!isOwner) return;
+                updateProject({
+                  id: projectId,
+                  providerAccountId: resolveAccountId(nextAccountId) ?? null,
+                });
+              }}
+              traits={projectStoredTraits(project)}
+              onTraitsChange={setProjectTraits}
+              className={`px-0 ${FIELD_TEXT_CLASS}`}
+            />
+          </div>
+        )}
 
         <div className={`${FIELD_ROW_CLASS} gap-1.5 ${FIELD_TEXT_CLASS}`}>
           <IconGitBranch size={14} className="text-muted-foreground" />
