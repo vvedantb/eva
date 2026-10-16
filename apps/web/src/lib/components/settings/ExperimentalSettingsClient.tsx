@@ -215,6 +215,21 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={11} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Open pull requests on GitHub"
+            description="Open a pull request on GitHub in a new tab when you click it in the Reviews sidebar, instead of the review view in Eva. Cmd or Ctrl-click still opens it in Eva."
+            action={
+              <Switch
+                checked={flags.openPrsOnGithub}
+                onCheckedChange={(checked) =>
+                  toggle("openPrsOnGithub", checked)
+                }
+                aria-label="Open pull requests on GitHub"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={12} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Simple view"
             description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
             action={

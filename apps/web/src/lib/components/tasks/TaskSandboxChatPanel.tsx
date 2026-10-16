@@ -35,6 +35,7 @@ import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -375,9 +376,16 @@ export function TaskSandboxChatPanel({
             isSandboxActive,
           }
         : undefined,
+    goal: task?.goal,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
+    sendCommand: (command) => handleSend(command),
   };
+
+  const chatMessages = [...firstRunTurn, ...(messages ?? [])];
+  const streamingActivity = isFirstRunInProgress
+    ? firstRunStreaming?.currentActivity
+    : streaming?.currentActivity;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -387,83 +395,88 @@ export function TaskSandboxChatPanel({
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
       />
-      <ChatBody
-        repo={{ id: repo._id, basePath }}
-        conversationId={taskId}
-        chatParentId={taskId}
-        messages={[...firstRunTurn, ...(messages ?? [])]}
-        isLoadingMessages={messages === undefined}
-        queuedMessages={queuedMessages ?? []}
-        queueLabel={queueGate.queueLabel(isExecuting)}
-        streamingActivity={
-          isFirstRunInProgress
-            ? firstRunStreaming?.currentActivity
-            : streaming?.currentActivity
-        }
-        streamingContent={
-          isFirstRunInProgress
-            ? firstRunStreaming?.currentContent
-            : streaming?.currentContent
-        }
-        streamingPendingQuestion={
-          isFirstRunInProgress
-            ? firstRunStreaming?.pendingQuestion
-            : streaming?.pendingQuestion
-        }
-        blockingQuestion={activeQuestion ?? undefined}
-        onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
-        isExecuting={isExecuting}
-        isInputDisabled={composer.isInputDisabled}
-        placeholder={composer.placeholder}
-        emptyStateTitle={
-          isSandboxActive
-            ? "Ask Eva anything about this task's running sandbox."
-            : SANDBOX_CHAT_COPY.asleepTitle
-        }
-        emptyStateDescription={
-          isSandboxActive
-            ? SANDBOX_CHAT_COPY.activeDescription
-            : SANDBOX_CHAT_COPY.asleepDescription
-        }
-        disabledReason={composer.disabledReason}
-        onStartSandbox={
-          !isSandboxActive && !isSandboxToggling && onSandboxToggle
-            ? () => onSandboxToggle("start")
-            : undefined
-        }
-        modelPicker={{
-          model,
-          setModel: queueGate.setModel,
-          modelOptions,
-          accounts,
-          accountId: providerAccountId,
-          onAccountChange: queueGate.setAccount,
-          displayTraits,
-          onTraitsChange,
-        }}
-        onSend={handleSend}
-        onCancel={handleCancel}
-        preInputContent={<SandboxChatPreInput surface={chatSurface} />}
-        underCardLeading={
-          <SandboxBranchChip
-            branch={task?.sandboxBranch}
-            isSandboxActive={isSandboxActive}
-          />
-        }
-        draft={draftBundle}
-        isDraftLoading={!draftSeed.isReady}
-        onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
-        onOpenAgentsTab={onOpenAgentsTab}
-        backgroundAgents={task?.backgroundAgents}
+      <SubagentThreadLayer
+        surface={chatSurface}
+        parentTitle={task?.title ?? "Task"}
+        messages={chatMessages}
+        streamingActivity={streamingActivity}
         sandboxRunning={isSandboxActive}
-        transcriptTail={sandboxStartupTail(
-          sandboxStartupActivity,
-          sandboxStartupActivity !== undefined &&
-            !isSandboxActive &&
-            !isExecuting,
-        )}
-      />
+        onOpenFile={onOpenFile}
+      >
+        <ChatBody
+          repo={{ id: repo._id, basePath }}
+          conversationId={taskId}
+          chatParentId={taskId}
+          messages={chatMessages}
+          isLoadingMessages={messages === undefined}
+          queuedMessages={queuedMessages ?? []}
+          queueLabel={queueGate.queueLabel(isExecuting)}
+          streamingActivity={streamingActivity}
+          streamingContent={
+            isFirstRunInProgress
+              ? firstRunStreaming?.currentContent
+              : streaming?.currentContent
+          }
+          streamingPendingQuestion={
+            isFirstRunInProgress
+              ? firstRunStreaming?.pendingQuestion
+              : streaming?.pendingQuestion
+          }
+          blockingQuestion={activeQuestion ?? undefined}
+          onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
+          isExecuting={isExecuting}
+          isInputDisabled={composer.isInputDisabled}
+          placeholder={composer.placeholder}
+          emptyStateTitle={
+            isSandboxActive
+              ? "Ask Eva anything about this task's running sandbox."
+              : SANDBOX_CHAT_COPY.asleepTitle
+          }
+          emptyStateDescription={
+            isSandboxActive
+              ? SANDBOX_CHAT_COPY.activeDescription
+              : SANDBOX_CHAT_COPY.asleepDescription
+          }
+          disabledReason={composer.disabledReason}
+          onStartSandbox={
+            !isSandboxActive && !isSandboxToggling && onSandboxToggle
+              ? () => onSandboxToggle("start")
+              : undefined
+          }
+          modelPicker={{
+            model,
+            setModel: queueGate.setModel,
+            modelOptions,
+            accounts,
+            accountId: providerAccountId,
+            onAccountChange: queueGate.setAccount,
+            displayTraits,
+            onTraitsChange,
+          }}
+          onSend={handleSend}
+          onCancel={handleCancel}
+          preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+          underCardLeading={
+            <SandboxBranchChip
+              branch={task?.sandboxBranch}
+              isSandboxActive={isSandboxActive}
+            />
+          }
+          draft={draftBundle}
+          isDraftLoading={!draftSeed.isReady}
+          onOpenFile={onOpenFile}
+          onViewDiff={onViewDiff}
+          onOpenAgentsTab={onOpenAgentsTab}
+          backgroundAgents={task?.backgroundAgents}
+          sandboxRunning={isSandboxActive}
+          transcriptTail={sandboxStartupTail(
+            sandboxStartupActivity,
+            sandboxStartupActivity !== undefined &&
+              !isSandboxActive &&
+              !isExecuting,
+          )}
+        />
+      </SubagentThreadLayer>
       {queueGate.switchDialog}
     </div>
   );

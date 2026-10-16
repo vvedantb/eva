@@ -79,6 +79,9 @@ export function ThreadFindBar({
   const registerShortcuts = (node: HTMLDivElement | null) => {
     if (!node) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      // A chat hidden under an open subagent thread is inert; its find bar
+      // must not open behind the overlay or swallow the browser's own find.
+      if (node.closest("[inert]")) return;
       if (event.key === "Escape") {
         if (!open) return;
         if (!isWithinChatFindScope(event.target)) return;

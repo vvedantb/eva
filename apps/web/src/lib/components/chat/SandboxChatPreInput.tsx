@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { BackgroundAgentsChip } from "./BackgroundAgentsChip";
+import { GoalBanner } from "./GoalBanner";
 import type { SandboxChatSurface } from "./sandboxChatSurface";
 import { UsageLimitRecoveryBanner } from "./UsageLimitRecoveryBanner";
 import { useStopBackgroundAgent } from "./useStopBackgroundAgent";
@@ -10,7 +11,7 @@ import { RoutedThreadsBanner } from "@/lib/components/routed/RoutedThreadsBanner
 
 /**
  * The stack every sandbox chat renders above its composer: the background
- * agents chip and the usage-limit recovery card, with slots for whatever else
+ * agents chip, the `/goal` banner and the usage-limit recovery card, with slots for whatever else
  * a surface puts between or after them.
  */
 export function SandboxChatPreInput({
@@ -38,6 +39,8 @@ export function SandboxChatPreInput({
           onRequestStop={requestStop}
         />
       )}
+      {/* Not gated by simple view: the user set this goal and can clear it. */}
+      <GoalBanner goal={surface.goal} sendCommand={surface.sendCommand} />
       {beforeBanner}
       {/* Not gated by simple view: recovery is a user action, not internals. */}
       <UsageLimitRecoveryBanner surface={surface} />
