@@ -122,15 +122,15 @@ export function RepositorySettingsSection({
         bodyVariant="list"
       >
         <SettingsToggleRow
-          title="Readable by other sandboxes"
-          description="Sandboxes for other repositories you can access in Eva may clone this repository read-only. Turn off to keep it private to its own sandboxes."
+          title="Usable by other sandboxes"
+          description="Sandboxes for other repositories you can access in Eva may clone and push to this repository. Turn off to keep it private to its own sandboxes."
           action={
             <Switch
               checked={repo.sandboxReadExcluded !== true}
               onCheckedChange={(nextOn) =>
                 updateConfig({ repoId, sandboxReadExcluded: !nextOn })
               }
-              aria-label="Readable by other sandboxes"
+              aria-label="Usable by other sandboxes"
             />
           }
         />

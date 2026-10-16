@@ -462,6 +462,110 @@ export const inspectCandidate = internalQuery({
 });
 
 /**
+ * What Eva wants for one Vercel sandbox, judged from every entity that points
+ * at it:
+ *   - `unknown`  — no session, quick task or project owns it (another
+ *                  deployment, seed prep, arena): never touch it.
+ *   - `wanted`   — an owner is active/starting, busy, or has a tab open.
+ *   - `stopping` — an owner is mid-stop and nothing wants the VM.
+ *   - `closed`   — every owner is stopped and idle, so a running VM is a leak.
+ *
+ * The Vercel SDK resumes a stopped sandbox on any exec (lazy resume), so a
+ * background job that runs a command after Stop silently wakes the VM while
+ * the owner row still says `closed`. Idle pause only scans `active` rows, so
+ * those VMs used to bill until someone stopped them by hand.
+ */
+export type SandboxOwnerState = "unknown" | "wanted" | "stopping" | "closed";
+
+export const sandboxOwnerStateValidator = v.union(
+  v.literal("unknown"),
+  v.literal("wanted"),
+  v.literal("stopping"),
+  v.literal("closed"),
+);
+
+async function resolveSandboxOwnerState(
+  ctx: QueryCtx,
+  sandboxId: string,
+): Promise<
+  | { state: "unknown" }
+  | { state: Exclude<SandboxOwnerState, "unknown">; repoId: Id<"githubRepos"> }
+> {
+  const [sessions, tasks, projects] = await Promise.all([
+    ctx.db
+      .query("sessions")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+      .collect(),
+    ctx.db
+      .query("agentTasks")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+      .collect(),
+    ctx.db
+      .query("projects")
+      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+      .collect(),
+  ]);
+  const owners = [
+    ...sessions.map((doc) => ({
+      repoId: doc.repoId,
+      inspect: () => inspectSession(ctx, doc._id),
+    })),
+    ...tasks.map((doc) => ({
+      repoId: doc.repoId,
+      inspect: () => inspectTask(ctx, doc._id),
+    })),
+    ...projects.map((doc) => ({
+      repoId: doc.repoId,
+      inspect: () => inspectProject(ctx, doc._id),
+    })),
+  ];
+  // The repo resolves the Vercel credentials a stop needs.
+  const repoId = owners.find((owner) => owner.repoId)?.repoId;
+  if (!repoId) return { state: "unknown" };
+  let stopping = false;
+  for (const owner of owners) {
+    const candidate = await owner.inspect();
+    if (!candidate) continue;
+    if (
+      candidate.status === "active" ||
+      candidate.status === "starting" ||
+      candidate.busy ||
+      candidate.present
+    ) {
+      return { state: "wanted", repoId };
+    }
+    if (candidate.status === "stopping") stopping = true;
+  }
+  return { state: stopping ? "stopping" : "closed", repoId };
+}
+
+/** Internal: owner state for one sandbox. Background jobs check it before exec. */
+export const getSandboxOwnerState = internalQuery({
+  args: { sandboxId: v.string() },
+  returns: sandboxOwnerStateValidator,
+  handler: async (ctx, args) =>
+    (await resolveSandboxOwnerState(ctx, args.sandboxId)).state,
+});
+
+/** Internal: the subset of `sandboxIds` that are leaks (owner state `closed`). */
+export const listLeakedSandboxes = internalQuery({
+  args: { sandboxIds: v.array(v.string()) },
+  returns: v.array(
+    v.object({ sandboxId: v.string(), repoId: v.id("githubRepos") }),
+  ),
+  handler: async (ctx, args) => {
+    const leaked: Array<{ sandboxId: string; repoId: Id<"githubRepos"> }> = [];
+    for (const sandboxId of args.sandboxIds) {
+      const owner = await resolveSandboxOwnerState(ctx, sandboxId);
+      if (owner.state === "closed") {
+        leaked.push({ sandboxId, repoId: owner.repoId });
+      }
+    }
+    return leaked;
+  },
+});
+
+/**
  * Internal: requests the stop. Re-reads status and busy state inside the
  * mutation so a turn that started between the sweep's read and this write wins.
  */

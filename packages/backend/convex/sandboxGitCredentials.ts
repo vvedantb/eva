@@ -146,9 +146,10 @@ async function linkedSessionRepo(
  * linked repo of a multi-repo session gets a full token too, for its own
  * installation, which may differ from the primary's — but only from the
  * allow-list recorded on the credential row, so a sandbox can never mint for an
- * installation its session does not use. Any other repository gets a read-only,
- * single-repository token, and only when the sandbox owner can reach that
- * repository in eva and it has not opted out.
+ * installation its session does not use. Any other repository gets a
+ * single-repository contents-write token (clone + push, nothing else), and only
+ * when the sandbox owner can reach that repository in eva and it has not opted
+ * out.
  *
  * The home repository is read from the credential row first (pinned when the
  * helper is installed), so sandboxes bound to no eva entity — snapshot
@@ -220,7 +221,7 @@ export const resolveCredentialRequest = internalQuery({
     // installation must be on the allow-list the helper install recorded — so a
     // sandbox can never mint for an installation its own session does not use.
     // Checked after the home repository (which keeps the primary installation)
-    // and before the sibling read (which is read-only).
+    // and before the sibling token (which is scoped to contents only).
     const linked = entity.sessionId
       ? await linkedSessionRepo(ctx.db, entity.sessionId, requested)
       : null;
