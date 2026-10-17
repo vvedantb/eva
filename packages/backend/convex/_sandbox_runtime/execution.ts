@@ -175,6 +175,8 @@ export const validateSandbox = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    /** The caller knows another step provisions swap and Docker. */
+    skipDocker: v.optional(v.boolean()),
   },
   returns: v.object({ healthy: v.boolean() }),
   handler: async (ctx, args) => {
@@ -184,6 +186,7 @@ export const validateSandbox = internalAction({
       // Start the sandbox if it's stopped (fast resume ~3-5s)
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
+        skipDocker: args.skipDocker,
       });
       return { healthy: true };
     } catch (e) {
