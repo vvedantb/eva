@@ -51,8 +51,11 @@ const FAVICON_STAR_SCALE = 1.45;
  * under 2× so it stays readable when the bubble hangs off the edge.
  */
 const BADGE_CENTER = 340;
-/** Thin dark separator only; red gets almost the whole bubble. */
-const BADGE_CUTOUT_RADIUS = 210;
+/**
+ * Dark ring ~1px wide at 16px (32/512). The disc now surrounds the badge, so a
+ * light accent fill (e.g. zinc in dark mode) needs it to separate from white.
+ */
+const BADGE_CUTOUT_RADIUS = 230;
 const BADGE_RADIUS = 198;
 
 /** Slightly under 2× the pre-enlarge badges (220 / 160 / 100). */
