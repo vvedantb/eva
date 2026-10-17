@@ -357,4 +357,36 @@ describe("sandbox owner state (leak sweep)", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "a shared VM is a leak only once every owner is closed",
+    async () => {
+      const { t, sessionId, taskId } = await fixture();
+      const leaked = () =>
+        t.query(internal.sandboxIdlePause.listLeakedSandboxes, {
+          sandboxIds: ["sbx-session"],
+        });
+
+      // A closed session and an active quick task share one VM: the sweep
+      // must not stop the VM the task still uses.
+      await t.run(async (ctx) => {
+        await ctx.db.patch(sessionId, { status: "closed" });
+        await ctx.db.patch(taskId, { sandboxId: "sbx-session" });
+      });
+      expect(
+        await t.query(internal.sandboxIdlePause.getSandboxOwnerState, {
+          sandboxId: "sbx-session",
+        }),
+      ).toBe("wanted");
+      expect(await leaked()).toEqual([]);
+
+      await t.run(async (ctx) => {
+        await ctx.db.patch(taskId, { reviewTaskSandboxStatus: "closed" });
+      });
+      expect((await leaked()).map((row) => row.sandboxId)).toEqual([
+        "sbx-session",
+      ]);
+    },
+    TIMEOUT_MS,
+  );
 });
