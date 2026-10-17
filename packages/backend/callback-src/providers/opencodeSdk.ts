@@ -356,8 +356,11 @@ export async function runOpencodeSdkAttempt(
   let resultIsError = false;
   let attemptErrorMessage = "";
 
-  const sdk = await loadOpencodeSdk();
-  const baseUrl = await ensureOpencodeServer();
+  // The SDK import (~40ms) overlaps the health probe or a cold server start.
+  const [sdk, baseUrl] = await Promise.all([
+    loadOpencodeSdk(),
+    ensureOpencodeServer(),
+  ]);
   const client: OpencodeClientLike = sdk.createOpencodeClient({
     baseUrl,
     // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether

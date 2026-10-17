@@ -4276,7 +4276,7 @@ function hydratePersistedOpencodeState() {
       "hydratePersistedOpencodeState(auth)"
     );
   }
-  process.env.OPENCODE_PERMISSION = '"allow"';
+  process.env.OPENCODE_PERMISSION = '{"*":"allow"}';
   process.env.OPENCODE_DISABLE_AUTOUPDATE = "1";
 }
 function prepareOpencodeSessionState() {
@@ -5761,8 +5761,13 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     DISABLE_TELEMETRY: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_ERROR_REPORTING: "1",
-    // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
-    ENABLE_TOOL_SEARCH: "auto",
+    // Always defer MCP/tool schemas (agent turns only). "auto" made the CLI
+    // await a count_tokens API call before the first request to test a ~10%
+    // threshold: one more API round trip (≥0.12s measured) before every
+    // daemon's first token. With MCP servers still connecting (see below) that
+    // count saw only built-ins, so the first request also went out without
+    // ToolSearch.
+    ENABLE_TOOL_SEARCH: "true",
     // Do not hold the first turn until every HTTP MCP server (eva, linear,
     // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
     // first token ~3s sooner. The servers still join mid-turn; ToolSearch
@@ -6364,6 +6369,7 @@ var unsettledBackgroundAgents = /* @__PURE__ */ new Map();
 var pendingAgentStops = /* @__PURE__ */ new Set();
 var currentAgentRunner = null;
 var usageRefreshInFlight = false;
+var wakeIdlePump = null;
 function entityMutationArgs(fields) {
   return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
 }
@@ -7032,7 +7038,9 @@ function startClaimWatcher(agentRunner) {
             currentLeaseTurnId: currentLease?.turnId ?? null,
             claimedLeaseTurnId: turn.turnLease?.turnId ?? null
           })) {
-            if (!supervisor.parkClaim(turn)) {
+            if (supervisor.parkClaim(turn)) {
+              wakeIdlePump?.();
+            } else {
               log("daemon: duplicate claimed turn ignored");
             }
           } else {
@@ -7066,7 +7074,11 @@ async function runDaemonMessagePump(agentRunner) {
       return;
     }
     if (supervisor.currentTurn === null && !agentRunner.hasPending()) {
-      await sleep(PROMPT_POLL_INTERVAL_MS);
+      await new Promise((resolve) => {
+        wakeIdlePump = resolve;
+        setTimeout(resolve, PROMPT_POLL_INTERVAL_MS);
+      });
+      wakeIdlePump = null;
       continue;
     }
     const message = await agentRunner.waitMessage();
@@ -7312,10 +7324,11 @@ async function runSdkDaemon() {
     process.exit(1);
   }
   startStreamingLoops();
-  await refreshGithubToken();
+  const tokenRefreshed = refreshGithubToken();
+  await new Promise((resolve) => setImmediate(resolve));
   const sessionMode = prepareClaudeSessionState();
+  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
   const options = buildSdkOptions(sessionMode);
-  const sdk = await loadSdk();
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
   log(
@@ -8393,10 +8406,12 @@ async function runCodexAppServerDaemon() {
     }
   }, FENCE_POLL_INTERVAL_MS2);
   fence.unref?.();
-  const preflightOk2 = await runPreflightHeartbeat();
+  const [preflightOk2] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshGithubToken2()
+  ]);
   if (!preflightOk2) process.exit(1);
   startStreamingLoops();
-  await refreshGithubToken2();
   const client = new CodexAppServerClient();
   try {
     const sessionMode = prepareCodexSessionState();
@@ -8497,7 +8512,7 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
+import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
 
 // callback-src/providers/callbackRefresh.ts
 function decideCallbackRefresh(state) {
@@ -8527,7 +8542,14 @@ function decideCallbackRefresh(state) {
 }
 
 // callback-src/providers/cursorSdk.ts
-import { mkdirSync as mkdirSync7, readFileSync as readFileSync8 } from "fs";
+import {
+  mkdirSync as mkdirSync7,
+  readFileSync as readFileSync8,
+  renameSync as renameSync2,
+  statSync as statSync3,
+  writeFileSync as writeFileSync10
+} from "fs";
+import * as nodeModule from "node:module";
 var SDK_PACKAGE2 = "@cursor/sdk";
 var SDK_VERSION2 = "1.0.28";
 var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
@@ -8610,28 +8632,54 @@ function filterModeParamsByModel(candidates, model, opted) {
     })
   );
 }
+function enableSdkCompileCache() {
+  try {
+    nodeModule.enableCompileCache?.();
+  } catch {
+  }
+}
+function flushSdkCompileCache() {
+  try {
+    nodeModule.flushCompileCache?.();
+  } catch {
+  }
+}
 var loadedSdk = null;
 var loadedSdkSqlite = null;
 function loadCursorSdk() {
+  enableSdkCompileCache();
   loadedSdk ??= import(resolvePinnedSdkEntry({
     packageName: SDK_PACKAGE2,
     version: SDK_VERSION2,
     entryRelPath: SDK_ENTRY_RELPATH
-  })).catch((error) => {
-    loadedSdk = null;
-    throw error;
-  });
+  })).then(
+    (mod) => {
+      flushSdkCompileCache();
+      return mod;
+    },
+    (error) => {
+      loadedSdk = null;
+      throw error;
+    }
+  );
   return loadedSdk;
 }
 function loadCursorSdkSqlite() {
+  enableSdkCompileCache();
   loadedSdkSqlite ??= import(resolvePinnedSdkEntry({
     packageName: SDK_PACKAGE2,
     version: SDK_VERSION2,
     entryRelPath: SDK_SQLITE_ENTRY_RELPATH
-  })).catch((error) => {
-    loadedSdkSqlite = null;
-    throw error;
-  });
+  })).then(
+    (mod) => {
+      flushSdkCompileCache();
+      return mod;
+    },
+    (error) => {
+      loadedSdkSqlite = null;
+      throw error;
+    }
+  );
   return loadedSdkSqlite;
 }
 function preloadCursorSdk() {
@@ -8656,53 +8704,118 @@ function cursorModelCatalogJson(models) {
     )
   );
 }
-async function resolveCursorModelSelection(sdk) {
-  const base = normalizedCursorModel;
-  const level = cursorReasoningLevel;
-  const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
-  const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
-  if (candidates.length === 0 && !level) {
-    return { id: base };
+var CURSOR_MODEL_RESOLUTION_CACHE_FILE = CURSOR_RUNTIME_HOME_DIR + "/model-resolution.json";
+var CURSOR_MODEL_RESOLUTION_MAX_AGE_MS = 60 * 60 * 1e3;
+function cursorModelResolutionKey() {
+  return [
+    normalizedCursorModel,
+    cursorReasoningLevel,
+    String(cursorFastMode),
+    String(cursorUse1mContext)
+  ].join("|");
+}
+function readCachedCursorModelResolution() {
+  try {
+    const ageMs = Date.now() - statSync3(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
+    if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
+    const cached = JSON.parse(
+      readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
+    );
+    if (!cached || typeof cached !== "object" || Array.isArray(cached)) {
+      return null;
+    }
+    const selection = cached.selection;
+    if (cached.key !== cursorModelResolutionKey() || typeof cached.catalog !== "string" || !selection || typeof selection !== "object" || Array.isArray(selection) || typeof selection.id !== "string") {
+      return null;
+    }
+    const params = [];
+    for (const param of Array.isArray(selection.params) ? selection.params : []) {
+      if (!param || typeof param !== "object" || Array.isArray(param)) continue;
+      if (typeof param.id !== "string" || typeof param.value !== "string") {
+        continue;
+      }
+      params.push({ id: param.id, value: param.value });
+    }
+    return {
+      selection: params.length > 0 ? { id: selection.id, params } : { id: selection.id },
+      catalog: cached.catalog
+    };
+  } catch {
+    return null;
   }
-  let model;
-  let listUnavailable = false;
+}
+function writeCachedCursorModelResolution(resolution) {
+  try {
+    mkdirSync7(CURSOR_RUNTIME_HOME_DIR, { recursive: true });
+    const tmpFile = CURSOR_MODEL_RESOLUTION_CACHE_FILE + "." + String(process.pid);
+    writeFileSync10(
+      tmpFile,
+      JSON.stringify({ key: cursorModelResolutionKey(), ...resolution })
+    );
+    renameSync2(tmpFile, CURSOR_MODEL_RESOLUTION_CACHE_FILE);
+  } catch (error) {
+    log(
+      "resolveCursorModelSelection: cache write failed (" + (error instanceof Error ? error.message : String(error)) + ")"
+    );
+  }
+}
+async function resolveCursorModelSelection(sdk) {
+  const cached = readCachedCursorModelResolution();
+  const resolution = cached ?? await fetchCursorModelSelection(sdk);
+  if (cached) {
+    void fetchCursorModelSelection(sdk).catch(() => void 0);
+  }
+  if (resolution.catalog) {
+    process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = resolution.catalog;
+  }
+  return resolution.selection;
+}
+async function fetchCursorModelSelection(sdk) {
+  const base = normalizedCursorModel;
+  let models = null;
   try {
     const list = sdk.Cursor?.models?.list;
     if (list) {
-      const models = await waitForCursorPhase({
+      const listed = await waitForCursorPhase({
         task: list(),
         phase: "fetching the model list",
         timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS
       });
-      if (Array.isArray(models)) {
-        const catalog = cursorModelCatalogJson(models);
-        if (catalog) process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog;
-      }
-      model = Array.isArray(models) ? models.find(
-        (entry) => entry && typeof entry === "object" && entry.id === base
-      ) : void 0;
-      if (!model) {
-        log(
-          "resolveCursorModelSelection: model " + base + " not in Cursor.models.list \\u2014 keeping opted-in params only"
-        );
-      }
-    } else {
-      listUnavailable = true;
+      if (Array.isArray(listed)) models = listed;
     }
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
-    listUnavailable = true;
     log(
       "resolveCursorModelSelection: model list failed \\u2014 keeping opted-in params only (" + messageText + ")"
     );
   }
+  const model = models?.find(
+    (entry) => entry && typeof entry === "object" && entry.id === base
+  );
+  if (models && !model) {
+    log(
+      "resolveCursorModelSelection: model " + base + " not in Cursor.models.list \\u2014 keeping opted-in params only"
+    );
+  }
+  const catalog = models ? cursorModelCatalogJson(models) : null;
+  const selection = selectCursorModel(model);
+  if (catalog && model) {
+    writeCachedCursorModelResolution({ selection, catalog });
+  }
+  return { selection, catalog };
+}
+function selectCursorModel(model) {
+  const base = normalizedCursorModel;
+  const level = cursorReasoningLevel;
+  const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
+  const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
   const params = filterModeParamsByModel(candidates, model, opted);
   if (params.length < candidates.length && model) {
     log(
       "resolveCursorModelSelection: " + base + " does not declare " + candidates.filter((candidate) => !params.some((p) => p.id === candidate.id)).map((candidate) => candidate.id).join(", ") + " \\u2014 dropped"
     );
   }
-  if (!level || listUnavailable || !model) {
+  if (!level || !model) {
     return params.length > 0 ? { id: base, params } : { id: base };
   }
   for (const definition of model.parameters ?? []) {
@@ -9576,7 +9689,7 @@ async function reportCursorTurnWorkerFailure(outcome) {
 }
 async function runClaimedTurn(turn) {
   const promptFile = CURSOR_TURN_WORKER_FILE_PREFIX + String(process.pid) + "-" + String(Date.now()) + ".txt";
-  writeFileSync10(promptFile, turn.prompt);
+  writeFileSync11(promptFile, turn.prompt);
   startClaimedTurn(turn);
   turnActive2 = true;
   turnStartedAtMs2 = Date.now();
@@ -9682,7 +9795,7 @@ import {
   readdirSync as readdirSync4,
   readFileSync as readFileSync10,
   rmSync,
-  writeFileSync as writeFileSync11
+  writeFileSync as writeFileSync12
 } from "fs";
 var SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
 var SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
@@ -9755,7 +9868,7 @@ function writeStub(skill) {
     return false;
   }
   mkdirSync8(directory, { recursive: true });
-  writeFileSync11(\`\${directory}/SKILL.md\`, skill.stub);
+  writeFileSync12(\`\${directory}/SKILL.md\`, skill.stub);
   return true;
 }
 function pruneStaleStubs(keep) {
@@ -9782,7 +9895,7 @@ function updateGitExclude(names) {
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
-  writeFileSync11(excludeFile, next);
+  writeFileSync12(excludeFile, next);
 }
 function materializeSystemSkills() {
   try {
@@ -9817,7 +9930,7 @@ function materializeSystemSkills() {
 }
 
 // callback-src/runtime/branchWatcher.ts
-import { statSync as statSync3, watch } from "fs";
+import { statSync as statSync4, watch } from "fs";
 var GIT_TIMEOUT_MS = 5e3;
 var POLL_INTERVAL_MS3 = 15e3;
 var DEBOUNCE_MS = 300;
@@ -9929,7 +10042,7 @@ function startBranchWatcher() {
   const gitDir = WORK_DIR + "/.git";
   let gitDirIsDirectory = false;
   try {
-    gitDirIsDirectory = statSync3(gitDir).isDirectory();
+    gitDirIsDirectory = statSync4(gitDir).isDirectory();
   } catch {
     gitDirIsDirectory = false;
   }
@@ -9957,15 +10070,16 @@ import {
   openSync,
   readFileSync as readFileSync11,
   rmSync as rmSync2,
-  statSync as statSync4,
-  writeFileSync as writeFileSync12
+  statSync as statSync5,
+  writeFileSync as writeFileSync13
 } from "fs";
 var SERVER_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.json";
 var SERVER_LOCK_DIR = OPENCODE_RUNTIME_HOME_DIR + "/server.lock";
 var SERVER_LOG_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.log";
 var HEALTH_PROBE_TIMEOUT_MS = 3e3;
+var STARTUP_PROBE_TIMEOUT_MS = 250;
 var STARTUP_TIMEOUT_MS = 6e4;
-var HEALTH_POLL_INTERVAL_MS = 250;
+var HEALTH_POLL_INTERVAL_MS = 50;
 var LOCK_STALE_MS = 9e4;
 var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
@@ -9977,10 +10091,10 @@ function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
     return "";
   }
 }
-async function probeHealth() {
+async function probeHealth(timeoutMs = HEALTH_PROBE_TIMEOUT_MS) {
   try {
     const response = await fetch(opencodeServerBaseUrl + "/config", {
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
+      signal: AbortSignal.timeout(timeoutMs)
     });
     return response.ok;
   } catch {
@@ -10040,7 +10154,7 @@ function spawnServer() {
     child.unref();
     const pid = child.pid ?? 0;
     writeOomScoreAdj(pid, "300");
-    writeFileSync12(
+    writeFileSync13(
       SERVER_STATE_FILE,
       JSON.stringify({ pid, port: OPENCODE_SERVER_PORT })
     );
@@ -10052,7 +10166,7 @@ function spawnServer() {
 async function waitForHealth(pid) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await probeHealth()) return;
+    if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) return;
     if (pid && !pidAlive(pid)) {
       throw new Error(
         "opencode serve exited during startup. Server log tail:\\n" + readOpencodeServerLogTail()
@@ -10070,7 +10184,7 @@ function acquireStartupLock() {
     return true;
   } catch {
     try {
-      const ageMs = Date.now() - statSync4(SERVER_LOCK_DIR).mtimeMs;
+      const ageMs = Date.now() - statSync5(SERVER_LOCK_DIR).mtimeMs;
       if (ageMs > LOCK_STALE_MS) {
         rmSync2(SERVER_LOCK_DIR, { recursive: true, force: true });
         mkdirSync9(SERVER_LOCK_DIR);
@@ -10095,7 +10209,9 @@ async function ensureOpencodeServer() {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(HEALTH_POLL_INTERVAL_MS);
-      if (await probeHealth()) return opencodeServerBaseUrl;
+      if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) {
+        return opencodeServerBaseUrl;
+      }
       if (!existsSync8(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;
@@ -10277,8 +10393,10 @@ async function runOpencodeSdkAttempt(sessionMode) {
   let sawResult = false;
   let resultIsError = false;
   let attemptErrorMessage = "";
-  const sdk = await loadOpencodeSdk();
-  const baseUrl = await ensureOpencodeServer();
+  const [sdk, baseUrl] = await Promise.all([
+    loadOpencodeSdk(),
+    ensureOpencodeServer()
+  ]);
   const client = sdk.createOpencodeClient({
     baseUrl,
     // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether

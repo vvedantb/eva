@@ -429,8 +429,13 @@ function buildSdkOptionsFromParts(
     DISABLE_TELEMETRY: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_ERROR_REPORTING: "1",
-    // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
-    ENABLE_TOOL_SEARCH: "auto",
+    // Always defer MCP/tool schemas (agent turns only). "auto" made the CLI
+    // await a count_tokens API call before the first request to test a ~10%
+    // threshold: one more API round trip (≥0.12s measured) before every
+    // daemon's first token. With MCP servers still connecting (see below) that
+    // count saw only built-ins, so the first request also went out without
+    // ToolSearch.
+    ENABLE_TOOL_SEARCH: "true",
     // Do not hold the first turn until every HTTP MCP server (eva, linear,
     // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
     // first token ~3s sooner. The servers still join mid-turn; ToolSearch

@@ -388,10 +388,17 @@ export async function runCodexAppServerDaemon(): Promise<void> {
   }, FENCE_POLL_INTERVAL_MS);
   fence.unref?.();
 
-  const preflightOk = await runPreflightHeartbeat();
+  // The lease preflight and the GitHub token are independent Convex round
+  // trips (measured ~0.1–0.2s and ~0.3–0.45s), so run them side by side. Both
+  // still land before the app-server spawns: its tool shells inherit
+  // `GH_TOKEN` from the spawn env, and the first turn waits on MCP connects
+  // that only start at `thread/start`, so every ms saved here reaches it.
+  const [preflightOk] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshGithubToken(),
+  ]);
   if (!preflightOk) process.exit(1);
   startStreamingLoops();
-  await refreshGithubToken();
 
   const client = new CodexAppServerClient();
   try {
