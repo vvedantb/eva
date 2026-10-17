@@ -40,3 +40,7 @@ minimumReleaseAgeExclude:
   # typecheck script, ~1.5x faster than Go tsc here. Drop after 2026-10-14.
   - tsc-rs
   - "@tsc-rs/*"
+  # tsc-ts 0.0.2 (Vercel Labs TS port of tsc 7, native via scriptc) published
+  # 2026-10-17; installed to benchmark against tsc-rs. Drop after 2026-10-24.
+  - tsc-ts
+  - "@tsc-ts/*"
