@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  CHAT_LOG_AGENT_BODY_MAX,
+  CHAT_LOG_AGENT_TITLE_MAX,
+} from "@eva/shared/chatLog";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
 import {
@@ -457,7 +461,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       name: "log_entry",
       description: `Add one entry to a chat's Log, shown at the top of its Documents tab. Name no chat and it writes to the chat you are running in.
 
-The Log is append-only: it is how the user catches up on this chat weeks later. Log decisions (with the reason), research findings and changes, in user terms. To change an earlier decision, add a new decision and pass the old entry's id as "supersedes". The reply carries the new entry's id.`,
+The Log is append-only: it is how the user catches up on this chat weeks later, by skimming. Log decisions (with the reason), research findings and changes, in user terms: a headline title, at most 3 short bullets. When a decision, finding or figure changes, add the new entry and pass the old entry's id as "supersedes". Never log housekeeping (branch syncs, merges with main, sandbox state). The reply carries the new entry's id.`,
       mutating: true,
       input: {
         ...entityRefArgs,
@@ -469,20 +473,22 @@ The Log is append-only: it is how the user catches up on this chat weeks later. 
         title: z
           .string()
           .min(1)
-          .max(200)
-          .describe("One short sentence a reader can scan."),
+          .max(CHAT_LOG_AGENT_TITLE_MAX)
+          .describe(
+            "A headline that keeps the key fact or number. No markdown, no narration.",
+          ),
         body: z
           .string()
-          .max(4000)
+          .max(CHAT_LOG_AGENT_BODY_MAX)
           .optional()
           .describe(
-            "Markdown detail: the reason for a decision, the evidence for a finding.",
+            "Up to 3 short markdown bullets: the reason, the key evidence, an open risk. No paragraphs.",
           ),
         supersedes: z
           .string()
           .optional()
           .describe(
-            "Id of the earlier entry (from read_chat_log) that this decision replaces.",
+            "Id of the earlier entry (from read_chat_log) that this entry replaces: a changed decision, an updated finding or figure.",
           ),
       },
       handler: async ({ entryKind, title, body, supersedes, ...ref }) => {
@@ -522,7 +528,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later. 
   tools.push(
     defineTool({
       name: "read_chat_log",
-      description: `Read a chat's Log as markdown: current decisions, then every entry by day. Name no chat and it reads the chat you are running in. Use it to catch up on what was agreed earlier, or to find the id of a decision to supersede (ids are listed after the markdown).`,
+      description: `Read a chat's Log as markdown: current decisions, then every entry by day. Name no chat and it reads the chat you are running in. Use it to catch up on what was agreed earlier, or to find the id of an entry to supersede (ids are listed after the markdown).`,
       mutating: false,
       input: { ...entityRefArgs },
       handler: async (ref) => {
