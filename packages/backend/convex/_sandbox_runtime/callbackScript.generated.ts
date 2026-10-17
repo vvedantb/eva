@@ -4259,6 +4259,7 @@ function syncOpencodeStateToPersist() {
     "syncOpencodeStateToPersist(auth)"
   );
 }
+var OPENCODE_PERMISSION_ALLOW_ALL = '{"*":"allow"}';
 function hydratePersistedOpencodeState() {
   store3.hydratePersistedState("hydratePersistedOpencodeState");
   const configJson = OPENCODE_CONFIG_JSON || (OPENCODE_CONFIG_JSON_BASE64 ? decodeBase64(OPENCODE_CONFIG_JSON_BASE64) : "");
@@ -4276,7 +4277,7 @@ function hydratePersistedOpencodeState() {
       "hydratePersistedOpencodeState(auth)"
     );
   }
-  process.env.OPENCODE_PERMISSION = '{"*":"allow"}';
+  process.env.OPENCODE_PERMISSION = OPENCODE_PERMISSION_ALLOW_ALL;
   process.env.OPENCODE_DISABLE_AUTOUPDATE = "1";
 }
 function prepareOpencodeSessionState() {
