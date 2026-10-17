@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!-- Favicon: full-canvas centred disc + enlarged star (badge overlays at
        runtime). Full and centred so edges hit the pixel grid at 16/32 px.
-       Mirrors evaMark.ts. -->
+       Thicker disc star. Mirrors evaMark.ts. -->
   <defs>
     <clipPath id="eva-disc">
       <circle cx="256" cy="256" r="256" />
@@ -12,7 +12,7 @@
     clip-path="url(#eva-disc)"
     transform="translate(256 256) scale(1.45) translate(-256 -256)"
   >
-    <polygon points="0,256 217,237 256,64 295,237 512,256" fill="#8B3FB8" />
-    <polygon points="0,256 217,275 256,449 295,275 512,256" fill="#3B7DD8" />
+    <polygon points="0,256 204,222 256,64 308,222 512,256" fill="#8B3FB8" />
+    <polygon points="0,256 204,290 256,449 308,290 512,256" fill="#3B7DD8" />
   </g>
 </svg>
