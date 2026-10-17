@@ -14,7 +14,8 @@ const MAX_SKEW_DEG = 14;
  */
 const EYE_SPRING = { stiffness: 320, damping: 16, mass: 0.6 };
 
-const EYE_CLASS = "h-[10px] w-[6px] rounded-full bg-zinc-900";
+/** `bg-foreground` turns light in dark themes; zinc-900 vanished on the dark card. */
+const EYE_CLASS = "h-[10px] w-[6px] rounded-full bg-foreground";
 
 /**
  * Two eyes over Ave's star that follow the cursor anywhere on the page.
