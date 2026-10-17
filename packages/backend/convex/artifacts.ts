@@ -1,15 +1,25 @@
 import { v } from "convex/values";
 import { z } from "zod";
 import { internal } from "./_generated/api";
-import type { ActionCtx, QueryCtx } from "./_generated/server";
+import {
+  internalMutation,
+  type ActionCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
+  assertMessageParentAccess,
   authQuery,
   authMutation,
   authAction,
   hasTeamAccess,
 } from "./functions";
-import { artifactFields } from "./validators";
+import { artifactFields, messageFields } from "./validators";
+import {
+  chatEntityKindValidator,
+  latestChatMessageId,
+  resolveChatParent,
+} from "./_chat/chatParent";
 import { deleteAllArtifactState } from "./artifactState";
 import {
   callerCanSeeChatSource,
@@ -212,6 +222,74 @@ export const listForSource = authQuery({
     }
     const repoCache: RepoCache = new Map();
     return Promise.all(visible.map((row) => withSource(ctx, row, repoCache)));
+  },
+});
+
+/**
+ * Anchors a new artifact to the chat turn that created it, so it shows as an
+ * inline card under that reply. Called by `create_artifact` after the row
+ * exists; the same anchor rule as `render_html` (`latestChatMessageId`).
+ */
+export const anchorToChat = internalMutation({
+  args: {
+    artifactId: v.string(),
+    entityKind: chatEntityKindValidator,
+    entityId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const artifactId = ctx.db.normalizeId("artifacts", args.artifactId);
+    if (!artifactId) return null;
+    const chatParentId = await resolveChatParent(
+      ctx.db,
+      args.entityKind,
+      args.entityId,
+    );
+    if (!chatParentId) return null;
+    const messageId = await latestChatMessageId(ctx.db, chatParentId);
+    await ctx.db.patch(artifactId, {
+      chatParentId,
+      ...(messageId ? { messageId } : {}),
+    });
+    return null;
+  },
+});
+
+/**
+ * The artifacts created in one chat thread, for its inline cards. Light rows
+ * only: a card loads the HTML when the user opens its preview.
+ */
+export const listForChat = authQuery({
+  args: { parentId: messageFields.parentId },
+  returns: v.array(
+    v.object({
+      _id: v.id("artifacts"),
+      name: v.string(),
+      description: v.optional(v.string()),
+      messageId: v.optional(v.id("messages")),
+      createdAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const rows = await ctx.db
+      .query("artifacts")
+      .withIndex("by_chat_parent", (q) => q.eq("chatParentId", args.parentId))
+      .collect();
+    const visible = [];
+    for (const row of rows) {
+      if (!(await hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId))) continue;
+      visible.push({
+        _id: row._id,
+        name: row.name,
+        ...(row.description !== undefined
+          ? { description: row.description }
+          : {}),
+        ...(row.messageId !== undefined ? { messageId: row.messageId } : {}),
+        createdAt: row.createdAt,
+      });
+    }
+    return visible;
   },
 });
 

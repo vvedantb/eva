@@ -91,7 +91,8 @@ const schema = defineSchema({
     .index("by_uploader", ["uploadedBy"])
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
-    .index("by_source_project", ["sourceProjectId"]),
+    .index("by_source_project", ["sourceProjectId"])
+    .index("by_chat_parent", ["chatParentId"]),
 
   artifactState: defineTable(artifactStateFields).index(
     "by_artifact_owner_key",
