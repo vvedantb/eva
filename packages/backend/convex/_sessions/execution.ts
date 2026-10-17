@@ -23,6 +23,10 @@ import {
   drainSessionChatQueues,
 } from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
+import {
+  buildDaemonPendingTurn,
+  scheduleChatDaemonPrewarm,
+} from "./daemonTurn";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
@@ -143,14 +147,12 @@ async function stageAndStartChatTurn(
     repoId: session.repoId,
   });
   const pendingTurn = usesDaemonPull
-    ? {
+    ? buildDaemonPendingTurn({
         prompt,
-        requestedAt: Date.now(),
         turnId,
         attachmentStorageIds: settings.attachmentStorageIds,
         model: normalizedModel,
-        interactionMode: "default" as const,
-      }
+      })
     : undefined;
   const now = Date.now();
   await ctx.db.patch(chat._id, {
@@ -162,18 +164,14 @@ async function stageAndStartChatTurn(
   });
   await ctx.db.patch(session._id, { updatedAt: now });
 
-  if (usesDaemonPull && session.sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
-      sandboxId: session.sandboxId,
-      chatId: chat._id,
-      repoId: session.repoId,
+  if (usesDaemonPull) {
+    await scheduleChatDaemonPrewarm(ctx, {
+      session,
+      chat,
       userId: params.actingUserId,
       model: normalizedModel,
-      ...launchTraits,
-      allowedTools: SESSION_TOOLS,
+      launchTraits,
       providerAccountId: stickyProviderAccountId,
-      credentialOwnerUserId,
-      sessionPersistenceId: sessionChatPersistenceId(chat),
     });
   }
 

@@ -56,6 +56,8 @@ test("the session workflow requires a turn and keeps its journal", () => {
     "internal.sessionWorkflow.clearSessionClosedStatus",
     "internal.sessionWorkflow.ensurePendingTurn",
     "internal.sandbox.prewarmSessionDaemon",
+    // One-shot providers wait out a new sandbox's setup gate before launch.
+    "internal.sessionWorkflow.waitForSessionSetup",
     "internal.turns.acquireOneShotLease",
     "internal.sessionWorkflow.saveResult",
     "internal.sandbox.launchOnExistingSandbox",

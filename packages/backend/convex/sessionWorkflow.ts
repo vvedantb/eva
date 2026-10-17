@@ -21,6 +21,8 @@ export {
   requestStopBackgroundAgent,
 } from "./_sessions/workflow";
 
+export { waitForSessionSetup } from "./_sessions/setupGate";
+
 export {
   startExecute,
   retryLastTurnWithAccount,

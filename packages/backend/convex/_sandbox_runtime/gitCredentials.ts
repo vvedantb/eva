@@ -158,22 +158,25 @@ export async function ensureGitCredentialHelper(
   extraInstallationIds: number[] = [],
 ): Promise<void> {
   const secret = randomBytes(32).toString("hex");
-  await ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
-    sandboxId: sandbox.id,
-    installationId,
-    installationIds: Array.from(
-      new Set([installationId, ...extraInstallationIds]),
-    ),
-    secret,
-    repoOwner: homeRepo.owner,
-    repoName: homeRepo.name,
-  });
-
   const siteUrl = resolveConvexSiteUrl();
   const envFileContent = `EVA_SANDBOX_SECRET=${secret}\nCONVEX_SITE_URL=${siteUrl}\n`;
 
-  await writeSandboxFile(sandbox, HELPER_SCRIPT_PATH, HELPER_SCRIPT);
-  await writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent);
+  // Independent of each other, and nothing calls the helper until the exec
+  // below wires it into git config — so one round trip instead of three.
+  await Promise.all([
+    ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: sandbox.id,
+      installationId,
+      installationIds: Array.from(
+        new Set([installationId, ...extraInstallationIds]),
+      ),
+      secret,
+      repoOwner: homeRepo.owner,
+      repoName: homeRepo.name,
+    }),
+    writeSandboxFile(sandbox, HELPER_SCRIPT_PATH, HELPER_SCRIPT),
+    writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent),
+  ]);
 
   // Legacy snapshots and pre-helper clones embed the installation token in
   // `remote.origin.url` (e.g. `https://x-access-token:ghs_xxx@github.com/...`).

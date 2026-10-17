@@ -408,7 +408,14 @@ export const sessionExecuteWorkflow = workflow.define({
       if (thawId) {
         const validation = await step.runAction(
           internal.sandbox.validateSandbox,
-          { sandboxId: thawId, repoId: data.repoId },
+          {
+            sandboxId: thawId,
+            repoId: data.repoId,
+            // A just-created sandbox: startSessionSandbox provisions swap and
+            // Docker itself, and waiting on its Docker bootstrap here (2.8s
+            // p50, 14.6s p90) only delays the launch.
+            skipDocker: data.sandboxSetupPending,
+          },
           { retry: false },
         );
         validatedSandboxId = validation.healthy ? thawId : null;
@@ -489,6 +496,14 @@ export const sessionExecuteWorkflow = workflow.define({
       // empty placeholder (and activeWorkflowId) stuck on "Working…" until
       // the 2-hour backstop.
       try {
+        // One-shot providers push the prompt at launch, so hold it until the
+        // new sandbox is on the latest base (daemons get this from the
+        // claimPendingTurn gate). Read live: the gate may already be clear.
+        if (data.sandboxSetupPending) {
+          await step.runAction(internal.sessionWorkflow.waitForSessionSetup, {
+            sessionId,
+          });
+        }
         const turnLease = await step.runMutation(
           internal.turns.acquireOneShotLease,
           { turnId: args.turnId, sandboxId },
@@ -880,6 +895,8 @@ export const getSessionData = internalQuery({
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     /** Non-zero for a multi-repo session — gates the linked publish step. */
     linkedRepoCount: v.optional(v.number()),
+    /** startSessionSandbox still owns repo prep, swap and Docker. */
+    sandboxSetupPending: v.boolean(),
   }),
   handler: async (ctx, args) => {
     const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
@@ -930,6 +947,7 @@ export const getSessionData = internalQuery({
       deploymentProjectName: repo.deploymentProjectName,
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
       linkedRepoCount: session.linkedRepoCount,
+      sandboxSetupPending: session.sandboxSetupPending === true,
     };
   },
 });

@@ -41,8 +41,10 @@ import {
   releaseSwapFile,
   resolveSwapConfig,
 } from "./_sandbox_runtime/swap";
-import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
-import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion";
+import {
+  resolveClaudeCliVersion,
+  resolveCodexCliVersion,
+} from "./_sandbox_runtime/launch";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
 import {
@@ -311,6 +313,13 @@ export const launchSeedRun = internalAction({
     // Validates Vercel credentials are configured for this repo; the sandbox
     // handle itself is resolved separately below via getSandboxHandle.
     await resolveSandboxCredentials(ctx, args.repoId);
+    // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
+    // the compiled floor made every launch npm-install the latest Claude CLI
+    // before its daemon could start: ~5-7s on half of all first turns.
+    const [claudeCliVersion, codexCliVersion] = await Promise.all([
+      resolveClaudeCliVersion(),
+      resolveCodexCliVersion(),
+    ]);
     const startupCommands: string[] | null = await ctx.runQuery(
       internal.repoSnapshots.getStartupCommands,
       { repoId: args.repoId },
@@ -417,7 +426,7 @@ export const launchSeedRun = internalAction({
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
-      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
+      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", claudeCliVersion)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", codexCliVersion)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${claudeCliVersion} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${codexCliVersion} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
       // code-server publishes one artifact per packaging format, and the two
       // asset names differ by more than the extension (`code-server_V_amd64.deb`
