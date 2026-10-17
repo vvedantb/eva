@@ -10,6 +10,7 @@ import {
   getAIModelProvider,
   launchTraitsFromStored,
   normalizeAIModel,
+  usesChatDaemon,
 } from "../validators";
 import type { AIProvider } from "../validators";
 import { queuedMessageFields } from "../_validators/tableFields";
@@ -40,6 +41,11 @@ import {
   type UsageLimitHold,
 } from "../_taskWorkflow/usageLimitReset";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
+import { buildSessionPrompt } from "../_sessions/workflow";
+import {
+  buildDaemonPendingTurn,
+  scheduleChatDaemonPrewarm,
+} from "../_sessions/daemonTurn";
 import { wakeTaskSandboxForQueue } from "../_agentTasks/sandbox";
 import { wakeProjectSandboxForQueue } from "../_projects/sandbox";
 import {
@@ -593,7 +599,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sentViaOrchestrator: next.sentViaOrchestrator,
     });
   },
-  startWorkflow: async (ctx, id, { session }, next, prepared) => {
+  startWorkflow: async (ctx, id, { session, chat }, next, prepared) => {
     const placeholderMessageId = await ctx.db.insert("messages", {
       parentId: id,
       role: "assistant",
@@ -612,6 +618,46 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sandboxId: session.sandboxId,
       repoId: session.repoId,
     });
+    // Normalised, not forwarded raw: the composer enqueues model defaults
+    // explicitly (e.g. reasoning "high"), and the workflow feeds these
+    // straight into prewarmSessionDaemon — a raw default yields a
+    // different opts sig from the page-open prewarm and kills its daemon.
+    const model = normalizeAIModel(prepared.model);
+    const launchTraits = launchTraitsFromStored(model, {
+      reasoningLevel: next.reasoningLevel,
+      thinkingEnabled: next.thinkingEnabled,
+      use1mContext: next.use1mContext,
+      fastMode: next.fastMode,
+    });
+    // Same daemon-pull staging as a direct send (stageAndStartChatTurn). A new
+    // session's first message lands here once its sandbox exists; leaving the
+    // staging to the workflow held the turn ~7s behind its validate step.
+    if (usesChatDaemon(model)) {
+      const { prompt } = await buildSessionPrompt(ctx, {
+        session,
+        chat,
+        repo: prepared.repo,
+        user: await ctx.db.get(next.userId),
+        message: next.content,
+        model,
+      });
+      await ctx.db.patch(id, {
+        pendingTurn: buildDaemonPendingTurn({
+          prompt,
+          turnId,
+          attachmentStorageIds: next.attachmentStorageIds,
+          model,
+        }),
+      });
+      await scheduleChatDaemonPrewarm(ctx, {
+        session,
+        chat,
+        userId: next.userId,
+        model,
+        launchTraits,
+        providerAccountId: prepared.providerAccountId,
+      });
+    }
     try {
       return await workflow.start(
         ctx,
@@ -620,16 +666,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
           chatId: id,
           message: next.content,
           model: prepared.model,
-          // Normalised, not forwarded raw: the composer enqueues model defaults
-          // explicitly (e.g. reasoning "high"), and the workflow feeds these
-          // straight into prewarmSessionDaemon — a raw default yields a
-          // different opts sig from the page-open prewarm and kills its daemon.
-          ...launchTraitsFromStored(normalizeAIModel(prepared.model), {
-            reasoningLevel: next.reasoningLevel,
-            thinkingEnabled: next.thinkingEnabled,
-            use1mContext: next.use1mContext,
-            fastMode: next.fastMode,
-          }),
+          ...launchTraits,
           providerAccountId: prepared.providerAccountId,
           credentialOwnerUserId: session.createdBy ?? session.userId,
           userId: next.userId,

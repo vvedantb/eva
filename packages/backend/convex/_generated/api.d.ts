@@ -294,6 +294,7 @@ import type * as _sessionChats_mutations from "../_sessionChats/mutations.js";
 import type * as _sessionChats_queries from "../_sessionChats/queries.js";
 import type * as _sessions_backgroundAgents from "../_sessions/backgroundAgents.js";
 import type * as _sessions_baseBranch from "../_sessions/baseBranch.js";
+import type * as _sessions_daemonTurn from "../_sessions/daemonTurn.js";
 import type * as _sessions_execution from "../_sessions/execution.js";
 import type * as _sessions_fork from "../_sessions/fork.js";
 import type * as _sessions_groups from "../_sessions/groups.js";
@@ -838,6 +839,7 @@ declare const fullApi: ApiFromModules<{
   "_sessionChats/queries": typeof _sessionChats_queries;
   "_sessions/backgroundAgents": typeof _sessions_backgroundAgents;
   "_sessions/baseBranch": typeof _sessions_baseBranch;
+  "_sessions/daemonTurn": typeof _sessions_daemonTurn;
   "_sessions/execution": typeof _sessions_execution;
   "_sessions/fork": typeof _sessions_fork;
   "_sessions/groups": typeof _sessions_groups;

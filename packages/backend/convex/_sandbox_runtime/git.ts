@@ -432,9 +432,9 @@ export async function createSandbox(
     // before return, their `sandbox` var stays unset and they cannot delete —
     // so orphans must be cleaned up here.
     try {
-      if (onSandboxAcquired) {
-        await onSandboxAcquired(sandbox);
-      }
+      // Env file first: early-ready below lets the session start its agent
+      // daemon, and the runner sources this file once at spawn — the snapshot's
+      // copy carries a stale token and stale repo env vars.
       const token = await tokenPromise;
       await runLoggedGitStep("createSandbox.writeEvaEnv", sandbox.id, () =>
         writeSandboxFile(
@@ -453,6 +453,9 @@ export async function createSandbox(
           }) + AGENT_CLI_PATH_LINE,
         ),
       );
+      if (onSandboxAcquired) {
+        await onSandboxAcquired(sandbox);
+      }
       // Must run before any install: it turns the raw Drive mount into the
       // writable cache root the env above points at. Never fails a create —
       // the script itself soft-fails to a plain directory.
@@ -466,12 +469,19 @@ export async function createSandbox(
           "GITHUB_APP_SLUG and GITHUB_BOT_USER_ID must be set in Convex env",
         );
       }
-      // The steps below are independent of each other, so each group runs in
+      // The steps below are independent of each other, so they run in
       // parallel: every exec is a ~0.5s round trip, and this whole block sits
-      // before the session's first-turn gate (measured 7.3s serial). Two groups,
-      // not one: jq and a missing docker binary both go through the package
-      // manager, which must not run twice at once.
+      // before the session's first-turn gate (measured 7.3s serial). Docker is
+      // not here: see startDockerBootstrap in createSandboxAndPrepareRepo.
       await Promise.all([
+        // Every sandbox eva creates — session, quick task, project chat or seed
+        // prep — starts here, and the memory-hungry stages that follow
+        // (snapshot dependency install, `next build`, the first Convex backend
+        // open) all run before any resume path could provision swap.
+        // ensureSandboxRunning covers later boots; this covers the first one.
+        runLoggedGitStep("createSandbox.ensureSwap", sandbox.id, () =>
+          ensureSwapFile(sandbox),
+        ),
         // Belt-and-suspenders for login shells; tmux Console already sources
         // eva-env. Never fail create over this hook.
         runLoggedGitStep(
@@ -514,25 +524,6 @@ export async function createSandbox(
             ].join(" && "),
             10,
           ),
-        ),
-      ]);
-
-      await Promise.all([
-        // Every sandbox eva creates — session, quick task, project chat or seed
-        // prep — starts here, and the memory-hungry stages that follow
-        // (snapshot dependency install, `next build`, the first Convex backend
-        // open) all run before any resume path could provision swap.
-        // ensureSandboxRunning covers later boots; this covers the first one.
-        runLoggedGitStep("createSandbox.ensureSwap", sandbox.id, () =>
-          ensureSwapFile(sandbox),
-        ),
-        // Start Docker daemon if available (for Docker-in-Docker / Supabase
-        // local dev). Idempotent — also re-invoked from ensureSandboxRunning on
-        // resume since dockerd doesn't survive auto-stop. Already fast-paths on
-        // an already-running daemon (`docker info` check first); the timing
-        // wrapper just makes that fast path visible in logs instead of assumed.
-        runLoggedGitStep("createSandbox.bootstrapDocker", sandbox.id, () =>
-          bootstrapVercelDocker(sandbox),
         ),
       ]);
 
@@ -671,6 +662,15 @@ export async function fetchBranchRefs(
           }
           const fetchedBranches: string[] = [];
           for (const [index, refspec] of refspecs.entries()) {
+            // The combined fetch failed on a missing ref; if every other ref
+            // fetched, this last one is it. Skips a doomed ~0.9s round trip —
+            // a new session's never-pushed branch, on every first turn.
+            if (
+              index === refspecs.length - 1 &&
+              fetchedBranches.length === index
+            ) {
+              break;
+            }
             try {
               await execGitCommand(
                 sandbox,
@@ -810,7 +810,7 @@ async function pinBranchUpstream(
   try {
     await execGitCommand(
       sandbox,
-      `cd ${workspaceDir} && git config ${quote([`branch.${branchName}.remote`])} origin && git config ${quote([`branch.${branchName}.merge`])} ${quote([`refs/heads/${branchName}`])}`,
+      `cd ${workspaceDir} && ${pinBranchUpstreamShell(branchName)}`,
       15,
     );
   } catch (error) {
@@ -818,6 +818,11 @@ async function pinBranchUpstream(
       `pinBranchUpstream: failed for ${branchName} (continuing): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+/** Shell for {@link pinBranchUpstream}; run inside the workspace. */
+function pinBranchUpstreamShell(branchName: string): string {
+  return `git config ${quote([`branch.${branchName}.remote`])} origin && git config ${quote([`branch.${branchName}.merge`])} ${quote([`refs/heads/${branchName}`])}`;
 }
 
 /**
@@ -909,60 +914,45 @@ export async function checkoutSessionBranch(
 ): Promise<void> {
   const details = `branch=${branchName}, base=${baseBranch}`;
   await runLoggedGitStep("checkoutSessionBranch", details, async () => {
-    // Check if branch already exists locally via SDK
-    const branchList = await execSdkGitOperation(
-      sandbox,
-      `branches`,
-      () => sandbox.git.branches(WORKSPACE_DIR),
-      10,
-    );
-    if (branchList.branches.includes(branchName)) {
-      // Branch exists locally — check if we're already on it
-      const workspaceDir = workspaceDirShell();
-      const currentBranch = (
-        await execGitCommand(
-          sandbox,
-          `cd ${workspaceDir} && git branch --show-current`,
-          5,
-        )
-      ).trim();
-      if (currentBranch !== branchName) {
-        // Checkout using git command (more reliable than SDK for existing branches)
-        const quotedBranch = quote([branchName]);
-        await execGitCommand(
-          sandbox,
-          `cd ${workspaceDir} && git checkout ${quotedBranch}`,
-          20,
-        );
-      } else {
-        logGit(
-          `checkoutSessionBranch: already on ${branchName}, skipping checkout`,
-        );
-      }
-      // Also self-heals branches created before the upstream pin existed.
-      await pinBranchUpstream(sandbox, branchName);
-      return;
-    }
-    // Branch doesn't exist locally — create from remote tracking or base ref.
-    // `--no-track` on the base fallback: tracking the START POINT is what left
-    // the branch pointing at origin/<base>; pinBranchUpstream then pins the
-    // upstream to origin/<branchName> on both arms.
-    // `-f` on both arms: this path only runs on a fresh sandbox with no user
-    // work, but the dev server can re-dirty generated files between
-    // normalizeSnapshotWorktree and here (e.g. routeTree.gen.ts), and when the
-    // start point moves those files a plain checkout aborts — leaving the
-    // sandbox stuck on the base branch and publish refusing at session end.
-    const { ref: baseTarget } = await resolveBaseTarget(sandbox, baseBranch);
+    // One exec, not four: this sits on a new session's first-turn gate, and
+    // each exec is a ~0.5s round trip (measured 2.0s for the old sequence).
+    //
+    // Existing local branch: switch to it unless already there.
+    // New branch: create it from origin/<branch> when that exists, else from
+    // the best base (origin/<base>, then local <base>, then HEAD). `--no-track`
+    // on the base fallback: tracking the START POINT is what left the branch
+    // pointing at origin/<base>; the upstream pin below targets
+    // origin/<branchName> on both arms. `-f` on both arms: this path only runs
+    // on a fresh sandbox with no user work, but the dev server can re-dirty
+    // generated files between normalizeSnapshotWorktree and here (e.g.
+    // routeTree.gen.ts), and when the start point moves those files a plain
+    // checkout aborts — leaving the sandbox stuck on the base branch and
+    // publish refusing at session end.
+    //
+    // The upstream pin also self-heals branches created before it existed. It
+    // is best-effort, like before: a failed pin never fails the checkout.
     const quotedBranch = quote([branchName]);
     const quotedRemoteBranch = quote([`origin/${branchName}`]);
-    const quotedBase = quote([baseTarget]);
-    const workspaceDir = workspaceDirShell();
+    const quotedBase = quote([baseBranch]);
+    const pinUpstream = isSafeBranchName(branchName)
+      ? `{ ${pinBranchUpstreamShell(branchName)}; } || echo "pinBranchUpstream failed (continuing)" >&2`
+      : "true";
     await execGitCommand(
       sandbox,
-      `cd ${workspaceDir} && (git checkout -f -b ${quotedBranch} ${quotedRemoteBranch} || git checkout -f --no-track -b ${quotedBranch} ${quotedBase})`,
+      [
+        `cd ${workspaceDirShell()} || exit 1`,
+        `if git show-ref --verify --quiet refs/heads/${quotedBranch}; then`,
+        `  if [ "$(git branch --show-current)" != ${quotedBranch} ]; then git checkout ${quotedBranch} || exit 1; fi`,
+        "else",
+        `  if git rev-parse --verify --quiet refs/remotes/origin/${quotedBase} >/dev/null 2>&1; then start=${quote([`origin/${baseBranch}`])}`,
+        `  elif git show-ref --verify --quiet refs/heads/${quotedBase}; then start=${quotedBase}`,
+        "  else start=HEAD; fi",
+        `  git checkout -f -b ${quotedBranch} ${quotedRemoteBranch} || git checkout -f --no-track -b ${quotedBranch} "$start" || exit 1`,
+        "fi",
+        pinUpstream,
+      ].join("\n"),
       30,
     );
-    await pinBranchUpstream(sandbox, branchName);
   });
 }
 
@@ -1700,6 +1690,13 @@ function isSnapshotUnusableError(err: unknown): boolean {
   );
 }
 
+type PreparedSandbox = {
+  sandbox: SandboxHandle;
+  usedSnapshot: boolean;
+  /** Settles once dockerd is up (true) or unavailable (false). Never rejects. */
+  dockerReady: Promise<boolean>;
+};
+
 /** Creates a sandbox and prepares the repo by cloning or syncing from a snapshot. */
 export async function createSandboxAndPrepareRepo(
   ctx: ActionCtx,
@@ -1730,7 +1727,11 @@ export async function createSandboxAndPrepareRepo(
   forkFrom?: string,
   // Shared package-cache Drive role. See createSandbox.driveCacheRole.
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
-): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
+  // When true, return without waiting for dockerd; the caller must await
+  // `dockerReady` before anything that needs Docker. Docker takes 2.8s at p50
+  // and 14.6s at p90, which a new session's repo prep should not wait on.
+  deferDocker = false,
+): Promise<PreparedSandbox> {
   let sandbox: SandboxHandle | undefined;
   try {
     const details = `${owner}/${name}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
@@ -1775,6 +1776,17 @@ export async function createSandboxAndPrepareRepo(
             throw err;
           }
         }
+        // After createSandbox, not inside it: a missing docker binary installs
+        // through the package manager, which must not race createSandbox's jq
+        // install. Idempotent and serialized by a flock, so a later
+        // ensureDockerDaemon simply waits for this one. Never throws.
+        const createdSandbox = sandbox;
+        const dockerReady = runLoggedGitStep(
+          "createSandbox.bootstrapDocker",
+          createdSandbox.id,
+          () => bootstrapVercelDocker(createdSandbox),
+        );
+        if (!deferDocker) await dockerReady;
         if (effectiveSnapshot || forkFrom) {
           // Deliberately no `installDependencies`/pnpm install on this path:
           // a seeded/base snapshot already carries node_modules from the seed
@@ -1795,7 +1807,7 @@ export async function createSandboxAndPrepareRepo(
             await syncRepo(sandbox, owner, name, syncStrategy);
           }
           await copySandboxConfigFilesToWorkspace(sandbox, { force: true });
-          return { sandbox, usedSnapshot: true };
+          return { sandbox, usedSnapshot: true, dockerReady };
         }
         if (lifecycle.ephemeral && syncStrategy.mode === "none") {
           await cloneAndSetupRepo(
@@ -1807,7 +1819,7 @@ export async function createSandboxAndPrepareRepo(
             false,
             onProgress,
           );
-          return { sandbox, usedSnapshot: false };
+          return { sandbox, usedSnapshot: false, dockerReady };
         }
         await cloneAndSetupRepo(
           ctx,
@@ -1822,7 +1834,7 @@ export async function createSandboxAndPrepareRepo(
           if (onProgress) await onProgress("Syncing repository...");
           await syncRepo(sandbox, owner, name, syncStrategy);
         }
-        return { sandbox, usedSnapshot: false };
+        return { sandbox, usedSnapshot: false, dockerReady };
       },
     );
   } catch (error) {
