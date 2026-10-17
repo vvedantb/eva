@@ -1,0 +1,6 @@
+{
+  "envFile": ".env.local",
+  "network": "live",
+  "auth": "redline.auth.mjs",
+  "seeds": ["/vvedantb/eva/sessions", "/vvedantb/eva/quick-tasks", "/vvedantb/eva/projects"]
+}
