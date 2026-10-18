@@ -137,7 +137,7 @@ function GardenerBracket() {
         transition={on ? { ...SETTLE, delay: 0.8 } : LEAVE}
       >
         <Sheen step={1} delay={1.1} className="rounded-full">
-          <div className="rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-1 text-sm font-medium whitespace-nowrap text-white">
+          <div className="rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-1 text-sm font-medium whitespace-nowrap text-[#fff]">
             The Gardener
           </div>
         </Sheen>

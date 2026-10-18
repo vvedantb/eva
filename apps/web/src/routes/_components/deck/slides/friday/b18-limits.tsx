@@ -1,5 +1,6 @@
 import { m } from "motion/react";
 import {
+  useInk,
   Accent,
   Footnote,
   Shell,
@@ -60,6 +61,7 @@ const GLOW = [
 
 /** The year draws itself on entry; the ladder then climbs off this line. */
 function Axis() {
+  const ink = useInk();
   return (
     <>
       <div className="absolute inset-0">
@@ -70,7 +72,7 @@ function Axis() {
           delay={0.45}
           duration={1.3}
           strokeWidth={1.5}
-          color="rgba(255,255,255,0.16)"
+          color={ink(0.16)}
           dot
         />
       </div>

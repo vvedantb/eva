@@ -6,7 +6,7 @@ import {
   statusConfig,
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
-import { useDeckStep } from "../../_components/DeckPrimitives";
+import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE } from "../../_components/motion";
 
 /**
@@ -266,12 +266,16 @@ function DropSlot({ column }: { column: number }) {
 }
 
 export function Fri4ReviewBoard() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   const column = heroColumn(step);
 
   return (
     <div
-      className="dark relative overflow-hidden rounded-2xl bg-background ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "relative overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
       style={{ width: BOARD_W, height: BOARD_H }}
     >
       <div

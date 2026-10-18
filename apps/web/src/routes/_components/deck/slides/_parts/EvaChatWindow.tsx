@@ -1,6 +1,6 @@
 import { IconArrowUp, IconChevronDown } from "@tabler/icons-react";
-import { Message, MessageContent, ProviderIcon } from "@eva/ui";
-import { Reveal } from "../../_components/DeckPrimitives";
+import { Message, MessageContent, ProviderIcon, cn } from "@eva/ui";
+import { useAppScheme, Reveal } from "../../_components/DeckPrimitives";
 
 /** What the one person types. Short enough to sit on a single line. */
 const MESSAGES: readonly string[] = [
@@ -41,8 +41,14 @@ function EvaComposer() {
  * instructions typed by one person, then the prompt bar they typed them into.
  */
 export function EvaChatWindow() {
+  const appScheme = useAppScheme();
   return (
-    <div className="dark w-[340px] overflow-hidden rounded-2xl bg-background ring-1 ring-white/10">
+    <div
+      className={cn(
+        appScheme,
+        "w-[340px] overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
+    >
       <div className="flex flex-col gap-3 px-4 pt-4">
         {MESSAGES.map((message, index) => (
           <Reveal key={message} delay={0.3 + index * 0.45} from="left">

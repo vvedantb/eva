@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { BRAND, useDeckStep } from "../../_components/DeckPrimitives";
+import { useInk, BRAND, useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE, LEAVE, Spotlight } from "../../_components/motion";
 import { LEAD, MoF1Milestone } from "./MoF1SessionsMilestone";
 import type { Run } from "./MoF1SessionsMilestone";
@@ -56,6 +56,7 @@ function MonthLabel({ index }: { index: number }) {
 }
 
 export function SessionsTimeline() {
+  const ink = useInk();
   const step = useDeckStep();
   const placed = place();
   const lit = runs(placed);
@@ -98,7 +99,7 @@ export function SessionsTimeline() {
         </defs>
         <m.path
           d={`M ${START} ${LINE_Y} L ${END} ${LINE_Y}`}
-          stroke="rgba(255,255,255,0.12)"
+          stroke={ink(0.12)}
           strokeWidth={2}
           strokeLinecap="round"
           fill="none"

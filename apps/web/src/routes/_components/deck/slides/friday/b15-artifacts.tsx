@@ -81,7 +81,7 @@ function ChatTabs({ tabbed }: { tabbed: boolean }) {
           </m.span>
         ))}
       </div>
-      <div className="flex flex-col gap-2 rounded-[16px] bg-[#0b0c11] p-3 ring-1 ring-white/[0.06]">
+      <div className="flex flex-col gap-2 rounded-[16px] bg-[var(--deck-inset,#0b0c11)] p-3 ring-1 ring-white/[0.06]">
         {SAVED.map((name, index) => (
           <m.div
             key={name}

@@ -1,7 +1,7 @@
 import type { Icon } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
-import { BRAND } from "../../_components/DeckPrimitives";
+import { useInk, BRAND } from "../../_components/DeckPrimitives";
 import { DUR, EASE, SETTLE } from "../../_components/motion";
 
 /** Seconds between neighbouring chips when a row or column lights up. */
@@ -32,6 +32,7 @@ export function Fri2Chip({
   delay,
   className,
 }: Fri2ChipProps) {
+  const ink = useInk();
   const at = lit ? (delay ?? index * FRI2_CHIP_STAGGER) : 0;
 
   return (
@@ -42,9 +43,7 @@ export function Fri2Chip({
       )}
       initial={{ opacity: 0, x: -14 }}
       animate={{
-        backgroundColor: lit
-          ? "rgba(255,255,255,0.09)"
-          : "rgba(255,255,255,0.04)",
+        backgroundColor: lit ? ink(0.09) : ink(0.04),
         x: lit ? 0 : -8,
         opacity: lit ? 1 : 0.45,
       }}

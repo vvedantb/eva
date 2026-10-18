@@ -1,8 +1,8 @@
 import { IconCircleCheckFilled, IconDownload } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { LoadingState } from "@eva/ui";
+import { LoadingState, cn } from "@eva/ui";
 import { GrokMark } from "@/lib/components/grokBot/GrokMark";
-import { useDeckStep } from "../../_components/DeckPrimitives";
+import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE, Pulse, cueTransition } from "../../_components/motion";
 import { DROP_AT, MERGE_AT } from "./Fri4ReviewBoard";
 
@@ -83,13 +83,19 @@ function RunLine({ line }: { line: Line }) {
 
 /** The bot's own run log: wakes on the drop, then works through the release. */
 export function Fri4GrokRun() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   const awake = step >= 1;
   const finished = step >= 2;
   const status = finished ? "Done" : awake ? "Working" : "Waiting";
 
   return (
-    <div className="dark overflow-hidden rounded-2xl bg-background ring-1 ring-white/10">
+    <div
+      className={cn(
+        appScheme,
+        "overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
+    >
       <div className="flex h-11 items-center gap-2.5 border-b border-border/60 px-4">
         <m.span
           className="flex"
@@ -150,12 +156,18 @@ export function Fri4GrokRun() {
 
 /** The page the task changed, with the new button arriving once it is merged. */
 export function Fri4LivePage() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   const live = step >= 2;
   const at = step === 2 ? MERGE_AT + 0.5 : 0;
 
   return (
-    <div className="dark overflow-hidden rounded-2xl bg-background ring-1 ring-white/10">
+    <div
+      className={cn(
+        appScheme,
+        "overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
+    >
       <div className="flex h-9 items-center gap-1.5 border-b border-border/60 px-3">
         <span className="size-2 rounded-full bg-white/15" />
         <span className="size-2 rounded-full bg-white/15" />

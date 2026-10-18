@@ -19,14 +19,14 @@ const MATCH_INDEX = 1;
 export function MoF3SearchOverlay() {
   return (
     <m.div
-      className="absolute inset-0 flex items-start justify-center rounded-[20px] bg-black/60 pt-10"
+      className="absolute inset-0 flex items-start justify-center rounded-[20px] bg-[var(--deck-scrim,rgb(0_0_0/0.6))] pt-10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: DUR.fast, ease: EASE.out } }}
       transition={{ duration: DUR.base, ease: EASE.out }}
     >
       <m.div
-        className="w-[520px] overflow-hidden rounded-[20px] bg-[#16161a] p-4 ring-1 ring-white/15"
+        className="w-[520px] overflow-hidden rounded-[20px] bg-[var(--deck-raised,#16161a)] p-4 ring-1 ring-white/15"
         initial={{ opacity: 0, y: -18, scale: 0.94 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{

@@ -39,7 +39,7 @@ export function MoF1PreviewPanel() {
       </div>
       <div className="relative mt-auto w-fit">
         <m.div
-          className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-white"
+          className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-[#fff]"
           style={{ background: BRAND_GRADIENT }}
           initial={{ opacity: 0, scale: 0.9, y: 6 }}
           animate={

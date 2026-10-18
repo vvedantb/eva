@@ -13,6 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
+  useInk,
   Accent,
   BRAND,
   Footnote,
@@ -134,6 +135,7 @@ function JevNode() {
 }
 
 function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
+  const ink = useInk();
   const step = useDeckStep();
   const lit = step >= FEATURES_STEP;
   const at = step === FEATURES_STEP ? 0.55 + index * 0.35 : 0;
@@ -152,9 +154,7 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
       animate={{
         opacity: lit ? 1 : 0.3,
         x: lit ? 0 : -8,
-        backgroundColor: lit
-          ? "rgba(255,255,255,0.07)"
-          : "rgba(255,255,255,0.03)",
+        backgroundColor: lit ? ink(0.07) : ink(0.03),
       }}
       transition={
         lit

@@ -18,7 +18,7 @@ import {
   SimpleModelLadder,
 } from "@eva/ui";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
-import { useDeckStep } from "../../_components/DeckPrimitives";
+import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE, SETTLE, Sheen } from "../../_components/motion";
 
 const FABLE: AIModel = "claude:claude-fable-5-1";
@@ -161,6 +161,7 @@ function releaseFocusToDeck(node: HTMLDivElement): () => void {
  * because a Radix popover would portal out of the deck's scaled stage.
  */
 export function RealModelPicker() {
+  const appScheme = useAppScheme();
   const simple = useDeckStep() >= 1;
   const [model, setModel] = useState<AIModel>(FABLE);
   const [traits, setTraits] = useState<StoredModelTraits>({});
@@ -190,7 +191,7 @@ export function RealModelPicker() {
       <m.div
         layout
         transition={PANEL_TRANSITION}
-        className="dark flex flex-col gap-2"
+        className={cn(appScheme, "flex flex-col gap-2")}
       >
         <AnimatePresence mode="popLayout" initial={false}>
           {simple ? (

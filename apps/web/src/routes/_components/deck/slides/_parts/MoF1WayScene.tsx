@@ -1,3 +1,4 @@
+import { useInk } from "../../_components/DeckPrimitives";
 import { m } from "motion/react";
 import {
   BRAND,
@@ -57,6 +58,7 @@ const TURNS: readonly { width: number; mine: boolean }[] = [
 ];
 
 function Conversation({ on, delay }: { on: boolean; delay: number }) {
+  const ink = useInk();
   return (
     <div className="flex w-full flex-col gap-2">
       {TURNS.map((turn, index) => (
@@ -70,9 +72,7 @@ function Conversation({ on, delay }: { on: boolean; delay: number }) {
           style={{
             width: turn.width,
             originX: turn.mine ? 1 : 0,
-            background: turn.mine
-              ? `${BRAND.purple}5c`
-              : "rgba(255,255,255,0.1)",
+            background: turn.mine ? `${BRAND.purple}5c` : ink(0.1),
           }}
           initial={{ opacity: 0, scale: 0.6, y: 6 }}
           animate={

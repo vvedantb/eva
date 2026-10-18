@@ -126,7 +126,7 @@ export function CloudVisual() {
                 className="pointer-events-none absolute inset-0 flex items-center justify-center"
               >
                 <m.div
-                  className="flex items-center gap-2 rounded-full bg-[#1f1e27] py-1.5 pr-4 pl-3 text-sm whitespace-nowrap text-white/85"
+                  className="flex items-center gap-2 rounded-full bg-[var(--deck-chip,#1f1e27)] py-1.5 pr-4 pl-3 text-sm whitespace-nowrap text-white/85"
                   initial={{
                     opacity: 0,
                     x: x / 2,

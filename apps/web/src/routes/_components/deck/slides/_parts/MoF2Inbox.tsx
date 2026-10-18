@@ -186,7 +186,7 @@ export function MoF2BrowserTab() {
           reach={2}
           className="rounded-full"
         >
-          <span className="relative flex size-5 items-center justify-center rounded-full bg-[#3B7DD8] text-[11px] font-semibold text-white">
+          <span className="relative flex size-5 items-center justify-center rounded-full bg-[#3B7DD8] text-[11px] font-semibold text-[#fff]">
             <CountRoll value={3} step={2} delay={0.2} duration={0.9} />
           </span>
         </Pulse>

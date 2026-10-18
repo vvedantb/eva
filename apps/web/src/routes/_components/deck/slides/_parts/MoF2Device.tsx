@@ -93,7 +93,7 @@ export function MoF2Device({ phone }: { phone: boolean }) {
       <m.div
         layout
         transition={RESHAPE}
-        className="flex h-full gap-3 bg-[#0b0c11] p-3 ring-1 ring-white/[0.06]"
+        className="flex h-full gap-3 bg-[var(--deck-inset,#0b0c11)] p-3 ring-1 ring-white/[0.06]"
         style={{ borderRadius: phone ? 26 : 14 }}
       >
         <SidePane phone={phone} width={130}>

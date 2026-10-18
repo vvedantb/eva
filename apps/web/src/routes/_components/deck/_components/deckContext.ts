@@ -53,3 +53,27 @@ export function useMotionCue(step?: number, delay = 0): MotionCue {
   if (step !== undefined) return { on: deckStep >= step, delay };
   return { on: cue.on, delay: cue.delay + delay };
 }
+
+/** The foreground ink per surface, as an `r,g,b` triple. */
+const INK_RGB: Record<DeckTheme, string> = {
+  dark: "255,255,255",
+  light: "24,24,27",
+};
+
+/**
+ * The slide's foreground at an alpha: white on dark slides, zinc-900 on light
+ * ones. It mirrors the `--color-white` swap `.deck-ink-light` makes for class
+ * names, for colours that live in JS — SVG strokes and animated values.
+ */
+export function useInk(): (alpha: number) => string {
+  const rgb = INK_RGB[useDeckTheme()];
+  return (alpha) => `rgba(${rgb},${alpha})`;
+}
+
+/**
+ * The class an app window inside a slide takes: the app's dark theme on a dark
+ * slide, its light theme on a light one, so a window always matches its stage.
+ */
+export function useAppScheme(): string {
+  return useDeckTheme() === "light" ? "deck-app-light" : "dark";
+}

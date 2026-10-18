@@ -9,6 +9,7 @@ import {
 import { m } from "motion/react";
 import { Message, MessageContent, ProviderIcon, cn } from "@eva/ui";
 import {
+  useAppScheme,
   Accent,
   BRAND,
   Footnote,
@@ -196,10 +197,14 @@ function Composer() {
 }
 
 function Chat() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   return (
     <m.div
-      className="dark absolute top-0 flex flex-col overflow-hidden rounded-2xl bg-background ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "absolute top-0 flex flex-col overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
       style={{ left: CHAT_X, width: CHAT_W, height: H }}
       animate={{ opacity: step >= RULES ? 0.55 : 1 }}
       transition={{ duration: DUR.slow, ease: EASE.out }}

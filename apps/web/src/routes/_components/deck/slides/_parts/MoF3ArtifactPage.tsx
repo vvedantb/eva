@@ -1,3 +1,4 @@
+import { useInk } from "../../_components/DeckPrimitives";
 import { IconFileText, IconLink, IconLock } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
@@ -45,6 +46,7 @@ const at = (on: boolean, delay: number) =>
   cueTransition(on, delay, { duration: DUR.slow, ease: EASE.expo });
 
 function HostedPage({ hosted }: { hosted: boolean }) {
+  const ink = useInk();
   return (
     <div className="flex flex-1 flex-col gap-4 p-5">
       <m.div
@@ -95,7 +97,7 @@ function HostedPage({ hosted }: { hosted: boolean }) {
           step={1}
           delay={0.85}
           duration={1.1}
-          color="rgba(255,255,255,0.85)"
+          color={ink(0.85)}
           dot
           className="absolute inset-0"
         />
@@ -148,7 +150,7 @@ function SavedFile({ hosted }: { hosted: boolean }) {
       }
     >
       <Sheen step={0} delay={1.2} className="h-full rounded-[10px]">
-        <div className="h-full rounded-[10px] bg-[#0b0c11] p-5 ring-1 ring-white/[0.06]">
+        <div className="h-full rounded-[10px] bg-[var(--deck-inset,#0b0c11)] p-5 ring-1 ring-white/[0.06]">
           <div className="flex items-center gap-2 text-white/55">
             <IconFileText size={16} aria-hidden />
             <span className="text-sm">Saved page</span>
@@ -197,7 +199,7 @@ export function MoF3ArtifactPage({ hosted }: { hosted: boolean }) {
         }
       >
         <Sheen step={1} delay={1.5} className="h-full rounded-[14px]">
-          <div className="flex h-full flex-col rounded-[14px] bg-[#0b0c11] ring-1 ring-white/[0.06]">
+          <div className="flex h-full flex-col rounded-[14px] bg-[var(--deck-inset,#0b0c11)] ring-1 ring-white/[0.06]">
             <div className="flex h-10 shrink-0 items-center gap-2 px-4">
               <IconLock size={13} aria-hidden className="text-emerald-400/70" />
               <span className="flex h-5 flex-1 items-center rounded-full bg-white/[0.07] px-3 text-[11px] text-white/45">
@@ -234,7 +236,7 @@ export function MoF3ArtifactPage({ hosted }: { hosted: boolean }) {
           color="rgba(139,63,184,0.7)"
           className="rounded-full"
         >
-          <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-2 text-sm font-medium whitespace-nowrap text-white">
+          <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-2 text-sm font-medium whitespace-nowrap text-[#fff]">
             <IconLink size={15} aria-hidden />
             Open the link
           </span>

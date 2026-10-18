@@ -121,7 +121,7 @@ export function FridayReliability() {
                 >
                   <Sheen step={3} delay={0.95} className="rounded-full">
                     <span
-                      className="inline-block rounded-full px-5 py-2.5 text-base font-medium text-white"
+                      className="inline-block rounded-full px-5 py-2.5 text-base font-medium text-[#fff]"
                       style={{ background: BRAND_GRADIENT }}
                     >
                       Use a shared account

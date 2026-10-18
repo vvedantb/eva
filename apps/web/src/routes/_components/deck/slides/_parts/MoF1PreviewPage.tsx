@@ -47,7 +47,7 @@ function CommentPin() {
           color={BRAND.purple}
           className="rounded-full"
         >
-          <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-[#8B3FB8] to-[#3B7DD8] text-[12px] font-semibold text-white">
+          <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-[#8B3FB8] to-[#3B7DD8] text-[12px] font-semibold text-[#fff]">
             1
           </span>
         </Pulse>
@@ -144,7 +144,7 @@ export function MoF1PreviewPage({
 
       <div className="mt-4 flex h-10 shrink-0 items-center gap-4">
         <PageHeading pinned={pinned} />
-        <span className="ml-auto shrink-0 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-2 text-[12px] font-medium whitespace-nowrap text-white">
+        <span className="ml-auto shrink-0 rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-4 py-2 text-[12px] font-medium whitespace-nowrap text-[#fff]">
           New referral
         </span>
       </div>

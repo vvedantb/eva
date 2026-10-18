@@ -9,6 +9,7 @@ import { m } from "motion/react";
 import { buildAutomationEmailHtml } from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
+  useAppScheme,
   Accent,
   BRAND,
   Footnote,
@@ -172,12 +173,16 @@ function Row({
 }
 
 function Inbox() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   const open = step >= OPEN;
 
   return (
     <div
-      className="dark absolute top-0 left-0 overflow-hidden rounded-2xl bg-background ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "absolute top-0 left-0 overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
       style={{ width: INBOX_W, height: H }}
     >
       <div className="flex h-11 items-center gap-2 border-b border-border/60 px-4">
@@ -211,13 +216,17 @@ function Inbox() {
 
 /** The real template in a mail window. It scrolls slowly once opened. */
 function Email() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   const open = step >= OPEN;
   const reading = step === OPEN;
 
   return (
     <m.div
-      className="dark absolute top-0 overflow-hidden rounded-2xl bg-background ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "absolute top-0 overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
       style={{ left: MAIL_X, width: MAIL_W, height: H }}
       initial={{ opacity: 0.35, scale: 0.97 }}
       animate={{ opacity: open ? 1 : 0.35, scale: open ? 1 : 0.97 }}

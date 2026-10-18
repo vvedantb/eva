@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { useDeckStep } from "../../_components/DeckPrimitives";
+import { useInk, useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, DrawPath, EASE, cueTransition } from "../../_components/motion";
 
 const GARDENING: readonly string[] = [
@@ -24,6 +24,7 @@ export function MoF3Gardening({
   from: number;
   width: number;
 }) {
+  const ink = useInk();
   const shown = useDeckStep() >= 2;
   const column = (width - CHIP_GAP * 3) / 4;
   const root = (index: number) => {
@@ -43,7 +44,7 @@ export function MoF3Gardening({
             delay={index * 0.08}
             duration={0.6}
             strokeWidth={1}
-            color="rgba(255,255,255,0.18)"
+            color={ink(0.18)}
             dot
             className="absolute inset-0"
           />

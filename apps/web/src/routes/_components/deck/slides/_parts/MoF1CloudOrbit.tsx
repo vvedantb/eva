@@ -1,3 +1,4 @@
+import { useInk } from "../../_components/DeckPrimitives";
 import { m } from "motion/react";
 import { DUR, EASE, LEAVE } from "../../_components/motion";
 
@@ -36,6 +37,7 @@ export function Handoff({ lifted }: { lifted: boolean }) {
 }
 
 export function Orbit({ lifted }: { lifted: boolean }) {
+  const ink = useInk();
   return (
     <svg
       aria-hidden
@@ -46,7 +48,7 @@ export function Orbit({ lifted }: { lifted: boolean }) {
     >
       <m.path
         d={RING}
-        stroke="rgba(255,255,255,0.12)"
+        stroke={ink(0.12)}
         strokeWidth={1}
         initial={{ pathLength: 0, opacity: 0 }}
         animate={

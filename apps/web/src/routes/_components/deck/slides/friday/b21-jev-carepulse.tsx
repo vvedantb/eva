@@ -8,6 +8,7 @@ import {
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
+  useAppScheme,
   Accent,
   BRAND,
   Footnote,
@@ -201,7 +202,7 @@ function FieldRow({ field, index }: { field: Field; index: number }) {
       </m.div>
       {live ? (
         <m.div
-          className="flex items-center gap-1.5 overflow-hidden text-xs text-amber-400"
+          className="flex items-center gap-1.5 overflow-hidden text-xs text-amber-600 dark:text-amber-400"
           initial={{ opacity: 0, height: 0 }}
           animate={
             flagged ? { opacity: 1, height: 22 } : { opacity: 0, height: 0 }
@@ -220,13 +221,17 @@ function FieldRow({ field, index }: { field: Field; index: number }) {
 }
 
 function ReferralForm() {
+  const appScheme = useAppScheme();
   const step = useDeckStep();
   const flagged = step >= TYPE;
   const at = step === TYPE ? FLAG_AT + 0.2 : 0;
 
   return (
     <div
-      className="dark absolute top-0 left-0 overflow-hidden rounded-2xl bg-background ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "absolute top-0 left-0 overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
       style={{ width: FORM_W }}
     >
       <div className="flex h-11 items-center gap-3 border-b border-border/60 px-4">
@@ -238,7 +243,7 @@ function ReferralForm() {
           CarePulse
         </span>
         <m.span
-          className="ml-auto flex items-center gap-1.5 text-xs text-amber-400"
+          className="ml-auto flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
           initial={{ opacity: 0, x: 8 }}
           animate={flagged ? { opacity: 1, x: 0 } : { opacity: 0, x: 8 }}
           transition={cueTransition(flagged, at, {

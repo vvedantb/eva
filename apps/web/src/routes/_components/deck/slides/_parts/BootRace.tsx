@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { animate, m } from "motion/react";
 import type { Transition } from "motion/react";
-import { BRAND } from "../../_components/DeckPrimitives";
+import { useInk, BRAND } from "../../_components/DeckPrimitives";
 import { BRAND_GRADIENT, DUR, EASE, LEAVE } from "../../_components/motion";
 
 /** Static radial glows for the light on each bar's tip; nothing filters. */
@@ -30,6 +30,7 @@ export function RaceLane({
   readout,
   caption,
 }: RaceLaneProps) {
+  const ink = useInk();
   // Fill and comet share one tween, so the light always sits on the tip.
   const travel: Transition = running
     ? { duration, ease: brand ? EASE.expo : "linear" }
@@ -64,9 +65,7 @@ export function RaceLane({
           <m.div
             className="h-full w-full origin-left rounded-full"
             style={
-              brand
-                ? { background: BRAND_GRADIENT }
-                : { background: "rgba(255,255,255,0.25)" }
+              brand ? { background: BRAND_GRADIENT } : { background: ink(0.25) }
             }
             initial={{ scaleX: 0 }}
             animate={{ scaleX: running ? 1 : 0 }}

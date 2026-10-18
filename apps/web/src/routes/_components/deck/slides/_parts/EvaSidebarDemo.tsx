@@ -1,5 +1,10 @@
+import { cn } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
-import { EASE_OUT, useDeckStep } from "../../_components/DeckPrimitives";
+import {
+  useAppScheme,
+  EASE_OUT,
+  useDeckStep,
+} from "../../_components/DeckPrimitives";
 import { SETTLE, Sheen } from "../../_components/motion";
 import { EvaRail } from "./EvaSidebarRail";
 import {
@@ -91,7 +96,7 @@ function WindowTitle({ simple }: { simple: boolean }) {
           </span>
           {simple ? (
             <m.span
-              className="rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-2 text-[10px] leading-4 text-white"
+              className="rounded-full bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8] px-2 text-[10px] leading-4 text-[#fff]"
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ ...SETTLE, delay: 0.25 }}
@@ -110,6 +115,7 @@ function WindowTitle({ simple }: { simple: boolean }) {
  * frame. At `SIMPLE_STEP` the rows Simple Mode really hides collapse away.
  */
 export function EvaSidebarDemo() {
+  const appScheme = useAppScheme();
   const simple = useDeckStep() >= SIMPLE_STEP;
 
   return (
@@ -137,7 +143,7 @@ export function EvaSidebarDemo() {
           style={{ height: WINDOW_HEIGHT - TITLE_BAR }}
         >
           <div
-            className="dark flex origin-top-left bg-background"
+            className={cn(appScheme, "flex origin-top-left bg-background")}
             style={{
               width: SURFACE_WIDTH,
               height: SURFACE_HEIGHT,

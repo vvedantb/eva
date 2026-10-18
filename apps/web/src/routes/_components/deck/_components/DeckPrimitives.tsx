@@ -17,6 +17,8 @@ export {
   DeckThemeContext,
   useDeckStep,
   useDeckTheme,
+  useAppScheme,
+  useInk,
   useMotionCue,
 } from "./deckContext";
 export type { DeckTheme } from "./deckContext";

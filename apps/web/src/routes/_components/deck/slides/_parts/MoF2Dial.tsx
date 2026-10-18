@@ -1,3 +1,4 @@
+import { useInk } from "../../_components/DeckPrimitives";
 import { m } from "motion/react";
 import { BRAND, DUR, EASE, Sheen } from "../../_components/motion";
 
@@ -21,6 +22,7 @@ const SWEEP = { duration: MOF2_SWEEP, ease: EASE.inOut };
  * three to five, and the arc it leaves behind, with a light riding its tip.
  */
 export function MoF2Dial({ running }: { running: boolean }) {
+  const ink = useInk();
   return (
     <div className="flex flex-col items-center">
       <m.div
@@ -47,7 +49,7 @@ export function MoF2Dial({ running }: { running: boolean }) {
             cy="105"
             r={R}
             fill="none"
-            stroke="rgba(255,255,255,0.08)"
+            stroke={ink(0.08)}
             strokeWidth="2"
           />
           {Array.from({ length: 12 }, (_, hour) => (
@@ -57,11 +59,7 @@ export function MoF2Dial({ running }: { running: boolean }) {
               y1={105 - R + 8}
               x2="105"
               y2={105 - R + (hour % 3 === 0 ? 18 : 13)}
-              stroke={
-                hour === 3 || hour === 5
-                  ? "rgba(255,255,255,0.5)"
-                  : "rgba(255,255,255,0.16)"
-              }
+              stroke={hour === 3 || hour === 5 ? ink(0.5) : ink(0.16)}
               strokeWidth={hour % 3 === 0 ? 2 : 1.5}
               strokeLinecap="round"
               transform={`rotate(${hour * 30} 105 105)`}

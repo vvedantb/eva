@@ -3,7 +3,8 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import type { DeckSlide } from "./slides/types";
-import { DeckStepContext, DeckThemeContext } from "./_components/deckContext";
+import { DeckStepContext } from "./_components/deckContext";
+import { DeckThemeScope } from "./_components/DeckThemeScope";
 import { EASE } from "./_components/motion/tokens";
 import { DeckAmbient } from "./_components/DeckAmbient";
 import { DeckWash } from "./_components/DeckWash";
@@ -217,11 +218,11 @@ export function Deck({
               exit="exit"
               className="absolute inset-0"
             >
-              <DeckThemeContext value={theme}>
+              <DeckThemeScope theme={theme}>
                 <DeckStepContext value={step}>
                   <entry.Component />
                 </DeckStepContext>
-              </DeckThemeContext>
+              </DeckThemeScope>
             </m.div>
           </AnimatePresence>
         </div>

@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { useDeckStep } from "../../_components/DeckPrimitives";
+import { useInk, useDeckStep } from "../../_components/DeckPrimitives";
 import {
   BRAND,
   DUR,
@@ -81,6 +81,7 @@ function Entry({ index }: { index: number }) {
  * down to yesterday, and each entry lands beside its dot.
  */
 export function MoF2Timeline() {
+  const ink = useInk();
   return (
     <div className="relative h-[276px] w-[440px]">
       <div className="absolute" style={{ left: 3, top: DOT_Y }}>
@@ -92,7 +93,7 @@ export function MoF2Timeline() {
           delay={0.35}
           duration={0.6}
           strokeWidth={1.5}
-          color="rgba(255,255,255,0.18)"
+          color={ink(0.18)}
           dot
         />
       </div>

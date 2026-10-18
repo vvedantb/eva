@@ -45,7 +45,7 @@ import { FridayJevCarePulse } from "./friday/b21-jev-carepulse";
  * and what's next; then the call to action. The index here is the slide
  * number minus one.
  */
-export const FRIDAY_SLIDES: DeckSlide[] = [
+const SLIDES: DeckSlide[] = [
   // ── Three months: the numbers, and where the work happens ───────────
   {
     id: "01-title",
@@ -287,3 +287,11 @@ export const FRIDAY_SLIDES: DeckSlide[] = [
     steps: 0,
   },
 ];
+
+/**
+ * The Friday deck runs on the light stage throughout. One map rather than a
+ * `theme` on every entry, so a slide added later cannot come out dark.
+ */
+export const FRIDAY_SLIDES: DeckSlide[] = SLIDES.map(
+  (slide): DeckSlide => ({ ...slide, theme: "light" }),
+);

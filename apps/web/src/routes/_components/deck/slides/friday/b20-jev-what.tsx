@@ -10,6 +10,7 @@ import {
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
+  useInk,
   Accent,
   BRAND,
   Footnote,
@@ -203,6 +204,7 @@ function Writer() {
 }
 
 function ScoreRow({ row, index }: { row: Row; index: number }) {
+  const ink = useInk();
   const step = useDeckStep();
   const scored = step >= SCORE;
   const at = step === SCORE ? 0.9 + index * 0.16 : 0;
@@ -226,7 +228,7 @@ function ScoreRow({ row, index }: { row: Row; index: number }) {
           className="absolute inset-y-0 left-0 origin-left rounded-full"
           style={{
             width: `${row.score}%`,
-            background: above ? BRAND_GRADIENT : "rgba(255,255,255,0.3)",
+            background: above ? BRAND_GRADIENT : ink(0.3),
           }}
           initial={{ scaleX: 0 }}
           animate={{ scaleX: scored ? 1 : 0 }}

@@ -1,6 +1,6 @@
 import { IconCheck } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { useDeckStep } from "../../_components/DeckPrimitives";
+import { useInk, useDeckStep } from "../../_components/DeckPrimitives";
 import { BRAND, Connector, DUR, EASE, LEAVE } from "../../_components/motion";
 import { FriTyped, FriWindow } from "./FriMock";
 
@@ -77,7 +77,7 @@ function LiveCursor({ cursor, index }: { cursor: Cursor; index: number }) {
           style={{ backgroundColor: cursor.colour }}
         />
         <span
-          className="ml-1 rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium text-white"
+          className="ml-1 rounded-[6px] px-1.5 py-0.5 text-[10px] font-medium text-[#fff]"
           style={{ backgroundColor: cursor.colour }}
         >
           {cursor.name}
@@ -165,6 +165,7 @@ function CommentAnchor() {
 
 /** The shared document: typed heading, two paragraphs, a short list. */
 export function MoF1Document() {
+  const ink = useInk();
   return (
     <div className="relative">
       <FriWindow
@@ -184,9 +185,7 @@ export function MoF1Document() {
               left: BODY_X + bar.x,
               top: bar.y + 20,
               width: bar.w,
-              background: bar.strong
-                ? "rgba(255,255,255,0.12)"
-                : "rgba(255,255,255,0.09)",
+              background: bar.strong ? ink(0.12) : ink(0.09),
             }}
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}

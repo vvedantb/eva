@@ -90,7 +90,9 @@ function Action({ action, index }: { action: string; index: number }) {
 
 export function FridayClose() {
   return (
-    <Shell className="relative justify-center overflow-hidden py-14">
+    <Shell className="relative justify-center py-14">
+      {/* No clip: the wash runs on past the canvas, so a light stage shows no
+          box edge around the slide. */}
       <BrandSweep />
 
       <div className="relative">

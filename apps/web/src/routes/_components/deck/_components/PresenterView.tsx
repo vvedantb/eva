@@ -3,7 +3,8 @@ import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { Button, cn } from "@eva/ui";
 import type { DeckSlide } from "../slides/types";
 import { getSpeakerNotes } from "../speakerNotes";
-import { DeckStepContext, DeckThemeContext } from "./DeckPrimitives";
+import { DeckStepContext } from "./DeckPrimitives";
+import { DeckThemeScope } from "./DeckThemeScope";
 import { DECK_TONES } from "./deckTone";
 import { DeckAmbient } from "./DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./DeckCamera";
@@ -93,11 +94,11 @@ export function PresenterView({
           >
             <DeckAmbient theme={theme} />
             {/* Keyed on the slide id so a slide change remounts the build. */}
-            <DeckThemeContext value={theme}>
+            <DeckThemeScope theme={theme}>
               <DeckStepContext key={entry.id} value={step}>
                 <entry.Component />
               </DeckStepContext>
-            </DeckThemeContext>
+            </DeckThemeScope>
           </div>
         </div>
 

@@ -1,3 +1,4 @@
+import { cn } from "@eva/ui";
 import type { Icon } from "@tabler/icons-react";
 import {
   IconAdjustmentsHorizontal,
@@ -10,6 +11,8 @@ import {
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
+  useAppScheme,
+  useInk,
   Accent,
   BRAND,
   Footnote,
@@ -143,7 +146,7 @@ function EvaBox() {
         top: MID_Y - BOX.h / 2,
         width: BOX.w,
         height: BOX.h,
-        background: `linear-gradient(145deg, ${BRAND.purple}2e, ${BRAND.blue}22), #121019`,
+        background: `linear-gradient(145deg, ${BRAND.purple}2e, ${BRAND.blue}22), var(--deck-box, #121019)`,
       }}
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{
@@ -164,10 +167,14 @@ function EvaBox() {
 }
 
 function PromptCard() {
+  const appScheme = useAppScheme();
   const clear = useDeckStep() >= CLEAR;
   return (
     <m.div
-      className="dark absolute flex flex-col overflow-hidden rounded-2xl bg-background p-5 ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "absolute flex flex-col overflow-hidden rounded-2xl bg-background p-5 ring-1 ring-white/10",
+      )}
       style={{
         left: 0,
         top: MID_Y - CARD_H / 2,
@@ -187,10 +194,14 @@ function PromptCard() {
 }
 
 function ResultCard() {
+  const appScheme = useAppScheme();
   const clear = useDeckStep() >= CLEAR;
   return (
     <m.div
-      className="dark absolute flex flex-col overflow-hidden rounded-2xl bg-background ring-1 ring-white/10"
+      className={cn(
+        appScheme,
+        "absolute flex flex-col overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
+      )}
       style={{
         left: RESULT_X,
         top: MID_Y - CARD_H / 2,
@@ -232,6 +243,7 @@ function ResultCard() {
 }
 
 export function FridayAbstracted() {
+  const ink = useInk();
   return (
     <Shell className="py-14">
       <Title size="md">
@@ -251,7 +263,7 @@ export function FridayAbstracted() {
               delay={0.6}
               duration={1.1}
               strokeWidth={1.5}
-              color="rgba(255,255,255,0.16)"
+              color={ink(0.16)}
             />
           </div>
           <div className="absolute inset-0">

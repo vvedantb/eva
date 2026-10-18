@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { DeckAmbient } from "../_components/deck/_components/DeckAmbient";
 import { DeckCard } from "../_components/deck/_components/DeckCard";
 import type { DeckSummary } from "../_components/deck/_components/DeckCard";
 import { DeckStepContext } from "../_components/deck/_components/DeckPrimitives";
+import { DeckThemeScope } from "../_components/deck/_components/DeckThemeScope";
+import { DECK_TONES } from "../_components/deck/_components/deckTone";
 import { getSpeakerNotes } from "../_components/deck/speakerNotes";
 import type { DeckSlide } from "../_components/deck/slides/types";
 import { FRIDAY_SLIDES } from "../_components/deck/slides/friday";
@@ -20,14 +23,22 @@ export const Route = createFileRoute("/slides/")({
   component: SlidesIndexPage,
 });
 
-/** A thumbnail for a deck on our own engine: its first slide, at rest. */
+/**
+ * A thumbnail for a deck on our own engine: its first slide, at rest, on that
+ * slide's own surface, so a light deck previews light.
+ */
 function deckPreview(slides: readonly DeckSlide[]): ReactNode {
-  const First = slides[0]?.Component;
-  if (!First) return null;
+  const first = slides[0];
+  if (!first) return null;
+  const theme = first.theme ?? "dark";
   return (
-    <DeckStepContext value={0}>
-      <First />
-    </DeckStepContext>
+    <div className={cn("absolute inset-0", DECK_TONES[theme].stage)}>
+      <DeckThemeScope theme={theme}>
+        <DeckStepContext value={0}>
+          <first.Component />
+        </DeckStepContext>
+      </DeckThemeScope>
+    </div>
   );
 }
 

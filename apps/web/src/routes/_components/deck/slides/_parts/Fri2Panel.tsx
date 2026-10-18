@@ -36,7 +36,7 @@ export function Fri2Panel({
       ) : null}
       <div
         className={cn(
-          "rounded-[16px] bg-[#0b0c11] p-5 ring-1 ring-white/[0.06]",
+          "rounded-[16px] bg-[var(--deck-inset,#0b0c11)] p-5 ring-1 ring-white/[0.06]",
           bodyClassName,
         )}
       >

@@ -106,7 +106,7 @@ function QueueBar({ focused }: { focused: boolean }) {
           <Sheen hero step={1} delay={0.2} className="size-full">
             {/* The only segment worth naming, named where it sits. */}
             <m.div
-              className="flex size-full items-center justify-center text-sm font-medium text-black/70 tabular-nums"
+              className="flex size-full items-center justify-center text-sm font-medium text-[var(--deck-on-ink,rgb(0_0_0/0.7))] tabular-nums"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: DUR.base, ease: EASE.out, delay: 1.5 }}
