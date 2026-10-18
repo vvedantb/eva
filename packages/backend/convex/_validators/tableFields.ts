@@ -381,6 +381,10 @@ export const chatDaemonEntityFields = {
   // unconditionally (even mid-turn, with no pendingTurn) so the daemon's poll
   // loop notices and aborts its in-flight SDK query.
   cancelRequestedAt: v.optional(v.number()),
+  // Steer signal for a warm Claude/Codex daemon: a queued message waits with
+  // `steer: "requested"`. Kept on the entity so the 50ms claim poll reads the
+  // queue only while a steer is waiting (see `_chat/steer.ts`).
+  steerRequestedAt: v.optional(v.number()),
   // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
   // for project and task chat daemons.
   usageRefreshRequestedAt: v.optional(v.number()),
@@ -1417,6 +1421,11 @@ export const queuedMessageFields = {
   // the "via orchestrator" badge was lost on exactly the messages that had to
   // queue (mirrors messageFields.sentViaOrchestrator).
   sentViaOrchestrator: v.optional(v.boolean()),
+  // The user pressed Steer and the running daemon injects this message into
+  // its live turn: "requested" waits for the daemon, "delivering" is handed
+  // over and waits for its ack. A turn that ends first sends it as the next
+  // queued turn (the row sits at the front). See `_chat/steer.ts`.
+  steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
 };
 
 export const taskSandboxEventFields = {

@@ -1,4 +1,10 @@
 import {
+  confirmSteerAcks,
+  deliverSteers,
+  readSteers,
+  steerClaimArgs,
+} from "../runtime/steering.js";
+import {
   CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
   DAEMON_OPTS_SIG,
@@ -360,6 +366,12 @@ async function startTurn(
   log("codex daemon: turn started " + providerTurnId);
 }
 
+/** The running turn's App Server id, or "" when no turn can take a steer. */
+function liveProviderTurnId(): string {
+  if (supervisor.phase !== "running") return "";
+  return supervisor.currentTurn?.providerTurnId ?? "";
+}
+
 function cleanMarkers(): void {
   cleanOwnedDaemonMarkers({
     paths,
@@ -444,12 +456,14 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         lastClaimAt = claimNow;
         const acceptTurn =
           supervisor.phase === "idle" && supervisor.pendingClaim === null;
+        const steerArgs = steerClaimArgs(liveProviderTurnId() !== "");
 
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION,
-          entityArgs({ model: MODEL, acceptTurn }),
+          entityArgs({ model: MODEL, acceptTurn, ...steerArgs }),
         );
+        confirmSteerAcks(steerArgs);
         const providerTurnId = supervisor.currentTurn?.providerTurnId ?? "";
         if (
           readCancelRequested(claimed) &&
@@ -470,6 +484,20 @@ export async function runCodexAppServerDaemon(): Promise<void> {
               log("codex daemon: interrupt failed — " + message);
             });
         }
+        // After the cancel: a steer that races a Stop is rejected and runs as
+        // the next queued turn. `expectedTurnId` makes App Server reject a
+        // steer that lands after this turn already ended.
+        await deliverSteers(readSteers(claimed), async (text) => {
+          const turnId = liveProviderTurnId();
+          if (!turnId) return false;
+          await client.request("turn/steer", {
+            threadId: S.activeCodexThreadId,
+            expectedTurnId: turnId,
+            input: [{ type: "text", text }],
+          });
+          lastEventAt = Date.now();
+          return true;
+        });
         const claimedTurn = readClaimedTurn(claimed);
         if (claimedTurn) {
           const currentLease = getCurrentTurnLease();

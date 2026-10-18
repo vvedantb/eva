@@ -4504,6 +4504,14 @@ function appendResponseText(added) {
 function pushNoticeStep2(label, detail) {
   pushProgressStep({ type: "notice", label, detail, status: "complete" });
 }
+function pushSteerStep(text) {
+  pushProgressStep({
+    type: "steer",
+    label: "Steered",
+    detail: text,
+    status: "complete"
+  });
+}
 function updateThinkingStep(label, detail) {
   callbackState.transientThinkingStep = {
     type: "thinking",
@@ -5999,6 +6007,38 @@ async function materializeTurnAttachments(turn) {
   turn.prompt += "\\n\\n---\\nThe user attached the following file(s). Read them with your file-reading tool before responding:\\n" + paths2.map((path3) => \`- \${path3}\`).join("\\n");
 }
 
+// callback-src/runtime/steering.ts
+var pendingAcks = [];
+function readSteers(result) {
+  const payload = unwrapConvexMutationPayload(result);
+  const field = payload?.steers;
+  if (!Array.isArray(field)) return [];
+  const steers = [];
+  for (const item of field) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const { id, text } = item;
+    if (typeof id === "string" && typeof text === "string") {
+      steers.push({ id, text });
+    }
+  }
+  return steers;
+}
+function steerClaimArgs(acceptSteer) {
+  return pendingAcks.length > 0 ? { acceptSteer, steerAcks: [...pendingAcks] } : { acceptSteer };
+}
+function confirmSteerAcks(sent) {
+  pendingAcks.splice(0, sent.steerAcks?.length ?? 0);
+}
+async function deliverSteers(steers, inject) {
+  for (const steer of steers) {
+    const delivered = await inject(steer.text).catch(() => false);
+    if (delivered) pushSteerStep(steer.text);
+    pendingAcks.push({ id: steer.id, delivered });
+  }
+}
+
 // callback-src/providers/githubToken.ts
 function tokenFromActionResponse(data) {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
@@ -6460,12 +6500,13 @@ function startTurnWatchdog() {
 function createPromptStream() {
   const queue = [];
   let notify = null;
-  const push = (text) => {
+  const push = (text, priority) => {
     queue.push({
       type: "user",
       message: { role: "user", content: text },
       parent_tool_use_id: null,
-      session_id: callbackState.activeClaudeSessionId || ""
+      session_id: callbackState.activeClaudeSessionId || "",
+      ...priority ? { priority } : {}
     });
     const resume = notify;
     notify = null;
@@ -6974,6 +7015,9 @@ function handleCancelRequested(agentRunner) {
     log("daemon: interrupt failed \\u2014 " + messageText);
   });
 }
+function canTakeSteer() {
+  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real";
+}
 function startClaimWatcher(agentRunner) {
   void (async () => {
     while (!supervisor.isStopping) {
@@ -7001,12 +7045,14 @@ function startClaimWatcher(agentRunner) {
         process.exit(0);
       }
       const acceptTurn = supervisor.phase === "idle" && supervisor.pendingClaim === null;
+      const steerArgs = steerClaimArgs(canTakeSteer());
       try {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION ?? "",
-          entityMutationArgs({ model: MODEL, acceptTurn })
+          entityMutationArgs({ model: MODEL, acceptTurn, ...steerArgs })
         );
+        confirmSteerAcks(steerArgs);
         const stopIds = readStopTaskToolUseIds(claimed);
         for (const toolUseId of stopIds) {
           pendingAgentStops.add(toolUseId);
@@ -7015,6 +7061,11 @@ function startClaimWatcher(agentRunner) {
         if (readCancelRequested(claimed)) {
           handleCancelRequested(agentRunner);
         }
+        await deliverSteers(readSteers(claimed), async (text) => {
+          if (!canTakeSteer()) return false;
+          agentRunner.push(text, "next");
+          return true;
+        });
         if (readUsageRefreshRequested(claimed) && !usageRefreshInFlight) {
           usageRefreshInFlight = true;
           log("daemon: usage refresh requested \\u2014 reading SDK plan usage");
@@ -8382,6 +8433,10 @@ async function startTurn(client, turn) {
   callbackState.activeAttemptStartedAt = activeTurnStartedAt;
   log("codex daemon: turn started " + providerTurnId);
 }
+function liveProviderTurnId() {
+  if (supervisor2.phase !== "running") return "";
+  return supervisor2.currentTurn?.providerTurnId ?? "";
+}
 function cleanMarkers() {
   cleanOwnedDaemonMarkers({
     paths,
@@ -8445,11 +8500,13 @@ async function runCodexAppServerDaemon() {
       })) {
         lastClaimAt = claimNow;
         const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
+        const steerArgs = steerClaimArgs(liveProviderTurnId() !== "");
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION,
-          entityArgs({ model: MODEL, acceptTurn })
+          entityArgs({ model: MODEL, acceptTurn, ...steerArgs })
         );
+        confirmSteerAcks(steerArgs);
         const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
         if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
           void client.request("turn/interrupt", {
@@ -8460,6 +8517,17 @@ async function runCodexAppServerDaemon() {
             log("codex daemon: interrupt failed \\u2014 " + message);
           });
         }
+        await deliverSteers(readSteers(claimed), async (text) => {
+          const turnId = liveProviderTurnId();
+          if (!turnId) return false;
+          await client.request("turn/steer", {
+            threadId: callbackState.activeCodexThreadId,
+            expectedTurnId: turnId,
+            input: [{ type: "text", text }]
+          });
+          lastEventAt = Date.now();
+          return true;
+        });
         const claimedTurn = readClaimedTurn(claimed);
         if (claimedTurn) {
           const currentLease = getCurrentTurnLease();

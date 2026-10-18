@@ -61,6 +61,12 @@ import {
   type ClaudeUsageResponseLike,
 } from "../runtime/usageLimits.js";
 import { materializeTurnAttachments } from "../runtime/turnAttachments.js";
+import {
+  confirmSteerAcks,
+  deliverSteers,
+  readSteers,
+  steerClaimArgs,
+} from "../runtime/steering.js";
 import { persistTurnWork } from "../runtime/turnPersist.js";
 import {
   appendTurnCheckpoint,
@@ -166,7 +172,8 @@ type AgentQuery = ReturnType<SdkModule["query"]>;
 type DaemonTurn = { kind: "real" } | { kind: "synthetic"; messageId: string };
 
 type WarmRunner = {
-  push: (text: string) => void;
+  /** `priority: "next"` injects a steer into the live turn at its next boundary. */
+  push: (text: string, priority?: "next") => void;
   waitMessage: () => Promise<DaemonMessage | null>;
   drainPending: () => DaemonMessage[];
   hasPending: () => boolean;
@@ -373,17 +380,18 @@ function startTurnWatchdog(): void {
  * message starts a new turn (ended by a `result` message).
  */
 function createPromptStream(): {
-  push: (text: string) => void;
+  push: (text: string, priority?: "next") => void;
   iterable: AsyncIterable<SdkUserMessage>;
 } {
   const queue: SdkUserMessage[] = [];
   let notify: (() => void) | null = null;
-  const push = (text: string): void => {
+  const push = (text: string, priority?: "next"): void => {
     queue.push({
       type: "user",
       message: { role: "user", content: text },
       parent_tool_use_id: null,
       session_id: S.activeClaudeSessionId || "",
+      ...(priority ? { priority } : {}),
     });
     const resume = notify;
     notify = null;
@@ -1073,6 +1081,13 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   });
 }
 
+/** A real turn is live, so a pushed message joins it instead of starting one. */
+function canTakeSteer(): boolean {
+  return (
+    supervisor.phase === "running" && supervisor.currentTurn?.kind === "real"
+  );
+}
+
 function startClaimWatcher(agentRunner: WarmRunner): void {
   void (async () => {
     while (!supervisor.isStopping) {
@@ -1103,12 +1118,14 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
       }
       const acceptTurn =
         supervisor.phase === "idle" && supervisor.pendingClaim === null;
+      const steerArgs = steerClaimArgs(canTakeSteer());
       try {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION ?? "",
-          entityMutationArgs({ model: MODEL, acceptTurn }),
+          entityMutationArgs({ model: MODEL, acceptTurn, ...steerArgs }),
         );
+        confirmSteerAcks(steerArgs);
         const stopIds = readStopTaskToolUseIds(claimed);
         for (const toolUseId of stopIds) {
           pendingAgentStops.add(toolUseId);
@@ -1117,6 +1134,13 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (readCancelRequested(claimed)) {
           handleCancelRequested(agentRunner);
         }
+        // After the cancel: a steer that races a Stop is rejected and runs
+        // as the next queued turn instead.
+        await deliverSteers(readSteers(claimed), async (text) => {
+          if (!canTakeSteer()) return false;
+          agentRunner.push(text, "next");
+          return true;
+        });
         if (readUsageRefreshRequested(claimed) && !usageRefreshInFlight) {
           usageRefreshInFlight = true;
           log("daemon: usage refresh requested — reading SDK plan usage");

@@ -71,6 +71,7 @@ const STANDALONE_TYPES = new Set<ActivityStep["type"]>([
   "notice",
   "status",
   "question",
+  "steer",
 ]);
 
 /** One block in the activity timeline: prose, a lone row, or a folded run. */

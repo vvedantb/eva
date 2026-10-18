@@ -199,6 +199,16 @@ export function pushNoticeStep(label: string, detail?: string): void {
   pushProgressStep({ type: "notice", label, detail, status: "complete" });
 }
 
+/** Marks where a steered user message reached the live turn (`runtime/steering.ts`). */
+export function pushSteerStep(text: string): void {
+  pushProgressStep({
+    type: "steer",
+    label: "Steered",
+    detail: text,
+    status: "complete",
+  });
+}
+
 /** Thinking is streamed as liveness but never persisted in the final log. */
 export function updateThinkingStep(label: string, detail?: string): void {
   S.transientThinkingStep = {

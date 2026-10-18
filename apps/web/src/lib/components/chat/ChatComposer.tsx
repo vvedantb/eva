@@ -188,8 +188,12 @@ export function ChatComposer({
   // The composer's text lives inside PromptInput; the readiness verdict is
   // keyed by the exact text it judged, so the last draft is mirrored here.
   const [draftText, setDraftText] = useState("");
-  const { updateQueuedMessage, deleteQueuedMessage, reorderQueuedMessages } =
-    useQueuedMessageMutations(queuedMessages);
+  const {
+    updateQueuedMessage,
+    deleteQueuedMessage,
+    reorderQueuedMessages,
+    steerQueuedMessage,
+  } = useQueuedMessageMutations(queuedMessages);
   // Convex draft wins when both are passed (existing sessions).
   const seed = draft ?? localDraft;
 
@@ -252,6 +256,7 @@ export function ChatComposer({
     model: message.model,
     reasoningLevel: message.reasoningLevel,
     userId: message.userId,
+    steering: message.steer !== undefined,
   }));
 
   const mutedBar = (stashButton: ReactNode) =>
@@ -323,6 +328,9 @@ export function ChatComposer({
           const parentId = queuedMessages[0]?.parentId;
           if (!parentId) return;
           await reorderQueuedMessages({ parentId, orderedIds });
+        }}
+        onSteer={async (id) => {
+          await steerQueuedMessage({ id });
         }}
       />
       <QueuedMessagesPanel
