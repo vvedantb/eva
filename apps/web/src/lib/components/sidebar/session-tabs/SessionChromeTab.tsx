@@ -5,12 +5,10 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
   LoadingState,
   cn,
 } from "@eva/ui";
+import { SessionsHoverCard } from "@vvedantb/ui/shell";
 import { IconGitPullRequest, IconX } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import {
@@ -110,10 +108,24 @@ export function SessionChromeTab({
   // Longer open delay than the house default on purpose: tabs sit shoulder to
   // shoulder, so the pointer crosses several on its way to the one it wants.
   return (
-    <HoverCard openDelay={400}>
-      <ContextMenu>
+    <ContextMenu>
+      <SessionsHoverCard
+        openDelay={400}
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        surface="glass"
+        body={
+          <SessionHoverCardBody
+            title={session.title}
+            sessionId={session._id}
+            createdAt={session._creationTime}
+            userId={session.userId}
+            baseBranch={session.baseBranch}
+          />
+        }
+      >
         <ContextMenuTrigger asChild>
-          <HoverCardTrigger asChild>
             <div
               className={cn(
                 // Width is owned by the motion wrapper in SessionChromeTabGroup
@@ -258,8 +270,8 @@ export function SessionChromeTab({
                 <IconX size={14} />
               </button>
             </div>
-          </HoverCardTrigger>
         </ContextMenuTrigger>
+      </SessionsHoverCard>
         <ContextMenuContent onClick={(e) => e.stopPropagation()}>
           <SessionMenuItems
             session={session}
@@ -270,21 +282,6 @@ export function SessionChromeTab({
             onArchiveRequest={onArchiveRequest}
           />
         </ContextMenuContent>
-      </ContextMenu>
-      <HoverCardContent
-        side="bottom"
-        align="start"
-        sideOffset={6}
-        className="w-64 p-3"
-      >
-        <SessionHoverCardBody
-          title={session.title}
-          sessionId={session._id}
-          createdAt={session._creationTime}
-          userId={session.userId}
-          baseBranch={session.baseBranch}
-        />
-      </HoverCardContent>
-    </HoverCard>
+    </ContextMenu>
   );
 }

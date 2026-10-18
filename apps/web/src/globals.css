@@ -1,8 +1,22 @@
 @import "tailwindcss";
 @import "shadow-plugin";
 @import "../../../packages/ui/src/markdown/markdown.css";
+@import "@vvedantb/ui/tokens/css/compat-shadcn-rgb.css";
 
 @config '../tailwind.config.js';
+
+/* @vvedantb/ui compat theme: only references Eva's RGB vars (--card, --primary,
+ * --ring, --radius ...), so ThemeContext runtime overrides still apply.
+ * Not imported on purpose: tokens.css, base.css, tabs-pills.css (clash with Eva's
+ * RGB vars), and modal.css / tabs.css (Eva keeps its local t-modal / t-tabs-pill
+ * utilities below; importing would define them twice). */
+@source "../node_modules/@vvedantb/ui/src/**/*.{ts,tsx}";
+@source "../node_modules/@vvedantb/ui/shell/**/*.{ts,tsx}";
+
+/* Overrides the package fallback; same fill Eva uses for toasts and hover cards. */
+@utility glass-panel-strong {
+  @apply bg-card/95 backdrop-blur-md;
+}
 
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
  * inside its own dist, which the content globs never reach. */
