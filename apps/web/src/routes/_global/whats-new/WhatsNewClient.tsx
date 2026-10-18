@@ -58,12 +58,12 @@ export function WhatsNewClient() {
                     </span>
                   ) : null}
                 </header>
-                <div className="px-4 py-3">
-                  <Markdown className="text-sm">{entry.content}</Markdown>
-                </div>
                 {entry.feedback ? (
                   <ChangelogFeedbackSummary feedback={entry.feedback} />
                 ) : null}
+                <div className="px-4 py-3">
+                  <Markdown className="text-sm">{entry.content}</Markdown>
+                </div>
               </article>
             </m.li>
           ))}
@@ -89,7 +89,7 @@ function ChangelogFeedbackSummary({
 }) {
   const { topPick, email } = feedback;
   return (
-    <div className="mx-4 mb-4 rounded-surface bg-muted px-3 py-2 text-xs text-muted-foreground">
+    <div className="mx-4 mt-3 rounded-surface bg-muted px-3 py-2 text-xs text-muted-foreground">
       <p className="mb-1 font-medium text-foreground">
         Email feedback{" "}
         <span className="font-normal text-muted-foreground">· admins only</span>
