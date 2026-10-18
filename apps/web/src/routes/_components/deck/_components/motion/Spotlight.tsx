@@ -1,6 +1,7 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { useDeckStep, useDeckTheme } from "../deckContext";
+import type { DeckTheme } from "../deckContext";
 import { BRAND, DUR, EASE } from "./tokens";
 
 /** Where the light falls, in pixels of the spotlight's parent. */
@@ -22,6 +23,16 @@ export interface SpotlightProps {
   mode?: "glow" | "dim";
   className?: string;
 }
+
+/**
+ * The guide light per surface. On a dark stage it reads as light; on a light
+ * stage a saturated glow reads as a purple smudge under the text, so it is
+ * paler there and only hints at where to look.
+ */
+const GLOW: Record<DeckTheme, string> = {
+  dark: `radial-gradient(circle at center, ${BRAND.purple}66, ${BRAND.blue}22 45%, transparent 70%)`,
+  light: `radial-gradient(circle at center, ${BRAND.purple}1f, ${BRAND.blue}0d 45%, transparent 70%)`,
+};
 
 /** Glow and hole are drawn once at this size and scaled, so moving them is transform-only. */
 const BASE = 100;
@@ -49,7 +60,7 @@ export function Spotlight({ shots, mode = "glow", className }: SpotlightProps) {
     ? `radial-gradient(circle at center, transparent ${BASE / 2}px, ${
         theme === "dark" ? "rgba(0,0,0,0.62)" : "rgba(250,250,250,0.7)"
       } ${BASE / 2 + 34}px)`
-    : `radial-gradient(circle at center, ${BRAND.purple}66, ${BRAND.blue}22 45%, transparent 70%)`;
+    : GLOW[theme];
 
   return (
     <div
