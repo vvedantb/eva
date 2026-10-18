@@ -2,12 +2,8 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import {
-  CenteredSpinner,
-  cn,
-  motionBase,
-  motionStagger,
-} from "@eva/ui";
+import type { FunctionReturnType } from "convex/server";
+import { CenteredSpinner, cn, motionBase, motionStagger } from "@eva/ui";
 import { m } from "motion/react";
 import { Markdown } from "@eva/ui/markdown";
 import { IconSparkles } from "@tabler/icons-react";
@@ -65,11 +61,45 @@ export function WhatsNewClient() {
                 <div className="px-4 py-3">
                   <Markdown className="text-sm">{entry.content}</Markdown>
                 </div>
+                {entry.feedback ? (
+                  <ChangelogFeedbackSummary feedback={entry.feedback} />
+                ) : null}
               </article>
             </m.li>
           ))}
         </ol>
       )}
     </PageWrapper>
+  );
+}
+
+type ChangelogFeedback = NonNullable<
+  FunctionReturnType<typeof api.changelog.listChangelog>[number]["feedback"]
+>;
+
+/**
+ * Email feedback counts for one week, shown to admins only (the query leaves
+ * `feedback` out for everyone else): 👍 / 👎 on the top pick and the
+ * whole-email rating.
+ */
+function ChangelogFeedbackSummary({
+  feedback,
+}: {
+  feedback: ChangelogFeedback;
+}) {
+  const { topPick, email } = feedback;
+  return (
+    <div className="mx-4 mb-4 rounded-surface bg-muted px-3 py-2 text-xs text-muted-foreground">
+      <p className="mb-1 font-medium text-foreground">
+        Email feedback{" "}
+        <span className="font-normal text-muted-foreground">· admins only</span>
+      </p>
+      <p className="tabular-nums">
+        Top pick “{topPick.title}”: 👍 {topPick.up} · 👎 {topPick.down}
+      </p>
+      <p className="tabular-nums">
+        Whole email: 😍 {email.love} · 🙂 {email.ok} · 😐 {email.meh}
+      </p>
+    </div>
   );
 }

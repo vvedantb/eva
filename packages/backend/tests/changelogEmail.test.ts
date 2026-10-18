@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   changelogDisplayMarkdown,
   parseChangelog,
+  tallyChangelogFeedback,
 } from "../convex/_changelog/entry";
 import { buildChangelogEmailHtml } from "../convex/emailTemplates";
 
@@ -71,5 +72,25 @@ describe("buildChangelogEmailHtml", () => {
 
   it("links Try it into the app", () => {
     expect(html).toContain('href="https://app.example.com/settings/sandboxes"');
+  });
+});
+
+describe("tallyChangelogFeedback", () => {
+  it("counts top-pick votes and email ratings, ignoring votes on other items", () => {
+    const changelog = parseChangelog(JSON.stringify(structured));
+    if (!changelog) throw new Error("fixture must parse");
+    expect(
+      tallyChangelogFeedback(changelog, [
+        { itemIndex: 2, vote: "up" },
+        { itemIndex: 2, vote: "up" },
+        { itemIndex: 2, vote: "down" },
+        { itemIndex: 0, vote: "up" },
+        { vote: "love" },
+        { vote: "meh" },
+      ]),
+    ).toEqual({
+      topPick: { title: "Agent <memory>", up: 2, down: 1 },
+      email: { love: 1, ok: 0, meh: 1 },
+    });
   });
 });

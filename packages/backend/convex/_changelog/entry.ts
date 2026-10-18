@@ -120,6 +120,39 @@ export type ChangelogFeedback =
   | { itemIndex: number; vote: (typeof CHANGELOG_ITEM_VOTES)[number] }
   | { vote: (typeof CHANGELOG_EMAIL_RATINGS)[number] };
 
+export interface ChangelogFeedbackTally {
+  topPick: { title: string; up: number; down: number };
+  email: { love: number; ok: number; meh: number };
+}
+
+/**
+ * Counts one run's stored feedback: 👍 / 👎 on the top pick, and the
+ * whole-email ratings. Votes on any other item (older emails voted on every
+ * item) are not part of the current layout, so they are left out.
+ */
+export function tallyChangelogFeedback(
+  changelog: Changelog,
+  votes: { itemIndex?: number; vote: ChangelogFeedback["vote"] }[],
+): ChangelogFeedbackTally {
+  const topPick = changelogTopPick(changelog);
+  const tally: ChangelogFeedbackTally = {
+    topPick: { title: topPick.item.title, up: 0, down: 0 },
+    email: { love: 0, ok: 0, meh: 0 },
+  };
+  for (const { itemIndex, vote } of votes) {
+    if (itemIndex === undefined) {
+      if (vote === "love" || vote === "ok" || vote === "meh")
+        tally.email[vote] += 1;
+    } else if (
+      itemIndex === topPick.index &&
+      (vote === "up" || vote === "down")
+    ) {
+      tally.topPick[vote] += 1;
+    }
+  }
+  return tally;
+}
+
 /** Domain-separated HMAC message that authorises one recipient's feedback on one run. */
 export function changelogVoteHmacMessage(
   runId: string,
