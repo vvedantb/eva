@@ -1230,6 +1230,24 @@ export const automationRunFields = {
   superseded: v.optional(v.boolean()),
 };
 
+// One row per (changelog run, user, item): the latest feedback from the email.
+// `itemIndex` is the item's position in the run's structured changelog and
+// takes "up" / "down"; no `itemIndex` is a rating of the whole email
+// ("love" / "ok" / "meh"). The HTTP route enforces that pairing.
+export const changelogVoteFields = {
+  runId: v.id("automationRuns"),
+  userId: v.id("users"),
+  itemIndex: v.optional(v.number()),
+  vote: v.union(
+    v.literal("up"),
+    v.literal("down"),
+    v.literal("love"),
+    v.literal("ok"),
+    v.literal("meh"),
+  ),
+  updatedAt: v.number(),
+};
+
 /**
  * Usage columns denormalised from `rawResultEvent` at write time (see
  * `_logs/usage.ts`) so the Usage page aggregates without parsing JSON blobs.

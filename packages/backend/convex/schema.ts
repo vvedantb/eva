@@ -12,6 +12,7 @@ import {
   aveMessageFields,
   automationFields,
   automationRunFields,
+  changelogVoteFields,
   agentTaskFields,
   agentRunFields,
   pullRequestFields,
@@ -565,6 +566,11 @@ const schema = defineSchema({
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
     .index("by_repo", ["repoId"]),
+
+  changelogVotes: defineTable(changelogVoteFields).index(
+    "by_run_and_user_and_item",
+    ["runId", "userId", "itemIndex"],
+  ),
 
   logs: defineTable(logFields)
     .index("by_repo", ["repoId"])
