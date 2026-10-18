@@ -1,14 +1,12 @@
 /**
- * The app's two alert sounds, synthesised rather than loaded from files.
+ * The inbox notification bell, synthesised rather than loaded from a file.
  *
- * Each is a handful of short sine tones — a few oscillator nodes — so
- * generating them beats shipping audio assets: nothing to fetch, nothing to
- * cache, and no first-alert delay while a request is in flight.
+ * A few short sine tones beat a shipped audio asset: nothing to fetch or cache,
+ * and no first-alert delay. One struck, lower bell tone with a longer ring.
  *
- * - Reply chime: a soft rising two-note interval when the agent finishes.
- * - Notification bell: one struck, lower bell tone with a longer ring when an
- *   inbox notification arrives. Different pitch, shape and length, so the two
- *   are told apart without looking.
+ * The reply chime lives in `@vvedantb/ui` (`useReplyChime`). It has its own
+ * audio context and 1 second floor, so a chime and a bell that fire together
+ * can overlap; this file only floors repeated bells.
  */
 
 type Tone = {
@@ -17,12 +15,6 @@ type Tone = {
   durationS: number;
   peakGain: number;
 };
-
-/** A soft rising interval (A5 then D6), the second note overlapping the first. */
-const REPLY_CHIME: Tone[] = [
-  { frequency: 880, startOffsetS: 0, durationS: 0.28, peakGain: 0.14 },
-  { frequency: 1174.66, startOffsetS: 0.09, durationS: 0.28, peakGain: 0.14 },
-];
 
 /**
  * A single bell strike on E5. The upper partials sit at the inharmonic ratios
@@ -47,12 +39,7 @@ const ATTACK_S = 0.012;
  */
 let sharedContext: AudioContext | null = null;
 
-/**
- * Floor between any two sounds. Two sources can fire for the same moment — an
- * agent turn finishing in the open chat, and the `task_complete` notification
- * that lands right after it — and overlapping sounds read as a glitch rather
- * than as two events. Shared across both sounds, so the first one wins.
- */
+/** Floor between two bells, so a burst of notifications sounds once. */
 const MIN_INTERVAL_S = 1;
 
 let lastPlayedAtS: number | null = null;
@@ -118,11 +105,6 @@ function playTones(tones: Tone[]): void {
     // Nodes are single-use; stopping releases them for garbage collection.
     oscillator.stop(toneEnd);
   }
-}
-
-/** The agent finished replying (`replyChime` flag). */
-export function playReplyChime(): void {
-  playTones(REPLY_CHIME);
 }
 
 /** An inbox notification arrived (`notificationBell` flag). */

@@ -1,7 +1,6 @@
-import { useEffect, useRef } from "react";
 import { useQuery } from "convex/react";
+import { useReplyChime } from "@vvedantb/ui";
 import { api } from "@eva/backend";
-import { playReplyChime } from "@/lib/utils/notificationChime";
 
 /**
  * Plays the reply chime once when the agent finishes a turn,
@@ -14,7 +13,8 @@ import { playReplyChime } from "@/lib/utils/notificationChime";
  *
  * Audio only, and only locally: a session can be watched by several people, so
  * `isOwnTurn` keeps the chime with the person who prompted the turn rather than
- * sounding on every teammate's machine.
+ * sounding on every teammate's machine. The edge is tracked while disabled, so
+ * turning the flag on mid-turn chimes on the next finish, not a stale one.
  */
 export function useAgentReplyChime({
   conversationId,
@@ -26,35 +26,9 @@ export function useAgentReplyChime({
   isOwnTurn: boolean;
 }): void {
   const flags = useQuery(api.auth.getExperimentalFlags);
-  const isEnabled = flags?.replyChime === true;
-  const watchedRef = useRef<{
-    conversationId: string;
-    wasExecuting: boolean;
-  } | null>(null);
-
-  /* eslint-disable no-effect/no-event-handler --
-     The edge being watched is the agent finishing its turn on the server, which
-     arrives as a live-query change; there is no local event to play the chime
-     from. */
-  useEffect(() => {
-    const watched = watchedRef.current;
-    watchedRef.current = { conversationId, wasExecuting: isExecuting };
-
-    // First observation of this chat — opening a settled conversation must not
-    // chime for a turn that finished before the panel mounted.
-    if (!watched || watched.conversationId !== conversationId) {
-      return;
-    }
-    // Only the executing → idle edge; steady state on either side is silent.
-    if (!watched.wasExecuting || isExecuting) {
-      return;
-    }
-    if (!isOwnTurn || !isEnabled) {
-      return;
-    }
-    playReplyChime();
-    // The edge is tracked even while the flag is off, so turning it on mid-turn
-    // chimes on the next finish rather than replaying a stale one.
-  }, [conversationId, isExecuting, isOwnTurn, isEnabled]);
-  /* eslint-enable no-effect/no-event-handler */
+  useReplyChime({
+    enabled: flags?.replyChime === true && isOwnTurn,
+    isStreaming: isExecuting,
+    threadId: conversationId,
+  });
 }

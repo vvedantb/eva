@@ -1,25 +1,26 @@
-# `@vvedantb/ui` toast parity gap
+# `@vvedantb/ui@0.2.2` adoption notes
 
-Date: 2026-10-18. Eva keeps `Toaster` from `@eva/ui` (`packages/ui/src/ui/sonner.tsx`). `SonnerToaster` in `@vvedantb/ui@0.2.1` does not match it.
+Date: 2026-10-18.
 
-`SonnerToaster` spreads `{...props}` after its own `toastOptions`. Passing `toastOptions` from Eva would replace all of its classes. A wrapper would then copy Eva's whole toaster, so switching has no benefit.
+## Moved to the package
 
-## What the package needs for parity
+- **Toaster:** `AppToaster` uses `SonnerToaster` with `toastRadius="surface"`, `toastIcons="filled24"`, `closeButtonStyle="hoverChip"`, `sonnerVars` and `descriptionMuted`, plus `gap={8}`.
+- **Eva merges** (`EVA_TOAST_CLASS_NAMES` in `AppToaster.tsx`): `cursor-pointer`, `gap-x-4`, `p-3`, icon and content layout, `me-4 wrap-break-word`, `rounded-control h-7 motion-press active:scale-[0.96]` on action and cancel, and `duration-[var(--motion-base)]` on the close chip. Classes that fight a package utility use `!` because the package classes come first and CSS order decides ties.
+- **Reply chime:** `useAgentReplyChime` calls `useReplyChime`. The package tones match Eva's old ones (880 Hz and 1174.66 Hz, same gains). `isOwnTurn` and the `replyChime` flag stay in Eva.
+- **Kept in Eva:** `toast` re-export and `Toaster` in `packages/ui` (unused now), and `playNotificationBell`.
 
-- **Radius:** use `rounded-surface` (`clamp(0.75rem, var(--radius), 1rem)`), not `rounded-lg`.
-- **Layout:** use `p-3 gap-x-4 cursor-pointer font-sans`, not `px-4 py-3 gap-3`.
-- **Gap and stacking:** Eva uses `gap={8}`. The package uses `gap={12}`, `expand={false}`, `visibleToasts={4}`.
-- **Icons:** Eva passes 24px HeroUI-style icons for success, info, warning and error. It uses a `CircleSpinner` for loading and a 14px round cross for close. The package uses sonner defaults (16px).
-- **Close button:** Eva uses a circular chip at the top-right (`-right-2 -top-2`). It shows on hover (`group-hover`) and always on small screens (`max-sm`). The package renders a text-style button (`bg-default px-2.5 py-1`) in flow.
-- **Font:** Eva sets `fontFamily: "inherit"` in `style` so toasts follow `--font-sans`. The package uses `!font-sans`. Check that `--font-sans` reaches it.
-- **Sonner variables:** Eva sets `--normal-bg`, `--normal-border`, `--normal-text`, `--normal-bg-hover`, `--normal-border-hover` from `rgb(var(--card|border|foreground|muted))`. The package sets none.
-- **Description colour:** Eva uses `text-muted-foreground!`. The `!` is needed because sonner's dark-theme description rule wins otherwise. The package uses no `!`.
-- **Action and cancel buttons:** Eva uses `rounded-control`, `h-7`, `motion-press` and `active:scale-[0.96]`.
-- **Title:** Eva wraps long text (`wrap-break-word`, `me-4`). The package sets none.
-- **Fill:** `glass-panel-strong` is defined in Eva's `globals.css` as `bg-card/95 backdrop-blur-md`. This matches.
-- **Variant tints:** Eva tints icons through the icon components. The package uses `[&_[data-icon]]:text-*`. This needs sonner to render `data-icon`, which is not confirmed with custom icons.
-- **Not in `@vvedantb/ui`:** `smooth-shadow-ring-md`, `motion-press`, `hit-target` and `reveal-on-hover` are Eva utilities. Eva defines them, so they work here.
+## Remaining gaps
 
-## Suggested package change
+- **Toaster, not verified in a browser.** Check these by eye: title and description size and line height (package `leading-snug`, `text-[13px]` overridden with `text-sm! leading-5!`), action and cancel hover and transition (package `transition-opacity` stays), close chip fade.
+- **Sessions `SessionsHoverCard` not adopted.** Its content has no `Portal` (Eva's `HoverCardContent` portals, so the sidebar list cannot clip it), uses `bg-overlay rounded-lg` instead of `bg-popover/95 backdrop-blur-md rounded-surface`, and has no `max-sm:scrollbar`. Overriding with `className` would race `rounded-lg` against `rounded-surface` (tailwind-merge does not know the custom utility).
+- **Chrome tabs.** `SessionChromeTab` nests `ContextMenuTrigger` around `HoverCardTrigger`. `SessionsHoverCard` owns its trigger and does not forward props or refs, so the context menu cannot attach.
+- **Chime floor.** The 1 second floor is no longer shared with the bell. A reply chime and a bell in the same second can overlap.
 
-Export a `createToasterClassNames` option or accept `classNames` and `icons` as merged props, so an app can override pieces without replacing the whole `toastOptions`.
+## Suggested package changes
+
+- `SessionsHoverCard`: wrap content in `HoverCardPrimitive.Portal`, accept `contentClassName` that replaces the surface classes, and forward trigger props and ref.
+- `SonnerToaster`: accept `toastLayout="compact"` (`p-3 gap-x-4`) and `buttonRadius="control"` so apps need no `!` overrides.
+
+## Colour check
+
+`compat-shadcn-rgb.css` adds `--color-card: rgb(var(--card))` and `--color-muted: rgb(var(--muted))`. It does not redefine `--card` or `--muted`. A Tailwind compile of `bg-card`, `bg-card/95`, `bg-muted` and `bg-muted/80` with Eva's `tailwind.config.js` still reads `--card` and `--muted`. The only change is `rgb(var(--card) / 1)` to `rgb(var(--card))`, which renders the same. Eva's `tokens.css`, `base.css`, `tabs-pills.css` and `utilities.css` stay unimported (Eva defines `rounded-surface`).
