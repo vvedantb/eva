@@ -884,7 +884,13 @@ function ChatBodyInner({
         onQueryChange={revealFirstFindMatch}
         scopeKey={windowFirstId}
       />
-      <Conversation className="flex-1 min-h-0">
+      <Conversation
+        className="flex-1 min-h-0"
+        // Only a live reply glides down. Any other growth — loading skeleton
+        // to transcript, the deferred backlog, late markdown — snaps, so an
+        // opened chat lands at the bottom instead of animating from the top.
+        resize={streamingTargetId ? "smooth" : "instant"}
+      >
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
