@@ -8,12 +8,12 @@ import { sendEmail } from "./email";
 import {
   buildAutomationEmailHtml,
   buildChangelogEmailHtml,
-  type ChangelogVote,
 } from "./emailTemplates";
 import {
   CHANGELOG_AUTOMATION_TITLE,
   changelogVoteHmacMessage,
   parseChangelog,
+  type ChangelogFeedback,
 } from "./_changelog/entry";
 import { hmacSha256Hex } from "./_shared/hmac";
 
@@ -26,18 +26,22 @@ function getEnv(name: string): string {
   return value;
 }
 
-/** Builds the signed one-click vote link for one recipient of one changelog run. */
-async function changelogVoteUrlBuilder(
+/** Builds the signed one-click feedback link for one recipient of one changelog run. */
+async function changelogFeedbackUrlBuilder(
   runId: string,
   userId: string,
-): Promise<(itemIndex: number, vote: ChangelogVote) => string> {
+): Promise<(feedback: ChangelogFeedback) => string> {
   const sig = await hmacSha256Hex(
     getEnv("ENCRYPTION_KEY"),
     changelogVoteHmacMessage(runId, userId),
   );
   const base = `${getEnv("CONVEX_SITE_URL")}/api/changelog/vote`;
-  return (itemIndex, vote) =>
-    `${base}?${new URLSearchParams({ run: runId, user: userId, item: String(itemIndex), vote, sig })}`;
+  return (feedback) => {
+    const params = new URLSearchParams({ run: runId, user: userId, sig });
+    params.set("vote", feedback.vote);
+    if ("itemIndex" in feedback) params.set("item", String(feedback.itemIndex));
+    return `${base}?${params}`;
+  };
 }
 
 /**
@@ -71,23 +75,24 @@ export const sendAutomationEmail = internalAction({
     let sent = 0;
     const failures: string[] = [];
     for (const recipient of recipients) {
-      const shared = {
-        recipientName: recipient.name,
-        appUrl,
-        publishedAt: run.publishedAt,
-        heading: run.automationTitle,
-      };
       try {
         const html = changelog
           ? buildChangelogEmailHtml({
-              ...shared,
+              appUrl,
               changelog,
-              voteUrl: await changelogVoteUrlBuilder(
+              publishedAt: run.publishedAt,
+              feedbackUrl: await changelogFeedbackUrlBuilder(
                 args.runId,
                 recipient.userId,
               ),
             })
-          : buildAutomationEmailHtml({ ...shared, contentHtml });
+          : buildAutomationEmailHtml({
+              recipientName: recipient.name,
+              appUrl,
+              contentHtml,
+              publishedAt: run.publishedAt,
+              heading: run.automationTitle,
+            });
         await sendEmail({
           to: recipient.email,
           subject: `${run.automationTitle} #${run.runNumber}`,

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   changelogDisplayMarkdown,
-  changelogStatsLine,
   parseChangelog,
 } from "../convex/_changelog/entry";
 import { buildChangelogEmailHtml } from "../convex/emailTemplates";
@@ -37,10 +36,6 @@ describe("changelog display", () => {
     );
   });
 
-  it("counts categories in display order with singular nouns", () => {
-    const changelog = parseChangelog(JSON.stringify(structured));
-    expect(changelog && changelogStatsLine(changelog)).toBe("2 new features · 1 fix");
-  });
 });
 
 describe("buildChangelogEmailHtml", () => {
@@ -49,21 +44,32 @@ describe("buildChangelogEmailHtml", () => {
   const html = buildChangelogEmailHtml({
     appUrl: "https://app.example.com/",
     changelog,
-    publishedAt: Date.UTC(2026, 9, 19),
-    heading: "Eva Weekly Changelog",
-    voteUrl: (item, vote) => `https://site.example/vote?item=${item}&vote=${vote}`,
+    // Monday 19 Oct 2026, so the email covers 12–18 Oct (ISO week 42).
+    publishedAt: Date.UTC(2026, 9, 19, 3),
+    feedbackUrl: (f) =>
+      `https://site.example/vote?vote=${f.vote}${"itemIndex" in f ? `&item=${f.itemIndex}` : ""}`,
   });
 
-  it("shows the highlighted item once, as the top pick", () => {
+  it("labels the week the changelog covers", () => {
+    expect(html).toContain("Week 42 · 12–18 Oct 2026");
+  });
+
+  it("shows the highlighted item once, as the top pick, outside the grid", () => {
     expect(html).toContain("Top pick this week");
     expect(html.match(/Agent &lt;memory&gt;/g)).toHaveLength(1);
+    expect(html).toContain("Also new");
+    expect(html).toContain("Faster, fixed and polished");
   });
 
-  it("links Try it into the app and gives every item both vote links", () => {
-    expect(html).toContain('href="https://app.example.com/settings/sandboxes"');
-    for (const item of [0, 1, 2]) {
-      expect(html).toContain(`item=${item}&amp;vote=up`);
-      expect(html).toContain(`item=${item}&amp;vote=down`);
+  it("puts item votes on the top pick only, plus one whole-email rating", () => {
+    expect(html.match(/vote=up/g)).toHaveLength(1);
+    expect(html).toContain("vote=up&amp;item=2");
+    for (const rating of ["love", "ok", "meh"]) {
+      expect(html.match(new RegExp(`vote=${rating}"`, "g"))).toHaveLength(1);
     }
+  });
+
+  it("links Try it into the app", () => {
+    expect(html).toContain('href="https://app.example.com/settings/sandboxes"');
   });
 });

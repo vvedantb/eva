@@ -1230,13 +1230,21 @@ export const automationRunFields = {
   superseded: v.optional(v.boolean()),
 };
 
-// One row per (changelog run, user, item): the latest 👍 / 👎 from the email.
-// `itemIndex` is the item's position in the run's structured changelog.
+// One row per (changelog run, user, item): the latest feedback from the email.
+// `itemIndex` is the item's position in the run's structured changelog and
+// takes "up" / "down"; no `itemIndex` is a rating of the whole email
+// ("love" / "ok" / "meh"). The HTTP route enforces that pairing.
 export const changelogVoteFields = {
   runId: v.id("automationRuns"),
   userId: v.id("users"),
-  itemIndex: v.number(),
-  vote: v.union(v.literal("up"), v.literal("down")),
+  itemIndex: v.optional(v.number()),
+  vote: v.union(
+    v.literal("up"),
+    v.literal("down"),
+    v.literal("love"),
+    v.literal("ok"),
+    v.literal("meh"),
+  ),
   updatedAt: v.number(),
 };
 

@@ -1,6 +1,6 @@
 /**
  * The weekly changelog's structured shape. The changelog automation returns
- * this as JSON so the email can render cards; older runs hold plain markdown,
+ * this as JSON so the email can render a tiered layout; older runs hold plain markdown,
  * so every reader falls back to the raw text when parsing fails. Pure module:
  * safe for queries, node actions and the email templates alike.
  */
@@ -8,17 +8,15 @@ import { z } from "zod";
 
 export const CHANGELOG_AUTOMATION_TITLE = "Eva Weekly Changelog";
 
+/** `heading` titles the in-app markdown; `tag` labels the email's pills. */
 export const CHANGELOG_CATEGORIES = {
-  new: { heading: "✨ New Features", noun: ["new feature", "new features"] },
-  faster: { heading: "⚡ Faster & Smoother", noun: ["speed-up", "speed-ups"] },
-  fixes: { heading: "🐛 Bug Fixes", noun: ["fix", "fixes"] },
-  improvements: {
-    heading: "🛠 Improvements",
-    noun: ["improvement", "improvements"],
-  },
+  new: { heading: "✨ New Features", tag: "New" },
+  faster: { heading: "⚡ Faster & Smoother", tag: "Faster" },
+  fixes: { heading: "🐛 Bug Fixes", tag: "Fixed" },
+  improvements: { heading: "🛠 Improvements", tag: "Improved" },
 } as const;
 
-type ChangelogCategory = keyof typeof CHANGELOG_CATEGORIES;
+export type ChangelogCategory = keyof typeof CHANGELOG_CATEGORIES;
 
 const CATEGORY_ORDER: ChangelogCategory[] = [
   "new",
@@ -92,16 +90,6 @@ export function changelogSections(
   });
 }
 
-/** "8 new features · 4 speed-ups · 7 fixes", omitting empty categories. */
-export function changelogStatsLine(changelog: Changelog): string {
-  return changelogSections(changelog)
-    .map(({ category, items }) => {
-      const [one, many] = CHANGELOG_CATEGORIES[category].noun;
-      return `${items.length} ${items.length === 1 ? one : many}`;
-    })
-    .join(" · ");
-}
-
 /** Markdown for the in-app popup and /whats-new, matching the legacy layout. */
 export function changelogToMarkdown(changelog: Changelog): string {
   return changelogSections(changelog)
@@ -121,7 +109,18 @@ export function changelogDisplayMarkdown(content: string): string {
   return changelog ? changelogToMarkdown(changelog) : content;
 }
 
-/** Domain-separated HMAC message that authorises one recipient's votes on one run. */
+export const CHANGELOG_ITEM_VOTES = ["up", "down"] as const;
+export const CHANGELOG_EMAIL_RATINGS = ["love", "ok", "meh"] as const;
+
+/**
+ * One click of feedback from the email: 👍 / 👎 on one item (the top pick),
+ * or a rating of the whole email, which has no item.
+ */
+export type ChangelogFeedback =
+  | { itemIndex: number; vote: (typeof CHANGELOG_ITEM_VOTES)[number] }
+  | { vote: (typeof CHANGELOG_EMAIL_RATINGS)[number] };
+
+/** Domain-separated HMAC message that authorises one recipient's feedback on one run. */
 export function changelogVoteHmacMessage(
   runId: string,
   userId: string,

@@ -131,9 +131,10 @@ export const dismissChangelog = authMutation({
 });
 
 /**
- * Records one recipient's 👍 / 👎 on one changelog item, replacing any earlier
- * vote. The HTTP route has already checked the link signature. Returns false
- * when the run or item no longer exists, so the route can say so.
+ * Records one recipient's feedback on a changelog run (an item vote, or a
+ * whole-email rating when `itemIndex` is absent), replacing any earlier one.
+ * The HTTP route has already checked the link signature. Returns false when
+ * the run or item no longer exists, so the route can say so.
  */
 export const recordVote = internalMutation({
   args: {
@@ -151,7 +152,9 @@ export const recordVote = internalMutation({
     const changelog = run?.resultSummary
       ? parseChangelog(run.resultSummary)
       : null;
-    if (!changelog || args.itemIndex >= changelog.items.length) return false;
+    if (!changelog) return false;
+    if (args.itemIndex !== undefined && args.itemIndex >= changelog.items.length)
+      return false;
 
     const existing = await ctx.db
       .query("changelogVotes")

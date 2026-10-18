@@ -15,7 +15,11 @@ import {
 } from "./_automationEvents/events";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 import { hmacSha256Hex } from "./_shared/hmac";
-import { changelogVoteHmacMessage } from "./_changelog/entry";
+import {
+  CHANGELOG_EMAIL_RATINGS,
+  CHANGELOG_ITEM_VOTES,
+  changelogVoteHmacMessage,
+} from "./_changelog/entry";
 import { buildChangelogVotePageHtml } from "./emailTemplates";
 
 const http = httpRouter();
@@ -1070,17 +1074,29 @@ http.route({
   handler: mcpHandler,
 });
 
-const changelogVoteQuerySchema = z.object({
+const changelogLinkFields = {
   run: z.string().min(1),
   user: z.string().min(1),
-  item: z.coerce.number().int().min(0),
-  vote: z.enum(["up", "down"]),
   sig: z.string().min(1),
-});
+};
+
+/** Either 👍 / 👎 on one item, or a rating of the whole email (no item). */
+const changelogFeedbackQuerySchema = z.union([
+  z.object({
+    ...changelogLinkFields,
+    item: z.coerce.number().int().min(0),
+    vote: z.enum(CHANGELOG_ITEM_VOTES),
+  }),
+  z.object({
+    ...changelogLinkFields,
+    vote: z.enum(CHANGELOG_EMAIL_RATINGS),
+  }),
+]);
 
 /**
- * One-click 👍 / 👎 from the weekly changelog email. The signature covers the
- * run and the recipient, so a link only votes as the user it was mailed to.
+ * One-click feedback from the weekly changelog email: 👍 / 👎 on the top pick,
+ * or a rating of the whole email. The signature covers the run and the
+ * recipient, so a link only records feedback as the user it was mailed to.
  * An email link has to be a GET; a link scanner that prefetches it only
  * overwrites that user's row, and the user's own later click wins.
  */
@@ -1088,13 +1104,13 @@ http.route({
   path: "/api/changelog/vote",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
-    const parsed = changelogVoteQuerySchema.safeParse(
+    const parsed = changelogFeedbackQuerySchema.safeParse(
       Object.fromEntries(new URL(request.url).searchParams),
     );
     if (!parsed.success) {
       return new Response("Invalid vote link", { status: 400 });
     }
-    const { run, user, item, vote, sig } = parsed.data;
+    const { run, user, sig } = parsed.data;
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
@@ -1110,8 +1126,8 @@ http.route({
     const recorded = await ctx.runMutation(internal.changelog.recordVote, {
       runId: run,
       userId: user,
-      itemIndex: item,
-      vote,
+      itemIndex: "item" in parsed.data ? parsed.data.item : undefined,
+      vote: parsed.data.vote,
     });
     return new Response(buildChangelogVotePageHtml({ appUrl, recorded }), {
       status: recorded ? 200 : 404,
