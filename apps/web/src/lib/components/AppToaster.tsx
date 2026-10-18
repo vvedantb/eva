@@ -1,6 +1,6 @@
 "use client";
 
-import { SonnerToaster } from "@vvedantb/ui";
+import { SonnerToaster } from "@/lib/vvedantbUi";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 
 /**

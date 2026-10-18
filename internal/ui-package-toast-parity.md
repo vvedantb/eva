@@ -24,3 +24,7 @@ Date: 2026-10-18.
 ## Colour check
 
 `compat-shadcn-rgb.css` adds `--color-card: rgb(var(--card))` and `--color-muted: rgb(var(--muted))`. It does not redefine `--card` or `--muted`. A Tailwind compile of `bg-card`, `bg-card/95`, `bg-muted` and `bg-muted/80` with Eva's `tailwind.config.js` still reads `--card` and `--muted`. The only change is `rgb(var(--card) / 1)` to `rgb(var(--card))`, which renders the same. Eva's `tokens.css`, `base.css`, `tabs-pills.css` and `utilities.css` stay unimported (Eva defines `rounded-surface`).
+
+## Deep imports (typecheck)
+
+The `@vvedantb/ui` barrel re-exports `ai-elements/speech-input.tsx`. It declares a required `Window.SpeechRecognition` that conflicts with Eva's optional one in `packages/ui/src/ai-elements/prompt-input-speech.tsx`. Eva imports `SonnerToaster` and `useReplyChime` through `apps/web/src/lib/vvedantbUi.ts`, which deep-imports the package source. The package needs `./sonner` and `./audio` subpath exports so apps need not deep-import.
