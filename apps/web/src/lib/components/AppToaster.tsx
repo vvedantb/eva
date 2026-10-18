@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleSpinner } from "@eva/ui";
 import { SonnerToaster } from "@vvedantb/ui/sonner";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 
@@ -7,7 +8,7 @@ import { useThemeMode } from "@/lib/hooks/useThemeMode";
  * Eva-only layout on top of the package defaults. Package classes come first
  * and these follow. `!` stays only where a package utility sets the same
  * property and merge order cannot decide (padding, description size, radius,
- * button fills).
+ * button fills). Title leading and stacked-content hiding are package props.
  */
 const EVA_TOAST_CLASS_NAMES = {
   toast: "cursor-pointer gap-x-4 px-3! font-sans",
@@ -39,6 +40,9 @@ export function AppToaster() {
       closeButtonStyle="hoverChip"
       sonnerVars
       descriptionMuted
+      titleLeading="5"
+      hideStackedContent
+      loadingIcon={<CircleSpinner size="md" aria-hidden="true" />}
       toastOptions={{ classNames: EVA_TOAST_CLASS_NAMES }}
     />
   );

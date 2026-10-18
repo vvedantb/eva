@@ -1,4 +1,4 @@
-# `@vvedantb/ui@0.2.3` adoption notes
+# `@vvedantb/ui@0.3.1` adoption notes
 
 Date: 2026-10-18.
 
@@ -10,6 +10,14 @@ Date: 2026-10-18.
 - **Local `Toaster`:** deleted from `packages/ui/src/ui/sonner.tsx`, with its icons. The file now only re-exports `toast`, so `import { toast } from "@eva/ui"` still works.
 - **Audio floor:** `notificationChime.ts` calls `playTone(NOTIFICATION_BELL)`. The bell and the reply chime now share one 1 second floor. The bell has the same frequencies, durations and gains as before. Eva has no private `AudioContext` any more. `playTone` is not wrapped in `withAudioFloor`, because it already takes the floor.
 - **Hover cards:** `SidebarSessionItem` (`openDelay` 250, `closeDelay` 100, `right`, `start`, offset 8, `surface="glass"`) and `SessionChromeTab` (`openDelay` 400, `bottom`, `start`, offset 6, `surface="glass"`) use `SessionsHoverCard` with `SessionHoverCardBody` as `body`. The tab nests `ContextMenu > SessionsHoverCard > ContextMenuTrigger asChild`. `globals.css` has a `@source` for `shell/`.
+
+## 0.3.1 opt-ins
+
+- **`titleLeading="5"`:** title line height is 20px (`leading-5`), as on main. The package default `leading-snug` is 19.25px.
+- **`hideStackedContent`:** hides back-toast content, as main did. Eva no longer sets the opacity class.
+- **`loadingIcon`:** `AppToaster` passes `CircleSpinner size="md"` from `@eva/ui`, the same icon main used.
+- **`closeButtonStyle="hoverChip"`:** now adds `hover:border-border!`, which fixes the dark-mode hover ring. Eva has no override for it. Eva keeps `duration-[var(--motion-base)]` on the close button.
+- **Chrome tab hover card:** 0.3.1 opens on `:focus-visible` only, so pointer focus after the context menu no longer opens it. `SessionChromeTab` passes no focus prop, so nothing fights this.
 
 ## Remaining gaps
 
