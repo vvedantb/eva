@@ -2176,3 +2176,55 @@ html[data-page-hidden] .landing-pulse-dot,
   /* Text on a solid ink fill (a `bg-white/70` bar reads as dark here). */
   --deck-on-ink: rgb(255 255 255 / 0.92);
 }
+
+/* Card and chip fills on a light slide are solid: the same tint mixed into
+   white, so a glow behind a card stays behind it rather than showing through.
+   JS fills use `useSurface()`. */
+.deck-ink-light .bg-white\/\[0\.02\] {
+  background-color: color-mix(in srgb, #18181b 2%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.03\] {
+  background-color: color-mix(in srgb, #18181b 3%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.035\] {
+  background-color: color-mix(in srgb, #18181b 3.5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.04\] {
+  background-color: color-mix(in srgb, #18181b 4%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.045\] {
+  background-color: color-mix(in srgb, #18181b 4.5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.05\] {
+  background-color: color-mix(in srgb, #18181b 5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.06\] {
+  background-color: color-mix(in srgb, #18181b 6%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.07\] {
+  background-color: color-mix(in srgb, #18181b 7%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.08\] {
+  background-color: color-mix(in srgb, #18181b 8%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.09\] {
+  background-color: color-mix(in srgb, #18181b 9%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.1\] {
+  background-color: color-mix(in srgb, #18181b 10%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.12\] {
+  background-color: color-mix(in srgb, #18181b 12%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.13\] {
+  background-color: color-mix(in srgb, #18181b 13%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.14\] {
+  background-color: color-mix(in srgb, #18181b 14%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.16\] {
+  background-color: color-mix(in srgb, #18181b 16%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.18\] {
+  background-color: color-mix(in srgb, #18181b 18%, #fff);
+}

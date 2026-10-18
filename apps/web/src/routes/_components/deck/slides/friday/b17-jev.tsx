@@ -13,7 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
-  useInk,
+  useSurface,
   Accent,
   BRAND,
   Footnote,
@@ -31,6 +31,7 @@ import {
   Pulse,
   SHARED,
   Spotlight,
+  brandTint,
   cueTransition,
 } from "../../_components/motion";
 import { Fri2Chip } from "../_parts/Fri2Chip";
@@ -122,7 +123,7 @@ function JevNode() {
         top: NODE_CY - NODE.size / 2,
         width: NODE.size,
         height: NODE.size,
-        background: `linear-gradient(145deg, ${BRAND.purple}40, ${BRAND.blue}33)`,
+        background: brandTint("40", "33"),
       }}
       initial={false}
       animate={{ scale: step >= FEATURES_STEP ? 1.04 : 1 }}
@@ -139,7 +140,7 @@ function JevNode() {
 }
 
 function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
-  const ink = useInk();
+  const surface = useSurface();
   const step = useDeckStep();
   const lit = step >= FEATURES_STEP;
   const at = step === FEATURES_STEP ? 0.55 + index * 0.35 : 0;
@@ -158,7 +159,7 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
       animate={{
         opacity: lit ? 1 : 0.3,
         x: lit ? 0 : -8,
-        backgroundColor: lit ? ink(0.07) : ink(0.03),
+        backgroundColor: lit ? surface(0.07) : surface(0.03),
       }}
       transition={
         lit

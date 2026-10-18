@@ -16,6 +16,7 @@ export {
   SETTLE,
   SHARED,
   STAGGER,
+  brandTint,
   cueTransition,
 } from "./tokens";
 export { useMotionCue } from "../deckContext";

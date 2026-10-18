@@ -7,7 +7,6 @@ import { DeckStepContext } from "./_components/deckContext";
 import { DeckThemeScope } from "./_components/DeckThemeScope";
 import { EASE } from "./_components/motion/tokens";
 import { DeckAmbient } from "./_components/DeckAmbient";
-import { DeckWash } from "./_components/DeckWash";
 import { STAGE_PERSPECTIVE } from "./_components/DeckCamera";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
@@ -40,11 +39,6 @@ interface DeckProps {
   basePath: string;
 }
 
-/**
- * The incoming slide travels in from depth, slightly turned, on a long expo
- * curve; the outgoing one falls back the other way in under half the time. No
- * animated `filter`: the Z push plus the `DeckWash` light carry the change.
- */
 /** What the slide variants need: which way the deck moved, and whether a shared element carries over. */
 interface SlideMotion {
   dir: number;
@@ -54,6 +48,12 @@ interface SlideMotion {
 /** A slide that continues an element from its neighbour: the stage holds still and fades. */
 const MORPH_FADE = { opacity: 0, x: 0, rotateY: 0, z: 0, scale: 1 };
 
+/**
+ * The incoming slide travels in from depth, slightly turned, on a long expo
+ * curve; the outgoing one falls back the other way in under half the time. No
+ * animated `filter`, and no light sweep across the stage: the Z push alone
+ * carries the change.
+ */
 const slideVariants = {
   enter: ({ dir, morph }: SlideMotion) =>
     morph
@@ -248,12 +248,6 @@ export function Deck({
             </m.div>
           </AnimatePresence>
         </div>
-
-        <DeckWash
-          key={share.effectiveSlide}
-          direction={direction}
-          theme={theme}
-        />
 
         <DeckChrome
           slide={share.effectiveSlide}

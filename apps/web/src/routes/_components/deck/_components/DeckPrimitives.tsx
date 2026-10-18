@@ -20,6 +20,7 @@ export {
   useAppScheme,
   useInk,
   useMotionCue,
+  useSurface,
 } from "./deckContext";
 export type { DeckTheme } from "./deckContext";
 export { BRAND, EASE_OUT } from "./motion/tokens";

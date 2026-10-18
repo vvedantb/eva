@@ -1,6 +1,6 @@
 import { IconCheck } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { useInk, useDeckStep } from "../../_components/DeckPrimitives";
+import { useSurface, useDeckStep } from "../../_components/DeckPrimitives";
 import { BRAND, Connector, DUR, EASE, LEAVE } from "../../_components/motion";
 import { FriTyped, FriWindow } from "./FriMock";
 
@@ -165,7 +165,7 @@ function CommentAnchor() {
 
 /** The shared document: typed heading, two paragraphs, a short list. */
 export function MoF1Document() {
-  const ink = useInk();
+  const surface = useSurface();
   return (
     <div className="relative">
       <FriWindow
@@ -185,7 +185,7 @@ export function MoF1Document() {
               left: BODY_X + bar.x,
               top: bar.y + 20,
               width: bar.w,
-              background: bar.strong ? ink(0.12) : ink(0.09),
+              background: bar.strong ? surface(0.12) : surface(0.09),
             }}
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}

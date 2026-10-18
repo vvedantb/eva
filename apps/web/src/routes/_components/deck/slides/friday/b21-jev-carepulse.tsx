@@ -25,6 +25,7 @@ import {
   Pulse,
   SHARED,
   Spotlight,
+  brandTint,
   cueTransition,
 } from "../../_components/motion";
 import { Fri2Chip } from "../_parts/Fri2Chip";
@@ -282,7 +283,7 @@ function Question() {
         layoutId={SHARED.jev}
         className="rounded-[22px] p-5 ring-1 ring-white/10 ring-inset"
         style={{
-          background: `linear-gradient(145deg, ${BRAND.purple}30, ${BRAND.blue}22)`,
+          background: brandTint("30", "22"),
         }}
         initial={false}
         animate={{ opacity: guarded ? 0.5 : asked ? 1 : 0.7 }}

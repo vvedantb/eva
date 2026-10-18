@@ -77,3 +77,18 @@ export function useInk(): (alpha: number) => string {
 export function useAppScheme(): string {
   return useDeckTheme() === "light" ? "deck-app-light" : "dark";
 }
+
+/**
+ * A card or chip fill at an alpha. On a dark slide it is the translucent white
+ * the slides were written with; on a light slide the same tint is mixed into
+ * white and returned solid, so a glow behind the card stays behind it instead
+ * of showing through. Mirrors the `bg-white/[x]` rules in `globals.css`.
+ */
+export function useSurface(): (alpha: number) => string {
+  const light = useDeckTheme() === "light";
+  return (alpha) => {
+    if (!light) return `rgba(255,255,255,${alpha})`;
+    const mix = (channel: number) => Math.round(255 - alpha * (255 - channel));
+    return `rgb(${mix(24)},${mix(24)},${mix(27)})`;
+  };
+}

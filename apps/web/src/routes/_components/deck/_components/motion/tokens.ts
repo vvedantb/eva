@@ -69,6 +69,15 @@ export const BRAND: { readonly purple: string; readonly blue: string } = {
 
 export const BRAND_GRADIENT = `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`;
 
+/**
+ * The brand-tinted card fill: a purple-to-blue wash over a solid base, so a
+ * glow behind the card stays behind it. The base is the slide's own surface
+ * (`--deck-box`, set on light slides), falling back to the dark stage.
+ */
+export function brandTint(purple: string, blue: string): string {
+  return `linear-gradient(145deg, ${BRAND.purple}${purple}, ${BRAND.blue}${blue}), var(--deck-box, #121019)`;
+}
+
 /** Hero entrance: long expo tween. */
 export const HERO: Transition = { duration: DUR.hero, ease: EASE.expo };
 

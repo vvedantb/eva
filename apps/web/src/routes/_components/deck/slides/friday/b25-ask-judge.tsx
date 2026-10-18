@@ -3,14 +3,19 @@ import { IconMessageQuestion, IconScale } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  BRAND,
   Shell,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
-import { DUR, EASE, Spotlight, cueTransition } from "../../_components/motion";
+import {
+  DUR,
+  EASE,
+  Spotlight,
+  brandTint,
+  cueTransition,
+} from "../../_components/motion";
 
 const ASK = 1;
 const JUDGE = 2;
@@ -59,7 +64,7 @@ function SkillCard({ skill }: { skill: Skill }) {
       style={{
         width: CARD_W,
         height: H,
-        background: `linear-gradient(145deg, ${BRAND.purple}26, ${BRAND.blue}1a)`,
+        background: brandTint("26", "1a"),
       }}
       initial={{ opacity: 0.18, y: 18, scale: 0.97 }}
       animate={{

@@ -30,6 +30,7 @@ import {
   Pulse,
   SHARED,
   Spotlight,
+  brandTint,
   cueTransition,
 } from "../../_components/motion";
 
@@ -148,7 +149,7 @@ function EvaBox() {
         top: MID_Y - BOX.h / 2,
         width: BOX.w,
         height: BOX.h,
-        background: `linear-gradient(145deg, ${BRAND.purple}2e, ${BRAND.blue}22), var(--deck-box, #121019)`,
+        background: brandTint("2e", "22"),
       }}
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{
