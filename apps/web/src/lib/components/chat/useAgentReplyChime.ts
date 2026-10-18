@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { useReplyChime } from "@/lib/vvedantbUi";
+import { useReplyChime } from "@vvedantb/ui/audio";
 import { api } from "@eva/backend";
 
 /**

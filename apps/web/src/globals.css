@@ -11,6 +11,7 @@
  * RGB vars), and modal.css / tabs.css (Eva keeps its local t-modal / t-tabs-pill
  * utilities below; importing would define them twice). */
 @source "../node_modules/@vvedantb/ui/src/**/*.{ts,tsx}";
+@source "../node_modules/@vvedantb/ui/shell/**/*.{ts,tsx}";
 
 /* Overrides the package fallback; same fill Eva uses for toasts and hover cards. */
 @utility glass-panel-strong {

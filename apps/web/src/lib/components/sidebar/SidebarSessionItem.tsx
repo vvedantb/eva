@@ -3,13 +3,8 @@
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { Id } from "@eva/backend";
-import {
-  cn,
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-  LoadingState,
-} from "@eva/ui";
+import { cn, LoadingState } from "@eva/ui";
+import { SessionsHoverCard } from "@vvedantb/ui/shell";
 import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
@@ -346,14 +341,14 @@ export function SidebarSessionItem({
   if (isFolder) return link;
 
   return (
-    <HoverCard>
-      <HoverCardTrigger asChild>{link}</HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        className="w-64 p-3"
-      >
+    <SessionsHoverCard
+      openDelay={250}
+      closeDelay={100}
+      side="right"
+      align="start"
+      sideOffset={8}
+      surface="glass"
+      body={
         <SessionHoverCardBody
           title={title}
           sessionId={sessionId}
@@ -362,7 +357,9 @@ export function SidebarSessionItem({
           baseBranch={baseBranch}
           app={app}
         />
-      </HoverCardContent>
-    </HoverCard>
+      }
+    >
+      {link}
+    </SessionsHoverCard>
   );
 }

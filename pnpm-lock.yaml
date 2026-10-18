@@ -346,8 +346,8 @@ importers:
         specifier: ^1.5.0
         version: 1.6.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.2.2
-        version: 0.2.2(b63587f42cdb7ffbe7593d6a124edb7d)
+        specifier: ^0.2.3
+        version: 0.2.3(b63587f42cdb7ffbe7593d6a124edb7d)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -6117,8 +6117,8 @@ packages:
       vite:
         optional: true
 
-  '@vvedantb/ui@0.2.2':
-    resolution: {integrity: sha512-khc4ZUE6ADYlld3BIRMQfqhHNxE8b5lN+rFQlBuseBgXDW5rGP+qo+jc+XTdKSESZntZRdJdaM/96zRG7oUQTQ==}
+  '@vvedantb/ui@0.2.3':
+    resolution: {integrity: sha512-ZufFZRWUdqTr1u7hmVqgcLLGxbCFtn/AH3ykA3uXOgFYFuddWYFFXrX7NIKPqf+Q3Kigyhm/f4pmhDxNZknRwQ==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -15576,7 +15576,7 @@ snapshots:
       react-dom: 19.3.0(react@19.3.0)
       vite: 8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
 
-  '@vvedantb/ui@0.2.2(b63587f42cdb7ffbe7593d6a124edb7d)':
+  '@vvedantb/ui@0.2.3(b63587f42cdb7ffbe7593d6a124edb7d)':
     dependencies:
       '@radix-ui/react-accordion': 1.2.12(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@radix-ui/react-checkbox': 1.3.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

@@ -1,30 +1,24 @@
-# `@vvedantb/ui@0.2.2` adoption notes
+# `@vvedantb/ui@0.2.3` adoption notes
 
 Date: 2026-10-18.
 
 ## Moved to the package
 
-- **Toaster:** `AppToaster` uses `SonnerToaster` with `toastRadius="surface"`, `toastIcons="filled24"`, `closeButtonStyle="hoverChip"`, `sonnerVars` and `descriptionMuted`, plus `gap={8}`.
-- **Eva merges** (`EVA_TOAST_CLASS_NAMES` in `AppToaster.tsx`): `cursor-pointer`, `gap-x-4`, `p-3`, icon and content layout, `me-4 wrap-break-word`, `rounded-control h-7 motion-press active:scale-[0.96]` on action and cancel, and `duration-[var(--motion-base)]` on the close chip. Classes that fight a package utility use `!` because the package classes come first and CSS order decides ties.
-- **Reply chime:** `useAgentReplyChime` calls `useReplyChime`. The package tones match Eva's old ones (880 Hz and 1174.66 Hz, same gains). `isOwnTurn` and the `replyChime` flag stay in Eva.
-- **Kept in Eva:** `toast` re-export and `Toaster` in `packages/ui` (unused now), and `playNotificationBell`.
+- **Subpath imports:** the `apps/web/src/lib/vvedantbUi.ts` shim is gone. Code imports `SonnerToaster` from `@vvedantb/ui/sonner`, and `useReplyChime` and `playTone` from `@vvedantb/ui/audio`. Never use the root barrel (its `speech-input.tsx` clashes with Eva's `Window.SpeechRecognition`).
+- **Toaster:** `AppToaster` keeps `toastRadius="surface"`, `toastIcons="filled24"`, `closeButtonStyle="hoverChip"`, `sonnerVars`, `descriptionMuted`, `gap={8}` and `position="top-right"`. It does not use `density="compact"` (`text-xs`, `py-2`, `gap-2` worsen parity with Eva's `text-sm`, `p-3`, `gap-x-4`). It does not use `toastRadius="control"` (that is `rounded-field`, not Eva's `rounded-control`).
+- **Eva merges, now smaller:** dropped `gap-x-4!` (property order lets `gap-x` beat `gap`), `py-3!` (same as the package), `text-sm! leading-5!` on the title (the toast already sets `text-sm`) and the collapsed-content opacity rule (the package `sonner.css` hides it). Kept `px-3!`, `text-sm! leading-5!` on the description, and the `rounded-control!`, fill and hover merges on both buttons.
+- **Local `Toaster`:** deleted from `packages/ui/src/ui/sonner.tsx`, with its icons. The file now only re-exports `toast`, so `import { toast } from "@eva/ui"` still works.
+- **Audio floor:** `notificationChime.ts` calls `playTone(NOTIFICATION_BELL)`. The bell and the reply chime now share one 1 second floor. The bell has the same frequencies, durations and gains as before. Eva has no private `AudioContext` any more. `playTone` is not wrapped in `withAudioFloor`, because it already takes the floor.
+- **Hover cards:** `SidebarSessionItem` (`openDelay` 250, `closeDelay` 100, `right`, `start`, offset 8, `surface="glass"`) and `SessionChromeTab` (`openDelay` 400, `bottom`, `start`, offset 6, `surface="glass"`) use `SessionsHoverCard` with `SessionHoverCardBody` as `body`. The tab nests `ContextMenu > SessionsHoverCard > ContextMenuTrigger asChild`. `globals.css` has a `@source` for `shell/`.
 
 ## Remaining gaps
 
-- **Toaster, not verified in a browser.** Check these by eye: title and description size and line height (package `leading-snug`, `text-[13px]` overridden with `text-sm! leading-5!`), action and cancel hover and transition (package `transition-opacity` stays), close chip fade.
-- **Sessions `SessionsHoverCard` not adopted.** Its content has no `Portal` (Eva's `HoverCardContent` portals, so the sidebar list cannot clip it), uses `bg-overlay rounded-lg` instead of `bg-popover/95 backdrop-blur-md rounded-surface`, and has no `max-sm:scrollbar`. Overriding with `className` would race `rounded-lg` against `rounded-surface` (tailwind-merge does not know the custom utility).
-- **Chrome tabs.** `SessionChromeTab` nests `ContextMenuTrigger` around `HoverCardTrigger`. `SessionsHoverCard` owns its trigger and does not forward props or refs, so the context menu cannot attach.
-- **Chime floor.** The 1 second floor is no longer shared with the bell. A reply chime and a bell in the same second can overlap.
-
-## Suggested package changes
-
-- `SessionsHoverCard`: wrap content in `HoverCardPrimitive.Portal`, accept `contentClassName` that replaces the surface classes, and forward trigger props and ref.
-- `SonnerToaster`: accept `toastLayout="compact"` (`p-3 gap-x-4`) and `buttonRadius="control"` so apps need no `!` overrides.
+- **Not checked in a browser.** Check by eye: toast padding and type size, button hover, close chip fade, hover card glass fill and radius, and that the tab context menu and the hover card both open.
+- **Hover card body wrapper.** The package wraps `body` in `text-sm text-muted-foreground`. `SessionHoverCardBody` sets its own classes, but confirm that no text turns muted.
+- **Width and padding.** The package default `w-64 p-3` matches Eva's old `className`.
+- **Not migrated:** Docs, Testing Arena and Automation lists still use `SidebarListHoverCard` on `@eva/ui` `HoverCard`.
+- **`!` merges left:** the package toaster has no prop for Eva's button radius (`rounded-control`), `px-3` or description size, so those stay as `!` merges.
 
 ## Colour check
 
-`compat-shadcn-rgb.css` adds `--color-card: rgb(var(--card))` and `--color-muted: rgb(var(--muted))`. It does not redefine `--card` or `--muted`. A Tailwind compile of `bg-card`, `bg-card/95`, `bg-muted` and `bg-muted/80` with Eva's `tailwind.config.js` still reads `--card` and `--muted`. The only change is `rgb(var(--card) / 1)` to `rgb(var(--card))`, which renders the same. Eva's `tokens.css`, `base.css`, `tabs-pills.css` and `utilities.css` stay unimported (Eva defines `rounded-surface`).
-
-## Deep imports (typecheck)
-
-The `@vvedantb/ui` barrel re-exports `ai-elements/speech-input.tsx`. It declares a required `Window.SpeechRecognition` that conflicts with Eva's optional one in `packages/ui/src/ai-elements/prompt-input-speech.tsx`. Eva imports `SonnerToaster` and `useReplyChime` through `apps/web/src/lib/vvedantbUi.ts`, which deep-imports the package source. The package needs `./sonner` and `./audio` subpath exports so apps need not deep-import.
+Still OK. `compat-shadcn-rgb.css` adds `--color-card: rgb(var(--card))` and `--color-muted: rgb(var(--muted))`. It does not redefine `--card` or `--muted`, so `bg-card/95`, `bg-muted` and `bg-muted/80` still read Eva's variables. Eva's `tokens.css`, `base.css`, `tabs-pills.css` and `utilities.css` stay unimported.
