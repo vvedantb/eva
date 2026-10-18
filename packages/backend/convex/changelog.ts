@@ -1,11 +1,15 @@
 import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc } from "./_generated/dataModel";
-import { query } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { getCurrentUserId } from "./_auth/currentUser";
 import { authMutation } from "./functions";
-
-export const CHANGELOG_AUTOMATION_TITLE = "Eva Weekly Changelog";
+import { changelogVoteFields } from "./validators";
+import {
+  CHANGELOG_AUTOMATION_TITLE,
+  changelogDisplayMarkdown,
+  parseChangelog,
+} from "./_changelog/entry";
 
 /** Roughly a year of a weekly automation — deep enough to never need paging. */
 const ENTRY_LIMIT = 50;
@@ -63,7 +67,7 @@ export const getLatestChangelog = query({
 
     return {
       show: latestRun.finishedAt > dismissed,
-      content: latestRun.resultSummary,
+      content: changelogDisplayMarkdown(latestRun.resultSummary),
       publishedAt: latestRun.finishedAt,
     };
   },
@@ -105,7 +109,7 @@ export const listChangelog = query({
         ? [
             {
               id: run._id,
-              content: run.resultSummary,
+              content: changelogDisplayMarkdown(run.resultSummary),
               publishedAt: run.finishedAt,
             },
           ]
@@ -123,5 +127,53 @@ export const dismissChangelog = authMutation({
       lastChangelogDismissedAt: Date.now(),
     });
     return null;
+  },
+});
+
+/**
+ * Records one recipient's 👍 / 👎 on one changelog item, replacing any earlier
+ * vote. The HTTP route has already checked the link signature. Returns false
+ * when the run or item no longer exists, so the route can say so.
+ */
+export const recordVote = internalMutation({
+  args: {
+    runId: v.string(),
+    userId: v.string(),
+    itemIndex: changelogVoteFields.itemIndex,
+    vote: changelogVoteFields.vote,
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const runId = ctx.db.normalizeId("automationRuns", args.runId);
+    const userId = ctx.db.normalizeId("users", args.userId);
+    if (!runId || !userId) return false;
+    const run = await ctx.db.get(runId);
+    const changelog = run?.resultSummary
+      ? parseChangelog(run.resultSummary)
+      : null;
+    if (!changelog || args.itemIndex >= changelog.items.length) return false;
+
+    const existing = await ctx.db
+      .query("changelogVotes")
+      .withIndex("by_run_and_user_and_item", (q) =>
+        q
+          .eq("runId", runId)
+          .eq("userId", userId)
+          .eq("itemIndex", args.itemIndex),
+      )
+      .unique();
+    const updatedAt = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, { vote: args.vote, updatedAt });
+    } else {
+      await ctx.db.insert("changelogVotes", {
+        runId,
+        userId,
+        itemIndex: args.itemIndex,
+        vote: args.vote,
+        updatedAt,
+      });
+    }
+    return true;
   },
 });

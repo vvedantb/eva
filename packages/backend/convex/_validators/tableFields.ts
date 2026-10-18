@@ -1230,6 +1230,16 @@ export const automationRunFields = {
   superseded: v.optional(v.boolean()),
 };
 
+// One row per (changelog run, user, item): the latest 👍 / 👎 from the email.
+// `itemIndex` is the item's position in the run's structured changelog.
+export const changelogVoteFields = {
+  runId: v.id("automationRuns"),
+  userId: v.id("users"),
+  itemIndex: v.number(),
+  vote: v.union(v.literal("up"), v.literal("down")),
+  updatedAt: v.number(),
+};
+
 /**
  * Usage columns denormalised from `rawResultEvent` at write time (see
  * `_logs/usage.ts`) so the Usage page aggregates without parsing JSON blobs.

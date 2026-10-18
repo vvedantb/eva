@@ -4,6 +4,15 @@
  * Email clients ignore <style>/external CSS, so every style is inlined.
  */
 
+import {
+  CHANGELOG_CATEGORIES,
+  changelogSections,
+  changelogStatsLine,
+  changelogTopPick,
+  type Changelog,
+  type IndexedChangelogItem,
+} from "./_changelog/entry";
+
 /** A single unread notification rendered in the daily digest. */
 export interface DigestNotification {
   title: string;
@@ -35,6 +44,8 @@ const BRAND = "#4f46e5";
 const TEXT = "#111827";
 const MUTED = "#6b7280";
 const SURFACE = "#f3f4f6";
+/** Light tint of BRAND for the changelog's top-pick card. */
+const BRAND_TINT = "#eef2ff";
 
 // Inter first, with a system fallback stack for clients that ignore web fonts
 // (Gmail, Outlook desktop). Apple Mail / iOS Mail load Inter via the @import.
@@ -87,6 +98,11 @@ function buildLink(appUrl: string, href: string): string {
   const base = stripTrailingSlash(appUrl);
   const path = href.startsWith("/") ? href : `/${href}`;
   return `${base}${path}`;
+}
+
+/** A filled brand-colour call-to-action link. */
+function renderButton(href: string, label: string): string {
+  return `<a href="${escapeHtml(href)}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">${escapeHtml(label)}</a>`;
 }
 
 const DEFAULT_FOOTER_TEXT =
@@ -217,7 +233,7 @@ export function buildAutomationEmailHtml(opts: AutomationEmailOptions): string {
     <p style="margin:0 0 20px;font-size:13px;color:${MUTED};">${escapeHtml(formatDate(opts.publishedAt))}</p>
     <div style="font-size:14px;line-height:22px;color:${TEXT};">${opts.contentHtml}</div>
     <p style="margin:24px 0 0;">
-      <a href="${escapeHtml(stripTrailingSlash(opts.appUrl))}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">Open the app</a>
+      ${renderButton(stripTrailingSlash(opts.appUrl), "Open the app")}
     </p>
   `;
 
@@ -227,6 +243,139 @@ export function buildAutomationEmailHtml(opts: AutomationEmailOptions): string {
     appUrl: opts.appUrl,
     footerText:
       "You are receiving this email because email notifications are enabled. Open the app to manage them.",
+  });
+}
+
+export type ChangelogVote = "up" | "down";
+
+export interface ChangelogEmailOptions {
+  recipientName?: string;
+  /** Base URL of the web app, e.g. https://app.example.com (no trailing slash needed). */
+  appUrl: string;
+  changelog: Changelog;
+  publishedAt: number;
+  heading: string;
+  /** Signed one-click link that records this recipient's vote on one item. */
+  voteUrl: (itemIndex: number, vote: ChangelogVote) => string;
+}
+
+/** "Useful? 👍 👎" — two one-click vote links for one changelog item. */
+function renderVoteLinks(
+  itemIndex: number,
+  voteUrl: ChangelogEmailOptions["voteUrl"],
+): string {
+  const link = (vote: ChangelogVote, emoji: string, label: string) =>
+    `<a href="${escapeHtml(voteUrl(itemIndex, vote))}" title="${label}" style="display:inline-block;padding:0 4px;font-size:16px;line-height:20px;text-decoration:none;">${emoji}</a>`;
+  return `<span style="font-size:12px;color:${MUTED};vertical-align:middle;">Useful?</span> ${link("up", "&#128077;", "Useful")}${link("down", "&#128078;", "Not useful")}`;
+}
+
+/** Bottom row of a changelog card: an optional "Try it" action and the vote links. */
+function renderCardFooter(
+  action: string,
+  itemIndex: number,
+  voteUrl: ChangelogEmailOptions["voteUrl"],
+): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
+    <tr>
+      <td style="vertical-align:middle;">${action}</td>
+      <td align="right" style="vertical-align:middle;white-space:nowrap;padding-left:12px;">${renderVoteLinks(itemIndex, voteUrl)}</td>
+    </tr>
+  </table>`;
+}
+
+/** The week's top pick: a tinted card with a large title and a filled "Try it" button. */
+function renderTopPick(
+  { index, item }: IndexedChangelogItem,
+  opts: ChangelogEmailOptions,
+): string {
+  const action = item.path
+    ? renderButton(buildLink(opts.appUrl, item.path), "Try it")
+    : "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;background-color:${BRAND_TINT};border-radius:12px;">
+    <tr>
+      <td style="padding:20px 22px;">
+        <p style="margin:0 0 6px;font-size:11px;line-height:16px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${BRAND};">Top pick this week</p>
+        <p style="margin:0;font-size:18px;line-height:26px;font-weight:700;color:${TEXT};">${escapeHtml(item.title)}</p>
+        <p style="margin:6px 0 0;font-size:14px;line-height:22px;color:${TEXT};">${escapeHtml(item.summary)}</p>
+        ${renderCardFooter(action, index, opts.voteUrl)}
+      </td>
+    </tr>
+  </table>`;
+}
+
+/** One changelog item as a card, in the same style as a digest notification row. */
+function renderChangelogCard(
+  { index, item }: IndexedChangelogItem,
+  opts: ChangelogEmailOptions,
+): string {
+  const action = item.path
+    ? `<a href="${escapeHtml(buildLink(opts.appUrl, item.path))}" style="font-size:13px;font-weight:600;color:${BRAND};text-decoration:none;">Try it &rarr;</a>`
+    : "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;background-color:${SURFACE};border-radius:10px;">
+    <tr>
+      <td style="padding:16px 18px;">
+        <p style="margin:0;font-size:15px;line-height:21px;font-weight:600;color:${TEXT};">${escapeHtml(item.title)}</p>
+        <p style="margin:4px 0 0;font-size:14px;line-height:20px;color:${MUTED};">${escapeHtml(item.summary)}</p>
+        ${renderCardFooter(action, index, opts.voteUrl)}
+      </td>
+    </tr>
+  </table>`;
+}
+
+/**
+ * Builds the weekly changelog email from a structured changelog: a stats line,
+ * the top pick, then one card per remaining item under its category heading.
+ * Shares the automation email shell so greeting, date and footer stay in step.
+ */
+export function buildChangelogEmailHtml(opts: ChangelogEmailOptions): string {
+  const topPick = changelogTopPick(opts.changelog);
+  const sections = changelogSections(opts.changelog).flatMap(
+    ({ category, items }) => {
+      const rest = items.filter(({ index }) => index !== topPick.index);
+      if (rest.length === 0) return [];
+      const cards = rest.map((entry) => renderChangelogCard(entry, opts));
+      return [
+        `<h2 style="margin:24px 0 12px;font-size:16px;line-height:22px;font-weight:700;color:${TEXT};">${escapeHtml(CHANGELOG_CATEGORIES[category].heading)}</h2>${cards.join("")}`,
+      ];
+    },
+  );
+
+  const contentHtml = `
+    <p style="margin:0 0 16px;font-size:14px;line-height:20px;font-weight:600;color:${TEXT};">This week: ${escapeHtml(changelogStatsLine(opts.changelog))}</p>
+    ${renderTopPick(topPick, opts)}
+    ${sections.join("")}
+  `;
+
+  return buildAutomationEmailHtml({
+    recipientName: opts.recipientName,
+    appUrl: opts.appUrl,
+    contentHtml,
+    publishedAt: opts.publishedAt,
+    heading: opts.heading,
+  });
+}
+
+/** The page a changelog vote link opens: a thank-you, or a notice that the item is gone. */
+export function buildChangelogVotePageHtml(opts: {
+  appUrl: string;
+  recorded: boolean;
+}): string {
+  const heading = opts.recorded
+    ? "Thanks for your feedback"
+    : "This update is no longer available";
+  const message = opts.recorded
+    ? "Your vote helps us decide what to improve next. To change it, click the other button in the same email."
+    : "We could not record your vote because this changelog entry no longer exists.";
+  const bodyHtml = `
+    <h1 style="margin:0 0 8px;font-size:20px;line-height:28px;font-weight:700;color:${TEXT};">${heading}</h1>
+    <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:${MUTED};">${message}</p>
+    ${renderButton(stripTrailingSlash(opts.appUrl), "Open the app")}
+  `;
+  return wrapEmailLayout({
+    title: heading,
+    bodyHtml,
+    appUrl: opts.appUrl,
+    footerText: "You opened a feedback link from the Eva weekly changelog email.",
   });
 }
 
@@ -251,7 +400,7 @@ export function buildAgentEmailHtml(opts: AgentEmailOptions): string {
     <h1 style="margin:0 0 20px;font-size:20px;line-height:28px;font-weight:700;color:${TEXT};">${escapeHtml(opts.subject)}</h1>
     <div style="font-size:14px;line-height:22px;color:${TEXT};">${opts.contentHtml}</div>
     <p style="margin:24px 0 0;">
-      <a href="${escapeHtml(stripTrailingSlash(opts.appUrl))}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#ffffff;background-color:${BRAND};border-radius:8px;text-decoration:none;">Open the app</a>
+      ${renderButton(stripTrailingSlash(opts.appUrl), "Open the app")}
     </p>
   `;
 

@@ -5,7 +5,17 @@ import { marked } from "marked";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
-import { buildAutomationEmailHtml } from "./emailTemplates";
+import {
+  buildAutomationEmailHtml,
+  buildChangelogEmailHtml,
+  type ChangelogVote,
+} from "./emailTemplates";
+import {
+  CHANGELOG_AUTOMATION_TITLE,
+  changelogVoteHmacMessage,
+  parseChangelog,
+} from "./_changelog/entry";
+import { hmacSha256Hex } from "./_shared/hmac";
 
 /** Reads a required environment variable, throwing a clear error when it is missing. */
 function getEnv(name: string): string {
@@ -14,6 +24,20 @@ function getEnv(name: string): string {
     throw new Error(`${name} is not set in the Convex environment`);
   }
   return value;
+}
+
+/** Builds the signed one-click vote link for one recipient of one changelog run. */
+async function changelogVoteUrlBuilder(
+  runId: string,
+  userId: string,
+): Promise<(itemIndex: number, vote: ChangelogVote) => string> {
+  const sig = await hmacSha256Hex(
+    getEnv("ENCRYPTION_KEY"),
+    changelogVoteHmacMessage(runId, userId),
+  );
+  const base = `${getEnv("CONVEX_SITE_URL")}/api/changelog/vote`;
+  return (itemIndex, vote) =>
+    `${base}?${new URLSearchParams({ run: runId, user: userId, item: String(itemIndex), vote, sig })}`;
 }
 
 /**
@@ -32,7 +56,13 @@ export const sendAutomationEmail = internalAction({
     if (!run) return null;
 
     const appUrl = getEnv("WEB_APP_URL");
-    const contentHtml = await marked.parse(run.content);
+    // The weekly changelog returns structured JSON and gets the card layout;
+    // every other automation (and legacy markdown changelogs) gets plain HTML.
+    const changelog =
+      run.automationTitle === CHANGELOG_AUTOMATION_TITLE
+        ? parseChangelog(run.content)
+        : null;
+    const contentHtml = changelog ? "" : await marked.parse(run.content);
     const recipients = await ctx.runQuery(
       internal.users.listEmailRecipients,
       {},
@@ -41,14 +71,23 @@ export const sendAutomationEmail = internalAction({
     let sent = 0;
     const failures: string[] = [];
     for (const recipient of recipients) {
-      const html = buildAutomationEmailHtml({
+      const shared = {
         recipientName: recipient.name,
         appUrl,
-        contentHtml,
         publishedAt: run.publishedAt,
         heading: run.automationTitle,
-      });
+      };
       try {
+        const html = changelog
+          ? buildChangelogEmailHtml({
+              ...shared,
+              changelog,
+              voteUrl: await changelogVoteUrlBuilder(
+                args.runId,
+                recipient.userId,
+              ),
+            })
+          : buildAutomationEmailHtml({ ...shared, contentHtml });
         await sendEmail({
           to: recipient.email,
           subject: `${run.automationTitle} #${run.runNumber}`,

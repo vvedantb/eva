@@ -14,6 +14,9 @@ import {
   parseRepoEvents,
 } from "./_automationEvents/events";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
+import { hmacSha256Hex } from "./_shared/hmac";
+import { changelogVoteHmacMessage } from "./_changelog/entry";
+import { buildChangelogVotePageHtml } from "./emailTemplates";
 
 const http = httpRouter();
 
@@ -55,18 +58,7 @@ function verifyDeployKey(request: Request): boolean {
 async function computeScopedHmac(message: string): Promise<string | null> {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return hmacSha256Hex(secret, message);
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -1076,6 +1068,56 @@ http.route({
   path: "/mcp",
   method: "DELETE",
   handler: mcpHandler,
+});
+
+const changelogVoteQuerySchema = z.object({
+  run: z.string().min(1),
+  user: z.string().min(1),
+  item: z.coerce.number().int().min(0),
+  vote: z.enum(["up", "down"]),
+  sig: z.string().min(1),
+});
+
+/**
+ * One-click 👍 / 👎 from the weekly changelog email. The signature covers the
+ * run and the recipient, so a link only votes as the user it was mailed to.
+ * An email link has to be a GET; a link scanner that prefetches it only
+ * overwrites that user's row, and the user's own later click wins.
+ */
+http.route({
+  path: "/api/changelog/vote",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const parsed = changelogVoteQuerySchema.safeParse(
+      Object.fromEntries(new URL(request.url).searchParams),
+    );
+    if (!parsed.success) {
+      return new Response("Invalid vote link", { status: 400 });
+    }
+    const { run, user, item, vote, sig } = parsed.data;
+    const expected = await computeScopedHmac(
+      changelogVoteHmacMessage(run, user),
+    );
+    const appUrl = process.env.WEB_APP_URL;
+    if (!expected || !appUrl) {
+      return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
+        status: 500,
+      });
+    }
+    if (!timingSafeEqual(sig, expected)) {
+      return new Response("Invalid vote signature", { status: 401 });
+    }
+    const recorded = await ctx.runMutation(internal.changelog.recordVote, {
+      runId: run,
+      userId: user,
+      itemIndex: item,
+      vote,
+    });
+    return new Response(buildChangelogVotePageHtml({ appUrl, recorded }), {
+      status: recorded ? 200 : 404,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }),
 });
 
 // Health check
