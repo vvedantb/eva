@@ -12,7 +12,9 @@ export {
   EASE_OUT,
   HERO,
   LEAVE,
+  MORPH,
   SETTLE,
+  SHARED,
   STAGGER,
   cueTransition,
 } from "./tokens";

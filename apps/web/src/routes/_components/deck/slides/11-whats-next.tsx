@@ -13,6 +13,8 @@ import {
   DUR,
   EASE,
   LEAVE,
+  MORPH,
+  SHARED,
   Sheen,
 } from "../_components/motion";
 import { MoF3NextSteps } from "./_parts/MoF3NextSteps";
@@ -153,17 +155,20 @@ export function Slide11WhatsNext() {
           </div>
 
           <Reveal step={1} from="right" delay={0.15} distance={40}>
-            <Card>
-              <CountRoll
-                value={43}
-                step={1}
-                delay={0.35}
-                className="text-6xl leading-none font-semibold"
-              />
-              <div className="mt-4 text-lg leading-snug text-pretty text-white/75">
-                finished bundles waiting for a human
-              </div>
-            </Card>
+            {/* The waiting 43 grow into the review board on the next slide. */}
+            <m.div layoutId={SHARED.review} transition={{ layout: MORPH }}>
+              <Card>
+                <CountRoll
+                  value={43}
+                  step={1}
+                  delay={0.35}
+                  className="text-6xl leading-none font-semibold"
+                />
+                <div className="mt-4 text-lg leading-snug text-pretty text-white/75">
+                  finished bundles waiting for a human
+                </div>
+              </Card>
+            </m.div>
           </Reveal>
 
           {/* The 43 in the bar and the 43 in the card are the same queue. */}

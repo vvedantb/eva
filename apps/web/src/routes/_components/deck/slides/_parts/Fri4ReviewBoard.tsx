@@ -7,7 +7,7 @@ import {
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
-import { DUR, EASE } from "../../_components/motion";
+import { DUR, EASE, MORPH, SHARED } from "../../_components/motion";
 
 /**
  * The quick-task board, drawn with the app's own row, badge and status tokens.
@@ -271,7 +271,10 @@ export function Fri4ReviewBoard() {
   const column = heroColumn(step);
 
   return (
-    <div
+    // Grows out of the "43 waiting" card on the slide before (see `SHARED`).
+    <m.div
+      layoutId={SHARED.review}
+      transition={{ layout: MORPH }}
       className={cn(
         appScheme,
         "relative overflow-hidden rounded-2xl bg-background ring-1 ring-white/10",
@@ -320,6 +323,6 @@ export function Fri4ReviewBoard() {
 
       <HeroCard />
       <Cursor dragging={step === 1} />
-    </div>
+    </m.div>
   );
 }

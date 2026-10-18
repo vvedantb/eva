@@ -132,6 +132,7 @@ const SLIDES: DeckSlide[] = [
     title: "All you see",
     Component: FridayAbstracted,
     steps: 2,
+    morph: true,
   },
   {
     id: "friday-b11-skills",
@@ -188,12 +189,14 @@ const SLIDES: DeckSlide[] = [
     title: "Jev inside Eva",
     Component: FridayJev,
     steps: 2,
+    morph: true,
   },
   {
     id: "friday-b21-jev-carepulse",
     title: "Jev inside CarePulse",
     Component: FridayJevCarePulse,
     steps: 2,
+    morph: true,
   },
 
   // ── Trust and reach: when it breaks, and everywhere it goes ─────────
@@ -241,6 +244,7 @@ const SLIDES: DeckSlide[] = [
     title: "Code review to live",
     Component: FridayPipeline,
     steps: 3,
+    morph: true,
   },
   {
     id: "10-code-reviews",

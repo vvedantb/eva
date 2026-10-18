@@ -45,14 +45,26 @@ interface DeckProps {
  * curve; the outgoing one falls back the other way in under half the time. No
  * animated `filter`: the Z push plus the `DeckWash` light carry the change.
  */
+/** What the slide variants need: which way the deck moved, and whether a shared element carries over. */
+interface SlideMotion {
+  dir: number;
+  morph: boolean;
+}
+
+/** A slide that continues an element from its neighbour: the stage holds still and fades. */
+const MORPH_FADE = { opacity: 0, x: 0, rotateY: 0, z: 0, scale: 1 };
+
 const slideVariants = {
-  enter: (dir: number) => ({
-    opacity: 0,
-    x: dir * 60,
-    rotateY: dir * 10,
-    z: -320,
-    scale: 0.97,
-  }),
+  enter: ({ dir, morph }: SlideMotion) =>
+    morph
+      ? MORPH_FADE
+      : {
+          opacity: 0,
+          x: dir * 60,
+          rotateY: dir * 10,
+          z: -320,
+          scale: 0.97,
+        },
   center: {
     opacity: 1,
     x: 0,
@@ -65,14 +77,17 @@ const slideVariants = {
       opacity: { duration: 0.4, ease: EASE.out, delay: 0.06 },
     },
   },
-  exit: (dir: number) => ({
-    opacity: 0,
-    x: dir * -40,
-    rotateY: dir * -6,
-    z: -160,
-    scale: 0.985,
-    transition: { duration: 0.34, ease: EASE.in },
-  }),
+  exit: ({ dir, morph }: SlideMotion) =>
+    morph
+      ? { ...MORPH_FADE, transition: { duration: 0.45, ease: EASE.out } }
+      : {
+          opacity: 0,
+          x: dir * -40,
+          rotateY: dir * -6,
+          z: -160,
+          scale: 0.985,
+          transition: { duration: 0.34, ease: EASE.in },
+        },
 };
 
 export function Deck({
@@ -97,6 +112,13 @@ export function Deck({
 
   const { entry, step, direction, total } = nav;
   const theme = entry.theme ?? "dark";
+  // Moving forward onto a morph slide, or back off one, keeps the stage still
+  // so its shared element can glide from the neighbouring slide.
+  const index = slides.indexOf(entry);
+  const slideMotion: SlideMotion = {
+    dir: direction,
+    morph: Boolean(direction > 0 ? entry.morph : slides[index + 1]?.morph),
+  };
 
   // A follower is a passenger: every way of moving the deck by hand is taken
   // away in one place, rather than guarded at each call site. `applyRemote` is
@@ -208,10 +230,10 @@ export function Deck({
         >
           {/* No `initial={false}`: it propagates to every descendant and would
               freeze mount-time animations on a direct `?slide=n` load. */}
-          <AnimatePresence mode="popLayout" custom={direction}>
+          <AnimatePresence mode="popLayout" custom={slideMotion}>
             <m.div
               key={share.effectiveSlide}
-              custom={direction}
+              custom={slideMotion}
               variants={slideVariants}
               initial="enter"
               animate="center"

@@ -19,7 +19,14 @@ import {
 } from "@eva/ui";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
 import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
-import { DUR, EASE, SETTLE, Sheen } from "../../_components/motion";
+import {
+  DUR,
+  EASE,
+  MORPH,
+  SETTLE,
+  SHARED,
+  Sheen,
+} from "../../_components/motion";
 
 const FABLE: AIModel = "claude:claude-fable-5-1";
 
@@ -67,12 +74,17 @@ function ComposerBar({ model }: { model: AIModel }) {
   const option = findModelOption(model, AI_MODEL_OPTIONS);
   return (
     <div className="w-full">
-      <div className="flex items-center gap-2 rounded-t-surface rounded-b-md bg-card px-3 py-2.5">
+      {/* The prompt box carries on to the next slide as "You" (see `SHARED`). */}
+      <m.div
+        layoutId={SHARED.prompt}
+        transition={{ layout: MORPH }}
+        className="flex items-center gap-2 rounded-t-surface rounded-b-md bg-card px-3 py-2.5"
+      >
         <span className="flex-1 text-sm text-muted-foreground">
           Ask Eva to build something…
         </span>
         <PromptInputSubmit />
-      </div>
+      </m.div>
       <div className="mx-auto flex w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
         <span className="ml-auto flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground">
           <ProviderIcon provider={option?.provider ?? "claude"} size={14} />

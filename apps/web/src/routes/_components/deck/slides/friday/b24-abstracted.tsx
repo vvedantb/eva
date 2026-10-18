@@ -26,7 +26,9 @@ import {
   DUR,
   DrawPath,
   EASE,
+  MORPH,
   Pulse,
+  SHARED,
   Spotlight,
   cueTransition,
 } from "../../_components/motion";
@@ -170,7 +172,9 @@ function PromptCard() {
   const appScheme = useAppScheme();
   const clear = useDeckStep() >= CLEAR;
   return (
+    // The Simple Mode prompt box from the slide before grows into this card.
     <m.div
+      layoutId={SHARED.prompt}
       className={cn(
         appScheme,
         "absolute flex flex-col overflow-hidden rounded-2xl bg-background p-5 ring-1 ring-white/10",
@@ -181,9 +185,9 @@ function PromptCard() {
         width: CARD_W,
         height: CARD_H,
       }}
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0, scale: clear ? 1.04 : 1 }}
-      transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.2 }}
+      initial={false}
+      animate={{ scale: clear ? 1.04 : 1 }}
+      transition={{ duration: DUR.hero, ease: EASE.expo, layout: MORPH }}
     >
       <div className="text-xs font-medium text-muted-foreground">You</div>
       <div className="mt-auto rounded-2xl bg-card px-4 py-3 text-base leading-snug text-foreground ring-1 ring-border">

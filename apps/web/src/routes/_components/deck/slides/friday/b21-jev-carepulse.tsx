@@ -21,7 +21,9 @@ import type { CameraShot } from "../../_components/DeckCamera";
 import {
   DUR,
   EASE,
+  MORPH,
   Pulse,
+  SHARED,
   Spotlight,
   cueTransition,
 } from "../../_components/motion";
@@ -275,17 +277,16 @@ function Question() {
       className="absolute top-0 flex flex-col gap-4"
       style={{ left: FORM_W + 40, width: W - FORM_W - 40 }}
     >
+      {/* Jev's tile from the slide before grows into this card. */}
       <m.div
+        layoutId={SHARED.jev}
         className="rounded-[22px] p-5 ring-1 ring-white/10 ring-inset"
         style={{
           background: `linear-gradient(145deg, ${BRAND.purple}30, ${BRAND.blue}22)`,
         }}
-        initial={{ opacity: 0, y: 14 }}
-        animate={{
-          opacity: guarded ? 0.5 : asked ? 1 : 0.7,
-          y: 0,
-        }}
-        transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.3 }}
+        initial={false}
+        animate={{ opacity: guarded ? 0.5 : asked ? 1 : 0.7 }}
+        transition={{ duration: DUR.slow, ease: EASE.out, layout: MORPH }}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-white/70">
           <Pulse color={BRAND.blue} size={7} step={TYPE} delay={0.2} />

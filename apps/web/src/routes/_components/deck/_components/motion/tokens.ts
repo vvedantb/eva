@@ -75,6 +75,26 @@ export const HERO: Transition = { duration: DUR.hero, ease: EASE.expo };
 /** Settle: critically damped spring, for anything that lands in place. */
 export const SETTLE: Transition = { type: "spring", bounce: 0, duration: 0.6 };
 
+/**
+ * A shared element gliding between two slides: long enough to follow, settled
+ * without overshoot so text inside the box lands still.
+ */
+export const MORPH: Transition = { type: "spring", bounce: 0, duration: 0.9 };
+
+/**
+ * `layoutId`s for elements that carry over from one slide to the next. One
+ * map, so a pair can only meet if both slides name the same entry.
+ */
+export const SHARED: {
+  readonly jev: string;
+  readonly prompt: string;
+  readonly review: string;
+} = {
+  jev: "deck-shared-jev",
+  prompt: "deck-shared-prompt",
+  review: "deck-shared-review",
+};
+
 /** Leaving is quieter than arriving: short, no delay. */
 export const LEAVE: Transition = { duration: DUR.fast, ease: EASE.out };
 

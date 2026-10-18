@@ -24,6 +24,8 @@ import {
   BRAND_GRADIENT,
   DUR,
   EASE,
+  MORPH,
+  SHARED,
   Spotlight,
   cueTransition,
 } from "../../_components/motion";
@@ -136,20 +138,24 @@ function Panel({
   label,
   focused,
   dimmed,
+  layoutId,
   children,
 }: {
   label: string;
   focused: boolean;
   dimmed: boolean;
+  /** Carries the panel on to the next slide (see `SHARED`). */
+  layoutId?: string;
   children: ReactNode;
 }) {
   return (
     <m.div
+      layoutId={layoutId}
       className="flex h-[340px] flex-col rounded-[24px] bg-white/[0.05] p-6 ring-1 ring-white/10 ring-inset"
       style={{ width: PANEL_W }}
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: dimmed ? 0.4 : focused ? 1 : 0.7, y: 0 }}
-      transition={{ duration: DUR.slow, ease: EASE.out }}
+      transition={{ duration: DUR.slow, ease: EASE.out, layout: MORPH }}
     >
       <div className="text-sm font-medium tracking-wide text-white/50">
         {label}
@@ -259,7 +265,12 @@ function Judge() {
   const at = step === SCORE ? 0.35 : 0;
 
   return (
-    <Panel label="Jev" focused={step === SCORE} dimmed={step >= RECIPE}>
+    <Panel
+      label="Jev"
+      focused={step === SCORE}
+      dimmed={step >= RECIPE}
+      layoutId={SHARED.jev}
+    >
       <m.div
         className="mt-5 w-fit rounded-2xl px-4 py-2.5 text-base text-white ring-1 ring-inset"
         style={{ background: `${BRAND.purple}26`, borderColor: BRAND.purple }}

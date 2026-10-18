@@ -27,7 +27,9 @@ import {
   DUR,
   DrawPath,
   EASE,
+  MORPH,
   Pulse,
+  SHARED,
   Spotlight,
   cueTransition,
 } from "../../_components/motion";
@@ -111,7 +113,9 @@ const toCard = (index: number) => {
 function JevNode() {
   const step = useDeckStep();
   return (
+    // Arrives from the Jev panel on the slide before, so it starts visible.
     <m.div
+      layoutId={SHARED.jev}
       className="absolute flex items-center justify-center rounded-[28px] ring-1 ring-white/15 ring-inset"
       style={{
         left: NODE.x,
@@ -120,9 +124,9 @@ function JevNode() {
         height: NODE.size,
         background: `linear-gradient(145deg, ${BRAND.purple}40, ${BRAND.blue}33)`,
       }}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: step >= FEATURES_STEP ? 1.04 : 1 }}
-      transition={{ type: "spring", bounce: 0, duration: 0.8, delay: 0.4 }}
+      initial={false}
+      animate={{ scale: step >= FEATURES_STEP ? 1.04 : 1 }}
+      transition={{ type: "spring", bounce: 0, duration: 0.8, layout: MORPH }}
     >
       <span className="absolute top-3.5 right-3.5">
         <Pulse color={BRAND.blue} size={7} step={FEATURES_STEP} delay={0.3} />

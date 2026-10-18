@@ -11,4 +11,10 @@ export interface DeckSlide {
   steps: number;
   /** The surface this slide is painted on. Dark when absent. */
   theme?: DeckTheme;
+  /**
+   * Continues an element from the slide before it (a shared `layoutId`). The
+   * stage then cross-fades between the two slides instead of flying, so the
+   * shared element can glide from one place to the other on a still stage.
+   */
+  morph?: boolean;
 }
