@@ -1262,18 +1262,26 @@ class VercelSandboxClient implements SandboxClient {
 
   /**
    * Regions the create's snapshot lives in, for {@link sandboxPlacement}.
+   * A fork restores from the source sandbox's current snapshot, so it follows
+   * that one — a source made before the move to cdg1 only forks in iad1.
    * `undefined` when there is no snapshot to follow or the lookup failed.
    */
   private async snapshotRegions(
     params: SandboxCreateParams,
   ): Promise<SandboxRegion[] | undefined> {
-    if (params.forkFrom || !params.snapshot) return undefined;
     try {
+      const snapshotId = params.forkFrom
+        ? (
+            await Sandbox.get({
+              ...this.creds,
+              name: params.forkFrom,
+              resume: false,
+            })
+          ).currentSnapshotId
+        : params.snapshot;
+      if (!snapshotId) return undefined;
       const { Snapshot } = await import("@vercel/sandbox");
-      const { regions } = await Snapshot.get({
-        ...this.creds,
-        snapshotId: params.snapshot,
-      });
+      const { regions } = await Snapshot.get({ ...this.creds, snapshotId });
       return regions;
     } catch {
       return undefined;
