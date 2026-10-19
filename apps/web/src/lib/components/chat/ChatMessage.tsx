@@ -118,6 +118,11 @@ interface ChatMessageProps {
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
+  /**
+   * False in simple view: drops the assistant meta row (model, copy, fork,
+   * time · duration). Copy and fork stay on the right-click menu.
+   */
+  showTurnMeta?: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: (messageId: string, expanded: boolean) => void;
   /** True when this user turn belongs to a teammate (left-aligned). */
@@ -193,6 +198,7 @@ export const ChatMessage = memo(function ChatMessage({
   repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
+  showTurnMeta = true,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   isOtherUser = false,
@@ -540,7 +546,8 @@ export const ChatMessage = memo(function ChatMessage({
                 {belowContent && !panelTabs ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}
-                {turnModel || copyPlain || rowActions.length > 0 ? (
+                {showTurnMeta &&
+                (turnModel || copyPlain || rowActions.length > 0) ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
                       <MessageModelIcon

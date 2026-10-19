@@ -832,6 +832,7 @@ function ChatBodyInner({
           repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
+          showTurnMeta={!simpleView}
           {...(expandedByMessageId[message._id] !== undefined
             ? { changedFilesExpanded: expandedByMessageId[message._id] }
             : {})}
