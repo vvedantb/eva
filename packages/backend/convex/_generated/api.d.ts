@@ -112,6 +112,7 @@ import type * as _github_prDiff from "../_github/prDiff.js";
 import type * as _github_prDiffFallback from "../_github/prDiffFallback.js";
 import type * as _github_prErrors from "../_github/prErrors.js";
 import type * as _github_prFlow from "../_github/prFlow.js";
+import type * as _github_prLabels from "../_github/prLabels.js";
 import type * as _github_prLifecycleActions from "../_github/prLifecycleActions.js";
 import type * as _github_prMeta from "../_github/prMeta.js";
 import type * as _github_prOverview from "../_github/prOverview.js";
@@ -662,6 +663,7 @@ declare const fullApi: ApiFromModules<{
   "_github/prDiffFallback": typeof _github_prDiffFallback;
   "_github/prErrors": typeof _github_prErrors;
   "_github/prFlow": typeof _github_prFlow;
+  "_github/prLabels": typeof _github_prLabels;
   "_github/prLifecycleActions": typeof _github_prLifecycleActions;
   "_github/prMeta": typeof _github_prMeta;
   "_github/prOverview": typeof _github_prOverview;
