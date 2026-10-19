@@ -119,8 +119,9 @@ interface ChatMessageProps {
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
   /**
-   * False in simple view: drops the assistant meta row (model, copy, fork,
-   * time · duration). Copy and fork stay on the right-click menu.
+   * False in simple view: drops the meta row under every turn (user: time,
+   * copy, fork; assistant: model, copy, fork, time · duration). Copy and fork
+   * stay on the right-click menu.
    */
   showTurnMeta?: boolean;
   /** The viewer's `scopeCheck` experimental flag. */
@@ -424,13 +425,15 @@ export const ChatMessage = memo(function ChatMessage({
                     {artifacts}
                   </div>
                 ) : null}
-                <UserMessageMeta
-                  align={isOtherUser ? "start" : "end"}
-                  copyPlain={copyPlain}
-                  actions={forkAction ? [forkAction] : []}
-                  timestamp={message.timestamp}
-                  className={isOtherUser ? "pl-6" : undefined}
-                />
+                {showTurnMeta ? (
+                  <UserMessageMeta
+                    align={isOtherUser ? "start" : "end"}
+                    copyPlain={copyPlain}
+                    actions={forkAction ? [forkAction] : []}
+                    timestamp={message.timestamp}
+                    className={isOtherUser ? "pl-6" : undefined}
+                  />
+                ) : null}
               </div>
             ) : (
               <>
