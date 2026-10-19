@@ -16,3 +16,4 @@ Rules:
 - Never commit `.redline/`. It holds screenshots and the data snapshot.
 - Screenshots show local data. Do not post them outside the PR or this chat.
 - Do not run it while the Preview Console dev server is compiling for the first time: two Vite builds at once can run the VM out of memory.
+- If posting fails with `401 Bad credentials`, the sandbox GitHub token expired (they last about an hour). Rerun with a fresh one: `GH_TOKEN=$(printf 'protocol=https\nhost=github.com\npath=vvedantb/eva.git\n\n' | git credential fill | sed -n 's/^password=//p') pnpm --filter @eva/web redline:pr`.
