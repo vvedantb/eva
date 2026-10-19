@@ -10,5 +10,13 @@
   ],
   "hide": [
     "[data-agentation-root]"
+  ],
+  "dataSnapshot": {
+    "file": ".redline/convex-snapshot.zip",
+    "convexDir": "../../packages/backend"
+  },
+  "exclude": [
+    "/agent-callback",
+    "/preview-auth"
   ]
 }
