@@ -11,6 +11,7 @@ import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
 import type { Doc, Id } from "../_generated/dataModel";
 import { sessionRepoPullRequest } from "../_pullRequests/store";
+import { sessionPullRequestLabels } from "./prLabels";
 
 /**
  * Promotes a session's draft PR to ready-for-review. Called when the user
@@ -188,10 +189,6 @@ export const createDraftSessionPr = internalAction({
     });
     if (!repo) return null;
 
-    const appLabel: string | undefined = repo.rootDirectory
-      ? repo.rootDirectory.split("/").pop()
-      : undefined;
-
     // The reviewer-facing description is generated from the diff after the PR
     // exists (`generatePrDescription`); the session summary is only included
     // when the user has already produced one.
@@ -234,7 +231,7 @@ export const createDraftSessionPr = internalAction({
         baseBranch,
         title: session.title,
         body,
-        labels: ["eva", "session", "draft", ...(appLabel ? [appLabel] : [])],
+        labels: sessionPullRequestLabels(repo.rootDirectory),
       });
     } catch (error) {
       if (isBranchNotAheadError(error)) {
@@ -322,7 +319,7 @@ export const createDraftSessionRepoPr = internalAction({
         baseBranch: linkedRepo.baseBranch,
         title: session.title,
         body,
-        labels: ["eva", "session", "draft"],
+        labels: sessionPullRequestLabels(undefined),
       });
     } catch (error) {
       if (isBranchNotAheadError(error)) {

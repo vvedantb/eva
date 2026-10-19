@@ -1,6 +1,7 @@
 "use node";
 
 import type { getInstallationOctokit } from "../githubAuth";
+import { hasLegacyDraftLabel, LEGACY_DRAFT_LABEL } from "./prLabels";
 
 type InstallationOctokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
 
@@ -36,6 +37,30 @@ export async function markPullRequestReadyForReview(
   nodeId: string,
 ): Promise<void> {
   await octokit.graphql(MARK_READY_MUTATION, { id: nodeId });
+}
+
+/**
+ * Removes the legacy `draft` label from a ready PR, if it has one.
+ * Best-effort: a failure is logged and never thrown.
+ */
+export async function removeLegacyDraftLabel(
+  octokit: InstallationOctokit,
+  target: PullRequestTarget,
+  pr: { labels: { name?: string }[] },
+): Promise<void> {
+  if (!hasLegacyDraftLabel(pr.labels)) return;
+  try {
+    await octokit.rest.issues.removeLabel({
+      owner: target.owner,
+      repo: target.repo,
+      issue_number: target.pull_number,
+      name: LEGACY_DRAFT_LABEL,
+    });
+  } catch (error) {
+    console.error(
+      `[github] Failed to remove legacy draft label from PR #${target.pull_number} (${target.owner}/${target.repo}): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /**
