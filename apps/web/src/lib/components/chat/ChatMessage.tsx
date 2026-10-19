@@ -118,6 +118,14 @@ interface ChatMessageProps {
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
+  /**
+   * False in simple view: drops the meta row under every turn (user: time,
+   * copy, fork; assistant: model, copy, fork, time · duration). Copy and fork
+   * stay on the right-click menu.
+   */
+  showTurnMeta?: boolean;
+  /** The viewer's `scopeCheck` experimental flag. */
+  showScopeCheck?: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: (messageId: string, expanded: boolean) => void;
   /** True when this user turn belongs to a teammate (left-aligned). */
@@ -193,6 +201,8 @@ export const ChatMessage = memo(function ChatMessage({
   repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
+  showTurnMeta = true,
+  showScopeCheck = false,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   isOtherUser = false,
@@ -415,13 +425,15 @@ export const ChatMessage = memo(function ChatMessage({
                     {artifacts}
                   </div>
                 ) : null}
-                <UserMessageMeta
-                  align={isOtherUser ? "start" : "end"}
-                  copyPlain={copyPlain}
-                  actions={forkAction ? [forkAction] : []}
-                  timestamp={message.timestamp}
-                  className={isOtherUser ? "pl-6" : undefined}
-                />
+                {showTurnMeta ? (
+                  <UserMessageMeta
+                    align={isOtherUser ? "start" : "end"}
+                    copyPlain={copyPlain}
+                    actions={forkAction ? [forkAction] : []}
+                    timestamp={message.timestamp}
+                    className={isOtherUser ? "pl-6" : undefined}
+                  />
+                ) : null}
               </div>
             ) : (
               <>
@@ -525,7 +537,7 @@ export const ChatMessage = memo(function ChatMessage({
                     reader who needs it. The hover card's per-hunk rows only
                     link out when the diff surface exists — simple view bounces
                     away from that tab, so they degrade to plain rows there. */}
-                {message.scopeCheck ? (
+                {showScopeCheck && message.scopeCheck ? (
                   <div className="mt-1">
                     <ScopeCheckChip
                       check={message.scopeCheck}
@@ -540,7 +552,8 @@ export const ChatMessage = memo(function ChatMessage({
                 {belowContent && !panelTabs ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}
-                {turnModel || copyPlain || rowActions.length > 0 ? (
+                {showTurnMeta &&
+                (turnModel || copyPlain || rowActions.length > 0) ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
                       <MessageModelIcon

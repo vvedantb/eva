@@ -7,6 +7,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 
 /** Enough history to reach the user message behind a long agent turn. */
 const RECENT_MESSAGE_LIMIT = 60;
@@ -41,7 +42,7 @@ async function resolveRepoId(
 /**
  * The turn's checkpoint shas, its repo, the prompt it answered and the reply it
  * gave — or null when there is nothing to judge (no code changed, no prompt to
- * judge against, or a verdict already landed).
+ * judge against, a verdict already landed, or the asker has the flag off).
  *
  * The reply is what the mention question reads: a change the user was told
  * about is reviewable, one they were not is a surprise in production.
@@ -84,6 +85,10 @@ export const getTurnContext = internalQuery({
       .slice(index + 1)
       .find((row) => row.role === "user" && row.isSystemAlert !== true);
     if (!prompt) return null;
+    // Opt-in per user (settings → Experimental): off means no Jev spend.
+    const asker =
+      prompt.userId === undefined ? null : await ctx.db.get(prompt.userId);
+    if (!resolveExperimentalFlags(asker).scopeCheck) return null;
 
     return {
       repoId,
