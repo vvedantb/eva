@@ -106,6 +106,11 @@ import {
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
+import {
+  ChatLinkedMessageScroll,
+  useLinkedMessageId,
+} from "@/lib/components/chat/messageLink";
+
 export type { ChatBodyMessage };
 
 /**
@@ -581,10 +586,25 @@ function ChatBodyInner({
     pinnedIndex >= 0
       ? pinnedIndex
       : findTurnWindowStart(displayMessages, TRANSCRIPT_TURN_WINDOW);
-  const windowStart =
-    newBoundaryIndex >= 0
-      ? Math.min(baseWindowStart, newBoundaryIndex)
-      : baseWindowStart;
+  // A shared message link (`?message=<id>`) opens the chat at that message.
+  // Only the chat on screen follows it: hidden cached shells read the same URL.
+  const linkedParam = useLinkedMessageId();
+  const linkedIndex =
+    linkedParam === null || !isRouteActive
+      ? -1
+      : displayMessages.findIndex((message) => message._id === linkedParam);
+  const linkedMessageId =
+    linkedIndex >= 0 ? displayMessages[linkedIndex]?._id : undefined;
+  const windowStart = Math.min(
+    baseWindowStart,
+    ...[
+      newBoundaryIndex,
+      // The linked row's whole turn, so it does not open mid-turn.
+      linkedIndex >= 0
+        ? findTurnWindowStart(displayMessages, 1, linkedIndex + 1)
+        : -1,
+    ].filter((index) => index >= 0),
+  );
   const windowFirstId = displayMessages[windowStart]?._id;
   // Pinning during render is React's "adjust state when a prop changes"
   // pattern: it re-renders before commit, and settles once the pin matches.
@@ -864,6 +884,7 @@ function ChatBodyInner({
           }
           precedingUser={precedingUser}
           citeHighlight={citations?.highlightedMessageId === message._id}
+          linkHighlight={message._id === linkedMessageId}
           onFork={
             onForkTranscript && canForkMessage(message)
               ? setForkThroughId
@@ -968,6 +989,14 @@ function ChatBodyInner({
           />
         ) : null}
         <ConversationScrollButton resetKey={conversationId} />
+        {/* Mounted with the backlog, so a linked row above the last turn is
+            already in the DOM when this scrolls to it. */}
+        {backlogReady && linkedMessageId !== undefined ? (
+          <ChatLinkedMessageScroll
+            key={linkedMessageId}
+            messageId={linkedMessageId}
+          />
+        ) : null}
         {/* Mounted with the backlog: the rail resolves its ticks by querying
             `[data-message-id]` from an effect keyed on the (memoised) tick
             array, so binding it before those rows exist would observe nothing
