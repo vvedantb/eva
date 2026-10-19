@@ -478,6 +478,10 @@ export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
 // rather than pushes — going back should leave the page, not the highlight.
 export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 
+// The chat message a shared link points at (`?message=<id>`). Written only
+// into copied links, so it replaces rather than pushes, like `?comment`.
+export const messageLinkParser = parseAsString.withOptions(searchOptions);
+
 const pullRequestListStates = ["open", "closed", "all"] as const;
 export type PullRequestListState = (typeof pullRequestListStates)[number];
 export const pullRequestListStateParser = parseAsStringLiteral(

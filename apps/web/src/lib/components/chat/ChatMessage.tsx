@@ -43,7 +43,8 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
-import { IconGitFork } from "@tabler/icons-react";
+import { IconGitFork, IconLink } from "@tabler/icons-react";
+import { copyMessageLink } from "@/lib/components/chat/messageLink";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type {
@@ -161,6 +162,8 @@ interface ChatMessageProps {
   turnCheckpoint?: TurnCheckpointContext;
   /** Flash the row after a citation chip jumps here. */
   citeHighlight?: boolean;
+  /** Flash the row a shared message link (`?message=<id>`) opened at. */
+  linkHighlight?: boolean;
   /**
    * Sessions: start a new chat with the transcript through this message. Takes
    * the id so the parent can pass one stable handler to every row — a per-row
@@ -220,6 +223,7 @@ export const ChatMessage = memo(function ChatMessage({
   sandboxRunning,
   turnCheckpoint,
   citeHighlight = false,
+  linkHighlight = false,
   onFork,
   onRetryTurn,
   precedingUser,
@@ -270,7 +274,19 @@ export const ChatMessage = memo(function ChatMessage({
         onClick: () => onFork(message._id),
       }
     : undefined;
-  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
+  // A reply still streaming has nothing worth linking to yet.
+  const linkAction: ChatMessageActionItem | undefined = isStreamingPlaceholder
+    ? undefined
+    : {
+        key: "copy-link",
+        label: "Copy link",
+        icon: <IconLink className="size-4" />,
+        onClick: () => copyMessageLink(message._id),
+      };
+  const userActions = [linkAction, forkAction].filter(
+    (action): action is ChatMessageActionItem => action !== undefined,
+  );
+  const rowActions = [...userActions, ...checkpoint.items];
 
   // Two MCP provenances, never both on one row: a child chat shows the turns
   // posted from outside the composer, Eva shows the wake-ups its children fired.
@@ -338,9 +354,10 @@ export const ChatMessage = memo(function ChatMessage({
           initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={motionFast}
-          className={
-            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
-          }
+          className={cn(
+            citeHighlight && "rounded-md ring-2 ring-primary/50",
+            linkHighlight && "rounded-md t-anchor-flash",
+          )}
         >
           <AIMessage
             from={message.role}
@@ -429,7 +446,7 @@ export const ChatMessage = memo(function ChatMessage({
                   <UserMessageMeta
                     align={isOtherUser ? "start" : "end"}
                     copyPlain={copyPlain}
-                    actions={forkAction ? [forkAction] : []}
+                    actions={userActions}
                     timestamp={message.timestamp}
                     className={isOtherUser ? "pl-6" : undefined}
                   />
