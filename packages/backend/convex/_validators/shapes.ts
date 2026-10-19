@@ -11,6 +11,26 @@ import {
   roleValidator,
 } from "./enums";
 
+/**
+ * One sandbox owner contract shared by view state, PTYs, panes, and runtime
+ * APIs. A sandbox belongs to a session, a quick task, or a project, and the
+ * backend resolves the sandbox and repo from whichever is provided.
+ */
+export const sandboxOwnerValidator = v.union(
+  v.object({
+    kind: v.literal("session"),
+    sessionId: v.id("sessions"),
+  }),
+  v.object({
+    kind: v.literal("task"),
+    taskId: v.id("agentTasks"),
+  }),
+  v.object({
+    kind: v.literal("project"),
+    projectId: v.id("projects"),
+  }),
+);
+
 /** Git HEAD of one checked-out repo, keyed by its sandbox path. */
 export const repoShaValidator = v.object({
   path: v.string(),

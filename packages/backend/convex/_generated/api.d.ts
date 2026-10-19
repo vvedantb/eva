@@ -359,6 +359,8 @@ import type * as _validators_personalisation from "../_validators/personalisatio
 import type * as _validators_shapes from "../_validators/shapes.js";
 import type * as _validators_shortcuts from "../_validators/shortcuts.js";
 import type * as _validators_tableFields from "../_validators/tableFields.js";
+import type * as _wakeups_rules from "../_wakeups/rules.js";
+import type * as _wakeups_wakeups from "../_wakeups/wakeups.js";
 import type * as agentRuns from "../agentRuns.js";
 import type * as agentTaskChatWorkflow from "../agentTaskChatWorkflow.js";
 import type * as agentTasks from "../agentTasks.js";
@@ -909,6 +911,8 @@ declare const fullApi: ApiFromModules<{
   "_validators/shapes": typeof _validators_shapes;
   "_validators/shortcuts": typeof _validators_shortcuts;
   "_validators/tableFields": typeof _validators_tableFields;
+  "_wakeups/rules": typeof _wakeups_rules;
+  "_wakeups/wakeups": typeof _wakeups_wakeups;
   agentRuns: typeof agentRuns;
   agentTaskChatWorkflow: typeof agentTaskChatWorkflow;
   agentTasks: typeof agentTasks;

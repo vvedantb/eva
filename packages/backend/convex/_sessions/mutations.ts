@@ -25,15 +25,12 @@ import {
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
-import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+import { scheduleSessionSandboxGraceDelete } from "../sandboxCleanup";
 import {
   closeLivePullRequests,
   findPrimaryPullRequest,
-  reopenArchivedPullRequests,
 } from "../_pullRequests/store";
+import { unarchiveSession } from "./prArchive";
 import { composerTraitFields } from "../_shared/composerTraits";
 import {
   assertValidRepoGroupMembers,
@@ -503,8 +500,7 @@ export const archive = authMutation({
   },
 });
 
-/** Unarchives a session, restoring it to the active list.
- * Reopens a PR Eva closed on archive, as draft or ready to match that state. */
+/** Unarchives a session, restoring it to the active list. */
 export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
@@ -513,13 +509,7 @@ export const unarchive = authMutation({
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-
-    await reopenArchivedPullRequests(ctx, {
-      kind: "session",
-      sessionId: args.id,
-    });
-    await ctx.db.patch(args.id, { archived: false });
-    await cancelSessionSandboxGraceDelete(ctx, args.id);
+    await unarchiveSession(ctx, args.id);
     return null;
   },
 });

@@ -17,6 +17,7 @@ import {
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { scheduleTaskSandboxGraceDelete } from "./sandboxCleanup";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
+import { armMergeWakeups, dropMergeWakeups } from "./_wakeups/wakeups";
 import {
   allPullRequestsTerminal,
   derivePrStateFromEvent,
@@ -87,6 +88,11 @@ export const handlePullRequestEvent = internalMutation({
       if (!row) return null;
     }
     if (nextState === null || nextState === previousState) return null;
+
+    // Chat wake-ups waiting on this PR. A tip-copy false merge is caught at
+    // fire time: the detached row no longer reads as merged.
+    if (nextState === "merged") await armMergeWakeups(ctx, row.prUrl);
+    if (nextState === "closed") await dropMergeWakeups(ctx, row.prUrl);
 
     const owner = row.owner;
     if (owner.kind === "session") {

@@ -16,6 +16,7 @@ import {
   agentTaskFields,
   agentRunFields,
   pullRequestFields,
+  chatWakeupFields,
   sessionFields,
   sessionRepoFields,
   sessionGroupFields,
@@ -150,6 +151,13 @@ const schema = defineSchema({
     ])
     // Watched PRs by head branch: a commit status there names no PR.
     .index("by_head_and_watch", ["headBranch", "watch.startedAt"]),
+
+  chatWakeups: defineTable(chatWakeupFields)
+    .index("by_session", ["owner.sessionId"])
+    .index("by_task", ["owner.taskId"])
+    .index("by_project", ["owner.projectId"])
+    // Wakes waiting on a PR: its merge arms them, its close drops them.
+    .index("by_pr_url_and_status", ["trigger.prUrl", "status"]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),
