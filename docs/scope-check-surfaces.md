@@ -22,6 +22,8 @@ Flow: `scheduleScopeCheck` (`_scopeCheck/mutations.ts:31`) → `scopeCheck.ts` `
 
 **Why `mentioned` exists.** The motivating miss (carepulse-ts, trophy icon, PR #1889) was not caught by scope alone: the change was unrequested *and* unreported. An unrequested change the reply names is a decision a reviewer can accept or reject; an unnamed one reaches production unseen. An absent `mentioned` means the question went unanswered — never "the reply stayed silent".
 
+Opt-in per user: the `scopeCheck` experimental flag (Settings → Experimental). `getTurnContext` returns null unless the prompting user has it on, so no Jev spend; `ChatBody` hides the chip unless the viewer has it on.
+
 Every failure path leaves `scopeCheck` absent and the chip simply does not render (`scopeCheck.ts:8-10`, `_scopeCheck/mutations.ts`).
 
 ## Where the verdict goes

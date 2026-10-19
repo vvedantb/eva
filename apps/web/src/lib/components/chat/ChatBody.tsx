@@ -404,6 +404,9 @@ function ChatBodyInner({
   // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
+  // Experimental opt-in; off hides verdicts already stored on old turns too.
+  const showScopeCheck =
+    useQuery(api.auth.getExperimentalFlags)?.scopeCheck === true;
 
   // Composer predictions read the chat only while it waits on the user and is
   // on screen — hidden cached shells must not each spend a model call.
@@ -832,6 +835,8 @@ function ChatBodyInner({
           repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
+          showTurnMeta={!simpleView}
+          showScopeCheck={showScopeCheck}
           {...(expandedByMessageId[message._id] !== undefined
             ? { changedFilesExpanded: expandedByMessageId[message._id] }
             : {})}
