@@ -17,6 +17,7 @@ import {
   IconListCheck,
   IconInfoCircle,
   IconAnchor,
+  IconSteeringWheel,
 } from "@tabler/icons-react";
 import { CircleSpinner } from "../ui/spinner";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -74,7 +75,9 @@ export interface ActivityStep {
     | "tool"
     | "notice"
     | "hook"
-    | "status";
+    | "status"
+    /** A queued user message the agent took into this live turn (Steer). */
+    | "steer";
   label: string;
   detail?: string;
   /** Full, unshortened path for file-type steps. Powers the chat File Viewer. */
@@ -157,6 +160,7 @@ export const stepConfig = {
   notice: { icon: IconInfoCircle, defaultLabel: "Notice" },
   hook: { icon: IconAnchor, defaultLabel: "Hook" },
   status: { icon: CircleSpinner, defaultLabel: "Status" },
+  steer: { icon: IconSteeringWheel, defaultLabel: "Steered" },
 };
 
 const SPINNER_VERBS = [

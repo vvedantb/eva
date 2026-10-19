@@ -691,7 +691,117 @@ export const enqueueMessage = authMutation({
  * daemon-backed turn, sets `cancelRequestedAt` so the warm provider process
  * interrupts its own in-flight turn on its next `claimPendingTurn` poll.
  * One-shot providers retain the process-kill path.
+ * Shared by the Stop button and the Steer fallback (`_chat/steer.ts`).
  */
+export async function cancelTaskChatExecution(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, task.activeChatWorkflowId);
+
+  const workflowIdToCancel = task.activeChatWorkflowId;
+  const pendingRequestedAt = task.pendingTurn?.requestedAt;
+
+  if (usesChatDaemon(task.lastChatModel ?? task.model)) {
+    await ctx.db.patch(task._id, { cancelRequestedAt: Date.now() });
+  } else if (task.sandboxId && task.repoId) {
+    if (task.activeWorkflowId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
+        sandboxId: task.sandboxId,
+        repoId: task.repoId,
+        entityIdField: "taskId",
+        entityId: String(task._id),
+      });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+        sandboxId: task.sandboxId,
+        repoId: task.repoId,
+      });
+    }
+  }
+
+  if (workflowIdToCancel !== undefined) {
+    await closeTurnForWorkflow(
+      ctx,
+      task._id,
+      workflowIdToCancel,
+      "cancelled",
+      { error: "Cancelled by the user" },
+    );
+  }
+
+  const streamingEntityId = chatStreamEntityId(task._id);
+  const streaming = await ctx.db
+    .query("streamingActivity")
+    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
+    .first();
+
+  const latest = await ctx.db.get(task._id);
+  if (!latest) return;
+
+  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+    latestPendingTurn: latest.pendingTurn,
+    cancelPendingRequestedAt: pendingRequestedAt,
+    latestActiveWorkflowId: latest.activeChatWorkflowId,
+    cancelWorkflowId: workflowIdToCancel,
+  });
+
+  if (cancelOwnsCurrentTurn) {
+    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
+    const last = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", task._id))
+      .order("desc")
+      .first();
+    if (
+      last &&
+      last.role === "assistant" &&
+      last.finishedAt === undefined &&
+      last._id !== syntheticTurnMessageId
+    ) {
+      await finalizeCancelledAssistantMessage(ctx, last, streaming);
+    }
+    await finalizeOpenSyntheticTurnOnCancel(
+      ctx,
+      syntheticTurnMessageId,
+      streaming,
+    );
+    await closeOpenTurn(ctx, task._id, "cancelled", {
+      error: "Cancelled by the user",
+    });
+  }
+
+  await clearStreamingActivity(ctx, streamingEntityId);
+
+  const taskPatch: {
+    activeChatWorkflowId?: undefined;
+    pendingTurn?: undefined;
+    syntheticTurnMessageId?: undefined;
+    updatedAt: number;
+  } = { updatedAt: Date.now() };
+
+  if (
+    workflowIdToCancel !== undefined &&
+    latest.activeChatWorkflowId === workflowIdToCancel
+  ) {
+    taskPatch.activeChatWorkflowId = undefined;
+  }
+  if (
+    pendingRequestedAt !== undefined &&
+    latest.pendingTurn?.requestedAt === pendingRequestedAt
+  ) {
+    taskPatch.pendingTurn = undefined;
+  }
+  if (cancelOwnsCurrentTurn) {
+    taskPatch.syntheticTurnMessageId = undefined;
+  }
+
+  await ctx.db.patch(task._id, taskPatch);
+
+  await startNextQueuedTaskChatMessage(ctx, task._id);
+}
+
+/** The chat Stop button. */
 export const cancelExecution = authMutation({
   args: {
     taskId: v.id("agentTasks"),
@@ -707,108 +817,7 @@ export const cancelExecution = authMutation({
       throw new Error("Not authorized");
     }
 
-    await cancelTrackedWorkflow(ctx, task.activeChatWorkflowId);
-
-    const workflowIdToCancel = task.activeChatWorkflowId;
-    const pendingRequestedAt = task.pendingTurn?.requestedAt;
-
-    if (usesChatDaemon(task.lastChatModel ?? task.model)) {
-      await ctx.db.patch(args.taskId, { cancelRequestedAt: Date.now() });
-    } else if (task.sandboxId && task.repoId) {
-      if (task.activeWorkflowId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-          entityIdField: "taskId",
-          entityId: String(args.taskId),
-        });
-      } else {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-        });
-      }
-    }
-
-    if (workflowIdToCancel !== undefined) {
-      await closeTurnForWorkflow(
-        ctx,
-        args.taskId,
-        workflowIdToCancel,
-        "cancelled",
-        { error: "Cancelled by the user" },
-      );
-    }
-
-    const streamingEntityId = chatStreamEntityId(args.taskId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-
-    const latest = await ctx.db.get(args.taskId);
-    if (!latest) return null;
-
-    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-      latestPendingTurn: latest.pendingTurn,
-      cancelPendingRequestedAt: pendingRequestedAt,
-      latestActiveWorkflowId: latest.activeChatWorkflowId,
-      cancelWorkflowId: workflowIdToCancel,
-    });
-
-    if (cancelOwnsCurrentTurn) {
-      const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
-        .order("desc")
-        .first();
-      if (
-        last &&
-        last.role === "assistant" &&
-        last.finishedAt === undefined &&
-        last._id !== syntheticTurnMessageId
-      ) {
-        await finalizeCancelledAssistantMessage(ctx, last, streaming);
-      }
-      await finalizeOpenSyntheticTurnOnCancel(
-        ctx,
-        syntheticTurnMessageId,
-        streaming,
-      );
-      await closeOpenTurn(ctx, args.taskId, "cancelled", {
-        error: "Cancelled by the user",
-      });
-    }
-
-    await clearStreamingActivity(ctx, streamingEntityId);
-
-    const taskPatch: {
-      activeChatWorkflowId?: undefined;
-      pendingTurn?: undefined;
-      syntheticTurnMessageId?: undefined;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-
-    if (
-      workflowIdToCancel !== undefined &&
-      latest.activeChatWorkflowId === workflowIdToCancel
-    ) {
-      taskPatch.activeChatWorkflowId = undefined;
-    }
-    if (
-      pendingRequestedAt !== undefined &&
-      latest.pendingTurn?.requestedAt === pendingRequestedAt
-    ) {
-      taskPatch.pendingTurn = undefined;
-    }
-    if (cancelOwnsCurrentTurn) {
-      taskPatch.syntheticTurnMessageId = undefined;
-    }
-
-    await ctx.db.patch(args.taskId, taskPatch);
-
-    await startNextQueuedTaskChatMessage(ctx, args.taskId);
+    await cancelTaskChatExecution(ctx, task);
     return null;
   },
 });

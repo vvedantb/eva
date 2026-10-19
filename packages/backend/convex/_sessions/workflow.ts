@@ -1,3 +1,4 @@
+import { drainSteers, steerClaimArgs } from "../_chat/steerClaim";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -1147,6 +1148,7 @@ export const claimPendingTurn = authMutation({
     // When false, drain cancel/stop/usage only. Old sandboxes omit this and
     // keep acquiring the running lease (previous behaviour).
     acceptTurn: v.optional(v.boolean()),
+    ...steerClaimArgs,
   },
   returns: daemonClaimResultValidator,
   handler: async (ctx, args) => {
@@ -1193,11 +1195,15 @@ export const claimPendingTurn = authMutation({
       await ctx.db.patch(chat._id, { cancelRequestedAt: undefined });
     }
 
+    // Steers drain mid-turn too: that is the only time a daemon takes one.
+    const steers = await drainSteers(ctx, chat, args);
+
     const drained = {
       ...emptyClaim,
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
+      steers,
     };
 
     // A prewarm is killing this daemon right now (stale callback bundle or a
@@ -1269,6 +1275,7 @@ export const claimPendingTurn = authMutation({
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
+      steers,
       interactionMode: "default" as const,
     };
     const turnLifecycle = "durable" as const;

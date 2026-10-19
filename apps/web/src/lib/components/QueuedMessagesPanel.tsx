@@ -30,7 +30,12 @@ import {
   useDragSensors,
 } from "@eva/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconArrowUp, IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+  IconArrowUp,
+  IconPencil,
+  IconSteeringWheel,
+  IconTrash,
+} from "@tabler/icons-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -51,8 +56,10 @@ interface QueuedMessageItem<TId extends string> {
   content: string;
   model?: string;
   reasoningLevel?: string;
-  /** Who queued it ??? a shared chat's queue mixes several teammates' prompts. */
+  /** Who queued it: a shared chat's queue mixes several teammates' prompts. */
   userId?: Id<"users">;
+  /** Steer pressed: the running agent is taking this message into its turn. */
+  steering?: boolean;
 }
 
 interface QueuedMessagesPanelProps<TId extends string> {
@@ -63,6 +70,8 @@ interface QueuedMessagesPanelProps<TId extends string> {
   onDelete?: (id: TId) => Promise<void>;
   /** When provided, items become reorderable; receives the new top-to-bottom id order. */
   onReorder?: (orderedIds: TId[]) => Promise<void>;
+  /** When provided, each item gets a Steer button: send it now and redirect the agent. */
+  onSteer?: (id: TId) => Promise<void>;
 }
 
 /** Tooltip copy for a queued row's model + effort snapshot. */
@@ -137,6 +146,7 @@ function SortableQueuedItem<TId extends string>({
   onEditClick,
   onDeleteClick,
   onMoveToFront,
+  onSteerClick,
 }: {
   item: QueuedMessageItem<TId>;
   index: number;
@@ -145,6 +155,7 @@ function SortableQueuedItem<TId extends string>({
   onEditClick?: (item: QueuedMessageItem<TId>) => void;
   onDeleteClick?: (item: QueuedMessageItem<TId>) => void;
   onMoveToFront?: (item: QueuedMessageItem<TId>) => void;
+  onSteerClick?: (item: QueuedMessageItem<TId>) => void;
 }) {
   const {
     attributes,
@@ -184,9 +195,25 @@ function SortableQueuedItem<TId extends string>({
         <QueueItemContent className="text-xs leading-4">
           {renderContent ? renderContent(item.content) : item.content}
         </QueueItemContent>
-        {/* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
-            touch by itself; only the tap target still needs growing here. */}
+        {item.steering ? (
+          <span className="shrink-0 text-xs leading-4 text-muted-foreground">
+            Steering…
+          </span>
+        ) : (
+        /* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
+            touch by itself; only the tap target still needs growing here. */
         <QueueItemActions className="items-center max-sm:[&>button]:size-10">
+          {onSteerClick ? (
+            <QueueItemAction
+              aria-label="Steer with queued message"
+              title="Send now and redirect the running agent"
+              className="gap-1 px-1.5 text-xs max-sm:w-auto"
+              onClick={() => onSteerClick(item)}
+            >
+              <IconSteeringWheel size={14} />
+              Steer
+            </QueueItemAction>
+          ) : null}
           {onEditClick ? (
             <QueueItemAction
               aria-label="Edit queued message"
@@ -213,6 +240,7 @@ function SortableQueuedItem<TId extends string>({
             </QueueItemAction>
           ) : null}
         </QueueItemActions>
+        )}
       </div>
     </QueueItem>
   );
@@ -231,6 +259,7 @@ export function QueuedMessagesPanel<TId extends string>({
   onEdit,
   onDelete,
   onReorder,
+  onSteer,
 }: QueuedMessagesPanelProps<TId>) {
   const [editingItem, setEditingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
@@ -343,6 +372,13 @@ export function QueuedMessagesPanel<TId extends string>({
                             }
                             onMoveToFront={
                               onReorder ? handleMoveToFront : undefined
+                            }
+                            onSteerClick={
+                              onSteer
+                                ? (item) => {
+                                    void onSteer(item.id);
+                                  }
+                                : undefined
                             }
                           />
                         ))}

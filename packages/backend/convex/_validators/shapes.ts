@@ -56,6 +56,8 @@ const daemonClaimDrainFields = {
   cancelRequested: v.boolean(),
   usageRefreshRequested: v.boolean(),
   interactionMode: v.optional(interactionModeValidator),
+  /** Queued messages the daemon injects into its live turn (`_chat/steer.ts`). */
+  steers: v.optional(v.array(v.object({ id: v.string(), text: v.string() }))),
 };
 
 /**

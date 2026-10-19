@@ -65,6 +65,8 @@ import type * as _chat_projectChatDaemon from "../_chat/projectChatDaemon.js";
 import type * as _chat_seededRestoreAlert from "../_chat/seededRestoreAlert.js";
 import type * as _chat_stallRetry from "../_chat/stallRetry.js";
 import type * as _chat_stallWatchdog from "../_chat/stallWatchdog.js";
+import type * as _chat_steer from "../_chat/steer.js";
+import type * as _chat_steerClaim from "../_chat/steerClaim.js";
 import type * as _chat_storageUrls from "../_chat/storageUrls.js";
 import type * as _chat_surfaceAdapters from "../_chat/surfaceAdapters.js";
 import type * as _chat_taskChatDaemon from "../_chat/taskChatDaemon.js";
@@ -613,6 +615,8 @@ declare const fullApi: ApiFromModules<{
   "_chat/seededRestoreAlert": typeof _chat_seededRestoreAlert;
   "_chat/stallRetry": typeof _chat_stallRetry;
   "_chat/stallWatchdog": typeof _chat_stallWatchdog;
+  "_chat/steer": typeof _chat_steer;
+  "_chat/steerClaim": typeof _chat_steerClaim;
   "_chat/storageUrls": typeof _chat_storageUrls;
   "_chat/surfaceAdapters": typeof _chat_surfaceAdapters;
   "_chat/taskChatDaemon": typeof _chat_taskChatDaemon;

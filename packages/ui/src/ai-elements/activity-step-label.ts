@@ -834,6 +834,7 @@ const GROUP_PHRASES: Record<ActivityStep["type"], string> = {
   reasoning: "thought it through",
   response: "replied",
   question: "asked a question",
+  steer: "took your steer",
 };
 
 function groupPhraseForStep(step: ActivityStep): string {
@@ -964,6 +965,12 @@ export function deriveStepRowPresentation(
         return { text: "Waiting for your answer" };
       }
       return { text: step.detail ? `Asked: ${step.detail}` : step.label };
+    }
+    case "steer": {
+      return {
+        text: step.detail ? `Steered: ${step.detail}` : step.label,
+        title: step.detail,
+      };
     }
     case "thinking":
     case "reasoning":
