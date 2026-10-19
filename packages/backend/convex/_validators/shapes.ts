@@ -278,6 +278,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("askTeammates"),
   v.literal("claudeStyleActivity"),
   v.literal("openPrsOnGithub"),
+  v.literal("scopeCheck"),
 );
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
@@ -296,6 +297,7 @@ export const experimentalFlagsFields = {
   askTeammates: v.optional(v.boolean()),
   claudeStyleActivity: v.optional(v.boolean()),
   openPrsOnGithub: v.optional(v.boolean()),
+  scopeCheck: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -316,6 +318,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   askTeammates: v.boolean(),
   claudeStyleActivity: v.boolean(),
   openPrsOnGithub: v.boolean(),
+  scopeCheck: v.boolean(),
 });
 
 /**

@@ -123,6 +123,8 @@ interface ChatMessageProps {
    * time · duration). Copy and fork stay on the right-click menu.
    */
   showTurnMeta?: boolean;
+  /** The viewer's `scopeCheck` experimental flag. */
+  showScopeCheck?: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: (messageId: string, expanded: boolean) => void;
   /** True when this user turn belongs to a teammate (left-aligned). */
@@ -199,6 +201,7 @@ export const ChatMessage = memo(function ChatMessage({
   isLatestAssistantTurn,
   showChangedFiles = true,
   showTurnMeta = true,
+  showScopeCheck = false,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   isOtherUser = false,
@@ -531,7 +534,7 @@ export const ChatMessage = memo(function ChatMessage({
                     reader who needs it. The hover card's per-hunk rows only
                     link out when the diff surface exists — simple view bounces
                     away from that tab, so they degrade to plain rows there. */}
-                {message.scopeCheck ? (
+                {showScopeCheck && message.scopeCheck ? (
                   <div className="mt-1">
                     <ScopeCheckChip
                       check={message.scopeCheck}

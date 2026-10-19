@@ -245,8 +245,21 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={13} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Scope check"
+            description="After a reply that changes code, check each change against your request. A chip under the reply flags changes you did not ask for or were not told about (new turns only)."
+            action={
+              <Switch
+                checked={flags.scopeCheck}
+                onCheckedChange={(checked) => toggle("scopeCheck", checked)}
+                aria-label="Scope check"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={14} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Simple view"
-            description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
+            description="Hide reviews, diffs, tool activity steps, message footers, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
             action={
               <Switch
                 checked={flags.simpleView === true}
