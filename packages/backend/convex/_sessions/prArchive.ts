@@ -9,6 +9,7 @@ import {
 import {
   clearArchivedPrStates,
   listOwnerPullRequests,
+  reopenArchivedPullRequests,
   type PrState,
 } from "../_pullRequests/store";
 import { requestSessionSandboxStop } from "./sandbox";
@@ -98,6 +99,19 @@ async function ownerDisabledAutoArchive(
 ): Promise<boolean> {
   const owner = await ctx.db.get(session.createdBy ?? session.userId);
   return resolveExperimentalFlags(owner).disableAutoArchive;
+}
+
+/**
+ * Moves a session back to the active list: the Unarchive button, and a
+ * wake-up firing on a merged session. Reopens any PR Eva closed on archive.
+ */
+export async function unarchiveSession(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+): Promise<void> {
+  await reopenArchivedPullRequests(ctx, { kind: "session", sessionId });
+  await ctx.db.patch(sessionId, { archived: false });
+  await cancelSessionSandboxGraceDelete(ctx, sessionId);
 }
 
 /**

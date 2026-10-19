@@ -820,5 +820,169 @@ The watch ends when the PR merges or closes, when you call unwatch_pull_request,
     }),
   );
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // schedule_wakeup / list_wakeups / cancel_wakeup
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** A wake's times as ISO strings, for the agent to read back. */
+  function wakeupView(wakeup: {
+    wakeupId: string;
+    status: "pending" | "armed";
+    prompt: string;
+    prUrl?: string;
+    delayMs?: number;
+    fireAt?: number;
+  }) {
+    return {
+      wakeupId: wakeup.wakeupId,
+      status: wakeup.status,
+      prompt: wakeup.prompt,
+      ...(wakeup.prUrl === undefined
+        ? {}
+        : {
+            afterMerge: {
+              prUrl: wakeup.prUrl,
+              delayHours: (wakeup.delayMs ?? 0) / 3_600_000,
+            },
+          }),
+      ...(wakeup.fireAt === undefined
+        ? {}
+        : { firesAt: new Date(wakeup.fireAt).toISOString() }),
+    };
+  }
+
+  tools.push(
+    defineTool({
+      name: "schedule_wakeup",
+      description: `Ask Eva to send a prompt back into this chat later, so you can follow up on your own work. Only set one when the user (or a skill) asks for a later check: each wake starts a sandbox.
+
+Pick one trigger:
+- afterMergeHours: fire that many hours after one of this chat's pull requests merges. Use it to check production logs, errors and performance once the change ships. If the PR already merged, the delay counts from now. If it closes without merging, the wake is dropped.
+- at: fire at a set time.
+
+When it fires, the prompt arrives as a message in this chat and runs a turn, in a fresh sandbox on the latest base branch if the old one is gone. A merged session is moved back to the active list. To keep checking (for example until a feature flag is fully rolled out and its dead code can be removed), call schedule_wakeup again from the woken turn.
+
+Limits: 3 pending wakes per chat, 20 over the chat's life, and at most 30 days ahead.`,
+      mutating: true,
+      input: {
+        prompt: z
+          .string()
+          .describe(
+            "What to do when you wake: what to check, where (logs, dashboards, flags), and what counts as done. You will not remember more than this chat holds, so be specific.",
+          ),
+        afterMergeHours: z
+          .number()
+          .min(0)
+          .optional()
+          .describe(
+            "Hours after the pull request merges. Use this or at, not both.",
+          ),
+        prUrl: z
+          .string()
+          .optional()
+          .describe(
+            "With afterMergeHours: one of this chat's own pull requests. Omit it for the chat's main pull request.",
+          ),
+        at: z
+          .string()
+          .datetime({ offset: true })
+          .optional()
+          .describe(
+            'A set time, as an ISO 8601 time with a zone, e.g. "2026-11-01T09:00:00Z". Use this or afterMergeHours, not both.',
+          ),
+      },
+      handler: async ({ prompt, afterMergeHours, prUrl, at }) => {
+        if ((afterMergeHours === undefined) === (at === undefined)) {
+          return errorResult("Pass exactly one of afterMergeHours or at.");
+        }
+        const url = watchPrUrl(prUrl);
+        if (url === null) return errorResult(BAD_PR_URL);
+        if (at !== undefined && url !== undefined) {
+          return errorResult("prUrl only goes with afterMergeHours.");
+        }
+        const target = await ownChat();
+        if ("isError" in target) return target;
+        const reply = await ctx.runMutation(
+          internal._wakeups.wakeups.schedule,
+          {
+            kind: target.kind,
+            id: target.targetId,
+            ...(target.kind === "session" && credentials.chatId !== undefined
+              ? { sessionChatId: credentials.chatId }
+              : {}),
+            prompt,
+            trigger:
+              at !== undefined
+                ? { kind: "time", at: Date.parse(at) }
+                : {
+                    kind: "merge",
+                    delayMs: Math.round((afterMergeHours ?? 0) * 3_600_000),
+                    ...(url === undefined ? {} : { prUrl: url }),
+                  },
+          },
+        );
+        if (!reply.ok) return errorResult(reply.error);
+        return textResult({
+          wakeup: wakeupView(reply.wakeup),
+          note:
+            reply.wakeup.status === "pending"
+              ? "Eva arms this wake when the pull request merges. End your turn when you have nothing else to do."
+              : "Eva sends the prompt into this chat at firesAt. End your turn when you have nothing else to do.",
+        });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "list_wakeups",
+      description: `List this chat's pending wake-ups (see schedule_wakeup): those waiting for a merge, and those set to fire at a time.`,
+      mutating: false,
+      input: {},
+      handler: async () => {
+        const target = await ownChat();
+        if ("isError" in target) return target;
+        const wakeups = await ctx.runQuery(
+          internal._wakeups.wakeups.listForChat,
+          { kind: target.kind, id: target.targetId },
+        );
+        return textResult({ wakeups: wakeups.map(wakeupView) });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "cancel_wakeup",
+      description: `Cancel one of this chat's pending wake-ups by wakeupId (from list_wakeups), or omit it to cancel all of them.`,
+      mutating: true,
+      input: {
+        wakeupId: z
+          .string()
+          .optional()
+          .describe("The wake-up to cancel. Omit it to cancel every one."),
+      },
+      handler: async ({ wakeupId }) => {
+        const target = await ownChat();
+        if ("isError" in target) return target;
+        const cancelled = await ctx.runMutation(
+          internal._wakeups.wakeups.cancelForChat,
+          {
+            kind: target.kind,
+            id: target.targetId,
+            ...(wakeupId === undefined ? {} : { wakeupId }),
+          },
+        );
+        return textResult({
+          cancelled,
+          note:
+            cancelled.length === 0
+              ? "No pending wake-up matched; nothing changed."
+              : "Eva will not send these wake-ups.",
+        });
+      },
+    }),
+  );
+
   return tools;
 }

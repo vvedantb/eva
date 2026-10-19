@@ -106,7 +106,11 @@ describe("session archive closes every live PR", () => {
   });
 
   test("unarchive reopens only PRs Eva closed, skipping merged", () => {
-    expect(unarchive).toContain("reopenArchivedPullRequests(");
+    // The button and a firing wake-up share one helper.
+    expect(unarchive).toContain("unarchiveSession(");
+    expect(
+      functionBody(prArchive, "export async function unarchiveSession("),
+    ).toContain("reopenArchivedPullRequests(");
     expect(reopen).toContain("row.stateOnArchive === undefined");
     expect(reopen).toContain('row.state === "merged"');
     expect(reopen).toContain('kind: "reopen"');

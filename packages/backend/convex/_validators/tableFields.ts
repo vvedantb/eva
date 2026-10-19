@@ -53,6 +53,7 @@ import {
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
+  sandboxOwnerValidator,
   scopeCheckValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
@@ -494,6 +495,43 @@ export const pullRequestFields = {
   watch: v.optional(prWatchValidator),
   createdAt: v.number(),
   updatedAt: v.number(),
+};
+
+/**
+ * A wake-up an agent set on its own chat (`schedule_wakeup`): a prompt Eva
+ * sends back into the chat at a set time, or a delay after one of the chat's
+ * PRs merges. See `_wakeups/`.
+ */
+export const chatWakeupTriggerValidator = v.union(
+  v.object({ kind: v.literal("time") }),
+  v.object({
+    kind: v.literal("merge"),
+    prUrl: v.string(),
+    delayMs: v.number(),
+  }),
+);
+
+export const chatWakeupStatusValidator = v.union(
+  /** Waiting for its PR to merge. */
+  v.literal("pending"),
+  /** `fireAt` is set and a fire is scheduled. */
+  v.literal("armed"),
+  v.literal("fired"),
+  v.literal("cancelled"),
+  /** Could not fire: see `reason`. */
+  v.literal("dropped"),
+);
+
+export const chatWakeupFields = {
+  owner: sandboxOwnerValidator,
+  /** Session only: the chat that asked, which the wake goes to. */
+  sessionChatId: v.optional(v.id("sessionChats")),
+  prompt: v.string(),
+  trigger: chatWakeupTriggerValidator,
+  status: chatWakeupStatusValidator,
+  fireAt: v.optional(v.number()),
+  reason: v.optional(v.string()),
+  createdAt: v.number(),
 };
 
 /**

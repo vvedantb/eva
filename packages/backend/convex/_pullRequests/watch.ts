@@ -1,13 +1,18 @@
 import { v, type Infer } from "convex/values";
-import { internalMutation, type MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  type DatabaseReader,
+  type MutationCtx,
+} from "../_generated/server";
 import { internal } from "../_generated/api";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { isEntityDeleted } from "../numId";
 import { prWatchValidator } from "../validators";
 import {
   isLivePrState,
   listOwnerPullRequests,
   findPullRequestByUrl,
+  ownerRef,
   setPullRequestWatch,
   type PrOwnerRef,
 } from "./store";
@@ -22,7 +27,7 @@ import { newPrWatch, PR_WATCH_DEBOUNCE_MS } from "./watchEvaluate";
  * webhook, and the Review pane already reads that row.
  */
 
-const chatKindValidator = v.union(
+export const chatKindValidator = v.union(
   v.literal("session"),
   v.literal("task"),
   v.literal("project"),
@@ -131,8 +136,9 @@ export const noteBasePush = internalMutation({
   },
 });
 
-function ownerFor(
-  ctx: MutationCtx,
+/** The chat named by an MCP `kind` + id, or null when the id is malformed. */
+export function ownerFor(
+  ctx: { db: DatabaseReader },
   kind: Doc<"pullRequests">["owner"]["kind"],
   id: string,
 ): PrOwnerRef | null {
@@ -148,7 +154,7 @@ function ownerFor(
   return projectId === null ? null : { kind, projectId };
 }
 
-function samePrUrl(a: string, b: string): boolean {
+export function samePrUrl(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
@@ -251,19 +257,19 @@ export const stopWatchForChat = internalMutation({
 
 /**
  * Where a wake goes, or null when nobody should be woken: the chat was
- * archived or deleted, or the session chat that asked was closed.
+ * archived or deleted, or the session chat that asked was closed. Shared with
+ * `_wakeups/`, which unarchives a merged session before it asks.
  */
-async function wakeTarget(
+export async function wakeTarget(
   ctx: MutationCtx,
-  row: Doc<"pullRequests">,
-  watch: NonNullable<Doc<"pullRequests">["watch"]>,
+  owner: PrOwnerRef,
+  sessionChatId: Id<"sessionChats"> | undefined,
 ): Promise<{
   kind: "session" | "task" | "project";
   id: string;
   chat?: string;
   clerkUserId: string;
 } | null> {
-  const owner = row.owner;
   const clerkIdOf = async (userId: Doc<"users">["_id"]) =>
     (await ctx.db.get(userId))?.clerkId ?? null;
 
@@ -273,8 +279,8 @@ async function wakeTarget(
       return null;
     }
     let chat: string | undefined;
-    if (watch.sessionChatId !== undefined) {
-      const chatDoc = await ctx.db.get(watch.sessionChatId);
+    if (sessionChatId !== undefined) {
+      const chatDoc = await ctx.db.get(sessionChatId);
       if (!chatDoc || chatDoc.archived === true) return null;
       chat = String(chatDoc.number);
     }
@@ -338,7 +344,11 @@ export const claimCheck = internalMutation({
       watch.headSha === undefined && checkAt === watch.startedAt;
     if (!debounced && !baseline) return null;
     const repo = await ctx.db.get(row.repoId);
-    const target = await wakeTarget(ctx, row, watch);
+    const target = await wakeTarget(
+      ctx,
+      ownerRef(row.owner),
+      watch.sessionChatId,
+    );
     if (!isLivePrState(row.state) || repo === null || target === null) {
       await setPullRequestWatch(ctx, row._id, undefined);
       return null;

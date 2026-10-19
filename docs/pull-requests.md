@@ -35,6 +35,14 @@ The agent calls the chat-self MCP tool `watch_pull_request` (or `unwatch_pull_re
 - `startWatch` reads a baseline at once; that first read reports only new comments, so state that was already true never wakes the agent. Each burst then schedules one check 60s later (`watchCheck.ts`). It reads the PR's state, head, `mergeable` and all checks with `isRequired` in one GraphQL call, plus new feedback through the automation `fetchFeedback`. The pure `watchEvaluate.ts` decides what is new; the wake goes through `orchestratorSendMessage`, so it queues behind a running turn.
 - The watch ends when the PR merges or closes, on unwatch, after 10 comment-only wakes in a row, after 15 minutes of failed reads, or when the chat (or the session chat that asked) is archived or deleted. Bot comments, the agent's own included, never wake it.
 
+## Chat wake-ups
+
+The agent calls `schedule_wakeup` (with `list_wakeups` / `cancel_wakeup`) to have Eva send a prompt back into its own chat later: `afterMergeHours` after one of the chat's PRs merges, or `at` a set time. It is for post-merge production checks and for flag cleanup; the agent sets one only when asked. Rows live in `chatWakeups`; code in `_wakeups/`.
+
+- A merge wake is `pending` until `handlePullRequestEvent` sees the PR merge (`armMergeWakeups`), which sets `fireAt` and schedules `fire`. A close without merge drops it. A time wake is armed at once.
+- `claimFire` drops the wake when the PR row no longer reads merged (a tip-copy merge detaches it) or the chat is gone, unarchives a merged session, then `fire` sends through `orchestratorSendMessage`, the PR watch's path. The run may start a fresh sandbox on the latest base branch.
+- A woken agent re-arms by calling the tool again. Limits (`rules.ts`): 3 pending per chat, 20 per chat lifetime, 30 days ahead at most.
+
 ## UI
 
 The sandbox Review pane has a Pull requests tab (`…/review/prs`) on all three chat surfaces. It lists every PR the chat holds; picking one points Summary, Timeline and Code at it (`?pr=<pullRequestId>`, else the primary). The "More" menu lists each PR when there is more than one.

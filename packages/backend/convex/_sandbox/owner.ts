@@ -1,27 +1,10 @@
-import { v, type Infer } from "convex/values";
+import type { Infer } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
+import { sandboxOwnerValidator } from "../_validators/shapes";
 
-/**
- * One sandbox owner contract shared by view state, PTYs, panes, and runtime
- * APIs. A sandbox belongs to a session, a quick task, or a project, and the
- * backend resolves the sandbox and repo from whichever is provided.
- */
-export const sandboxOwnerValidator = v.union(
-  v.object({
-    kind: v.literal("session"),
-    sessionId: v.id("sessions"),
-  }),
-  v.object({
-    kind: v.literal("task"),
-    taskId: v.id("agentTasks"),
-  }),
-  v.object({
-    kind: v.literal("project"),
-    projectId: v.id("projects"),
-  }),
-);
+export { sandboxOwnerValidator };
 
 export type SandboxOwner = Infer<typeof sandboxOwnerValidator>;
 

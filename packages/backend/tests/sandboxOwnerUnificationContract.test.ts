@@ -14,10 +14,13 @@ function readSource(relativePath: string): string {
 
 test("PTYs and panes share the canonical sandbox owner validator", () => {
   const owner = readSource("convex/_sandbox/owner.ts");
+  const shapes = readSource("convex/_validators/shapes.ts");
   const ptyOwners = readSource("convex/_pty/owners.ts");
   const panes = readSource("convex/sandboxPanes.ts");
 
-  expect(owner).toContain("export const sandboxOwnerValidator = v.union(");
+  // Defined with the other shapes so table fields can use it without a cycle.
+  expect(shapes).toContain("export const sandboxOwnerValidator = v.union(");
+  expect(owner).toContain("export { sandboxOwnerValidator };");
   expect(ptyOwners).toContain("export const ownerArg = sandboxOwnerValidator");
   expect(panes).toContain("args: { owner: sandboxOwnerValidator }");
   expect(ptyOwners).not.toContain("export const ownerArg = v.union(");
