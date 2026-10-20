@@ -223,7 +223,7 @@ export function fleetTools(
     defineTool({
       name: "create_session",
       description:
-        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. You are notified when it finishes. Called from a session, the new session joins your linked-session group (see rename_session_group and remove_from_session_group).",
+        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. Manager Ave is notified when it finishes; other callers use watch_agent. Called from a session, the new session joins your linked-session group (see rename_session_group and remove_from_session_group).",
       mutating: true,
       input: {
         repoName: z
@@ -519,7 +519,7 @@ export function orchestratorTools(
       name: "send_agent_message",
       description: `Send a chat message to another agent as yourself. If the agent is mid-turn the message is queued and runs when the current turn finishes; if it is idle a new turn starts immediately. Returns which of the two happened.
 
-The message is marked as sent via MCP, and the agent is registered so you are notified when it finishes.`,
+The message is marked as sent via MCP. When Manager Ave sends it, the agent is registered so Ave is notified when it finishes; other callers use watch_agent.`,
       mutating: true,
       input: {
         kind: agentKindArg,
