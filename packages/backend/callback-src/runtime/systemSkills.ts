@@ -1,10 +1,10 @@
 /**
  * Materializes Eva system skills into the sandbox checkout.
  *
- * Each installed skill becomes `.agents/skills/<name>/SKILL.md`, a stub that
- * tells the agent to fetch the real instructions from the eva MCP server. The
- * files are never committed: a sentinel block in `.git/info/exclude` hides them
- * from `git add -A`.
+ * Each installed skill becomes `<root>/<name>/SKILL.md` in every skill root, a
+ * stub that tells the agent to fetch the real instructions from the eva MCP
+ * server. The files are never committed: a sentinel block in
+ * `.git/info/exclude` hides them from `git add -A`.
  */
 
 import {
@@ -32,6 +32,8 @@ const SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
 const EXCLUDE_BEGIN = "# >>> eva-system-skills >>>";
 const EXCLUDE_END = "# <<< eva-system-skills <<<";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+/** Codex reads `.agents/skills`; Claude Code reads only `.claude/skills`. */
+const SKILL_ROOTS = [".agents/skills", ".claude/skills"];
 
 export type SystemSkillStub = { name: string; stub: string };
 
@@ -89,19 +91,19 @@ export function renderExcludeContent(
 
   const block = [
     EXCLUDE_BEGIN,
-    ...names.map((name) => `/.agents/skills/${name}/`),
+    ...names.flatMap((name) => SKILL_ROOTS.map((root) => `/${root}/${name}/`)),
     EXCLUDE_END,
     "",
   ].join("\n");
   return `${preserved}${block}`;
 }
 
-function skillsRoot(): string {
-  return `${WORK_DIR}/.agents/skills`;
+function skillsRoots(): string[] {
+  return SKILL_ROOTS.map((root) => `${WORK_DIR}/${root}`);
 }
 
-function isEvaStub(directoryName: string): boolean {
-  const skillFile = `${skillsRoot()}/${directoryName}/SKILL.md`;
+function isEvaStub(directory: string): boolean {
+  const skillFile = `${directory}/SKILL.md`;
   if (!existsSync(skillFile)) return false;
   try {
     return readFileSync(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
@@ -111,28 +113,36 @@ function isEvaStub(directoryName: string): boolean {
 }
 
 function writeStub(skill: SystemSkillStub): boolean {
-  const directory = `${skillsRoot()}/${skill.name}`;
-  if (existsSync(`${directory}/SKILL.md`) && !isEvaStub(skill.name)) {
+  const directories = skillsRoots().map((root) => `${root}/${skill.name}`);
+  // A user skill in either root wins everywhere, so an Eva stub never shadows it.
+  const userOwned = directories.some(
+    (directory) => existsSync(`${directory}/SKILL.md`) && !isEvaStub(directory),
+  );
+  if (userOwned) {
     log(`[system-skills] ${skill.name} exists in the repo — leaving it alone`);
     return false;
   }
-  mkdirSync(directory, { recursive: true });
-  writeFileSync(`${directory}/SKILL.md`, skill.stub);
+  for (const directory of directories) {
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(`${directory}/SKILL.md`, skill.stub);
+  }
   return true;
 }
 
 function pruneStaleStubs(keep: Set<string>): void {
-  const root = skillsRoot();
-  if (!existsSync(root)) return;
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    if (keep.has(entry.name)) continue;
-    if (!isEvaStub(entry.name)) continue;
-    try {
-      rmSync(`${root}/${entry.name}`, { recursive: true, force: true });
-      log(`[system-skills] pruned ${entry.name}`);
-    } catch (err) {
-      log(`[system-skills] prune failed for ${entry.name}: ${String(err)}`);
+  for (const root of skillsRoots()) {
+    if (!existsSync(root)) continue;
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (keep.has(entry.name)) continue;
+      const directory = `${root}/${entry.name}`;
+      if (!isEvaStub(directory)) continue;
+      try {
+        rmSync(directory, { recursive: true, force: true });
+        log(`[system-skills] pruned ${directory}`);
+      } catch (err) {
+        log(`[system-skills] prune failed for ${directory}: ${String(err)}`);
+      }
     }
   }
 }
