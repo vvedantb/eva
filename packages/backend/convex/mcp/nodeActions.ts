@@ -1451,13 +1451,12 @@ const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
 };
 
-const aveThreadPointerSchema = z.object({ _id: z.string() }).nullable();
-
 /**
- * Implicit watch registration for create/send. Ave's own run passes its thread;
- * any other MCP caller registers against the user's live thread, if they have
- * one. Never clears an existing watch — that is what `setWatchedByAve` would
- * do without a thread id.
+ * Implicit watch registration for create/send: only Ave's own run, which passes
+ * its thread. Other senders (sandbox agents, OAuth connectors, PR-watch and
+ * automation-event deliveries) must not fall back to the user's live thread —
+ * that made Ave watch every chat they touched, so each turn end woke it.
+ * Explicit `watch_agent` keeps that fallback. Never clears an existing watch.
  */
 async function registerWatchIfAve(
   clerkUserId: string,
@@ -1465,18 +1464,8 @@ async function registerWatchIfAve(
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
-  const resolved =
-    aveThreadId ??
-    aveThreadPointerSchema.parse(
-      await runQueryAsUser(
-        getEvaConvexCloudUrl(),
-        clerkUserId,
-        "ave:getThread",
-        {},
-      ),
-    )?._id;
-  if (resolved === undefined) return;
-  await setWatchedByAve(clerkUserId, kind, id, resolved);
+  if (aveThreadId === undefined) return;
+  await setWatchedByAve(clerkUserId, kind, id, aveThreadId);
 }
 
 export const orchestratorListAgents = internalAction({
