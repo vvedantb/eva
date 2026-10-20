@@ -1008,7 +1008,9 @@ function ChatBodyInner({
             onRevealMessage={revealMessage}
           />
         ) : null}
-        {isArchived ? null : <AssistantCiteToolbar />}
+        {isArchived ? null : (
+          <AssistantCiteToolbar chatParentId={chatParentId} />
+        )}
       </Conversation>
       {isArchived ? null : (
         <AnimatePresence mode="wait" initial={false}>

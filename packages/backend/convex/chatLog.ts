@@ -269,6 +269,44 @@ export const append = authMutation({
   },
 });
 
+/**
+ * Saves selected chat text as a user note. Takes the chat's message parent
+ * (a parallel chat resolves to its session), since `ChatBody` knows that id
+ * and not the source.
+ */
+export const saveQuote = authMutation({
+  args: {
+    chatParentId: v.string(),
+    quote: v.string(),
+    messageUrl: v.string(),
+  },
+  returns: v.id("chatLogEntries"),
+  handler: async (ctx, args) => {
+    const fields = await chatSourceFieldsForEntityId(ctx.db, args.chatParentId);
+    const source = fields ? chatSourceArgFromFields(fields) : null;
+    if (!fields || !source || !(await callerCanSeeChatSource(ctx, source))) {
+      throw new Error("Not authorized to write to this chat's log.");
+    }
+    const quote = args.quote.trim();
+    if (!quote) throw new Error("A saved quote needs text.");
+    if (!/^https?:\/\//.test(args.messageUrl)) {
+      throw new Error("messageUrl must be an http(s) link.");
+    }
+    const link = `[Open in chat](${args.messageUrl})`;
+    // The quote is the title; the body repeats it only when the title clips.
+    const body =
+      quote.length > LIMITS.user.title
+        ? `> ${quote.replace(/\n/g, "\n> ")}\n\n${link}`
+        : link;
+    return insertEntry(ctx, fields, {
+      kind: "note",
+      author: "user",
+      title: quote,
+      body,
+    });
+  },
+});
+
 /** The Log as markdown, for the agent's `read_chat_log` tool. */
 export const markdownForSource = authQuery({
   args: { source: chatSourceArgValidator },

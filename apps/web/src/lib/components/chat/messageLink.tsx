@@ -10,14 +10,18 @@ import { messageLinkParser } from "@/lib/search-params";
 const MESSAGE_LINK_PARAM = "message";
 
 /**
- * Copies the current page URL aimed at one message. The rest of the URL stays
- * (`?chat=2`, `?subagent=…`), so the link opens the same chat it was copied in.
+ * The current page URL aimed at one message. The rest of the URL stays
+ * (`?chat=2`, `?subagent=…`), so the link opens the same chat it came from.
  */
-export function copyMessageLink(messageId: string) {
+export function messageLinkUrl(messageId: string): string {
   const url = new URL(window.location.href);
   url.searchParams.set(MESSAGE_LINK_PARAM, messageId);
+  return url.href;
+}
+
+export function copyMessageLink(messageId: string) {
   void navigator.clipboard
-    .writeText(url.href)
+    .writeText(messageLinkUrl(messageId))
     .then(() => toast.success("Link copied"));
 }
 
