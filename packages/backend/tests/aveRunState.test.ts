@@ -328,6 +328,43 @@ describe("wake-ups and watches", () => {
       expect(notification?.content).toContain(
         '[agent-notification] project "Billing revamp" (vvedantb/eva) finished: completed',
       );
+      const project = await f.t.run(async (ctx) => ctx.db.get(projectId));
+      expect(project?.watchedByAve).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a watch wakes Ave once: later turns in that chat stay silent until re-armed",
+    async () => {
+      const f = await fixture();
+      await f.owner.mutation(api.ave.send, { content: "hi", clientId: "c1" });
+      const thread = await liveThread(f);
+      if (!thread) throw new Error("no thread");
+      await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
+        sessionId: f.sessionId,
+        aveThreadId: thread._id,
+      });
+      const turnEnds = async () =>
+        f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
+          child: { kind: "session", sessionId: f.sessionId },
+          status: "completed",
+        });
+      const wakeUps = async () =>
+        (await rows(f)).filter((r) => r.orchestratorNotification === true)
+          .length;
+      await turnEnds();
+      // The user keeps chatting in that session: each turn end used to wake Ave.
+      await turnEnds();
+      await turnEnds();
+      expect(await wakeUps()).toBe(1);
+      // Ave's next send re-arms the watch, so the following turn end wakes it.
+      await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
+        sessionId: f.sessionId,
+        aveThreadId: thread._id,
+      });
+      await turnEnds();
+      expect(await wakeUps()).toBe(2);
     },
     TIMEOUT_MS,
   );
