@@ -28,8 +28,8 @@ interface ShowcaseState {
  * someone who is reading it.
  *
  * Each tab carries `group` so the animated sidebar icons play the same hover
- * animation here as they do in the app: the keyframes in `globals.css` are all
- * scoped to `.group:hover .nav-icon-*`.
+ * animation here as they do in the app: the keyframes in
+ * `@vvedantb/ui/tokens/css/nav-icons.css` are all scoped to `.group:hover .vv-icon`.
  */
 export function LandingShowcase({
   idPrefix,
