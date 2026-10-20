@@ -6847,6 +6847,9 @@ function handleSystemTaskMessage(message) {
   }
   const toolUseId = readStringField2(message, "tool_use_id");
   if (subtype === "task_started" && toolUseId) {
+    if (readStringField2(message, "task_type") === "local_bash") {
+      return;
+    }
     const entry = {
       toolUseId,
       taskId: readStringField2(message, "task_id"),
