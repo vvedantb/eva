@@ -1794,15 +1794,16 @@ export const orchestratorGetAgentState = internalAction({
 });
 
 /**
- * Renames or leaves a session's linked-session group as the calling user,
- * through the same mutations the sidebar and header chip use. Returns the
- * group as it stands afterwards (undefined once the session is out of it).
+ * Joins, renames or leaves a session's linked-session group as the calling
+ * user, through the same mutations the sidebar and header chip use. Returns
+ * the group as it stands afterwards (undefined once the session is out of it).
  */
 export const orchestratorUpdateSessionGroup = internalAction({
   args: {
     clerkUserId: v.string(),
     sessionId: v.string(),
     change: v.union(
+      v.object({ kind: v.literal("add"), groupSessionId: v.string() }),
       v.object({ kind: v.literal("rename"), name: v.string() }),
       v.object({ kind: v.literal("remove") }),
     ),
@@ -1810,7 +1811,12 @@ export const orchestratorUpdateSessionGroup = internalAction({
   returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
   handler: async (_ctx, { clerkUserId, sessionId, change }) => {
     const convexUrl = getEvaConvexCloudUrl();
-    if (change.kind === "rename") {
+    if (change.kind === "add") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:addToGroup", {
+        sessionId,
+        groupSessionId: change.groupSessionId,
+      });
+    } else if (change.kind === "rename") {
       await runMutationAsUser(convexUrl, clerkUserId, "sessions:renameGroup", {
         sessionId,
         name: change.name,

@@ -24,6 +24,7 @@ import {
 } from "../_userProviderAccounts/defaults";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
+import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import {
   cancelSessionSandboxGraceDelete,
@@ -103,10 +104,7 @@ export interface CreateSessionFork {
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
-/**
- * The linked-session group a new session spun up from `sourceId` joins. A
- * source not yet in a group gets a new one.
- */
+/** The linked-session group a new session spun up from `sourceId` joins. */
 async function joinSessionGroup(
   ctx: AuthMutationCtx,
   sourceId: Id<"sessions">,
@@ -115,12 +113,7 @@ async function joinSessionGroup(
   if (!source || !(await hasRepoAccess(ctx.db, source.repoId, ctx.userId))) {
     throw new Error("Source session not found");
   }
-  if (source.sessionGroupId) return source.sessionGroupId;
-  const groupId = await ctx.db.insert("sessionGroups", {
-    createdBy: ctx.userId,
-  });
-  await ctx.db.patch(source._id, { sessionGroupId: groupId });
-  return groupId;
+  return await ensureSessionGroup(ctx.db, source, ctx.userId);
 }
 
 /**

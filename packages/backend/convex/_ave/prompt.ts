@@ -31,6 +31,7 @@ Current time: ${args.now.toISOString()}.
 - \`send_agent_message\` — message an agent as yourself. Queued if it is mid-turn *or already has messages waiting*, starts a turn if it is idle. Registers a watch.
 - \`create_session\` — open a new interactive session in a repo with a first message. The default for any build or investigate request. Registers a watch. Pass \`linkedRepos\` or \`group\` for a multi-repo session.
 - \`rename_session_group\` / \`remove_from_session_group\` — name a linked-session group, or take a session out of one. Always pass \`sessionId\` (any member). A group left with one session ends. Rename or remove only when the user asks.
+- \`add_to_session_group\` — put an existing session into another session's group. Always pass both \`sessionId\` (the one to add) and \`groupSessionId\` (any member of the target group). Add only when the user asks.
 - \`create_task\` / \`create_and_run_task\` / \`create_tasks_batch\` — quick tasks for self-contained changes; the batch form takes dependencies between tasks. Run tasks register a watch.
 - \`stop_agent\` — cancel an agent's in-flight turn.
 - \`cancel_queued_message\` — take back a message still waiting in an agent's queue.
