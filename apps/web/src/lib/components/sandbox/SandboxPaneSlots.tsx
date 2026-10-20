@@ -17,6 +17,7 @@ import { DesktopPanel } from "@/routes/_repo/$owner/$repo/sessions/DesktopPanel"
 import { PrPanel } from "./PrPanel";
 import { SandboxPaneBoundary } from "./SandboxPaneBoundary";
 import { PreviewPaneTabs } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPaneTabs";
+import type { AnnotationSubmission } from "@/routes/_repo/$owner/$repo/sessions/_utils/-previewAnnotation";
 import { ConsoleDock } from "./ConsoleDock";
 import { KeepAlivePane } from "./KeepAlivePane";
 import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
@@ -60,7 +61,7 @@ interface SandboxPaneSlotsProps {
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /** Session-only: preview select-element → chat submit. */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
+  onAnnotationSubmit?: (submission: AnnotationSubmission) => Promise<void>;
   /** Session-only: the visible preview may float into the mini-player. */
   miniPlayer?: { sessionId: Id<"sessions">; returnTo: string; title: string };
   /**

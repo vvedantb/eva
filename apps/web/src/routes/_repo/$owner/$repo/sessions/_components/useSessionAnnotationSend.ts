@@ -8,17 +8,19 @@ import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import type { AnnotationSubmission } from "../_utils/-previewAnnotation";
 
 /**
  * Sends an annotation as chat display text + rich agent prompt into the
  * active chat tab. Queues with displayContent when that chat's turn is
- * already running.
+ * already running. A `note` is also saved to the session's Log, which the
+ * Documents tab shows.
  */
 export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
   chatId: Id<"sessionChats">,
   isRouteActive = true,
-): (display: string, full: string) => Promise<void> {
+): (submission: AnnotationSubmission) => Promise<void> {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // Model + traits + account are owned by Convex.
@@ -50,13 +52,25 @@ export function useSessionAnnotationSend(
   const addMessage = useMutation(api.sessions.addMessage);
   const startExecution = useMutation(api.sessionWorkflow.startExecute);
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
+  const appendLogEntry = useMutation(api.chatLog.append);
 
   const isExecuting =
     turnStatus === undefined
       ? isAssistantTurnInProgress(messages ?? [])
       : turnStatus !== null;
 
-  return async (display: string, full: string) => {
+  return async ({ display, full, note }: AnnotationSubmission) => {
+    // Saved before the send: a failed save keeps the card open with nothing
+    // sent, so a retry cannot post the turn twice.
+    if (note) {
+      await appendLogEntry({
+        source: { kind: "session", sessionId },
+        kind: "note",
+        author: "user",
+        title: note.title,
+        body: note.body,
+      });
+    }
     const accountId = resolveAccountId(providerAccountId);
     const reasoningLevel = displayTraits.effortLevel;
     if (isExecuting) {

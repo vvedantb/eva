@@ -307,6 +307,32 @@ export function buildAnnotationDisplay(
   return `${feedback.trim()}\n\n[Annotated ${elementChip(ctx)} on ${ctx.pagePath}]`;
 }
 
+/** What the comment card hands up: the chat turn, plus a Log note when saved. */
+export type AnnotationSubmission = {
+  display: string;
+  full: string;
+  note: { title: string; body: string } | null;
+};
+
+/**
+ * A Log note for the chat's Documents tab: the comment as the title, and the
+ * fields a reader needs to find the element again as the body.
+ */
+export function buildAnnotationNote(
+  feedback: string,
+  ctx: PreviewAnnotationContext,
+): { title: string; body: string } {
+  const lines = [
+    `- Page: \`${ctx.pagePath}\``,
+    `- Element: \`${elementChip(ctx)}\``,
+  ];
+  if (ctx.reactComponents.length > 0) {
+    lines.push(`- React: \`${ctx.reactComponents.join(" → ")}\``);
+  }
+  lines.push(`- Selector: \`${ctx.selector}\``);
+  return { title: feedback.trim(), body: lines.join("\n") };
+}
+
 /** Rich agent prompt with element context for the session workflow. */
 export function buildAnnotationPrompt(
   feedback: string,
