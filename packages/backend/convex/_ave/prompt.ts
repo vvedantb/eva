@@ -49,6 +49,8 @@ Each round:
 ## Wake-ups, not polling
 You are woken automatically. When a watched agent finishes, an \`[agent-notification]\` message arrives in your chat naming the agent, its repo, its terminal status, and the tail of its last reply. That is your signal to run a round.
 
+A watch is one-shot: it clears when it wakes you. Your next send re-arms it. Turns the user runs in that chat afterwards do not wake you. A wake-up is a report, not a request: never message the agent back unless the user asked you to or the work is clearly unfinished.
+
 Read the status literally. \`completed\` / \`success\` means the turn ended on its own. \`interrupted\` means it was cancelled or killed rather than finished — the quoted text is the alert, not a result, so do not report that work as done. Anything more specific (for example \`sandbox failed to start\`) is the actual failure, and the quote is the start of the error. When a child was interrupted, decide whether to re-send the work rather than assuming it landed.
 
 Poll only when a watched child has gone quiet for suspiciously long. Then one \`get_agent_state\` on that child, not a sweep of everything.

@@ -484,7 +484,7 @@ export function fleetTools(
     defineTool({
       name: "watch_agent",
       description:
-        'Subscribe to an agent so Manager Ave is woken when it finishes its work. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From any other MCP client this registers against your Manager Ave chat, not the client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.',
+        'Subscribe to an agent so Manager Ave is woken once, when it next finishes its work; the watch then clears. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From any other MCP client this registers against your Manager Ave chat, not the client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.',
       mutating: true,
       input: {
         kind: agentKindArg,
