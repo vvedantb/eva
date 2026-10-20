@@ -223,7 +223,7 @@ export function fleetTools(
     defineTool({
       name: "create_session",
       description:
-        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. Manager Ave is notified when it finishes; other callers use watch_agent. Called from a session, the new session joins your linked-session group (see rename_session_group and remove_from_session_group).",
+        "Start a new interactive session in any repo you can access and send it a first message. The session boots its own sandbox and runs the message as soon as that sandbox is ready. Manager Ave is notified when it finishes; other callers use watch_agent. Called from a session, the new session joins your linked-session group (see add_to_session_group, rename_session_group and remove_from_session_group).",
       mutating: true,
       input: {
         repoName: z
@@ -373,7 +373,7 @@ export function fleetTools(
   );
 
   // ───────────────────────────────────────────────────────────────────────────
-  // rename_session_group / remove_from_session_group
+  // add_to_session_group / rename_session_group / remove_from_session_group
   // ───────────────────────────────────────────────────────────────────────────
 
   const sessionGroupTargetArg = z
@@ -387,6 +387,37 @@ export function fleetTools(
   const groupTargetSessionId = (sessionId: string | undefined) =>
     sessionId ??
     (credentials.entityKind === "session" ? entityId : undefined);
+
+  tools.push(
+    defineTool({
+      name: "add_to_session_group",
+      description:
+        'Put an existing session into a linked-session group, the same group create_session joins. The target group is "groupSessionId"\'s group; a target in no group starts a new one with both sessions. A session already in another group moves, and a group left with one session dissolves. Returns the group afterwards.',
+      mutating: true,
+      input: {
+        sessionId: z.string().describe("Session id of the session to add."),
+        groupSessionId: sessionGroupTargetArg,
+      },
+      handler: async ({ sessionId, groupSessionId }) => {
+        await mcpGetContext(ctx, clerkUserId);
+        const target = groupTargetSessionId(groupSessionId);
+        if (!target) {
+          return errorResult(
+            'Pass "groupSessionId": you are not running in a session.',
+          );
+        }
+        const result = await ctx.runAction(
+          internal.mcp.nodeActions.orchestratorUpdateSessionGroup,
+          {
+            clerkUserId,
+            sessionId,
+            change: { kind: "add", groupSessionId: target },
+          },
+        );
+        return textResult({ sessionId, ...result });
+      },
+    }),
+  );
 
   tools.push(
     defineTool({
