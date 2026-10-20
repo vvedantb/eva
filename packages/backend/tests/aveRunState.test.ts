@@ -228,6 +228,9 @@ describe("wake-ups and watches", () => {
       );
       // Ave was already running, so the wake-up folds into one rerun.
       expect((await liveThread(f))?.rerunRequested).toBe(true);
+      // One-shot: the user's later turns in that chat do not wake Ave.
+      const session = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
+      expect(session?.watchedByAve).toBeUndefined();
     },
     TIMEOUT_MS,
   );
@@ -275,6 +278,11 @@ describe("wake-ups and watches", () => {
       await f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
         child: { kind: "session", sessionId: f.sessionId, chatId: sideChatId },
         status: "completed",
+      });
+      // The watch is one-shot, so re-arm it as Ave's next send would.
+      await f.owner.mutation(api.orchestratorWatch.setSessionWatchedBy, {
+        sessionId: f.sessionId,
+        aveThreadId: thread._id,
       });
       await f.t.mutation(internal.orchestratorNotify.notifyOrchestratorOfChild, {
         child: { kind: "session", sessionId: f.sessionId },

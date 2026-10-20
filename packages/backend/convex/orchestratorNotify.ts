@@ -68,7 +68,7 @@ async function loadChildSummary(
   };
 }
 
-/** Drops the watch pointer once its thread is gone, so we stop re-checking it. */
+/** Drops the watch pointer: after each wake-up, or once its thread is gone. */
 async function clearWatch(
   ctx: MutationCtx,
   child: OrchestratorNotifyChild,
@@ -112,7 +112,10 @@ async function resolveChildOutcome(
  * Inserts the wake-up as a user-role row (flagged `orchestratorNotification`
  * for styling) and asks for a run. A busy thread folds it into one follow-up
  * run, so several children finishing at once drain together instead of racing.
- * Ave never watches itself, so a wake-up cannot loop.
+ *
+ * The watch is one-shot: it clears here, and Ave re-arms it by sending again
+ * (or `watch_agent`). A standing watch woke Ave on every later turn the user
+ * ran in that chat, and Ave's replies to those wake-ups started new turns.
  */
 export const notifyOrchestratorOfChild = internalMutation({
   args: {
@@ -124,12 +127,10 @@ export const notifyOrchestratorOfChild = internalMutation({
   handler: async (ctx, args) => {
     const summary = await loadChildSummary(ctx, args.child);
     if (!summary) return null;
+    await clearWatch(ctx, args.child);
 
     const thread = await ctx.db.get(summary.threadId);
-    if (!thread || thread.archivedAt !== undefined) {
-      await clearWatch(ctx, args.child);
-      return null;
-    }
+    if (!thread || thread.archivedAt !== undefined) return null;
 
     const repo =
       summary.repoId === undefined ? null : await ctx.db.get(summary.repoId);
