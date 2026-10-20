@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@eva/backend";
 import { Button, toast } from "@eva/ui";
-import { IconQuote } from "@tabler/icons-react";
+import { IconBookmark, IconQuote } from "@tabler/icons-react";
 import {
   createCitation,
   ASSISTANT_CITATION_MAX_CHARS,
 } from "@/lib/components/chat/assistantCitation";
+import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
+import { messageLinkUrl } from "@/lib/components/chat/messageLink";
 import {
   captureAssistantCitationSelection,
   citationSelectionPosition,
@@ -20,14 +24,24 @@ interface CiteTarget {
   y: number;
 }
 
+/** Room for Cite + Save, so the pair never runs off the right edge. */
+const TOOLBAR_WIDTH = 150;
+
 export function AssistantCiteToolbar({
   forcedTarget,
+  chatParentId,
 }: {
   /** Demo / screenshot seed — skips live selection. */
   forcedTarget?: CiteTarget;
+  /**
+   * Enables Save, which keeps the selection as a note in the chat's Log
+   * (Documents tab). Chats without one (Manager Ave) have no Log.
+   */
+  chatParentId?: ChatParentId;
 }) {
   const citations = usePendingCitations();
   const [target, setTarget] = useState<CiteTarget | null>(forcedTarget ?? null);
+  const saveQuote = useMutation(api.chatLog.saveQuote);
 
   if (!citations) return null;
 
@@ -59,8 +73,9 @@ export function AssistantCiteToolbar({
     };
   };
 
-  const cite = () => {
-    if (!target) return;
+  /** Same whitespace clean-up and length cap for Cite and Save. */
+  const takeCitation = (verb: string) => {
+    if (!target) return null;
     const citation = createCitation({
       messageId: target.messageId,
       text: target.text,
@@ -68,14 +83,37 @@ export function AssistantCiteToolbar({
     if (!citation) {
       toast.error(
         target.text.trim().length > ASSISTANT_CITATION_MAX_CHARS
-          ? "Selection is too long to cite"
-          : "Couldn't cite that selection",
+          ? `Selection is too long to ${verb}`
+          : `Couldn't ${verb} that selection`,
       );
-      return;
+      return null;
     }
-    citations.add(citation);
     window.getSelection()?.removeAllRanges();
     setTarget(null);
+    return citation;
+  };
+
+  const cite = () => {
+    const citation = takeCitation("cite");
+    if (citation) citations.add(citation);
+  };
+
+  const save = (parentId: ChatParentId) => {
+    const citation = takeCitation("save");
+    if (!citation) return;
+    void saveQuote({
+      chatParentId: parentId,
+      quote: citation.text,
+      messageUrl: messageLinkUrl(citation.messageId),
+    }).then(
+      () => toast.success("Saved to Documents"),
+      () => toast.error("Couldn't save that selection"),
+    );
+  };
+
+  const buttonClass = "pointer-events-auto h-7 gap-1 px-2 text-xs shadow-sm";
+  const keepSelection = (event: { preventDefault: () => void }) => {
+    event.preventDefault();
   };
 
   return (
@@ -85,9 +123,12 @@ export function AssistantCiteToolbar({
       {forcedTarget ? null : <span hidden ref={watchSelection} />}
       {target ? (
         <div
-          className="pointer-events-none fixed z-50"
+          className="pointer-events-none fixed z-50 flex gap-1"
           style={{
-            left: Math.max(8, Math.min(target.x, window.innerWidth - 88)),
+            left: Math.max(
+              8,
+              Math.min(target.x, window.innerWidth - TOOLBAR_WIDTH),
+            ),
             top: Math.max(8, target.y - 40),
           }}
         >
@@ -95,16 +136,27 @@ export function AssistantCiteToolbar({
             type="button"
             size="sm"
             variant="secondary"
-            className="pointer-events-auto h-7 gap-1 px-2 text-xs shadow-sm"
+            className={buttonClass}
             data-testid="cite-selection-toolbar"
-            onMouseDown={(event) => {
-              event.preventDefault();
-            }}
+            onMouseDown={keepSelection}
             onClick={cite}
           >
             <IconQuote className="size-3.5" />
             Cite
           </Button>
+          {chatParentId ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className={buttonClass}
+              onMouseDown={keepSelection}
+              onClick={() => save(chatParentId)}
+            >
+              <IconBookmark className="size-3.5" />
+              Save
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </>

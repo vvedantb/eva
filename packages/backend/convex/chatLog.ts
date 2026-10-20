@@ -270,7 +270,7 @@ export const append = authMutation({
 });
 
 /**
- * Saves a cited chat quote as a user note. Takes the chat's message parent
+ * Saves selected chat text as a user note. Takes the chat's message parent
  * (a parallel chat resolves to its session), since `ChatBody` knows that id
  * and not the source.
  */
@@ -278,7 +278,6 @@ export const saveQuote = authMutation({
   args: {
     chatParentId: v.string(),
     quote: v.string(),
-    comment: v.string(),
     messageUrl: v.string(),
   },
   returns: v.id("chatLogEntries"),
@@ -293,13 +292,17 @@ export const saveQuote = authMutation({
     if (!/^https?:\/\//.test(args.messageUrl)) {
       throw new Error("messageUrl must be an http(s) link.");
     }
-    const comment = args.comment.trim();
-    const quoted = quote.replace(/\n/g, "\n> ");
+    const link = `[Open in chat](${args.messageUrl})`;
+    // The quote is the title; the body repeats it only when the title clips.
+    const body =
+      quote.length > LIMITS.user.title
+        ? `> ${quote.replace(/\n/g, "\n> ")}\n\n${link}`
+        : link;
     return insertEntry(ctx, fields, {
       kind: "note",
       author: "user",
-      title: comment || quote,
-      body: `> ${quoted}\n\n[Open in chat](${args.messageUrl})`,
+      title: quote,
+      body,
     });
   },
 });
