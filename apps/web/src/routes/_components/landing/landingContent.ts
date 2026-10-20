@@ -9,17 +9,17 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 import {
-  AutomationsIcon,
-  DocumentsIcon,
-  DraftsIcon,
-  InboxIcon,
-  ProjectsIcon,
-  QuickTasksIcon,
-  ReviewsIcon,
-  SessionsIcon,
-  StatsIcon,
-  TestingArenaIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+  AutomationIcon,
+  BarChartIcon,
+  BoardIcon,
+  ChecklistIcon,
+  DocumentIcon,
+  DraftIcon,
+  FlaskIcon,
+  InboxArrowIcon,
+  ReviewIcon,
+  TerminalIcon,
+} from "@vvedantb/ui";
 import type { BrandName } from "./BrandMark";
 
 /**
@@ -55,9 +55,8 @@ export type LandingPreviewKey =
 
 /**
  * Icon shape a feature tab can render. Deliberately narrower than either source
- * it accepts: the animated sidebar icons take `size` and `className` and
- * nothing else, and Tabler's icons take a superset, so this is the widest type
- * both satisfy. Features that exist in the product nav reuse that exact icon so
+ * it accepts: the animated nav icons from `@vvedantb/ui` and Tabler's icons
+ * both take a superset of `size` and `className`, so this is all the tabs use. Features that exist in the product nav reuse that exact icon so
  * the marketing page and the app agree; the rest fall back to Tabler.
  */
 type LandingIcon = ComponentType<{
@@ -132,7 +131,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
       "Requirements, structure and half-formed ideas live beside the repository, so a task starts with context instead of a prompt.",
     features: [
       {
-        icon: DocumentsIcon,
+        icon: DocumentIcon,
         name: "Documents",
         summary: "PRDs and specs the agent reads.",
         points: [
@@ -143,7 +142,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
         preview: "documents",
       },
       {
-        icon: ProjectsIcon,
+        icon: BoardIcon,
         name: "Projects",
         summary: "Multi-task work with a build pipeline.",
         points: [
@@ -154,7 +153,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
         preview: "projects",
       },
       {
-        icon: DraftsIcon,
+        icon: DraftIcon,
         name: "Drafts",
         summary: "Somewhere to put an idea.",
         points: [
@@ -176,7 +175,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
       "Sit with one in a live environment, or fire off a batch of small changes and come back when they are done.",
     features: [
       {
-        icon: SessionsIcon,
+        icon: TerminalIcon,
         name: "Sessions",
         summary: "Pair programming in a live sandbox.",
         points: [
@@ -187,7 +186,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
         preview: "sessions",
       },
       {
-        icon: QuickTasksIcon,
+        icon: ChecklistIcon,
         name: "Quick Tasks",
         summary: "Small changes, many at once.",
         points: [
@@ -220,7 +219,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
       "Every change arrives with a diff, a written recap, and whatever checks you have configured.",
     features: [
       {
-        icon: ReviewsIcon,
+        icon: ReviewIcon,
         name: "Reviews",
         summary: "Every pull request in one place.",
         points: [
@@ -231,7 +230,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
         preview: "reviews",
       },
       {
-        icon: TestingArenaIcon,
+        icon: FlaskIcon,
         name: "Testing Arena",
         summary: "Check the code against the spec.",
         points: [
@@ -253,7 +252,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
       "Scheduling, environments, conventions, and the numbers that tell you whether any of it worked.",
     features: [
       {
-        icon: AutomationsIcon,
+        icon: AutomationIcon,
         name: "Automations",
         summary: "Agent runs on a cron.",
         points: [
@@ -286,7 +285,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
         preview: "skills",
       },
       {
-        icon: StatsIcon,
+        icon: BarChartIcon,
         name: "Stats",
         summary: "See what actually shipped.",
         points: [
@@ -297,7 +296,7 @@ export const LANDING_PILLARS: readonly LandingPillar[] = [
         preview: "stats",
       },
       {
-        icon: InboxIcon,
+        icon: InboxArrowIcon,
         name: "Inbox",
         summary: "Know when something needs you.",
         points: [
