@@ -4,7 +4,6 @@ import { useState } from "react";
 import { m } from "motion/react";
 import {
   Button,
-  Checkbox,
   CodeBlock,
   CodeBlockCopyButton,
   Collapsible,
@@ -63,8 +62,7 @@ export function AnnotationCommentCard({
   cardRef: (node: HTMLDivElement | null) => void;
   context: PreviewAnnotationContext;
   position: { left: number; top: number };
-  /** `saveToDocuments`: also keep the annotation as a note in the chat's Log. */
-  onSubmit: (feedback: string, saveToDocuments: boolean) => void;
+  onSubmit: (feedback: string) => void;
   onCancel: () => void;
   isSubmitting: boolean;
 }) {
@@ -72,8 +70,6 @@ export function AnnotationCommentCard({
   // Ephemeral, per-annotation: the details are worth a look once, and the card
   // is thrown away on submit or cancel, so there is nothing to persist.
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // Same lifetime as the text: one choice per annotation.
-  const [saveToDocuments, setSaveToDocuments] = useState(false);
   const reactName = context.reactComponents[0];
   const previewText =
     context.textContent.length > 60
@@ -86,7 +82,7 @@ export function AnnotationCommentCard({
   function handleSubmit() {
     const trimmed = text.trim();
     if (!trimmed || isSubmitting) return;
-    onSubmit(trimmed, saveToDocuments);
+    onSubmit(trimmed);
   }
 
   return (
@@ -185,15 +181,6 @@ export function AnnotationCommentCard({
           }
         }}
       />
-      {/* Own row: beside the two buttons it overflowed the 320px card. */}
-      <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-        <Checkbox
-          checked={saveToDocuments}
-          onCheckedChange={(checked) => setSaveToDocuments(checked === true)}
-          disabled={isSubmitting}
-        />
-        Save to Documents
-      </label>
       <div className="mt-2 flex justify-end gap-2">
         <Button
           type="button"

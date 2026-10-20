@@ -10,17 +10,64 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  toast,
 } from "@eva/ui";
-import { IconPencil, IconQuote, IconX } from "@tabler/icons-react";
-import { citationPreview } from "@/lib/components/chat/assistantCitation";
+import {
+  IconBookmark,
+  IconBookmarkFilled,
+  IconPencil,
+  IconQuote,
+  IconX,
+} from "@tabler/icons-react";
+import { useMutation } from "convex/react";
+import { api } from "@eva/backend";
+import {
+  citationPreview,
+  type AssistantCitation,
+} from "@/lib/components/chat/assistantCitation";
+import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
+import { messageLinkUrl } from "@/lib/components/chat/messageLink";
 import { usePendingCitations } from "@/lib/contexts/PendingCitationsContext";
 
-export function PendingCitationChips() {
+/** Quote + comment: editing the comment after a save makes it savable again. */
+function savedKey(citation: AssistantCitation): string {
+  return `${citation.id}\n${citation.comment}`;
+}
+
+/**
+ * `chatParentId` enables the bookmark, which saves the quote and its comment
+ * as a note in the chat's Log (Documents tab). Chats without one (Manager
+ * Ave) have no Log, so the button is hidden.
+ */
+export function PendingCitationChips({
+  chatParentId,
+}: {
+  chatParentId?: ChatParentId;
+}) {
   const citations = usePendingCitations();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  // Per chip, not on the citation: a save never changes what gets sent.
+  const [savedKeys, setSavedKeys] = useState<ReadonlySet<string>>(new Set());
+  const saveQuote = useMutation(api.chatLog.saveQuote);
 
   if (!citations || citations.items.length === 0) return null;
+
+  function save(citation: AssistantCitation, parentId: ChatParentId) {
+    const key = savedKey(citation);
+    void saveQuote({
+      chatParentId: parentId,
+      quote: citation.text,
+      comment: citation.comment,
+      messageUrl: messageLinkUrl(citation.messageId),
+    }).then(
+      () => {
+        setSavedKeys((current) => new Set(current).add(key));
+        toast.success("Saved to Documents");
+      },
+      () => toast.error("Couldn't save that quote"),
+    );
+  }
 
   return (
     <div className="mb-2 flex flex-wrap gap-1.5" data-testid="citation-chips">
@@ -109,6 +156,25 @@ export function PendingCitationChips() {
                 </div>
               </PopoverContent>
             </Popover>
+            {chatParentId ? (
+              savedKeys.has(savedKey(citation)) ? (
+                <span
+                  className="inline-flex size-5 shrink-0 items-center justify-center text-muted-foreground"
+                  aria-label="Saved to Documents"
+                >
+                  <IconBookmarkFilled className="size-3" />
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="hit-target inline-flex size-5 shrink-0 items-center justify-center rounded hover:bg-muted"
+                  aria-label="Save to Documents"
+                  onClick={() => save(citation, chatParentId)}
+                >
+                  <IconBookmark className="size-3" />
+                </button>
+              )
+            ) : null}
             <button
               type="button"
               className="hit-target inline-flex size-5 shrink-0 items-center justify-center rounded hover:bg-muted"

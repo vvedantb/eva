@@ -43,7 +43,6 @@ import {
   type PreviewFramingChange,
   type PreviewViewport,
 } from "./_utils/previewViewport";
-import type { AnnotationSubmission } from "./_utils/-previewAnnotation";
 
 interface PreviewInfo {
   url: string;
@@ -75,11 +74,10 @@ interface WebPreviewPanelProps {
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
-   * Session-only: submit compact display + rich agent prompt (and an optional
-   * Log note) for a preview annotation. When absent, the select-element toggle
-   * is hidden.
+   * Session-only: submit compact display + rich agent prompt for a preview
+   * annotation. When absent, the select-element toggle is hidden.
    */
-  onAnnotationSubmit?: (submission: AnnotationSubmission) => Promise<void>;
+  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
   /**
    * Session-only, set while this pane is the visible preview: lets it float
    * into the mini-player when the user leaves the sessions area or pops it out.

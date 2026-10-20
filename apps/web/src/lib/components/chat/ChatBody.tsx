@@ -1054,7 +1054,7 @@ function ChatBodyInner({
                 onCancel={onCancel}
                 preInputContent={
                   <>
-                    <PendingCitationChips />
+                    <PendingCitationChips chatParentId={chatParentId} />
                     <PendingSnapshotChips />
                     <PendingWebMcpChips />
                     <PendingPullRequestChips />

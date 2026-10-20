@@ -6,9 +6,7 @@ import { AnimatePresence } from "motion/react";
 import { useWebPreview } from "@eva/ui";
 import {
   buildAnnotationDisplay,
-  buildAnnotationNote,
   buildAnnotationPrompt,
-  type AnnotationSubmission,
 } from "../_utils/-previewAnnotation";
 import { AnnotationCommentCard } from "./AnnotationCommentCard";
 import { useAnnotationBridge } from "./useAnnotationBridge";
@@ -27,7 +25,7 @@ export function PreviewAnnotationLayer({
 }: {
   mode: boolean;
   onModeChange: (active: boolean) => void;
-  onSubmit: (submission: AnnotationSubmission) => Promise<void>;
+  onSubmit: (display: string, full: string) => Promise<void>;
 }) {
   const { iframeRef } = useWebPreview();
   const layerRef = useRef<HTMLDivElement | null>(null);
@@ -115,15 +113,17 @@ export function PreviewAnnotationLayer({
                   position={cardPosition}
                   isSubmitting={isSubmitting}
                   onCancel={clearPending}
-                  onSubmit={(feedback, saveToDocuments) => {
+                  onSubmit={(feedback) => {
+                    const display = buildAnnotationDisplay(
+                      feedback,
+                      pending.context,
+                    );
+                    const full = buildAnnotationPrompt(
+                      feedback,
+                      pending.context,
+                    );
                     setIsSubmitting(true);
-                    void onSubmit({
-                      display: buildAnnotationDisplay(feedback, pending.context),
-                      full: buildAnnotationPrompt(feedback, pending.context),
-                      note: saveToDocuments
-                        ? buildAnnotationNote(feedback, pending.context)
-                        : null,
-                    })
+                    void onSubmit(display, full)
                       .then(() => {
                         clearPending();
                         onModeChange(false);
