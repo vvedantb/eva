@@ -185,15 +185,16 @@ export function AnnotationCommentCard({
           }
         }}
       />
-      <div className="mt-2 flex items-center gap-2">
-        <label className="mr-auto flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-          <Checkbox
-            checked={saveToDocuments}
-            onCheckedChange={(checked) => setSaveToDocuments(checked === true)}
-            disabled={isSubmitting}
-          />
-          Save to Documents
-        </label>
+      {/* Own row: beside the two buttons it overflowed the 320px card. */}
+      <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+        <Checkbox
+          checked={saveToDocuments}
+          onCheckedChange={(checked) => setSaveToDocuments(checked === true)}
+          disabled={isSubmitting}
+        />
+        Save to Documents
+      </label>
+      <div className="mt-2 flex justify-end gap-2">
         <Button
           type="button"
           size="sm"
