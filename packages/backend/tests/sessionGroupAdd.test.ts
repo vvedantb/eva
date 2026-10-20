@@ -88,6 +88,35 @@ describe("sessions.addToGroup", () => {
     TIMEOUT_MS,
   );
 
+  /**
+   * Without the same-group early return, re-adding leaves the group first: a
+   * two-member group dissolves, and the session is then patched onto the
+   * deleted group id still held by the stale anchor doc.
+   */
+  test(
+    "re-adding a session to the group it is already in keeps the group",
+    async () => {
+      const f = await fixture();
+      await f.asUser.mutation(api.sessions.addToGroup, {
+        sessionId: f.b,
+        groupSessionId: f.a,
+      });
+      const groupId = await f.groupOf(f.a);
+      expect(groupId).toBeDefined();
+
+      await f.asUser.mutation(api.sessions.addToGroup, {
+        sessionId: f.b,
+        groupSessionId: f.a,
+      });
+      expect(await f.groupOf(f.a)).toBe(groupId);
+      expect(await f.groupOf(f.b)).toBe(groupId);
+      if (groupId) {
+        expect(await f.t.run((ctx) => ctx.db.get(groupId))).not.toBeNull();
+      }
+    },
+    TIMEOUT_MS,
+  );
+
   test(
     "rejects adding a session to its own group",
     async () => {
