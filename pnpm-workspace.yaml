@@ -9,6 +9,8 @@ minimumReleaseAgeExclude:
   - "@vvedantb/redline"
   # @vvedantb/ui 0.12.0 (owner's package) published 2026-10-20 with the shared nav icons.
   - "@vvedantb/ui"
+  # @vvedantb/server 0.5.0 (owner's package) published 2026-10-22 with the shared code sandbox.
+  - "@vvedantb/server"
   # Native (Rust) React Compiler landed 2026-08-18 and is what the web build
   # runs; the 7-day soak would block installs until it ages in.
   - "@vitejs/plugin-react"
