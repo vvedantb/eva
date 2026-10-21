@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useUser } from "@clerk/clerk-react";
 import { useMutation } from "convex/react";
@@ -51,8 +51,6 @@ export function NewSessionComposer() {
     displayTraits,
     executionTraits,
     onTraitsChange,
-    providerAccountId,
-    setProviderAccountId,
     setDraft,
     clearDraft,
   } = useNewSessionComposerState(
@@ -67,43 +65,17 @@ export function NewSessionComposer() {
   } = tokenizedToEditable(draftTokenized);
 
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const {
-    options: accounts,
-    resolveId: resolveAccountId,
-    ready: accountsReady,
-  } = useProviderAccounts();
-  const [accountDefaulted, setAccountDefaulted] = useState(false);
-
-  // Default the account once the provider list is ready, but only when the
-  // stored pick does not resolve to an OWN account — a saved own pick must
-  // survive a reload, while a stored shared id is re-defaulted (an earlier bug
-  // auto-saved teammates' shared accounts here, and a shared account is an
-  // explicit per-visit choice, never a persisted default). Runs in an effect
-  // because setProviderAccountId writes to localStorage, which dispatches a
-  // sync event — doing that during render triggers React's
-  // event-handler-in-render error.
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-chain-state-updates --
-     See the comment above: setProviderAccountId writes localStorage and
-     dispatches a sync event, which React forbids during render. */
-  useEffect(() => {
-    if (accountsReady && !accountDefaulted) {
-      const storedResolvesToOwn = accounts.some(
-        (account) => account.id === providerAccountId && account.isOwn,
-      );
-      if (!storedResolvesToOwn) {
-        setProviderAccountId(defaultProviderAccountId(accounts, model));
-      }
-      setAccountDefaulted(true);
-    }
-  }, [
-    accountsReady,
-    accountDefaulted,
-    accounts,
-    model,
-    providerAccountId,
-    setProviderAccountId,
-  ]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-chain-state-updates */
+  const { options: accounts, resolveId: resolveAccountId } =
+    useProviderAccounts();
+  // `undefined` = no explicit pick this visit: follow the user's own account
+  // for the model's provider (Team when none), same as quick tasks.
+  const [pickedAccountId, setPickedAccountId] = useState<
+    string | null | undefined
+  >(undefined);
+  const providerAccountId =
+    pickedAccountId === undefined
+      ? defaultProviderAccountId(accounts, model)
+      : pickedAccountId;
 
   const handleSend = async (
     content: string,
@@ -186,14 +158,16 @@ export function NewSessionComposer() {
             model,
             setModel: (next) => {
               setModel(next);
-              setProviderAccountId(
-                providerAccountIdForModel(accounts, providerAccountId, next),
-              );
+              if (pickedAccountId !== undefined) {
+                setPickedAccountId(
+                  providerAccountIdForModel(accounts, pickedAccountId, next),
+                );
+              }
             },
             modelOptions,
             accounts,
             accountId: providerAccountId,
-            onAccountChange: setProviderAccountId,
+            onAccountChange: setPickedAccountId,
             displayTraits,
             onTraitsChange,
           }}
