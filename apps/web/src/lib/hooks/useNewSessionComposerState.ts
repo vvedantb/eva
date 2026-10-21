@@ -15,6 +15,14 @@ import {
 // Older blobs also held model/traits/account; only the draft is read now.
 const storedDraftSchema = z.object({ draft: z.string() }).catch({ draft: "" });
 
+export function parseStoredDraft(raw: string): { draft: string } {
+  try {
+    return storedDraftSchema.parse(JSON.parse(raw));
+  } catch {
+    return { draft: "" };
+  }
+}
+
 function storageKey(repoId: Id<"githubRepos">) {
   return `eva:new-session-composer:${repoId}`;
 }
@@ -32,15 +40,7 @@ export function useNewSessionComposerState(
   const [stored, setStored] = useLocalStorage(
     storageKey(repoId),
     { draft: "" },
-    {
-      deserializer: (raw) => {
-        try {
-          return storedDraftSchema.parse(JSON.parse(raw));
-        } catch {
-          return { draft: "" };
-        }
-      },
-    },
+    { deserializer: parseStoredDraft },
   );
   // Unpicked fields follow the repo defaults live.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
