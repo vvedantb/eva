@@ -42,7 +42,7 @@ export function useAvailableAiModels(
  *
  * `options` are the picker's account groups (empty while loading or when none
  * exist, so the picker falls back to team-only). `resolveId` maps a stored
- * string id (the picker/localStorage carries plain strings) back to the branded
+ * string id (the picker carries plain strings) back to the branded
  * `Id<"userProviderAccounts">` from the live docs, so callers pass a properly
  * typed id to mutations without a cast. Unknown ids (e.g. a deleted account)
  * resolve to undefined — the run falls back to the team credential.
