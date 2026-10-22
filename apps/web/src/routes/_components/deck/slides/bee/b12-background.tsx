@@ -4,8 +4,10 @@ import {
   IconBrain,
   IconCpu,
   IconFileText,
+  IconGauge,
   IconPlugConnected,
   IconSparkles,
+  IconStack2,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
@@ -38,9 +40,11 @@ interface Chore {
 /** What a hands-on agent asks of you before and during the work. */
 const CHORES: readonly Chore[] = [
   { icon: IconCpu, label: "Choose the model", tilt: 1 },
+  { icon: IconGauge, label: "Set the reasoning effort", tilt: -1.5 },
   { icon: IconSparkles, label: "Pick the right skill", tilt: -2 },
   { icon: IconPlugConnected, label: "Connect the MCP tools", tilt: 1.5 },
-  { icon: IconBrain, label: "Read the thinking", tilt: -1 },
+  { icon: IconStack2, label: "Watch the context fill and compact", tilt: -1 },
+  { icon: IconBrain, label: "Read the thinking", tilt: 1 },
   { icon: IconFileText, label: "Parse paragraphs of output", tilt: 2 },
   { icon: IconAdjustmentsHorizontal, label: "Steer it, again", tilt: -1.5 },
 ];
@@ -81,20 +85,20 @@ function Steering() {
       <div className="text-sm font-semibold tracking-[0.12em] text-[#2a1e0c]/50 uppercase">
         An agent you steer
       </div>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {CHORES.map((chore, index) => {
           const Glyph = chore.icon;
           return (
             <m.div
               key={chore.label}
-              className="flex h-11 items-center gap-3 rounded-full bg-[#2a1e0c]/[0.05] px-4 text-lg text-[#2a1e0c]/80"
+              className="flex h-9 items-center gap-3 rounded-full bg-[#2a1e0c]/[0.05] px-4 text-[17px] text-[#2a1e0c]/80"
               initial={{ opacity: 0, x: -16, rotate: 0 }}
               animate={
                 shown
                   ? { opacity: 1, x: 0, rotate: chore.tilt }
                   : { opacity: 0, x: -16, rotate: 0 }
               }
-              transition={cueTransition(shown, 0.15 + index * 0.14, BEE_SPRING)}
+              transition={cueTransition(shown, 0.15 + index * 0.11, BEE_SPRING)}
             >
               <Glyph size={20} stroke={1.7} className="text-[#2a1e0c]/50" />
               {chore.label}
