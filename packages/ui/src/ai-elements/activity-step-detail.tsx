@@ -4,7 +4,7 @@ import { Badge } from "../ui/badge";
 import { cn } from "../utils/cn";
 import type { ActivityStep } from "./activity-shared";
 import { CodeBlock, CodeBlockCopyButton } from "./code-block";
-import { TaskItemFile } from "./task";
+import { FileChip } from "./file-chip";
 
 function basename(value: string): string {
   const slash = Math.max(value.lastIndexOf("/"), value.lastIndexOf("\\"));
@@ -90,26 +90,14 @@ export function ActivityStepDetail({
 
       {step.files && step.files.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
-          {step.files.map((filePath) =>
-            onOpenFile ? (
-              <button
-                key={filePath}
-                type="button"
-                title={filePath}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenFile(filePath);
-                }}
-                className="inline-flex min-w-0 max-w-full cursor-pointer"
-              >
-                <TaskItemFile className="transition-colors hover:bg-muted">
-                  {basename(filePath)}
-                </TaskItemFile>
-              </button>
-            ) : (
-              <TaskItemFile key={filePath}>{basename(filePath)}</TaskItemFile>
-            ),
-          )}
+          {step.files.map((filePath) => (
+            <FileChip
+              key={filePath}
+              name={basename(filePath)}
+              path={filePath}
+              onOpenFile={onOpenFile}
+            />
+          ))}
         </div>
       ) : null}
 

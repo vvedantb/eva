@@ -1,4 +1,10 @@
 import {
+  confirmSteerAcks,
+  deliverSteers,
+  readSteers,
+  steerClaimArgs,
+} from "../runtime/steering.js";
+import {
   CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
   DAEMON_OPTS_SIG,
@@ -15,7 +21,7 @@ import {
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { serializeSteps } from "../parse/stepBudget.js";
+import { serializeFinalSteps } from "../parse/stepBudget.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
 import {
   buildClaudeShapedResult,
@@ -205,7 +211,7 @@ async function finalizeTurn(
     success,
     result,
     error,
-    activityLog: serializeSteps(S.accumulatedSteps),
+    activityLog: serializeFinalSteps(S.accumulatedSteps, result),
     ...(RUN_ID ? { runId: RUN_ID } : {}),
     ...(usage
       ? {
@@ -360,6 +366,12 @@ async function startTurn(
   log("codex daemon: turn started " + providerTurnId);
 }
 
+/** The running turn's App Server id, or "" when no turn can take a steer. */
+function liveProviderTurnId(): string {
+  if (supervisor.phase !== "running") return "";
+  return supervisor.currentTurn?.providerTurnId ?? "";
+}
+
 function cleanMarkers(): void {
   cleanOwnedDaemonMarkers({
     paths,
@@ -388,10 +400,17 @@ export async function runCodexAppServerDaemon(): Promise<void> {
   }, FENCE_POLL_INTERVAL_MS);
   fence.unref?.();
 
-  const preflightOk = await runPreflightHeartbeat();
+  // The lease preflight and the GitHub token are independent Convex round
+  // trips (measured ~0.1–0.2s and ~0.3–0.45s), so run them side by side. Both
+  // still land before the app-server spawns: its tool shells inherit
+  // `GH_TOKEN` from the spawn env, and the first turn waits on MCP connects
+  // that only start at `thread/start`, so every ms saved here reaches it.
+  const [preflightOk] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshGithubToken(),
+  ]);
   if (!preflightOk) process.exit(1);
   startStreamingLoops();
-  await refreshGithubToken();
 
   const client = new CodexAppServerClient();
   try {
@@ -437,12 +456,14 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         lastClaimAt = claimNow;
         const acceptTurn =
           supervisor.phase === "idle" && supervisor.pendingClaim === null;
+        const steerArgs = steerClaimArgs(liveProviderTurnId() !== "");
 
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION,
-          entityArgs({ model: MODEL, acceptTurn }),
+          entityArgs({ model: MODEL, acceptTurn, ...steerArgs }),
         );
+        confirmSteerAcks(steerArgs);
         const providerTurnId = supervisor.currentTurn?.providerTurnId ?? "";
         if (
           readCancelRequested(claimed) &&
@@ -463,6 +484,20 @@ export async function runCodexAppServerDaemon(): Promise<void> {
               log("codex daemon: interrupt failed — " + message);
             });
         }
+        // After the cancel: a steer that races a Stop is rejected and runs as
+        // the next queued turn. `expectedTurnId` makes App Server reject a
+        // steer that lands after this turn already ended.
+        await deliverSteers(readSteers(claimed), async (text) => {
+          const turnId = liveProviderTurnId();
+          if (!turnId) return false;
+          await client.request("turn/steer", {
+            threadId: S.activeCodexThreadId,
+            expectedTurnId: turnId,
+            input: [{ type: "text", text }],
+          });
+          lastEventAt = Date.now();
+          return true;
+        });
         const claimedTurn = readClaimedTurn(claimed);
         if (claimedTurn) {
           const currentLease = getCurrentTurnLease();

@@ -186,13 +186,23 @@ describe("swap exists before anything can spike memory", () => {
   test("a freshly created sandbox has swap before install and build", () => {
     // createSandbox is the one door every sandbox comes through — session,
     // quick task, project chat and seed prep — and its caller installs
-    // dependencies and builds long before any resume path would run.
+    // dependencies and builds long before any resume path would run. Docker
+    // starts only after createSandbox returns (createSandboxAndPrepareRepo),
+    // so swap is in place before dockerd can spike memory.
     const body = functionBody(git, "export async function createSandbox(");
-    const swapAt = body.indexOf("ensureSwapFile(sandbox)");
-    const dockerAt = body.indexOf("bootstrapVercelDocker(sandbox)");
-    expect(swapAt, "the post-create swap step moved").toBeGreaterThan(-1);
+    expect(
+      body.indexOf("ensureSwapFile(sandbox)"),
+      "the post-create swap step moved",
+    ).toBeGreaterThan(-1);
+    expect(body).not.toContain("bootstrapVercelDocker(");
+    const prepare = functionBody(
+      git,
+      "export async function createSandboxAndPrepareRepo(",
+    );
+    const createAt = prepare.indexOf("await createSandbox(");
+    const dockerAt = prepare.indexOf("bootstrapVercelDocker(createdSandbox)");
     expect(dockerAt, "the docker bootstrap moved").toBeGreaterThan(-1);
-    expect(swapAt).toBeLessThan(dockerAt);
+    expect(createAt).toBeLessThan(dockerAt);
   });
 
   test("both dev server launchers provision swap before a cold compile", () => {

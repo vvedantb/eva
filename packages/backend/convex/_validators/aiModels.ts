@@ -603,6 +603,16 @@ export function usesChatDaemon(model: string | null | undefined): boolean {
 }
 
 /**
+ * Whether the warm daemon can inject a message into its live turn: Claude via
+ * the SDK prompt stream, Codex via App Server `turn/steer`. Cursor and
+ * OpenCode steer by interrupting the turn and sending the message next.
+ */
+export function supportsNativeSteer(model: string | null | undefined): boolean {
+  const provider = getAIModelProvider(model);
+  return provider === "claude" || provider === "codex";
+}
+
+/**
  * Per-model trait capabilities (reasoning levels, thinking toggle, 1M context).
  */
 export function getModelTraits(model: string | null | undefined): ModelTraits {

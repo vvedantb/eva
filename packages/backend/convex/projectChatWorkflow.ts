@@ -42,6 +42,7 @@ import {
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
+import { bareHarnessCommandPrompt } from "./_mentions/bareHarnessCommand";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
 import { resolveMessageCredential } from "./_userProviderAccounts/credentialSource";
 import {
@@ -119,6 +120,13 @@ async function buildProjectChatTurnPrompt(
     args.message,
     project.repoId,
   );
+  const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
+  if (bareCommand !== null) {
+    return {
+      prompt: bareCommand,
+      attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
+    };
+  }
 
   const branchName =
     project.branchName ??
@@ -657,7 +665,117 @@ export const enqueueMessage = authMutation({
  * a daemon-backed turn, sets `cancelRequestedAt` so the warm provider process
  * interrupts its own in-flight turn on its next `claimPendingTurn` poll.
  * One-shot providers retain the process-kill path.
+ * Shared by the Stop button and the Steer fallback (`_chat/steer.ts`).
  */
+export async function cancelProjectChatExecution(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, project.activeChatWorkflowId);
+
+  const workflowIdToCancel = project.activeChatWorkflowId;
+  const pendingRequestedAt = project.pendingTurn?.requestedAt;
+
+  if (usesChatDaemon(project.lastChatModel ?? project.model)) {
+    await ctx.db.patch(project._id, { cancelRequestedAt: Date.now() });
+  } else if (project.sandboxId) {
+    if (project.activeWorkflowId || project.activeBuildWorkflowId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
+        sandboxId: project.sandboxId,
+        repoId: project.repoId,
+        entityIdField: "projectId",
+        entityId: String(project._id),
+      });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+        sandboxId: project.sandboxId,
+        repoId: project.repoId,
+      });
+    }
+  }
+
+  if (workflowIdToCancel !== undefined) {
+    await closeTurnForWorkflow(
+      ctx,
+      project._id,
+      workflowIdToCancel,
+      "cancelled",
+      { error: "Cancelled by the user" },
+    );
+  }
+
+  const streamingEntityId = chatStreamEntityId(project._id);
+  const streaming = await ctx.db
+    .query("streamingActivity")
+    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
+    .first();
+
+  const latest = await ctx.db.get(project._id);
+  if (!latest) return;
+
+  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+    latestPendingTurn: latest.pendingTurn,
+    cancelPendingRequestedAt: pendingRequestedAt,
+    latestActiveWorkflowId: latest.activeChatWorkflowId,
+    cancelWorkflowId: workflowIdToCancel,
+  });
+
+  if (cancelOwnsCurrentTurn) {
+    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
+    const last = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", project._id))
+      .order("desc")
+      .first();
+    if (
+      last &&
+      last.role === "assistant" &&
+      last.finishedAt === undefined &&
+      last._id !== syntheticTurnMessageId
+    ) {
+      await finalizeCancelledAssistantMessage(ctx, last, streaming);
+    }
+    await finalizeOpenSyntheticTurnOnCancel(
+      ctx,
+      syntheticTurnMessageId,
+      streaming,
+    );
+    await closeOpenTurn(ctx, project._id, "cancelled", {
+      error: "Cancelled by the user",
+    });
+  }
+
+  await clearStreamingActivity(ctx, streamingEntityId);
+
+  const projectPatch: {
+    activeChatWorkflowId?: undefined;
+    pendingTurn?: undefined;
+    syntheticTurnMessageId?: undefined;
+    updatedAt: number;
+  } = { updatedAt: Date.now() };
+
+  if (
+    workflowIdToCancel !== undefined &&
+    latest.activeChatWorkflowId === workflowIdToCancel
+  ) {
+    projectPatch.activeChatWorkflowId = undefined;
+  }
+  if (
+    pendingRequestedAt !== undefined &&
+    latest.pendingTurn?.requestedAt === pendingRequestedAt
+  ) {
+    projectPatch.pendingTurn = undefined;
+  }
+  if (cancelOwnsCurrentTurn) {
+    projectPatch.syntheticTurnMessageId = undefined;
+  }
+
+  await ctx.db.patch(project._id, projectPatch);
+
+  await startNextQueuedProjectChatMessage(ctx, project._id);
+}
+
+/** The chat Stop button. */
 export const cancelExecution = authMutation({
   args: {
     projectId: v.id("projects"),
@@ -670,108 +788,7 @@ export const cancelExecution = authMutation({
       throw new Error("Not authorized");
     }
 
-    await cancelTrackedWorkflow(ctx, project.activeChatWorkflowId);
-
-    const workflowIdToCancel = project.activeChatWorkflowId;
-    const pendingRequestedAt = project.pendingTurn?.requestedAt;
-
-    if (usesChatDaemon(project.lastChatModel ?? project.model)) {
-      await ctx.db.patch(args.projectId, { cancelRequestedAt: Date.now() });
-    } else if (project.sandboxId) {
-      if (project.activeWorkflowId || project.activeBuildWorkflowId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-          sandboxId: project.sandboxId,
-          repoId: project.repoId,
-          entityIdField: "projectId",
-          entityId: String(args.projectId),
-        });
-      } else {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-          sandboxId: project.sandboxId,
-          repoId: project.repoId,
-        });
-      }
-    }
-
-    if (workflowIdToCancel !== undefined) {
-      await closeTurnForWorkflow(
-        ctx,
-        args.projectId,
-        workflowIdToCancel,
-        "cancelled",
-        { error: "Cancelled by the user" },
-      );
-    }
-
-    const streamingEntityId = chatStreamEntityId(args.projectId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-
-    const latest = await ctx.db.get(args.projectId);
-    if (!latest) return null;
-
-    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-      latestPendingTurn: latest.pendingTurn,
-      cancelPendingRequestedAt: pendingRequestedAt,
-      latestActiveWorkflowId: latest.activeChatWorkflowId,
-      cancelWorkflowId: workflowIdToCancel,
-    });
-
-    if (cancelOwnsCurrentTurn) {
-      const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
-        .order("desc")
-        .first();
-      if (
-        last &&
-        last.role === "assistant" &&
-        last.finishedAt === undefined &&
-        last._id !== syntheticTurnMessageId
-      ) {
-        await finalizeCancelledAssistantMessage(ctx, last, streaming);
-      }
-      await finalizeOpenSyntheticTurnOnCancel(
-        ctx,
-        syntheticTurnMessageId,
-        streaming,
-      );
-      await closeOpenTurn(ctx, args.projectId, "cancelled", {
-        error: "Cancelled by the user",
-      });
-    }
-
-    await clearStreamingActivity(ctx, streamingEntityId);
-
-    const projectPatch: {
-      activeChatWorkflowId?: undefined;
-      pendingTurn?: undefined;
-      syntheticTurnMessageId?: undefined;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-
-    if (
-      workflowIdToCancel !== undefined &&
-      latest.activeChatWorkflowId === workflowIdToCancel
-    ) {
-      projectPatch.activeChatWorkflowId = undefined;
-    }
-    if (
-      pendingRequestedAt !== undefined &&
-      latest.pendingTurn?.requestedAt === pendingRequestedAt
-    ) {
-      projectPatch.pendingTurn = undefined;
-    }
-    if (cancelOwnsCurrentTurn) {
-      projectPatch.syntheticTurnMessageId = undefined;
-    }
-
-    await ctx.db.patch(args.projectId, projectPatch);
-
-    await startNextQueuedProjectChatMessage(ctx, args.projectId);
+    await cancelProjectChatExecution(ctx, project);
     return null;
   },
 });
@@ -1363,4 +1380,5 @@ export {
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,
+  updateGoal,
 } from "./_chat/projectChatDaemon";

@@ -2,13 +2,17 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
+import { IconBrain } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import {
   ActivityTasks,
-  Reasoning,
-  ReasoningTrigger,
-  CollapsibleContent,
   Shimmer,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
   Spinner,
   formatElapsed,
   useElapsedSeconds,
@@ -20,6 +24,7 @@ import {
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
 import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
@@ -167,6 +172,7 @@ export function StreamingActivityDisplay({
   isSandboxStartup?: boolean;
 }) {
   const simpleView = useSimpleView();
+  const layout = useActivityLayout();
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
   const streamIsSilent = useSilentStreamNotice(
     activity,
@@ -215,6 +221,7 @@ export function StreamingActivityDisplay({
       icon={icon}
       startedAt={startedAt}
       onOpenFile={onOpenFile}
+      layout={layout}
     />
   );
 }
@@ -280,6 +287,7 @@ export function ActivityLogDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
+  const layout = useActivityLayout();
   const { fullLog, request } = useFullActivityLog(messageId);
   const duration =
     startedAt && finishedAt ? formatDuration(startedAt, finishedAt) : undefined;
@@ -300,6 +308,7 @@ export function ActivityLogDisplay({
         finalText={finalText}
         onOpenFile={onOpenFile}
         onRequestFullDetail={request}
+        layout={layout}
       />
     );
   }
@@ -314,13 +323,20 @@ export function ActivityLogDisplay({
   }
 
   return (
-    <Reasoning defaultOpen={false}>
-      <ReasoningTrigger getThinkingMessage={() => "View logs"} />
-      <CollapsibleContent className="mt-4 text-sm text-muted-foreground">
+    <TraceCollapsible defaultOpen={false}>
+      <TraceCollapsibleTrigger>
+        <TraceLine>
+          <TraceIcon>
+            <IconBrain />
+          </TraceIcon>
+          <TraceTitle>View logs</TraceTitle>
+        </TraceLine>
+      </TraceCollapsibleTrigger>
+      <TraceCollapsibleContent>
         <pre className="whitespace-pre-wrap max-sm:wrap-break-word font-mono text-xs max-h-64 overflow-y-auto scroll-fade">
           {activityLog}
         </pre>
-      </CollapsibleContent>
-    </Reasoning>
+      </TraceCollapsibleContent>
+    </TraceCollapsible>
   );
 }

@@ -8,7 +8,19 @@ import {
   previewActivityHmacMessage,
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
-import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
+import {
+  parseCiCompleted,
+  parseCiPassed,
+  parseRepoEvents,
+} from "./_automationEvents/events";
+import { prWatchUrls } from "./_pullRequests/watchEvaluate";
+import { hmacSha256Hex } from "./_shared/hmac";
+import {
+  CHANGELOG_EMAIL_RATINGS,
+  CHANGELOG_ITEM_VOTES,
+  changelogVoteHmacMessage,
+} from "./_changelog/entry";
+import { buildChangelogVotePageHtml } from "./emailTemplates";
 
 const http = httpRouter();
 
@@ -50,18 +62,7 @@ function verifyDeployKey(request: Request): boolean {
 async function computeScopedHmac(message: string): Promise<string | null> {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return hmacSha256Hex(secret, message);
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -337,10 +338,10 @@ http.route({
     }
     if (resolved.kind === "sibling") {
       console.log(
-        `[git-credentials][sibling-read] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+        `[git-credentials][sibling] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
       );
       const siblingToken: string = await ctx.runAction(
-        internal.githubAuth.mintReadOnlyRepoToken,
+        internal.githubAuth.mintSiblingRepoToken,
         {
           installationId: resolved.installationId,
           githubId: resolved.githubId,
@@ -625,18 +626,42 @@ http.route({
 
     // Event-triggered automations (CI auto-fix, review responder, issue to
     // task, user automations). Independent of the state sync below.
-    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+    const repoEvents = parseRepoEvents(event ?? "", body);
+    const ciPassed = parseCiPassed(event ?? "", body);
+    for (const repoEvent of repoEvents) {
       await ctx.scheduler.runAfter(
         0,
         internal._automationEvents.dispatch.dispatch,
         { event: repoEvent },
       );
     }
-    for (const passed of parseCiPassed(event ?? "", body)) {
+    for (const passed of ciPassed) {
       await ctx.scheduler.runAfter(
         0,
         internal._automationEvents.dispatch.noteCiPassed,
         { passed },
+      );
+    }
+    // The agent's PR watch: trusted feedback, plus any CI that finished,
+    // whatever its outcome (the last check to finish may end cancelled).
+    const ciCompleted = parseCiCompleted(event ?? "", body);
+    const watchUrls = prWatchUrls(repoEvents, ciCompleted);
+    if (watchUrls.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watch.noteActivity,
+        { prUrls: watchUrls },
+      );
+    }
+    if (ciCompleted?.kind === "status" && ciCompleted.branches.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watch.noteHeadStatus,
+        {
+          owner: ciCompleted.owner,
+          name: ciCompleted.name,
+          branches: ciCompleted.branches,
+        },
       );
     }
 
@@ -720,6 +745,16 @@ http.route({
       const parsed = pushWebhookSchema.safeParse(JSON.parse(body));
       if (parsed.success && parsed.data.ref.startsWith("refs/heads/")) {
         const branch = parsed.data.ref.slice("refs/heads/".length);
+        // A push to a watched PR's base branch may cause a merge conflict.
+        await ctx.scheduler.runAfter(
+          0,
+          internal._pullRequests.watch.noteBasePush,
+          {
+            owner: parsed.data.repository.owner.login,
+            name: parsed.data.repository.name,
+            branch,
+          },
+        );
         await ctx.scheduler.runAfter(
           0,
           internal.githubWebhook.handlePushForSkillSync,
@@ -1037,6 +1072,68 @@ http.route({
   path: "/mcp",
   method: "DELETE",
   handler: mcpHandler,
+});
+
+const changelogLinkFields = {
+  run: z.string().min(1),
+  user: z.string().min(1),
+  sig: z.string().min(1),
+};
+
+/** Either 👍 / 👎 on one item, or a rating of the whole email (no item). */
+const changelogFeedbackQuerySchema = z.union([
+  z.object({
+    ...changelogLinkFields,
+    item: z.coerce.number().int().min(0),
+    vote: z.enum(CHANGELOG_ITEM_VOTES),
+  }),
+  z.object({
+    ...changelogLinkFields,
+    vote: z.enum(CHANGELOG_EMAIL_RATINGS),
+  }),
+]);
+
+/**
+ * One-click feedback from the weekly changelog email: 👍 / 👎 on the top pick,
+ * or a rating of the whole email. The signature covers the run and the
+ * recipient, so a link only records feedback as the user it was mailed to.
+ * An email link has to be a GET; a link scanner that prefetches it only
+ * overwrites that user's row, and the user's own later click wins.
+ */
+http.route({
+  path: "/api/changelog/vote",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const parsed = changelogFeedbackQuerySchema.safeParse(
+      Object.fromEntries(new URL(request.url).searchParams),
+    );
+    if (!parsed.success) {
+      return new Response("Invalid vote link", { status: 400 });
+    }
+    const { run, user, sig } = parsed.data;
+    const expected = await computeScopedHmac(
+      changelogVoteHmacMessage(run, user),
+    );
+    const appUrl = process.env.WEB_APP_URL;
+    if (!expected || !appUrl) {
+      return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
+        status: 500,
+      });
+    }
+    if (!timingSafeEqual(sig, expected)) {
+      return new Response("Invalid vote signature", { status: 401 });
+    }
+    const recorded = await ctx.runMutation(internal.changelog.recordVote, {
+      runId: run,
+      userId: user,
+      itemIndex: "item" in parsed.data ? parsed.data.item : undefined,
+      vote: parsed.data.vote,
+    });
+    return new Response(buildChangelogVotePageHtml({ appUrl, recorded }), {
+      status: recorded ? 200 : 404,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }),
 });
 
 // Health check

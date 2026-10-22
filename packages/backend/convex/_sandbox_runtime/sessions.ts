@@ -19,7 +19,6 @@ import {
   WORKSPACE_DIR,
 } from "./helpers";
 import {
-  setupBranch,
   checkoutSessionBranch,
   getUserCheckedOutBranch,
   createSandboxAndPrepareRepo,
@@ -27,7 +26,6 @@ import {
   forcePushBranchToOrigin,
   isUnresolvedGitIndexError,
   recoverUnresolvedGitIndex,
-  resolveBaseTarget,
   copySandboxConfigFilesToWorkspace,
   dependencyInstallCommand,
   SESSION_LIFECYCLE,
@@ -185,20 +183,6 @@ function isRetryableSessionGitError(message: string): boolean {
     lower.includes("early eof") ||
     lower.includes("connection reset by peer") ||
     lower.includes("rpc failed")
-  );
-}
-
-/** Resolves and logs the base ref target for a session branch. */
-async function resolveSessionBaseRef(
-  sandbox: SandboxHandle,
-  repoOwner: string,
-  repoName: string,
-  branchName: string,
-  baseBranch: string,
-): Promise<void> {
-  const { source } = await resolveBaseTarget(sandbox, baseBranch);
-  logSession(
-    `resolveSessionBaseRef source=${source} (repo=${repoOwner}/${repoName}, branch=${branchName}, base=${baseBranch})`,
   );
 }
 
@@ -475,15 +459,9 @@ async function syncSessionRefsForRestore(
     );
     return;
   }
+  // checkoutSessionBranch resolves the base start point in the same exec.
   logSession(
     `syncSessionRefsForRestore remote session branch missing, falling back to base branch restore (repo=${repoOwner}/${repoName}, branch=${branchName}, base=${baseBranch})`,
-  );
-  await resolveSessionBaseRef(
-    sandbox,
-    repoOwner,
-    repoName,
-    branchName,
-    baseBranch,
   );
 }
 
@@ -1162,8 +1140,7 @@ async function prepareSessionSandboxInternal(
             // need to be cloned/installed after this action returns (see
             // `sessionSandboxStartupWorkflow`), and the workflow — not this
             // action — clears the gate once they're done.
-            markSetupPending:
-              bootsFromImage || args.hasLinkedRepos === true,
+            markSetupPending: bootsFromImage || args.hasLinkedRepos === true,
             // Background + startup commands have not run yet on this fresh VM;
             // keep the Preview heal off it until final-ready clears the flag.
             markServicesPending: true,
@@ -1180,6 +1157,8 @@ async function prepareSessionSandboxInternal(
         undefined,
         false,
         forkFrom,
+        undefined, // driveCacheRole
+        true, // deferDocker: awaited below, before services need it
       ),
   );
   // The fork has been taken (or has failed) once this settles: only now is it
@@ -1212,24 +1191,20 @@ async function prepareSessionSandboxInternal(
     // Snapshot restore leaves HEAD at the (possibly stale) baked commit whose
     // lockfile the baked node_modules were installed against. Capture it before
     // the checkout below moves HEAD to the latest base, so we can tell whether
-    // deps drifted and an install is actually needed. Best-effort: on failure
-    // leave it null and force an install rather than skip a needed one.
-    let bakedSha: string | null = null;
-    if (prepared.usedSnapshot) {
-      try {
-        bakedSha = (
-          await execHandle(
-            handle,
-            `cd ${workspaceDirShell()} && git rev-parse HEAD`,
-            15,
-          )
-        ).trim();
-      } catch (revParseError) {
-        logSession(
-          `newSessionSandbox baked HEAD capture failed, forcing install (${sandboxDetails}): ${errorMessage(revParseError, "rev-parse failed")}`,
-        );
-      }
-    }
+    // deps drifted and an install is actually needed. Runs alongside the ref
+    // fetch (which never moves HEAD) and is awaited before the checkout.
+    // Best-effort: on failure resolve null and force an install rather than
+    // skip a needed one.
+    const bakedShaPromise: Promise<string | null> = prepared.usedSnapshot
+      ? execHandle(handle, `cd ${workspaceDirShell()} && git rev-parse HEAD`, 15)
+          .then((output) => output.trim())
+          .catch((revParseError: unknown) => {
+            logSession(
+              `newSessionSandbox baked HEAD capture failed, forcing install (${sandboxDetails}): ${errorMessage(revParseError, "rev-parse failed")}`,
+            );
+            return null;
+          })
+      : Promise.resolve(null);
 
     await emitSessionProgress(
       ctx,
@@ -1257,6 +1232,7 @@ async function prepareSessionSandboxInternal(
       label: "Syncing repository refs...",
       status: "complete",
     });
+    const bakedSha = await bakedShaPromise;
 
     await emitSessionProgress(
       ctx,
@@ -1280,22 +1256,10 @@ async function prepareSessionSandboxInternal(
       status: "complete",
     });
 
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Preparing branch...",
-    );
-    await runLoggedSessionStep(
-      "newSessionSandbox.setupBranch",
-      sandboxDetails,
-      () => setupBranch(handle, args.branchName, args.baseBranch),
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Preparing branch...",
-      status: "complete",
-    });
+    // No `setupBranch` here: the checkout above already left the session
+    // branch checked out with its upstream pinned, so setupBranch could only
+    // resolve `localBranch` and re-run `checkout -B <branch> <branch>` — ~1.5s
+    // of pure repeat on the first-turn gate.
 
     // Now on the latest base: reinstall only when the lockfile actually drifted
     // from the snapshot's baked commit, so the common no-dep-change session keeps
@@ -1310,13 +1274,10 @@ async function prepareSessionSandboxInternal(
       );
       let drift = { node: true, python: true };
       if (bakedSha) {
-        // Capture into a const so the closure sees a narrowed `string`, not the
-        // outer `let string | null`.
-        const sha = bakedSha;
         drift = await runLoggedSessionStep(
           "newSessionSandbox.checkLockfileDrift",
           sandboxDetails,
-          () => lockfileDrifted(handle, rootDir, sha),
+          () => lockfileDrifted(handle, rootDir, bakedSha),
         );
       }
       if (drift.node) {
@@ -1363,7 +1324,7 @@ async function prepareSessionSandboxInternal(
     // Restore baked config files from /home/eva/sandbox-config into the workspace.
     // Skipped when usedSnapshot: createSandboxAndPrepareRepo already ran this
     // exact copy (force: true) on the snapshot-restore path, and the
-    // checkout/setupBranch steps above don't touch untracked files, so
+    // checkout step above does not touch untracked files, so
     // re-copying here would be a pure duplicate on the common Vercel path.
     await emitSessionProgress(
       ctx,
@@ -1393,6 +1354,9 @@ async function prepareSessionSandboxInternal(
       completedSteps,
       "Starting dev server...",
     );
+    // Deferred at create so it overlapped the repo prep above. Services,
+    // background and startup commands may need dockerd (e.g. Supabase).
+    await prepared.dockerReady;
     const services = await runLoggedSessionStep(
       "newSessionSandbox.startSessionServices",
       sandboxDetails,

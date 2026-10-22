@@ -314,3 +314,79 @@ describe("idle pause sweep", () => {
     TIMEOUT_MS,
   );
 });
+
+/**
+ * A background exec after Stop resumes the VM (Vercel SDK `withResume`) while
+ * the owner row stays `closed`. The leak sweep must flag exactly those VMs and
+ * never one Eva still wants or does not own.
+ */
+describe("sandbox owner state (leak sweep)", () => {
+  test(
+    "closed and idle is a leak; active, stopping, busy and unowned are not",
+    async () => {
+      const { t, sessionId, taskId, repoId } = await fixture();
+      const state = (sandboxId: string) =>
+        t.query(internal.sandboxIdlePause.getSandboxOwnerState, { sandboxId });
+
+      expect(await state("sbx-session")).toBe("wanted");
+      expect(await state("sbx-unknown")).toBe("unknown");
+
+      await t.run(async (ctx) => {
+        await ctx.db.patch(sessionId, { status: "stopping" });
+        // A quick-task run uses its sandbox while the review status is closed.
+        await ctx.db.patch(taskId, {
+          reviewTaskSandboxStatus: "closed",
+          activeWorkflowId: "wf-running",
+        });
+      });
+      expect(await state("sbx-session")).toBe("stopping");
+      expect(await state("sbx-task")).toBe("wanted");
+
+      await t.run(async (ctx) => {
+        await ctx.db.patch(sessionId, { status: "closed" });
+        await ctx.db.patch(taskId, { activeWorkflowId: undefined });
+      });
+      const leaked = await t.query(
+        internal.sandboxIdlePause.listLeakedSandboxes,
+        { sandboxIds: ["sbx-session", "sbx-task", "sbx-unknown"] },
+      );
+      expect(leaked).toEqual([
+        { sandboxId: "sbx-session", repoId },
+        { sandboxId: "sbx-task", repoId },
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a shared VM is a leak only once every owner is closed",
+    async () => {
+      const { t, sessionId, taskId } = await fixture();
+      const leaked = () =>
+        t.query(internal.sandboxIdlePause.listLeakedSandboxes, {
+          sandboxIds: ["sbx-session"],
+        });
+
+      // A closed session and an active quick task share one VM: the sweep
+      // must not stop the VM the task still uses.
+      await t.run(async (ctx) => {
+        await ctx.db.patch(sessionId, { status: "closed" });
+        await ctx.db.patch(taskId, { sandboxId: "sbx-session" });
+      });
+      expect(
+        await t.query(internal.sandboxIdlePause.getSandboxOwnerState, {
+          sandboxId: "sbx-session",
+        }),
+      ).toBe("wanted");
+      expect(await leaked()).toEqual([]);
+
+      await t.run(async (ctx) => {
+        await ctx.db.patch(taskId, { reviewTaskSandboxStatus: "closed" });
+      });
+      expect((await leaked()).map((row) => row.sandboxId)).toEqual([
+        "sbx-session",
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+});

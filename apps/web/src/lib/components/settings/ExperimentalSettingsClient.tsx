@@ -215,8 +215,51 @@ export function ExperimentalSettingsClient() {
         </ListEnter>
         <ListEnter index={11} fast staggerMax={8}>
           <SettingsToggleRow
+            title="Open pull requests on GitHub"
+            description="Open a pull request on GitHub in a new tab when you click it in the Reviews sidebar, instead of the review view in Eva. Cmd or Ctrl-click still opens it in Eva."
+            action={
+              <Switch
+                checked={flags.openPrsOnGithub}
+                onCheckedChange={(checked) =>
+                  toggle("openPrsOnGithub", checked)
+                }
+                aria-label="Open pull requests on GitHub"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={12} fast staggerMax={8}>
+          <SettingsToggleRow
+            title="Claude-style activity steps"
+            description="Keep a reply's activity steps open in chat after the agent finishes, instead of folding them under Worked for. Text the agent writes between tool runs shows in order, between the steps (new turns only)."
+            action={
+              <Switch
+                checked={flags.claudeStyleActivity}
+                onCheckedChange={(checked) =>
+                  toggle("claudeStyleActivity", checked)
+                }
+                aria-label="Claude-style activity steps"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={13} fast staggerMax={8}>
+          <SettingsToggleRow
+            title="Scope check"
+            description="After a reply that changes code, check each change against your request. A chip under the reply flags changes you did not ask for or were not told about (new turns only)."
+            action={
+              <Switch
+                checked={flags.scopeCheck}
+                onCheckedChange={(checked) => toggle("scopeCheck", checked)}
+                aria-label="Scope check"
+              />
+            }
+          />
+        </ListEnter>
+        <ListEnter index={14} fast staggerMax={8}>
+          <SettingsToggleRow
             title="Simple view"
-            description="Hide reviews, diffs, tool activity steps, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
+            description="Hide reviews, diffs, tool activity steps, message footers, sandbox system messages, context usage, automations, model traits and older models, sandbox Files / Console / Editor / Computer / New Preview, repo settings entirely, global Sandboxes / Sync, and team Codebases / Env Variables. Chat plus Preview, Browser, Plan, and Designs. The model picker becomes a five-step slider; Advanced restores the list."
             action={
               <Switch
                 checked={flags.simpleView === true}

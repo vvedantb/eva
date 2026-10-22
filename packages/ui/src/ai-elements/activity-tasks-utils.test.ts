@@ -157,6 +157,23 @@ describe("groupActivityRows", () => {
     );
     expect(segments.map((s) => s.kind)).toEqual(["actions", "row", "actions"]);
   });
+
+  it("splits action runs at mid-turn reply text", () => {
+    const segments = groupActivityRows(
+      buildActivityRows([
+        step({ type: "response", label: "Response", detail: "Let me look." }),
+        step({ type: "read", label: "Read", detail: "a.ts" }),
+        step({ type: "response", label: "Response", detail: "Now the test." }),
+        step({ type: "read", label: "Read", detail: "a.test.ts" }),
+      ]),
+    );
+    expect(segments.map((s) => s.kind)).toEqual([
+      "response",
+      "actions",
+      "response",
+      "actions",
+    ]);
+  });
 });
 
 describe("activityStepKey", () => {

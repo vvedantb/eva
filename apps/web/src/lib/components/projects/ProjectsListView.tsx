@@ -139,6 +139,7 @@ export function ProjectsListView({
                               }
                               sandboxStatus={project.reviewProjectSandboxStatus}
                               hasUnread={project.hasUnread}
+                              isAwaitingAnswer={project.isAwaitingAnswer}
                               href={
                                 entityPathSegment(project)
                                   ? `${basePath}/projects/${entityPathSegment(project)}`

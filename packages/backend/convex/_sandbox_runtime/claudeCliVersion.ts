@@ -3,10 +3,10 @@
  *
  * This is no longer the version a sandbox ends up running: `resolveClaudeCliVersion`
  * in launch.ts resolves the registry's latest at launch, so a new Claude model
- * reaches every sandbox on its next boot without a deploy. This constant is
- * still what the snapshot seed bakes — an image resolves `@latest` once and
- * then freezes it, which is how a snapshot ended up stuck on 2.1.246 serving a
- * model it could not run — and the floor a failed registry lookup falls back to.
+ * reaches every sandbox on its next boot without a deploy. The snapshot seed
+ * bakes that same resolved version (launchSeedRun), so a launch only installs
+ * when a CLI shipped after the last scheduled build. This constant is the floor
+ * a failed registry lookup falls back to.
  *
  * Must match the `claudeCodeVersion` of the CLAUDE_AGENT_SDK_VERSION pinned in
  * snapshotActions.ts (SDK 0.3.X ships CLI 2.1.X): the Agent SDK spawns the

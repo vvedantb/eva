@@ -57,9 +57,31 @@ export function useQueuedMessageMutations(
     );
   });
 
+  // Shows "Steering…" at once; the server may instead send the row as the
+  // next turn (Cursor, OpenCode, idle chat), which removes it.
+  const steerQueuedMessage = useMutation(
+    api.queuedMessages.steer,
+  ).withOptimisticUpdate((localStore, args) => {
+    const msg = queuedMessages.find((m) => m._id === args.id);
+    if (!msg) return;
+    const current = localStore.getQuery(api.queuedMessages.listByParent, {
+      parentId: msg.parentId,
+    });
+    if (current !== undefined) {
+      localStore.setQuery(
+        api.queuedMessages.listByParent,
+        { parentId: msg.parentId },
+        current.map((m) =>
+          m._id === args.id ? { ...m, steer: "requested" as const } : m,
+        ),
+      );
+    }
+  });
+
   return {
     updateQueuedMessage,
     deleteQueuedMessage,
     reorderQueuedMessages,
+    steerQueuedMessage,
   };
 }

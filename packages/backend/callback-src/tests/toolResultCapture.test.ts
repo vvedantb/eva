@@ -70,8 +70,11 @@ test("cursor pairs call_id, unwraps result envelopes, and dedups transitions", (
   applyFixture("cursor-sdk-events.jsonl", "cursor");
   // 3 tools despite duplicate running/completed events and a
   // terminal-without-running error (pushed then completed). The stream also
-  // carries a thinking event, which now lands as its own reasoning step.
-  const toolSteps = S.accumulatedSteps.filter((s) => s.type !== "reasoning");
+  // carries a thinking event, which now lands as its own reasoning step, and
+  // reply text, which lands as a response step.
+  const toolSteps = S.accumulatedSteps.filter(
+    (s) => s.type !== "reasoning" && s.type !== "response",
+  );
   expect(toolSteps).toHaveLength(3);
   expect(S.accumulatedSteps.filter((s) => s.type === "reasoning")).toHaveLength(
     1,

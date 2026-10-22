@@ -408,6 +408,12 @@ export type PromptInputProps = Omit<
   ) => void | Promise<void>;
   /** Merged onto the inner InputGroup (radius, density). */
   inputGroupClassName?: string;
+  /**
+   * Accepts a non-file drag of this MIME type: it gets the same highlight as a
+   * file drag, and `onDrop` receives its string payload. Other types are left
+   * alone, so the browser's default drop still applies to them.
+   */
+  dataDrop?: { type: string; onDrop: (payload: string) => void };
 };
 
 export const PromptInput = ({
@@ -421,6 +427,7 @@ export const PromptInput = ({
   maxFileSize,
   onError,
   onSubmit,
+  dataDrop,
   children,
   ...props
 }: PromptInputProps) => {
@@ -675,23 +682,28 @@ export const PromptInput = ({
       return;
     }
 
-    const carriesFiles = (event: DragEvent) =>
-      event.dataTransfer?.types?.includes("Files") === true;
+    // Types are readable during the drag; the payload only on drop.
+    const carriesData = (event: DragEvent) =>
+      dataDrop !== undefined &&
+      event.dataTransfer?.types?.includes(dataDrop.type) === true;
+    const isAcceptedDrag = (event: DragEvent) =>
+      event.dataTransfer?.types?.includes("Files") === true ||
+      carriesData(event);
 
     const onDragEnter = (event: Event) => {
-      if (!(event instanceof DragEvent) || !carriesFiles(event)) {
+      if (!(event instanceof DragEvent) || !isAcceptedDrag(event)) {
         return;
       }
       dragEnterDepth.current += 1;
       setIsDragOver(true);
     };
     const onDragOver = (event: Event) => {
-      if (event instanceof DragEvent && carriesFiles(event)) {
+      if (event instanceof DragEvent && isAcceptedDrag(event)) {
         event.preventDefault();
       }
     };
     const onDragLeave = (event: Event) => {
-      if (!(event instanceof DragEvent) || !carriesFiles(event)) {
+      if (!(event instanceof DragEvent) || !isAcceptedDrag(event)) {
         return;
       }
       dragEnterDepth.current = Math.max(0, dragEnterDepth.current - 1);
@@ -703,11 +715,16 @@ export const PromptInput = ({
       if (!(event instanceof DragEvent)) {
         return;
       }
-      if (carriesFiles(event)) {
+      if (isAcceptedDrag(event)) {
         event.preventDefault();
       }
       dragEnterDepth.current = 0;
       setIsDragOver(false);
+      if (dataDrop !== undefined && carriesData(event)) {
+        const payload = event.dataTransfer?.getData(dataDrop.type);
+        if (payload) dataDrop.onDrop(payload);
+        return;
+      }
       if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
         add(event.dataTransfer.files);
       }
@@ -723,7 +740,7 @@ export const PromptInput = ({
       target.removeEventListener("dragleave", onDragLeave);
       target.removeEventListener("drop", onDrop);
     };
-  }, [add, globalDrop]);
+  }, [add, globalDrop, dataDrop]);
 
   useEffect(
     () => () => {

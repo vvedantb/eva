@@ -190,6 +190,7 @@ var CLAIM_MUTATION = process.env.CLAIM_MUTATION;
 var OPEN_SYNTHETIC_TURN_MUTATION = process.env.OPEN_SYNTHETIC_TURN_MUTATION;
 var COMPLETE_SYNTHETIC_TURN_MUTATION = process.env.COMPLETE_SYNTHETIC_TURN_MUTATION;
 var UPDATE_BACKGROUND_AGENTS_MUTATION = process.env.UPDATE_BACKGROUND_AGENTS_MUTATION;
+var UPDATE_GOAL_MUTATION = process.env.UPDATE_GOAL_MUTATION;
 var REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 var PROVIDER = process.env.AI_PROVIDER || "claude";
 var MODEL = process.env.AI_MODEL || process.env.CLAUDE_MODEL || "claude:sonnet";
@@ -1195,6 +1196,8 @@ var STEP_FIELD_CAPS = {
   /** Reasoning prose per burst; head-capped so one turn's thinking cannot
    * dominate the payload. Prose rides \`detail\` (see applyReasoningSnapshot). */
   reasoning: 6e3,
+  /** Reply text the agent writes between tool runs, per run; head-capped. */
+  response: 4e3,
   /** Soft ceiling for the whole steps JSON payload (under Convex 1 MiB). */
   jsonBytes: 600 * 1024
 };
@@ -1230,10 +1233,21 @@ function stripHeavyField(step, field) {
   }
   return false;
 }
+function isSubagentText(step) {
+  return step.type === "response" && step.parentToolUseId !== void 0;
+}
 function enforceStepBudget(steps) {
   let encoded = JSON.stringify(steps);
   if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
     return steps;
+  }
+  for (const step of steps) {
+    if (encoded.length <= STEP_FIELD_CAPS.jsonBytes) {
+      return steps;
+    }
+    if (isSubagentText(step) && stripHeavyField(step, "output")) {
+      encoded = JSON.stringify(steps);
+    }
   }
   for (const field of HEAVY_FIELDS) {
     for (const step of steps) {
@@ -1249,6 +1263,17 @@ function enforceStepBudget(steps) {
 }
 function serializeSteps(steps) {
   return JSON.stringify(enforceStepBudget(steps));
+}
+function serializeFinalSteps(steps, finalText2) {
+  const final = finalText2.trim();
+  const kept = final ? steps.filter((step) => {
+    if (step.type !== "response" || step.parentToolUseId !== void 0) {
+      return true;
+    }
+    const detail = (step.detail ?? "").trim();
+    return !final.includes(detail) && !detail.startsWith(final);
+  }) : steps;
+  return serializeSteps(kept);
 }
 
 // callback-src/parse/toolResultCapture.ts
@@ -1875,6 +1900,10 @@ function toolCallToStep(name, input) {
         type: "subtask",
         label: "Running agent...",
         detail: typeof input.description === "string" ? String(input.description) : typeof input.subagent_type === "string" ? String(input.subagent_type) : void 0,
+        // The prompt the subagent was spawned with: the opening message of
+        // its child thread view. Trimmed from the chat transcript query like
+        // any other preview, so it costs nothing until a reader opens it.
+        contentPreview: typeof input.prompt === "string" && input.prompt.trim() ? capContentPreview(input.prompt.trim()) : void 0,
         status: "active"
       };
     case "TodoWrite":
@@ -3539,6 +3568,9 @@ function claudeParseLine(event) {
   }
   const events = [];
   if (event.type === "stream_event") {
+    if (typeof event.parent_tool_use_id === "string" && event.parent_tool_use_id.trim()) {
+      return events;
+    }
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
@@ -3610,6 +3642,22 @@ function claudeParseLine(event) {
           kind: "set_pending_question",
           data: JSON.stringify(block.input)
         });
+      }
+    } else if (parentToolUseId) {
+      if (block.type === "text" && "text" in block && block.text) {
+        const output = buildStepOutput(String(block.text));
+        if (output) {
+          events.push({
+            kind: "push_subagent_text",
+            step: {
+              type: "response",
+              label: "Agent message",
+              status: "complete",
+              parentToolUseId,
+              output
+            }
+          });
+        }
       }
     } else if (block.type === "thinking" && "thinking" in block && block.thinking) {
       events.push({ kind: "update_reasoning", text: String(block.thinking) });
@@ -4211,6 +4259,7 @@ function syncOpencodeStateToPersist() {
     "syncOpencodeStateToPersist(auth)"
   );
 }
+var OPENCODE_PERMISSION_ALLOW_ALL = '{"*":"allow"}';
 function hydratePersistedOpencodeState() {
   store3.hydratePersistedState("hydratePersistedOpencodeState");
   const configJson = OPENCODE_CONFIG_JSON || (OPENCODE_CONFIG_JSON_BASE64 ? decodeBase64(OPENCODE_CONFIG_JSON_BASE64) : "");
@@ -4228,7 +4277,7 @@ function hydratePersistedOpencodeState() {
       "hydratePersistedOpencodeState(auth)"
     );
   }
-  process.env.OPENCODE_PERMISSION = '"allow"';
+  process.env.OPENCODE_PERMISSION = OPENCODE_PERMISSION_ALLOW_ALL;
   process.env.OPENCODE_DISABLE_AUTOUPDATE = "1";
 }
 function prepareOpencodeSessionState() {
@@ -4376,10 +4425,11 @@ function completeToolStep(trackingId, result) {
       }
     }
   }
-  if (callbackState.accumulatedSteps.length > 0) {
-    const last = callbackState.accumulatedSteps[callbackState.accumulatedSteps.length - 1];
-    if (result) mergeToolResult(last, result);
-    markStepComplete(last);
+  for (let i = callbackState.accumulatedSteps.length - 1; i >= 0; i--) {
+    const step = callbackState.accumulatedSteps[i];
+    if (step.type === "response") continue;
+    if (result) mergeToolResult(step, result);
+    markStepComplete(step);
     return;
   }
 }
@@ -4429,8 +4479,38 @@ function applyReasoningSnapshot(text) {
   stepStartedAt.set(step, Date.now());
   callbackState.lastStepType = "thinking";
 }
+function appendResponseText(added) {
+  if (!added) return;
+  const last = callbackState.accumulatedSteps[callbackState.accumulatedSteps.length - 1];
+  if (last && last.type === "response" && last.status === "active") {
+    last.detail = headCap(
+      (last.detail ?? "") + added,
+      STEP_FIELD_CAPS.response
+    ).text;
+    return;
+  }
+  const text = added.trimStart();
+  if (!text) return;
+  markLastComplete();
+  const step = {
+    type: "response",
+    label: "Response",
+    status: "active",
+    detail: headCap(text, STEP_FIELD_CAPS.response).text
+  };
+  callbackState.accumulatedSteps.push(step);
+  stepStartedAt.set(step, Date.now());
+}
 function pushNoticeStep2(label, detail) {
   pushProgressStep({ type: "notice", label, detail, status: "complete" });
+}
+function pushSteerStep(text) {
+  pushProgressStep({
+    type: "steer",
+    label: "Steered",
+    detail: text,
+    status: "complete"
+  });
 }
 function updateThinkingStep(label, detail) {
   callbackState.transientThinkingStep = {
@@ -4500,6 +4580,10 @@ function applyCanonicalEvents(events) {
         clearThinkingStep();
         appendStreamedContent(ev.text, true);
         break;
+      case "push_subagent_text":
+        clearThinkingStep();
+        callbackState.accumulatedSteps.push(ev.step);
+        break;
       case "stream_text_delta":
         clearThinkingStep();
         appendStreamedContent(ev.text, callbackState.pendingParagraphBreak);
@@ -4553,6 +4637,11 @@ function parseStreamEvent(line) {
   }
 }
 function appendStreamedContent(text, isBlockBoundary = false) {
+  const before = callbackState.currentStreamedContent;
+  writeStreamedContent(text, isBlockBoundary);
+  appendResponseText(callbackState.currentStreamedContent.slice(before.length));
+}
+function writeStreamedContent(text, isBlockBoundary) {
   const nextText = String(text);
   if (!nextText) {
     return;
@@ -5533,12 +5622,11 @@ async function readSdkPlanUsage(handle) {
   }
   return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
 }
+var NODE_GLOBAL_ROOT = dirname(dirname(process.execPath)) + "/lib/node_modules";
 var cachedGlobalNpmRoots = null;
 function globalNpmRoots() {
   if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
-  const roots = [
-    dirname(dirname(process.execPath)) + "/lib/node_modules"
-  ];
+  const roots = [NODE_GLOBAL_ROOT];
   try {
     const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
     if (npmRoot) roots.push(npmRoot);
@@ -5567,6 +5655,10 @@ function installedPackageVersion(packageRoot) {
 function resolvePinnedSdkEntry(pin) {
   const localRoot = SDK_LOCAL_PREFIX + "/node_modules/" + pin.packageName;
   let driftedVersion = null;
+  const nodeRoot = NODE_GLOBAL_ROOT + "/" + pin.packageName;
+  if (installedPackageVersion(nodeRoot) === pin.version) {
+    return nodeRoot + pin.entryRelPath;
+  }
   for (const root of globalNpmRoots()) {
     const globalRoot = root + "/" + pin.packageName;
     const globalVersion = installedPackageVersion(globalRoot);
@@ -5678,8 +5770,19 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     DISABLE_TELEMETRY: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_ERROR_REPORTING: "1",
-    // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
-    ENABLE_TOOL_SEARCH: "auto"
+    // Always defer MCP/tool schemas (agent turns only). "auto" made the CLI
+    // await a count_tokens API call before the first request to test a ~10%
+    // threshold: one more API round trip (≥0.12s measured) before every
+    // daemon's first token. With MCP servers still connecting (see below) that
+    // count saw only built-ins, so the first request also went out without
+    // ToolSearch.
+    ENABLE_TOOL_SEARCH: "true",
+    // Do not hold the first turn until every HTTP MCP server (eva, linear,
+    // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
+    // first token ~3s sooner. The servers still join mid-turn; ToolSearch
+    // reaches them and the CLI tells the model a pending server "is still
+    // connecting" instead of reporting its tools missing.
+    CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0"
   };
   if (CLAIM_MUTATION || ENTITY_ID_FIELD === "sessionId" || ENTITY_ID_FIELD === "chatId") {
     delete env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS;
@@ -5708,6 +5811,10 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     // Emit token-level partial (\`stream_event\`) messages so claudeParseLine can
     // stream text deltas into the reply live (dedup guards the final message).
     includePartialMessages: true,
+    // Forward each subagent's text too (not only its tool calls), so its child
+    // thread view can show the whole transcript. claudeParseLine keeps it out
+    // of the parent's reply.
+    forwardSubagentText: true,
     ...allowedToolsOption,
     env,
     ...sessionMode.mode === "session" && sessionMode.sessionId ? { sessionId: sessionMode.sessionId } : {},
@@ -5900,6 +6007,38 @@ async function materializeTurnAttachments(turn) {
   turn.prompt += "\\n\\n---\\nThe user attached the following file(s). Read them with your file-reading tool before responding:\\n" + paths2.map((path3) => \`- \${path3}\`).join("\\n");
 }
 
+// callback-src/runtime/steering.ts
+var pendingAcks = [];
+function readSteers(result) {
+  const payload = unwrapConvexMutationPayload(result);
+  const field = payload?.steers;
+  if (!Array.isArray(field)) return [];
+  const steers = [];
+  for (const item of field) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const { id, text } = item;
+    if (typeof id === "string" && typeof text === "string") {
+      steers.push({ id, text });
+    }
+  }
+  return steers;
+}
+function steerClaimArgs(acceptSteer) {
+  return pendingAcks.length > 0 ? { acceptSteer, steerAcks: [...pendingAcks] } : { acceptSteer };
+}
+function confirmSteerAcks(sent) {
+  pendingAcks.splice(0, sent.steerAcks?.length ?? 0);
+}
+async function deliverSteers(steers, inject) {
+  for (const steer of steers) {
+    const delivered = await inject(steer.text).catch(() => false);
+    if (delivered) pushSteerStep(steer.text);
+    pendingAcks.push({ id: steer.id, delivered });
+  }
+}
+
 // callback-src/providers/githubToken.ts
 function tokenFromActionResponse(data) {
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
@@ -6077,6 +6216,171 @@ var DaemonSupervisor = class {
   }
 };
 
+// callback-src/parse/claudeGoal.ts
+var GOAL_SET_PREFIX = "Goal set: ";
+var GOAL_CLEARED_PREFIX = "Goal cleared: ";
+var NO_GOAL_SET = "No goal set";
+var GOAL_ACTIVE = /^Goal active: ([\\s\\S]+?) \\((?:not yet evaluated|(\\d+) turns?)\\)/;
+var STOP_HOOK_FEEDBACK_PREFIX = "Stop hook feedback:\\n[";
+var UNRECOVERABLE_CLEAR_PREFIX = "Goal cleared after an unrecoverable error";
+var FEEDBACK_CONDITION_LIMIT = 500;
+var LAST_CHECK_LIMIT = 500;
+function textOf(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  let text = "";
+  for (const part of content) {
+    if (typeof part === "object" && part !== null && !Array.isArray(part) && part.type === "text" && typeof part.text === "string") {
+      text += part.text;
+    }
+  }
+  return text;
+}
+function isRootFrame(message) {
+  const parent = message.parent_tool_use_id;
+  return parent === void 0 || parent === null;
+}
+function assistantModel(message) {
+  const inner = message.message;
+  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+    return void 0;
+  }
+  return typeof inner.model === "string" ? inner.model : void 0;
+}
+function messageContent(message) {
+  const inner = message.message;
+  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+    return void 0;
+  }
+  return inner.content;
+}
+function isGoalWorkFrame(message) {
+  if (message.type !== "assistant" || !isRootFrame(message)) return false;
+  const model = assistantModel(message);
+  return model !== void 0 && model !== "<synthetic>";
+}
+function stopHookReason(text, objective) {
+  if (!text.startsWith(STOP_HOOK_FEEDBACK_PREFIX)) return void 0;
+  const rest = text.slice(STOP_HOOK_FEEDBACK_PREFIX.length);
+  const full = objective + "]: ";
+  if (rest.startsWith(full)) return rest.slice(full.length).trim();
+  if (objective.length <= FEEDBACK_CONDITION_LIMIT) return void 0;
+  const head = objective.slice(0, FEEDBACK_CONDITION_LIMIT - 100);
+  if (!rest.startsWith(head)) return void 0;
+  const end = rest.indexOf("]: ", head.length);
+  return end === -1 ? void 0 : rest.slice(end + 3).trim();
+}
+function nextClaudeGoal(current, message) {
+  if (!isRootFrame(message)) return void 0;
+  if (message.type === "assistant") {
+    if (assistantModel(message) !== "<synthetic>") return void 0;
+    const text = textOf(messageContent(message)).trim();
+    if (text.startsWith(GOAL_SET_PREFIX)) {
+      const objective2 = text.slice(GOAL_SET_PREFIX.length).trim();
+      return objective2 ? { objective: objective2, status: "active", checks: 0 } : void 0;
+    }
+    if (text.startsWith(GOAL_CLEARED_PREFIX)) return null;
+    if (text === NO_GOAL_SET || text.startsWith(NO_GOAL_SET + ". ")) {
+      return null;
+    }
+    const active = GOAL_ACTIVE.exec(text);
+    const objective = active?.[1];
+    if (objective === void 0) return void 0;
+    const sameGoal2 = current?.objective === objective;
+    return {
+      objective,
+      status: "active",
+      checks: Number(active?.[2] ?? 0),
+      ...sameGoal2 && current?.lastCheck !== void 0 ? { lastCheck: current.lastCheck } : {}
+    };
+  }
+  if (message.type === "system" && message.subtype === "informational") {
+    const content = message.content;
+    return typeof content === "string" && content.startsWith(UNRECOVERABLE_CLEAR_PREFIX) ? null : void 0;
+  }
+  if (message.type === "user" && message.isSynthetic === true && current?.status === "active") {
+    const reason = stopHookReason(
+      textOf(messageContent(message)),
+      current.objective
+    );
+    if (reason === void 0) return void 0;
+    return {
+      ...current,
+      checks: current.checks + 1,
+      ...reason ? { lastCheck: reason.slice(0, LAST_CHECK_LIMIT) } : {}
+    };
+  }
+  return void 0;
+}
+function goalAfterTurn(current, turn) {
+  if (current?.status !== "active" || !turn.modelWorked || !turn.endedCleanly || turn.backgroundWorkRunning) {
+    return current;
+  }
+  return {
+    objective: current.objective,
+    status: "complete",
+    checks: current.checks
+  };
+}
+function isCleanTurnEnd(result) {
+  if (result.type !== "result") return false;
+  if (result.subtype !== "success" || result.is_error === true) return false;
+  const reason = result.terminal_reason;
+  return reason === void 0 || reason === null || reason === "completed";
+}
+function sameGoal(a, b) {
+  if (a === null || b === null) return a === b;
+  return a.objective === b.objective && a.status === b.status && a.checks === b.checks && a.lastCheck === b.lastCheck;
+}
+
+// callback-src/providers/claudeGoalSync.ts
+var goal;
+var modelWorkedThisTurn = false;
+var backgroundTaskCount = 0;
+var writeChain = Promise.resolve();
+function goalJson(value) {
+  if (value === null) return null;
+  return {
+    objective: value.objective,
+    status: value.status,
+    checks: value.checks,
+    ...value.lastCheck === void 0 ? {} : { lastCheck: value.lastCheck }
+  };
+}
+function setGoal(next) {
+  if (goal !== void 0 && sameGoal(goal, next)) return;
+  goal = next;
+  const mutation = UPDATE_GOAL_MUTATION;
+  if (!mutation) return;
+  log("daemon: goal " + (next === null ? "cleared" : next.status));
+  const args = buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, {
+    goal: goalJson(next)
+  });
+  writeChain = writeChain.then(async () => {
+    await callConvexWithRetry("mutation", mutation, args);
+  }).catch(() => {
+  });
+}
+function trackClaudeGoalFrame(message) {
+  if (message.type === "system" && message.subtype === "background_tasks_changed" && Array.isArray(message.tasks)) {
+    backgroundTaskCount = message.tasks.length;
+  }
+  if (isGoalWorkFrame(message)) modelWorkedThisTurn = true;
+  const next = nextClaudeGoal(goal ?? null, message);
+  if (next !== void 0) setGoal(next);
+  if (message.type !== "result" || isZeroWorkTaskNotificationResult(message)) {
+    return;
+  }
+  const current = goal ?? null;
+  const after = goalAfterTurn(current, {
+    modelWorked: modelWorkedThisTurn,
+    endedCleanly: isCleanTurnEnd(message),
+    backgroundWorkRunning: backgroundTaskCount > 0
+  });
+  if (after !== current) setGoal(after);
+  modelWorkedThisTurn = false;
+}
+
 // callback-src/providers/claudeSdkDaemon.ts
 function readDaemonPidFile() {
   return readPidFromFile(DAEMON_PID_FILE);
@@ -6106,6 +6410,7 @@ var unsettledBackgroundAgents = /* @__PURE__ */ new Map();
 var pendingAgentStops = /* @__PURE__ */ new Set();
 var currentAgentRunner = null;
 var usageRefreshInFlight = false;
+var wakeIdlePump = null;
 function entityMutationArgs(fields) {
   return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
 }
@@ -6195,12 +6500,13 @@ function startTurnWatchdog() {
 function createPromptStream() {
   const queue = [];
   let notify = null;
-  const push = (text) => {
+  const push = (text, priority) => {
     queue.push({
       type: "user",
       message: { role: "user", content: text },
       parent_tool_use_id: null,
-      session_id: callbackState.activeClaudeSessionId || ""
+      session_id: callbackState.activeClaudeSessionId || "",
+      ...priority ? { priority } : {}
     });
     const resume = notify;
     notify = null;
@@ -6236,7 +6542,10 @@ function resetTurnState() {
 async function finalizeTurn(output, readUsage) {
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    callbackState.accumulatedSteps,
+    resultEvent?.result ?? ""
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = buildTurnCompletionPayload({
     success,
@@ -6538,6 +6847,9 @@ function handleSystemTaskMessage(message) {
   }
   const toolUseId = readStringField2(message, "tool_use_id");
   if (subtype === "task_started" && toolUseId) {
+    if (readStringField2(message, "task_type") === "local_bash") {
+      return;
+    }
     const entry = {
       toolUseId,
       taskId: readStringField2(message, "task_id"),
@@ -6638,7 +6950,10 @@ async function finalizeSyntheticTurn(output) {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    callbackState.accumulatedSteps,
+    resultEvent?.result ?? ""
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = entityMutationArgs({
     messageId,
@@ -6703,6 +7018,9 @@ function handleCancelRequested(agentRunner) {
     log("daemon: interrupt failed \\u2014 " + messageText);
   });
 }
+function canTakeSteer() {
+  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real";
+}
 function startClaimWatcher(agentRunner) {
   void (async () => {
     while (!supervisor.isStopping) {
@@ -6730,12 +7048,14 @@ function startClaimWatcher(agentRunner) {
         process.exit(0);
       }
       const acceptTurn = supervisor.phase === "idle" && supervisor.pendingClaim === null;
+      const steerArgs = steerClaimArgs(canTakeSteer());
       try {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION ?? "",
-          entityMutationArgs({ model: MODEL, acceptTurn })
+          entityMutationArgs({ model: MODEL, acceptTurn, ...steerArgs })
         );
+        confirmSteerAcks(steerArgs);
         const stopIds = readStopTaskToolUseIds(claimed);
         for (const toolUseId of stopIds) {
           pendingAgentStops.add(toolUseId);
@@ -6744,6 +7064,11 @@ function startClaimWatcher(agentRunner) {
         if (readCancelRequested(claimed)) {
           handleCancelRequested(agentRunner);
         }
+        await deliverSteers(readSteers(claimed), async (text) => {
+          if (!canTakeSteer()) return false;
+          agentRunner.push(text, "next");
+          return true;
+        });
         if (readUsageRefreshRequested(claimed) && !usageRefreshInFlight) {
           usageRefreshInFlight = true;
           log("daemon: usage refresh requested \\u2014 reading SDK plan usage");
@@ -6768,7 +7093,9 @@ function startClaimWatcher(agentRunner) {
             currentLeaseTurnId: currentLease?.turnId ?? null,
             claimedLeaseTurnId: turn.turnLease?.turnId ?? null
           })) {
-            if (!supervisor.parkClaim(turn)) {
+            if (supervisor.parkClaim(turn)) {
+              wakeIdlePump?.();
+            } else {
               log("daemon: duplicate claimed turn ignored");
             }
           } else {
@@ -6802,7 +7129,11 @@ async function runDaemonMessagePump(agentRunner) {
       return;
     }
     if (supervisor.currentTurn === null && !agentRunner.hasPending()) {
-      await sleep(PROMPT_POLL_INTERVAL_MS);
+      await new Promise((resolve) => {
+        wakeIdlePump = resolve;
+        setTimeout(resolve, PROMPT_POLL_INTERVAL_MS);
+      });
+      wakeIdlePump = null;
       continue;
     }
     const message = await agentRunner.waitMessage();
@@ -6833,6 +7164,7 @@ async function runDaemonMessagePump(agentRunner) {
     recogniseSubagentToolUses(message);
     handleSystemTaskMessage(message);
     handleBackgroundTasksChanged(message);
+    trackClaudeGoalFrame(message);
     if (supervisor.isCancellationInFlight) {
       if (message.type !== "result") {
         continue;
@@ -7047,10 +7379,11 @@ async function runSdkDaemon() {
     process.exit(1);
   }
   startStreamingLoops();
-  await refreshGithubToken();
+  const tokenRefreshed = refreshGithubToken();
+  await new Promise((resolve) => setImmediate(resolve));
   const sessionMode = prepareClaudeSessionState();
+  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
   const options = buildSdkOptions(sessionMode);
-  const sdk = await loadSdk();
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
   log(
@@ -7972,7 +8305,7 @@ async function finalizeTurn2(success, error) {
     success,
     result,
     error,
-    activityLog: serializeSteps(callbackState.accumulatedSteps),
+    activityLog: serializeFinalSteps(callbackState.accumulatedSteps, result),
     ...RUN_ID ? { runId: RUN_ID } : {},
     ...usage ? {
       rawResultEvent: buildClaudeShapedResult({
@@ -8103,6 +8436,10 @@ async function startTurn(client, turn) {
   callbackState.activeAttemptStartedAt = activeTurnStartedAt;
   log("codex daemon: turn started " + providerTurnId);
 }
+function liveProviderTurnId() {
+  if (supervisor2.phase !== "running") return "";
+  return supervisor2.currentTurn?.providerTurnId ?? "";
+}
 function cleanMarkers() {
   cleanOwnedDaemonMarkers({
     paths,
@@ -8128,10 +8465,12 @@ async function runCodexAppServerDaemon() {
     }
   }, FENCE_POLL_INTERVAL_MS2);
   fence.unref?.();
-  const preflightOk2 = await runPreflightHeartbeat();
+  const [preflightOk2] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshGithubToken2()
+  ]);
   if (!preflightOk2) process.exit(1);
   startStreamingLoops();
-  await refreshGithubToken2();
   const client = new CodexAppServerClient();
   try {
     const sessionMode = prepareCodexSessionState();
@@ -8164,11 +8503,13 @@ async function runCodexAppServerDaemon() {
       })) {
         lastClaimAt = claimNow;
         const acceptTurn = supervisor2.phase === "idle" && supervisor2.pendingClaim === null;
+        const steerArgs = steerClaimArgs(liveProviderTurnId() !== "");
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION,
-          entityArgs({ model: MODEL, acceptTurn })
+          entityArgs({ model: MODEL, acceptTurn, ...steerArgs })
         );
+        confirmSteerAcks(steerArgs);
         const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
         if (readCancelRequested(claimed) && providerTurnId && supervisor2.beginCancellation()) {
           void client.request("turn/interrupt", {
@@ -8179,6 +8520,17 @@ async function runCodexAppServerDaemon() {
             log("codex daemon: interrupt failed \\u2014 " + message);
           });
         }
+        await deliverSteers(readSteers(claimed), async (text) => {
+          const turnId = liveProviderTurnId();
+          if (!turnId) return false;
+          await client.request("turn/steer", {
+            threadId: callbackState.activeCodexThreadId,
+            expectedTurnId: turnId,
+            input: [{ type: "text", text }]
+          });
+          lastEventAt = Date.now();
+          return true;
+        });
         const claimedTurn = readClaimedTurn(claimed);
         if (claimedTurn) {
           const currentLease = getCurrentTurnLease();
@@ -8232,7 +8584,7 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync10 } from "fs";
+import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
 
 // callback-src/providers/callbackRefresh.ts
 function decideCallbackRefresh(state) {
@@ -8262,7 +8614,14 @@ function decideCallbackRefresh(state) {
 }
 
 // callback-src/providers/cursorSdk.ts
-import { mkdirSync as mkdirSync7, readFileSync as readFileSync8 } from "fs";
+import {
+  mkdirSync as mkdirSync7,
+  readFileSync as readFileSync8,
+  renameSync as renameSync2,
+  statSync as statSync3,
+  writeFileSync as writeFileSync10
+} from "fs";
+import * as nodeModule from "node:module";
 var SDK_PACKAGE2 = "@cursor/sdk";
 var SDK_VERSION2 = "1.0.28";
 var SDK_ENTRY_RELPATH = "/dist/esm/index.js";
@@ -8345,27 +8704,62 @@ function filterModeParamsByModel(candidates, model, opted) {
     })
   );
 }
+function enableSdkCompileCache() {
+  try {
+    nodeModule.enableCompileCache?.();
+  } catch {
+  }
+}
+function flushSdkCompileCache() {
+  try {
+    nodeModule.flushCompileCache?.();
+  } catch {
+  }
+}
 var loadedSdk = null;
 var loadedSdkSqlite = null;
-async function loadCursorSdk() {
-  if (loadedSdk) return loadedSdk;
-  const mod = await import(resolvePinnedSdkEntry({
+function loadCursorSdk() {
+  enableSdkCompileCache();
+  loadedSdk ??= import(resolvePinnedSdkEntry({
     packageName: SDK_PACKAGE2,
     version: SDK_VERSION2,
     entryRelPath: SDK_ENTRY_RELPATH
-  }));
-  loadedSdk = mod;
-  return mod;
+  })).then(
+    (mod) => {
+      flushSdkCompileCache();
+      return mod;
+    },
+    (error) => {
+      loadedSdk = null;
+      throw error;
+    }
+  );
+  return loadedSdk;
 }
-async function loadCursorSdkSqlite() {
-  if (loadedSdkSqlite) return loadedSdkSqlite;
-  const mod = await import(resolvePinnedSdkEntry({
+function loadCursorSdkSqlite() {
+  enableSdkCompileCache();
+  loadedSdkSqlite ??= import(resolvePinnedSdkEntry({
     packageName: SDK_PACKAGE2,
     version: SDK_VERSION2,
     entryRelPath: SDK_SQLITE_ENTRY_RELPATH
-  }));
-  loadedSdkSqlite = mod;
-  return mod;
+  })).then(
+    (mod) => {
+      flushSdkCompileCache();
+      return mod;
+    },
+    (error) => {
+      loadedSdkSqlite = null;
+      throw error;
+    }
+  );
+  return loadedSdkSqlite;
+}
+function preloadCursorSdk() {
+  try {
+    loadCursorSdk().catch(() => void 0);
+    loadCursorSdkSqlite().catch(() => void 0);
+  } catch {
+  }
 }
 function readPromptText3() {
   return readFileSync8("/tmp/design-prompt.txt", "utf8");
@@ -8382,53 +8776,118 @@ function cursorModelCatalogJson(models) {
     )
   );
 }
-async function resolveCursorModelSelection(sdk) {
-  const base = normalizedCursorModel;
-  const level = cursorReasoningLevel;
-  const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
-  const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
-  if (candidates.length === 0 && !level) {
-    return { id: base };
+var CURSOR_MODEL_RESOLUTION_CACHE_FILE = CURSOR_RUNTIME_HOME_DIR + "/model-resolution.json";
+var CURSOR_MODEL_RESOLUTION_MAX_AGE_MS = 60 * 60 * 1e3;
+function cursorModelResolutionKey() {
+  return [
+    normalizedCursorModel,
+    cursorReasoningLevel,
+    String(cursorFastMode),
+    String(cursorUse1mContext)
+  ].join("|");
+}
+function readCachedCursorModelResolution() {
+  try {
+    const ageMs = Date.now() - statSync3(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
+    if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
+    const cached = JSON.parse(
+      readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
+    );
+    if (!cached || typeof cached !== "object" || Array.isArray(cached)) {
+      return null;
+    }
+    const selection = cached.selection;
+    if (cached.key !== cursorModelResolutionKey() || typeof cached.catalog !== "string" || !selection || typeof selection !== "object" || Array.isArray(selection) || typeof selection.id !== "string") {
+      return null;
+    }
+    const params = [];
+    for (const param of Array.isArray(selection.params) ? selection.params : []) {
+      if (!param || typeof param !== "object" || Array.isArray(param)) continue;
+      if (typeof param.id !== "string" || typeof param.value !== "string") {
+        continue;
+      }
+      params.push({ id: param.id, value: param.value });
+    }
+    return {
+      selection: params.length > 0 ? { id: selection.id, params } : { id: selection.id },
+      catalog: cached.catalog
+    };
+  } catch {
+    return null;
   }
-  let model;
-  let listUnavailable = false;
+}
+function writeCachedCursorModelResolution(resolution) {
+  try {
+    mkdirSync7(CURSOR_RUNTIME_HOME_DIR, { recursive: true });
+    const tmpFile = CURSOR_MODEL_RESOLUTION_CACHE_FILE + "." + String(process.pid);
+    writeFileSync10(
+      tmpFile,
+      JSON.stringify({ key: cursorModelResolutionKey(), ...resolution })
+    );
+    renameSync2(tmpFile, CURSOR_MODEL_RESOLUTION_CACHE_FILE);
+  } catch (error) {
+    log(
+      "resolveCursorModelSelection: cache write failed (" + (error instanceof Error ? error.message : String(error)) + ")"
+    );
+  }
+}
+async function resolveCursorModelSelection(sdk) {
+  const cached = readCachedCursorModelResolution();
+  const resolution = cached ?? await fetchCursorModelSelection(sdk);
+  if (cached) {
+    void fetchCursorModelSelection(sdk).catch(() => void 0);
+  }
+  if (resolution.catalog) {
+    process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = resolution.catalog;
+  }
+  return resolution.selection;
+}
+async function fetchCursorModelSelection(sdk) {
+  const base = normalizedCursorModel;
+  let models = null;
   try {
     const list = sdk.Cursor?.models?.list;
     if (list) {
-      const models = await waitForCursorPhase({
+      const listed = await waitForCursorPhase({
         task: list(),
         phase: "fetching the model list",
         timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS
       });
-      if (Array.isArray(models)) {
-        const catalog = cursorModelCatalogJson(models);
-        if (catalog) process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog;
-      }
-      model = Array.isArray(models) ? models.find(
-        (entry) => entry && typeof entry === "object" && entry.id === base
-      ) : void 0;
-      if (!model) {
-        log(
-          "resolveCursorModelSelection: model " + base + " not in Cursor.models.list \\u2014 keeping opted-in params only"
-        );
-      }
-    } else {
-      listUnavailable = true;
+      if (Array.isArray(listed)) models = listed;
     }
   } catch (error) {
     const messageText = error instanceof Error ? error.message : String(error);
-    listUnavailable = true;
     log(
       "resolveCursorModelSelection: model list failed \\u2014 keeping opted-in params only (" + messageText + ")"
     );
   }
+  const model = models?.find(
+    (entry) => entry && typeof entry === "object" && entry.id === base
+  );
+  if (models && !model) {
+    log(
+      "resolveCursorModelSelection: model " + base + " not in Cursor.models.list \\u2014 keeping opted-in params only"
+    );
+  }
+  const catalog = models ? cursorModelCatalogJson(models) : null;
+  const selection = selectCursorModel(model);
+  if (catalog && model) {
+    writeCachedCursorModelResolution({ selection, catalog });
+  }
+  return { selection, catalog };
+}
+function selectCursorModel(model) {
+  const base = normalizedCursorModel;
+  const level = cursorReasoningLevel;
+  const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
+  const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
   const params = filterModeParamsByModel(candidates, model, opted);
   if (params.length < candidates.length && model) {
     log(
       "resolveCursorModelSelection: " + base + " does not declare " + candidates.filter((candidate) => !params.some((p) => p.id === candidate.id)).map((candidate) => candidate.id).join(", ") + " \\u2014 dropped"
     );
   }
-  if (!level || listUnavailable || !model) {
+  if (!level || !model) {
     return params.length > 0 ? { id: base, params } : { id: base };
   }
   for (const definition of model.parameters ?? []) {
@@ -9088,7 +9547,10 @@ async function finalizeTurn3(attempt) {
     success,
     result: resultEvent?.result ?? callbackState.rawOutput,
     error,
-    activityLog: serializeSteps(callbackState.accumulatedSteps),
+    activityLog: serializeFinalSteps(
+      callbackState.accumulatedSteps,
+      resultEvent?.result ?? ""
+    ),
     resultEvent
   });
   appendClaimedTurnCompletion(completionArgs);
@@ -9276,12 +9738,15 @@ async function runCursorTurnWorker() {
   resetTurnState3();
   startClaimedTurn(turn);
   try {
-    const preflightOk2 = await runPreflightHeartbeat();
+    preloadCursorSdk();
+    const [preflightOk2] = await Promise.all([
+      runPreflightHeartbeat(),
+      refreshGithubToken3()
+    ]);
     if (!preflightOk2) {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-    await refreshGithubToken3();
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();
@@ -9296,7 +9761,7 @@ async function reportCursorTurnWorkerFailure(outcome) {
 }
 async function runClaimedTurn(turn) {
   const promptFile = CURSOR_TURN_WORKER_FILE_PREFIX + String(process.pid) + "-" + String(Date.now()) + ".txt";
-  writeFileSync10(promptFile, turn.prompt);
+  writeFileSync11(promptFile, turn.prompt);
   startClaimedTurn(turn);
   turnActive2 = true;
   turnStartedAtMs2 = Date.now();
@@ -9402,7 +9867,7 @@ import {
   readdirSync as readdirSync4,
   readFileSync as readFileSync10,
   rmSync,
-  writeFileSync as writeFileSync11
+  writeFileSync as writeFileSync12
 } from "fs";
 var SYSTEM_SKILLS_STATE_FILE = "/tmp/eva-system-skills.json";
 var SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
@@ -9475,7 +9940,7 @@ function writeStub(skill) {
     return false;
   }
   mkdirSync8(directory, { recursive: true });
-  writeFileSync11(\`\${directory}/SKILL.md\`, skill.stub);
+  writeFileSync12(\`\${directory}/SKILL.md\`, skill.stub);
   return true;
 }
 function pruneStaleStubs(keep) {
@@ -9502,7 +9967,7 @@ function updateGitExclude(names) {
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
-  writeFileSync11(excludeFile, next);
+  writeFileSync12(excludeFile, next);
 }
 function materializeSystemSkills() {
   try {
@@ -9537,7 +10002,7 @@ function materializeSystemSkills() {
 }
 
 // callback-src/runtime/branchWatcher.ts
-import { statSync as statSync3, watch } from "fs";
+import { statSync as statSync4, watch } from "fs";
 var GIT_TIMEOUT_MS = 5e3;
 var POLL_INTERVAL_MS3 = 15e3;
 var DEBOUNCE_MS = 300;
@@ -9649,7 +10114,7 @@ function startBranchWatcher() {
   const gitDir = WORK_DIR + "/.git";
   let gitDirIsDirectory = false;
   try {
-    gitDirIsDirectory = statSync3(gitDir).isDirectory();
+    gitDirIsDirectory = statSync4(gitDir).isDirectory();
   } catch {
     gitDirIsDirectory = false;
   }
@@ -9677,15 +10142,16 @@ import {
   openSync,
   readFileSync as readFileSync11,
   rmSync as rmSync2,
-  statSync as statSync4,
-  writeFileSync as writeFileSync12
+  statSync as statSync5,
+  writeFileSync as writeFileSync13
 } from "fs";
 var SERVER_STATE_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.json";
 var SERVER_LOCK_DIR = OPENCODE_RUNTIME_HOME_DIR + "/server.lock";
 var SERVER_LOG_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.log";
 var HEALTH_PROBE_TIMEOUT_MS = 3e3;
+var STARTUP_PROBE_TIMEOUT_MS = 250;
 var STARTUP_TIMEOUT_MS = 6e4;
-var HEALTH_POLL_INTERVAL_MS = 250;
+var HEALTH_POLL_INTERVAL_MS = 50;
 var LOCK_STALE_MS = 9e4;
 var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
@@ -9697,10 +10163,10 @@ function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
     return "";
   }
 }
-async function probeHealth() {
+async function probeHealth(timeoutMs = HEALTH_PROBE_TIMEOUT_MS) {
   try {
     const response = await fetch(opencodeServerBaseUrl + "/config", {
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
+      signal: AbortSignal.timeout(timeoutMs)
     });
     return response.ok;
   } catch {
@@ -9760,7 +10226,7 @@ function spawnServer() {
     child.unref();
     const pid = child.pid ?? 0;
     writeOomScoreAdj(pid, "300");
-    writeFileSync12(
+    writeFileSync13(
       SERVER_STATE_FILE,
       JSON.stringify({ pid, port: OPENCODE_SERVER_PORT })
     );
@@ -9772,7 +10238,7 @@ function spawnServer() {
 async function waitForHealth(pid) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await probeHealth()) return;
+    if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) return;
     if (pid && !pidAlive(pid)) {
       throw new Error(
         "opencode serve exited during startup. Server log tail:\\n" + readOpencodeServerLogTail()
@@ -9790,7 +10256,7 @@ function acquireStartupLock() {
     return true;
   } catch {
     try {
-      const ageMs = Date.now() - statSync4(SERVER_LOCK_DIR).mtimeMs;
+      const ageMs = Date.now() - statSync5(SERVER_LOCK_DIR).mtimeMs;
       if (ageMs > LOCK_STALE_MS) {
         rmSync2(SERVER_LOCK_DIR, { recursive: true, force: true });
         mkdirSync9(SERVER_LOCK_DIR);
@@ -9815,7 +10281,9 @@ async function ensureOpencodeServer() {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(HEALTH_POLL_INTERVAL_MS);
-      if (await probeHealth()) return opencodeServerBaseUrl;
+      if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) {
+        return opencodeServerBaseUrl;
+      }
       if (!existsSync8(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;
@@ -9948,23 +10416,25 @@ async function ensureEvaMcpServers(client, servers = evaMcpServers) {
       log("opencode mcp.status failed: " + resultFailure(status));
       return;
     }
-    for (const [name, server] of configured) {
-      if (status.data[name]) continue;
-      const added = await client.mcp.add({
-        body: {
-          name,
-          config: {
-            type: "remote",
-            url: server.url,
-            headers: server.headers,
-            enabled: true
+    const known = status.data;
+    await Promise.all(
+      configured.filter(([name]) => !known[name]).map(async ([name, server]) => {
+        const added = await client.mcp.add({
+          body: {
+            name,
+            config: {
+              type: "remote",
+              url: server.url,
+              headers: server.headers,
+              enabled: true
+            }
           }
-        }
-      });
-      log(
-        added.data ? "opencode mcp server " + name + " registered (" + (added.data[name]?.status ?? "unknown") + ")" : "opencode mcp.add " + name + " failed: " + resultFailure(added)
-      );
-    }
+        });
+        log(
+          added.data ? "opencode mcp server " + name + " registered (" + (added.data[name]?.status ?? "unknown") + ")" : "opencode mcp.add " + name + " failed: " + resultFailure(added)
+        );
+      })
+    );
   } catch (error) {
     log(
       "opencode mcp registration failed: " + (error instanceof Error ? error.message : String(error))
@@ -9995,8 +10465,10 @@ async function runOpencodeSdkAttempt(sessionMode) {
   let sawResult = false;
   let resultIsError = false;
   let attemptErrorMessage = "";
-  const sdk = await loadOpencodeSdk();
-  const baseUrl = await ensureOpencodeServer();
+  const [sdk, baseUrl] = await Promise.all([
+    loadOpencodeSdk(),
+    ensureOpencodeServer()
+  ]);
   const client = sdk.createOpencodeClient({
     baseUrl,
     // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
@@ -10005,7 +10477,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
     // rebuild needed.
     directory: AGENT_CWD
   });
-  await ensureEvaMcpServers(client);
+  const mcpRegistered = ensureEvaMcpServers(client);
   const persistSessionId = (sessionId2) => {
     callbackState.activeOpencodeSessionId = sessionId2;
     writeOpencodeSessionState();
@@ -10163,6 +10635,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
     const consumed2 = consumeEvents(events.stream);
     consumed2.catch(() => {
     });
+    await mcpRegistered;
     const accepted = await client.session.promptAsync({
       path: { id: sessionId },
       body: {
@@ -10390,22 +10863,11 @@ try {
   const attemptEndedDueToTimeout = providerAttemptTimedOut(finalAttempt);
   const { success: runSucceededWithResult, error: resolvedError } = resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
   let errorValue = resolvedError;
-  const finalResultText = (finalResultEvent?.result ?? "").trim();
-  if (finalResultText) {
-    let lastIdx = callbackState.accumulatedSteps.length - 1;
-    while (lastIdx >= 0 && callbackState.accumulatedSteps[lastIdx].type === "thinking") {
-      lastIdx--;
-    }
-    const candidate = lastIdx >= 0 ? callbackState.accumulatedSteps[lastIdx] : void 0;
-    if (candidate && candidate.type === "response") {
-      const detail = (candidate.detail ?? "").trim();
-      if (detail && (finalResultText === detail || finalResultText.startsWith(detail) || detail.startsWith(finalResultText))) {
-        callbackState.accumulatedSteps.splice(lastIdx, 1);
-      }
-    }
-  }
   for (const step of callbackState.accumulatedSteps) step.status = "complete";
-  const activityLog = serializeSteps(callbackState.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    callbackState.accumulatedSteps,
+    finalResultEvent?.result ?? ""
+  );
   let completionSuccess = agentWasInterrupted ? false : finalResultEvent ? !finalResultEvent.isError : finalCode === 0;
   if (attemptEndedDueToTimeout && !runSucceededWithResult) {
     completionSuccess = false;

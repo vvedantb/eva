@@ -1,3 +1,4 @@
+import { drainSteers, steerClaimArgs } from "../_chat/steerClaim";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -29,6 +30,7 @@ import {
   scheduleQueueDrainAfterBackgroundAgents,
 } from "../_queues/helpers";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
+import { bareHarnessCommandPrompt } from "../_mentions/bareHarnessCommand";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { buildEditPrompt } from "./prompts";
@@ -54,6 +56,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
+import { agentGoalArg, agentGoalPatch } from "../_chat/agentGoal";
 import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { isDaemonClaimPaused } from "../_chat/daemonClaimPause";
 import { isStreamingActivityStale } from "../_chat/turnLease";
@@ -190,6 +193,8 @@ export async function buildSessionPrompt(
     args.message,
     session.repoId,
   );
+  const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
+  if (bareCommand !== null) return { prompt: bareCommand, branchName };
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // session owner, whose access the credential helper mints tokens against).
@@ -404,7 +409,14 @@ export const sessionExecuteWorkflow = workflow.define({
       if (thawId) {
         const validation = await step.runAction(
           internal.sandbox.validateSandbox,
-          { sandboxId: thawId, repoId: data.repoId },
+          {
+            sandboxId: thawId,
+            repoId: data.repoId,
+            // A just-created sandbox: startSessionSandbox provisions swap and
+            // Docker itself, and waiting on its Docker bootstrap here (2.8s
+            // p50, 14.6s p90) only delays the launch.
+            skipDocker: data.sandboxSetupPending,
+          },
           { retry: false },
         );
         validatedSandboxId = validation.healthy ? thawId : null;
@@ -485,6 +497,14 @@ export const sessionExecuteWorkflow = workflow.define({
       // empty placeholder (and activeWorkflowId) stuck on "Working…" until
       // the 2-hour backstop.
       try {
+        // One-shot providers push the prompt at launch, so hold it until the
+        // new sandbox is on the latest base (daemons get this from the
+        // claimPendingTurn gate). Read live: the gate may already be clear.
+        if (data.sandboxSetupPending) {
+          await step.runAction(internal.sessionWorkflow.waitForSessionSetup, {
+            sessionId,
+          });
+        }
         const turnLease = await step.runMutation(
           internal.turns.acquireOneShotLease,
           { turnId: args.turnId, sandboxId },
@@ -876,6 +896,8 @@ export const getSessionData = internalQuery({
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     /** Non-zero for a multi-repo session — gates the linked publish step. */
     linkedRepoCount: v.optional(v.number()),
+    /** startSessionSandbox still owns repo prep, swap and Docker. */
+    sandboxSetupPending: v.boolean(),
   }),
   handler: async (ctx, args) => {
     const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
@@ -926,6 +948,7 @@ export const getSessionData = internalQuery({
       deploymentProjectName: repo.deploymentProjectName,
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
       linkedRepoCount: session.linkedRepoCount,
+      sandboxSetupPending: session.sandboxSetupPending === true,
     };
   },
 });
@@ -1125,6 +1148,7 @@ export const claimPendingTurn = authMutation({
     // When false, drain cancel/stop/usage only. Old sandboxes omit this and
     // keep acquiring the running lease (previous behaviour).
     acceptTurn: v.optional(v.boolean()),
+    ...steerClaimArgs,
   },
   returns: daemonClaimResultValidator,
   handler: async (ctx, args) => {
@@ -1171,11 +1195,15 @@ export const claimPendingTurn = authMutation({
       await ctx.db.patch(chat._id, { cancelRequestedAt: undefined });
     }
 
+    // Steers drain mid-turn too: that is the only time a daemon takes one.
+    const steers = await drainSteers(ctx, chat, args);
+
     const drained = {
       ...emptyClaim,
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
+      steers,
     };
 
     // A prewarm is killing this daemon right now (stale callback bundle or a
@@ -1247,6 +1275,7 @@ export const claimPendingTurn = authMutation({
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
+      steers,
       interactionMode: "default" as const,
     };
     const turnLifecycle = "durable" as const;
@@ -1285,6 +1314,23 @@ export const updateBackgroundAgents = authMutation({
       chat._id,
       backgroundAgents,
     );
+    return null;
+  },
+});
+
+/** Daemon mirrors Claude's native `/goal` onto the chat (writes only on change). */
+export const updateGoal = authMutation({
+  args: { ...daemonChatTargetArgs, goal: agentGoalArg },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const chatId = await resolveDaemonChatId(ctx.db, args);
+    if (chatId === null) return null;
+    const chat = await ctx.db.get(chatId);
+    if (!chat) throw new Error("Chat not found");
+    if (!(await hasRepoAccess(ctx.db, chat.repoId, ctx.userId)))
+      throw new Error("Not authorized");
+    const patch = agentGoalPatch(chat.goal, args.goal);
+    if (patch) await ctx.db.patch(chat._id, patch);
     return null;
   },
 });

@@ -31,6 +31,7 @@ import {
 import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
+import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1450,13 +1451,12 @@ const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
 };
 
-const aveThreadPointerSchema = z.object({ _id: z.string() }).nullable();
-
 /**
- * Implicit watch registration for create/send. Ave's own run passes its thread;
- * any other MCP caller registers against the user's live thread, if they have
- * one. Never clears an existing watch — that is what `setWatchedByAve` would
- * do without a thread id.
+ * Implicit watch registration for create/send: only Ave's own run, which passes
+ * its thread. Other senders (sandbox agents, OAuth connectors, PR-watch and
+ * automation-event deliveries) must not fall back to the user's live thread —
+ * that made Ave watch every chat they touched, so each turn end woke it.
+ * Explicit `watch_agent` keeps that fallback. Never clears an existing watch.
  */
 async function registerWatchIfAve(
   clerkUserId: string,
@@ -1464,18 +1464,8 @@ async function registerWatchIfAve(
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
-  const resolved =
-    aveThreadId ??
-    aveThreadPointerSchema.parse(
-      await runQueryAsUser(
-        getEvaConvexCloudUrl(),
-        clerkUserId,
-        "ave:getThread",
-        {},
-      ),
-    )?._id;
-  if (resolved === undefined) return;
-  await setWatchedByAve(clerkUserId, kind, id, resolved);
+  if (aveThreadId === undefined) return;
+  await setWatchedByAve(clerkUserId, kind, id, aveThreadId);
 }
 
 export const orchestratorListAgents = internalAction({
@@ -1560,6 +1550,67 @@ export const orchestratorListAgents = internalAction({
  * `internal` — as the session branch does for its linked repos — would
  * otherwise make `internal` depend on itself.
  */
+/** A linked-session group as MCP callers see it: name and members across repos. */
+const mcpSessionGroupValidator = v.object({
+  id: v.string(),
+  name: v.optional(v.string()),
+  members: v.array(
+    v.object({
+      id: v.string(),
+      numId: v.optional(v.number()),
+      title: v.string(),
+      repo: v.string(),
+      archived: v.boolean(),
+    }),
+  ),
+});
+
+/** `sessions:listGroup` as read over HTTP; null when the session is in no group. */
+const sessionGroupSchema = z
+  .object({
+    _id: z.string(),
+    name: z.string().optional(),
+    members: z.array(
+      z.object({
+        _id: z.string(),
+        numId: z.number().optional(),
+        title: z.string(),
+        archived: z.boolean(),
+        repo: z.object({
+          owner: z.string(),
+          name: z.string(),
+          rootDirectory: z.string().optional(),
+        }),
+      }),
+    ),
+  })
+  .nullable();
+
+/** The session's linked-session group, read as the calling user. */
+async function readSessionGroup(
+  convexUrl: string,
+  clerkUserId: string,
+  sessionId: string,
+): Promise<Infer<typeof mcpSessionGroupValidator> | undefined> {
+  const group = sessionGroupSchema.parse(
+    await runQueryAsUser(convexUrl, clerkUserId, "sessions:listGroup", {
+      id: sessionId,
+    }),
+  );
+  if (!group) return undefined;
+  return {
+    id: group._id,
+    name: group.name,
+    members: group.members.map((member) => ({
+      id: member._id,
+      numId: member.numId,
+      title: member.title,
+      repo: repoRefLabel(member.repo),
+      archived: member.archived,
+    })),
+  };
+}
+
 const orchestratorAgentStateValidator = v.object({
   kind: agentKindValidator,
   id: v.string(),
@@ -1599,6 +1650,8 @@ const orchestratorAgentStateValidator = v.object({
       }),
     ),
   ),
+  /** Sessions only, and only when it is in a linked-session group. */
+  sessionGroup: v.optional(mcpSessionGroupValidator),
 });
 
 export const orchestratorGetAgentState = internalAction({
@@ -1696,6 +1749,7 @@ export const orchestratorGetAgentState = internalAction({
               sessionId: id,
             })
           : undefined;
+      const sessionGroup = await readSessionGroup(convexUrl, clerkUserId, id);
       return {
         ...common,
         numId: session.numId,
@@ -1706,6 +1760,7 @@ export const orchestratorGetAgentState = internalAction({
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
         linkedRepos,
+        sessionGroup,
       };
     }
 
@@ -1734,6 +1789,48 @@ export const orchestratorGetAgentState = internalAction({
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
       deploymentStatus: undefined,
+    };
+  },
+});
+
+/**
+ * Joins, renames or leaves a session's linked-session group as the calling
+ * user, through the same mutations the sidebar and header chip use. Returns
+ * the group as it stands afterwards (undefined once the session is out of it).
+ */
+export const orchestratorUpdateSessionGroup = internalAction({
+  args: {
+    clerkUserId: v.string(),
+    sessionId: v.string(),
+    change: v.union(
+      v.object({ kind: v.literal("add"), groupSessionId: v.string() }),
+      v.object({ kind: v.literal("rename"), name: v.string() }),
+      v.object({ kind: v.literal("remove") }),
+    ),
+  },
+  returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
+  handler: async (_ctx, { clerkUserId, sessionId, change }) => {
+    const convexUrl = getEvaConvexCloudUrl();
+    if (change.kind === "add") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:addToGroup", {
+        sessionId,
+        groupSessionId: change.groupSessionId,
+      });
+    } else if (change.kind === "rename") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:renameGroup", {
+        sessionId,
+        name: change.name,
+      });
+    } else {
+      await runMutationAsUser(
+        convexUrl,
+        clerkUserId,
+        "sessions:removeFromGroup",
+        { sessionId },
+      );
+    }
+    return {
+      sessionGroup: await readSessionGroup(convexUrl, clerkUserId, sessionId),
     };
   },
 });
@@ -2198,6 +2295,8 @@ export const orchestratorCreateSession = internalAction({
     /** Saved codebase group whose members prefill the selection. */
     repoGroupId: v.optional(v.string()),
     installDependencies: v.optional(v.boolean()),
+    /** Calling session; the new session joins its linked-session group. */
+    fromSessionId: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -2216,6 +2315,7 @@ export const orchestratorCreateSession = internalAction({
       linkedRepoIds,
       repoGroupId,
       installDependencies,
+      fromSessionId,
     },
   ) => {
     // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
@@ -2235,6 +2335,7 @@ export const orchestratorCreateSession = internalAction({
     if (installDependencies !== undefined) {
       createArgs.installDependencies = installDependencies;
     }
+    if (fromSessionId) createArgs.fromSessionId = fromSessionId;
 
     const created = createdSessionSchema.parse(
       await runMutationAsUser(

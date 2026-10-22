@@ -23,9 +23,14 @@ import {
 } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { UnreadDot } from "@/lib/components/ui/UnreadDot";
+import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+import {
+  RepoAppMark,
+  type RepoAppMarkRepo,
+} from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
@@ -78,6 +83,8 @@ interface SidebarSessionItemProps {
   sandboxError?: string;
   /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
+  /** The open turn waits on a blocking question; the "?" mark replaces the grid. */
+  isAwaitingAnswer?: boolean;
   /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
   hasUnread?: boolean;
   isSelected: boolean;
@@ -96,6 +103,11 @@ interface SidebarSessionItemProps {
   linkedFrom?: SessionLinkedFrom;
   /** Set on sessions made by "Fork session"; shows the fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
+  /**
+   * The session's own app on rows in a cross-repo linked group: its mark sits
+   * left of the title, and the hover card names it.
+   */
+  app?: RepoAppMarkRepo;
 }
 
 /** Fork glyph on rows made by "Fork session"; the hover card names the source. */
@@ -152,19 +164,32 @@ function SessionPrIcon({
 }
 
 /**
- * Leading mark: Drive pixel grid while the assistant turn is in flight
- * (replaces sandbox status — awaiting a reply already implies sandbox active).
- * Otherwise the sandbox status color dot (simple view: error only).
+ * Leading mark: the "?" mark while the turn waits on the user's answer, the
+ * Drive pixel grid while it runs (both replace sandbox status — an open turn
+ * already implies an active sandbox). Otherwise the sandbox status color dot
+ * (simple view: error only).
  */
 export function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
+  isAwaitingAnswer,
 }: {
   label: string;
   dotClassName: string;
   isExecuting: boolean;
+  isAwaitingAnswer: boolean;
 }) {
+  if (isAwaitingAnswer) {
+    return (
+      <span
+        className="flex shrink-0 items-center"
+        title="Waiting for your answer"
+      >
+        <AwaitingAnswerMark />
+      </span>
+    );
+  }
   if (isExecuting) {
     return (
       <span className="flex shrink-0 items-center" title="Working">
@@ -189,9 +214,7 @@ export function TitleRegeneratingHint({
 }) {
   if (!show) return null;
   return (
-    <span
-      className={cn("shrink-0 text-2xs text-muted-foreground", className)}
-    >
+    <span className={cn("shrink-0 text-2xs text-muted-foreground", className)}>
       Regenerating…
     </span>
   );
@@ -208,6 +231,7 @@ export function SidebarSessionItem({
   status,
   sandboxError,
   isExecuting = false,
+  isAwaitingAnswer = false,
   hasUnread = false,
   isSelected,
   onNavigate,
@@ -217,6 +241,7 @@ export function SidebarSessionItem({
   linkedRepoCount,
   linkedFrom,
   forkedFromSessionId,
+  app,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
   const simpleView = useSimpleView();
@@ -239,7 +264,9 @@ export function SidebarSessionItem({
   );
 
   const showLeading =
-    isExecuting || showsSandboxStatusDot(displayStatus, simpleView);
+    isAwaitingAnswer ||
+    isExecuting ||
+    showsSandboxStatusDot(displayStatus, simpleView);
   // Executing wins: the leading "Working" grid says more than the dot would.
   const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
   const statusLeading = showLeading ? (
@@ -247,7 +274,14 @@ export function SidebarSessionItem({
       label={statusLabel}
       dotClassName={statusStyle.dot}
       isExecuting={isExecuting}
+      isAwaitingAnswer={isAwaitingAnswer}
     />
+  ) : null;
+
+  const appMark = app ? (
+    <span className="flex shrink-0" title={repoDisplayLabel(app)}>
+      <RepoAppMark repo={app} />
+    </span>
   ) : null;
 
   const link = (
@@ -260,6 +294,7 @@ export function SidebarSessionItem({
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex min-w-0 items-center gap-2">
             {statusLeading}
+            {appMark}
             <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
@@ -291,6 +326,7 @@ export function SidebarSessionItem({
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           {statusLeading}
+          {appMark}
           <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
           <TitleRegeneratingHint show={isRegeneratingTitle} />
           <ForkedGlyph show={isFork} />
@@ -324,6 +360,7 @@ export function SidebarSessionItem({
           createdAt={createdAt}
           userId={userId}
           baseBranch={baseBranch}
+          app={app}
         />
       </HoverCardContent>
     </HoverCard>

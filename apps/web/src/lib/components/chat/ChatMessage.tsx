@@ -12,6 +12,7 @@ import {
 import { Markdown } from "@eva/ui/markdown";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
+import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -42,7 +43,8 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
-import { IconGitFork } from "@tabler/icons-react";
+import { IconGitFork, IconLink } from "@tabler/icons-react";
+import { copyMessageLink } from "@/lib/components/chat/messageLink";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type {
@@ -117,6 +119,14 @@ interface ChatMessageProps {
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
+  /**
+   * False in simple view: drops the meta row under every turn (user: time,
+   * copy, fork; assistant: model, copy, fork, time · duration). Copy and fork
+   * stay on the right-click menu.
+   */
+  showTurnMeta?: boolean;
+  /** The viewer's `scopeCheck` experimental flag. */
+  showScopeCheck?: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: (messageId: string, expanded: boolean) => void;
   /** True when this user turn belongs to a teammate (left-aligned). */
@@ -152,6 +162,8 @@ interface ChatMessageProps {
   turnCheckpoint?: TurnCheckpointContext;
   /** Flash the row after a citation chip jumps here. */
   citeHighlight?: boolean;
+  /** Flash the row a shared message link (`?message=<id>`) opened at. */
+  linkHighlight?: boolean;
   /**
    * Sessions: start a new chat with the transcript through this message. Takes
    * the id so the parent can pass one stable handler to every row — a per-row
@@ -179,6 +191,11 @@ interface ChatMessageProps {
    * is never dropped.
    */
   belowContent?: ReactNode;
+  /**
+   * Artifacts saved in this turn (`create_artifact`). They sit with the turn's
+   * output, like media, and never take the prose's slot behind a tab.
+   */
+  artifacts?: ReactNode;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -187,6 +204,8 @@ export const ChatMessage = memo(function ChatMessage({
   repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
+  showTurnMeta = true,
+  showScopeCheck = false,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   isOtherUser = false,
@@ -204,11 +223,14 @@ export const ChatMessage = memo(function ChatMessage({
   sandboxRunning,
   turnCheckpoint,
   citeHighlight = false,
+  linkHighlight = false,
   onFork,
   onRetryTurn,
   precedingUser,
   belowContent,
+  artifacts,
 }: ChatMessageProps) {
+  const activityLayout = useActivityLayout();
   const checkpoint = useTurnCheckpointActions({
     message,
     context: turnCheckpoint,
@@ -229,9 +251,15 @@ export const ChatMessage = memo(function ChatMessage({
   // While the turn is live the settled activityLog is not written yet, so the
   // just-answered question comes off the streaming payload instead — that is
   // what makes the record appear the moment the user submits.
-  const streamingQuestionSteps = isStreamingPlaceholder
-    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+  const streamingSteps = isStreamingPlaceholder
+    ? (parseActivitySteps(streamingActivity) ?? [])
     : [];
+  const streamingQuestionSteps = collectQuestionSteps(streamingSteps);
+  // Inline layout already shows the live text between the steps. Older
+  // callbacks send no response steps, so the text block stays for them.
+  const streamingTextIsInline =
+    activityLayout === "inline" &&
+    streamingSteps.some((step) => step.type === "response");
 
   const copySource =
     message.content.trim().length > 0
@@ -246,7 +274,19 @@ export const ChatMessage = memo(function ChatMessage({
         onClick: () => onFork(message._id),
       }
     : undefined;
-  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
+  // A reply still streaming has nothing worth linking to yet.
+  const linkAction: ChatMessageActionItem | undefined = isStreamingPlaceholder
+    ? undefined
+    : {
+        key: "copy-link",
+        label: "Copy link",
+        icon: <IconLink className="size-4" />,
+        onClick: () => copyMessageLink(message._id),
+      };
+  const userActions = [linkAction, forkAction].filter(
+    (action): action is ChatMessageActionItem => action !== undefined,
+  );
+  const rowActions = [...userActions, ...checkpoint.items];
 
   // Two MCP provenances, never both on one row: a child chat shows the turns
   // posted from outside the composer, Eva shows the wake-ups its children fired.
@@ -314,9 +354,10 @@ export const ChatMessage = memo(function ChatMessage({
           initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={motionFast}
-          className={
-            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
-          }
+          className={cn(
+            citeHighlight && "rounded-md ring-2 ring-primary/50",
+            linkHighlight && "rounded-md t-anchor-flash",
+          )}
         >
           <AIMessage
             from={message.role}
@@ -396,13 +437,20 @@ export const ChatMessage = memo(function ChatMessage({
                     {belowContent}
                   </div>
                 ) : null}
-                <UserMessageMeta
-                  align={isOtherUser ? "start" : "end"}
-                  copyPlain={copyPlain}
-                  actions={forkAction ? [forkAction] : []}
-                  timestamp={message.timestamp}
-                  className={isOtherUser ? "pl-6" : undefined}
-                />
+                {artifacts ? (
+                  <div className="mt-1 flex w-full flex-col gap-2">
+                    {artifacts}
+                  </div>
+                ) : null}
+                {showTurnMeta ? (
+                  <UserMessageMeta
+                    align={isOtherUser ? "start" : "end"}
+                    copyPlain={copyPlain}
+                    actions={userActions}
+                    timestamp={message.timestamp}
+                    className={isOtherUser ? "pl-6" : undefined}
+                  />
+                ) : null}
               </div>
             ) : (
               <>
@@ -417,7 +465,7 @@ export const ChatMessage = memo(function ChatMessage({
                       />
                       {agentSpawnRow}
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
-                      {streamingContent ? (
+                      {streamingContent && !streamingTextIsInline ? (
                         <div data-assistant-cite-source={message._id}>
                           <Markdown className="mt-2">
                             {streamingContent}
@@ -495,6 +543,9 @@ export const ChatMessage = memo(function ChatMessage({
                     </>
                   )}
                 </MessageContent>
+                {artifacts ? (
+                  <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+                ) : null}
                 {/* Sits above `belowContent` so agent-composed panels keep
                     their promised slot directly over the meta row, and so the
                     chip stays next to the changed-files card it judges.
@@ -503,7 +554,7 @@ export const ChatMessage = memo(function ChatMessage({
                     reader who needs it. The hover card's per-hunk rows only
                     link out when the diff surface exists — simple view bounces
                     away from that tab, so they degrade to plain rows there. */}
-                {message.scopeCheck ? (
+                {showScopeCheck && message.scopeCheck ? (
                   <div className="mt-1">
                     <ScopeCheckChip
                       check={message.scopeCheck}
@@ -518,7 +569,8 @@ export const ChatMessage = memo(function ChatMessage({
                 {belowContent && !panelTabs ? (
                   <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
                 ) : null}
-                {turnModel || copyPlain || rowActions.length > 0 ? (
+                {showTurnMeta &&
+                (turnModel || copyPlain || rowActions.length > 0) ? (
                   <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
                     {turnModel ? (
                       <MessageModelIcon

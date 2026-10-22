@@ -10,6 +10,16 @@ import type { ThemeAppearance } from "@/lib/hooks/useThemeMode";
  */
 export const EVA_MARK_TOP_POINTS = "0,256 217,237 256,64 295,237 512,256";
 export const EVA_MARK_BOTTOM_POINTS = "0,256 217,275 256,449 295,275 512,256";
+/**
+ * Thicker-waisted star for the disc marks (favicon, Manager Ave). They enlarge
+ * the star 1.45x into a small circle, where the logo's thin waist shrinks to a
+ * hairline cross at 16 px. Same tips, wider inner points.
+ */
+export const EVA_DISC_STAR_TOP_POINTS = "0,256 204,222 256,64 308,222 512,256";
+export const EVA_DISC_STAR_BOTTOM_POINTS =
+  "0,256 204,290 256,449 308,290 512,256";
+/** Star enlargement inside a disc mark; the overflow is clipped to the disc. */
+export const EVA_DISC_STAR_SCALE = 1.45;
 export const EVA_MARK_PURPLE = "#8B3FB8";
 export const EVA_MARK_BLUE = "#3B7DD8";
 
@@ -34,18 +44,15 @@ export const SHELL_COLOR: Record<ThemeAppearance, string> = {
 /**
  * Favicon layout, in the 512 viewBox.
  *
- * Only the white disc + star are rounded-full. They sit inset toward the
- * top-left so the unread bubble can rest on the disc's bottom-right edge
- * without being clipped by the canvas — the badge is drawn after the mark
- * (on top), not inside a clipped circle. Same layout with or without a
- * count so the tab icon does not resize as notifications arrive and clear.
+ * The disc fills the whole canvas and is centred, so its edges land on the
+ * pixel grid at 16/32 px. An inset, off-centre disc rendered blurry and
+ * jagged in the tab strip. The unread badge is drawn after the mark, on top
+ * of the disc's bottom-right, so the layout is the same with or without a
+ * count and the tab icon does not resize as notifications arrive and clear.
  */
-/** Disc centre nudged TL; radius leaves a BR gutter for the badge. */
-const DISC_CX = 210;
-const DISC_CY = 210;
-const DISC_R = 210;
-/** Star geometry is authored for a 256-radius disc; scale into this disc. */
-const FAVICON_STAR_SCALE = (1.45 * DISC_R) / 256;
+const DISC_CX = 256;
+const DISC_CY = 256;
+const DISC_R = 256;
 /**
  * Badge centre on the disc's BR (drawn after it = on top). Nudged into the
  * corner; outer red may kiss the viewBox like Discord. Digit is slightly
@@ -63,14 +70,14 @@ function badgeFontSize(label: string): number {
   return 400;
 }
 
-/** Inset rounded-full disc + enlarged star, clipped to the disc. */
+/** Full-canvas disc + enlarged disc star, clipped to the disc. */
 function markGroup(surface: string): string {
   return (
     `<defs><clipPath id="eva-disc"><circle cx="${DISC_CX}" cy="${DISC_CY}" r="${DISC_R}"/></clipPath></defs>` +
     `<circle cx="${DISC_CX}" cy="${DISC_CY}" r="${DISC_R}" fill="${surface}"/>` +
-    `<g clip-path="url(#eva-disc)" transform="translate(${DISC_CX} ${DISC_CY}) scale(${FAVICON_STAR_SCALE}) translate(-256 -256)">` +
-    `<polygon points="${EVA_MARK_TOP_POINTS}" fill="${EVA_MARK_PURPLE}"/>` +
-    `<polygon points="${EVA_MARK_BOTTOM_POINTS}" fill="${EVA_MARK_BLUE}"/>` +
+    `<g clip-path="url(#eva-disc)" transform="translate(${DISC_CX} ${DISC_CY}) scale(${EVA_DISC_STAR_SCALE}) translate(-256 -256)">` +
+    `<polygon points="${EVA_DISC_STAR_TOP_POINTS}" fill="${EVA_MARK_PURPLE}"/>` +
+    `<polygon points="${EVA_DISC_STAR_BOTTOM_POINTS}" fill="${EVA_MARK_BLUE}"/>` +
     `</g>`
   );
 }

@@ -478,6 +478,10 @@ export const inboxSelectedParser = parseAsString.withOptions(searchOptions);
 // rather than pushes — going back should leave the page, not the highlight.
 export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 
+// The chat message a shared link points at (`?message=<id>`). Written only
+// into copied links, so it replaces rather than pushes, like `?comment`.
+export const messageLinkParser = parseAsString.withOptions(searchOptions);
+
 const pullRequestListStates = ["open", "closed", "all"] as const;
 export type PullRequestListState = (typeof pullRequestListStates)[number];
 export const pullRequestListStateParser = parseAsStringLiteral(
@@ -496,6 +500,13 @@ export const previewPortParser = parseAsInteger.withOptions(searchOptions);
  * `$numId`, and nesting one inside the other would break every existing link.
  */
 export const chatParser = parseAsInteger.withOptions(tabOptions);
+
+/**
+ * Subagent child thread open over a sandbox chat (`?subagent=<toolUseId>`).
+ * Pushes history so Back returns to the parent chat. Not `?agent`: that key
+ * signs in the agent user.
+ */
+export const subagentParser = parseAsString.withOptions(tabOptions);
 
 export const branchParser = parseAsString
   .withDefault("main")

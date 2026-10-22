@@ -30,5 +30,8 @@ export function resolveExperimentalFlags(
     viewVercelDeployment: flags?.viewVercelDeployment ?? false,
     disableAutoArchive: flags?.disableAutoArchive ?? false,
     askTeammates: flags?.askTeammates ?? false,
+    claudeStyleActivity: flags?.claudeStyleActivity ?? false,
+    openPrsOnGithub: flags?.openPrsOnGithub ?? false,
+    scopeCheck: flags?.scopeCheck ?? false,
   };
 }

@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
 import {
-  DocumentsIcon,
-  ProjectsIcon,
-  QuickTasksIcon,
-  SessionsIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+  BoardIcon,
+  ChecklistIcon,
+  DocumentIcon,
+  TerminalIcon,
+} from "@vvedantb/ui";
 import {
   ClaudeLogo,
   CursorLogo,
@@ -30,13 +30,13 @@ const KIND_ICON_CLASS = "shrink-0 text-muted-foreground";
 function MentionKindIcon({ kind }: { kind: MentionKind }) {
   switch (kind) {
     case "document":
-      return <DocumentsIcon size={16} className={KIND_ICON_CLASS} />;
+      return <DocumentIcon size={16} className={KIND_ICON_CLASS} />;
     case "session":
-      return <SessionsIcon size={16} className={KIND_ICON_CLASS} />;
+      return <TerminalIcon size={16} className={KIND_ICON_CLASS} />;
     case "project":
-      return <ProjectsIcon size={16} className={KIND_ICON_CLASS} />;
+      return <BoardIcon size={16} className={KIND_ICON_CLASS} />;
     case "quickTask":
-      return <QuickTasksIcon size={16} className={KIND_ICON_CLASS} />;
+      return <ChecklistIcon size={16} className={KIND_ICON_CLASS} />;
   }
 }
 

@@ -1279,7 +1279,7 @@ Artifacts can keep persistent state (localStorage is in-memory only and is lost 
 - cowork.state.subscribe(fn) — fn(snapshot) on every change, including other viewers' writes; returns an unsubscribe function
 opts = { scope: "user" } (default, private to each viewer) or { scope: "shared" } (one copy for the whole team). Limits: 200 keys per scope, 64 KB per value.
 
-When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
+When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears as a card under your reply (with preview and fullscreen), in the chat's Artifacts tab, and on the main Artifacts page.
 
 Do NOT use this for session walkthrough recordings, screen captures, or screenshots. For those, save the file under repo-root recordings/ or screenshots/ with agent-browser and leave it on disk — Eva attaches it to the chat message with the built-in video/image player.`,
       mutating: true,
@@ -1324,6 +1324,14 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
               : {}),
           },
         );
+        // Anchor it to this chat's turn, so it shows as a card under the reply.
+        if (entityKind !== undefined && chatContentId !== undefined) {
+          await ctx.runMutation(internal.artifacts.anchorToChat, {
+            artifactId: result.artifactId,
+            entityKind,
+            entityId: chatContentId,
+          });
+        }
 
         return textResult({
           artifactId: result.artifactId,

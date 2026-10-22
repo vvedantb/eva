@@ -17,6 +17,7 @@ import {
   IconListCheck,
   IconInfoCircle,
   IconAnchor,
+  IconSteeringWheel,
 } from "@tabler/icons-react";
 import { CircleSpinner } from "../ui/spinner";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -74,12 +75,15 @@ export interface ActivityStep {
     | "tool"
     | "notice"
     | "hook"
-    | "status";
+    | "status"
+    /** A queued user message the agent took into this live turn (Steer). */
+    | "steer";
   label: string;
   detail?: string;
   /** Full, unshortened path for file-type steps. Powers the chat File Viewer. */
   path?: string;
-  status: "complete" | "active";
+  /** `pending`: a planned step that has not started (sandbox startup stages). */
+  status: "complete" | "active" | "pending";
   /** The tool_use id that produced this step (Claude only). */
   toolUseId?: string;
   /** Parent `Agent` tool_use id — set on steps that ran inside a subagent. */
@@ -156,6 +160,7 @@ export const stepConfig = {
   notice: { icon: IconInfoCircle, defaultLabel: "Notice" },
   hook: { icon: IconAnchor, defaultLabel: "Hook" },
   status: { icon: CircleSpinner, defaultLabel: "Status" },
+  steer: { icon: IconSteeringWheel, defaultLabel: "Steered" },
 };
 
 const SPINNER_VERBS = [

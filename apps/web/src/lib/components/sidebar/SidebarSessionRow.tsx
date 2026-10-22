@@ -11,6 +11,7 @@ import {
 } from "@eva/ui";
 import { useState } from "react";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
+import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
   sessionHrefForRow,
@@ -39,6 +40,8 @@ interface SessionItem {
   /** Set when the last wake attempt failed; the row's dot reads as an error. */
   sandboxError?: string;
   isExecuting?: boolean;
+  /** A turn waits on a blocking question (`api.sessions.list`). */
+  isAwaitingAnswer?: boolean;
   /** Finished reply the user has not seen (`api.sessions.list`). */
   hasUnread?: boolean;
   updatedAt?: number;
@@ -72,6 +75,10 @@ interface SidebarSessionRowProps<T extends SessionItem> {
   /** Shows Fork session (active and archived lists); opens the fork. */
   onForkNavigate?: (pathSegment: string) => void;
   onRenameRequest?: (session: T) => void;
+  /** The session's app on rows in a cross-repo linked group (mark + hover name). */
+  app?: RepoAppMarkRepo;
+  /** Rows in a linked-session group: shows "Remove from group". */
+  onRemoveFromGroup?: (session: T) => void;
 }
 
 /**
@@ -88,6 +95,8 @@ export function SidebarSessionRow<T extends SessionItem>({
   onUnarchive,
   onForkNavigate,
   onRenameRequest,
+  app,
+  onRemoveFromGroup,
 }: SidebarSessionRowProps<T>) {
   const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
@@ -127,6 +136,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 status={session.status}
                 sandboxError={session.sandboxError}
                 isExecuting={session.isExecuting === true}
+                isAwaitingAnswer={session.isAwaitingAnswer === true}
                 hasUnread={session.hasUnread === true}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
@@ -136,6 +146,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 linkedFrom={session.linkedFrom}
                 linkedRepoCount={session.linkedRepoCount}
                 forkedFromSessionId={session.forkedFromSessionId}
+                app={app}
               />
             </SharedLayoutNavSurface>
           </m.div>
@@ -170,6 +181,9 @@ export function SidebarSessionRow<T extends SessionItem>({
               isArchivedList && onUnarchive
                 ? () => onUnarchive(session)
                 : undefined
+            }
+            onRemoveFromGroup={
+              onRemoveFromGroup ? () => onRemoveFromGroup(session) : undefined
             }
             onArchiveRequest={
               !isArchivedList && onArchiveRequest

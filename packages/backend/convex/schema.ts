@@ -12,11 +12,13 @@ import {
   aveMessageFields,
   automationFields,
   automationRunFields,
+  changelogVoteFields,
   agentTaskFields,
   agentRunFields,
   pullRequestFields,
   sessionFields,
   sessionRepoFields,
+  sessionGroupFields,
   repoGroupFields,
   githubRepoFields,
   teamFields,
@@ -90,7 +92,8 @@ const schema = defineSchema({
     .index("by_uploader", ["uploadedBy"])
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
-    .index("by_source_project", ["sourceProjectId"]),
+    .index("by_source_project", ["sourceProjectId"])
+    .index("by_chat_parent", ["chatParentId"]),
 
   artifactState: defineTable(artifactStateFields).index(
     "by_artifact_owner_key",
@@ -138,7 +141,15 @@ const schema = defineSchema({
     .index("by_session", ["owner.sessionId"])
     .index("by_task", ["owner.taskId"])
     .index("by_project", ["owner.projectId"])
-    .index("by_repo_and_head_branch", ["repoId", "headBranch"]),
+    .index("by_repo_and_head_branch", ["repoId", "headBranch"])
+    // Watched PRs on a base branch: a push there may cause a merge conflict.
+    .index("by_repo_base_and_watch", [
+      "repoId",
+      "baseBranch",
+      "watch.startedAt",
+    ])
+    // Watched PRs by head branch: a commit status there names no PR.
+    .index("by_head_and_watch", ["headBranch", "watch.startedAt"]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),
@@ -213,7 +224,8 @@ const schema = defineSchema({
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
-    .index("by_forked_from", ["forkedFromSessionId"]),
+    .index("by_forked_from", ["forkedFromSessionId"])
+    .index("by_session_group", ["sessionGroupId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
@@ -233,6 +245,8 @@ const schema = defineSchema({
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
     .index("by_repo", ["repoId"]),
+  // Linked-session groups (members: `sessions.by_session_group`).
+  sessionGroups: defineTable(sessionGroupFields),
   // Saved codebase groups that prefill a new session's repo selection.
   repoGroups: defineTable(repoGroupFields)
     .index("by_created_by", ["createdBy"])
@@ -552,6 +566,11 @@ const schema = defineSchema({
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
     .index("by_repo", ["repoId"]),
+
+  changelogVotes: defineTable(changelogVoteFields).index(
+    "by_run_and_user_and_item",
+    ["runId", "userId", "itemIndex"],
+  ),
 
   logs: defineTable(logFields)
     .index("by_repo", ["repoId"])
