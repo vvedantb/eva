@@ -37,7 +37,7 @@ const SLIDES: DeckSlide[] = [
     id: "bee-12-background",
     title: "Works in the background",
     Component: BeeBackground,
-    steps: 3,
+    steps: 4,
   },
   {
     id: "bee-03-notch",

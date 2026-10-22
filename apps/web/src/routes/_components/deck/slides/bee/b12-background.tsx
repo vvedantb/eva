@@ -2,6 +2,7 @@ import type { Icon } from "@tabler/icons-react";
 import {
   IconAdjustmentsHorizontal,
   IconBrain,
+  IconCpu,
   IconFileText,
   IconPlugConnected,
   IconSparkles,
@@ -9,6 +10,7 @@ import {
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { GrokMark } from "@/lib/components/grokBot/GrokMark";
+import { LogoMark } from "@/lib/components/LogoMark";
 import {
   Accent,
   Shell,
@@ -25,6 +27,7 @@ import { BEE_CARD } from "./_parts/BeeBits";
 const STEER = 1;
 const BACKGROUND = 2;
 const BEE_TOO = 3;
+const EVA_TOO = 4;
 
 interface Chore {
   icon: Icon;
@@ -34,6 +37,7 @@ interface Chore {
 
 /** What a hands-on agent asks of you before and during the work. */
 const CHORES: readonly Chore[] = [
+  { icon: IconCpu, label: "Choose the model", tilt: 1 },
   { icon: IconSparkles, label: "Pick the right skill", tilt: -2 },
   { icon: IconPlugConnected, label: "Connect the MCP tools", tilt: 1.5 },
   { icon: IconBrain, label: "Read the thinking", tilt: -1 },
@@ -77,13 +81,13 @@ function Steering() {
       <div className="text-sm font-semibold tracking-[0.12em] text-[#2a1e0c]/50 uppercase">
         An agent you steer
       </div>
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2">
         {CHORES.map((chore, index) => {
           const Glyph = chore.icon;
           return (
             <m.div
               key={chore.label}
-              className="flex h-12 items-center gap-3 rounded-full bg-[#2a1e0c]/[0.05] px-4 text-lg text-[#2a1e0c]/80"
+              className="flex h-11 items-center gap-3 rounded-full bg-[#2a1e0c]/[0.05] px-4 text-lg text-[#2a1e0c]/80"
               initial={{ opacity: 0, x: -16, rotate: 0 }}
               animate={
                 shown
@@ -160,6 +164,7 @@ function Background() {
 export function BeeBackground() {
   const step = useDeckStep();
   const beeToo = step >= BEE_TOO;
+  const evaToo = step >= EVA_TOO;
 
   return (
     <Shell className="py-14">
@@ -176,7 +181,7 @@ export function BeeBackground() {
 
       {/* Bee is that idea, for meetings. */}
       <m.div
-        className="mt-8 flex items-center justify-center gap-4"
+        className="mt-6 flex items-center justify-center gap-4"
         initial={{ opacity: 0, y: 16 }}
         animate={beeToo ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
         transition={cueTransition(beeToo, 0.3, {
@@ -187,6 +192,24 @@ export function BeeBackground() {
         <BeeLogo size={52} glow={false} />
         <span className="text-[26px] font-medium text-[#2a1e0c]">
           Bee does the same for meetings: it listens, searches and reminds you.
+        </span>
+      </m.div>
+
+      {/* The same lesson, applied back to Eva. */}
+      <m.div
+        className="mt-4 flex items-center justify-center gap-4"
+        initial={{ opacity: 0, y: 16 }}
+        animate={evaToo ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
+        transition={cueTransition(evaToo, 0.2, {
+          duration: DUR.hero,
+          ease: EASE.expo,
+        })}
+      >
+        <span className="flex size-[52px] items-center justify-center">
+          <LogoMark size={34} />
+        </span>
+        <span className="text-[22px] text-[#2a1e0c]/70">
+          Eva&apos;s Simple Mode too: workspaces wake and sleep on their own.
         </span>
       </m.div>
     </Shell>

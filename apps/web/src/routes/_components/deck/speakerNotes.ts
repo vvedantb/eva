@@ -297,9 +297,10 @@ Detail: the answer usually exists, in your own notes or last meeting's summary. 
 Next: Before the product, one idea about which AI tools people actually keep using.`,
 
   "bee-12-background": `The AI tools that win are the ones with the least friction: they just work, and they do most of it in the background.
-→ Step 1: an agent you have to steer. You pick the skill, connect the MCP tools, read the thinking, parse paragraphs of output, and steer it again. It only works while you watch it.
+→ Step 1: an agent you have to steer. You choose the model, pick the skill, connect the MCP tools, read the thinking, parse paragraphs of output, and steer it again. It only works while you watch it.
 → Step 2: the Grok bot. You send it one message, and it does the work in the background and sends you updates, as a co-worker would. No skills, no tools, no traces to read.
 → Step 3: Bee is that idea for meetings. It listens, searches and reminds you, without you asking or steering it.
+→ Step 4: and the same lesson has gone back into Eva. In Simple Mode you no longer think about starting or stopping a workspace: it wakes when you send a message and sleeps when it is idle.
 Detail: the thread on screen is an example in the shape of a real Grok bot run on Eva: one message, then updates until the change is live. The point for the room: the less a tool asks of you, the more you use it.
 Next: So here is Bee.`,
 
