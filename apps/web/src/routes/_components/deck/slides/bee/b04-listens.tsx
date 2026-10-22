@@ -56,7 +56,7 @@ export function BeeListens() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">It listens. It finds. It tips.</Title>
+      <Title size="md">It listens. It finds. It tips</Title>
 
       <Camera shots={SHOTS} className="mt-8">
         <div className="relative" style={{ width: W, height: H }}>

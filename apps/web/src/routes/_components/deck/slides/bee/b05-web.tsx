@@ -34,7 +34,7 @@ export function BeeWeb() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">Answers from the web, too.</Title>
+      <Title size="md">Answers from the web, too</Title>
 
       <Camera shots={SHOTS} className="mt-10">
         <div className="relative isolate flex h-[440px] w-[1088px] items-start justify-center">

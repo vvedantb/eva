@@ -78,7 +78,7 @@ export function BeeRealMeeting() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        A real meeting, with <Accent>Krzys</Accent>.
+        A real meeting, with <Accent>Krzys</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

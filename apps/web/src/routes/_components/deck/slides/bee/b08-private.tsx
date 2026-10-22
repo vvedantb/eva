@@ -34,7 +34,7 @@ export function BeePrivate() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">Private by design.</Title>
+      <Title size="md">Private by design</Title>
 
       <Camera shots={SHOTS} className="mt-8">
         <div className="relative flex h-[440px] w-[1088px] items-start gap-12">

@@ -115,7 +115,7 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
 export function BeeTools() {
   return (
     <Shell className="py-14">
-      <Title size="md">Works with your tools.</Title>
+      <Title size="md">Works with your tools</Title>
 
       <Camera shots={SHOTS} className="mt-8">
         <div className="relative isolate" style={{ width: W, height: H }}>

@@ -24,7 +24,7 @@ export function BeeNotch() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">A small bar at the top of your screen.</Title>
+      <Title size="md">A small bar at the top of your screen</Title>
 
       <Camera shots={SHOTS} className="mt-6">
         {/* Your screen, mid-call. */}

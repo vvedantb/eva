@@ -63,7 +63,7 @@ export function BeeSummary() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">The summary writes itself.</Title>
+      <Title size="md">The summary writes itself</Title>
 
       <Camera shots={SHOTS} className="mt-6">
         <div className="relative flex h-[460px] w-[1088px] items-start gap-12">

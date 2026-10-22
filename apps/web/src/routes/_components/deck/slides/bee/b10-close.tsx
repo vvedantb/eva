@@ -20,7 +20,7 @@ export function BeeClose() {
         </m.div>
       </m.div>
       <Title size="lg">
-        Try it in your <Accent>next meeting</Accent>.
+        Try it in your <Accent>next meeting</Accent>
       </Title>
       <m.p
         className="text-2xl text-[#2a1e0c]/60"

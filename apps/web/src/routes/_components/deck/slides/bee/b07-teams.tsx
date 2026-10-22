@@ -79,7 +79,7 @@ export function BeeTeams() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">Better together.</Title>
+      <Title size="md">Better together</Title>
 
       <Camera shots={SHOTS} className="mt-8">
         <div className="relative" style={{ width: W, height: H }}>
