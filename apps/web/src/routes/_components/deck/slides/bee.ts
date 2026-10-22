@@ -1,6 +1,7 @@
 import type { DeckSlide } from "./types";
 import { BeeTitle } from "./bee/b01-title";
 import { BeeProblem } from "./bee/b02-problem";
+import { BeeBackground } from "./bee/b12-background";
 import { BeeNotch } from "./bee/b03-notch";
 import { BeeListens } from "./bee/b04-listens";
 import { BeeWeb } from "./bee/b05-web";
@@ -23,6 +24,12 @@ const SLIDES: DeckSlide[] = [
     title: "The problem",
     Component: BeeProblem,
     steps: 2,
+  },
+  {
+    id: "bee-12-background",
+    title: "Works in the background",
+    Component: BeeBackground,
+    steps: 3,
   },
   {
     id: "bee-03-notch",

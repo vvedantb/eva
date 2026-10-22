@@ -291,7 +291,14 @@ Next: Start with a moment everyone has had.`,
 → Step 1: someone says it out loud: "Last time we agreed something on the Acme renewal. What was it?"
 → Step 2: the notes that hold the answer blur and drift, and you start searching by hand while the meeting carries on.
 Detail: the answer usually exists, in your own notes or last meeting's summary. The problem is finding it in the ten seconds before the conversation moves on. The note names and the line are examples.
-Next: This is what Bee does instead.`,
+Next: Before the product, one idea about which AI tools people actually keep using.`,
+
+  "bee-12-background": `The AI tools that win are the ones with the least friction: they just work, and they do most of it in the background.
+→ Step 1: an agent you have to steer. You pick the skill, connect the MCP tools, read the thinking, parse paragraphs of output, and steer it again. It only works while you watch it.
+→ Step 2: the Grok bot. You send it one message, and it does the work in the background and sends you updates, as a co-worker would. No skills, no tools, no traces to read.
+→ Step 3: Bee is that idea for meetings. It listens, searches and reminds you, without you asking or steering it.
+Detail: the thread on screen is an example in the shape of a real Grok bot run on Eva: one message, then updates until the change is live. The point for the room: the less a tool asks of you, the more you use it.
+Next: So here is Bee.`,
 
   "bee-03-notch": `Bee lives in a small bar at the top centre of your screen, like a phone's notch.
 → Step 1: during the call it listens. The little bars move; nothing else changes.
