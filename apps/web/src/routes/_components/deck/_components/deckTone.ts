@@ -38,3 +38,22 @@ export const DECK_TONES: Record<DeckTheme, DeckTone> = {
     track: "bg-zinc-900/10",
   },
 };
+
+/** Whose deck it is: sets the accent pair, typeface and stage colour. */
+export type DeckBrand = "eva" | "bee";
+
+/**
+ * The class a deck's stage, presenter frame and index card take. It sets the
+ * `--deck-brand-*` accent variables (and, for Bee, its typeface); Eva's own
+ * colours are the variables' fallbacks, so Eva needs none.
+ */
+export const BRAND_CLASS: Record<DeckBrand, string> = {
+  eva: "",
+  bee: "deck-brand-bee",
+};
+
+/** The stage colour a brand paints under its slides, when it has its own. */
+export const BRAND_STAGE: Record<DeckBrand, string> = {
+  eva: "",
+  bee: "deck-stage-bee",
+};

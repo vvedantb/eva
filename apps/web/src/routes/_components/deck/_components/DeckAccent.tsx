@@ -1,7 +1,7 @@
 import { createContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useMotionCue } from "./deckContext";
-import { BRAND_GRADIENT } from "./motion/tokens";
+import { ACCENT_GRADIENT } from "./motion/tokens";
 
 /** Accent text waits this long after its words land (kept for `Title`). */
 const SHEEN_LEAD = 0.55;
@@ -42,7 +42,7 @@ export const InAccentContext = createContext(false);
 export function accentSliceStyle(slice: AccentSlice): CSSProperties {
   const { size, position } = sliceGeometry(slice);
   return {
-    backgroundImage: BRAND_GRADIENT,
+    backgroundImage: ACCENT_GRADIENT,
     backgroundSize: `${size} 100%`,
     backgroundPosition: `${position} 0%`,
     backgroundRepeat: "no-repeat",
@@ -67,7 +67,7 @@ export function AccentText({ children, slice }: AccentTextProps) {
     <span
       className="bg-clip-text text-transparent"
       style={{
-        backgroundImage: BRAND_GRADIENT,
+        backgroundImage: ACCENT_GRADIENT,
         backgroundSize: `${size} 100%`,
         backgroundPosition: `${position} 0%`,
         backgroundRepeat: "no-repeat",

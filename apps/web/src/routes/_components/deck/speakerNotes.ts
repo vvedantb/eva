@@ -281,6 +281,67 @@ Figures: models by the day each first appeared in Eva's model picker, from git h
 Next: The clearest of those problems is the review queue, which is where the bottleneck now sits.`,
 
   // ---------------------------------------------------------------------------
+  // Bee deck
+  // ---------------------------------------------------------------------------
+  "bee-01-title": `Open with what Bee is in one breath: a small assistant that sits at the top of your screen in meetings, listens, and finds what you already know.
+Detail: Bee is a desktop app for Windows and Mac. It is not a meeting bot; nobody else in the call sees it. Keep the technical side out of this deck: the room only needs to know what it does for them.
+Next: Start with a moment everyone has had.`,
+
+  "bee-02-problem": `Everyone has been in this meeting: someone remembers you agreed something, and nobody can find it.
+→ Step 1: someone says it out loud: "Last time we agreed something on the Acme renewal. What was it?"
+→ Step 2: the notes that hold the answer blur and drift, and you start searching by hand while the meeting carries on.
+Detail: the answer usually exists, in your own notes or last meeting's summary. The problem is finding it in the ten seconds before the conversation moves on. The note names and the line are examples.
+Next: This is what Bee does instead.`,
+
+  "bee-03-notch": `Bee lives in a small bar at the top centre of your screen, like a phone's notch.
+→ Step 1: during the call it listens. The little bars move; nothing else changes.
+→ Step 2: when it hears something it can help with, the bar grows into a short answer, and tells you which note it came from.
+Detail: one or two short tips at most, never a wall of text. You can press Cmd or Ctrl, Shift and Space to show or hide it. The meeting and the tip are an example.
+Next: What happens between hearing and showing?`,
+
+  "bee-04-listens": `Three steps, in about the time it takes to finish a sentence.
+→ Step 1: it hears. Bee picks up a phrase from the meeting, for example "the Acme renewal we talked about last time".
+→ Step 2: it finds. It searches your own markdown notes, and Jev, a small fast model, ranks which ones actually match.
+→ Step 3: it tips. A writing model turns the best match into one short line in the notch.
+Detail: the words Bee hears are never shown on screen. Only the tip is. The models are Grok for speech, Jev for ranking and GPT-6 Luna for the tip. The notes and tip are an example.
+Next: And when your notes do not have the answer?`,
+
+  "bee-05-web": `When the answer is not in your notes, Bee looks it up.
+→ Step 1: the tip appears as before, this time from the web.
+→ Step 2: the sources appear under it, so you can see where the answer came from and open the link.
+Detail: this keeps Bee honest: a web answer always shows its sources. The question and sources on screen are an example.
+Next: The meeting ends. What do you keep?`,
+
+  "bee-06-summary": `When the meeting ends, Bee writes the summary for you.
+→ Step 1: the decisions, in plain sentences.
+→ Step 2: the action items, each with an owner.
+→ Step 3: it is saved as a note, so next time someone says "last time we…", Bee can find it.
+Detail: if the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
+Next: That works for one person. It is better for a team.`,
+
+  "bee-07-teams": `In Teams mode, everyone's Bee works together.
+→ Step 1: each person's Bee shares what its own person said.
+→ Step 2: so the summary knows who said what, and labels each line with a name.
+Detail: there is no bot in the call and nothing joins automatically. Each Bee only shares what its own microphone heard. Names and lines are an example.
+Next: Which raises the obvious question: what about privacy?`,
+
+  "bee-08-private": `Bee was built to be safe to leave on.
+→ Step 1: you start sharing your screen, and the notch disappears from what others see.
+→ Step 2: the four promises: no transcript on screen, hidden during screen share, your keys stay on your computer, and nothing joins a meeting without your click.
+Detail: say these plainly; they are the reasons people are comfortable using it. Screen-share hiding is part of meeting mode.
+Next: Last, it fits with the tools you already use.`,
+
+  "bee-09-tools": `Bee connects to the tools you already have.
+→ Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.
+→ Step 2: meeting context: Bee works out which meeting you are in, and who is in it, from Outlook and Teams on your own computer.
+Detail: connectors use a normal sign-in. Meeting context is read locally; nothing is sent to join the meeting.
+Next: So, one thing to do.`,
+
+  "bee-10-close": `Close on one ask: try it in your next meeting.
+Detail: it runs on Windows and Mac. Offer to help anyone set it up after the session. Then open the floor for questions.
+Next: Questions.`,
+
+  // ---------------------------------------------------------------------------
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.

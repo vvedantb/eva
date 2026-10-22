@@ -1,15 +1,19 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
-import { motionSpring } from "@eva/ui";
-import { BRAND, EASE_OUT } from "./DeckPrimitives";
+import { cn, motionSpring } from "@eva/ui";
+import { EASE_OUT } from "./DeckPrimitives";
+import { BRAND_CLASS } from "./deckTone";
+import type { DeckBrand } from "./deckTone";
+import { ACCENT } from "./motion/tokens";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./deckStage";
 
-/** The deck routes a card may point at. All three live under `/slides`. */
+/** The deck routes a card may point at. All live under `/slides`. */
 export type DeckPath =
   | "/slides/intro-to-eva"
   | "/slides/friday-session"
-  | "/slides/annual-cdm";
+  | "/slides/annual-cdm"
+  | "/slides/bee";
 
 export interface DeckSummary {
   title: string;
@@ -23,6 +27,8 @@ export interface DeckSummary {
    * the caller is the only place that knows how to render one.
    */
   preview: ReactNode;
+  /** Whose deck: tints the card's hover glow. Eva when absent. */
+  brand?: DeckBrand;
 }
 
 interface DeckCardProps {
@@ -58,14 +64,17 @@ export function DeckCard({ deck, index }: DeckCardProps) {
       // of card padding around it. Explicit pixels on both sides of the pair,
       // because the `rounded-*` scale is derived from a user-settable
       // `--radius` and the relationship has to survive that.
-      className="group relative rounded-[28px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm"
+      className={cn(
+        "group relative rounded-[28px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-sm",
+        BRAND_CLASS[deck.brand ?? "eva"],
+      )}
     >
       <div
         aria-hidden
         // One pixel outside the card, so one pixel rounder.
         className="pointer-events-none absolute -inset-px rounded-[29px] opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-60"
         style={{
-          background: `linear-gradient(120deg, ${BRAND.purple}, ${BRAND.blue})`,
+          background: `linear-gradient(120deg, ${ACCENT.a}, ${ACCENT.b})`,
         }}
       />
 

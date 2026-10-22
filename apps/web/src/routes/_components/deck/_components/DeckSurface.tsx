@@ -3,7 +3,7 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { useDeckTheme, useMotionCue } from "./deckContext";
 import type { DeckTheme } from "./deckContext";
-import { EASE } from "./motion/tokens";
+import { ACCENT, EASE, accentMix } from "./motion/tokens";
 
 interface CardLight {
   /** The soft wash under the top edge, always there. */
@@ -19,7 +19,7 @@ const LIGHT: Record<DeckTheme, CardLight> = {
   },
   light: {
     highlight: "linear-gradient(180deg, rgba(255,255,255,0.7), transparent)",
-    edge: "linear-gradient(90deg, transparent, rgba(139,63,184,0.45), transparent)",
+    edge: `linear-gradient(90deg, transparent, ${accentMix(ACCENT.a, 45)}, transparent)`,
   },
 };
 

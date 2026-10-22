@@ -5,7 +5,8 @@ import type { DeckSlide } from "../slides/types";
 import { getSpeakerNotes } from "../speakerNotes";
 import { DeckStepContext } from "./DeckPrimitives";
 import { DeckThemeScope } from "./DeckThemeScope";
-import { DECK_TONES } from "./deckTone";
+import { BRAND_CLASS, BRAND_STAGE, DECK_TONES } from "./deckTone";
+import type { DeckBrand } from "./deckTone";
 import { DeckAmbient } from "./DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./DeckCamera";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./deckStage";
@@ -25,6 +26,8 @@ interface PresenterViewProps {
   onNavigate: (slide: number) => void;
   /** The deck's own route path, e.g. "/slides/annual-cdm". Also the sync channel key. */
   basePath: string;
+  /** Whose deck it is: accent colours, typeface and stage. Eva when absent. */
+  brand?: DeckBrand;
 }
 
 /**
@@ -37,6 +40,7 @@ export function PresenterView({
   slide,
   onNavigate,
   basePath,
+  brand = "eva",
 }: PresenterViewProps) {
   const nav = useDeckNavigation(slides, slide, onNavigate, (next, step) =>
     postDeckMessage({ deck: basePath, slide: next, step }),
@@ -90,6 +94,8 @@ export function PresenterView({
             className={cn(
               "relative shrink-0 overflow-hidden rounded-[20px] ring-2 ring-white/10",
               DECK_TONES[theme].stage,
+              BRAND_CLASS[brand],
+              BRAND_STAGE[brand],
             )}
           >
             <DeckAmbient theme={theme} />

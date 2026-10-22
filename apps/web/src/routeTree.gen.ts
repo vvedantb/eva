@@ -26,6 +26,7 @@ import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
 import { Route as SlidesIndexRouteImport } from './routes/slides/index'
 import { Route as SlidesAnnualCdmRouteImport } from './routes/slides/annual-cdm'
+import { Route as SlidesBeeRouteImport } from './routes/slides/bee'
 import { Route as SlidesFridaySessionRouteImport } from './routes/slides/friday-session'
 import { Route as SlidesIntroToEvaRouteImport } from './routes/slides/intro-to-eva'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
@@ -233,6 +234,11 @@ const SlidesIndexRoute = SlidesIndexRouteImport.update({
 const SlidesAnnualCdmRoute = SlidesAnnualCdmRouteImport.update({
   id: '/slides/annual-cdm',
   path: '/slides/annual-cdm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SlidesBeeRoute = SlidesBeeRouteImport.update({
+  id: '/slides/bee',
+  path: '/slides/bee',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SlidesFridaySessionRoute = SlidesFridaySessionRouteImport.update({
@@ -983,6 +989,7 @@ export interface FileRoutesByFullPath {
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/bee': typeof SlidesBeeRoute
   '/slides/friday-session': typeof SlidesFridaySessionRoute
   '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
   '/slides/': typeof SlidesIndexRoute
@@ -1124,6 +1131,7 @@ export interface FileRoutesByTo {
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/bee': typeof SlidesBeeRoute
   '/slides/friday-session': typeof SlidesFridaySessionRoute
   '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
   '/slides': typeof SlidesIndexRoute
@@ -1245,6 +1253,7 @@ export interface FileRoutesById {
   '/_global/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
+  '/slides/bee': typeof SlidesBeeRoute
   '/slides/friday-session': typeof SlidesFridaySessionRoute
   '/slides/intro-to-eva': typeof SlidesIntroToEvaRoute
   '/slides/': typeof SlidesIndexRoute
@@ -1389,6 +1398,7 @@ export interface FileRouteTypes {
     | '/whats-new'
     | '/dev/feature-previews'
     | '/slides/annual-cdm'
+    | '/slides/bee'
     | '/slides/friday-session'
     | '/slides/intro-to-eva'
     | '/slides/'
@@ -1530,6 +1540,7 @@ export interface FileRouteTypes {
     | '/whats-new'
     | '/dev/feature-previews'
     | '/slides/annual-cdm'
+    | '/slides/bee'
     | '/slides/friday-session'
     | '/slides/intro-to-eva'
     | '/slides'
@@ -1650,6 +1661,7 @@ export interface FileRouteTypes {
     | '/_global/whats-new'
     | '/dev/feature-previews'
     | '/slides/annual-cdm'
+    | '/slides/bee'
     | '/slides/friday-session'
     | '/slides/intro-to-eva'
     | '/slides/'
@@ -1786,6 +1798,7 @@ export interface RootRouteChildren {
   PreviewAuthRoute: typeof PreviewAuthRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
   SlidesAnnualCdmRoute: typeof SlidesAnnualCdmRoute
+  SlidesBeeRoute: typeof SlidesBeeRoute
   SlidesFridaySessionRoute: typeof SlidesFridaySessionRoute
   SlidesIntroToEvaRoute: typeof SlidesIntroToEvaRoute
   SlidesIndexRoute: typeof SlidesIndexRoute
@@ -1912,6 +1925,13 @@ declare module '@tanstack/react-router' {
       path: '/slides/annual-cdm'
       fullPath: '/slides/annual-cdm'
       preLoaderRoute: typeof SlidesAnnualCdmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/slides/bee': {
+      id: '/slides/bee'
+      path: '/slides/bee'
+      fullPath: '/slides/bee'
+      preLoaderRoute: typeof SlidesBeeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/slides/friday-session': {
@@ -3457,6 +3477,7 @@ const rootRouteChildren: RootRouteChildren = {
   PreviewAuthRoute: PreviewAuthRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
   SlidesAnnualCdmRoute: SlidesAnnualCdmRoute,
+  SlidesBeeRoute: SlidesBeeRoute,
   SlidesFridaySessionRoute: SlidesFridaySessionRoute,
   SlidesIntroToEvaRoute: SlidesIntroToEvaRoute,
   SlidesIndexRoute: SlidesIndexRoute,

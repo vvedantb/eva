@@ -2,7 +2,7 @@ import { useId } from "react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { useDeckTheme, useMotionCue } from "../deckContext";
-import { BRAND, EASE, cueTransition } from "./tokens";
+import { ACCENT, EASE, cueTransition } from "./tokens";
 
 export interface Point {
   x: number;
@@ -80,8 +80,8 @@ export function Connector({
         x2={to.x}
         y2={to.y}
       >
-        <stop offset="0%" stopColor={BRAND.purple} />
-        <stop offset="100%" stopColor={BRAND.blue} />
+        <stop offset="0%" style={{ stopColor: ACCENT.a }} />
+        <stop offset="100%" style={{ stopColor: ACCENT.b }} />
       </linearGradient>
       <m.path
         d={d}

@@ -70,6 +70,29 @@ export const BRAND: { readonly purple: string; readonly blue: string } = {
 export const BRAND_GRADIENT = `linear-gradient(90deg, ${BRAND.purple}, ${BRAND.blue})`;
 
 /**
+ * The deck's own accent pair, as CSS variables that fall back to Eva's purple
+ * and blue. A deck with its own brand sets them on the stage (`.deck-brand-*`
+ * in `globals.css`), so the engine's accent text, glow, lines and progress bar
+ * follow without a per-slide change. Slides that mean Eva itself keep `BRAND`.
+ */
+export const ACCENT: {
+  readonly a: string;
+  readonly b: string;
+  readonly c: string;
+} = {
+  a: "var(--deck-brand-a, #8B3FB8)",
+  b: "var(--deck-brand-b, #3B7DD8)",
+  c: "var(--deck-brand-c, #5A5FD0)",
+};
+
+export const ACCENT_GRADIENT = `linear-gradient(90deg, ${ACCENT.a}, ${ACCENT.b})`;
+
+/** An accent colour at a strength, for glows and washes built from `ACCENT`. */
+export function accentMix(color: string, percent: number): string {
+  return `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+}
+
+/**
  * The brand-tinted card fill: a purple-to-blue wash over a solid base, so a
  * glow behind the card stays behind it. The base is the slide's own surface
  * (`--deck-box`, set on light slides), falling back to the dark stage.

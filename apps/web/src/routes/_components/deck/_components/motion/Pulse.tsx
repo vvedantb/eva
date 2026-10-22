@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { useMotionCue } from "../deckContext";
-import { BRAND } from "./tokens";
+import { ACCENT } from "./tokens";
 
 export interface PulseProps {
   /** Wrapped content the rings expand from. Omit for a bare live dot. */
@@ -28,11 +28,11 @@ export interface PulseProps {
  * "this needs you" moments. Each ring is a bordered circle scaling up on a
  * linear loop; no shadows, no filters. Counts as `rings` infinite animations.
  *
- * @example <Pulse color={BRAND.blue} /> or <Pulse rings={3}><Avatar /></Pulse>
+ * @example <Pulse color={ACCENT.b} /> or <Pulse rings={3}><Avatar /></Pulse>
  */
 export function Pulse({
   children,
-  color = BRAND.blue,
+  color = ACCENT.b,
   size = 10,
   rings = 2,
   period = 2.2,

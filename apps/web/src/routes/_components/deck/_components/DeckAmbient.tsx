@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { BRAND } from "./motion/tokens";
+import { ACCENT } from "./motion/tokens";
 import type { DeckTheme } from "./deckContext";
 
 /**
@@ -50,12 +50,9 @@ interface Blob {
   period: number;
 }
 
-/** A third, in-between hue keeps the mesh from reading as two spotlights. */
-const INDIGO = "#5A5FD0";
-
 const BLOBS: readonly Blob[] = [
   {
-    color: BRAND.purple,
+    color: ACCENT.a,
     size: 900,
     at: { top: "-30%", left: "-20%" },
     x: [0, 180, 60, 0],
@@ -64,7 +61,7 @@ const BLOBS: readonly Blob[] = [
     period: 38,
   },
   {
-    color: BRAND.blue,
+    color: ACCENT.b,
     size: 860,
     at: { bottom: "-34%", right: "-18%" },
     x: [0, -200, -60, 0],
@@ -73,7 +70,8 @@ const BLOBS: readonly Blob[] = [
     period: 46,
   },
   {
-    color: INDIGO,
+    // A third, in-between hue keeps the mesh from reading as two spotlights.
+    color: ACCENT.c,
     size: 640,
     at: { top: "20%", left: "35%" },
     x: [0, -160, 140, 0],

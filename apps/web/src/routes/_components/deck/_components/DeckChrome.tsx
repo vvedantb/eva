@@ -8,7 +8,7 @@ import {
 import { cn, motionFast, motionSlow } from "@eva/ui";
 import type { DeckTheme } from "./DeckPrimitives";
 import { DECK_TONES } from "./deckTone";
-import { EASE } from "./motion/tokens";
+import { ACCENT_GRADIENT, EASE } from "./motion/tokens";
 import { DeckShareBar } from "./DeckShareBar";
 import type { LiveShare } from "./useLiveShare";
 
@@ -49,7 +49,8 @@ export function DeckChrome({
     <div className="pointer-events-none absolute inset-0 z-10">
       <div className={cn("absolute right-0 bottom-0 left-0 h-0.5", tone.track)}>
         <m.div
-          className="relative h-full overflow-hidden bg-gradient-to-r from-[#8B3FB8] to-[#3B7DD8]"
+          className="relative h-full overflow-hidden"
+          style={{ backgroundImage: ACCENT_GRADIENT }}
           animate={{ width: pct }}
           transition={motionSlow}
         >

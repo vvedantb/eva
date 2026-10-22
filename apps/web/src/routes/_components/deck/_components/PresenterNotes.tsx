@@ -1,4 +1,4 @@
-import { BRAND } from "./DeckPrimitives";
+import { ACCENT } from "./motion/tokens";
 
 const ARROW = "→ ";
 
@@ -22,7 +22,7 @@ export function PresenterNotes({ notes }: { notes: string }) {
         if (line.startsWith(ARROW)) {
           return (
             <p key={id} className="flex gap-3 pl-5">
-              <span aria-hidden style={{ color: BRAND.purple }}>
+              <span aria-hidden style={{ color: ACCENT.a }}>
                 →
               </span>
               <span>{line.slice(ARROW.length)}</span>

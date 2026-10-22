@@ -10,7 +10,8 @@ import { DeckAmbient } from "./_components/DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./_components/DeckCamera";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
-import { DECK_TONES } from "./_components/deckTone";
+import { BRAND_CLASS, BRAND_STAGE, DECK_TONES } from "./_components/deckTone";
+import type { DeckBrand } from "./_components/deckTone";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./_components/deckStage";
 import {
   handleStepKey,
@@ -37,6 +38,8 @@ interface DeckProps {
   }) => void;
   /** The deck's own route path, e.g. "/slides/annual-cdm". Also the sync channel key. */
   basePath: string;
+  /** Whose deck it is: accent colours, typeface and stage. Eva when absent. */
+  brand?: DeckBrand;
 }
 
 /** What the slide variants need: which way the deck moved, and whether a shared element carries over. */
@@ -96,6 +99,7 @@ export function Deck({
   sessionCode,
   updateSearch,
   basePath,
+  brand = "eva",
 }: DeckProps) {
   const share = useLiveShare({ slide, sessionCode, updateSearch });
   // The stage renders the host's slide when following, its own otherwise, so
@@ -195,6 +199,8 @@ export function Deck({
       className={cn(
         "fixed inset-0 flex overflow-hidden font-sans outline-none transition-colors duration-500 select-none",
         DECK_TONES[theme].stage,
+        BRAND_CLASS[brand],
+        BRAND_STAGE[brand],
       )}
     >
       <DeckAmbient theme={theme} />

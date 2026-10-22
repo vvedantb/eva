@@ -5,6 +5,8 @@
  * it to follow the enclosing `Reveal`/`Stagger` (their step and delay).
  */
 export {
+  ACCENT,
+  ACCENT_GRADIENT,
   BRAND,
   BRAND_GRADIENT,
   DUR,
@@ -16,6 +18,7 @@ export {
   SETTLE,
   SHARED,
   STAGGER,
+  accentMix,
   brandTint,
   cueTransition,
 } from "./tokens";

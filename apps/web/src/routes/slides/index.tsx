@@ -7,12 +7,18 @@ import { DeckCard } from "../_components/deck/_components/DeckCard";
 import type { DeckSummary } from "../_components/deck/_components/DeckCard";
 import { DeckStepContext } from "../_components/deck/_components/DeckPrimitives";
 import { DeckThemeScope } from "../_components/deck/_components/DeckThemeScope";
-import { DECK_TONES } from "../_components/deck/_components/deckTone";
+import {
+  BRAND_CLASS,
+  BRAND_STAGE,
+  DECK_TONES,
+} from "../_components/deck/_components/deckTone";
+import type { DeckBrand } from "../_components/deck/_components/deckTone";
 import { getSpeakerNotes } from "../_components/deck/speakerNotes";
 import type { DeckSlide } from "../_components/deck/slides/types";
 import { FRIDAY_SLIDES } from "../_components/deck/slides/friday";
 import { ANNUAL_SLIDES } from "../_components/deck/slides/annual";
 import { INTRO_SLIDES } from "../_components/deck/slides/intro";
+import { BEE_SLIDES } from "../_components/deck/slides/bee";
 
 /**
  * Public, chrome-less index of the presentation decks. No auth guard and no app
@@ -27,12 +33,22 @@ export const Route = createFileRoute("/slides/")({
  * A thumbnail for a deck on our own engine: its first slide, at rest, on that
  * slide's own surface, so a light deck previews light.
  */
-function deckPreview(slides: readonly DeckSlide[]): ReactNode {
+function deckPreview(
+  slides: readonly DeckSlide[],
+  brand: DeckBrand = "eva",
+): ReactNode {
   const first = slides[0];
   if (!first) return null;
   const theme = first.theme ?? "dark";
   return (
-    <div className={cn("absolute inset-0", DECK_TONES[theme].stage)}>
+    <div
+      className={cn(
+        "absolute inset-0",
+        DECK_TONES[theme].stage,
+        BRAND_CLASS[brand],
+        BRAND_STAGE[brand],
+      )}
+    >
       <DeckThemeScope theme={theme}>
         <DeckStepContext value={0}>
           <first.Component />
@@ -72,6 +88,15 @@ const DECKS: readonly DeckSummary[] = [
     notedCount: countWithNotes(ANNUAL_SLIDES),
     preview: deckPreview(ANNUAL_SLIDES),
   },
+  {
+    title: "Bee",
+    subtitle: "The meeting assistant",
+    path: "/slides/bee",
+    slideCount: BEE_SLIDES.length,
+    notedCount: countWithNotes(BEE_SLIDES),
+    preview: deckPreview(BEE_SLIDES, "bee"),
+    brand: "bee",
+  },
 ];
 
 function SlidesIndexPage() {
@@ -86,7 +111,7 @@ function SlidesIndexPage() {
             Presentations
           </h1>
           <p className="mt-3 text-white/55">
-            Three decks, one place. Press a card to present.
+            Four decks, one place. Press a card to present.
           </p>
         </header>
 

@@ -2,7 +2,7 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { useDeckStep, useDeckTheme } from "../deckContext";
 import type { DeckTheme } from "../deckContext";
-import { BRAND, DUR, EASE } from "./tokens";
+import { ACCENT, DUR, EASE, accentMix } from "./tokens";
 
 /** Where the light falls, in pixels of the spotlight's parent. */
 export interface SpotlightShot {
@@ -30,8 +30,8 @@ export interface SpotlightProps {
  * paler there and only hints at where to look.
  */
 const GLOW: Record<DeckTheme, string> = {
-  dark: `radial-gradient(circle at center, ${BRAND.purple}66, ${BRAND.blue}22 45%, transparent 70%)`,
-  light: `radial-gradient(circle at center, ${BRAND.purple}1f, ${BRAND.blue}0d 45%, transparent 70%)`,
+  dark: `radial-gradient(circle at center, ${accentMix(ACCENT.a, 40)}, ${accentMix(ACCENT.b, 13)} 45%, transparent 70%)`,
+  light: `radial-gradient(circle at center, ${accentMix(ACCENT.a, 12)}, ${accentMix(ACCENT.b, 5)} 45%, transparent 70%)`,
 };
 
 /** Glow and hole are drawn once at this size and scaled, so moving them is transform-only. */
