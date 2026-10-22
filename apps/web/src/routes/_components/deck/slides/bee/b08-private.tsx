@@ -1,7 +1,7 @@
 import {
   IconEyeOff,
   IconHandClick,
-  IconKey,
+  IconDeviceLaptop,
   IconScreenShare,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
@@ -18,7 +18,10 @@ const PROMISES = 2;
 const POINTS = [
   { icon: IconEyeOff, label: "No transcript on screen" },
   { icon: IconScreenShare, label: "Hidden when you share your screen" },
-  { icon: IconKey, label: "Your keys stay on your computer" },
+  {
+    icon: IconDeviceLaptop,
+    label: "Notes and summaries stay on your computer",
+  },
   { icon: IconHandClick, label: "Nothing joins without your click" },
 ];
 

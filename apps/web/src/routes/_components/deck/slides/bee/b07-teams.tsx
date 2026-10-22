@@ -1,4 +1,4 @@
-import { IconFileText } from "@tabler/icons-react";
+import { IconFileText, IconMicrophone } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
@@ -152,6 +152,32 @@ export function BeeTeams() {
                 {line.text}
               </m.div>
             ))}
+          </m.div>
+
+          {/* Why the names are right: every line comes from its own mic. */}
+          <m.div
+            className="absolute flex items-center gap-3 text-xl font-medium text-[#2a1e0c]"
+            style={{ left: DOC.x + 8, top: 330 }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={labelled ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+            transition={cueTransition(labelled, 0.6, BEE_SPRING)}
+          >
+            <span className="flex size-10 items-center justify-center rounded-full bg-[#fabe28]/30 text-[#7a4800]">
+              <IconMicrophone size={20} />
+            </span>
+            Each line comes from that person&apos;s own microphone, so it is
+            never a guess.
+          </m.div>
+
+          {/* What it takes: Bee running on everyone's laptop. */}
+          <m.div
+            className="absolute text-[17px] text-[#2a1e0c]/60"
+            style={{ left: PERSON.x + 4, top: 416 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: shared ? 1 : 0 }}
+            transition={cueTransition(shared, 0.9, { duration: DUR.slow })}
+          >
+            Everyone runs Bee on their own laptop.
           </m.div>
         </div>
       </Camera>

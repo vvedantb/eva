@@ -334,15 +334,15 @@ Detail: if the AI call fails, Bee still saves a plain version, so a meeting is n
 Next: That works for one person. It is better for a team.`,
 
   "bee-07-teams": `In Teams mode, everyone's Bee works together.
-→ Step 1: each person's Bee shares what its own person said.
-→ Step 2: so the summary knows who said what, and labels each line with a name.
-Detail: there is no bot in the call and nothing joins automatically. Each Bee only shares what its own microphone heard. Names and lines are an example.
+→ Step 1: each person's Bee shares only what its own microphone heard. That is why everyone in the meeting needs Bee running on their own laptop.
+→ Step 2: so the summary knows exactly who said what, and labels each line with a name. Each line comes from that person's own microphone, so the name is never a guess.
+Detail: say it aloud if it helps: this is the only way to be sure who said what. Tools that label speakers from one shared recording have to guess, and in my experience Teams often gets it wrong. Keep that as your own view; we have not measured it. The catch: people without Bee are not in the transcript, and the summary says it is partial. There is no bot in the call and nothing joins automatically. Names and lines are an example.
 Next: Which raises the obvious question: what about privacy?`,
 
   "bee-08-private": `Bee was built to be safe to leave on.
 → Step 1: you start sharing your screen, and the notch disappears from what others see.
-→ Step 2: the four promises: no transcript on screen, hidden during screen share, your keys stay on your computer, and nothing joins a meeting without your click.
-Detail: say these plainly; they are the reasons people are comfortable using it. Screen-share hiding is part of meeting mode.
+→ Step 2: the four promises: no transcript on screen, hidden during screen share, your notes and summaries stay on your computer, and nothing joins a meeting without your click.
+Detail: be precise if asked. Notes and summaries are saved only on your computer, and keys never leave it. Speech is sent to the AI models to be understood. In Teams mode, shared phrases pass through a short-lived online room that is deleted when the meeting ends, after four hours at most. Screen-share hiding is part of meeting mode.
 Next: Last, it fits with the tools you already use.`,
 
   "bee-09-tools": `Bee connects to the tools you already have.
