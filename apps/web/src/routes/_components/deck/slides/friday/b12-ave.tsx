@@ -9,7 +9,6 @@ import {
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -195,11 +194,6 @@ export function FridayAve() {
           ))}
         </div>
       </div>
-
-      <Footnote>
-        The master chat landed 18 August 2026. It became Manager Ave, limited to
-        supervising, on 24 August 2026.
-      </Footnote>
     </Shell>
   );
 }

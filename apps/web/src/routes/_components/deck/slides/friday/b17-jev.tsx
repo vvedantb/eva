@@ -16,7 +16,6 @@ import {
   useSurface,
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -248,12 +247,6 @@ export function FridayJev() {
           </div>
         </div>
       </Camera>
-
-      <Footnote>
-        Uses shipped 21 September to 12 October 2026 (Eva git history). Teammate
-        routing sits behind the Ask teammates experiment. Questions are
-        shortened from the code.
-      </Footnote>
     </Shell>
   );
 }

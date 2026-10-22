@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -87,10 +86,6 @@ export function FridayMobile() {
           </div>
         </div>
       </div>
-
-      <Footnote>
-        The web app, made usable on a phone. 17 August and 4 September 2026.
-      </Footnote>
     </Shell>
   );
 }

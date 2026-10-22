@@ -8,7 +8,6 @@ import {
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -142,12 +141,6 @@ export function FridayInbox() {
           </FriWindow>
         </Reveal>
       </div>
-
-      <Footnote>
-        List and detail in one view, driven by the arrow keys, 20 August 2026.
-        Chime and unread count on the browser tab, 1 August 2026. Mark a row
-        unread again, 29 August 2026.
-      </Footnote>
     </Shell>
   );
 }

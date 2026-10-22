@@ -15,7 +15,6 @@ import {
   useInk,
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -292,11 +291,6 @@ export function FridayAbstracted() {
           ))}
         </div>
       </Camera>
-
-      <Footnote>
-        In Simple Mode these choices are made for you; Advanced view keeps every
-        control for anyone who wants them.
-      </Footnote>
     </Shell>
   );
 }

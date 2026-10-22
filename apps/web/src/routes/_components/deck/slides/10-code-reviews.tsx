@@ -4,7 +4,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -194,10 +193,6 @@ export function Slide10CodeReviews() {
           <Accent>can we undo it</Accent>.
         </MaskedText>
       </div>
-
-      <Footnote>
-        The mechanics are the nightly routines and auto-merge, shown earlier.
-      </Footnote>
     </Shell>
   );
 }

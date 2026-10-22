@@ -12,7 +12,6 @@ import {
   useAppScheme,
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -268,11 +267,6 @@ export function FridayPredictions() {
       </Camera>
 
       <Rules />
-
-      <Footnote>
-        Composer predictions, an experimental setting since 10 October 2026. The
-        chat and the suggestion shown are an example.
-      </Footnote>
     </Shell>
   );
 }

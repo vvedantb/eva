@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -149,11 +148,6 @@ export function FridayStandup() {
           <MoF2Timeline />
         </div>
       </div>
-
-      <Footnote>
-        The morning summary started 20 August 2026. It was rewritten for
-        non-technical readers on 21 August 2026.
-      </Footnote>
     </Shell>
   );
 }

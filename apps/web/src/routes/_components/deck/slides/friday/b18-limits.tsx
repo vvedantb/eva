@@ -1,11 +1,5 @@
 import { m } from "motion/react";
-import {
-  useInk,
-  Accent,
-  Footnote,
-  Shell,
-  Title,
-} from "../../_components/DeckPrimitives";
+import { useInk, Accent, Shell, Title } from "../../_components/DeckPrimitives";
 import { Camera, Layer } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
@@ -127,12 +121,6 @@ export function FridayLimits() {
           </MaskedText>
         </p>
       </div>
-
-      <Footnote>
-        The presenter&rsquo;s view, backed by the evidence shown; not a measured
-        law. Models: day added to Eva (git history). Problems: first and latest
-        mention in Eva&rsquo;s changelog, 2026.
-      </Footnote>
     </Shell>
   );
 }

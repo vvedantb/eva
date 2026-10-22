@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { IconArrowBackUp, IconCloud, IconRobot } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -126,11 +125,6 @@ export function Slide12Future() {
           </div>
         </Camera>
       </div>
-
-      <Footnote>
-        A direction of travel, not a plan. Everything on this slide is already
-        true for how Eva itself is built.
-      </Footnote>
     </Shell>
   );
 }

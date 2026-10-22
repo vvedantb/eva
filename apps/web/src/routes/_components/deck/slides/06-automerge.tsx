@@ -9,7 +9,6 @@ import {
 import { m } from "motion/react";
 import {
   Card,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -182,12 +181,6 @@ export function Slide06Automerge() {
           </Card>
         </Reveal>
       </div>
-
-      <Footnote>
-        Auto-merge workflow landed 3 September 2026. Always-on checks were
-        retired in August: the agent had already checked its work in the
-        sandbox.
-      </Footnote>
     </Shell>
   );
 }

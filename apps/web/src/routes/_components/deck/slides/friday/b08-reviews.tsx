@@ -1,7 +1,6 @@
 import { IconCheck, IconFileCode } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -179,12 +178,6 @@ export function FridayReviews() {
           </AnimatePresence>
         </Reveal>
       </div>
-
-      <Footnote>
-        Bundles of changes reviewed and answered inside Eva, 3 August 2026. One
-        search across everything in Eva, 24 July 2026. Rebindable keyboard
-        shortcuts, 6 August 2026.
-      </Footnote>
     </Shell>
   );
 }

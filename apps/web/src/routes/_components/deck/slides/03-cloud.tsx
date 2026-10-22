@@ -4,7 +4,6 @@ import { Camera } from "../_components/DeckCamera";
 import type { CameraShot } from "../_components/DeckCamera";
 import {
   Card,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -95,13 +94,6 @@ export function Slide03Cloud() {
           <CloudVisual />
         </Camera>
       </div>
-
-      <Footnote>
-        <Reveal step={2} delay={0.5}>
-          Counted from the author recorded on each change in the project&rsquo;s
-          history.
-        </Reveal>
-      </Footnote>
     </Shell>
   );
 }

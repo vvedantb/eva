@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import type { Transition } from "motion/react";
 import {
   Accent,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -161,11 +160,6 @@ export function FridayArtifacts() {
           </m.div>
         </m.div>
       </div>
-
-      <Footnote>
-        Hosted artifacts landed 17 June 2026. Every chat gained its own
-        Artifacts and Documents tabs on 12 September 2026.
-      </Footnote>
     </Shell>
   );
 }

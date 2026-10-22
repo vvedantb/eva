@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -215,8 +214,6 @@ export function FridayPlan() {
           </MaskedText>
         </p>
       </div>
-
-      <Footnote>The plan mode control was removed on 23 August 2026.</Footnote>
     </Shell>
   );
 }

@@ -11,7 +11,6 @@ import {
   useAppScheme,
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -331,12 +330,6 @@ export function FridayJevCarePulse() {
           <Question />
         </div>
       </Camera>
-
-      <Footnote>
-        AQP referral form, carepulse-ts, on main since 14 October 2026. The
-        field text is invented and identifies no one; the scores are an
-        illustration.
-      </Footnote>
     </Shell>
   );
 }

@@ -1,11 +1,5 @@
 import { m } from "motion/react";
-import {
-  Accent,
-  Footnote,
-  Reveal,
-  Shell,
-  Title,
-} from "../_components/DeckPrimitives";
+import { Accent, Reveal, Shell, Title } from "../_components/DeckPrimitives";
 import {
   BRAND_GRADIENT,
   CountRoll,
@@ -106,10 +100,6 @@ export function Slide02Numbers() {
           ))}
         </div>
       </div>
-
-      <Footnote>
-        Source: Eva&rsquo;s git history, 12 June to 10 September 2026.
-      </Footnote>
     </Shell>
   );
 }

@@ -8,7 +8,6 @@ import { Camera } from "../../_components/DeckCamera";
 import {
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -202,11 +201,6 @@ export function FridaySkills() {
           <Composer />
         </m.div>
       </Camera>
-
-      <Footnote>
-        Eva&apos;s own skills landed 6 August 2026. Claude&apos;s built-in
-        skills joined the same picker on 22 August 2026.
-      </Footnote>
     </Shell>
   );
 }

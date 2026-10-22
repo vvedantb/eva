@@ -1,9 +1,4 @@
-import {
-  Footnote,
-  Reveal,
-  Shell,
-  Title,
-} from "../../_components/DeckPrimitives";
+import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { Spotlight } from "../../_components/motion";
@@ -36,12 +31,6 @@ export function FridayPreview() {
           </Camera>
         </Reveal>
       </div>
-
-      <Footnote>
-        Click-to-comment and phone, tablet and desktop widths, 21 July 2026.
-        Device toolbar with rotate and screenshot, 25 August 2026. Previews
-        survive leaving the session, 14 August 2026.
-      </Footnote>
     </Shell>
   );
 }

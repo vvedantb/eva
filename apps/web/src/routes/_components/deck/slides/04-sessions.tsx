@@ -1,4 +1,4 @@
-import { Footnote, Reveal, Shell, Title } from "../_components/DeckPrimitives";
+import { Reveal, Shell, Title } from "../_components/DeckPrimitives";
 import { SessionsTimeline } from "./_parts/SessionsTimeline";
 
 export function Slide04Sessions() {
@@ -11,10 +11,6 @@ export function Slide04Sessions() {
       <div className="my-auto">
         <SessionsTimeline />
       </div>
-
-      <Footnote>
-        Dates are when each change landed in Eva&rsquo;s main branch.
-      </Footnote>
     </Shell>
   );
 }

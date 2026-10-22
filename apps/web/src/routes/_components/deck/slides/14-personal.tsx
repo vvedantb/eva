@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -128,11 +127,6 @@ export function Slide14Personal() {
           <Accent>one person</Accent>, not everyone.
         </MaskedText>
       </div>
-
-      <Footnote>
-        Product names are their owners&apos; trademarks. Comparison reflects our
-        own use, September 2026.
-      </Footnote>
     </Shell>
   );
 }

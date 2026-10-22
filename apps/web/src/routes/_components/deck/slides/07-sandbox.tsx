@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -105,11 +104,6 @@ export function Slide07Sandbox() {
           </MaskedText>
         </p>
       </div>
-
-      <Footnote>
-        Timings from the product owner's measurements before and after the move.
-        Migration landed 6 to 8 July 2026.
-      </Footnote>
     </Shell>
   );
 }

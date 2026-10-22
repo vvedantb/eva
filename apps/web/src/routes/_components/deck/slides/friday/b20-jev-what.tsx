@@ -13,7 +13,6 @@ import {
   useInk,
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -379,11 +378,6 @@ export function FridayJevWhat() {
 
       <Recipe />
       <Benefits />
-
-      <Footnote>
-        Jev is TypeSafe&apos;s decision model, reached through Vercel&apos;s AI
-        Gateway. The question, items and scores shown are an illustration.
-      </Footnote>
     </Shell>
   );
 }

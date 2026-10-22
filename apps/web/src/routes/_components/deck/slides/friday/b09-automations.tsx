@@ -11,7 +11,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -162,11 +161,6 @@ export function FridayAutomations() {
           ))}
         </div>
       </div>
-
-      <Footnote>
-        The Automations Hub landed 6 August 2026. The five maintenance routines
-        were added 21 August 2026.
-      </Footnote>
     </Shell>
   );
 }

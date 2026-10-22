@@ -2,7 +2,6 @@ import { IconRefresh, IconSwitchHorizontal } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -133,12 +132,6 @@ export function FridayReliability() {
           </Magnify>
         </div>
       </div>
-
-      <Footnote>
-        Watchdog 30 July 2026. Stalled turns retry once, 26 August 2026. Usage
-        limits and the one-click switch, 4 September 2026, extended to quick
-        tasks and projects 10 September 2026.
-      </Footnote>
     </Shell>
   );
 }

@@ -2,7 +2,6 @@ import { IconArrowRight, IconCircleCheckFilled } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -126,12 +125,6 @@ export function FridayPipeline() {
       </Camera>
 
       <Goal />
-
-      <Footnote>
-        Eva auto-merge since 3 September 2026. The board, task and page are an
-        illustration. 43 CarePulse quick tasks sat in code review on 11
-        September 2026.
-      </Footnote>
     </Shell>
   );
 }

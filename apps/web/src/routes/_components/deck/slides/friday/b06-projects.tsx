@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { Camera } from "../../_components/DeckCamera";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -108,11 +107,6 @@ export function FridayProjects() {
           </Reveal>
         </Camera>
       </div>
-
-      <Footnote>
-        The projects timeline became a roadmap with completion bars, zoom
-        levels, a jump to today and drag-to-pan, 17 June 2026.
-      </Footnote>
     </Shell>
   );
 }

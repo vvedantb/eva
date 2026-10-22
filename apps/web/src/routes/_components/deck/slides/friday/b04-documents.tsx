@@ -1,6 +1,5 @@
 import { m } from "motion/react";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -150,8 +149,6 @@ export function FridayDocuments() {
           </div>
         </Camera>
       </div>
-
-      <Footnote>Collaborative documents, 10 June 2026.</Footnote>
     </Shell>
   );
 }

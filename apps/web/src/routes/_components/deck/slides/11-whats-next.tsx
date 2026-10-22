@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Card,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -192,11 +191,6 @@ export function Slide11WhatsNext() {
 
         <MoF3NextSteps shown={step >= 2} />
       </div>
-
-      <Footnote>
-        Counts are CarePulse quick tasks created in Eva between 1 June and 10
-        September 2026, by status on 11 September 2026.
-      </Footnote>
     </Shell>
   );
 }

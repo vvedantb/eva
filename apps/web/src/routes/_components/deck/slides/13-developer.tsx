@@ -11,7 +11,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -193,11 +192,6 @@ export function Slide13Developer() {
           For CarePulse, that job is the <Accent>v3 migration</Accent>.
         </MaskedText>
       </div>
-
-      <Footnote>
-        Archetypes: Boris Cherny, X, 28 June 2026. Hand-written code remark:
-        Fortune Brainstorm Tech, reported 11 June 2026.
-      </Footnote>
     </Shell>
   );
 }

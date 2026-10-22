@@ -1,5 +1,5 @@
 import { Camera } from "../_components/DeckCamera";
-import { Footnote, Reveal, Shell, Title } from "../_components/DeckPrimitives";
+import { Reveal, Shell, Title } from "../_components/DeckPrimitives";
 import { Spotlight } from "../_components/motion";
 import { RealModelPicker } from "./_parts/RealModelPicker";
 
@@ -31,11 +31,6 @@ export function Slide05SimpleMode() {
           </Camera>
         </div>
       </div>
-
-      <Footnote>
-        Simple Mode is an optional setting. Landed 14 August 2026; slider added
-        24 August 2026.
-      </Footnote>
     </Shell>
   );
 }

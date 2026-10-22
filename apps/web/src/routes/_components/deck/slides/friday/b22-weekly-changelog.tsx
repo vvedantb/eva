@@ -12,7 +12,6 @@ import {
   useAppScheme,
   Accent,
   BRAND,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -311,11 +310,6 @@ export function FridayWeeklyChangelog() {
       </Camera>
 
       <Facts />
-
-      <Footnote>
-        Real changelog email template, example text. Editions: successful runs,
-        11 April to 12 October 2026 (Eva records).
-      </Footnote>
     </Shell>
   );
 }
