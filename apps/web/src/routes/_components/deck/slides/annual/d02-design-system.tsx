@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -41,7 +40,7 @@ export function AnnualDesignSystem() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">One visual language.</Title>
+        <Title size="md">One visual language</Title>
       </Reveal>
 
       <div className="mt-14 grid grid-cols-6 gap-4">
@@ -115,8 +114,6 @@ export function AnnualDesignSystem() {
           Every new screen <Accent>starts consistent</Accent>.
         </MaskedText>
       </div>
-
-      <Footnote>Measured 23 September 2026.</Footnote>
     </Shell>
   );
 }

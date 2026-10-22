@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -154,8 +153,6 @@ export function AnnualDayOne() {
           .
         </MaskedText>
       </p>
-
-      <Footnote>First commit 11 January 2026.</Footnote>
     </Shell>
   );
 }

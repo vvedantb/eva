@@ -82,7 +82,7 @@ export function FridayProjects() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">See the whole job at once.</Title>
+        <Title size="md">See the whole job at once</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

@@ -10,7 +10,6 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -51,7 +50,7 @@ export function AnnualPeople() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Their problems set the agenda.</Title>
+        <Title size="md">Their problems set the agenda</Title>
       </Reveal>
 
       <Camera shots={PEOPLE_SHOTS} className="mt-28">
@@ -88,10 +87,6 @@ export function AnnualPeople() {
           </MaskedText>
         </p>
       </div>
-
-      <Footnote>
-        Incidents from Eva&apos;s release notes, August and September 2026.
-      </Footnote>
     </Shell>
   );
 }

@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -58,7 +57,7 @@ export function AnnualNumbers() {
     <Shell className="isolate py-12">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Title size="md">What eight months produced.</Title>
+        <Title size="md">What eight months produced</Title>
       </Reveal>
 
       <m.div
@@ -134,11 +133,6 @@ export function AnnualNumbers() {
           </Card>
         </Reveal>
       </div>
-
-      <Footnote>
-        Eva&rsquo;s own records and project history, 11 January to 16 September
-        2026.
-      </Footnote>
     </Shell>
   );
 }

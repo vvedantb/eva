@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -129,7 +128,7 @@ export function AnnualImpact() {
       <Spotlight shots={LIGHT} />
       <Reveal>
         <Title size="md" className="text-balance">
-          Not faster typing. A different job.
+          Not faster typing. A different job
         </Title>
       </Reveal>
 
@@ -159,10 +158,6 @@ export function AnnualImpact() {
           </div>
         </div>
       </Reveal>
-
-      <Footnote>
-        Counts from Eva&apos;s own records to 16 September 2026.
-      </Footnote>
     </Shell>
   );
 }

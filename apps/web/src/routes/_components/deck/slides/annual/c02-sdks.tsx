@@ -1,6 +1,5 @@
 import { m } from "motion/react";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -22,7 +21,7 @@ export function AnnualSdks() {
   return (
     <Shell className="justify-center py-12">
       <Reveal>
-        <Title size="md">Built on proper connections.</Title>
+        <Title size="md">Built on proper connections</Title>
       </Reveal>
 
       <div className="mt-14">
@@ -67,11 +66,6 @@ export function AnnualSdks() {
           aria-hidden
         />
       </m.div>
-
-      <Footnote>
-        Cursor 5 August, Codex 12 August, OpenCode 14 August 2026. The old
-        command-line runner was deleted on 18 August 2026.
-      </Footnote>
     </Shell>
   );
 }

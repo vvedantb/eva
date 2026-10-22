@@ -136,7 +136,7 @@ export function FridayDocuments() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Write it down together.</Title>
+        <Title size="md">Write it down together</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

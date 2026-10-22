@@ -2,7 +2,6 @@ import { IconFileText } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -184,7 +183,7 @@ export function AnnualAbandoned() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">Knowing what to stop.</Title>
+        <Title size="md">Knowing what to stop</Title>
       </Reveal>
 
       <div className="relative isolate mt-16">
@@ -213,8 +212,6 @@ export function AnnualAbandoned() {
           Written down, so nobody <Accent>re-argues it from memory</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>Seven cancelled plans kept in the repository.</Footnote>
     </Shell>
   );
 }

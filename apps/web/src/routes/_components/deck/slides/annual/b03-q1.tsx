@@ -1,6 +1,5 @@
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -27,7 +26,7 @@ export function AnnualQ1() {
   return (
     <Shell className="justify-center py-14">
       <Reveal delay={0.1}>
-        <Title size="md">Build the surface.</Title>
+        <Title size="md">Build the surface</Title>
       </Reveal>
 
       <div className="mt-12 flex items-end gap-24">
@@ -59,11 +58,6 @@ export function AnnualQ1() {
       </div>
 
       <MoA1WriteDrop step={3} className="mt-14" />
-
-      <Footnote>
-        Changes shipped January to March 2026. Live streaming moved to its own
-        table on 5 February 2026.
-      </Footnote>
     </Shell>
   );
 }

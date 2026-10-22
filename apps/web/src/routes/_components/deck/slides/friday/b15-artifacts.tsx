@@ -129,7 +129,7 @@ export function FridayArtifacts() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        Pages you can <Accent>just open</Accent>.
+        Pages you can <Accent>just open</Accent>
       </Title>
 
       <div className="flex flex-1 items-center justify-center pb-10">

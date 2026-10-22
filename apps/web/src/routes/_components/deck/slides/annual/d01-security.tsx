@@ -15,7 +15,6 @@ import { AnnCCountDown } from "../_parts/AnnCCountDown";
 import { moA3InOutAt } from "../_parts/MoA3Timing";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -157,7 +156,7 @@ export function AnnualSecurity() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">One guard on every door.</Title>
+        <Title size="md">One guard on every door</Title>
       </Reveal>
 
       <m.div
@@ -231,11 +230,6 @@ export function AnnualSecurity() {
           Checked against <Accent>production</Accent>, not only against tests.
         </MaskedText>
       </div>
-
-      <Footnote>
-        Ownership audit 8 August 2026; boundary verified against production data
-        19 August 2026.
-      </Footnote>
     </Shell>
   );
 }

@@ -8,7 +8,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -55,7 +54,7 @@ export function AnnualAhead() {
     <Shell className="py-12">
       <Reveal>
         <Title size="md" className="text-balance">
-          The bottleneck has moved.
+          The bottleneck has moved
         </Title>
       </Reveal>
 
@@ -122,10 +121,6 @@ export function AnnualAhead() {
           becomes <Accent>how fast can we decide</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>
-        Quick task status across all 887 raised in Eva, at 16 September 2026.
-      </Footnote>
     </Shell>
   );
 }

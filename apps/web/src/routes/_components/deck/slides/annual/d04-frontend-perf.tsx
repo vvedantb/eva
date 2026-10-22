@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import { AnnCCountDown } from "../_parts/AnnCCountDown";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -187,7 +186,7 @@ export function AnnualFrontendPerf() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Three waits, measured and cut.</Title>
+        <Title size="md">Three waits, measured and cut</Title>
       </Reveal>
 
       <div className="relative isolate mt-20">
@@ -201,11 +200,6 @@ export function AnnualFrontendPerf() {
           <DropRow key={drop.label} drop={drop} index={index} />
         ))}
       </div>
-
-      <Footnote>
-        Build and checker 20 August 2026; landing page 8 August 2026. A further
-        1.7 MB came off the first load on 4 August 2026.
-      </Footnote>
     </Shell>
   );
 }

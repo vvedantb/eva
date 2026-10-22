@@ -1,7 +1,6 @@
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -149,7 +148,7 @@ export function AnnualDebugging() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">Symptom, cause, then a test.</Title>
+        <Title size="md">Symptom, cause, then a test</Title>
       </Reveal>
 
       <div className="relative mt-20 h-[340px] w-full">
@@ -167,11 +166,6 @@ export function AnnualDebugging() {
         step={step}
         visible={item !== undefined}
       />
-
-      <Footnote>
-        Written up in the project&apos;s release notes, August to September
-        2026.
-      </Footnote>
     </Shell>
   );
 }

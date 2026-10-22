@@ -3,7 +3,6 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   BRAND,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -102,7 +101,7 @@ export function AnnualMcp() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Title size="md">Other tools can drive Eva.</Title>
+        <Title size="md">Other tools can drive Eva</Title>
       </Reveal>
 
       <Camera shots={SHOTS} className="mt-4">
@@ -147,12 +146,6 @@ export function AnnualMcp() {
           </div>
         </div>
       </Camera>
-
-      <Footnote>
-        Chat into a session, task or project 27 August; sandboxes 28 August;
-        running code 3 September; typed judgements 17 September; panels in chat
-        21 September 2026.
-      </Footnote>
     </Shell>
   );
 }

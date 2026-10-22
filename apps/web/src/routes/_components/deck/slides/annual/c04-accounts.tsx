@@ -3,7 +3,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -116,7 +115,7 @@ export function AnnualAccounts() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Bring your own account.</Title>
+        <Title size="md">Bring your own account</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col items-center justify-center pb-6">
@@ -189,11 +188,6 @@ export function AnnualAccounts() {
           </MaskedText>
         </p>
       </div>
-
-      <Footnote>
-        Per-user provider accounts, 17 July 2026. Sharing an account with the
-        team, 7 August 2026.
-      </Footnote>
     </Shell>
   );
 }

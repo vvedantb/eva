@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import {
   Accent,
   BRAND,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -64,7 +63,7 @@ export function AnnualScale() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">A product now, not a prototype.</Title>
+        <Title size="md">A product now, not a prototype</Title>
       </Reveal>
 
       <div className="relative isolate mt-20 grid grid-cols-5 gap-6 py-2">
@@ -147,8 +146,6 @@ export function AnnualScale() {
           Eight months, one codebase, <Accent>one person directing</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>Measured 23 September 2026.</Footnote>
     </Shell>
   );
 }

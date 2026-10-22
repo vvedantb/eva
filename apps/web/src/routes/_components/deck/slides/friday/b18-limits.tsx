@@ -96,7 +96,7 @@ export function FridayLimits() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        Better models. <Accent>Same problems.</Accent>
+        Better models. <Accent>Same problems</Accent>
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-10">

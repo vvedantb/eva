@@ -78,7 +78,7 @@ export function AnnualTitle() {
           <MaskedText delay={0.55} stagger={0.09} duration={1.1}>
             A year of
             <br />
-            building <Accent>Eva.</Accent>
+            building <Accent>Eva</Accent>
           </MaskedText>
         </h1>
       </div>

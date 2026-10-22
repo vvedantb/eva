@@ -1,9 +1,4 @@
-import {
-  Footnote,
-  Reveal,
-  Shell,
-  Title,
-} from "../../_components/DeckPrimitives";
+import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { CountRoll } from "../../_components/motion";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
@@ -21,7 +16,7 @@ export function AnnualQ3() {
       <div className="flex items-start justify-between">
         <div>
           <Reveal delay={0.1}>
-            <Title size="md">Make it dependable.</Title>
+            <Title size="md">Make it dependable</Title>
           </Reveal>
         </div>
 
@@ -36,10 +31,6 @@ export function AnnualQ3() {
       </div>
 
       <AnnABeats beats={BEATS} firstStep={1} liveLast className="mt-40" />
-
-      <Footnote>
-        Changes shipped July to September 2026. September runs to the 16th.
-      </Footnote>
     </Shell>
   );
 }

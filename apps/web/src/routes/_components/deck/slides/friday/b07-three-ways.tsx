@@ -134,7 +134,7 @@ export function FridayThreeWays() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Three sizes of ask.</Title>
+        <Title size="md">Three sizes of ask</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

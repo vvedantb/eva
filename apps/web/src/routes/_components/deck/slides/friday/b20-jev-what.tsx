@@ -365,7 +365,7 @@ export function FridayJevWhat() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        Most models write. Jev <Accent>decides</Accent>.
+        Most models write. Jev <Accent>decides</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-10">

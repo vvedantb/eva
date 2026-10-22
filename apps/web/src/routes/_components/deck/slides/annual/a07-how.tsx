@@ -109,7 +109,7 @@ export function AnnualHow() {
     <Shell className="py-12">
       <Reveal>
         <Title size="md" className="text-balance">
-          Describe it. Eva builds it. Review it.
+          Describe it. Eva builds it. Review it
         </Title>
       </Reveal>
 

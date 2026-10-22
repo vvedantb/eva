@@ -30,7 +30,7 @@ export function FridayMobile() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        Raise work from <Accent>your phone</Accent>.
+        Raise work from <Accent>your phone</Accent>
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

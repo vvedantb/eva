@@ -41,7 +41,7 @@ export function FridayReliability() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        When it breaks, <Accent>you know</Accent>.
+        When it breaks, <Accent>you know</Accent>
       </Title>
 
       {/* The three cards are the story, so they take the middle of the stage. */}

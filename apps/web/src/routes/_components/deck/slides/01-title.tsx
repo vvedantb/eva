@@ -85,7 +85,7 @@ export function Slide01Title() {
           <span className="block">
             <MaskedText delay={0.62}>of</MaskedText>{" "}
             <SplitReveal
-              text="Eva."
+              text="Eva"
               accent
               delay={0.72}
               stagger={0.06}

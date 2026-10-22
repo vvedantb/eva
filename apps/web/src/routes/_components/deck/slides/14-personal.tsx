@@ -55,7 +55,7 @@ export function Slide14Personal() {
       <Spotlight shots={LIGHT} />
       <Reveal>
         <Title size="md" className="text-balance">
-          Same idea. <Accent>Ours to shape.</Accent>
+          Same idea. <Accent>Ours to shape</Accent>
         </Title>
       </Reveal>
 

@@ -251,7 +251,7 @@ export function FridayAbstracted() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        You ask. You see the result. <Accent>That is all</Accent>.
+        You ask. You see the result. <Accent>That is all</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

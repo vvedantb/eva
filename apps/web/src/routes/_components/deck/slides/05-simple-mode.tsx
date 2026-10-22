@@ -18,7 +18,7 @@ export function Slide05SimpleMode() {
       <div className="flex flex-1 items-center gap-10">
         <div className="w-[420px] shrink-0">
           <Reveal delay={0.1}>
-            <Title size="md">One switch. Less machinery.</Title>
+            <Title size="md">One switch. Less machinery</Title>
           </Reveal>
         </div>
 

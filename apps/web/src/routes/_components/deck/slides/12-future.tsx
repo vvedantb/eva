@@ -106,7 +106,7 @@ export function Slide12Future() {
             <Title size="lg" className="leading-[1.02] tracking-[-0.025em]">
               Manage agents,
               <br />
-              not tasks.
+              not tasks
             </Title>
           </Reveal>
 

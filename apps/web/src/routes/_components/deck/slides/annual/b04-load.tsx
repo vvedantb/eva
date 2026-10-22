@@ -1,6 +1,5 @@
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -22,7 +21,7 @@ export function AnnualLoad() {
   return (
     <Shell className="justify-center py-14">
       <Reveal delay={0.1}>
-        <Title size="md">Then make it load.</Title>
+        <Title size="md">Then make it load</Title>
       </Reveal>
 
       <AnnAShrinkBars rows={ROWS} active={step >= 1} className="mt-16" />
@@ -32,8 +31,6 @@ export function AnnualLoad() {
           Opening the app now downloads <Accent>a fifth as much</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>Bundle optimisation, 31 March 2026.</Footnote>
     </Shell>
   );
 }

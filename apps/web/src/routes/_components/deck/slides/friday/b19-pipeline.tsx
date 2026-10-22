@@ -81,7 +81,7 @@ export function FridayPipeline() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        Code review to live, in <Accent>minutes</Accent>.
+        Code review to live, in <Accent>minutes</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

@@ -1,7 +1,7 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { accentSliceStyle } from "../../_components/DeckAccent";
-import { Footnote, Shell, useDeckStep } from "../../_components/DeckPrimitives";
+import { Shell, useDeckStep } from "../../_components/DeckPrimitives";
 import {
   BRAND,
   DUR,
@@ -186,10 +186,6 @@ export function AnnualRename() {
       <NameSwap />
 
       <Moments />
-
-      <Footnote className="text-center">
-        Renamed 3 June 2026; internal packages 24 July 2026.
-      </Footnote>
     </Shell>
   );
 }

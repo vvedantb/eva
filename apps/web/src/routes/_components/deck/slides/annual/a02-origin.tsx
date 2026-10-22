@@ -1,13 +1,7 @@
 import { CountRoll, MaskedText } from "../../_components/motion";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
-import {
-  Accent,
-  Footnote,
-  Reveal,
-  Shell,
-  Title,
-} from "../../_components/DeckPrimitives";
+import { Accent, Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { AnnualOriginTimeline } from "../_parts/AnnualOriginTimeline";
 
 /**
@@ -26,7 +20,7 @@ export function AnnualOrigin() {
   return (
     <Shell className="py-12">
       <Reveal delay={0.1}>
-        <Title size="md">Eight months, five moments.</Title>
+        <Title size="md">Eight months, five moments</Title>
       </Reveal>
 
       {/* The axis takes the free height, so it sits centred between the
@@ -50,11 +44,6 @@ export function AnnualOrigin() {
           sets of release notes written.
         </MaskedText>
       </p>
-
-      <Footnote>
-        Dates from Eva&rsquo;s own records and the project&rsquo;s history, to
-        16 September 2026.
-      </Footnote>
     </Shell>
   );
 }

@@ -320,7 +320,7 @@ export function FridayJevCarePulse() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        PID, <Accent>flagged</Accent> as you type.
+        PID, <Accent>flagged</Accent> as you type
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

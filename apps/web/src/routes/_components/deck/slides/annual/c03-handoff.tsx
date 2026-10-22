@@ -2,7 +2,6 @@ import { IconArrowUp } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -125,7 +124,7 @@ export function AnnualHandoff() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Change your mind mid-job.</Title>
+        <Title size="md">Change your mind mid-job</Title>
       </Reveal>
 
       <div className="flex flex-1 items-center pb-6">
@@ -199,10 +198,6 @@ export function AnnualHandoff() {
           </div>
         </Reveal>
       </div>
-
-      <Footnote>
-        Cross-provider handoffs carry the conversation, 24 August 2026.
-      </Footnote>
     </Shell>
   );
 }

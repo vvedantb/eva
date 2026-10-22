@@ -255,7 +255,7 @@ export function FridayPredictions() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        Your next message, <Accent>one Tab away</Accent>.
+        Your next message, <Accent>one Tab away</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

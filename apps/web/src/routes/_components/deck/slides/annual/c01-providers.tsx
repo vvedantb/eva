@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -167,7 +166,7 @@ export function AnnualProviders() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">Not tied to one supplier.</Title>
+        <Title size="md">Not tied to one supplier</Title>
       </Reveal>
 
       <div className="mt-9 grid grid-cols-4 gap-5">
@@ -204,8 +203,6 @@ export function AnnualProviders() {
           If one supplier stalls, <Accent>the work moves</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>Model catalogue at 16 September 2026.</Footnote>
     </Shell>
   );
 }

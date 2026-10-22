@@ -1,6 +1,5 @@
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -16,7 +15,7 @@ export function AnnualDurable() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Finishing what it starts.</Title>
+        <Title size="md">Finishing what it starts</Title>
       </Reveal>
 
       <div className="mt-36 h-[72px]">
@@ -28,11 +27,6 @@ export function AnnualDurable() {
           Interrupted is no longer the same as <Accent>lost</Accent>.
         </MaskedText>
       </div>
-
-      <Footnote>
-        One durable lifecycle for every turn, 19 August 2026; remaining gaps
-        closed 23 August 2026.
-      </Footnote>
     </Shell>
   );
 }

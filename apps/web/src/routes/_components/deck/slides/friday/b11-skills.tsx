@@ -155,7 +155,7 @@ export function FridaySkills() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        Never explain a job <Accent>twice</Accent>.
+        Never explain a job <Accent>twice</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="relative flex-1">

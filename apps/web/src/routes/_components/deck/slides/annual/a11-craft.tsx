@@ -9,7 +9,6 @@ import { m } from "motion/react";
 import {
   Accent,
   Card,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -180,7 +179,7 @@ export function AnnualCraft() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">Measure it, do not guess.</Title>
+        <Title size="md">Measure it, do not guess</Title>
       </Reveal>
 
       <div className="mt-14">
@@ -225,10 +224,6 @@ export function AnnualCraft() {
           Page scores: set up, <Accent>not yet a habit</Accent>.
         </MaskedText>
       </div>
-
-      <Footnote>
-        Animation performance work, 5 September 2026. Medians of three runs.
-      </Footnote>
     </Shell>
   );
 }

@@ -84,7 +84,7 @@ export function Slide02Numbers() {
   return (
     <Shell>
       <Reveal>
-        <Title>Twelve weeks of shipping.</Title>
+        <Title>Twelve weeks of shipping</Title>
       </Reveal>
 
       <div className="relative isolate my-auto pb-10">

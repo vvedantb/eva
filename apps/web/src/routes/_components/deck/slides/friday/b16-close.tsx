@@ -96,7 +96,7 @@ export function FridayClose() {
       <BrandSweep />
 
       <div className="relative">
-        <Title size="md">Three things to try.</Title>
+        <Title size="md">Three things to try</Title>
 
         <div className="mt-14 flex flex-col gap-7">
           {ACTIONS.map((action, index) => (

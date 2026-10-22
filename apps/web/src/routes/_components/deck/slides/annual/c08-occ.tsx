@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -107,7 +106,7 @@ export function AnnualOcc() {
   return (
     <Shell className="justify-center py-12">
       <Reveal>
-        <Title size="md">The database was fighting itself.</Title>
+        <Title size="md">The database was fighting itself</Title>
       </Reveal>
 
       <div className="relative mt-10 h-[340px]">
@@ -121,10 +120,6 @@ export function AnnualOcc() {
           <FixFigures />
         </Beat>
       </div>
-
-      <Footnote>
-        Three days of live traffic; the fixes landed 24 August 2026.
-      </Footnote>
     </Shell>
   );
 }

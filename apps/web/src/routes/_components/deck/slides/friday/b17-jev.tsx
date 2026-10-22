@@ -196,7 +196,7 @@ export function FridayJev() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        Ten small decisions <Accent>inside Eva</Accent>.
+        Ten small decisions <Accent>inside Eva</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-8">

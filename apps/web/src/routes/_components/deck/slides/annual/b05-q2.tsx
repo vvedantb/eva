@@ -1,9 +1,4 @@
-import {
-  Footnote,
-  Reveal,
-  Shell,
-  Title,
-} from "../../_components/DeckPrimitives";
+import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { CountRoll } from "../../_components/motion";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
@@ -21,7 +16,7 @@ export function AnnualQ2() {
       <div className="flex items-start justify-between">
         <div>
           <Reveal delay={0.1}>
-            <Title size="md">Work together.</Title>
+            <Title size="md">Work together</Title>
           </Reveal>
         </div>
 
@@ -36,11 +31,6 @@ export function AnnualQ2() {
       </div>
 
       <AnnABeats beats={BEATS} firstStep={1} className="mt-40" />
-
-      <Footnote>
-        Changes shipped April to June 2026. Documents 10 June 2026; roadmap and
-        Testing Arena 17 June 2026.
-      </Footnote>
     </Shell>
   );
 }

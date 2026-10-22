@@ -8,7 +8,6 @@ import {
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -120,7 +119,7 @@ export function AnnualUsers() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Title size="md">Built for who actually uses it.</Title>
+        <Title size="md">Built for who actually uses it</Title>
       </Reveal>
 
       <div className="mt-16 flex flex-col gap-8">
@@ -188,11 +187,6 @@ export function AnnualUsers() {
           <Accent>Usable.</Accent>
         </MaskedText>
       </p>
-
-      <Footnote>
-        Simple Mode from 14 August 2026; mobile audits August and September
-        2026.
-      </Footnote>
     </Shell>
   );
 }

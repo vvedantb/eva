@@ -189,7 +189,7 @@ export function FridayPlan() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Ask for a plan first.</Title>
+        <Title size="md">Ask for a plan first</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

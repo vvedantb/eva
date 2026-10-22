@@ -127,7 +127,7 @@ export function Slide11WhatsNext() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">The bottleneck has moved.</Title>
+        <Title size="md">The bottleneck has moved</Title>
       </Reveal>
 
       <div className="my-auto pb-10">

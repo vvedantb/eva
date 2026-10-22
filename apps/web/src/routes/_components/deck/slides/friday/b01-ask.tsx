@@ -137,7 +137,7 @@ export function FridayAsk() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Say what you want.</Title>
+        <Title size="md">Say what you want</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

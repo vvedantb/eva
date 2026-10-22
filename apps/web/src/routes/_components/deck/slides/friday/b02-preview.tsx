@@ -19,7 +19,7 @@ export function FridayPreview() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">See it before it is real.</Title>
+        <Title size="md">See it before it is real</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

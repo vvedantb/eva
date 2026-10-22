@@ -49,7 +49,7 @@ export function FridayStandup() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        A summary, <Accent>every morning</Accent>.
+        A summary, <Accent>every morning</Accent>
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

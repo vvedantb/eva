@@ -101,7 +101,7 @@ export function FridayAskJudge() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        The only intelligence that <Accent>matters</Accent>.
+        The only intelligence that <Accent>matters</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-14">

@@ -298,7 +298,7 @@ export function FridayWeeklyChangelog() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        Every Monday, the week in <Accent>plain English</Accent>.
+        Every Monday, the week in <Accent>plain English</Accent>
       </Title>
 
       <Camera shots={SHOTS} className="mt-6">

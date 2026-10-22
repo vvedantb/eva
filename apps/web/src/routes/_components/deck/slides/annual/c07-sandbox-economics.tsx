@@ -1,6 +1,5 @@
 import { m } from "motion/react";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -121,7 +120,7 @@ export function AnnualSandboxEconomics() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Workspaces clean up after themselves.</Title>
+        <Title size="md">Workspaces clean up after themselves</Title>
       </Reveal>
 
       <div className="relative isolate flex flex-1 flex-col justify-center pb-2">
@@ -178,8 +177,6 @@ export function AnnualSandboxEconomics() {
           })}
         </div>
       </div>
-
-      <Footnote>Snapshot lifecycle documented in the repository.</Footnote>
     </Shell>
   );
 }

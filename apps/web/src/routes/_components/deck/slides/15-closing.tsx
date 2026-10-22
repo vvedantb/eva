@@ -20,7 +20,7 @@ export function Slide15Closing() {
       <Title size="xl" className="leading-[1.02] tracking-[-0.025em]">
         Built in <Accent>Eva,</Accent>
         <br />
-        by <Accent>Eva.</Accent>
+        by <Accent>Eva</Accent>
       </Title>
 
       <div

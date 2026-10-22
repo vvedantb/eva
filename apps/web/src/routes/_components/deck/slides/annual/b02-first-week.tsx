@@ -1,10 +1,4 @@
-import {
-  Accent,
-  Footnote,
-  Reveal,
-  Shell,
-  Title,
-} from "../../_components/DeckPrimitives";
+import { Accent, Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { MaskedText } from "../../_components/motion";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
@@ -32,7 +26,7 @@ export function AnnualFirstWeek() {
   return (
     <Shell className="justify-center py-14">
       <Reveal delay={0.1}>
-        <Title size="md">Four days set the shape.</Title>
+        <Title size="md">Four days set the shape</Title>
       </Reveal>
 
       <Camera shots={WEEK_SHOTS} className="mt-14">
@@ -44,8 +38,6 @@ export function AnnualFirstWeek() {
           The product still rests on <Accent>these two ideas</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>Dates from the project&rsquo;s own history.</Footnote>
     </Shell>
   );
 }

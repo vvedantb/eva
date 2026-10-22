@@ -118,7 +118,7 @@ export function FridayAve() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        One chat that <Accent>runs the others</Accent>.
+        One chat that <Accent>runs the others</Accent>
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

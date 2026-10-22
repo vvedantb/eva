@@ -1,7 +1,6 @@
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -78,7 +77,7 @@ export function AnnualDesign() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">Decided on paper first.</Title>
+        <Title size="md">Decided on paper first</Title>
       </Reveal>
 
       <div className="relative isolate mt-24">
@@ -157,11 +156,6 @@ export function AnnualDesign() {
           );
         })}
       </div>
-
-      <Footnote>
-        Sandbox migration, 6 to 29 July 2026. Rejected options, 5 September
-        2026.
-      </Footnote>
     </Shell>
   );
 }

@@ -87,7 +87,7 @@ export function Slide06Automerge() {
 
   return (
     <Shell className="py-14">
-      <Title size="md">Changes that ship themselves.</Title>
+      <Title size="md">Changes that ship themselves</Title>
 
       <div className="my-auto pb-6">
         <m.div

@@ -1,7 +1,6 @@
 import { IconCheck } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -72,7 +71,7 @@ export function AnnualMcpSecurity() {
   return (
     <Shell className="justify-center py-12">
       <Reveal>
-        <Title size="md">Locked down by design.</Title>
+        <Title size="md">Locked down by design</Title>
       </Reveal>
 
       <div className="relative isolate mt-12">
@@ -106,8 +105,6 @@ export function AnnualMcpSecurity() {
           </div>
         </div>
       </div>
-
-      <Footnote>Security model documented in the repository.</Footnote>
     </Shell>
   );
 }

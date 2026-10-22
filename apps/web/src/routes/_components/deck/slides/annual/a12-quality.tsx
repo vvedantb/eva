@@ -2,7 +2,6 @@ import { IconCircleCheckFilled } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -63,7 +62,7 @@ export function AnnualQuality() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">The bar is enforced, not remembered.</Title>
+        <Title size="md">The bar is enforced, not remembered</Title>
       </Reveal>
 
       <div className="relative isolate mt-20 grid grid-cols-4 gap-6 py-4">
@@ -184,8 +183,6 @@ export function AnnualQuality() {
           A permanently red test is <Accent>a broken test</Accent>.
         </MaskedText>
       </p>
-
-      <Footnote>Counts from the repository at 16 September 2026.</Footnote>
     </Shell>
   );
 }

@@ -28,7 +28,7 @@ export function Slide07Sandbox() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        From forty seconds to <Accent>under one</Accent>.
+        From forty seconds to <Accent>under one</Accent>
       </Title>
 
       <div className="my-auto pb-10">

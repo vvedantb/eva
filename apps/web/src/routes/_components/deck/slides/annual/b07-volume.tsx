@@ -1,6 +1,5 @@
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -48,7 +47,7 @@ export function AnnualVolume() {
       <div className="flex items-start justify-between">
         <div>
           <Reveal delay={0.1}>
-            <Title size="md">It did not arrive evenly.</Title>
+            <Title size="md">It did not arrive evenly</Title>
           </Reveal>
         </div>
 
@@ -91,10 +90,6 @@ export function AnnualVolume() {
           />
         </div>
       </Camera>
-
-      <Footnote>
-        Changes shipped per calendar month. September is a part month.
-      </Footnote>
     </Shell>
   );
 }

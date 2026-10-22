@@ -135,7 +135,7 @@ export function Slide10CodeReviews() {
     <Shell className="isolate py-14">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Title size="md">Let the model find the bugs.</Title>
+        <Title size="md">Let the model find the bugs</Title>
       </Reveal>
 
       <div className="mt-16 grid grid-cols-[460px_1fr] gap-12">

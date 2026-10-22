@@ -3,7 +3,6 @@ import {
   Accent,
   BRAND,
   Card,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -135,7 +134,7 @@ export function Slide09Team() {
 
       <Reveal>
         <Title size="md" className="text-balance">
-          Built by the team, not just for them.
+          Built by the team, not just for them
         </Title>
       </Reveal>
 
@@ -159,11 +158,6 @@ export function Slide09Team() {
           pieces of work, raised by colleagues.
         </MaskedText>
       </p>
-
-      <Footnote>
-        Sessions, quick tasks and projects created in Eva between 11 January and
-        16 September 2026, including items later cancelled.
-      </Footnote>
     </Shell>
   );
 }

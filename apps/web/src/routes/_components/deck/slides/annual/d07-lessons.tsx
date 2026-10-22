@@ -2,7 +2,6 @@ import { m } from "motion/react";
 import type { TargetAndTransition, Transition } from "motion/react";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -83,7 +82,7 @@ export function AnnualLessons() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">Two lessons, one direction.</Title>
+        <Title size="md">Two lessons, one direction</Title>
       </Reveal>
 
       <div className="relative isolate mt-20 h-[400px] w-full">
@@ -112,8 +111,6 @@ export function AnnualLessons() {
           </p>
         </div>
       </div>
-
-      <Footnote>From the project&apos;s own written notes.</Footnote>
     </Shell>
   );
 }

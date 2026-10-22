@@ -152,7 +152,7 @@ export function Slide13Developer() {
     <Shell className="py-12">
       <Reveal>
         <Title size="md" className="text-balance">
-          From writing code to <Accent>tending the garden</Accent>.
+          From writing code to <Accent>tending the garden</Accent>
         </Title>
       </Reveal>
 

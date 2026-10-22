@@ -91,7 +91,7 @@ export function FridayInbox() {
   return (
     <Shell className="py-14">
       <Reveal>
-        <Title size="md">Everything that needs you, in one place.</Title>
+        <Title size="md">Everything that needs you, in one place</Title>
       </Reveal>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

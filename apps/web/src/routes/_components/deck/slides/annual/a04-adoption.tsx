@@ -2,7 +2,6 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Stagger,
@@ -35,7 +34,7 @@ export function AnnualAdoption() {
   return (
     <Shell className="py-12">
       <Reveal delay={0.1}>
-        <Title size="md">From one person to the whole team.</Title>
+        <Title size="md">From one person to the whole team</Title>
       </Reveal>
 
       <Camera shots={ADOPTION_SHOTS} className="mt-16">
@@ -75,11 +74,6 @@ export function AnnualAdoption() {
           </StaggerItem>
         ))}
       </Stagger>
-
-      <Footnote>
-        Counts are sessions created per calendar month in Eva, to 16 September
-        2026. June 2026 has none recorded.
-      </Footnote>
     </Shell>
   );
 }

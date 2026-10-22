@@ -98,7 +98,7 @@ export function FridayAutomations() {
   return (
     <Shell className="py-12">
       <Title size="md">
-        Work that <Accent>starts itself</Accent>.
+        Work that <Accent>starts itself</Accent>
       </Title>
 
       <div className="flex flex-1 flex-col justify-center pb-8">

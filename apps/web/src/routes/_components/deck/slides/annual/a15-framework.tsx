@@ -5,7 +5,6 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -60,7 +59,7 @@ export function AnnualFramework() {
   return (
     <Shell className="py-10">
       <Reveal>
-        <Title size="md">Senior engineer, mapped.</Title>
+        <Title size="md">Senior engineer, mapped</Title>
       </Reveal>
 
       <Camera shots={FRAMEWORK_SHOTS} className="mt-10">
@@ -148,11 +147,6 @@ export function AnnualFramework() {
           sets of release notes. All written down at the time.
         </MaskedText>
       </p>
-
-      <Footnote>
-        Evidence from the repository and Eva&apos;s own records, 11 January to
-        16 September 2026.
-      </Footnote>
     </Shell>
   );
 }

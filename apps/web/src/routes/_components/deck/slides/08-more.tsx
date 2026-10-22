@@ -102,7 +102,7 @@ export function Slide08More() {
     <Shell className="isolate">
       <GridBackdrop variant="dots" cell={28} period={9} className="top-1/4" />
       <Reveal>
-        <Title>And a great deal more.</Title>
+        <Title>And a great deal more</Title>
       </Reveal>
 
       {/* No build steps, so the one hero move is on entry: the whole grid

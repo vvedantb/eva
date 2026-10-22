@@ -5,7 +5,6 @@ import {
 } from "../_parts/AnnCMotionSample";
 import {
   Accent,
-  Footnote,
   Reveal,
   Shell,
   Title,
@@ -31,7 +30,7 @@ export function AnnualMotion() {
   return (
     <Shell className="py-12">
       <Reveal>
-        <Title size="md">One set of rules for motion.</Title>
+        <Title size="md">One set of rules for motion</Title>
       </Reveal>
 
       {/* Hands the room to the closing line on step 2. */}
@@ -86,8 +85,6 @@ export function AnnualMotion() {
           Motion is now a <Accent>house style</Accent>, not an opinion.
         </MaskedText>
       </p>
-
-      <Footnote>Ten motion changes, 7 August 2026.</Footnote>
     </Shell>
   );
 }
