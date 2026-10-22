@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { cn } from "@eva/ui";
-import { LogoMark } from "@/lib/components/LogoMark";
+import { EvaDiscMark } from "../_components/deck/_components/EvaDiscMark";
 import { DeckAmbient } from "../_components/deck/_components/DeckAmbient";
 import { DeckCard } from "../_components/deck/_components/DeckCard";
 import type { DeckSummary } from "../_components/deck/_components/DeckCard";
@@ -106,7 +106,7 @@ function SlidesIndexPage() {
 
       <div className="relative z-10 mx-auto max-w-[1100px] px-6 py-24">
         <header className="mb-14">
-          <LogoMark size={44} />
+          <EvaDiscMark size={44} />
           <h1 className="mt-6 text-5xl font-semibold tracking-[-0.02em]">
             Presentations
           </h1>

@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { LogoMark } from "@/lib/components/LogoMark";
+import { EvaDiscMark } from "../_components/EvaDiscMark";
 import { Shell } from "../_components/DeckPrimitives";
 import {
   BRAND,
@@ -59,7 +59,7 @@ function LogoIgnite() {
             delay: 1.3,
           }}
         >
-          <LogoMark size={88} />
+          <EvaDiscMark size={88} />
         </m.div>
       </m.div>
     </div>

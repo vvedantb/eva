@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { LogoMark } from "@/lib/components/LogoMark";
+import { EvaDiscMark } from "../../_components/EvaDiscMark";
 import { Accent, Shell } from "../../_components/DeckPrimitives";
 import { BRAND, EASE, MaskedText } from "../../_components/motion";
 
@@ -60,7 +60,7 @@ function Emblem() {
             delay: 1.5,
           }}
         >
-          <LogoMark size={88} />
+          <EvaDiscMark size={88} />
         </m.div>
       </m.div>
     </div>

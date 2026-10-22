@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { LogoMark } from "@/lib/components/LogoMark";
+import { EvaDiscMark } from "../_components/EvaDiscMark";
 import { Accent, BRAND, Shell, Title } from "../_components/DeckPrimitives";
 import { DUR, DrawPath, EASE } from "../_components/motion";
 
@@ -63,7 +63,7 @@ export function Slide15Closing() {
             opacity: { duration: DUR.base, delay: LOGO_AT },
           }}
         >
-          <LogoMark size={40} />
+          <EvaDiscMark size={40} />
         </m.div>
       </div>
     </Shell>

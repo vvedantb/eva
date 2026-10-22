@@ -10,7 +10,7 @@ import {
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { GrokMark } from "@/lib/components/grokBot/GrokMark";
-import { LogoMark } from "@/lib/components/LogoMark";
+import { EvaDiscMark } from "../../_components/EvaDiscMark";
 import {
   Accent,
   Shell,
@@ -206,7 +206,7 @@ export function BeeBackground() {
         })}
       >
         <span className="flex size-[52px] items-center justify-center">
-          <LogoMark size={34} />
+          <EvaDiscMark size={34} />
         </span>
         <span className="text-[22px] text-[#2a1e0c]/70">
           Eva&apos;s Simple Mode too: workspaces wake and sleep on their own.

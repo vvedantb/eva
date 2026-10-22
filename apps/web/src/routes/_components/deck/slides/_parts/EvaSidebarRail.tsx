@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  AutomationsIcon,
-  InboxIcon,
-  SessionsIcon,
+  AutomationIcon,
+  InboxArrowIcon,
+  TerminalIcon,
   SettingsIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+} from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { EASE_OUT } from "../../_components/DeckPrimitives";
@@ -83,11 +83,11 @@ export function EvaRail({ simple }: { simple: boolean }) {
           </span>
         </RailTile>
         <RailTile>
-          <InboxIcon size={22} className="shrink-0" />
+          <InboxArrowIcon size={22} className="shrink-0" />
         </RailTile>
         <RailDivider />
         <RailTile>
-          <SessionsIcon size={22} className="shrink-0" />
+          <TerminalIcon size={22} className="shrink-0" />
         </RailTile>
         <RailDivider />
       </div>
@@ -106,7 +106,7 @@ export function EvaRail({ simple }: { simple: boolean }) {
               transition={{ duration: 0.32, ease: EASE_OUT }}
             >
               <RailTile>
-                <AutomationsIcon size={22} className="shrink-0" />
+                <AutomationIcon size={22} className="shrink-0" />
               </RailTile>
             </m.div>
           )}

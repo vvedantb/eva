@@ -2,13 +2,13 @@ import type { ComponentType } from "react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import {
-  DocumentsIcon,
-  ProjectsIcon,
-  QuickTasksIcon,
-  ReviewsIcon,
+  DocumentIcon,
+  BoardIcon,
+  ChecklistIcon,
+  ReviewIcon,
   SettingsIcon,
-  TestingArenaIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+  FlaskIcon,
+} from "@vvedantb/ui";
 import {
   sidebarNavLinkClass,
   sidebarSectionLabelClass,
@@ -42,16 +42,16 @@ export const NAV_GROUPS: readonly EvaNavGroup[] = [
   {
     label: "Ship",
     items: [
-      { name: "Projects", icon: ProjectsIcon },
-      { name: "Quick Tasks", icon: QuickTasksIcon, active: true, badge: "2" },
+      { name: "Projects", icon: BoardIcon },
+      { name: "Quick Tasks", icon: ChecklistIcon, active: true, badge: "2" },
     ],
   },
   {
     label: "Test",
     items: [
-      { name: "Documents", icon: DocumentsIcon },
-      { name: "Reviews", icon: ReviewsIcon, simpleHidden: true },
-      { name: "Testing Arena", icon: TestingArenaIcon },
+      { name: "Documents", icon: DocumentIcon },
+      { name: "Reviews", icon: ReviewIcon, simpleHidden: true },
+      { name: "Testing Arena", icon: FlaskIcon },
     ],
   },
   {
