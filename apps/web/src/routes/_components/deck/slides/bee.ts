@@ -1,4 +1,5 @@
 import type { DeckSlide } from "./types";
+import { BeeBlank } from "./bee/b00-blank";
 import { BeeTitle } from "./bee/b01-title";
 import { BeeProblem } from "./bee/b02-problem";
 import { BeeBackground } from "./bee/b12-background";
@@ -18,6 +19,13 @@ import { BeeClose } from "./bee/b10-close";
  * `bee` brand for honey accents and Bee's typeface.
  */
 const SLIDES: DeckSlide[] = [
+  {
+    id: "bee-00-blank",
+    title: "Blank",
+    Component: BeeBlank,
+    steps: 0,
+    blank: true,
+  },
   { id: "bee-01-title", title: "Bee", Component: BeeTitle, steps: 0 },
   {
     id: "bee-02-problem",

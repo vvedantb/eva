@@ -283,6 +283,9 @@ Next: The clearest of those problems is the review queue, which is where the bot
   // ---------------------------------------------------------------------------
   // Bee deck
   // ---------------------------------------------------------------------------
+  "bee-00-blank": `A blank stage while the room settles. Press the right arrow to bring in the title.
+Next: Bee.`,
+
   "bee-01-title": `Open with what Bee is in one breath: a small assistant that sits at the top of your screen in meetings, listens, and finds what you already know.
 Detail: Bee is a desktop app for Windows and Mac. It is not a meeting bot; nobody else in the call sees it. Keep the technical side out of this deck: the room only needs to know what it does for them.
 Next: Start with a moment everyone has had.`,

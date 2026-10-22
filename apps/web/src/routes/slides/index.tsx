@@ -37,7 +37,7 @@ function deckPreview(
   slides: readonly DeckSlide[],
   brand: DeckBrand = "eva",
 ): ReactNode {
-  const first = slides[0];
+  const first = slides.find((slide) => !slide.blank);
   if (!first) return null;
   const theme = first.theme ?? "dark";
   return (

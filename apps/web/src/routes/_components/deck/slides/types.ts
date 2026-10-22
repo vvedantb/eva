@@ -17,4 +17,6 @@ export interface DeckSlide {
    * shared element can glide from one place to the other on a still stage.
    */
   morph?: boolean;
+  /** A blank lead-in before the title, so its entrance plays live. Index thumbnails skip it. */
+  blank?: boolean;
 }
