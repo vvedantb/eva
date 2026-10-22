@@ -40,6 +40,11 @@ import { AnnualAbandoned } from "./annual/d06-abandoned";
 import { AnnualLessons } from "./annual/d07-lessons";
 import { AnnualDurable } from "./annual/d08-durable";
 
+import { Slide04Sessions } from "./04-sessions";
+import { FridayPlan } from "./friday/b05-plan";
+import { FridayReviews } from "./friday/b08-reviews";
+import { FridayReliability } from "./friday/b13-reliability";
+import { FridayLimits } from "./friday/b18-limits";
 /**
  * Annual CDM deck order: Eva's story and the evidence for it. Five acts, then
  * the close: origin, in use, the platform, craft, people, then the year ahead,
@@ -103,6 +108,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 3,
   },
   {
+    id: "04-sessions",
+    title: "Sessions grew up",
+    Component: Slide04Sessions,
+    steps: 3,
+  },
+  {
     id: "a02-origin",
     title: "The story so far",
     Component: AnnualOrigin,
@@ -154,6 +165,18 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 1,
   },
   {
+    id: "friday-b05-plan",
+    title: "Ask for a plan",
+    Component: FridayPlan,
+    steps: 1,
+  },
+  {
+    id: "friday-b08-reviews",
+    title: "Reviewing",
+    Component: FridayReviews,
+    steps: 2,
+  },
+  {
     id: "annual-c04-accounts",
     title: "Bring your own account",
     Component: AnnualAccounts,
@@ -201,6 +224,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "Finishing what it starts",
     Component: AnnualDurable,
     steps: 2,
+  },
+  {
+    id: "friday-b13-reliability",
+    title: "When it breaks",
+    Component: FridayReliability,
+    steps: 3,
   },
   {
     id: "annual-d01-security",
@@ -263,6 +292,13 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualUsers,
     steps: 2,
   },
+  {
+    id: "friday-b18-limits",
+    title: "Same problems",
+    Component: FridayLimits,
+    steps: 3,
+  },
+
   {
     id: "annual-d07-lessons",
     title: "Two lessons, one direction",

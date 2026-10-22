@@ -1,8 +1,6 @@
 import type { DeckSlide } from "./types";
 import { Slide01Title } from "./01-title";
-import { Slide02Numbers } from "./02-numbers";
 import { Slide03Cloud } from "./03-cloud";
-import { Slide04Sessions } from "./04-sessions";
 import { Slide05SimpleMode } from "./05-simple-mode";
 import { Slide06Automerge } from "./06-automerge";
 import { Slide07Sandbox } from "./07-sandbox";
@@ -17,10 +15,8 @@ import { FridayAsk } from "./friday/b01-ask";
 import { FridayPreview } from "./friday/b02-preview";
 import { FridayInbox } from "./friday/b03-inbox";
 import { FridayDocuments } from "./friday/b04-documents";
-import { FridayPlan } from "./friday/b05-plan";
 import { FridayProjects } from "./friday/b06-projects";
 import { FridayThreeWays } from "./friday/b07-three-ways";
-import { FridayReviews } from "./friday/b08-reviews";
 import { FridayAutomations } from "./friday/b09-automations";
 import { FridayStandup } from "./friday/b10-standup";
 import { FridayWeeklyChangelog } from "./friday/b22-weekly-changelog";
@@ -29,12 +25,10 @@ import { FridayPredictions } from "./friday/b23-predictions";
 import { FridayAbstracted } from "./friday/b24-abstracted";
 import { FridayAskJudge } from "./friday/b25-ask-judge";
 import { FridayAve } from "./friday/b12-ave";
-import { FridayReliability } from "./friday/b13-reliability";
 import { FridayMobile } from "./friday/b14-mobile";
 import { FridayArtifacts } from "./friday/b15-artifacts";
 import { FridayClose } from "./friday/b16-close";
 import { FridayJev } from "./friday/b17-jev";
-import { FridayLimits } from "./friday/b18-limits";
 import { FridayPipeline } from "./friday/b19-pipeline";
 import { FridayJevWhat } from "./friday/b20-jev-what";
 import { FridayJevCarePulse } from "./friday/b21-jev-carepulse";
@@ -46,17 +40,11 @@ import { FridayJevCarePulse } from "./friday/b21-jev-carepulse";
  * number minus one.
  */
 const SLIDES: DeckSlide[] = [
-  // ── Three months: the numbers, and where the work happens ───────────
+  // ── Three months: where the work happens ─────────────────────────────────────
   {
     id: "01-title",
     title: "Three months of Eva",
     Component: Slide01Title,
-    steps: 0,
-  },
-  {
-    id: "02-numbers",
-    title: "The numbers",
-    Component: Slide02Numbers,
     steps: 0,
   },
   {
@@ -92,22 +80,10 @@ const SLIDES: DeckSlide[] = [
     steps: 3,
   },
   {
-    id: "04-sessions",
-    title: "Sessions grew up",
-    Component: Slide04Sessions,
-    steps: 3,
-  },
-  {
     id: "friday-b04-documents",
     title: "Documents",
     Component: FridayDocuments,
     steps: 2,
-  },
-  {
-    id: "friday-b05-plan",
-    title: "Ask for a plan",
-    Component: FridayPlan,
-    steps: 1,
   },
   {
     id: "friday-b06-projects",
@@ -201,12 +177,6 @@ const SLIDES: DeckSlide[] = [
 
   // ── Trust and reach: when it breaks, and everywhere it goes ─────────
   {
-    id: "friday-b13-reliability",
-    title: "When it breaks",
-    Component: FridayReliability,
-    steps: 3,
-  },
-  {
     id: "friday-b14-mobile",
     title: "On your phone",
     Component: FridayMobile,
@@ -219,20 +189,8 @@ const SLIDES: DeckSlide[] = [
     steps: 2,
   },
   { id: "08-more", title: "And more", Component: Slide08More, steps: 0 },
-  {
-    id: "friday-b08-reviews",
-    title: "Reviewing",
-    Component: FridayReviews,
-    steps: 2,
-  },
 
   // ── What's next: the queue, and where this is heading ───────────────
-  {
-    id: "friday-b18-limits",
-    title: "Same problems",
-    Component: FridayLimits,
-    steps: 3,
-  },
   {
     id: "11-whats-next",
     title: "The bottleneck",
