@@ -310,7 +310,14 @@ Next: And when your notes do not have the answer?`,
 → Step 1: the tip appears as before, this time from the web.
 → Step 2: the sources appear under it, so you can see where the answer came from and open the link.
 Detail: this keeps Bee honest: a web answer always shows its sources. The question and sources on screen are an example.
-Next: The meeting ends. What do you keep?`,
+Next: Here is what that looked like in a real meeting.`,
+
+  "bee-11-real-meeting": `This is not a made-up example. It happened in a meeting with Krzys.
+→ Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
+→ Step 2: then whether the Claude Agent SDK can take MCP servers. Bee would have answered: yes, through the mcpServers option.
+→ Step 3: instead, I searched the web myself while everyone waited. Having it listen, search in the background and show the answer would have saved five minutes or more.
+Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The five minutes is my own estimate from that meeting, not a measurement.
+Next: And when the meeting ends, the summary writes itself.`,
 
   "bee-06-summary": `When the meeting ends, Bee writes the summary for you.
 → Step 1: the decisions, in plain sentences.

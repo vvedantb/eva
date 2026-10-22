@@ -4,6 +4,7 @@ import { BeeProblem } from "./bee/b02-problem";
 import { BeeNotch } from "./bee/b03-notch";
 import { BeeListens } from "./bee/b04-listens";
 import { BeeWeb } from "./bee/b05-web";
+import { BeeRealMeeting } from "./bee/b11-real-meeting";
 import { BeeSummary } from "./bee/b06-summary";
 import { BeeTeams } from "./bee/b07-teams";
 import { BeePrivate } from "./bee/b08-private";
@@ -40,6 +41,12 @@ const SLIDES: DeckSlide[] = [
     title: "Answers from the web",
     Component: BeeWeb,
     steps: 2,
+  },
+  {
+    id: "bee-11-real-meeting",
+    title: "A real meeting",
+    Component: BeeRealMeeting,
+    steps: 3,
   },
   {
     id: "bee-06-summary",
