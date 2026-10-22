@@ -94,7 +94,10 @@ export function BeeRealMeeting() {
           </div>
 
           {/* What Bee would have shown, while the meeting carried on. */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
+            <div className="text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase">
+              What Bee would have answered
+            </div>
             <BeeIsland
               status={active ? "Searched the web" : "Listening…"}
               listening={!active}
@@ -128,7 +131,7 @@ export function BeeRealMeeting() {
 
             {/* What it would have saved. */}
             <m.div
-              className="flex items-center gap-5"
+              className="mt-2 flex items-center gap-5"
               initial={{ opacity: 0, y: 16 }}
               animate={saved ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
               transition={cueTransition(saved, 0.25, {
@@ -141,10 +144,10 @@ export function BeeRealMeeting() {
               </span>
               <span>
                 <span className="block text-4xl font-semibold text-[#2a1e0c]">
-                  5+ minutes saved
+                  Would have saved 5+ minutes
                 </span>
                 <span className="block text-xl text-[#2a1e0c]/60">
-                  No stopping to search the web mid-meeting.
+                  Instead, I searched the web mid-meeting.
                 </span>
               </span>
             </m.div>
