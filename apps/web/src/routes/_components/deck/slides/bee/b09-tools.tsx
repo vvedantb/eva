@@ -7,12 +7,7 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { Connector, Spotlight, cueTransition } from "../../_components/motion";
@@ -165,11 +160,6 @@ export function BeeTools() {
           ))}
         </div>
       </Camera>
-
-      <Footnote>
-        Connectors let Bee read from tools you already use. Meeting context
-        comes from Outlook and Teams on your own computer.
-      </Footnote>
     </Shell>
   );
 }

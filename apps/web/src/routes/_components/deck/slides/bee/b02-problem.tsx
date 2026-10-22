@@ -1,11 +1,6 @@
 import { IconSearch } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
@@ -100,8 +95,6 @@ export function BeeProblem() {
           </m.div>
         </div>
       </Camera>
-
-      <Footnote>The notes and the line said are examples.</Footnote>
     </Shell>
   );
 }

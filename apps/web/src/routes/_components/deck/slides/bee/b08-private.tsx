@@ -5,12 +5,7 @@ import {
   IconScreenShare,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
@@ -93,11 +88,6 @@ export function BeePrivate() {
           </div>
         </div>
       </Camera>
-
-      <Footnote>
-        Bee hides itself from screen sharing in meeting mode. Teams mode needs
-        no bot in the call.
-      </Footnote>
     </Shell>
   );
 }

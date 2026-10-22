@@ -2,7 +2,6 @@ import { IconClockHour4, IconWorld } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import {
   Accent,
-  Footnote,
   Shell,
   Title,
   useDeckStep,
@@ -152,12 +151,6 @@ export function BeeRealMeeting() {
           </div>
         </div>
       </Camera>
-
-      <Footnote>
-        Questions from a real meeting. Answers checked against the Convex and
-        Claude Agent SDK documentation, October 2026. Time saved is the
-        presenter&apos;s own estimate.
-      </Footnote>
     </Shell>
   );
 }

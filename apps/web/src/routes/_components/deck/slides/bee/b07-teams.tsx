@@ -1,11 +1,6 @@
 import { IconFileText } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { Connector, DUR, EASE, cueTransition } from "../../_components/motion";
@@ -160,11 +155,6 @@ export function BeeTeams() {
           </m.div>
         </div>
       </Camera>
-
-      <Footnote>
-        Teams mode: each person&apos;s Bee shares what they said, so the summary
-        knows who said what. Names and lines are an example.
-      </Footnote>
     </Shell>
   );
 }

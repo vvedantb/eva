@@ -1,11 +1,6 @@
 import { IconMicrophone } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, DrawPath, cueTransition } from "../../_components/motion";
@@ -163,11 +158,6 @@ export function BeeListens() {
           </div>
         </div>
       </Camera>
-
-      <Footnote>
-        Bee never shows the words on screen. The notes and the tip are an
-        example.
-      </Footnote>
     </Shell>
   );
 }

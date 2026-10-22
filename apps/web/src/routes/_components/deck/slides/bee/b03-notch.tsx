@@ -1,10 +1,5 @@
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE } from "../../_components/motion";
@@ -83,8 +78,6 @@ export function BeeNotch() {
           </div>
         </div>
       </Camera>
-
-      <Footnote>The meeting and the tip are an example.</Footnote>
     </Shell>
   );
 }

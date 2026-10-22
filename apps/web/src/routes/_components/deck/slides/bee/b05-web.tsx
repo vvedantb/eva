@@ -1,11 +1,6 @@
 import { IconExternalLink, IconWorld } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { Spotlight, cueTransition } from "../../_components/motion";
@@ -120,11 +115,6 @@ export function BeeWeb() {
           </BeeIsland>
         </div>
       </Camera>
-
-      <Footnote>
-        When your notes do not have it, Bee searches the web and shows where the
-        answer came from. The question and sources are an example.
-      </Footnote>
     </Shell>
   );
 }

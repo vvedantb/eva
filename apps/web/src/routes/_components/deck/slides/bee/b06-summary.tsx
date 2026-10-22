@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 import { IconArrowBackUp, IconFileText } from "@tabler/icons-react";
 import { m } from "motion/react";
-import {
-  Footnote,
-  Shell,
-  Title,
-  useDeckStep,
-} from "../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
@@ -132,11 +127,6 @@ export function BeeSummary() {
           </m.div>
         </div>
       </Camera>
-
-      <Footnote>
-        If the summary cannot be written, Bee still saves a plain one. The
-        meeting shown is an example.
-      </Footnote>
     </Shell>
   );
 }
