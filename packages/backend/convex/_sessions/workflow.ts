@@ -242,6 +242,7 @@ export async function buildSessionPrompt(
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
       askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
+      prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
   );
   prompt = `${prompt}${parallelNote}`;

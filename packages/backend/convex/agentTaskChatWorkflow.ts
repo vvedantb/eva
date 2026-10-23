@@ -167,6 +167,7 @@ async function buildTaskChatTurnPrompt(
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
       askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
+      prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
   });
   if (prefixBlock) {
