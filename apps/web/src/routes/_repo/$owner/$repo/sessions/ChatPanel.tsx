@@ -373,6 +373,7 @@ export function ChatPanel({
     messageCount: messages.length,
     isSandboxActive,
     isSandboxToggling,
+    sandboxGitSync,
     isAssistantResponding: isExecuting,
     deploymentStatus,
     simpleView,
@@ -505,8 +506,6 @@ export function ChatPanel({
               branch={sandboxBranch}
               isSandboxActive={isSandboxActive}
               intendedBranch={branchName}
-              gitSync={sandboxGitSync}
-              target={{ kind: "session", sessionId }}
             />
           }
           preInputContent={preInputContent}

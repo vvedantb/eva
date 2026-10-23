@@ -394,8 +394,6 @@ export function ProjectSandboxChatPanel({
               branch={project?.sandboxBranch}
               isSandboxActive={isSandboxActive}
               intendedBranch={project?.branchName}
-              gitSync={project?.sandboxGitSync}
-              target={{ kind: "project", projectId }}
             />
           }
           draft={draftBundle}
