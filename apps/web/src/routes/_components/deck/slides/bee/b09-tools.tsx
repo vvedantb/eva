@@ -124,6 +124,7 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
 }
 
 export function BeeTools() {
+  const connected = useDeckStep() >= CONNECT;
   return (
     <Shell className="py-14">
       <Title size="md">Works with your tools</Title>
@@ -163,7 +164,12 @@ export function BeeTools() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ ...BEE_SPRING, delay: 0.2 }}
           >
-            <BeeLogo size={92} glow={false} />
+            <BeeLogo
+              size={92}
+              tone="dark"
+              glow={false}
+              state={connected ? "tool" : "idle"}
+            />
           </m.div>
 
           {TOOLS.map((tool, index) => (

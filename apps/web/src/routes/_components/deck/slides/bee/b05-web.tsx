@@ -42,6 +42,7 @@ export function BeeWeb() {
           <BeeIsland
             status={answered ? "Searched the web" : "Listening…"}
             listening={!answered}
+            state={sourced ? "done" : answered ? "searching" : "listening"}
             open={answered}
             openDelay={0.1}
             width={640}

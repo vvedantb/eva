@@ -56,6 +56,7 @@ export function BeeNotch() {
                 open ? "Found in your notes" : listening ? "Listening…" : "Bee"
               }
               listening={listening && !open}
+              state={open ? "done" : listening ? "listening" : "idle"}
               open={open}
               openDelay={0.15}
             >

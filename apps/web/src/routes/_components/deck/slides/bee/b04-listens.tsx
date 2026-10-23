@@ -125,6 +125,9 @@ export function BeeListens() {
             <StageLabel text="Tips" shown={tips} />
             <BeeIsland
               status={tips ? "From your notes" : "Bee"}
+              state={
+                tips ? "done" : finds ? "tool" : hears ? "listening" : "idle"
+              }
               open={tips}
               openDelay={0.2}
               width={368}

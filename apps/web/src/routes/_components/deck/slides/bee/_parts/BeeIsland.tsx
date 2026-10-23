@@ -4,6 +4,7 @@ import type { Transition } from "motion/react";
 import { cn } from "@eva/ui";
 import { DUR, EASE } from "../../../_components/motion";
 import { BeeLogo } from "./BeeLogo";
+import type { LogoState } from "./BeeLogo";
 
 /**
  * Bee's palette, from the app's `styles.css`. The island is always the app's
@@ -62,6 +63,8 @@ interface BeeIslandProps {
   status: ReactNode;
   /** Bars move while Bee hears speech. */
   listening?: boolean;
+  /** What the mark shows. Defaults to listening or idle, from `listening`. */
+  state?: LogoState;
   /** Grows the answer panel out of the pill. */
   open?: boolean;
   /** Seconds after `open` before the panel grows. */
@@ -79,6 +82,7 @@ interface BeeIslandProps {
 export function BeeIsland({
   status,
   listening = false,
+  state,
   open = false,
   openDelay = 0,
   width = 560,
@@ -94,7 +98,12 @@ export function BeeIsland({
       transition={{ duration: 0.36 }}
     >
       <div className="flex h-[60px] items-center gap-3 pr-5 pl-4">
-        <BeeLogo size={34} glow={false} />
+        <BeeLogo
+          size={34}
+          tone="dark"
+          glow={false}
+          state={state ?? (listening ? "listening" : "idle")}
+        />
         <span className="min-w-0 flex-1 truncate text-[17px] font-medium">
           {status}
         </span>

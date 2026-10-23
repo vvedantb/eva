@@ -101,6 +101,7 @@ export function BeeRealMeeting() {
             <BeeIsland
               status={active ? "Searched the web" : "Listening…"}
               listening={!active}
+              state={saved ? "done" : active ? "searching" : "listening"}
               open={Boolean(active)}
               openDelay={0.3}
               width={600}
