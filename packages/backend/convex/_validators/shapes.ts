@@ -282,6 +282,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("openPrsOnGithub"),
   v.literal("scopeCheck"),
   v.literal("manualSideBranchPublish"),
+  v.literal("prWatch"),
 );
 
 /**
@@ -313,6 +314,7 @@ export const experimentalFlagsFields = {
   openPrsOnGithub: v.optional(v.boolean()),
   scopeCheck: v.optional(v.boolean()),
   manualSideBranchPublish: v.optional(v.boolean()),
+  prWatch: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -335,6 +337,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   openPrsOnGithub: v.boolean(),
   scopeCheck: v.boolean(),
   manualSideBranchPublish: v.boolean(),
+  prWatch: v.boolean(),
 });
 
 /**

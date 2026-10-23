@@ -141,6 +141,12 @@ const FLAG_GROUPS: FlagGroup[] = [
           "Open a pull request on GitHub in a new tab when you click it in the Reviews sidebar, instead of the review view in Eva. Cmd or Ctrl-click still opens it in Eva.",
       },
       {
+        key: "prWatch",
+        title: "Pull request watch",
+        description:
+          "Let the agent watch its pull requests. Eva wakes the chat when checks fail or pass, a reviewer comments, or the branch conflicts.",
+      },
+      {
         key: "viewVercelDeployment",
         title: "View Vercel Deployment",
         description:
