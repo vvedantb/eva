@@ -37,7 +37,7 @@ interface SandboxBranchChipProps {
  * Chip on the composer's under-input bar naming the branch the sandbox
  * worktree is actually checked out on right now. The daemon reports it live,
  * so this is the ground truth — not the branch Eva meant to boot on. When work
- * on it is not on GitHub yet, the chip shows the counts and a "Commit & push".
+ * on it is not on GitHub yet, a "Commit & push" follows, its counts in a tooltip.
  */
 export function SandboxBranchChip({
   branch,
@@ -71,37 +71,45 @@ export function SandboxBranchChip({
       .finally(() => setIsPushing(false));
   };
 
+  const counts = [
+    uncommitted > 0
+      ? `${uncommitted} uncommitted ${uncommitted === 1 ? "file" : "files"}`
+      : null,
+    unpushed > 0
+      ? `${unpushed} unpushed ${unpushed === 1 ? "commit" : "commits"}`
+      : null,
+  ]
+    .filter((part) => part !== null)
+    .join(" · ");
+
+  // The counts live in the tooltip so the under-input bar stays compact.
   const pushButton = hasUnpublishedWork ? (
-    <button
-      type="button"
-      disabled={isPushing}
-      onClick={handlePush}
-      className="motion-press flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-normal text-warning hover:bg-muted active:scale-[0.97] disabled:opacity-60"
-    >
-      {isPushing ? <Spinner size="sm" /> : <IconUpload size={14} />}
-      <span>{simpleView ? "Save to GitHub" : "Commit & push"}</span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          disabled={isPushing}
+          onClick={handlePush}
+          aria-label={`${simpleView ? "Save to GitHub" : "Commit & push"}: ${counts}`}
+          className="motion-press flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-normal text-warning hover:bg-muted active:scale-[0.97] disabled:opacity-60"
+        >
+          {isPushing ? <Spinner size="sm" /> : <IconUpload size={14} />}
+          <span>{simpleView ? "Save to GitHub" : "Commit & push"}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <span className="block">{counts}</span>
+        <span className="block text-muted-foreground">Not on GitHub yet</span>
+      </TooltipContent>
+    </Tooltip>
   ) : null;
 
-  if (simpleView) {
-    return (
-      <div className="flex min-w-0 items-center gap-1">
-        <span className="px-1 text-xs text-warning">Unsaved changes</span>
-        {pushButton}
-      </div>
-    );
-  }
+  if (simpleView) return pushButton;
 
   // Eva booted the sandbox on `intendedBranch`, but something inside it (a
   // checkout, a rebase, a stacked branch) moved the worktree. Worth surfacing,
   // not worth shouting about.
   const isMismatched = intendedBranch !== undefined && intendedBranch !== branch;
-  const counts = [
-    uncommitted > 0 ? `${uncommitted} uncommitted` : null,
-    unpushed > 0 ? `${unpushed} unpushed` : null,
-  ]
-    .filter((part) => part !== null)
-    .join(" · ");
 
   return (
     <div className="flex min-w-0 items-center">
@@ -131,17 +139,8 @@ export function SandboxBranchChip({
               Chat branch is {intendedBranch}
             </span>
           ) : null}
-          {counts ? (
-            <span className="block text-muted-foreground">
-              {counts} — not on GitHub yet
-            </span>
-          ) : null}
         </TooltipContent>
       </Tooltip>
-      {counts ? (
-        // Outside the capped branch button, so a long name never hides them.
-        <span className="shrink-0 px-1 text-xs text-warning">{counts}</span>
-      ) : null}
       {pushButton}
     </div>
   );
