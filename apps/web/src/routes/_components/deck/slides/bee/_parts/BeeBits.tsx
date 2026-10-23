@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Icon } from "@tabler/icons-react";
-import { IconFileText } from "@tabler/icons-react";
+import { IconFileText, IconX } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { DUR, EASE, cueTransition } from "../../../_components/motion";
@@ -84,5 +84,28 @@ export function BeeChip({
       </span>
       {label}
     </m.div>
+  );
+}
+
+/**
+ * A suggested link, as Bee's notch shows it (`LinkChips` in the app): a pill
+ * with the site's favicon on a light square, the domain, and a dismiss cross.
+ * Favicons come from Google's favicon service, as the app's fetch does.
+ */
+export function SourceChip({ domain }: { domain: string }) {
+  return (
+    <span
+      className="inline-flex h-9 items-center gap-2 rounded-full pr-2 pl-3 text-[16px]"
+      style={{ background: BEE.raised, color: BEE.text }}
+    >
+      <img
+        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+        alt=""
+        className="size-5 rounded-[5px] object-contain p-px"
+        style={{ background: BEE.text }}
+      />
+      {domain}
+      <IconX size={15} stroke={2} style={{ color: BEE.muted }} />
+    </span>
   );
 }

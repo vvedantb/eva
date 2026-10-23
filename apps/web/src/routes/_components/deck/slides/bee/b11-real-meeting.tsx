@@ -1,4 +1,4 @@
-import { IconClockHour4, IconWorld } from "@tabler/icons-react";
+import { IconClockHour4 } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import {
   Accent,
@@ -10,6 +10,7 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
 import { BEE, BEE_SPRING, BeeIsland } from "./_parts/BeeIsland";
+import { SourceChip } from "./_parts/BeeBits";
 
 const FIRST = 1;
 const SECOND = 2;
@@ -118,12 +119,8 @@ export function BeeRealMeeting() {
                     <p className="m-0 text-[21px] leading-snug font-medium text-pretty">
                       {active.answer}
                     </p>
-                    <div
-                      className="mt-4 flex items-center gap-2 text-[15px]"
-                      style={{ color: BEE.muted }}
-                    >
-                      <IconWorld size={15} />
-                      {active.source}
+                    <div className="mt-4">
+                      <SourceChip domain={active.source} />
                     </div>
                   </m.div>
                 ) : null}

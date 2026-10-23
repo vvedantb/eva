@@ -1,19 +1,16 @@
-import { IconExternalLink, IconWorld } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { Spotlight, cueTransition } from "../../_components/motion";
-import { BEE, BEE_SPRING, BeeIsland, BeeTip } from "./_parts/BeeIsland";
+import { BEE_SPRING, BeeIsland, BeeTip } from "./_parts/BeeIsland";
+import { SourceChip } from "./_parts/BeeBits";
 
 const ANSWER = 1;
 const SOURCES = 2;
 
-/** Example sources, the shape Bee shows under a web answer. */
-const LINKS = [
-  { site: "gov.uk", title: "Data protection: the basics" },
-  { site: "ico.org.uk", title: "Guide to UK GDPR" },
-];
+/** Example sources, as the chips Bee shows under a web answer. */
+const LINKS = ["gov.uk", "ico.org.uk"];
 
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 8, translateZ: -40 },
@@ -54,8 +51,7 @@ export function BeeWeb() {
               </BeeTip>
 
               <m.div
-                className="mt-5 border-t pt-4"
-                style={{ borderColor: BEE.raised }}
+                className="overflow-hidden"
                 initial={false}
                 animate={
                   sourced
@@ -64,51 +60,22 @@ export function BeeWeb() {
                 }
                 transition={cueTransition(sourced, 0.1, BEE_SPRING)}
               >
-                <div
-                  className="mb-3 flex items-center gap-2 text-[13px] font-semibold tracking-[0.1em] uppercase"
-                  style={{ color: BEE.muted }}
-                >
-                  <IconWorld size={15} />
-                  Sources
-                </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2 pt-4">
                   {LINKS.map((link, index) => (
-                    <m.div
-                      key={link.site}
-                      className="flex items-center gap-3 rounded-2xl px-4 py-3"
-                      style={{ background: BEE.raised }}
-                      initial={{ opacity: 0, x: -12 }}
+                    <m.span
+                      key={link}
+                      initial={{ opacity: 0, y: 6 }}
                       animate={
-                        sourced ? { opacity: 1, x: 0 } : { opacity: 0, x: -12 }
+                        sourced ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }
                       }
                       transition={cueTransition(
                         sourced,
-                        0.35 + index * 0.12,
+                        0.3 + index * 0.1,
                         BEE_SPRING,
                       )}
                     >
-                      <span
-                        className="flex size-8 items-center justify-center rounded-lg text-[13px] font-bold"
-                        style={{ background: BEE.accent, color: BEE.surface }}
-                      >
-                        {link.site.slice(0, 1).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[16px] font-medium">
-                          {link.title}
-                        </span>
-                        <span
-                          className="block text-[13px]"
-                          style={{ color: BEE.muted }}
-                        >
-                          {link.site}
-                        </span>
-                      </span>
-                      <IconExternalLink
-                        size={16}
-                        style={{ color: BEE.muted }}
-                      />
-                    </m.div>
+                      <SourceChip domain={link} />
+                    </m.span>
                   ))}
                 </div>
               </m.div>
