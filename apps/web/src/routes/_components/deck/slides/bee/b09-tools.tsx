@@ -1,9 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  IconCalendarEvent,
-  IconPlug,
-  IconUsersGroup,
-} from "@tabler/icons-react";
+import { IconPlug } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
@@ -66,11 +62,7 @@ const TOOLS: readonly Tool[] = [
     y: 40,
   },
   {
-    tile: (
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/25 text-[#a15f00]">
-        <IconCalendarEvent size={22} stroke={1.7} />
-      </span>
-    ),
+    tile: <BrandTile src="/brands/microsoft-outlook.svg" alt="Outlook" />,
     label: "Outlook",
     note: "Which meeting",
     step: CONTEXT,
@@ -78,11 +70,7 @@ const TOOLS: readonly Tool[] = [
     y: 250,
   },
   {
-    tile: (
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/25 text-[#a15f00]">
-        <IconUsersGroup size={22} stroke={1.7} />
-      </span>
-    ),
+    tile: <BrandTile src="/brands/microsoft-teams.svg" alt="Microsoft Teams" />,
     label: "Teams",
     note: "Who is in it",
     step: CONTEXT,
@@ -90,6 +78,15 @@ const TOOLS: readonly Tool[] = [
     y: 340,
   },
 ];
+
+/** A product logo from `public/brands`, on a plain white tile. */
+function BrandTile({ src, alt }: { src: string; alt: string }) {
+  return (
+    <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fff] ring-1 ring-[#2a1e0c]/10">
+      <img src={src} alt={alt} className="size-7" />
+    </span>
+  );
+}
 
 const CARD = { w: 228, h: 80 };
 
