@@ -889,6 +889,14 @@ export const projectChatExecuteWorkflow = workflow.define({
       turnId: args.turnId,
       sandboxId: activeSandboxId,
     });
+    if (data.branchName) {
+      await step.runAction(internal.sandbox.applyBranchPublishPolicy, {
+        sandboxId: activeSandboxId,
+        repoId: data.repoId,
+        userId: args.userId,
+        branchName: data.branchName,
+      });
+    }
 
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.projectChatWorkflow.ensurePendingTurn, {

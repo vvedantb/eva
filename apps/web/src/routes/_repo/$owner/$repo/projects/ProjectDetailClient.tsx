@@ -46,6 +46,7 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -581,6 +582,11 @@ export function ProjectDetailClient({
                   own confirmed "Stop Build", so it is not gated here. This is the
                   only wake/sleep control now, the sandbox chat header carries
                   usage alone. */}
+              <SandboxCommitPushButton
+                gitSync={project.sandboxGitSync}
+                isSandboxActive={isSandboxActive}
+                target={{ kind: "project", projectId }}
+              />
               {isSandboxActive || canStartSandbox ? (
                 <SandboxStartStopButton
                   isActive={isSandboxActive}

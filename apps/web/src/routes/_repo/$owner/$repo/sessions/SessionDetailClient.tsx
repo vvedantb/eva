@@ -316,6 +316,7 @@ export function SessionDetailClient({
       title={session.title}
       branchName={session.branchName}
       sandboxBranch={session.sandboxBranch}
+      sandboxGitSync={session.sandboxGitSync}
       prUrl={session.prUrl}
       prState={session.prState}
       summary={session.summary}

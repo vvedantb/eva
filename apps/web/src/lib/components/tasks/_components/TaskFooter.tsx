@@ -31,6 +31,7 @@ import dayjs from "@eva/shared/dates";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
@@ -315,6 +316,12 @@ export function TaskFooter({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          <SandboxCommitPushButton
+            gitSync={task?.sandboxGitSync}
+            isSandboxActive={isSandboxActive}
+            target={{ kind: "task", taskId }}
+            size={buttonSize}
+          />
           <AnimatePresence initial={false} mode="popLayout">
             {showSandboxToggle ? (
               <m.div
