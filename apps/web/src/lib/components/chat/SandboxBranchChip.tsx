@@ -122,9 +122,6 @@ export function SandboxBranchChip({
           >
             <IconGitBranch size={14} className="shrink-0" />
             <span className="truncate">{branch}</span>
-            {counts ? (
-              <span className="shrink-0 text-warning">· {counts}</span>
-            ) : null}
           </button>
         </TooltipTrigger>
         <TooltipContent>
@@ -141,6 +138,10 @@ export function SandboxBranchChip({
           ) : null}
         </TooltipContent>
       </Tooltip>
+      {counts ? (
+        // Outside the capped branch button, so a long name never hides them.
+        <span className="shrink-0 px-1 text-xs text-warning">{counts}</span>
+      ) : null}
       {pushButton}
     </div>
   );
