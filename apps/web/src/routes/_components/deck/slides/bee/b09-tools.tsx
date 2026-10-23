@@ -1,9 +1,7 @@
-import type { Icon } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import {
-  IconBrain,
   IconCalendarEvent,
   IconPlug,
-  IconSparkles,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
@@ -14,6 +12,8 @@ import { Connector, Spotlight, cueTransition } from "../../_components/motion";
 import { BEE, BEE_SPRING } from "./_parts/BeeIsland";
 import { BeeLogo } from "./_parts/BeeLogo";
 import { BEE_CARD } from "./_parts/BeeBits";
+import { VmemMark } from "./_parts/VmemMark";
+import { EvaDiscMark } from "../../_components/EvaDiscMark";
 
 const CONNECT = 1;
 const CONTEXT = 2;
@@ -23,7 +23,8 @@ const H = 440;
 const HUB = { x: W / 2, y: 200 };
 
 interface Tool {
-  icon: Icon;
+  /** The 44px tile: a real logo where the product has one. */
+  tile: ReactNode;
   label: string;
   note: string;
   step: number;
@@ -33,7 +34,7 @@ interface Tool {
 
 const TOOLS: readonly Tool[] = [
   {
-    icon: IconSparkles,
+    tile: <EvaDiscMark size={44} />,
     label: "Eva",
     note: "Your team's work",
     step: CONNECT,
@@ -41,7 +42,11 @@ const TOOLS: readonly Tool[] = [
     y: 40,
   },
   {
-    icon: IconBrain,
+    tile: (
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#17140f] text-[#fff]">
+        <VmemMark size={24} />
+      </span>
+    ),
     label: "vmem",
     note: "Your history",
     step: CONNECT,
@@ -49,7 +54,11 @@ const TOOLS: readonly Tool[] = [
     y: 250,
   },
   {
-    icon: IconPlug,
+    tile: (
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/25 text-[#a15f00]">
+        <IconPlug size={22} stroke={1.7} />
+      </span>
+    ),
     label: "Your own",
     note: "Any connector",
     step: CONNECT,
@@ -57,7 +66,11 @@ const TOOLS: readonly Tool[] = [
     y: 40,
   },
   {
-    icon: IconCalendarEvent,
+    tile: (
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/25 text-[#a15f00]">
+        <IconCalendarEvent size={22} stroke={1.7} />
+      </span>
+    ),
     label: "Outlook",
     note: "Which meeting",
     step: CONTEXT,
@@ -65,7 +78,11 @@ const TOOLS: readonly Tool[] = [
     y: 250,
   },
   {
-    icon: IconUsersGroup,
+    tile: (
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/25 text-[#a15f00]">
+        <IconUsersGroup size={22} stroke={1.7} />
+      </span>
+    ),
     label: "Teams",
     note: "Who is in it",
     step: CONTEXT,
@@ -90,7 +107,6 @@ const GLOW = [
 
 function ToolCard({ tool, index }: { tool: Tool; index: number }) {
   const shown = useDeckStep() >= tool.step;
-  const Glyph = tool.icon;
   return (
     <m.div
       className={`${BEE_CARD} absolute flex items-center gap-4 px-5`}
@@ -99,9 +115,7 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
       animate={shown ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
       transition={cueTransition(shown, 0.25 + (index % 3) * 0.12, BEE_SPRING)}
     >
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/25 text-[#a15f00]">
-        <Glyph size={22} stroke={1.7} />
-      </span>
+      {tool.tile}
       <span>
         <span className="block text-xl font-semibold text-[#2a1e0c]">
           {tool.label}
