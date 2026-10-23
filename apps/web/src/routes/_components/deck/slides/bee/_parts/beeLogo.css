@@ -53,9 +53,8 @@
   transform-origin: center;
 }
 
-/* States (data-state, BeeLogo.tsx). Base declarations are each state's still pose; animations layer on top, so
-   reduced motion (which removes them) leaves the pose. Path keyframes (bee-eight, bee-orbit-*, bee-loop*) are generated
-   in logo.ts. Amplitudes come from variables on the svg, sized per view. */
+/* States (data-state, BeeLogo.tsx). Base declarations are each state's still pose; animations layer on top. Path keyframes
+   (bee-eight, bee-orbit-*, bee-loop*) are generated in beeLogoMotion.ts. Amplitudes come from variables on the svg, sized per view. */
 
 /* Duration comes from the element style (3–5 s per instance); the blink is the last 5 %. */
 .bee-logo.animated .bee-logo-eyes {
@@ -325,9 +324,3 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bee-logo,
-  .bee-logo * {
-    animation: none !important;
-  }
-}
