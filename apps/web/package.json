@@ -112,6 +112,7 @@
     "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
     "tsc-rs": "0.1.0",
+    "tsc-ts": "0.0.2",
     "typescript": "7.0.1-rc",
     "vite": "^8.2.0",
     "vitest": "^3.2.4"
