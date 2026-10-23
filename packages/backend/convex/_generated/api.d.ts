@@ -142,7 +142,6 @@ import type * as _jev_jsonValue from "../_jev/jsonValue.js";
 import type * as _logs_resolveProjectId from "../_logs/resolveProjectId.js";
 import type * as _logs_usage from "../_logs/usage.js";
 import type * as _logs_usageSummary from "../_logs/usageSummary.js";
-import type * as _mcp_codeModeRuntime from "../_mcp/codeModeRuntime.js";
 import type * as _mcp_codeModeTools from "../_mcp/codeModeTools.js";
 import type * as _mcp_evaluateTool from "../_mcp/evaluateTool.js";
 import type * as _mcp_previewTools from "../_mcp/previewTools.js";
@@ -693,7 +692,6 @@ declare const fullApi: ApiFromModules<{
   "_logs/resolveProjectId": typeof _logs_resolveProjectId;
   "_logs/usage": typeof _logs_usage;
   "_logs/usageSummary": typeof _logs_usageSummary;
-  "_mcp/codeModeRuntime": typeof _mcp_codeModeRuntime;
   "_mcp/codeModeTools": typeof _mcp_codeModeTools;
   "_mcp/evaluateTool": typeof _mcp_evaluateTool;
   "_mcp/previewTools": typeof _mcp_previewTools;

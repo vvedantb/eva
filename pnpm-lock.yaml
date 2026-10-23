@@ -580,6 +580,9 @@ importers:
       '@vercel/sandbox':
         specifier: ^3.8.0
         version: 3.8.0(patch_hash=fa921e07e5f53281f9079d36cf2a9fdd25ea4986ee518790819e1bbe70c3a9f1)
+      '@vvedantb/server':
+        specifier: 0.5.0
+        version: 0.5.0(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       ai:
         specifier: ^7.0.105
         version: 7.0.105(zod@3.25.76)
@@ -6136,6 +6139,29 @@ packages:
       react-dom:
         optional: true
       vite:
+        optional: true
+
+  '@vvedantb/server@0.5.0':
+    resolution: {integrity: sha512-rD4RXmrg8vfUuUmkoY+bNK/ck5EXTPVEItzh466M3aiGAm+JCHFcARFsbNCeeU4FtFLZwfeI/jzU8WSSUDWExw==}
+    peerDependencies:
+      '@clerk/backend': '>=1'
+      '@jitl/quickjs-singlefile-cjs-release-sync': ^0.32.0
+      '@modelcontextprotocol/sdk': ^1.29.0
+      convex: ^1.24.0
+      quickjs-emscripten-core: ^0.32.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@clerk/backend':
+        optional: true
+      '@jitl/quickjs-singlefile-cjs-release-sync':
+        optional: true
+      '@modelcontextprotocol/sdk':
+        optional: true
+      convex:
+        optional: true
+      quickjs-emscripten-core:
+        optional: true
+      zod:
         optional: true
 
   '@vvedantb/ui@0.12.1':
@@ -15619,6 +15645,15 @@ snapshots:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       vite: 8.2.0(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
+
+  '@vvedantb/server@0.5.0(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)':
+    optionalDependencies:
+      '@clerk/backend': 2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@jitl/quickjs-singlefile-cjs-release-sync': 0.32.0
+      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      convex: 1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)
+      quickjs-emscripten-core: 0.32.0
+      zod: 3.25.76
 
   '@vvedantb/ui@0.12.1(947761f140f8b7663962f9a6e0a32ff2)':
     dependencies:
