@@ -74,6 +74,7 @@ interface ChatPanelProps {
   branchName?: string;
   /** Branch the sandbox worktree is on right now, reported by its daemon. */
   sandboxBranch?: string;
+  sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
@@ -124,6 +125,7 @@ export function ChatPanel({
   title,
   branchName,
   sandboxBranch,
+  sandboxGitSync,
   prUrl,
   prState,
   summary,
@@ -503,6 +505,8 @@ export function ChatPanel({
               branch={sandboxBranch}
               isSandboxActive={isSandboxActive}
               intendedBranch={branchName}
+              gitSync={sandboxGitSync}
+              target={{ kind: "session", sessionId }}
             />
           }
           preInputContent={preInputContent}

@@ -531,7 +531,7 @@ describe("a callback-published session still opens its first pull request", () =
    * pure cost.
    */
   test("the durability push short-circuits before touching the network", () => {
-    const body = functionBody(turnPersist, "export function persistTurnWork(");
+    const body = functionBody(turnPersist, "function commitAndPushTurnWork(");
     const guardAt = body.indexOf("tipAlreadyPublished([");
     const fetchAt = body.indexOf("synchronizeForPush(");
     expect(guardAt, "the local no-op guard is missing").toBeGreaterThan(-1);

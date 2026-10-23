@@ -460,6 +460,8 @@ export function TaskSandboxChatPanel({
             <SandboxBranchChip
               branch={task?.sandboxBranch}
               isSandboxActive={isSandboxActive}
+              gitSync={task?.sandboxGitSync}
+              target={{ kind: "task", taskId }}
             />
           }
           draft={draftBundle}

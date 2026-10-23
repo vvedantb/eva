@@ -3,6 +3,10 @@
 import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
+import {
+  AUTO_PUBLISH_BRANCH_GIT_CONFIG,
+  COMMIT_EXCLUDE_PATHSPECS,
+} from "@eva/shared/gitDefaults";
 import { getInstallationToken } from "../githubAuth";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
@@ -1455,6 +1459,30 @@ async function synchronizeBranchForPublish(
 }
 
 /**
+ * True when Eva pinned auto-publish to `chatBranch` for this turn (see
+ * `applyBranchPublishPolicy`). Unreadable config means "not pinned", which is
+ * the old behaviour.
+ */
+async function isAutoPublishPinned(
+  sandbox: SandboxHandle,
+  workspaceDir: string,
+  chatBranch: string,
+): Promise<boolean> {
+  try {
+    const pinned = (
+      await execGitCommand(
+        sandbox,
+        `cd ${workspaceDir} && (git config --get ${quote([AUTO_PUBLISH_BRANCH_GIT_CONFIG])} || true)`,
+        10,
+      )
+    ).trim();
+    return pinned === chatBranch;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pushes the current branch to origin with retry logic.
  *
  * Auth comes from the eva git credential helper installed at sandbox
@@ -1483,6 +1511,14 @@ export async function pushBranchToOrigin(
       )
     ).trim();
     if (isChatSideBranch(currentBranch, branchName)) {
+      if (await isAutoPublishPinned(sandbox, workspaceDir, branchName)) {
+        // The sender's `manualSideBranchPublish` flag: the agent owns its side
+        // branches, and the chip's "Commit & push" publishes them on request.
+        logGit(
+          `pushBranchToOrigin: sandbox is on side branch ${currentBranch}; left unpublished by the branch policy (${details})`,
+        );
+        return { pushed: false, published: false };
+      }
       logGit(
         `pushBranchToOrigin: sandbox is on side branch ${currentBranch}; publishing it instead (${details})`,
       );
@@ -1499,6 +1535,76 @@ export async function pushBranchToOrigin(
       workspaceDir,
     });
   });
+}
+
+/**
+ * Pins turn-end auto-publish to `pinnedBranch`, or unpins it (null). Read by
+ * the callback's `persistTurnWork` and by `pushBranchToOrigin`, so both
+ * publish paths follow one per-turn setting.
+ */
+export async function writeAutoPublishPolicy(
+  sandbox: SandboxHandle,
+  pinnedBranch: string | null,
+): Promise<void> {
+  const key = quote([AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
+  const command =
+    pinnedBranch === null
+      ? `git config --unset ${key} || true`
+      : `git config ${key} ${quote([pinnedBranch])}`;
+  await execGitCommand(sandbox, `cd ${workspaceDirShell()} && ${command}`, 10);
+}
+
+/**
+ * Commits any uncommitted work on the checked-out branch and pushes it. The
+ * user asked for it ("Commit & push" on the branch chip), so a side branch is
+ * published too, whatever the auto-publish policy says. Eva-owned branches
+ * only: this never pushes main or a base branch.
+ */
+export async function commitAndPushCheckedOutBranch(
+  sandbox: SandboxHandle,
+  owner: string,
+  name: string,
+): Promise<{
+  branch: string;
+  sync: { uncommittedFiles: number; unpushedCommits: number };
+}> {
+  const workspaceDir = workspaceDirShell();
+  const branch = (
+    await execGitCommand(sandbox, `cd ${workspaceDir} && git branch --show-current`, 10)
+  ).trim();
+  if (!isEvaOwnedBranch(branch)) {
+    throw new Error(
+      branch === ""
+        ? "The sandbox is on a detached HEAD. Check out a branch first."
+        : `Eva only pushes eva/ branches. The sandbox is on ${branch}.`,
+    );
+  }
+  const pathspecs = quote(["--", ".", ...COMMIT_EXCLUDE_PATHSPECS]);
+  await execGitCommand(
+    sandbox,
+    `cd ${workspaceDir} && git add -A ${pathspecs} && (git diff --cached --quiet || git commit -q -m ${quote(["task: commit work from the sandbox"])})`,
+    30,
+  );
+  await pushBranchToOrigin(sandbox, owner, name, branch, {
+    timeoutSeconds: 90,
+    retryAttempts: 3,
+  });
+  const [uncommitted = "", unpushed = ""] = (
+    await execGitCommand(
+      sandbox,
+      `cd ${workspaceDir} && echo "$(git status --porcelain ${pathspecs} | wc -l)|$(git rev-list --count HEAD --not --remotes=origin)"`,
+      15,
+    )
+  )
+    .trim()
+    .split("|");
+  return {
+    branch,
+    sync: {
+      uncommittedFiles: Number(uncommitted) || 0,
+      unpushedCommits: Number(unpushed) || 0,
+    },
+  };
 }
 
 /** Syncs `branchName` with origin and pushes it; the sandbox must be on it. */

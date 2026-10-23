@@ -459,6 +459,12 @@ export const sessionExecuteWorkflow = workflow.define({
       turnId: args.turnId,
       sandboxId,
     });
+    await step.runAction(internal.sandbox.applyBranchPublishPolicy, {
+      sandboxId,
+      repoId: data.repoId,
+      userId: args.userId,
+      branchName: data.branchName ?? `eva/session-${sessionId}`,
+    });
     await step.runMutation(internal.sessionWorkflow.clearSessionClosedStatus, {
       sessionId,
     });
