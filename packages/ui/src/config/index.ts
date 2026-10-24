@@ -2,6 +2,7 @@
 // vvedantb component, so they render eva's classes and defaults.
 import type { UiConfig } from "@vvedantb/ui";
 import { aiactivityConfig } from "./aiactivity";
+import { aichatConfig } from "./aichat";
 import { evaCn } from "./cn";
 import { controlsConfig } from "./controls";
 import { foundationsConfig } from "./foundations";
@@ -15,4 +16,5 @@ export const evaUiConfig: UiConfig = {
   ...overlaysConfig,
   ...aiactivityConfig,
   ...kiboMarkdownConfig,
+  ...aichatConfig,
 };
