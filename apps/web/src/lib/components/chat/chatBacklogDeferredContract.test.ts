@@ -72,6 +72,9 @@ describe("a long transcript commits its backlog off the first paint", () => {
     expect(chatBody).toMatch(
       /backlogReady(?: &&[^?]+)? \?\s*\(?\s*<ChatJumpRail/,
     );
+    // Older turns outside the render window are revealed, then scrolled to.
+    expect(chatBody).toContain("onRevealMessage={revealMessage}");
+    expect(chatBody).toContain("renderedFromId={windowFirstId}");
   });
 
   test("turn checkpoint dialogs are built on first open", () => {

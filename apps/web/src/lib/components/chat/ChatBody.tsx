@@ -1,7 +1,9 @@
 import {
+  ChatJumpRail,
   Conversation,
   ConversationContent,
   ConversationScrollButton,
+  buildChatJumpRailTicks,
   tokenTransition,
 } from "@vvedantb/ui";
 import {
@@ -18,7 +20,6 @@ import {
   type TranscriptScrollAnchor,
 } from "@/lib/components/chat/_components/ChatEarlierTurnsLoader";
 import { useSeenOnce } from "@/lib/components/chat/useSeenOnce";
-import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
   ChatComposer,
   type ChatModelPicker,
@@ -431,6 +432,16 @@ function ChatBodyInner({
   // on the loading spinner and then commit the whole backlog in the render
   // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+  // Keyed on `displayMessages`, which keeps its identity while a turn streams,
+  // so the rail's observer is not rebuilt on every token.
+  const jumpRailTicks = buildChatJumpRailTicks(
+    displayMessages.map((message) => ({
+      id: message._id,
+      role: message.role,
+      content: message.content,
+      isSystemAlert: message.isSystemAlert,
+    })),
+  );
 
   // Streamed prose and the tool timeline arrive in the same Convex patch, but
   // they cost wildly different amounts to render: the prose grows by a few
@@ -1003,9 +1014,10 @@ function ChatBodyInner({
             and never retry. */}
         {backlogReady && !hideJumpRail ? (
           <ChatJumpRail
-            messages={displayMessages}
+            messages={jumpRailTicks}
             renderedFromId={windowFirstId}
             onRevealMessage={revealMessage}
+            formatPreview={tokenizedToDisplayText}
           />
         ) : null}
         {isArchived ? null : (
