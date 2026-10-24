@@ -608,6 +608,16 @@ const schema = defineSchema({
     registeredAt: v.number(),
   }).index("by_clientId", ["clientId"]),
 
+  // Unused after local Clerk JWT MCP verify. Kept until drain migration
+  // dataMigrations:drainMcpTokenCache empties it; a follow-up PR removes the table.
+  mcpTokenCache: defineTable({
+    tokenHash: v.string(),
+    clerkUserId: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_expires", ["expiresAt"]),
+
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])
     .index("by_secret", ["secret"]),

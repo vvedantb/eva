@@ -314,3 +314,11 @@ export const backfillRunPullRequests = dataMigrations.define({
     return { prUrl: undefined };
   },
 });
+
+/** Deletes every mcpTokenCache row. Auth no longer writes the cache. */
+export const drainMcpTokenCache = dataMigrations.define({
+  table: "mcpTokenCache",
+  migrateOne: async (ctx, row) => {
+    await ctx.db.delete(row._id);
+  },
+});

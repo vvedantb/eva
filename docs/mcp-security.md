@@ -62,4 +62,4 @@ Tools that put user input into Convex query code (`get_document`, `count_table`)
 ## Known Limitations
 
 - **JWT revocation**: A Clerk JWT stays valid until it expires, because Eva checks it locally and does not call Clerk.
-- **Unused tables**: `mcpAuthCodes` and `mcpClientRegistrations` stay in the schema until a drain migration removes them. `mcpTokenCache` was removed from the schema; old rows may remain in prod, orphaned.
+- **Unused tables**: `mcpAuthCodes` and `mcpClientRegistrations` stay in the schema until a drain migration removes them. `mcpTokenCache` also stays until `dataMigrations:drainMcpTokenCache` empties it. A follow-up PR then removes the table.
