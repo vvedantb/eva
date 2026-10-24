@@ -6,15 +6,11 @@ import {
   createMcpHttpHandler,
   createProtectedResourceMetadata,
 } from "@vvedantb/server";
-import { authenticateMcpToken, type McpPrincipal } from "./authenticate";
-
-// Eva reads the Clerk issuer from CLERK_JWT_ISSUER_DOMAIN, with the package
-// default as fallback.
-const clerkIssuer = {
-  name: "CLERK_JWT_ISSUER_DOMAIN",
-  fallback: "CLERK_FRONTEND_API_URL",
-  fallbackMode: "prefer-primary" as const,
-};
+import {
+  authenticateMcpToken,
+  clerkIssuer,
+  type McpPrincipal,
+} from "./authenticate";
 
 // Clerk is the OAuth authorization server. These routes only point clients at it.
 export const oauthMetadata = httpAction(

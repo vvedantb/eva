@@ -1,7 +1,15 @@
+import { authenticateClerkBearer, readEnvUrl } from "@vvedantb/server";
 import { z } from "zod";
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
-import { authenticateWithTokenCache } from "./tokenCache";
+
+// Eva reads the Clerk issuer from CLERK_JWT_ISSUER_DOMAIN, with the package
+// default as fallback. The metadata routes and the JWT check share it.
+export const clerkIssuer = {
+  name: "CLERK_JWT_ISSUER_DOMAIN",
+  fallback: "CLERK_FRONTEND_API_URL",
+  fallbackMode: "prefer-primary" as const,
+};
 
 /** Optional fields are set only by sandbox (`mcp-internal`) tokens. */
 export type McpPrincipal = {
@@ -39,37 +47,29 @@ export function isInternalToken(token: string): boolean {
   }
 }
 
-type AuthenticateDeps = {
-  token: string;
-  verify: (token: string) => Promise<McpPrincipal | null>;
-  cached: (
-    token: string,
-    verify: (token: string) => Promise<McpPrincipal | null>,
-  ) => Promise<McpPrincipal | null>;
-};
-
 /**
- * Sandbox tokens skip the cache: it stores only `clerkUserId`, so a hit would
- * drop the repo, entity and chat scope. Clerk tokens go through the cache.
+ * Sandbox tokens are HS256 JWTs. The Clerk JWT check would reject them, so
+ * they go to the Node action first. That keeps their repo, entity and chat
+ * scope. Clerk access-token JWTs (`at+jwt`) are verified locally. Opaque
+ * tokens and session JWTs use the Node `verifyAccessToken` fallback.
  */
-export function authenticateWith({
-  token,
-  verify,
-  cached,
-}: AuthenticateDeps): Promise<McpPrincipal | null> {
-  return isInternalToken(token) ? verify(token) : cached(token, verify);
-}
-
 export function authenticateMcpToken(
-  ctx: Pick<ActionCtx, "runQuery" | "runMutation" | "runAction">,
+  ctx: Pick<ActionCtx, "runAction">,
   token: string,
 ): Promise<McpPrincipal | null> {
-  return authenticateWith({
+  const verifyNode = (value: string) =>
+    ctx.runAction(internal.mcp.nodeActions.verifyAccessToken, { token: value });
+  if (isInternalToken(token)) return verifyNode(token);
+  return authenticateClerkBearer({
     token,
-    verify: (uncached) =>
-      ctx.runAction(internal.mcp.nodeActions.verifyAccessToken, {
-        token: uncached,
-      }),
-    cached: (value, verify) => authenticateWithTokenCache(ctx, value, verify),
+    issuer: readEnvUrl(clerkIssuer),
+    verifyFallback: verifyNode,
+    onReject: (r) =>
+      console.error("[MCP][authenticateClerkBearer] rejected:", r.kind),
+    onError: (e) =>
+      console.error(
+        "[MCP][authenticateClerkBearer] threw:",
+        e instanceof Error ? e.message : e,
+      ),
   });
 }

@@ -84,13 +84,6 @@ crons.interval(
   {},
 );
 
-crons.interval(
-  "mcp token cache purge",
-  { hours: 1 },
-  internal.mcp.tokenCache.purgeExpired,
-  {},
-);
-
 // Safety net: delete sandboxes for archived sessions / done|cancelled tasks
 // whose 48h grace has elapsed (or never got a grace schedule).
 crons.cron(

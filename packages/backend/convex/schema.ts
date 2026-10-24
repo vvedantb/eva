@@ -608,7 +608,8 @@ const schema = defineSchema({
     registeredAt: v.number(),
   }).index("by_clientId", ["clientId"]),
 
-  // Verified MCP bearer tokens (SHA-256 hash only). Functions in `mcp/tokenCache.ts`.
+  // Unused after local Clerk JWT MCP verify. Kept until drain migration
+  // dataMigrations:drainMcpTokenCache empties it; a follow-up PR removes the table.
   mcpTokenCache: defineTable({
     tokenHash: v.string(),
     clerkUserId: v.string(),
