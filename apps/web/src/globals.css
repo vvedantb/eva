@@ -2,12 +2,18 @@
 @import "shadow-plugin";
 @import "../../../packages/ui/src/markdown/markdown.css";
 @import "@vvedantb/ui/tokens/css/nav-icons.css";
+/* vvedantb components read their colour names (`surface-*`, `field-*`,
+ * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
+ * shadcn `R G B` variables below; it never redefines them. */
+@import "@vvedantb/ui/tokens/css/compat-shadcn-rgb.css";
 
 @config '../tailwind.config.js';
 
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
  * inside its own dist, which the content globs never reach. */
 @source "../../../packages/ui/node_modules/streamdown/dist";
+@source "../node_modules/@vvedantb/ui/src";
+@source "../node_modules/@vvedantb/ui/shell/src";
 
 /* v4 changed the default border colour to `currentcolor`. The upgrade codemod
  * adds a gray-200 compatibility shim here; it is not needed, because the base
