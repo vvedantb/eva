@@ -309,6 +309,5 @@
   "apps/web/src/routes/dev/_components/ui-gallery/KiboSection.tsx :: text-white-black",
   "apps/web/src/routes/dev/_components/ui-gallery/MenuSections.tsx :: raw-radius",
   "apps/web/src/routes/dev/feature-previews.tsx :: raw-button",
-  "apps/web/src/routes/dev/feature-previews.tsx :: raw-radius",
-  "apps/web/src/routes/mcp/oauth/authorize.tsx :: raw-radius"
+  "apps/web/src/routes/dev/feature-previews.tsx :: raw-radius"
 ]

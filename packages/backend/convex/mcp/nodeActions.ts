@@ -6,6 +6,10 @@ import { createClerkClient } from "@clerk/backend";
 import { jwtVerify, SignJWT, importJWK } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
+import {
+  consoleClerkVerifyLogger,
+  verifyClerkAccessToken,
+} from "@vvedantb/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {
@@ -42,12 +46,6 @@ import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 // Environment Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getJwtSecret(): string {
-  const secret = process.env.MCP_JWT_SECRET;
-  if (!secret) throw new Error("MCP_JWT_SECRET is required");
-  return secret;
-}
-
 function getClerkSecretKey(): string {
   const key = process.env.CLERK_SECRET_KEY;
   if (!key) throw new Error("CLERK_SECRET_KEY is required");
@@ -57,21 +55,6 @@ function getClerkSecretKey(): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
 // ─────────────────────────────────────────────────────────────────────────────
-
-const refreshTokenClaims = z.object({
-  sub: z.string(),
-  type: z.literal("refresh"),
-  clientId: z.string(),
-  iss: z.literal("eva"),
-  aud: z.literal("mcp-oauth"),
-});
-
-const oauthTokenClaims = z.object({
-  sub: z.string(),
-  clientId: z.string(),
-  iss: z.literal("eva"),
-  aud: z.literal("mcp-oauth"),
-});
 
 const internalTokenClaims = z.object({
   sub: z.string(),
@@ -89,120 +72,43 @@ const mcpEntityKindValidator = v.union(
   v.literal("project"),
 );
 
-type OauthTokens = {
-  access_token: string;
-  token_type: "Bearer";
-  expires_in: number;
-  scope: string;
-  refresh_token: string;
-};
-
-type RefreshResult =
-  | { success: true; tokens: OauthTokens }
-  | { success: false; error: string };
-
-function refreshFailure(error: string): RefreshResult {
-  return { success: false, error };
-}
-
-function refreshSuccess(tokens: OauthTokens): RefreshResult {
-  return { success: true, tokens };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Actions
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function createOauthTokens(
-  clerkUserId: string,
-  clientId: string,
-  secret: Uint8Array,
-): Promise<OauthTokens> {
-  const accessToken = await new SignJWT({ sub: clerkUserId, clientId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("eva")
-    .setAudience("mcp-oauth")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(secret);
-
-  const refreshToken = await new SignJWT({
-    sub: clerkUserId,
-    clientId,
-    type: "refresh",
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("eva")
-    .setAudience("mcp-oauth")
-    .setExpirationTime("30d")
-    .setIssuedAt()
-    .sign(secret);
-
-  return {
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: 3600,
-    scope: "claudeai",
-    refresh_token: refreshToken,
-  };
-}
-
-export const issueTokens = internalAction({
-  args: { clerkUserId: v.string(), clientId: v.string() },
-  returns: v.object({
-    access_token: v.string(),
-    token_type: v.literal("Bearer"),
-    expires_in: v.number(),
-    scope: v.string(),
-    refresh_token: v.string(),
-  }),
-  handler: async (_ctx, { clerkUserId, clientId }) => {
-    const secret = new TextEncoder().encode(getJwtSecret());
-    return await createOauthTokens(clerkUserId, clientId, secret);
-  },
-});
-
-export const refreshToken = internalAction({
-  args: { refreshToken: v.string(), clientId: v.string() },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      tokens: v.object({
-        access_token: v.string(),
-        token_type: v.literal("Bearer"),
-        expires_in: v.number(),
-        scope: v.string(),
-        refresh_token: v.string(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      error: v.string(),
-    }),
-  ),
-  handler: async (_ctx, { refreshToken, clientId }) => {
-    try {
-      const secret = new TextEncoder().encode(getJwtSecret());
-      const { payload } = await jwtVerify(refreshToken, secret, {
-        issuer: "eva",
-        audience: "mcp-oauth",
-      });
-
-      const claims = refreshTokenClaims.safeParse(payload);
-      if (!claims.success || claims.data.clientId !== clientId) {
-        return refreshFailure("Invalid refresh token");
-      }
-
-      const clerk = createClerkClient({ secretKey: getClerkSecretKey() });
-      await clerk.users.getUser(claims.data.sub);
-      const tokens = await createOauthTokens(claims.data.sub, clientId, secret);
-
-      return refreshSuccess(tokens);
-    } catch {
-      return refreshFailure("Expired or invalid refresh token");
+/**
+ * Sandbox tokens: HS256, `aud: "mcp-internal"`, signed with
+ * `MCP_INTERNAL_SECRET`. Carry the repo, entity and chat scope.
+ */
+async function verifyInternalToken(token: string) {
+  const internalSecret = process.env.MCP_INTERNAL_SECRET;
+  if (!internalSecret) return null;
+  try {
+    const secret = new TextEncoder().encode(internalSecret);
+    const { payload } = await jwtVerify(token, secret);
+    const claims = internalTokenClaims.safeParse(payload);
+    if (!claims.success) {
+      console.error("[MCP][verifyAccessToken] internal token payload invalid");
+      return null;
     }
-  },
-});
+    return {
+      clerkUserId: claims.data.sub,
+      scopedRepoId: claims.data.repoId,
+      ...(claims.data.entityId !== undefined
+        ? { entityId: claims.data.entityId }
+        : {}),
+      ...(claims.data.entityKind !== undefined
+        ? { entityKind: claims.data.entityKind }
+        : {}),
+      ...(claims.data.chatId !== undefined
+        ? { chatId: claims.data.chatId }
+        : {}),
+    };
+  } catch {
+    // Not a valid sandbox token. The caller tries Clerk next.
+    return null;
+  }
+}
 
 export const verifyAccessToken = internalAction({
   args: { token: v.string() },
@@ -217,83 +123,20 @@ export const verifyAccessToken = internalAction({
     v.null(),
   ),
   handler: async (_ctx, { token }) => {
-    // Try OAuth token first
-    try {
-      const secret = new TextEncoder().encode(getJwtSecret());
-      const { payload } = await jwtVerify(token, secret, {
-        issuer: "eva",
-        audience: "mcp-oauth",
-      });
+    const sandbox = await verifyInternalToken(token);
+    if (sandbox) return sandbox;
 
-      const claims = oauthTokenClaims.safeParse(payload);
-      if (claims.success) {
-        // Best-effort Clerk lookup — agent/test users may not exist in Clerk but
-        // a verified JWT sub is still authoritative for MCP auth.
-        try {
-          const clerk = createClerkClient({ secretKey: getClerkSecretKey() });
-          await clerk.users.getUser(claims.data.sub);
-        } catch (err) {
-          console.error(
-            "[MCP][verifyAccessToken] Clerk getUser failed (using JWT sub):",
-            err instanceof Error ? err.message : err,
-          );
-          return null;
-        }
-        // Same shape as internal tokens so callers can read optional fields
-        // without narrowing (OAuth tokens just leave them unset).
-        return {
-          clerkUserId: claims.data.sub,
-          scopedRepoId: undefined,
-          entityId: undefined,
-          entityKind: undefined,
-          chatId: undefined,
-        };
-      }
-      // OAuth payload missing sub — fall through to internal token
-    } catch {
-      // Not an OAuth token — fall through to internal token
-    }
-
-    // Try internal token (scoped repo access)
-    try {
-      const internalSecret = process.env.MCP_INTERNAL_SECRET;
-      if (!internalSecret) {
-        console.error("[MCP][verifyAccessToken] MCP_INTERNAL_SECRET not set");
-        return null;
-      }
-
-      const secret = new TextEncoder().encode(internalSecret);
-      const { payload } = await jwtVerify(token, secret);
-
-      // Validate internal token structure
-      const claims = internalTokenClaims.safeParse(payload);
-      if (!claims.success) {
-        console.error(
-          "[MCP][verifyAccessToken] internal token payload invalid",
-        );
-        return null;
-      }
-
-      return {
-        clerkUserId: claims.data.sub,
-        scopedRepoId: claims.data.repoId,
-        ...(claims.data.entityId !== undefined
-          ? { entityId: claims.data.entityId }
-          : {}),
-        ...(claims.data.entityKind !== undefined
-          ? { entityKind: claims.data.entityKind }
-          : {}),
-        ...(claims.data.chatId !== undefined
-          ? { chatId: claims.data.chatId }
-          : {}),
-      };
-    } catch (err) {
-      console.error(
-        "[MCP][verifyAccessToken] all verification failed:",
-        err instanceof Error ? err.message : err,
-      );
-      return null;
-    }
+    // Clerk OAuth access token (or session token). Needs only the secret key,
+    // so the client is built here instead of with `getClerkClient`.
+    const verified = await verifyClerkAccessToken(
+      () => createClerkClient({ secretKey: getClerkSecretKey() }),
+      token,
+      {
+        acceptsToken: ["oauth_token", "session_token"],
+        ...consoleClerkVerifyLogger,
+      },
+    );
+    return verified ? { clerkUserId: verified.userId } : null;
   },
 });
 

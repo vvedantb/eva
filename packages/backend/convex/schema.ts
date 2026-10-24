@@ -589,6 +589,7 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
+  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
   mcpAuthCodes: defineTable({
     code: v.string(),
     clerkUserId: v.string(),
@@ -599,12 +600,22 @@ const schema = defineSchema({
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
 
+  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
   mcpClientRegistrations: defineTable({
     clientId: v.string(),
     clientSecret: v.optional(v.string()),
     redirectUris: v.array(v.string()),
     registeredAt: v.number(),
   }).index("by_clientId", ["clientId"]),
+
+  // Verified MCP bearer tokens (SHA-256 hash only). Functions in `mcp/tokenCache.ts`.
+  mcpTokenCache: defineTable({
+    tokenHash: v.string(),
+    clerkUserId: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_token_hash", ["tokenHash"])
+    .index("by_expires", ["expiresAt"]),
 
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])
