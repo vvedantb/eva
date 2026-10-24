@@ -54,13 +54,14 @@ Tools that put user input into Convex query code (`get_document`, `count_table`)
 
 ## Environment Variables (Convex)
 
-| Variable                  | Purpose                                                                  |
-| ------------------------- | ------------------------------------------------------------------------ |
-| `CLERK_JWT_ISSUER_DOMAIN` | Clerk issuer for OAuth metadata (falls back to `CLERK_FRONTEND_API_URL`) |
-| `CLERK_SECRET_KEY`        | Clerk token verification                                                 |
-| `MCP_INTERNAL_SECRET`     | Sandbox token signing and checking                                       |
-| `MCP_BOOTSTRAP_SECRET`    | Bootstrap endpoint auth                                                  |
-| `WEB_APP_URL`             | `resource_documentation` in the protected resource metadata              |
+| Variable                  | Purpose                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `CLERK_JWT_ISSUER_DOMAIN` | Clerk issuer for OAuth metadata (falls back to `CLERK_FRONTEND_API_URL`)      |
+| `CLERK_SECRET_KEY`        | Clerk token verification                                                      |
+| `CLERK_PUBLISHABLE_KEY`   | Clerk token verification (`authenticateRequest` needs it with the secret key) |
+| `MCP_INTERNAL_SECRET`     | Sandbox token signing and checking                                            |
+| `MCP_BOOTSTRAP_SECRET`    | Bootstrap endpoint auth                                                       |
+| `WEB_APP_URL`             | `resource_documentation` in the protected resource metadata                   |
 
 `MCP_JWT_SECRET` is no longer read. Remove it from Convex env when convenient.
 
