@@ -165,7 +165,7 @@ npx convex env set VAR value
 - `SANDBOX_JWT_PRIVATE_KEY`, `SANDBOX_JWT_JWKS` — sandbox authentication
 - `PREVIEW_GRANT_PRIVATE_KEY` — short-lived preview URLs
 - `MCP_BOOTSTRAP_SECRET`, `MCP_INTERNAL_SECRET` — MCP
-- `CLERK_SECRET_KEY`, `CLERK_JWT_ISSUER_DOMAIN` — MCP sign-in (Clerk OAuth)
+- `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_ISSUER_DOMAIN` — MCP sign-in (Clerk OAuth)
 - `SENDGRID_API_KEY` — email
 - `EMAIL_ENV` — email routing
 - `EXTENSION_ADMIN_KEY`, `EXTENSION_ID` — Chrome extension updates

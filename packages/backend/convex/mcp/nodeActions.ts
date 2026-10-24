@@ -8,6 +8,7 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
   consoleClerkVerifyLogger,
+  getClerkClient,
   verifyClerkAccessToken,
 } from "@vvedantb/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -41,16 +42,6 @@ import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { formatConvexQueryError } from "./convexQueryLimits";
 import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Environment Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getClerkSecretKey(): string {
-  const key = process.env.CLERK_SECRET_KEY;
-  if (!key) throw new Error("CLERK_SECRET_KEY is required");
-  return key;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -126,10 +117,12 @@ export const verifyAccessToken = internalAction({
     const sandbox = await verifyInternalToken(token);
     if (sandbox) return sandbox;
 
-    // Clerk OAuth access token (or session token). Needs only the secret key,
-    // so the client is built here instead of with `getClerkClient`.
+    // Clerk OAuth access token (or session token). `getClerkClient` reads
+    // CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY. `authenticateRequest` needs
+    // both. A missing key throws inside `verifyClerkAccessToken`, which logs it
+    // and returns null.
     const verified = await verifyClerkAccessToken(
-      () => createClerkClient({ secretKey: getClerkSecretKey() }),
+      () => getClerkClient(createClerkClient),
       token,
       {
         acceptsToken: ["oauth_token", "session_token"],

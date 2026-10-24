@@ -29,7 +29,7 @@ type FakeState =
   | { isAuthenticated: false; reason: string | null; message: string | null };
 
 const clerk = vi.hoisted(() => {
-  const created: Array<{ secretKey: string }> = [];
+  const created: Array<{ secretKey: string; publishableKey: string }> = [];
   const acceptsToken: string[][] = [];
   const state: { next: () => Promise<FakeState> } = {
     next: () => Promise.reject(new Error("no fake state set")),
@@ -38,7 +38,10 @@ const clerk = vi.hoisted(() => {
 });
 
 vi.mock("@clerk/backend", () => ({
-  createClerkClient: (options: { secretKey: string }) => {
+  createClerkClient: (options: {
+    secretKey: string;
+    publishableKey: string;
+  }) => {
     clerk.created.push(options);
     return {
       authenticateRequest: (
@@ -81,6 +84,7 @@ beforeEach(() => {
   clerk.created.length = 0;
   clerk.acceptsToken.length = 0;
   vi.stubEnv("CLERK_SECRET_KEY", "sk_test_fake");
+  vi.stubEnv("CLERK_PUBLISHABLE_KEY", "pk_test_fake");
   vi.stubEnv("MCP_INTERNAL_SECRET", INTERNAL_SECRET);
   errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -100,8 +104,9 @@ describe("verifyAccessToken: Clerk tokens", () => {
         userId: "user_abc",
       });
       expect(await verify("opaque_token")).toEqual({ clerkUserId: "user_abc" });
-      // Needs only CLERK_SECRET_KEY, not CLERK_PUBLISHABLE_KEY.
-      expect(clerk.created).toEqual([{ secretKey: "sk_test_fake" }]);
+      expect(clerk.created).toEqual([
+        { secretKey: "sk_test_fake", publishableKey: "pk_test_fake" },
+      ]);
       expect(clerk.acceptsToken).toEqual([["oauth_token", "session_token"]]);
     },
     TIMEOUT_MS,
@@ -150,6 +155,25 @@ describe("verifyAccessToken: Clerk tokens", () => {
       vi.stubEnv("CLERK_SECRET_KEY", "");
       expect(await verify("opaque_token")).toBeNull();
       expect(clerk.created).toEqual([]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "returns null and logs when CLERK_PUBLISHABLE_KEY is missing",
+    async () => {
+      vi.stubEnv("CLERK_PUBLISHABLE_KEY", "");
+      clerk.state.next = signedIn({
+        isAuthenticated: true,
+        tokenType: "oauth_token",
+        userId: "user_abc",
+      });
+      expect(await verify("opaque_token")).toBeNull();
+      expect(clerk.created).toEqual([]);
+      expect(errors).toHaveBeenCalledWith(
+        "[MCP][verifyAccessToken] threw:",
+        expect.stringContaining("CLERK_PUBLISHABLE_KEY"),
+      );
     },
     TIMEOUT_MS,
   );
