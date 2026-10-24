@@ -1,6 +1,6 @@
 ---
 name: principle-prove-it-works
-description: "Apply after completing a task, before declaring done. Verify against the real artifact (run the feature, read the actual value, inspect the diff), not a proxy, self-report, or 'it compiles.'"
+description: "Use before you say done, fixed or works, and before you answer a review comment. Verify against the real artifact (run the feature, read the actual value, inspect the diff), not a proxy, self-report, or 'it compiles.' For UI changes, open the change in the running app with agent-browser and look at it."
 ---
 
 # Prove It Works
@@ -21,6 +21,8 @@ Code and features:
 2. Run it and exercise the actual feature path
 3. Check the full chain: does data flow from input to output?
 4. For integrations, test the full communication path end-to-end
+5. For UI changes, open the exact screen in the running app (agent-browser) and compare it to the request or design before you say it is fixed. If you cannot reach the screen, say so; do not report it done.
+6. For review findings (human or bot), reproduce the defect before you fix it, and check the fix the same way.
 
 Delegation: trust artifacts, not self-reports.
 When verifying delegated work, inspect the actual output artifact (git diff, file contents, runtime behavior), not the delegate's summary. Agents report what they intended, not always what happened.

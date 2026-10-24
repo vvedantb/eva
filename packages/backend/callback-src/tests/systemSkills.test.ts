@@ -47,7 +47,7 @@ test("parseSystemSkillsFile drops entries that cannot be a directory name", () =
 
 test("renderExcludeContent adds a sentinel block to a fresh file", () => {
   expect(renderExcludeContent("", ["eva-capture"])).toBe(
-    "# >>> eva-system-skills >>>\n/.agents/skills/eva-capture/\n# <<< eva-system-skills <<<\n",
+    "# >>> eva-system-skills >>>\n/.agents/skills/eva-capture/\n/.claude/skills/eva-capture/\n# <<< eva-system-skills <<<\n",
   );
 });
 
@@ -55,7 +55,7 @@ test("renderExcludeContent replaces its own block and keeps user lines", () => {
   const existing =
     "*.log\n\n# >>> eva-system-skills >>>\n/.agents/skills/eva-audit/\n# <<< eva-system-skills <<<\n";
   expect(renderExcludeContent(existing, ["eva-capture"])).toBe(
-    "*.log\n# >>> eva-system-skills >>>\n/.agents/skills/eva-capture/\n# <<< eva-system-skills <<<\n",
+    "*.log\n# >>> eva-system-skills >>>\n/.agents/skills/eva-capture/\n/.claude/skills/eva-capture/\n# <<< eva-system-skills <<<\n",
   );
 });
 
