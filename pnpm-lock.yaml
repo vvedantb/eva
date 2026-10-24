@@ -126,8 +126,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: github:vvedantb/packages#270f87f3e78884b71ad7debd9a2732fb63830234&path:packages/ui
-        version: https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(f4b241521966f7d0f94b7b0b8a3bf5b9)
+        specifier: ^0.18.0
+        version: 0.18.0(f4b241521966f7d0f94b7b0b8a3bf5b9)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -352,8 +352,8 @@ importers:
         specifier: ^0.7.1
         version: 0.7.1(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       '@vvedantb/ui':
-        specifier: github:vvedantb/packages#270f87f3e78884b71ad7debd9a2732fb63830234&path:packages/ui
-        version: https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(cf81e58ba96b66ea4f7efff26fcf2d83)
+        specifier: ^0.18.0
+        version: 0.18.0(cf81e58ba96b66ea4f7efff26fcf2d83)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -685,8 +685,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: github:vvedantb/packages#270f87f3e78884b71ad7debd9a2732fb63830234&path:packages/ui
-        version: https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(5683f87a26c4d8da9aa4ca6f08bbd0de)
+        specifier: ^0.18.0
+        version: 0.18.0(5683f87a26c4d8da9aa4ca6f08bbd0de)
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
@@ -700,8 +700,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: github:vvedantb/packages#270f87f3e78884b71ad7debd9a2732fb63830234&path:packages/ui
-        version: https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(685a0fe5d13768ffe77fc87a5ac00137)
+        specifier: ^0.18.0
+        version: 0.18.0(685a0fe5d13768ffe77fc87a5ac00137)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6057,9 +6057,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui':
-    resolution: {path: packages/ui, tarball: https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234}
-    version: 0.18.0
+  '@vvedantb/ui@0.18.0':
+    resolution: {integrity: sha512-o0L0nWzxPgegyq4tPPhqvjQsg8iou8MnKAmPvPO/3E1Yo6VvDWLumJBvImsJlB26PWJuMGF3i9kZcSgAi/wfOw==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -15599,7 +15598,7 @@ snapshots:
       zod: 4.4.3
     optional: true
 
-  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(5683f87a26c4d8da9aa4ca6f08bbd0de)':
+  '@vvedantb/ui@0.18.0(5683f87a26c4d8da9aa4ca6f08bbd0de)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15657,7 +15656,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(685a0fe5d13768ffe77fc87a5ac00137)':
+  '@vvedantb/ui@0.18.0(685a0fe5d13768ffe77fc87a5ac00137)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15715,7 +15714,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(cf81e58ba96b66ea4f7efff26fcf2d83)':
+  '@vvedantb/ui@0.18.0(cf81e58ba96b66ea4f7efff26fcf2d83)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15773,7 +15772,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/270f87f3e78884b71ad7debd9a2732fb63830234#path:packages/ui(f4b241521966f7d0f94b7b0b8a3bf5b9)':
+  '@vvedantb/ui@0.18.0(f4b241521966f7d0f94b7b0b8a3bf5b9)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
