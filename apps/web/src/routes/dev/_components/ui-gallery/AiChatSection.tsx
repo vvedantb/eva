@@ -86,7 +86,7 @@ function SampleMessageActions() {
 function ConversationSample() {
   return (
     <Conversation className="h-[420px] w-[36rem] rounded-surface bg-card">
-      <ConversationContent>
+      <ConversationContent className="pt-14">
         {MESSAGES.map((message) => (
           <Message from={message.role} key={message.id}>
             <MessageContent>{message.content}</MessageContent>
