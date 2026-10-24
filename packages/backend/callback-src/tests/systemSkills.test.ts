@@ -1,8 +1,47 @@
-import { expect, test } from "vitest";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { beforeEach, expect, test, vi } from "vitest";
+import type * as callbackConfig from "../config.js";
 import {
   parseSystemSkillsFile,
+  reconcileSystemSkills,
   renderExcludeContent,
 } from "../runtime/systemSkills.js";
+
+// A throwaway dir stands in for the sandbox checkout.
+const workspace = vi.hoisted((): { dir: string } => ({ dir: "" }));
+
+vi.mock("../config.js", async (importOriginal) => {
+  const original = await importOriginal<typeof callbackConfig>();
+  return {
+    ...original,
+    get WORK_DIR() {
+      return workspace.dir;
+    },
+  };
+});
+
+const MARKER = "<!-- eva:system-skill -->";
+
+function skillFile(root: string, name: string): string {
+  return join(workspace.dir, root, name, "SKILL.md");
+}
+
+function writeSkill(root: string, name: string, body: string): void {
+  mkdirSync(join(workspace.dir, root, name), { recursive: true });
+  writeFileSync(skillFile(root, name), body);
+}
+
+beforeEach(() => {
+  workspace.dir = mkdtempSync(join(tmpdir(), "system-skills-"));
+});
 
 test("parseSystemSkillsFile reads the launch payload", () => {
   const parsed = parseSystemSkillsFile(
@@ -64,4 +103,33 @@ test("renderExcludeContent removes the block when nothing is installed", () => {
     "*.log\n# >>> eva-system-skills >>>\n/.agents/skills/eva-capture/\n# <<< eva-system-skills <<<\n";
   expect(renderExcludeContent(existing, [])).toBe("*.log\n");
   expect(renderExcludeContent("", [])).toBe("");
+});
+
+// Regression: stubs only went to `.agents/skills`, which Claude Code never reads.
+test("reconcileSystemSkills writes each stub into both skill roots", () => {
+  const stub = `${MARKER}\n# capture`;
+  reconcileSystemSkills([{ name: "eva-capture", stub }]);
+  expect(readFileSync(skillFile(".agents/skills", "eva-capture"), "utf8")).toBe(stub);
+  expect(readFileSync(skillFile(".claude/skills", "eva-capture"), "utf8")).toBe(stub);
+});
+
+test("reconcileSystemSkills never shadows a user skill in either root", () => {
+  writeSkill(".claude/skills", "eva-capture", "# my own capture");
+  reconcileSystemSkills([{ name: "eva-capture", stub: `${MARKER}\n# capture` }]);
+  expect(readFileSync(skillFile(".claude/skills", "eva-capture"), "utf8")).toBe(
+    "# my own capture",
+  );
+  expect(existsSync(skillFile(".agents/skills", "eva-capture"))).toBe(false);
+});
+
+test("reconcileSystemSkills prunes stale Eva stubs from both roots only", () => {
+  writeSkill(".agents/skills", "eva-audit", `${MARKER}\n# audit`);
+  writeSkill(".claude/skills", "eva-audit", `${MARKER}\n# audit`);
+  writeSkill(".claude/skills", "preflight", "# repo skill");
+  reconcileSystemSkills([]);
+  expect(existsSync(skillFile(".agents/skills", "eva-audit"))).toBe(false);
+  expect(existsSync(skillFile(".claude/skills", "eva-audit"))).toBe(false);
+  expect(readFileSync(skillFile(".claude/skills", "preflight"), "utf8")).toBe(
+    "# repo skill",
+  );
 });
