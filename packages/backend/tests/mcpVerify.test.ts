@@ -54,20 +54,6 @@ vi.mock("@clerk/backend", () => ({
   },
 }));
 
-const bearer = vi.hoisted(() => ({
-  authenticate: vi.fn<
-    (options: { token: string }) => Promise<{ clerkUserId: string } | null>
-  >(),
-}));
-
-vi.mock("@vvedantb/server", async (importOriginal) => {
-  const actual = await importOriginal();
-  if (typeof actual !== "object" || actual === null) {
-    throw new Error("expected @vvedantb/server module object");
-  }
-  return { ...actual, authenticateClerkBearer: bearer.authenticate };
-});
-
 const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const INTERNAL_SECRET = "internal-test-secret-0123456789abcdef";
@@ -262,21 +248,38 @@ describe("authenticateMcpToken", () => {
       internal.mcp.nodeActions.verifyAccessToken,
       { token },
     );
-    expect(bearer.authenticate).not.toHaveBeenCalled();
   });
 
-  test("other tokens go to authenticateClerkBearer", async () => {
-    bearer.authenticate.mockResolvedValueOnce({ clerkUserId: "user_abc" });
-    const runAction = vi.fn();
+  test("opaque tokens use the verifyAccessToken fallback", async () => {
+    const runAction = vi.fn(() => Promise.resolve({ clerkUserId: "user_abc" }));
     expect(await authenticateMcpToken({ runAction }, "opaque_token")).toEqual({
       clerkUserId: "user_abc",
     });
-    expect(bearer.authenticate).toHaveBeenCalledTimes(1);
-    expect(bearer.authenticate.mock.calls[0]?.[0]).toMatchObject({
-      token: "opaque_token",
-      issuer: "https://clerk.test",
+    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(runAction).toHaveBeenCalledWith(
+      internal.mcp.nodeActions.verifyAccessToken,
+      { token: "opaque_token" },
+    );
+  });
+
+  test("Clerk session JWTs use the verifyAccessToken fallback", async () => {
+    const token = await new SignJWT({})
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setSubject("user_session")
+      .setIssuer("https://clerk.test")
+      .setExpirationTime("1h")
+      .sign(new TextEncoder().encode(INTERNAL_SECRET));
+    const runAction = vi.fn(() =>
+      Promise.resolve({ clerkUserId: "user_session" }),
+    );
+    expect(await authenticateMcpToken({ runAction }, token)).toEqual({
+      clerkUserId: "user_session",
     });
-    expect(runAction).not.toHaveBeenCalled();
+    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(runAction).toHaveBeenCalledWith(
+      internal.mcp.nodeActions.verifyAccessToken,
+      { token },
+    );
   });
 });
 

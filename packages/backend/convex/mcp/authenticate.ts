@@ -50,8 +50,8 @@ export function isInternalToken(token: string): boolean {
 /**
  * Sandbox tokens are HS256 JWTs. The Clerk JWT check would reject them, so
  * they go to the Node action first. That keeps their repo, entity and chat
- * scope. Clerk JWTs are verified locally. Opaque Clerk tokens use the Node
- * action.
+ * scope. Clerk access-token JWTs (`at+jwt`) are verified locally. Opaque
+ * tokens and session JWTs use the Node `verifyAccessToken` fallback.
  */
 export function authenticateMcpToken(
   ctx: Pick<ActionCtx, "runAction">,
@@ -63,7 +63,7 @@ export function authenticateMcpToken(
   return authenticateClerkBearer({
     token,
     issuer: readEnvUrl(clerkIssuer),
-    verifyOpaque: verifyNode,
+    verifyFallback: verifyNode,
     onReject: (r) =>
       console.error("[MCP][authenticateClerkBearer] rejected:", r.kind),
     onError: (e) =>
