@@ -16,7 +16,7 @@
 
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
  * inside its own dist, which the content globs never reach. */
-@source "../../../packages/ui/node_modules/streamdown/dist";
+@source "../node_modules/streamdown/dist";
 @source "../node_modules/@vvedantb/ui/src";
 @source "../node_modules/@vvedantb/ui/shell/src";
 
@@ -1243,7 +1243,7 @@ html[data-blur-pid] [data-pii] {
  *  1. --card and --secondary swap lightness between modes (light: card is
  *     lightest; dark: secondary is lightest), so the active pill cannot be
  *     expressed as a single utility — it needs a per-mode value.
- *  2. New utility classes added under packages/ui are not recompiled by the
+ *  2. New utility classes added in eva's UI config are not recompiled by the
  *     running dev server without a full restart; these CSS-variable rules
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
  *     over the list's own bg utility at equal specificity.
@@ -1373,7 +1373,7 @@ html[data-blur-pid] [data-pii] {
 }
 
 /* Brand purple→blue, same as the spinners and the session-row Drive grid.
- * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `brand-colors.ts`. */
+ * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `config/foundations.ts`. */
 .beam-colorful {
   --eva-purple: 139 63 184;
   --eva-blue: 59 125 216;
@@ -1420,7 +1420,7 @@ html[data-blur-pid] [data-pii] {
   transition: transform var(--mq-dur, 0s) linear var(--mq-delay, 400ms);
 }
 
-/* LoadingState (packages/ui) — label shimmer (the pixel grid runs on WAAPI) */
+/* LoadingState (@vvedantb/ui, eva config) — label shimmer (the pixel grid runs on WAAPI) */
 @keyframes shimmer-text {
   0% {
     background-position: 200% 0;
@@ -1433,7 +1433,7 @@ html[data-blur-pid] [data-pii] {
   animation: shimmer-text 1.4s linear infinite;
 }
 
-/* <Shimmer/> (packages/ui) — highlight sweep across text, on the compositor.
+/* <Shimmer/> (@vvedantb/ui, mask mode) — highlight sweep across text, on the compositor.
  * `.shimmer-overlay` clips a copy of the text in the highlight colour;
  * `.shimmer-band` masks that copy to a soft band and translates one way while
  * `.shimmer-copy` inside it translates the other by the same amount, so the

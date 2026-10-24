@@ -1,4 +1,4 @@
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 /** One run of the child thread: the subagent's prose, or the tools it ran. */
 export type SubagentThreadBlock =

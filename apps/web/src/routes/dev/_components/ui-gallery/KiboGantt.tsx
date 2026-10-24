@@ -13,12 +13,15 @@ import {
   GanttSidebarHeader,
   GanttSidebarItem,
   GanttTimeline,
-  type GanttFeature,
-  type GanttStatus,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { GanttFeature, GanttStatus } from "@vvedantb/ui";
 import { GalleryItem } from "./GalleryItem";
 
-const PLANNED: GanttStatus = { id: "planned", name: "Planned", color: "#6b7280" };
+const PLANNED: GanttStatus = {
+  id: "planned",
+  name: "Planned",
+  color: "#6b7280",
+};
 const ACTIVE: GanttStatus = { id: "active", name: "Active", color: "#f59e0b" };
 const DONE: GanttStatus = { id: "done", name: "Done", color: "#10b981" };
 
@@ -69,7 +72,10 @@ const FEATURES = [DESIGN, RUNTIME, BILLING, LAUNCH];
 export function KiboGantt() {
   return (
     <>
-      <GalleryItem label="Gantt timeline (monthly, fixed 2025 dates, no sidebar)" className="w-full">
+      <GalleryItem
+        label="Gantt timeline (monthly, fixed 2025 dates, no sidebar)"
+        className="w-full"
+      >
         <div className="h-[260px] w-[1100px]">
           <GanttProvider range="monthly" zoom={100}>
             <GanttTimeline>
@@ -87,7 +93,10 @@ export function KiboGantt() {
           </GanttProvider>
         </div>
       </GalleryItem>
-      <GalleryItem label="GanttFeatureRow (lanes) + custom bar content" className="w-full">
+      <GalleryItem
+        label="GanttFeatureRow (lanes) + custom bar content"
+        className="w-full"
+      >
         <div className="h-[240px] w-[1100px]">
           <GanttProvider range="quarterly" zoom={100}>
             <GanttTimeline>
@@ -136,7 +145,10 @@ export function KiboGantt() {
                   renderHeaderItem={(index) => <p>{`W${index + 1}`}</p>}
                   isColumnCurrent={(index) => index === 1}
                 />
-                <GanttColumns columns={4} isColumnSecondary={(index) => index % 2 === 1} />
+                <GanttColumns
+                  columns={4}
+                  isColumnSecondary={(index) => index % 2 === 1}
+                />
               </div>
               <div className="flex h-10">
                 <GanttColumn index={0} />

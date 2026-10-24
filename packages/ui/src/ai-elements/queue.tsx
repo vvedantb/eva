@@ -1,3 +1,0 @@
-// Moved to @vvedantb/ui; eva's look comes from EvaUiProvider (src/config).
-export { QueuePanel as Queue, QueueSection, QueueSectionTrigger, QueueSectionLabel, QueueSectionContent, QueuePanelList as QueueList, QueuePanelItem as QueueItem, QueueItemIndicator, QueueItemContent, QueueItemActions, QueueItemAction } from "@vvedantb/ui";
-export type { QueueProps, QueueSectionProps, QueueSectionTriggerProps, QueueSectionLabelProps, QueueSectionContentProps, QueueListProps, QueueItemProps, QueueItemIndicatorProps, QueueItemContentProps, QueueItemActionsProps, QueueItemActionProps } from "@vvedantb/ui";

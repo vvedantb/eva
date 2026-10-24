@@ -5,8 +5,8 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-  motionBase,
-} from "@eva/ui";
+  transitionBase,
+} from "@vvedantb/ui";
 import { IconSparkles } from "@tabler/icons-react";
 import { m, AnimatePresence } from "motion/react";
 import { StreamingActivityDisplay } from "@/lib/components/StreamingActivityDisplay";
@@ -31,7 +31,7 @@ export function SessionSummaryAccordion({
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
-        transition={motionBase}
+        transition={transitionBase}
       >
         <Accordion
           type="single"

@@ -35,8 +35,8 @@ import {
   Toaster,
   Button,
   toast,
-  type StatusTone,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { StatusTone } from "@vvedantb/ui";
 import {
   IconAlertTriangle,
   IconCheck,
@@ -227,10 +227,20 @@ function SpinnerGroup() {
           <BorderBeam active className="rounded-lg">
             <div className="rounded-lg bg-card px-4 py-3 text-sm">mono</div>
           </BorderBeam>
-          <BorderBeam active size="sm" colorVariant="progress" className="rounded-lg">
+          <BorderBeam
+            active
+            size="sm"
+            colorVariant="progress"
+            className="rounded-lg"
+          >
             <div className="rounded-lg bg-card px-4 py-3 text-sm">progress</div>
           </BorderBeam>
-          <BorderBeam active size="lg" colorVariant="colorful" className="rounded-lg">
+          <BorderBeam
+            active
+            size="lg"
+            colorVariant="colorful"
+            className="rounded-lg"
+          >
             <div className="rounded-lg bg-card px-4 py-3 text-sm">colorful</div>
           </BorderBeam>
           <BorderBeam active={false} className="rounded-lg">
@@ -252,7 +262,10 @@ function SurfaceGroup() {
           </Surface>
         </GalleryItem>
       ))}
-      <GalleryItem label="ListRow plain / accent / selected / href" className="w-96">
+      <GalleryItem
+        label="ListRow plain / accent / selected / href"
+        className="w-96"
+      >
         <div className="flex flex-col gap-2">
           <ListRow>
             <span className="text-sm">Plain row</span>

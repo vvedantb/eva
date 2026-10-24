@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { cn } from "@eva/ui";
 import {
   Popover,
   PopoverContent,
@@ -13,8 +14,7 @@ import {
   CommandItem,
   CommandList,
   CircleSpinner,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconGitBranch, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useBranches } from "@/lib/hooks/useBranches";

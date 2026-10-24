@@ -21,12 +21,12 @@ import {
   DialogTrigger,
   Input,
   Label,
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@eva/ui";
+  SideSheet,
+  SideSheetClose,
+  SideSheetContent,
+  SideSheetTitle,
+  SideSheetTrigger,
+} from "@vvedantb/ui";
 import {
   IconFile,
   IconGitBranch,
@@ -84,12 +84,17 @@ export function SheetSection() {
   return (
     <GalleryGroup title="Sheet (left + right open, controlled)">
       <GalleryItem label="SheetTrigger + SheetContent side=left">
-        <Sheet open onOpenChange={noop}>
-          <SheetTrigger asChild>
+        <SideSheet open onOpenChange={noop}>
+          <SideSheetTrigger asChild>
             <Button variant="outline">Open left</Button>
-          </SheetTrigger>
-          <SheetContent className="w-80 p-6" onOpenAutoFocus={skipAutoFocus}>
-            <SheetTitle className="text-base font-semibold">Navigation</SheetTitle>
+          </SideSheetTrigger>
+          <SideSheetContent
+            className="w-80 p-6"
+            onOpenAutoFocus={skipAutoFocus}
+          >
+            <SideSheetTitle className="text-base font-semibold">
+              Navigation
+            </SideSheetTitle>
             <nav className="mt-4 flex flex-col gap-1 text-sm">
               <span className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5">
                 <IconHome className="size-4" /> Home
@@ -101,32 +106,34 @@ export function SheetSection() {
                 <IconSettings className="size-4" /> Settings
               </span>
             </nav>
-          </SheetContent>
-        </Sheet>
+          </SideSheetContent>
+        </SideSheet>
       </GalleryItem>
       <GalleryItem label="SheetContent side=right with SheetClose (modal=false)">
         {/* Non-modal so it renders no second scrim over the left sheet; the
             left sheet's scrim already shows the overlay styling. */}
-        <Sheet open onOpenChange={noop} modal={false}>
-          <SheetTrigger asChild>
+        <SideSheet open onOpenChange={noop} modal={false}>
+          <SideSheetTrigger asChild>
             <Button variant="outline">Open right</Button>
-          </SheetTrigger>
-          <SheetContent
+          </SideSheetTrigger>
+          <SideSheetContent
             side="right"
             className="w-96 p-6"
             onOpenAutoFocus={skipAutoFocus}
           >
-            <SheetTitle className="text-base font-semibold">Details</SheetTitle>
+            <SideSheetTitle className="text-base font-semibold">
+              Details
+            </SideSheetTitle>
             <p className="mt-2 text-sm text-muted-foreground">
               Run 1042 finished in 3m 12s.
             </p>
-            <SheetClose asChild>
+            <SideSheetClose asChild>
               <Button className="mt-6" variant="secondary">
                 Done
               </Button>
-            </SheetClose>
-          </SheetContent>
-        </Sheet>
+            </SideSheetClose>
+          </SideSheetContent>
+        </SideSheet>
       </GalleryItem>
     </GalleryGroup>
   );

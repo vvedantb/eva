@@ -1,5 +1,5 @@
 import { IconArrowRight, IconUsers } from "@tabler/icons-react";
-import { CircleSpinner } from "@eva/ui";
+import { CircleSpinner } from "@vvedantb/ui";
 import {
   formatUtilization,
   maxUtilization,

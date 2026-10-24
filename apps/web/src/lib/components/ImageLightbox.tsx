@@ -12,7 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   projectVelocity,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 export type GalleryImage = { url: string; alt?: string };
 

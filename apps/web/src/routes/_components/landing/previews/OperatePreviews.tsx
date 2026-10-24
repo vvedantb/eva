@@ -1,5 +1,6 @@
 import { IconCheck, IconFileCode, IconFolder } from "@tabler/icons-react";
-import { CircleSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { CircleSpinner } from "@vvedantb/ui";
 import { MockChip, MockDot, MockLabel, MockWindow } from "./MockParts";
 
 const AUTOMATIONS = [

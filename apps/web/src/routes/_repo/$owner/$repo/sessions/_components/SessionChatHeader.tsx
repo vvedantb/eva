@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
 import type { Doc, Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";

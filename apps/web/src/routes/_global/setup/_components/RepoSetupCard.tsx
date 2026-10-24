@@ -1,4 +1,4 @@
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import {
   IconBrandGithub,
   IconCheck,

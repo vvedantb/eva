@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 

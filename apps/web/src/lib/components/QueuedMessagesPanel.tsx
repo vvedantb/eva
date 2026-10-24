@@ -10,13 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
   ProviderIcon,
-  Queue,
-  QueueItem,
+  QueuePanel,
+  QueuePanelItem,
   QueueItemAction,
   QueueItemActions,
   QueueItemContent,
   QueueItemIndicator,
-  QueueList,
+  QueuePanelList,
   QueueSection,
   QueueSectionContent,
   QueueSectionLabel,
@@ -26,9 +26,9 @@ import {
   TooltipContent,
   TooltipTrigger,
   formatModelDisplayLabel,
-  motionBase,
+  transitionBase,
   useDragSensors,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconArrowUp,
@@ -44,11 +44,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 /** `TId` is the row's id: a `queuedMessages` doc, or Manager Ave's held message. */
 interface QueuedMessageItem<TId extends string> {
@@ -172,7 +168,7 @@ function SortableQueuedItem<TId extends string>({
   };
 
   return (
-    <QueueItem
+    <QueuePanelItem
       ref={setNodeRef}
       style={style}
       className={isDragging ? "opacity-50" : undefined}
@@ -200,49 +196,49 @@ function SortableQueuedItem<TId extends string>({
             Steering…
           </span>
         ) : (
-        /* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
+          /* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
             touch by itself; only the tap target still needs growing here. */
-        <QueueItemActions className="items-center max-sm:[&>button]:size-10">
-          {onSteerClick ? (
-            <QueueItemAction
-              aria-label="Steer with queued message"
-              title="Send now and redirect the running agent"
-              className="gap-1 px-1.5 text-xs max-sm:w-auto"
-              onClick={() => onSteerClick(item)}
-            >
-              <IconSteeringWheel size={14} />
-              Steer
-            </QueueItemAction>
-          ) : null}
-          {onEditClick ? (
-            <QueueItemAction
-              aria-label="Edit queued message"
-              onClick={() => onEditClick(item)}
-            >
-              <IconPencil size={14} />
-            </QueueItemAction>
-          ) : null}
-          {onMoveToFront && index > 0 ? (
-            <QueueItemAction
-              aria-label="Move queued message to front"
-              onClick={() => onMoveToFront(item)}
-            >
-              <IconArrowUp size={14} />
-            </QueueItemAction>
-          ) : null}
-          {onDeleteClick ? (
-            <QueueItemAction
-              aria-label="Delete queued message"
-              title={skipConfirmTitle("Delete queued message")}
-              onClick={() => onDeleteClick(item)}
-            >
-              <IconTrash size={14} />
-            </QueueItemAction>
-          ) : null}
-        </QueueItemActions>
+          <QueueItemActions className="items-center max-sm:[&>button]:size-10">
+            {onSteerClick ? (
+              <QueueItemAction
+                aria-label="Steer with queued message"
+                title="Send now and redirect the running agent"
+                className="gap-1 px-1.5 text-xs max-sm:w-auto"
+                onClick={() => onSteerClick(item)}
+              >
+                <IconSteeringWheel size={14} />
+                Steer
+              </QueueItemAction>
+            ) : null}
+            {onEditClick ? (
+              <QueueItemAction
+                aria-label="Edit queued message"
+                onClick={() => onEditClick(item)}
+              >
+                <IconPencil size={14} />
+              </QueueItemAction>
+            ) : null}
+            {onMoveToFront && index > 0 ? (
+              <QueueItemAction
+                aria-label="Move queued message to front"
+                onClick={() => onMoveToFront(item)}
+              >
+                <IconArrowUp size={14} />
+              </QueueItemAction>
+            ) : null}
+            {onDeleteClick ? (
+              <QueueItemAction
+                aria-label="Delete queued message"
+                title={skipConfirmTitle("Delete queued message")}
+                onClick={() => onDeleteClick(item)}
+              >
+                <IconTrash size={14} />
+              </QueueItemAction>
+            ) : null}
+          </QueueItemActions>
         )}
       </div>
-    </QueueItem>
+    </QueuePanelItem>
   );
 }
 
@@ -264,13 +260,10 @@ export function QueuedMessagesPanel<TId extends string>({
   const [editingItem, setEditingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
   );
-  const [deletingItem, setDeletingItem] = useState<QueuedMessageItem<TId> | null>(
-    null,
-  );
+  const [deletingItem, setDeletingItem] =
+    useState<QueuedMessageItem<TId> | null>(null);
   const [draftContent, setDraftContent] = useState("");
-  const [draftForId, setDraftForId] = useState<TId | null>(
-    null,
-  );
+  const [draftForId, setDraftForId] = useState<TId | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const altHeld = useAltHeld();
@@ -329,18 +322,18 @@ export function QueuedMessagesPanel<TId extends string>({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionBase}
+            transition={transitionBase}
           >
             {/* Flush above the composer: fills the dock column in ComposerStash,
                 which owns the inset, with a square bottom so it blends into the
                 input card (mirrors underCardLeading below). */}
-            <Queue className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
+            <QueuePanel className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
               <QueueSection defaultOpen>
                 <QueueSectionTrigger>
                   <QueueSectionLabel count={items.length} label={label} />
                 </QueueSectionTrigger>
                 <QueueSectionContent>
-                  <QueueList>
+                  <QueuePanelList>
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
@@ -384,10 +377,10 @@ export function QueuedMessagesPanel<TId extends string>({
                         ))}
                       </SortableContext>
                     </DndContext>
-                  </QueueList>
+                  </QueuePanelList>
                 </QueueSectionContent>
               </QueueSection>
-            </Queue>
+            </QueuePanel>
           </m.div>
         ) : null}
       </AnimatePresence>

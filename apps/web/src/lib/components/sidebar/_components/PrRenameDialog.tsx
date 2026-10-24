@@ -12,7 +12,7 @@ import {
   DialogTitle,
   Input,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { usePrEdit } from "@/lib/components/reviews/usePrEdit";
 
 /** The pull request being renamed, or null when the dialog is closed. */
@@ -107,9 +107,7 @@ function RenameForm({
         </Button>
         <Button
           onClick={submit}
-          disabled={
-            trimmed.length === 0 || trimmed === pr.title || edit.saving
-          }
+          disabled={trimmed.length === 0 || trimmed === pr.title || edit.saving}
         >
           {edit.saving ? <Spinner size="sm" /> : null}
           Rename

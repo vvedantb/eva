@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 interface ConfirmDialogProps {
   open: boolean;

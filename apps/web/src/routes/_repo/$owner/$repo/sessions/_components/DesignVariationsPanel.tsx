@@ -10,8 +10,8 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-  motionBase,
-} from "@eva/ui";
+  transitionBase,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
@@ -93,7 +93,7 @@ export function DesignVariationsPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionBase}
+            transition={transitionBase}
           >
             <div className="max-w-md space-y-3 px-6 text-center">
               <IconPalette className="mx-auto h-10 w-10 text-muted-foreground/60" />
@@ -112,7 +112,7 @@ export function DesignVariationsPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionBase}
+            transition={transitionBase}
           >
             <Tabs
               value={String(activeTabIndex)}

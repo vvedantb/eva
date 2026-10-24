@@ -10,8 +10,8 @@ import {
   ContributionGraphCalendar,
   ContributionGraphFooter,
   ContributionGraphLegend,
-} from "@eva/ui";
-import type { Activity } from "@eva/ui";
+} from "@vvedantb/ui";
+import type { Activity } from "@vvedantb/ui";
 import { IconFlame } from "@tabler/icons-react";
 import { Widget } from "@/lib/components/Widget";
 import { useCountUpDisplay } from "./useCountUpDisplay";
@@ -107,10 +107,7 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
   const countedTotal = useCountUpDisplay(totalCount);
 
   return (
-    <Widget
-      title="Activity"
-      subtitle="Tasks completed over the last year."
-    >
+    <Widget title="Activity" subtitle="Tasks completed over the last year.">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <p className="text-3xl font-bold tabular-nums text-foreground">
           {countedTotal}

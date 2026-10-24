@@ -19,14 +19,14 @@ import { AveHeaderButton } from "@/lib/components/ave/AveHeaderButton";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
-  motionBase,
-  motionSpring,
+  transitionBase,
+  springTransition,
   projectVelocity,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
@@ -425,7 +425,7 @@ export function Sidebar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionBase}
+            transition={transitionBase}
           />
         )}
       </AnimatePresence>
@@ -449,7 +449,7 @@ export function Sidebar() {
         )}
         initial={false}
         animate={{ x: isDesktop || mobileOpen ? 0 : "-100%" }}
-        transition={motionSpring}
+        transition={springTransition}
         drag={!isDesktop && mobileOpen ? "x" : false}
         dragDirectionLock
         dragConstraints={{ left: 0, right: 0 }}
@@ -515,7 +515,7 @@ export function Sidebar() {
                       )}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={motionBase}
+                      transition={transitionBase}
                     >
                       {isFlatPanel ? (
                         <>
@@ -653,7 +653,7 @@ export function Sidebar() {
                         key={`${panelKey}-nav`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={motionBase}
+                        transition={transitionBase}
                       >
                         <Suspense fallback={sidebarPanelFallback}>
                           {showGlobalSessionsPanel ? (

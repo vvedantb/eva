@@ -24,9 +24,9 @@ import {
   DialogBody,
   CenteredSpinner,
   toast,
-  motionFast,
+  transitionFast,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
@@ -647,7 +647,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               {projectSandboxContent}
             </m.div>
@@ -658,7 +658,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <ProjectOverviewTab
                 projectId={projectId}
@@ -673,7 +673,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <ProjectTabs
                 projectId={projectId}
@@ -695,7 +695,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <ProjectActiveLayout
                 projectId={projectId}

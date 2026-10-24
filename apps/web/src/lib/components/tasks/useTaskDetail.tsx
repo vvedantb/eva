@@ -1,6 +1,6 @@
 "use client";
 
-import { toast, useElapsedSeconds } from "@eva/ui";
+import { toast, useElapsedSeconds } from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";

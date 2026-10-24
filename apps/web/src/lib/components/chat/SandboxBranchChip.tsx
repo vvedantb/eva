@@ -1,7 +1,8 @@
 "use client";
 
 import { IconGitBranch } from "@tabler/icons-react";
-import { cn, toast, Tooltip, TooltipContent, TooltipTrigger } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { toast, Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 interface SandboxBranchChipProps {
@@ -30,7 +31,8 @@ export function SandboxBranchChip({
   // Eva booted the sandbox on `intendedBranch`, but something inside it (a
   // checkout, a rebase, a stacked branch) moved the worktree. Worth surfacing,
   // not worth shouting about.
-  const isMismatched = intendedBranch !== undefined && intendedBranch !== branch;
+  const isMismatched =
+    intendedBranch !== undefined && intendedBranch !== branch;
 
   return (
     <Tooltip>

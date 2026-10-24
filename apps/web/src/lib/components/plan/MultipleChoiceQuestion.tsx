@@ -8,9 +8,9 @@ import {
   CardContent,
   Input,
   LIST_ROW_CONTROL_CLASS,
-  motionBase,
+  transitionBase,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -175,7 +175,7 @@ export function MultipleChoiceQuestion({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionBase}
+          transition={transitionBase}
         >
           <div className="flex items-center justify-between">
             <p className="text-[15px] font-semibold leading-snug text-foreground">
@@ -183,10 +183,7 @@ export function MultipleChoiceQuestion({
             </p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               {q.header && (
-                <Badge
-                  variant="secondary"
-                  className="text-3xs font-semibold"
-                >
+                <Badge variant="secondary" className="text-3xs font-semibold">
                   {q.header}
                 </Badge>
               )}

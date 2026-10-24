@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { IconChartBarOff } from "@tabler/icons-react";
 import {
   DAY_MS,

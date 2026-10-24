@@ -1,7 +1,7 @@
 "use client";
 
 import { useNavigate } from "@tanstack/react-router";
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
   SANDBOX_STATUS_STYLES,
@@ -76,11 +76,7 @@ export function ProjectMainTabs({
     >
       {/* Centred in the page header — segmented so it matches other header
           switchers (sessions, quick tasks) and needs no hairline of its own. */}
-      <TabsList
-        size="sm"
-        className="tabs-segmented"
-        aria-label="Project view"
-      >
+      <TabsList size="sm" className="tabs-segmented" aria-label="Project view">
         <TabsTrigger value="overview">Overview</TabsTrigger>
         <TabsTrigger value="work">{workTabLabel}</TabsTrigger>
         {showSandbox ? (

@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { CenteredSpinner, motionBase, motionStagger } from "@eva/ui";
+import { CenteredSpinner, transitionBase, staggerDelay } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconFileText } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -48,7 +48,7 @@ export function DraftsClient() {
               }
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...motionBase, delay: motionStagger(index) }}
+              transition={{ ...transitionBase, delay: staggerDelay(index) }}
             >
               <DraftCard model={model} basePath={basePath} />
             </m.div>

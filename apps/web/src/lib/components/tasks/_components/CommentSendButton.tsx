@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, CrossfadeIcon, CircleSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, CrossfadeIcon, CircleSpinner } from "@vvedantb/ui";
 import { IconArrowUp } from "@tabler/icons-react";
 
 interface CommentSendButtonProps {

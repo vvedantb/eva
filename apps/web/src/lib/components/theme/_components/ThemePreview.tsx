@@ -1,5 +1,5 @@
 import { m, AnimatePresence } from "motion/react";
-import { motionBase } from "@eva/ui";
+import { transitionBase } from "@vvedantb/ui";
 import {
   FONT_FAMILIES,
   LETTER_SPACING_VALUES,
@@ -41,7 +41,7 @@ export function ThemePreview({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={motionBase}
+        transition={transitionBase}
       >
         <div className="mb-4 flex items-start gap-2">
           <div

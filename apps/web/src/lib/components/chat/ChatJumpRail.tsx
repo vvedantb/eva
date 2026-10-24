@@ -7,7 +7,8 @@ import {
   type MouseEvent,
 } from "react";
 import { useStickToBottomContext } from "use-stick-to-bottom";
-import { cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { transitionFast } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import {
@@ -279,7 +280,7 @@ export function ChatJumpRail({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={transitionFast}
               >
                 <span className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium leading-5">
                   {activeTick.userText}

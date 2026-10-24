@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "motion/react";
-import { Badge } from "@eva/ui";
+import { Badge } from "@vvedantb/ui";
 import {
   IconCircle,
   IconClock,

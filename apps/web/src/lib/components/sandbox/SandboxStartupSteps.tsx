@@ -9,9 +9,8 @@ import {
   TraceLine,
   TraceTitle,
   useElapsedSeconds,
-  type ActivityStep,
-  type TraceStatus,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { ActivityStep, TraceStatus } from "@vvedantb/ui";
 import { IconCheck, IconCircle, IconX } from "@tabler/icons-react";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
@@ -38,7 +37,8 @@ const STAGE_TRACE_STATUS: Record<StageState, TraceStatus | undefined> = {
 };
 
 function StageIcon({ state }: { state: StageState }) {
-  if (state === "running") return <CircleSpinner size="sm" className="size-3.5" />;
+  if (state === "running")
+    return <CircleSpinner size="sm" className="size-3.5" />;
   if (state === "failed") return <IconX />;
   if (state === "pending") return <IconCircle className="size-3.5" />;
   return <IconCheck />;

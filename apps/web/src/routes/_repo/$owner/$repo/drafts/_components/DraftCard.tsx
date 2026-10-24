@@ -5,6 +5,7 @@ import type { ConvexReactClient } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Badge,
   ContextMenu,
@@ -14,8 +15,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   LIST_ROW_CONTROL_CLASS,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconDots } from "@tabler/icons-react";
 import { DraftCardMenuItems } from "./DraftCardMenuItems";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";

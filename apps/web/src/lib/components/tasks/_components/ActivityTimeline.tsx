@@ -13,7 +13,7 @@ import {
   CircleSpinner,
   Spinner,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";

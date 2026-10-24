@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { m } from "motion/react";
-import { motionFast } from "@eva/ui";
+import { transitionFast } from "@vvedantb/ui";
 import type { MentionPopupPlacement } from "./mentionPopupPosition";
 import { optionId } from "./mentionOptionId";
 
@@ -86,7 +86,7 @@ export function MentionPickerPopup<TItem extends { id: string }>({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={motionFast}
+        transition={transitionFast}
         style={{ maxHeight: placement.maxHeight }}
         className={
           "flex flex-col overflow-hidden rounded-surface " +

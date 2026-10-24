@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button, Input } from "@eva/ui";
+import { Button, Input } from "@vvedantb/ui";
 import { IconPhoto } from "@tabler/icons-react";
 import { useRepoLogoUpload } from "@/lib/hooks/useRepoLogoUpload";
 import { useRepo } from "@/lib/contexts/RepoContext";

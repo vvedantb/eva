@@ -5,9 +5,9 @@ import {
   AvatarFallback,
   Message as AIMessage,
   MessageContent,
-  motionFast,
-} from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+  transitionFast,
+  Markdown,
+} from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import dayjs from "@eva/shared/dates";
@@ -54,7 +54,7 @@ export function ChatMessage({
     <m.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionFast}
+      transition={transitionFast}
     >
       <AIMessage from={role}>
         <MessageContent
@@ -88,9 +88,7 @@ export function ChatMessage({
                       finalText={content}
                     />
                   )}
-                  <Markdown className="text-sm">
-                    {content}
-                  </Markdown>
+                  <Markdown className="text-sm">{content}</Markdown>
                 </>
               )}
             </>

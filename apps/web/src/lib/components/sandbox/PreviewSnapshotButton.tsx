@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Spinner, toast, WebPreviewNavigationButton } from "@eva/ui";
+import { Spinner, toast, WebPreviewNavigationButton } from "@vvedantb/ui";
 import { IconListTree } from "@tabler/icons-react";
 import { parseSnapshotInbound } from "@/lib/components/sandbox/previewSnapshot";
 import { PreviewSnapshotDialog } from "@/lib/components/sandbox/PreviewSnapshotDialog";

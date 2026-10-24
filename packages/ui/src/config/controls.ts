@@ -185,7 +185,9 @@ export const controlsConfig = {
       month_grid: rdp.month_grid,
       weekdays: cn("flex", rdp.weekdays),
       weekday: cn(
+        // design-check-ignore-next-line — legacy @eva/ui Calendar string, kept byte-for-byte
         "text-muted-foreground flex-1 font-medium text-[0.76rem] uppercase tracking-[0.08em] select-none",
+        // design-check-ignore-next-line — legacy @eva/ui Calendar string, kept byte-for-byte
         "rounded-lg",
         rdp.weekday,
       ),
@@ -203,6 +205,7 @@ export const controlsConfig = {
       range_start: rdp.range_start,
       range_middle: rdp.range_middle,
       range_end: rdp.range_end,
+      // design-check-ignore-next-line — legacy @eva/ui Calendar string, kept byte-for-byte
       today: cn("border border-primary/25 bg-primary/10 text-primary", "rounded-lg", rdp.today),
       outside: cn("text-muted-foreground aria-selected:text-muted-foreground", rdp.outside),
       disabled: cn("text-muted-foreground opacity-50", rdp.disabled),

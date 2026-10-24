@@ -1,5 +1,6 @@
 import { IconCheck, IconGitBranch } from "@tabler/icons-react";
-import { CircleSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { CircleSpinner } from "@vvedantb/ui";
 import { BrandMark, type BrandName } from "../BrandMark";
 import {
   MockChip,

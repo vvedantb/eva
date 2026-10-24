@@ -1,4 +1,4 @@
-import { ContextMenuItem, DropdownMenuItem } from "@eva/ui";
+import { ContextMenuItem, DropdownMenuItem } from "@vvedantb/ui";
 import {
   IconPencil,
   IconPhoto,

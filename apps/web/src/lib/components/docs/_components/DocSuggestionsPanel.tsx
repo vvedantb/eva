@@ -7,7 +7,8 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
-import { Button, cn, LIST_ROW_CONTROL_CLASS, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, LIST_ROW_CONTROL_CLASS, transitionFast } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconX, IconCheck, IconArrowBackUp } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
@@ -84,7 +85,7 @@ export function DocSuggestionsPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={transitionFast}
           >
             <Button
               size="sm"
@@ -120,7 +121,7 @@ export function DocSuggestionsPanel({
               <m.div
                 key={s.id}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={transitionFast}
               >
                 <ListEnter index={index} fast>
                   <SuggestionRow editor={editor} suggestion={s} />

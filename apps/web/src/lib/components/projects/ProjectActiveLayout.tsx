@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner, motionFast } from "@eva/ui";
+import { Spinner, transitionFast } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { entityPathSegment } from "@/lib/numId";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
@@ -202,7 +202,7 @@ export function ProjectActiveLayout({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={motionFast}
+                  transition={transitionFast}
                 >
                   <TaskDetailInline
                     taskId={selectedTaskId}

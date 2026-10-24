@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconX } from "@tabler/icons-react";
-import { motionFast } from "@eva/ui";
+import { transitionFast } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface ActiveFiltersBarProps {
@@ -26,34 +26,36 @@ export function ActiveFiltersBar({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={motionFast}
+        transition={transitionFast}
       >
-      <span className="text-xs text-muted-foreground mr-0.5">Filtered by</span>
-      {filters.map((f) => (
-        <button
-          key={f.key}
-          type="button"
-          onClick={() => onClearFilter(f.key)}
-          className="group max-sm:flex max-sm:min-h-10 max-sm:max-w-full max-sm:items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
-        >
-          <span className="sr-only">Remove filter</span>
-          <span className="max-sm:truncate">{f.label}</span>
-          <IconX
-            size={12}
-            aria-hidden="true"
-            className="max-sm:shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
-          />
-        </button>
-      ))}
-      {filters.length > 1 && (
-        <button
-          type="button"
-          onClick={onClearAll}
-          className="ml-1 max-sm:flex max-sm:min-h-10 max-sm:items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Clear all
-        </button>
-      )}
+        <span className="text-xs text-muted-foreground mr-0.5">
+          Filtered by
+        </span>
+        {filters.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => onClearFilter(f.key)}
+            className="group max-sm:flex max-sm:min-h-10 max-sm:max-w-full max-sm:items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <span className="sr-only">Remove filter</span>
+            <span className="max-sm:truncate">{f.label}</span>
+            <IconX
+              size={12}
+              aria-hidden="true"
+              className="max-sm:shrink-0 opacity-50 group-hover:opacity-100 transition-opacity"
+            />
+          </button>
+        ))}
+        {filters.length > 1 && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="ml-1 max-sm:flex max-sm:min-h-10 max-sm:items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Clear all
+          </button>
+        )}
       </m.div>
     </AnimatePresence>
   );

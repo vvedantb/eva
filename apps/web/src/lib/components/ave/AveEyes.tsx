@@ -80,8 +80,7 @@ export function AveEyes({ state }: { state: AveLogoState }) {
         window.addEventListener("pointermove", onPointerMove, {
           passive: true,
         });
-        return () =>
-          window.removeEventListener("pointermove", onPointerMove);
+        return () => window.removeEventListener("pointermove", onPointerMove);
       }}
       className="pointer-events-none absolute inset-0 flex items-center justify-center"
       aria-hidden

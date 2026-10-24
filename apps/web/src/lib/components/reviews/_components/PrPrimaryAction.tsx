@@ -20,7 +20,7 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconArrowBackUp,
   IconChevronDown,

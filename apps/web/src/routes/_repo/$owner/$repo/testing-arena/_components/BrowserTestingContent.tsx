@@ -6,7 +6,7 @@ import {
   Spinner,
   TestError,
   TestErrorMessage,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconAlertTriangle,
   IconCheck,

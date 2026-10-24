@@ -14,13 +14,13 @@ import {
   Command,
   CommandEmpty,
   CommandList,
-  motionFast,
-  motionSpring,
+  transitionFast,
+  springTransition,
   Popover,
   PopoverAnchor,
   PopoverContent,
   usePromptInputController,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconBookmark, IconChevronDown } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
@@ -114,7 +114,7 @@ export function ComposerStash({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={transitionFast}
         >
           <button
             ref={tabRef}
@@ -133,7 +133,7 @@ export function ComposerStash({
               key={pulseKey}
               initial={{ opacity: 0, y: 2 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={motionSpring}
+              transition={springTransition}
               className="font-medium tabular-nums"
             >
               {entries.length}

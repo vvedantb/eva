@@ -24,13 +24,7 @@ export function AccentColorSection({
         if (!isAccentColor(key)) return null;
         const isActive = accentColor === key;
         return (
-          <ListEnter
-            key={key}
-            index={index}
-            fast
-            slide={false}
-            staggerMax={8}
-          >
+          <ListEnter key={key} index={index} fast slide={false} staggerMax={8}>
             <OptionButton
               active={isActive}
               onClick={() => onAccentChange(key)}
@@ -44,7 +38,9 @@ export function AccentColorSection({
                   key === "zinc" && "bg-zinc-900 dark:bg-zinc-100",
                 )}
                 style={
-                  key === "zinc" ? undefined : { backgroundColor: color.preview }
+                  key === "zinc"
+                    ? undefined
+                    : { backgroundColor: color.preview }
                 }
               >
                 {isActive && (

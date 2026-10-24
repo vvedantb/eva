@@ -1,7 +1,7 @@
 import { createContext, use } from "react";
 import type { ReactNode } from "react";
 import { motion } from "motion/react";
-import { motionBase } from "@eva/ui";
+import { transitionBase } from "@vvedantb/ui";
 
 /**
  * The current build step for the active slide. 0 = initial state (no clicks
@@ -37,7 +37,7 @@ export function SlideReveal({
       initial="hidden"
       animate={isVisible ? "show" : "hidden"}
       variants={fadeUpVariants}
-      transition={{ ...motionBase, delay: isVisible ? delay : 0 }}
+      transition={{ ...transitionBase, delay: isVisible ? delay : 0 }}
       className={className}
     >
       {children}
@@ -91,7 +91,7 @@ export function SlideItem({ children, className = "" }: SlideItemProps) {
   return (
     <motion.div
       variants={fadeUpVariants}
-      transition={motionBase}
+      transition={transitionBase}
       className={className}
     >
       {children}

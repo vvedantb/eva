@@ -3,14 +3,14 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, DAILY_STANDUP_KEY } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   CenteredSpinner,
-  cn,
-  motionBase,
-  motionStagger,
-} from "@eva/ui";
+  transitionBase,
+  staggerDelay,
+  Markdown,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
-import { Markdown } from "@eva/ui/markdown";
 import { IconSunrise } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -90,7 +90,7 @@ export function TodayClient() {
               className="relative"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...motionBase, delay: motionStagger(index) }}
+              transition={{ ...transitionBase, delay: staggerDelay(index) }}
             >
               <span
                 className={cn(

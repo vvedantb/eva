@@ -3,7 +3,7 @@ import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, ModelSelect, Switch, toast } from "@eva/ui";
+import { Button, ModelSelect, Switch, toast } from "@vvedantb/ui";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import { SettingsStack } from "@/lib/components/settings/SettingsStack";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";

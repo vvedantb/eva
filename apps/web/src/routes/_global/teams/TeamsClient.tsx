@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
   CenteredSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";

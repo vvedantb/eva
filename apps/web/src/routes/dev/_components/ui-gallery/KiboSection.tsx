@@ -36,10 +36,8 @@ import {
   VideoPlayerTimeDisplay,
   VideoPlayerTimeRange,
   VideoPlayerVolumeRange,
-  type Activity,
-  type KanbanColumnDef,
-  type KanbanItem,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { Activity, KanbanColumnDef, KanbanItem } from "@vvedantb/ui";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 import { KiboGantt } from "./KiboGantt";
 
@@ -58,15 +56,27 @@ const KANBAN_ITEMS: KanbanItem[] = [
 ];
 
 const LIST_GROUPS = [
-  { id: "backlog", name: "Backlog", color: "#6b7280", items: ["Audit tokens", "Remove legacy CSS"] },
-  { id: "active", name: "Active", color: "#f59e0b", items: ["Swap Tabs", "Swap Dialog"] },
+  {
+    id: "backlog",
+    name: "Backlog",
+    color: "#6b7280",
+    items: ["Audit tokens", "Remove legacy CSS"],
+  },
+  {
+    id: "active",
+    name: "Active",
+    color: "#f59e0b",
+    items: ["Swap Tabs", "Swap Dialog"],
+  },
 ];
 
 /** Every day of 2025 with a fixed count/level pattern (no randomness). */
 function buildActivity(): Activity[] {
   const days: Activity[] = [];
   for (let day = 0; day < 365; day++) {
-    const date = new Date(Date.UTC(2025, 0, 1 + day)).toISOString().slice(0, 10);
+    const date = new Date(Date.UTC(2025, 0, 1 + day))
+      .toISOString()
+      .slice(0, 10);
     const count = (day * 7 + Math.floor(day / 5)) % 11;
     days.push({ date, count, level: Math.min(4, Math.floor(count / 2.5)) });
   }
@@ -85,8 +95,15 @@ export function KiboSection() {
   return (
     <>
       <GalleryGroup title="Kanban">
-        <GalleryItem label="KanbanProvider / Board / Header / Cards / Card" className="w-full">
-          <KanbanProvider columns={KANBAN_COLUMNS} data={KANBAN_ITEMS} className="grid w-[840px] grid-cols-3 gap-3">
+        <GalleryItem
+          label="KanbanProvider / Board / Header / Cards / Card"
+          className="w-full"
+        >
+          <KanbanProvider
+            columns={KANBAN_COLUMNS}
+            data={KANBAN_ITEMS}
+            className="grid w-[840px] grid-cols-3 gap-3"
+          >
             {KANBAN_COLUMNS.map((column) => (
               <KanbanBoard id={column.id} key={column.id}>
                 <KanbanHeader>{column.name}</KanbanHeader>
@@ -104,14 +121,23 @@ export function KiboSection() {
       </GalleryGroup>
 
       <GalleryGroup title="List">
-        <GalleryItem label="ListProvider / Group / Header / Items / Item" className="w-[420px]">
+        <GalleryItem
+          label="ListProvider / Group / Header / Items / Item"
+          className="w-[420px]"
+        >
           <ListProvider onDragEnd={noop}>
             {LIST_GROUPS.map((group) => (
               <ListGroup id={group.id} key={group.id}>
                 <ListHeader name={group.name} color={group.color} />
                 <ListItems>
                   {group.items.map((name, index) => (
-                    <ListItem id={`${group.id}-${index}`} index={index} key={name} name={name} parent={group.id} />
+                    <ListItem
+                      id={`${group.id}-${index}`}
+                      index={index}
+                      key={name}
+                      name={name}
+                      parent={group.id}
+                    />
                   ))}
                 </ListItems>
               </ListGroup>
@@ -129,7 +155,11 @@ export function KiboSection() {
           <ContributionGraph data={ACTIVITY}>
             <ContributionGraphCalendar>
               {({ activity, dayIndex, weekIndex }) => (
-                <ContributionGraphBlock activity={activity} dayIndex={dayIndex} weekIndex={weekIndex} />
+                <ContributionGraphBlock
+                  activity={activity}
+                  dayIndex={dayIndex}
+                  weekIndex={weekIndex}
+                />
               )}
             </ContributionGraphCalendar>
             <ContributionGraphFooter>
@@ -143,7 +173,14 @@ export function KiboSection() {
       <GalleryGroup title="VideoPlayer">
         <GalleryItem label="VideoPlayer + every control (no source, no autoplay)">
           <VideoPlayer className="w-[640px] overflow-hidden rounded-surface">
-            <VideoPlayerContent slot="media" poster={POSTER} preload="none" muted playsInline className="aspect-video w-full bg-black" />
+            <VideoPlayerContent
+              slot="media"
+              poster={POSTER}
+              preload="none"
+              muted
+              playsInline
+              className="aspect-video w-full bg-black"
+            />
             <VideoPlayerControlBar>
               <VideoPlayerPlayButton />
               <VideoPlayerSeekBackwardButton />
@@ -182,14 +219,18 @@ export function KiboSection() {
             <AvatarStack>
               {["AL", "GH", "MK", "TS"].map((initials) => (
                 <Avatar className="size-full" key={initials}>
-                  <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+                  <AvatarFallback className="text-[10px]">
+                    {initials}
+                  </AvatarFallback>
                 </Avatar>
               ))}
             </AvatarStack>
             <AvatarStack size={32}>
               {["AL", "GH", "MK"].map((initials) => (
                 <Avatar className="size-full" key={initials}>
-                  <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                  <AvatarFallback className="text-xs">
+                    {initials}
+                  </AvatarFallback>
                 </Avatar>
               ))}
             </AvatarStack>

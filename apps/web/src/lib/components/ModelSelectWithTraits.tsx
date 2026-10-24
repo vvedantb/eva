@@ -9,7 +9,8 @@ import {
   type AIModel,
   type StoredModelTraits,
 } from "@eva/backend";
-import { ModelSelect, type ModelSelectProps } from "@eva/ui";
+import { ModelSelect } from "@vvedantb/ui";
+import type { ModelSelectProps } from "@vvedantb/ui";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 

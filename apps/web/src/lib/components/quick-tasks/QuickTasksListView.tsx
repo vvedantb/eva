@@ -22,8 +22,8 @@ import {
   ListItems,
   ListItem,
   toast,
-  type ListDragEndEvent,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { ListDragEndEvent } from "@vvedantb/ui";
 import { IconChevronRight, IconPlayerPlay } from "@tabler/icons-react";
 import {
   ConfirmSkipHint,
@@ -89,7 +89,9 @@ export function QuickTasksListView({
   const projectsList = useQuery(api.projects.list, { repoId });
   const projectNumIds = new Map(
     (projectsList ?? []).flatMap((project) =>
-      project.numId === undefined ? [] : [[project._id, project.numId] as const],
+      project.numId === undefined
+        ? []
+        : [[project._id, project.numId] as const],
     ),
   );
   const updateStatus = useMutation(
@@ -317,73 +319,75 @@ export function QuickTasksListView({
                                     index={index}
                                     firstPaint={firstPaint.current}
                                   >
-                                  <QuickTaskCard
-                                    id={task._id}
-                                    title={task.title}
-                                    description={task.description}
-                                    status={task.status}
-                                    isAgentActive={task.isExecuting}
-                                    hasUnread={task.hasUnread}
-                                    isAwaitingAnswer={task.isAwaitingAnswer}
-                                    priority={task.priority}
-                                    numId={task.numId}
-                                    projectNumId={
-                                      task.projectId
-                                        ? projectNumIds.get(task.projectId)
-                                        : undefined
-                                    }
-                                    hasError={errorTaskIdSet.has(task._id)}
-                                    sandboxStatus={task.reviewTaskSandboxStatus}
-                                    scheduledAt={task.scheduledAt}
-                                    tags={task.tags}
-                                    createdByUser={users?.find(
-                                      (u) => u._id === task.createdBy,
-                                    )}
-                                    createdAt={task.createdAt}
-                                    projectName={
-                                      task.projectId
-                                        ? projectNames.get(task.projectId)
-                                        : undefined
-                                    }
-                                    href={
-                                      entityPathSegment(task)
-                                        ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
-                                        : `${basePath}/quick-tasks`
-                                    }
-                                    onClick={
-                                      isSelecting
-                                        ? (event) => {
-                                            event.preventDefault();
-                                            onToggleSelect(task._id, {
-                                              range: event.shiftKey,
-                                              orderedIds: sectionIds,
-                                            });
-                                          }
-                                        : onOpenTask
-                                          ? () => onOpenTask(task._id)
+                                    <QuickTaskCard
+                                      id={task._id}
+                                      title={task.title}
+                                      description={task.description}
+                                      status={task.status}
+                                      isAgentActive={task.isExecuting}
+                                      hasUnread={task.hasUnread}
+                                      isAwaitingAnswer={task.isAwaitingAnswer}
+                                      priority={task.priority}
+                                      numId={task.numId}
+                                      projectNumId={
+                                        task.projectId
+                                          ? projectNumIds.get(task.projectId)
                                           : undefined
-                                    }
-                                    isSelecting={isSelecting}
-                                    isSelected={selectedIds.has(task._id)}
-                                    isActive={selectedTaskId === task._id}
-                                    onToggleSelect={(event) =>
-                                      onToggleSelect(task._id, {
-                                        range: event.shiftKey,
-                                        orderedIds: sectionIds,
-                                      })
-                                    }
-                                    groupedCodebases={
-                                      groupedCodebases ?? undefined
-                                    }
-                                    assignedTo={task.assignedTo}
-                                    model={task.model}
-                                    providerAccountId={task.providerAccountId}
-                                    projectId={task.projectId}
-                                    repoId={task.repoId ?? repoId}
-                                    users={users ?? undefined}
-                                    currentUserId={currentUserId ?? undefined}
-                                    projects={projectsList ?? undefined}
-                                  />
+                                      }
+                                      hasError={errorTaskIdSet.has(task._id)}
+                                      sandboxStatus={
+                                        task.reviewTaskSandboxStatus
+                                      }
+                                      scheduledAt={task.scheduledAt}
+                                      tags={task.tags}
+                                      createdByUser={users?.find(
+                                        (u) => u._id === task.createdBy,
+                                      )}
+                                      createdAt={task.createdAt}
+                                      projectName={
+                                        task.projectId
+                                          ? projectNames.get(task.projectId)
+                                          : undefined
+                                      }
+                                      href={
+                                        entityPathSegment(task)
+                                          ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
+                                          : `${basePath}/quick-tasks`
+                                      }
+                                      onClick={
+                                        isSelecting
+                                          ? (event) => {
+                                              event.preventDefault();
+                                              onToggleSelect(task._id, {
+                                                range: event.shiftKey,
+                                                orderedIds: sectionIds,
+                                              });
+                                            }
+                                          : onOpenTask
+                                            ? () => onOpenTask(task._id)
+                                            : undefined
+                                      }
+                                      isSelecting={isSelecting}
+                                      isSelected={selectedIds.has(task._id)}
+                                      isActive={selectedTaskId === task._id}
+                                      onToggleSelect={(event) =>
+                                        onToggleSelect(task._id, {
+                                          range: event.shiftKey,
+                                          orderedIds: sectionIds,
+                                        })
+                                      }
+                                      groupedCodebases={
+                                        groupedCodebases ?? undefined
+                                      }
+                                      assignedTo={task.assignedTo}
+                                      model={task.model}
+                                      providerAccountId={task.providerAccountId}
+                                      projectId={task.projectId}
+                                      repoId={task.repoId ?? repoId}
+                                      users={users ?? undefined}
+                                      currentUserId={currentUserId ?? undefined}
+                                      projects={projectsList ?? undefined}
+                                    />
                                   </ListEnter>
                                 </ListItem>
                               );

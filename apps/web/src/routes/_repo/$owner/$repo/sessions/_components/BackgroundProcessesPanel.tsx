@@ -4,19 +4,19 @@ import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
-  Queue,
-  QueueItem,
+  QueuePanel,
+  QueuePanelItem,
   QueueItemAction,
   QueueItemActions,
-  QueueList,
+  QueuePanelList,
   QueueSection,
   QueueSectionContent,
   QueueSectionLabel,
   QueueSectionTrigger,
   toast,
-  motionBase,
+  transitionBase,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconPlayerStop, IconTerminal2 } from "@tabler/icons-react";
 import { api } from "@eva/backend";
@@ -117,9 +117,9 @@ export function BackgroundProcessesPanel({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionBase}
+          transition={transitionBase}
         >
-          <Queue className="mb-2">
+          <QueuePanel className="mb-2">
             <QueueSection defaultOpen>
               <QueueSectionTrigger>
                 <QueueSectionLabel
@@ -132,11 +132,11 @@ export function BackgroundProcessesPanel({
                 />
               </QueueSectionTrigger>
               <QueueSectionContent>
-                <QueueList>
+                <QueuePanelList>
                   {rows.map((row, index) => {
                     const isKilling = killingIds.has(row._id);
                     return (
-                      <QueueItem key={row._id}>
+                      <QueuePanelItem key={row._id}>
                         <ListEnter index={index} fast>
                           <div className="flex items-start gap-2">
                             <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
@@ -189,13 +189,13 @@ export function BackgroundProcessesPanel({
                             </QueueItemActions>
                           </div>
                         </ListEnter>
-                      </QueueItem>
+                      </QueuePanelItem>
                     );
                   })}
-                </QueueList>
+                </QueuePanelList>
               </QueueSectionContent>
             </QueueSection>
-          </Queue>
+          </QueuePanel>
         </m.div>
       ) : null}
     </AnimatePresence>

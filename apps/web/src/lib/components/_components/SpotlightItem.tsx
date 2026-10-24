@@ -3,9 +3,9 @@
 import {
   CommandItem,
   CommandShortcut,
-  motionFast,
-  motionStagger,
-} from "@eva/ui";
+  transitionFast,
+  staggerDelay,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
 import type { ReactNode } from "react";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
@@ -37,8 +37,8 @@ export function SpotlightItem({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
-        ...motionFast,
-        delay: motionStagger(index, 0.02, 0.08),
+        ...transitionFast,
+        delay: staggerDelay(index, 0.02, 0.08),
       }}
     >
       <CommandItem value={value} onSelect={onSelect}>

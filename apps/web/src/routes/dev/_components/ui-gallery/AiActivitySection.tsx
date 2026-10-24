@@ -10,7 +10,7 @@ import {
   ContextInputUsage,
   ContextOutputUsage,
   ContextTrigger,
-  EvaThinkingIcon,
+  ActivityThinkingIcon,
   ModelPickerContent,
   ModelSelect,
   modelPickerSurfaceClass,
@@ -18,7 +18,7 @@ import {
   PromptInputSpeech,
   ProviderIcon,
   TraitsPanel,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 import {
   PlanSpecimen,
@@ -66,23 +66,35 @@ function GalleryTraitsPanel() {
 function ActivityGroup() {
   return (
     <GalleryGroup title="ActivityTasks">
-      <GalleryItem label="ActivityTasks layout=folded (capped at 8 rows)" className="w-[420px]">
+      <GalleryItem
+        label="ActivityTasks layout=folded (capped at 8 rows)"
+        className="w-[420px]"
+      >
         <ActivityTasks steps={GALLERY_STEPS} layout="folded" />
       </GalleryItem>
-      <GalleryItem label="ActivityTasks layout=inline (all rows, active step last)" className="w-[420px]">
+      <GalleryItem
+        label="ActivityTasks layout=inline (all rows, active step last)"
+        className="w-[420px]"
+      >
         <ActivityTasks steps={GALLERY_STEPS} layout="inline" />
       </GalleryItem>
-      <GalleryItem label='ActivityTasks folded settled (duration="2m 14s")' className="w-[420px]">
+      <GalleryItem
+        label='ActivityTasks folded settled (duration="2m 14s")'
+        className="w-[420px]"
+      >
         <ActivityTasks steps={SHORT_STEPS} duration="2m 14s" />
       </GalleryItem>
-      <GalleryItem label="ActivityQuestionCard (answered + unanswered)" className="w-[420px]">
+      <GalleryItem
+        label="ActivityQuestionCard (answered + unanswered)"
+        className="w-[420px]"
+      >
         <ActivityQuestionCard
           questions={GALLERY_QUESTIONS}
           answers={GALLERY_ANSWERS}
         />
       </GalleryItem>
       <GalleryItem label="EvaThinkingIcon">
-        <EvaThinkingIcon />
+        <ActivityThinkingIcon />
       </GalleryItem>
     </GalleryGroup>
   );
@@ -139,7 +151,10 @@ function ModelGroup() {
 function ContextGroup() {
   return (
     <GalleryGroup title="Context (hover card forced open)">
-      <GalleryItem label="Context open: header / body usage rows / footer" className="h-[420px]">
+      <GalleryItem
+        label="Context open: header / body usage rows / footer"
+        className="h-[420px]"
+      >
         <Context
           open
           onOpenChange={noop}

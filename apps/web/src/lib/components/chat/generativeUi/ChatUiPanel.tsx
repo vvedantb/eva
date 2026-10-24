@@ -1,6 +1,6 @@
 "use client";
 
-import { motionFast, Surface } from "@eva/ui";
+import { transitionFast, Surface } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { parseChatUiSpec } from "@eva/shared/generativeUi";
 import { ChatUiSpecRenderer } from "@/lib/components/chat/generativeUi/renderer";
@@ -62,7 +62,7 @@ export function ChatUiPanel({ spec, onReply }: ChatUiPanelProps) {
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionFast}
+      transition={transitionFast}
     >
       <Surface
         density="tight"

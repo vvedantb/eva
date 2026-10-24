@@ -13,10 +13,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  motionFast,
+  transitionFast,
   CrossfadeIconSlot,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
@@ -171,7 +171,7 @@ export function TaskFooter({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={transitionFast}
           >
             {executionError ?? latestPrError}
           </m.p>
@@ -192,7 +192,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               {executionError ?? latestPrError}
             </m.p>
@@ -205,7 +205,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <SplitRunButton
                 taskId={taskId}
@@ -329,7 +329,7 @@ export function TaskFooter({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={transitionFast}
               >
                 <SandboxStartStopButton
                   isActive={isSandboxActive}

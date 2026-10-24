@@ -7,15 +7,15 @@ import {
   IconTerminal2,
   IconX,
 } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 import {
-  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { SandboxOwner } from "@eva/backend";
 import { TerminalPanel } from "@/routes/_repo/$owner/$repo/sessions/TerminalPanel";
@@ -63,7 +63,7 @@ export function SandboxTerminalPanel({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={motionFast}
+                  transition={transitionFast}
                   className={cn(
                     "group flex h-9 shrink-0 items-center rounded-md transition-[background-color]",
                     selected ? "bg-card" : "hover:bg-secondary",

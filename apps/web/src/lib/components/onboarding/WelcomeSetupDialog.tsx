@@ -16,7 +16,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { resolveCustomTheme } from "@/lib/contexts/themeTokens";

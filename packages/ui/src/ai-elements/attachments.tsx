@@ -1,3 +1,0 @@
-// Moved to @vvedantb/ui; eva's look comes from EvaUiProvider (src/config).
-export { getMediaCategory, getAttachmentLabel, useAttachmentsContext, useAttachmentContext, Attachments, Attachment, AttachmentPreview, AttachmentInfo, AttachmentRemove, AttachmentHoverCard, AttachmentHoverCardTrigger, AttachmentHoverCardContent, AttachmentEmpty } from "@vvedantb/ui";
-export type { AttachmentData, AttachmentMediaCategory, AttachmentVariant, AttachmentsProps, AttachmentProps, AttachmentPreviewProps, AttachmentInfoProps, AttachmentRemoveProps, AttachmentHoverCardProps, AttachmentHoverCardTriggerProps, AttachmentHoverCardContentProps, AttachmentEmptyProps } from "@vvedantb/ui";

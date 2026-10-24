@@ -12,7 +12,7 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";

@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@eva/ui";
 import {
   Accordion,
   AccordionContent,
@@ -13,8 +14,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconArrowUp } from "@tabler/icons-react";
 import { TaskStatusBadge } from "@/lib/components/tasks/TaskStatusBadge";
 import {

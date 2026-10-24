@@ -12,8 +12,9 @@ import {
   formatElapsed,
   Spinner as UISpinner,
   Surface,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+  Markdown,
+} from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconAlertTriangle,
@@ -27,7 +28,6 @@ import dayjs from "@eva/shared/dates";
 import { formatDuration } from "@eva/shared/duration";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { Markdown } from "@eva/ui/markdown";
 import { FindingsList } from "./FindingsList";
 
 export function LatestRun({
@@ -234,7 +234,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <Button
                 size="sm"
@@ -263,7 +263,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <Button
                 size="sm"
@@ -285,7 +285,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               Read
             </m.span>
@@ -298,7 +298,7 @@ function RunAccordion({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={transitionFast}
             className="px-4 py-3 space-y-3"
           >
             {isActive && liveSteps && (

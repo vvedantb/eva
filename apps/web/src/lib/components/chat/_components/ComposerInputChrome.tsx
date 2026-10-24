@@ -1,3 +1,4 @@
+import { cn } from "@eva/ui";
 import {
   BorderBeam,
   Button,
@@ -10,12 +11,11 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-  motionFast,
-  motionSpring,
-  type PromptInputMessage,
+  transitionFast,
+  springTransition,
   usePromptInputController,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { PromptInputMessage } from "@vvedantb/ui";
 import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
 import {
@@ -160,7 +160,7 @@ export function ComposerInputChrome({
     <m.div
       layout="position"
       layoutId="composer-left-tools"
-      transition={motionSpring}
+      transition={springTransition}
       className="flex items-center gap-1"
     >
       <ComposerPlusMenu
@@ -176,7 +176,7 @@ export function ComposerInputChrome({
     <m.div
       layout="position"
       layoutId="composer-right-tools"
-      transition={motionSpring}
+      transition={springTransition}
       className="flex min-w-0 items-center gap-0.5"
     >
       <ComposerSpeechButton disabled={isInputDisabled} />
@@ -188,7 +188,7 @@ export function ComposerInputChrome({
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
-            transition={motionFast}
+            transition={transitionFast}
           >
             {/* A tooltip rather than `title`: the binding is a `ShortcutKbd`
                 that follows the user's own setting, and a title attribute can

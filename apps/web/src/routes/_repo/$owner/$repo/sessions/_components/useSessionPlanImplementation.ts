@@ -1,5 +1,5 @@
 import { api, normalizeAIModel, type Id } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -33,10 +33,15 @@ export function useSessionPlanImplementation({
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
   const defaultModel = normalizeAIModel(repo.defaultModel);
-  const { resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
-  const { model, traits, providerAccountId: stickyProviderAccountId } =
-    useChatModel(chatId, defaultModel, isRouteActive);
+  const { resolveId: resolveAccountId } = useSessionOwnerProviderAccounts(
+    sessionId,
+    isRouteActive,
+  );
+  const {
+    model,
+    traits,
+    providerAccountId: stickyProviderAccountId,
+  } = useChatModel(chatId, defaultModel, isRouteActive);
   const { displayTraits, executionTraits, providerAccountId } =
     useSessionSettings({
       defaultModel,
@@ -49,9 +54,13 @@ export function useSessionPlanImplementation({
   const updatePlanContent = useMutation(api.sessions.updatePlanContent);
 
   const implementPlan = (plan: ProposedPlanRow) => {
-    void handleSend(buildPlanImplementationPrompt(plan.planMarkdown), undefined, {
-      sourceProposedPlanId: plan._id,
-    });
+    void handleSend(
+      buildPlanImplementationPrompt(plan.planMarkdown),
+      undefined,
+      {
+        sourceProposedPlanId: plan._id,
+      },
+    );
   };
 
   const implementPlanContent = (markdown: string) => {

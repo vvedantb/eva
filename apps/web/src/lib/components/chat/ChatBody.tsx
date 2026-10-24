@@ -2,8 +2,8 @@ import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
-  motionBase,
-} from "@eva/ui";
+  transitionBase,
+} from "@vvedantb/ui";
 import {
   ChatEmptyState,
   ChatTranscriptLoading,
@@ -1020,7 +1020,7 @@ function ChatBodyInner({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={motionBase}
+              transition={transitionBase}
             >
               <ChatQuestionDock
                 questions={dockedQuestions}
@@ -1037,7 +1037,7 @@ function ChatBodyInner({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={motionBase}
+              transition={transitionBase}
             >
               <ChatComposer
                 repo={repo}

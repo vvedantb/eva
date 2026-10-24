@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogFooter,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 export function RunDevServerConfirmDialog({
   open,

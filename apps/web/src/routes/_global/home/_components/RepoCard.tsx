@@ -10,8 +10,8 @@ import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
 import { useRepoLogoUpload } from "@/lib/hooks/useRepoLogoUpload";
 import { appLeafName, repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { cn } from "@eva/ui";
 import {
-  cn,
   Card,
   CardContent,
   ContextMenu,
@@ -20,9 +20,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  motionBase,
-  motionStagger,
-} from "@eva/ui";
+  transitionBase,
+  staggerDelay,
+} from "@vvedantb/ui";
 import {
   IconBrandGithub,
   IconDots,
@@ -84,7 +84,7 @@ export function RepoCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      transition={{ ...motionBase, delay: motionStagger(index) }}
+      transition={{ ...transitionBase, delay: staggerDelay(index) }}
     >
       <ContextMenu>
         <ContextMenuTrigger asChild>
@@ -122,9 +122,7 @@ export function RepoCard({
                   {repo.connected === false && (
                     <div className="flex max-sm:shrink-0 items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-destructive">
                       <IconPlugConnectedX size={11} />
-                      <span className="text-2xs font-medium">
-                        Disconnected
-                      </span>
+                      <span className="text-2xs font-medium">Disconnected</span>
                     </div>
                   )}
                 </CardContent>

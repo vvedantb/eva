@@ -19,7 +19,7 @@ import {
   DropdownMenuLabel,
   ModelPickerContent,
   modelPickerSurfaceClass,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { normalizeAIModel, type Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {

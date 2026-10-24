@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { IconGitPullRequest } from "@tabler/icons-react";
 import { RepoAppMark } from "@/lib/components/RepoLogo";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";

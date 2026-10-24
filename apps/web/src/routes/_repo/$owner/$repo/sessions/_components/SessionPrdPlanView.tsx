@@ -5,9 +5,9 @@ import { useState, useEffect, useRef } from "react";
 import { useMutation, useConvex } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useNavigate } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   Plan,
   PlanHeader,
   PlanTitle,
@@ -18,8 +18,8 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+  Markdown,
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconCode,
@@ -231,9 +231,7 @@ export function SessionPrdPlanView({
               isPanel ? "min-h-0 flex-1" : "max-h-40 sm:max-h-64",
             )}
           >
-            <Markdown className="text-sm">
-              {planContent}
-            </Markdown>
+            <Markdown className="text-sm">{planContent}</Markdown>
           </div>
         )}
       </PlanContent>

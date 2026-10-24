@@ -6,9 +6,9 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  motionFast,
+  transitionFast,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useState } from "react";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
@@ -118,7 +118,7 @@ export function SidebarSessionRow<T extends SessionItem>({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={transitionFast}
           >
             <SharedLayoutNavSurface
               itemId={session._id}
@@ -170,8 +170,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                       () => setIsReviewOpen(true),
                       () => {
                         void sendForReview().then((ok) => {
-                          if (ok)
-                            toast.success("Sent to the team for review.");
+                          if (ok) toast.success("Sent to the team for review.");
                         });
                       },
                     )

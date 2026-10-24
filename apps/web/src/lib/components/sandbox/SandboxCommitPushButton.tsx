@@ -12,7 +12,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
@@ -83,7 +83,11 @@ export function SandboxCommitPushButton({
           className="text-warning"
           aria-label={`${label}: ${counts}`}
         >
-          {isPushing ? <Spinner size="sm" /> : <IconUpload className="h-4 w-4" />}
+          {isPushing ? (
+            <Spinner size="sm" />
+          ) : (
+            <IconUpload className="h-4 w-4" />
+          )}
         </Button>
       </TooltipTrigger>
       <TooltipContent>

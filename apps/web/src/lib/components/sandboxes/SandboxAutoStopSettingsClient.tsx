@@ -9,8 +9,8 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { SandboxIdlePauseMode } from "@eva/shared";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
@@ -142,7 +142,7 @@ export function SandboxAutoStopSettingsClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <SettingsField
                 label="Pause after the agent finishes"
@@ -216,7 +216,7 @@ export function SandboxAutoStopSettingsClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               <SettingsField
                 label="Stop time"

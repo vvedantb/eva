@@ -12,7 +12,7 @@ import {
   DropdownMenuSubTrigger,
   SearchInput,
   usePromptInputAttachments,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconFile,
   IconPhoto,

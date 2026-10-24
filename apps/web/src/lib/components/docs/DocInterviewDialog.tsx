@@ -18,8 +18,8 @@ import {
   Textarea,
   getSpeechRecognition,
   useSpeechRecognition,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
@@ -342,7 +342,7 @@ export function DocInterviewDialog({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={motionFast}
+                    transition={transitionFast}
                   >
                     <MultipleChoiceQuestion
                       question={currentQuestion.question}
@@ -419,7 +419,7 @@ export function DocInterviewDialog({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={motionFast}
+                    transition={transitionFast}
                   >
                     <Spinner size="sm" />
                     <span className="text-sm text-muted-foreground">

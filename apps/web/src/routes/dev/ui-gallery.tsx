@@ -25,7 +25,7 @@ import { KiboSection } from "./_components/ui-gallery/KiboSection";
 import { MarkdownSection } from "./_components/ui-gallery/MarkdownSection";
 
 /**
- * Static specimens of every `@eva/ui` component, one section per page load, so
+ * Static specimens of every eva UI component (`@vvedantb/ui` under eva's config), one section per page load, so
  * the UI migration can be proven pixel-identical with before/after captures
  * (`/tmp/eva-migration/capture.mjs`). Dev only.
  */

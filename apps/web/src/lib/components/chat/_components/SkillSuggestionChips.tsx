@@ -1,6 +1,11 @@
 "use client";
 
-import { Tooltip, TooltipContent, TooltipTrigger, motionFast } from "@eva/ui";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  transitionFast,
+} from "@vvedantb/ui";
 import { IconSparkles } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import type { SlashItem } from "@/lib/components/mentions";
@@ -30,7 +35,7 @@ export function SkillSuggestionChips({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionFast}
+                transition={transitionFast}
                 onClick={() => onPick(chip)}
                 aria-label={`Add /${chip.label} to your message`}
                 className="max-sm:hit-target mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground hover:bg-muted"

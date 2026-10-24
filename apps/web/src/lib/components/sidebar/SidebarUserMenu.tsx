@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import {

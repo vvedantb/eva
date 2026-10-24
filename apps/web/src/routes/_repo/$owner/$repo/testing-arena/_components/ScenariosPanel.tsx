@@ -5,7 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button, Input, Spinner, Switch, Textarea } from "@eva/ui";
+import { Button, Input, Spinner, Switch, Textarea } from "@vvedantb/ui";
 import {
   IconPencil,
   IconPlus,
@@ -69,7 +69,11 @@ export function ScenariosPanel({
             {isDrafting ? <Spinner size="sm" /> : <IconSparkles size={14} />}
             {isDrafting ? "Drafting..." : "Draft with agent"}
           </Button>
-          <Button size="sm" onClick={() => setIsAdding(true)} disabled={isAdding}>
+          <Button
+            size="sm"
+            onClick={() => setIsAdding(true)}
+            disabled={isAdding}
+          >
             <IconPlus size={14} />
             Add scenario
           </Button>

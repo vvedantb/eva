@@ -36,7 +36,7 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconCopy,
   IconDots,
@@ -80,7 +80,9 @@ export function DropdownMenuSection() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem checked>Show sidebar</DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked>
+              Show sidebar
+            </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem checked={false}>
               Show minimap
             </DropdownMenuCheckboxItem>
@@ -162,7 +164,9 @@ export function ContextMenuSection() {
             </ContextMenuGroup>
             <ContextMenuSeparator />
             <ContextMenuCheckboxItem checked>Pinned</ContextMenuCheckboxItem>
-            <ContextMenuCheckboxItem checked={false}>Muted</ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem checked={false}>
+              Muted
+            </ContextMenuCheckboxItem>
             <ContextMenuSeparator />
             <ContextMenuLabel inset>Sort by</ContextMenuLabel>
             <ContextMenuRadioGroup value="name">
@@ -216,7 +220,10 @@ export function SelectSection() {
           </SelectContent>
         </Select>
       </GalleryItem>
-      <GalleryItem label="Open with groups, label, separator, disabled item" className="w-56">
+      <GalleryItem
+        label="Open with groups, label, separator, disabled item"
+        className="w-56"
+      >
         <Select open onOpenChange={noop} value="sfo">
           <SelectTrigger>
             <SelectValue />

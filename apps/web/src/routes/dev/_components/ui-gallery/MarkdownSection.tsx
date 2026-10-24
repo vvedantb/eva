@@ -1,4 +1,4 @@
-import { Markdown, MarkdownLink } from "@eva/ui/markdown";
+import { Markdown, MarkdownLink } from "@vvedantb/ui";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
 /**
@@ -74,13 +74,22 @@ export function MarkdownSection() {
   return (
     <>
       <GalleryGroup title="Markdown">
-        <GalleryItem label="Markdown mermaid fence (renders async)" className="w-[760px]">
+        <GalleryItem
+          label="Markdown mermaid fence (renders async)"
+          className="w-[760px]"
+        >
           <Markdown mode="static">{MERMAID}</Markdown>
         </GalleryItem>
-        <GalleryItem label='Markdown mode="static" (headings, lists, table, code, quote, alerts, links, KaTeX)' className="w-[760px]">
+        <GalleryItem
+          label='Markdown mode="static" (headings, lists, table, code, quote, alerts, links, KaTeX)'
+          className="w-[760px]"
+        >
           <Markdown mode="static">{SAMPLE}</Markdown>
         </GalleryItem>
-        <GalleryItem label='Markdown className="text-sm" (short)' className="w-[420px]">
+        <GalleryItem
+          label='Markdown className="text-sm" (short)'
+          className="w-[420px]"
+        >
           <Markdown mode="static" className="text-sm">
             {"Short **reply** with `code` and a list:\n\n- one\n- two"}
           </Markdown>
@@ -91,7 +100,9 @@ export function MarkdownSection() {
           <MarkdownLink href="/settings">Settings</MarkdownLink>
         </GalleryItem>
         <GalleryItem label="github.com href (icon, no network)">
-          <MarkdownLink href="https://github.com/vercel/next.js">vercel/next.js</MarkdownLink>
+          <MarkdownLink href="https://github.com/vercel/next.js">
+            vercel/next.js
+          </MarkdownLink>
         </GalleryItem>
         <GalleryItem label="no href (plain span)">
           <MarkdownLink>Unresolved link</MarkdownLink>

@@ -1,7 +1,8 @@
 "use client";
 
 import { compactRelativeTime, formatExactDateTime } from "@eva/shared/dates";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 
 interface RelativeDateTimeProps {
   /** Unix ms timestamp. When omitted, renders `emptyLabel` without a tooltip. */

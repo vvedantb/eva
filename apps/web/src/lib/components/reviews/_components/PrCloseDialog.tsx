@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconGitPullRequestClosed } from "@tabler/icons-react";
 
 /**

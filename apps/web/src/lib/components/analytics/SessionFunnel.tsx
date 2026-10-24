@@ -1,6 +1,6 @@
 "use client";
 
-import { Progress } from "@eva/ui";
+import { Progress } from "@vvedantb/ui";
 import { Widget } from "@/lib/components/Widget";
 import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 

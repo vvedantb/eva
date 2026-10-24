@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Card, CardContent, CenteredSpinner } from "@eva/ui";
+import { Card, CardContent, CenteredSpinner } from "@vvedantb/ui";
 import { IconBrandGithub, IconTerminal2 } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { EmptyState } from "@/lib/components/ui/EmptyState";

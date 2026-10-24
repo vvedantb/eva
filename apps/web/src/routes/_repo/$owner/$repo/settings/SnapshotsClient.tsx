@@ -21,8 +21,8 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
@@ -265,394 +265,416 @@ export function SnapshotsClient({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={transitionFast}
         >
-      {activeTab === "configuration" ? (
-        <>
-          <CronScheduleCard
-            value={schedule}
-            onChange={handleScheduleChange}
-            allowManual
-          />
-
-          <SettingsSection
-            title="Branch"
-            description="When disabled, scheduled rebuilds are paused. Manual rebuilds still work."
-            action={
-              snapshot ? (
-                <Switch
-                  checked={isEnabled}
-                  onCheckedChange={(enabled) =>
-                    setSnapshotEnabled({
-                      repoSnapshotId: snapshot._id,
-                      enabled,
-                    })
-                  }
-                  aria-label="Scheduled rebuilds enabled"
-                />
-              ) : null
-            }
-          >
-            <SettingsField
-              label="Branch"
-              description={
-                <>
-                  Branch to clone for the snapshot. Defaults to{" "}
-                  <code>main</code>
-                  if empty.
-                </>
-              }
-            >
-              <BranchSelect
-                value={workflowRef}
-                onValueChange={handleBranchChange}
-                className="h-8 text-xs"
-                placeholder="Select a branch"
-              />
-            </SettingsField>
-          </SettingsSection>
-
-          {snapshot && <RebuildRequiredWarning />}
-
-          <SettingsSection title="Build Commands">
-            <SettingsField
-              label="Commands to run during snapshot build"
-              description={
-                <>
-                  One command per line. Runs in <code>/tmp/repo</code> after{" "}
-                  <code>pnpm install</code> and before services start. Use for
-                  codegen and builds.
-                </>
-              }
-            >
-              <Textarea
-                key={`build-${snapshot?._id ?? "none"}`}
-                defaultValue={buildCommandsText}
-                onBlur={handleBuildCommandsBlur}
-                className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
-                placeholder="pnpm convex codegen&#10;pnpm build"
-              />
-            </SettingsField>
-          </SettingsSection>
-
-          <SettingsSection title="Seed Commands">
-            <SettingsField
-              label="One-time data seeding, run with services up"
-              description={
-                <>
-                  One command per line. Runs once per seeded build after
-                  services start. Unlike startup commands, these do not run on
-                  every sandbox boot.
-                </>
-              }
-            >
-              <Textarea
-                key={`seed-${snapshot?._id ?? "none"}`}
-                defaultValue={seedCommandsText}
-                onBlur={handleSeedCommandsBlur}
-                className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
-                placeholder="cd packages/backend && npx convex env set MY_KEY 'value'&#10;cd packages/backend && npx convex import seed.zip --yes"
-              />
-            </SettingsField>
-          </SettingsSection>
-
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Requires Vercel Sandbox credentials:{" "}
-            <code className="font-mono">VERCEL_TOKEN</code> and{" "}
-            <code className="font-mono">VERCEL_TEAM_ID</code> (team or repo),
-            and <code className="font-mono">VERCEL_PROJECT_ID</code> on this
-            app — not borrowed from a sibling repo.
-          </p>
-        </>
-      ) : null}
-
-      {activeTab === "status" ? (
-        <>
-          {snapshot ? (
+          {activeTab === "configuration" ? (
             <>
-              <SettingsSection title="Current Status">
-                <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 sm:gap-4">
-                  <div>
-                    <span className="text-muted-foreground">Snapshot Name</span>
-                    <p className="font-mono mt-0.5 max-sm:break-all">
-                      {snapshot.snapshotName}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Schedule</span>
-                    <p className="mt-0.5">
-                      {snapshot.schedule === "manual"
-                        ? "Manual"
-                        : (() => {
-                            const result = describeCron(snapshot.schedule);
-                            return result.valid
-                              ? result.text
-                              : snapshot.schedule;
-                          })()}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Clone Branch</span>
-                    <p className="font-mono mt-0.5 max-sm:break-all">
-                      {snapshot.workflowRef ?? "main"}
-                    </p>
-                  </div>
-                  {lastBuild && (
-                    <>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Last Build
-                        </span>
-                        <p className="mt-0.5">
-                          {new Date(lastBuild.startedAt).toLocaleDateString(
-                            "en-GB",
-                            {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Status</span>
-                        <p className="mt-0.5">
-                          <BuildStatusBadge status={lastBuild.status} />
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={handleRebuild}
-                    disabled={building || isRunning || isSeeding}
-                  >
-                    {building || isRunning || isSeeding ? (
-                      <Spinner size="sm" className="mr-1.5" />
-                    ) : (
-                      <IconPlayerPlay size={14} className="mr-1.5" />
-                    )}
-                    {building || isRunning
-                      ? "Building..."
-                      : isSeeding
-                        ? "Seeding..."
-                        : "Rebuild Now"}
-                  </Button>
-                  {isRunning && lastBuild ? (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleCancelBuild(lastBuild._id)}
-                      disabled={cancelling}
-                    >
-                      {cancelling ? (
-                        <Spinner size="sm" className="mr-1.5" />
-                      ) : (
-                        <IconPlayerStop size={14} className="mr-1.5" />
-                      )}
-                      Cancel Build
-                    </Button>
-                  ) : null}
-                </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Always rebuilds the base Image below.
-                  {hasSeedableApps
-                    ? " Also re-captures the optional seeded snapshot when apps have Stop Commands."
-                    : " No seed file or Stop Commands required."}
-                </p>
-                {lastBuild?.status === "error" && lastBuild.error ? (
-                  <p className="text-xs leading-relaxed text-destructive">
-                    {lastBuild.error}
-                  </p>
-                ) : null}
-              </SettingsSection>
+              <CronScheduleCard
+                value={schedule}
+                onChange={handleScheduleChange}
+                allowManual
+              />
+
               <SettingsSection
-                title="Images"
-                description={
-                  <>
-                    Base snapshot with toolchain, <code>pnpm install</code>, and
-                    your build commands. Eva captures a running sandbox as{" "}
-                    <code>snap_*</code>. This is what sandboxes boot from unless
-                    a seeded snapshot exists.
-                  </>
+                title="Branch"
+                description="When disabled, scheduled rebuilds are paused. Manual rebuilds still work."
+                action={
+                  snapshot ? (
+                    <Switch
+                      checked={isEnabled}
+                      onCheckedChange={(enabled) =>
+                        setSnapshotEnabled({
+                          repoSnapshotId: snapshot._id,
+                          enabled,
+                        })
+                      }
+                      aria-label="Scheduled rebuilds enabled"
+                    />
+                  ) : null
                 }
               >
-                <div>
-                  <h4 className="text-xs font-medium text-foreground">
-                    Base Image
-                  </h4>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Rebuild Now always refreshes this — no seed file needed.
-                  </p>
-                  <div className="mt-3">
-                    {baseImageReady ? (
-                      <div className="flex items-start gap-1 text-xs text-green-500">
-                        <IconCheck size={12} className="mt-0.5 shrink-0" />
-                        <span className="min-w-0">
-                          <span className="mr-1 text-muted-foreground">
-                            Active:
-                          </span>
-                          <span className="font-mono break-all text-foreground">
-                            {activeBaseSnapshotId}
-                          </span>
-                        </span>
-                      </div>
-                    ) : isRunning ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-blue-500">
-                        <Spinner size="sm" />
-                        Building base Image…
-                      </span>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        {snapshot.baseSnapshotId ? (
-                          <>
-                            Last active:{" "}
-                            <span className="font-mono break-all">
-                              {snapshot.baseSnapshotId}
-                            </span>
-                            {" — "}
-                          </>
-                        ) : null}
-                        Config name:{" "}
-                        <span className="font-mono max-sm:break-all">
-                          {snapshot.snapshotName}
-                        </span>
-                        {lastBuild?.status === "error"
-                          ? " — last build failed; click Rebuild Now to retry."
-                          : " — not built yet; click Rebuild Now."}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <h4 className="text-xs font-medium text-foreground">
-                    Seeded snapshot{" "}
-                    <span className="font-normal text-muted-foreground">
-                      (optional)
-                    </span>
-                  </h4>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Running-sandbox capture with DB and services already
-                    started. Only needed when cold boot is too slow. Configure
-                    Stop Commands on an app (Settings → App); upload seed files
-                    only if startup commands reference them.
-                  </p>
-                  <div className="mt-3">
-                    {seededApps === undefined ? (
-                      <p className="text-xs text-muted-foreground">Loading…</p>
-                    ) : isSeeding ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-blue-500">
-                        <Spinner size="sm" />
-                        Capturing seeded snapshot…
-                      </span>
-                    ) : sharedSeededSnapshotName ? (
-                      <div className="flex items-start gap-1 text-xs text-green-500">
-                        <IconCheck size={12} className="mt-0.5 shrink-0" />
-                        <span className="min-w-0">
-                          <span className="mr-1 text-muted-foreground">
-                            Active:
-                          </span>
-                          <span className="font-mono max-sm:break-all">
-                            {sharedSeededSnapshotName}
-                          </span>
-                        </span>
-                      </div>
-                    ) : !hasSeedableApps ? (
-                      <p className="text-xs text-muted-foreground">
-                        Not configured — no apps have Stop Commands. Sandboxes
-                        use the base Image only, which is fine for most repos.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Not captured yet — run Rebuild Now after configuring app
-                        startup/background/stop commands.
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <SettingsField
+                  label="Branch"
+                  description={
+                    <>
+                      Branch to clone for the snapshot. Defaults to{" "}
+                      <code>main</code>
+                      if empty.
+                    </>
+                  }
+                >
+                  <BranchSelect
+                    value={workflowRef}
+                    onValueChange={handleBranchChange}
+                    className="h-8 text-xs"
+                    placeholder="Select a branch"
+                  />
+                </SettingsField>
               </SettingsSection>
+
+              {snapshot && <RebuildRequiredWarning />}
+
+              <SettingsSection title="Build Commands">
+                <SettingsField
+                  label="Commands to run during snapshot build"
+                  description={
+                    <>
+                      One command per line. Runs in <code>/tmp/repo</code> after{" "}
+                      <code>pnpm install</code> and before services start. Use
+                      for codegen and builds.
+                    </>
+                  }
+                >
+                  <Textarea
+                    key={`build-${snapshot?._id ?? "none"}`}
+                    defaultValue={buildCommandsText}
+                    onBlur={handleBuildCommandsBlur}
+                    className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
+                    placeholder="pnpm convex codegen&#10;pnpm build"
+                  />
+                </SettingsField>
+              </SettingsSection>
+
+              <SettingsSection title="Seed Commands">
+                <SettingsField
+                  label="One-time data seeding, run with services up"
+                  description={
+                    <>
+                      One command per line. Runs once per seeded build after
+                      services start. Unlike startup commands, these do not run
+                      on every sandbox boot.
+                    </>
+                  }
+                >
+                  <Textarea
+                    key={`seed-${snapshot?._id ?? "none"}`}
+                    defaultValue={seedCommandsText}
+                    onBlur={handleSeedCommandsBlur}
+                    className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
+                    placeholder="cd packages/backend && npx convex env set MY_KEY 'value'&#10;cd packages/backend && npx convex import seed.zip --yes"
+                  />
+                </SettingsField>
+              </SettingsSection>
+
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Requires Vercel Sandbox credentials:{" "}
+                <code className="font-mono">VERCEL_TOKEN</code> and{" "}
+                <code className="font-mono">VERCEL_TEAM_ID</code> (team or
+                repo), and <code className="font-mono">VERCEL_PROJECT_ID</code>{" "}
+                on this app — not borrowed from a sibling repo.
+              </p>
             </>
-          ) : (
-            <NoSnapshotConfigured />
-          )}
-        </>
-      ) : null}
+          ) : null}
 
-      {activeTab === "builds" ? (
-        <>
-          {snapshot && builds && builds.length > 0 ? (
-            // Rows own their padding so the table spans the card's full width.
-            <SettingsSection title="Build History" bodyVariant="list">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs sm:min-w-[420px] max-sm:min-w-[620px]">
-                  <thead>
-                    <tr className="text-left text-muted-foreground">
-                      <th className="px-2 py-2 font-medium w-8 sm:px-4" />
-                      <th className="px-2 py-2 font-medium sm:px-4">Date</th>
-                      <th className="px-2 py-2 font-medium sm:px-4">
-                        Duration
-                      </th>
-                      <th className="px-2 py-2 font-medium sm:px-4">Trigger</th>
-                      <th className="px-2 py-2 font-medium sm:px-4">
-                        Provider
-                      </th>
-                      <th className="px-2 py-2 font-medium sm:px-4">Type</th>
-                      <th className="px-2 py-2 font-medium sm:px-4">Status</th>
-                      <th className="px-2 py-2 font-medium sm:px-4">Seeded</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {builds.map((build) => {
-                      const isExpanded = expandedBuild === build._id;
-                      const duration = build.completedAt
-                        ? formatDurationMs(build.completedAt - build.startedAt)
-                        : build.status === "running"
-                          ? "Running..."
-                          : "-";
-                      return (
-                        <BuildRow
-                          key={build._id}
-                          build={build}
-                          isExpanded={isExpanded}
-                          duration={duration}
-                          cancelling={cancelling}
-                          onCancel={
-                            build.status === "running"
-                              ? () => handleCancelBuild(build._id)
-                              : undefined
-                          }
-                          onToggle={() =>
-                            setExpandedBuild(isExpanded ? null : build._id)
-                          }
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </SettingsSection>
-          ) : snapshot && builds && builds.length === 0 ? (
-            <SettingsSection title="Build History" bodyVariant="list">
-              <SettingsEmptyState
-                icon={IconCamera}
-                title="No builds yet"
-                description="Select Rebuild Now on the Status tab to run the first build."
-              />
-            </SettingsSection>
-          ) : (
-            <NoSnapshotConfigured />
-          )}
-        </>
-      ) : null}
+          {activeTab === "status" ? (
+            <>
+              {snapshot ? (
+                <>
+                  <SettingsSection title="Current Status">
+                    <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 sm:gap-4">
+                      <div>
+                        <span className="text-muted-foreground">
+                          Snapshot Name
+                        </span>
+                        <p className="font-mono mt-0.5 max-sm:break-all">
+                          {snapshot.snapshotName}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Schedule</span>
+                        <p className="mt-0.5">
+                          {snapshot.schedule === "manual"
+                            ? "Manual"
+                            : (() => {
+                                const result = describeCron(snapshot.schedule);
+                                return result.valid
+                                  ? result.text
+                                  : snapshot.schedule;
+                              })()}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">
+                          Clone Branch
+                        </span>
+                        <p className="font-mono mt-0.5 max-sm:break-all">
+                          {snapshot.workflowRef ?? "main"}
+                        </p>
+                      </div>
+                      {lastBuild && (
+                        <>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Last Build
+                            </span>
+                            <p className="mt-0.5">
+                              {new Date(lastBuild.startedAt).toLocaleDateString(
+                                "en-GB",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">
+                              Status
+                            </span>
+                            <p className="mt-0.5">
+                              <BuildStatusBadge status={lastBuild.status} />
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleRebuild}
+                        disabled={building || isRunning || isSeeding}
+                      >
+                        {building || isRunning || isSeeding ? (
+                          <Spinner size="sm" className="mr-1.5" />
+                        ) : (
+                          <IconPlayerPlay size={14} className="mr-1.5" />
+                        )}
+                        {building || isRunning
+                          ? "Building..."
+                          : isSeeding
+                            ? "Seeding..."
+                            : "Rebuild Now"}
+                      </Button>
+                      {isRunning && lastBuild ? (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleCancelBuild(lastBuild._id)}
+                          disabled={cancelling}
+                        >
+                          {cancelling ? (
+                            <Spinner size="sm" className="mr-1.5" />
+                          ) : (
+                            <IconPlayerStop size={14} className="mr-1.5" />
+                          )}
+                          Cancel Build
+                        </Button>
+                      ) : null}
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Always rebuilds the base Image below.
+                      {hasSeedableApps
+                        ? " Also re-captures the optional seeded snapshot when apps have Stop Commands."
+                        : " No seed file or Stop Commands required."}
+                    </p>
+                    {lastBuild?.status === "error" && lastBuild.error ? (
+                      <p className="text-xs leading-relaxed text-destructive">
+                        {lastBuild.error}
+                      </p>
+                    ) : null}
+                  </SettingsSection>
+                  <SettingsSection
+                    title="Images"
+                    description={
+                      <>
+                        Base snapshot with toolchain, <code>pnpm install</code>,
+                        and your build commands. Eva captures a running sandbox
+                        as <code>snap_*</code>. This is what sandboxes boot from
+                        unless a seeded snapshot exists.
+                      </>
+                    }
+                  >
+                    <div>
+                      <h4 className="text-xs font-medium text-foreground">
+                        Base Image
+                      </h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Rebuild Now always refreshes this — no seed file needed.
+                      </p>
+                      <div className="mt-3">
+                        {baseImageReady ? (
+                          <div className="flex items-start gap-1 text-xs text-green-500">
+                            <IconCheck size={12} className="mt-0.5 shrink-0" />
+                            <span className="min-w-0">
+                              <span className="mr-1 text-muted-foreground">
+                                Active:
+                              </span>
+                              <span className="font-mono break-all text-foreground">
+                                {activeBaseSnapshotId}
+                              </span>
+                            </span>
+                          </div>
+                        ) : isRunning ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-blue-500">
+                            <Spinner size="sm" />
+                            Building base Image…
+                          </span>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            {snapshot.baseSnapshotId ? (
+                              <>
+                                Last active:{" "}
+                                <span className="font-mono break-all">
+                                  {snapshot.baseSnapshotId}
+                                </span>
+                                {" — "}
+                              </>
+                            ) : null}
+                            Config name:{" "}
+                            <span className="font-mono max-sm:break-all">
+                              {snapshot.snapshotName}
+                            </span>
+                            {lastBuild?.status === "error"
+                              ? " — last build failed; click Rebuild Now to retry."
+                              : " — not built yet; click Rebuild Now."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-      {activeTab === "config-files" ? (
-        <ConfigFilesSection repoId={repoId} snapshotId={snapshot?._id} />
-      ) : null}
+                    <div className="mt-6">
+                      <h4 className="text-xs font-medium text-foreground">
+                        Seeded snapshot{" "}
+                        <span className="font-normal text-muted-foreground">
+                          (optional)
+                        </span>
+                      </h4>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Running-sandbox capture with DB and services already
+                        started. Only needed when cold boot is too slow.
+                        Configure Stop Commands on an app (Settings → App);
+                        upload seed files only if startup commands reference
+                        them.
+                      </p>
+                      <div className="mt-3">
+                        {seededApps === undefined ? (
+                          <p className="text-xs text-muted-foreground">
+                            Loading…
+                          </p>
+                        ) : isSeeding ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-blue-500">
+                            <Spinner size="sm" />
+                            Capturing seeded snapshot…
+                          </span>
+                        ) : sharedSeededSnapshotName ? (
+                          <div className="flex items-start gap-1 text-xs text-green-500">
+                            <IconCheck size={12} className="mt-0.5 shrink-0" />
+                            <span className="min-w-0">
+                              <span className="mr-1 text-muted-foreground">
+                                Active:
+                              </span>
+                              <span className="font-mono max-sm:break-all">
+                                {sharedSeededSnapshotName}
+                              </span>
+                            </span>
+                          </div>
+                        ) : !hasSeedableApps ? (
+                          <p className="text-xs text-muted-foreground">
+                            Not configured — no apps have Stop Commands.
+                            Sandboxes use the base Image only, which is fine for
+                            most repos.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Not captured yet — run Rebuild Now after configuring
+                            app startup/background/stop commands.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </SettingsSection>
+                </>
+              ) : (
+                <NoSnapshotConfigured />
+              )}
+            </>
+          ) : null}
+
+          {activeTab === "builds" ? (
+            <>
+              {snapshot && builds && builds.length > 0 ? (
+                // Rows own their padding so the table spans the card's full width.
+                <SettingsSection title="Build History" bodyVariant="list">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs sm:min-w-[420px] max-sm:min-w-[620px]">
+                      <thead>
+                        <tr className="text-left text-muted-foreground">
+                          <th className="px-2 py-2 font-medium w-8 sm:px-4" />
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Date
+                          </th>
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Duration
+                          </th>
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Trigger
+                          </th>
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Provider
+                          </th>
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Type
+                          </th>
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Status
+                          </th>
+                          <th className="px-2 py-2 font-medium sm:px-4">
+                            Seeded
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {builds.map((build) => {
+                          const isExpanded = expandedBuild === build._id;
+                          const duration = build.completedAt
+                            ? formatDurationMs(
+                                build.completedAt - build.startedAt,
+                              )
+                            : build.status === "running"
+                              ? "Running..."
+                              : "-";
+                          return (
+                            <BuildRow
+                              key={build._id}
+                              build={build}
+                              isExpanded={isExpanded}
+                              duration={duration}
+                              cancelling={cancelling}
+                              onCancel={
+                                build.status === "running"
+                                  ? () => handleCancelBuild(build._id)
+                                  : undefined
+                              }
+                              onToggle={() =>
+                                setExpandedBuild(isExpanded ? null : build._id)
+                              }
+                            />
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </SettingsSection>
+              ) : snapshot && builds && builds.length === 0 ? (
+                <SettingsSection title="Build History" bodyVariant="list">
+                  <SettingsEmptyState
+                    icon={IconCamera}
+                    title="No builds yet"
+                    description="Select Rebuild Now on the Status tab to run the first build."
+                  />
+                </SettingsSection>
+              ) : (
+                <NoSnapshotConfigured />
+              )}
+            </>
+          ) : null}
+
+          {activeTab === "config-files" ? (
+            <ConfigFilesSection repoId={repoId} snapshotId={snapshot?._id} />
+          ) : null}
         </m.div>
       </AnimatePresence>
     </SettingsPage>

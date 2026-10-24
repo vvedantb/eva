@@ -3,7 +3,7 @@ import type {
   ActivityStep,
   ModelAccount,
   ModelOption,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 /** Fixed sample data for the `ai-activity` gallery section. */
 
@@ -202,4 +202,4 @@ export const CONSOLE_LOGS: {
 ];
 
 export const PREVIEW_SRC_DOC =
-  "<html><body style='font-family:sans-serif;margin:0;display:grid;place-items:center;height:100vh;background:#f4f4f5;color:#18181b'><p>Static preview body</p></body></html>";
+  "<html><body style='font-family:sans-serif;margin:0;display:grid;place-items:center;height:100dvh;background:#f4f4f5;color:#18181b'><p>Static preview body</p></body></html>";

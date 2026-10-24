@@ -9,7 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconBrandVercel, IconGitPullRequest } from "@tabler/icons-react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";

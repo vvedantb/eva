@@ -1,3 +1,0 @@
-// Moved to @vvedantb/ui; eva's look comes from EvaUiProvider (src/config).
-export { Message, MessageContent, MessageActionsBar as MessageActions, MessageAction, MessageBranch, MessageBranchContent, MessageBranchSelector, MessageBranchPrevious, MessageBranchNext, MessageBranchPage, MessageToolbar } from "@vvedantb/ui";
-export type { MessageProps, MessageContentProps, MessageActionsBarProps as MessageActionsProps, MessageActionProps, MessageBranchProps, MessageBranchContentProps, MessageBranchSelectorProps, MessageBranchPreviousProps, MessageBranchNextProps, MessageBranchPageProps, MessageToolbarProps } from "@vvedantb/ui";

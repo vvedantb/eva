@@ -8,8 +8,8 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  type Range,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { Range } from "@vvedantb/ui";
 import {
   IconZoomIn,
   IconZoomOut,

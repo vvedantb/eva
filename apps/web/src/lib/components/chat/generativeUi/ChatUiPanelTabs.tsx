@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vvedantb/ui";
 import type { ReactNode } from "react";
 
 interface ChatUiPanelTabsProps {

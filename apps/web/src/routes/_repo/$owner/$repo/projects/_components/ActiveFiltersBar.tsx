@@ -1,5 +1,5 @@
 import { IconX } from "@tabler/icons-react";
-import { motionFast } from "@eva/ui";
+import { transitionFast } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface ActiveFiltersBarProps {
@@ -21,34 +21,36 @@ export function ActiveFiltersBar({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={motionFast}
+        transition={transitionFast}
       >
-      <span className="text-xs text-muted-foreground mr-0.5">Filtered by</span>
-      {filters.map((f) => (
-        <button
-          key={f.key}
-          type="button"
-          aria-label={`Clear filter: ${f.label}`}
-          onClick={() => onClearFilter(f.key)}
-          className="max-sm:hit-target group flex items-center gap-1 rounded-md bg-muted/60 px-2 max-sm:py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
-        >
-          {f.label}
-          <IconX
-            size={12}
-            aria-hidden
-            className="opacity-50 group-hover:opacity-100 transition-opacity"
-          />
-        </button>
-      ))}
-      {filters.length > 1 && (
-        <button
-          type="button"
-          onClick={onClearAll}
-          className="max-sm:hit-target text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
-        >
-          Clear all
-        </button>
-      )}
+        <span className="text-xs text-muted-foreground mr-0.5">
+          Filtered by
+        </span>
+        {filters.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            aria-label={`Clear filter: ${f.label}`}
+            onClick={() => onClearFilter(f.key)}
+            className="max-sm:hit-target group flex items-center gap-1 rounded-md bg-muted/60 px-2 max-sm:py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
+          >
+            {f.label}
+            <IconX
+              size={12}
+              aria-hidden
+              className="opacity-50 group-hover:opacity-100 transition-opacity"
+            />
+          </button>
+        ))}
+        {filters.length > 1 && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="max-sm:hit-target text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+          >
+            Clear all
+          </button>
+        )}
       </m.div>
     </AnimatePresence>
   );

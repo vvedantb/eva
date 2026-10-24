@@ -10,7 +10,7 @@ import {
   usePromptInputController,
   useSpeechRecognition,
   CircleSpinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useGatewayDictation } from "@/lib/hooks/useGatewayDictation";
 import { useTranscriptPolish } from "@/lib/hooks/useTranscriptPolish";
 

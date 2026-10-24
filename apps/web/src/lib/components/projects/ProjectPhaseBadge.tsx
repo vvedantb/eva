@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "motion/react";
-import { Badge, motionFast } from "@eva/ui";
+import { Badge, transitionFast } from "@vvedantb/ui";
 import type { Doc } from "@eva/backend";
 import {
   IconNotes,
@@ -127,7 +127,7 @@ export function ProjectPhaseBadge({ phase }: ProjectPhaseBadgeProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={motionFast}
+        transition={transitionFast}
         className="inline-flex"
       >
         <Badge className={`${config.text} ${config.bg} border-transparent`}>

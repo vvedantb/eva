@@ -12,7 +12,7 @@ import {
   DialogTitle,
   Input,
   Textarea,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconCopy,
@@ -24,11 +24,7 @@ import {
 } from "@tabler/icons-react";
 import type { EnvVar } from "@/lib/components/EnvVarsTable";
 import type { EnvVarSlotEntry } from "@/lib/components/_utils/envVarSlotTypes";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 interface EnvVarProviderSlotsProps {
   entries: ReadonlyArray<EnvVarSlotEntry>;

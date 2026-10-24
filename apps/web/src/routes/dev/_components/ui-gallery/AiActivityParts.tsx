@@ -38,7 +38,7 @@ import {
   WebPreviewNavigation,
   WebPreviewNavigationButton,
   WebPreviewUrl,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconArrowLeft,
   IconArrowRight,
@@ -54,7 +54,10 @@ const noop = () => {};
 
 export function TraceSpecimens() {
   return (
-    <GalleryItem label="Trace (line / running / error / pending / collapsible open + closed)" className="w-96">
+    <GalleryItem
+      label="Trace (line / running / error / pending / collapsible open + closed)"
+      className="w-96"
+    >
       <Trace>
         <TraceLine>
           <TraceIcon>
@@ -114,7 +117,10 @@ export function TraceSpecimens() {
 
 export function WebPreviewSpecimen() {
   return (
-    <GalleryItem label="WebPreview (srcDoc body, console with fixed logs)" className="w-[560px]">
+    <GalleryItem
+      label="WebPreview (srcDoc body, console with fixed logs)"
+      className="w-[560px]"
+    >
       <WebPreview defaultUrl="https://example.com/dashboard" className="h-96">
         <WebPreviewNavigation>
           <WebPreviewNavigationButton tooltip="Back" disabled>
@@ -137,7 +143,10 @@ export function WebPreviewSpecimen() {
 
 export function PlanSpecimen() {
   return (
-    <GalleryItem label="Plan (open) + Plan (streaming, closed)" className="w-96">
+    <GalleryItem
+      label="Plan (open) + Plan (streaming, closed)"
+      className="w-96"
+    >
       <Plan open onOpenChange={noop}>
         <PlanHeader>
           <PlanTitle>Move activity UI to Trace</PlanTitle>
@@ -173,7 +182,13 @@ export function TestResultsSpecimen() {
   return (
     <GalleryItem label="TestResults (all parts)" className="w-[480px]">
       <TestResults
-        summary={{ passed: 8, failed: 1, skipped: 1, total: 10, duration: 3420 }}
+        summary={{
+          passed: 8,
+          failed: 1,
+          skipped: 1,
+          total: 10,
+          duration: 3420,
+        }}
       >
         <TestResultsHeader>
           <TestResultsSummary />
@@ -183,7 +198,12 @@ export function TestResultsSpecimen() {
           <TestResultsProgress />
         </div>
         <TestResultsContent>
-          <TestSuite name="trace.test.tsx" status="failed" open onOpenChange={noop}>
+          <TestSuite
+            name="trace.test.tsx"
+            status="failed"
+            open
+            onOpenChange={noop}
+          >
             <TestSuiteName />
             <TestSuiteStats passed={2} failed={1} skipped={1} />
             <TestSuiteContent>
@@ -203,7 +223,12 @@ export function TestResultsSpecimen() {
               <Test name="streams" status="running" />
             </TestSuiteContent>
           </TestSuite>
-          <TestSuite name="plan.test.tsx" status="passed" open={false} onOpenChange={noop}>
+          <TestSuite
+            name="plan.test.tsx"
+            status="passed"
+            open={false}
+            onOpenChange={noop}
+          >
             <TestSuiteName />
             <TestSuiteStats passed={6} />
             <TestSuiteContent>

@@ -2,7 +2,7 @@
 
 import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 import { IconBrandGithub } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { EVA_GITHUB_URL, LANDING_NAV_LINKS } from "./landingContent";
 import { LandingBrand } from "./LandingBrand";
 import { LandingNavMenu } from "./LandingNavMenu";

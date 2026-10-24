@@ -3,15 +3,18 @@
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { isViewableRecap, type api, type Id } from "@eva/backend";
-import { Button } from "@eva/ui";
+import { Button, Markdown } from "@vvedantb/ui";
 import { IconPencil } from "@tabler/icons-react";
-import { Markdown } from "@eva/ui/markdown";
 import { PrRecapPanel } from "@/lib/components/sandbox/PrRecapPanel";
 import { usePrEdit } from "./usePrEdit";
 import { PrCheckRow } from "./_components/PrCheckRow";
 import { PrDescriptionEditor } from "./_components/PrDescriptionEditor";
 import { checksHeadline, countChecks } from "./_components/prMergeState";
-import { MARKDOWN_CLASS, NOTICE_CLASS, type PrOverview } from "./_components/prOverviewMeta";
+import {
+  MARKDOWN_CLASS,
+  NOTICE_CLASS,
+  type PrOverview,
+} from "./_components/prOverviewMeta";
 import { SummaryComments } from "./_components/SummaryComments";
 import { SummaryMetaRows } from "./_components/SummaryMetaRows";
 import { SummarySection } from "./_components/SummarySection";
@@ -45,7 +48,11 @@ export function ReviewSummaryTab({
   return (
     <div className="h-full overflow-y-auto pb-20">
       <div className="mx-auto max-w-4xl">
-        <SummaryMetaRows repoId={repoId} overview={overview} onChanged={onChanged} />
+        <SummaryMetaRows
+          repoId={repoId}
+          overview={overview}
+          onChanged={onChanged}
+        />
 
         {/* Open when there is a walkthrough to read, folded to its Generate
             control when there is not. Keyed on that, so the default re-applies
@@ -66,9 +73,7 @@ export function ReviewSummaryTab({
 
         <SummarySection
           title={
-            checks.total === 0
-              ? "Checks"
-              : `Checks · ${checksHeadline(checks)}`
+            checks.total === 0 ? "Checks" : `Checks · ${checksHeadline(checks)}`
           }
           defaultOpen={false}
         >
@@ -128,7 +133,9 @@ function SummaryDescription({
   return (
     <div className="group flex items-start gap-1">
       {body.trim().length > 0 ? (
-        <Markdown className={`${MARKDOWN_CLASS} min-w-0 flex-1`}>{body}</Markdown>
+        <Markdown className={`${MARKDOWN_CLASS} min-w-0 flex-1`}>
+          {body}
+        </Markdown>
       ) : (
         <p className="min-w-0 flex-1 text-sm italic text-muted-foreground">
           No description provided.

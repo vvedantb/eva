@@ -18,7 +18,7 @@ import {
   Slider,
   Switch,
   Textarea,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconArrowUp,
   IconChevronDown,
@@ -113,7 +113,10 @@ function ButtonMatrix() {
 function FormGroup() {
   return (
     <GalleryGroup title="Input / Textarea / Checkbox / Switch / Slider">
-      <GalleryItem label="Input placeholder / value / disabled / invalid" className="w-72">
+      <GalleryItem
+        label="Input placeholder / value / disabled / invalid"
+        className="w-72"
+      >
         <div className="flex flex-col gap-2">
           <Input placeholder="you@example.com" />
           <Input defaultValue="vedant@eva.dev" />

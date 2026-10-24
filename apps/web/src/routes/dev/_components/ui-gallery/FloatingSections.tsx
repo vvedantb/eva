@@ -14,7 +14,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCalendar, IconInfoCircle } from "@tabler/icons-react";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
@@ -43,9 +43,17 @@ export function PopoverSection() {
               </div>
               <div className="grid grid-cols-3 items-center gap-2">
                 <Label htmlFor="g-pop-width">Width</Label>
-                <Input id="g-pop-width" defaultValue="100%" className="col-span-2 h-8" />
+                <Input
+                  id="g-pop-width"
+                  defaultValue="100%"
+                  className="col-span-2 h-8"
+                />
                 <Label htmlFor="g-pop-height">Height</Label>
-                <Input id="g-pop-height" defaultValue="25px" className="col-span-2 h-8" />
+                <Input
+                  id="g-pop-height"
+                  defaultValue="25px"
+                  className="col-span-2 h-8"
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button size="sm" variant="ghost">
@@ -107,7 +115,10 @@ const TOOLTIP_SIDES = ["top", "right", "bottom", "left"] as const;
 
 export function TooltipSection() {
   return (
-    <GalleryGroup title="Tooltip (open, controlled)" className="gap-24 px-16 py-12">
+    <GalleryGroup
+      title="Tooltip (open, controlled)"
+      className="gap-24 px-16 py-12"
+    >
       {TOOLTIP_SIDES.map((side) => (
         <GalleryItem key={side} label={`side=${side}`}>
           <Tooltip open onOpenChange={noop}>

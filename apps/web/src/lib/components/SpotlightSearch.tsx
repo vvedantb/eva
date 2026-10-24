@@ -9,7 +9,7 @@ import {
   CommandList,
   Dialog,
   DialogContent,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";

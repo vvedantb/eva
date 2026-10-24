@@ -14,8 +14,8 @@ import {
   DialogTitle,
   Input,
   CenteredSpinner,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
@@ -31,10 +31,7 @@ import {
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import { useSidebarAppGroupOpen } from "@/lib/components/sidebar/useSidebarAppGroupOpen";
 import { entityPathSegment } from "@/lib/numId";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
 import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
@@ -223,7 +220,7 @@ export function GlobalSessionsSidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               {orderedRepos === undefined ? (
                 <CenteredSpinner

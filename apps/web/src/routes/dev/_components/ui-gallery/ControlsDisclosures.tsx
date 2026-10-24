@@ -20,7 +20,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconChevronDown, IconSettings } from "@tabler/icons-react";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
@@ -66,7 +66,10 @@ export function DisclosureGroups() {
             mode="range"
             defaultMonth={CALENDAR_MONTH}
             today={CALENDAR_TODAY}
-            selected={{ from: new Date(2025, 2, 10), to: new Date(2025, 2, 16) }}
+            selected={{
+              from: new Date(2025, 2, 10),
+              to: new Date(2025, 2, 16),
+            }}
           />
         </GalleryItem>
         <GalleryItem label="Carousel (first slide)" className="w-96 px-12">
@@ -105,8 +108,14 @@ export function DisclosureGroups() {
             </TabsContent>
           </Tabs>
         </GalleryItem>
-        <GalleryItem label="TabsBar default + actions / sm" className="w-[560px]">
-          <Surface density="none" className="flex flex-col gap-3 overflow-hidden">
+        <GalleryItem
+          label="TabsBar default + actions / sm"
+          className="w-[560px]"
+        >
+          <Surface
+            density="none"
+            className="flex flex-col gap-3 overflow-hidden"
+          >
             <Tabs defaultValue="diff">
               <TabsBar
                 actions={
@@ -138,7 +147,9 @@ export function DisclosureGroups() {
           <Accordion type="single" defaultValue="b" collapsible>
             <AccordionItem value="a">
               <AccordionTrigger>What is eva?</AccordionTrigger>
-              <AccordionContent>A platform for running codebases.</AccordionContent>
+              <AccordionContent>
+                A platform for running codebases.
+              </AccordionContent>
             </AccordionItem>
             <AccordionItem value="b">
               <AccordionTrigger>Where do sandboxes run?</AccordionTrigger>

@@ -1,6 +1,7 @@
 import { api } from "@eva/backend";
 import type { AIModel, Id, ModelTraitsExecutionArgs } from "@eva/backend";
-import type { ModelAccount } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import type { OptimisticLocalStore } from "convex/browser";
@@ -15,7 +16,6 @@ import {
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { toast } from "@eva/ui";
 export type SessionMessage = NonNullable<
   FunctionReturnType<typeof api.messages.listByParent>
 >[number];

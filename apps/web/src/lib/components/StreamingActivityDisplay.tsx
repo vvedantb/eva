@@ -16,7 +16,7 @@ import {
   Spinner,
   formatElapsed,
   useElapsedSeconds,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   isEmptyActivityPayload,
   isSandboxStartupActivity,

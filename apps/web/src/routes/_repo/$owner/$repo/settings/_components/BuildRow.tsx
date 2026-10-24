@@ -5,7 +5,7 @@ import {
   Collapsible,
   CollapsibleContent,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconChevronDown,

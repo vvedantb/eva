@@ -1,11 +1,11 @@
 import type { ComponentType } from "react";
+import { cn } from "@eva/ui";
 import {
   TabsTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { TablerIconByName } from "@/lib/components/TablerIconByName";
 
 /**
@@ -157,9 +157,7 @@ export function SandboxTabTrigger({
       {layout === "stacked" ? (
         /* One line, clipped: a rail that reflows per tab name would make the
            whole column ragged, and the tooltip is gone at this width. */
-        <span className="w-full truncate text-3xs leading-3">
-          {tab.label}
-        </span>
+        <span className="w-full truncate text-3xs leading-3">{tab.label}</span>
       ) : null}
       {count !== undefined ? (
         <span

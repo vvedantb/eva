@@ -18,10 +18,8 @@ import {
   GanttFeatureItem,
   GanttToday,
   useGanttContext,
-  type GanttFeature,
-  type GanttStatus,
-  type Range,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { GanttFeature, GanttStatus, Range } from "@vvedantb/ui";
 import {
   phaseConfig,
   type ProjectPhase,
@@ -250,21 +248,21 @@ export function ProjectsTimeline({
               const Icon = config.icon;
               return (
                 <ListEnter key={feature.id} index={index}>
-                <GanttSidebarItem
-                  feature={feature}
-                  onSelectItem={handleSelectItem}
-                  icon={<Icon size={14} className={config.text} />}
-                  meta={
-                    project ? (
-                      <TimelineSidebarMeta
-                        progress={progressMap.get(feature.id)}
-                        lead={project.projectLead}
-                        members={project.members}
-                        fallbackUserId={project.userId}
-                      />
-                    ) : undefined
-                  }
-                />
+                  <GanttSidebarItem
+                    feature={feature}
+                    onSelectItem={handleSelectItem}
+                    icon={<Icon size={14} className={config.text} />}
+                    meta={
+                      project ? (
+                        <TimelineSidebarMeta
+                          progress={progressMap.get(feature.id)}
+                          lead={project.projectLead}
+                          members={project.members}
+                          fallbackUserId={project.userId}
+                        />
+                      ) : undefined
+                    }
+                  />
                 </ListEnter>
               );
             })}

@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useNavigate } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,8 +11,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconChevronDown, IconPlus, IconX } from "@tabler/icons-react";
 import { useClosedSessionTabs } from "@/lib/components/sidebar/session-tabs/useClosedSessionTabs";
 import { DynamicLink } from "@/lib/components/DynamicLink";
@@ -124,9 +124,7 @@ export function SessionTabsOverflowMenu({
                           <DynamicLink
                             to={href}
                             title={
-                              closed
-                                ? "Closed tab — opens it again"
-                                : undefined
+                              closed ? "Closed tab — opens it again" : undefined
                             }
                             className={cn(
                               "cursor-pointer",

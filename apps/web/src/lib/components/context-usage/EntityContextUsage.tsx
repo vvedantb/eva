@@ -15,7 +15,7 @@ import {
   ContextOutputUsage,
   ContextCacheReadUsage,
   ContextCacheWriteUsage,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { parseResultEvent } from "@/lib/utils/logs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 

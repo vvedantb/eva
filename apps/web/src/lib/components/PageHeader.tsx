@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconArrowLeft } from "@tabler/icons-react";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 

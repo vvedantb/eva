@@ -207,6 +207,9 @@ export default defineConfig({
       "shiki",
       "frimousse",
       "sonner",
+      // eva's provider (@eva/ui) and the app must share one copy, or the
+      // UiConfig context splits and components lose eva's config.
+      "@vvedantb/ui",
     ],
   },
   build: {

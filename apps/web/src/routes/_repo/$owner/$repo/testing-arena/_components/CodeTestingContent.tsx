@@ -9,8 +9,8 @@ import {
   Spinner,
   TestError,
   TestErrorMessage,
-  motionFast,
-} from "@eva/ui";
+  transitionFast,
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconAlertTriangle,
@@ -113,7 +113,7 @@ function ReportCard({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={transitionFast}
               >
                 {toolbarKey === "fix" ? (
                   <Button
@@ -174,7 +174,7 @@ function ReportCard({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={transitionFast}
           >
             {fixSteps ? (
               <div className="rounded-surface border border-primary/20 bg-primary/5 px-4 py-3">

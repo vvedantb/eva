@@ -20,7 +20,7 @@ import {
   CenteredSpinner,
   toast,
   RefreshSpinIcon,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconEyeOff,

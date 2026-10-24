@@ -11,7 +11,7 @@ import {
   ConversationScrollButton,
   Message,
   MessageAction,
-  MessageActions,
+  MessageActionsBar,
   MessageBranch,
   MessageBranchContent,
   MessageBranchNext,
@@ -38,7 +38,7 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconCopy,
   IconMessageCircle,
@@ -66,7 +66,7 @@ const MESSAGES = [
 
 function SampleMessageActions() {
   return (
-    <MessageActions>
+    <MessageActionsBar>
       <MessageAction label="Copy">
         <IconCopy className="size-4" />
       </MessageAction>
@@ -79,7 +79,7 @@ function SampleMessageActions() {
       <MessageAction label="Dislike">
         <IconThumbDown className="size-4" />
       </MessageAction>
-    </MessageActions>
+    </MessageActionsBar>
   );
 }
 
@@ -113,7 +113,9 @@ function BranchSample() {
           <MessageContent>First answer: use a Switch.</MessageContent>
         </Message>
         <Message from="assistant" key="b2">
-          <MessageContent>Second answer: use a segmented control.</MessageContent>
+          <MessageContent>
+            Second answer: use a segmented control.
+          </MessageContent>
         </Message>
         <Message from="assistant" key="b3">
           <MessageContent>Third answer: follow the OS setting.</MessageContent>
@@ -155,7 +157,9 @@ function PromptInputSample({
       ) : null}
       <PromptInputBody>
         <PromptInputTextarea
-          defaultValue={withAttachments ? "Fix the layout in this screenshot" : undefined}
+          defaultValue={
+            withAttachments ? "Fix the layout in this screenshot" : undefined
+          }
         />
       </PromptInputBody>
       <PromptInputFooter>
@@ -179,7 +183,9 @@ function PromptInputSample({
               <PromptInputSelectValue />
             </PromptInputSelectTrigger>
             <PromptInputSelectContent>
-              <PromptInputSelectItem value="sonnet">Sonnet</PromptInputSelectItem>
+              <PromptInputSelectItem value="sonnet">
+                Sonnet
+              </PromptInputSelectItem>
               <PromptInputSelectItem value="opus">Opus</PromptInputSelectItem>
             </PromptInputSelectContent>
           </PromptInputSelect>

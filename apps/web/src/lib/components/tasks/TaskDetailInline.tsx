@@ -6,7 +6,8 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, CircleSpinner, cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Badge, CircleSpinner, transitionFast } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
@@ -580,7 +581,7 @@ export function TaskDetailInline({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               {sandboxContent}
             </m.div>
@@ -591,7 +592,7 @@ export function TaskDetailInline({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={transitionFast}
             >
               {detailContent}
             </m.div>

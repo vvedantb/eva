@@ -6,6 +6,7 @@ import {
   IconPlayerStop,
   IconRobot,
 } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 import {
   ActivityTasks,
   Button,
@@ -13,10 +14,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   CircleSpinner,
-  cn,
   formatElapsed,
   useElapsedSeconds,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   subagentTone,
   type SubagentTone,
