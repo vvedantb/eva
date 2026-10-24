@@ -608,15 +608,6 @@ const schema = defineSchema({
     registeredAt: v.number(),
   }).index("by_clientId", ["clientId"]),
 
-  // Verified MCP bearer tokens (SHA-256 hash only). Functions in `mcp/tokenCache.ts`.
-  mcpTokenCache: defineTable({
-    tokenHash: v.string(),
-    clerkUserId: v.string(),
-    expiresAt: v.number(),
-  })
-    .index("by_token_hash", ["tokenHash"])
-    .index("by_expires", ["expiresAt"]),
-
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])
     .index("by_secret", ["secret"]),

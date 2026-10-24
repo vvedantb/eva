@@ -1,6 +1,5 @@
 import { convexTest } from "convex-test";
 import { SignJWT } from "jose";
-import { authenticateWithTokenCache } from "@vvedantb/server";
 import {
   afterEach,
   beforeEach,
@@ -13,7 +12,7 @@ import {
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
-  authenticateWith,
+  authenticateMcpToken,
   isInternalToken,
   type McpPrincipal,
 } from "../convex/mcp/authenticate";
@@ -55,6 +54,17 @@ vi.mock("@clerk/backend", () => ({
   },
 }));
 
+const bearer = vi.hoisted(() => ({
+  authenticate: vi.fn<
+    (options: { token: string }) => Promise<{ clerkUserId: string } | null>
+  >(),
+}));
+
+vi.mock("@vvedantb/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vvedantb/server")>();
+  return { ...actual, authenticateClerkBearer: bearer.authenticate };
+});
+
 const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const INTERNAL_SECRET = "internal-test-secret-0123456789abcdef";
@@ -85,6 +95,7 @@ beforeEach(() => {
   clerk.acceptsToken.length = 0;
   vi.stubEnv("CLERK_SECRET_KEY", "sk_test_fake");
   vi.stubEnv("CLERK_PUBLISHABLE_KEY", "pk_test_fake");
+  vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.test");
   vi.stubEnv("MCP_INTERNAL_SECRET", INTERNAL_SECRET);
   errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -230,46 +241,39 @@ describe("verifyAccessToken: mcp-internal tokens", () => {
   );
 });
 
-describe("authenticateWith", () => {
-  const clerkPrincipal: McpPrincipal = { clerkUserId: "user_abc" };
+describe("authenticateMcpToken", () => {
   const sandboxPrincipal: McpPrincipal = {
     clerkUserId: "user_sandbox",
     scopedRepoId: "repo_1",
     entityKind: "task",
   };
 
-  test("sandbox tokens skip the cache and keep their scope", async () => {
+  test("sandbox tokens skip Clerk and keep their scope", async () => {
     const token = await signToken("mcp-internal", {});
-    const verifyToken = vi.fn(() => Promise.resolve(sandboxPrincipal));
-    const cached = vi.fn(() => Promise.resolve(clerkPrincipal));
-    expect(await authenticateWith({ token, verify: verifyToken, cached })).toBe(
+    const runAction = vi.fn(() => Promise.resolve(sandboxPrincipal));
+    expect(await authenticateMcpToken({ runAction }, token)).toBe(
       sandboxPrincipal,
     );
-    expect(cached).not.toHaveBeenCalled();
-    expect(verifyToken).toHaveBeenCalledWith(token);
+    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(runAction).toHaveBeenCalledWith(
+      internal.mcp.nodeActions.verifyAccessToken,
+      { token },
+    );
+    expect(bearer.authenticate).not.toHaveBeenCalled();
   });
 
-  test("Clerk tokens go through the cache", async () => {
-    const verifyToken = vi.fn(() => Promise.resolve(clerkPrincipal));
-    const cached = vi.fn(() => Promise.resolve(clerkPrincipal));
-    expect(
-      await authenticateWith({
-        token: "opaque_token",
-        verify: verifyToken,
-        cached,
-      }),
-    ).toBe(clerkPrincipal);
-    expect(cached).toHaveBeenCalledWith("opaque_token", verifyToken);
-  });
-
-  test("a null from verify stays null", async () => {
-    expect(
-      await authenticateWith({
-        token: "opaque_token",
-        verify: () => Promise.resolve(null),
-        cached: (token, verifyToken) => verifyToken(token),
-      }),
-    ).toBeNull();
+  test("other tokens go to authenticateClerkBearer", async () => {
+    bearer.authenticate.mockResolvedValueOnce({ clerkUserId: "user_abc" });
+    const runAction = vi.fn();
+    expect(await authenticateMcpToken({ runAction }, "opaque_token")).toEqual({
+      clerkUserId: "user_abc",
+    });
+    expect(bearer.authenticate).toHaveBeenCalledTimes(1);
+    expect(bearer.authenticate.mock.calls[0]?.[0]).toMatchObject({
+      token: "opaque_token",
+      issuer: "https://clerk.test",
+    });
+    expect(runAction).not.toHaveBeenCalled();
   });
 });
 
@@ -280,71 +284,4 @@ describe("isInternalToken", () => {
     expect(isInternalToken("opaque_token")).toBe(false);
     expect(isInternalToken("a.not-base64!.c")).toBe(false);
   });
-});
-
-describe("MCP token cache", () => {
-  const FAR_FUTURE_MS = Date.now() + 60 * 60 * 1000;
-
-  test(
-    "a cache hit skips verify, a miss verifies and stores",
-    async () => {
-      const t = convexTest(schema, modules);
-      const ctx = {
-        runQuery: t.query,
-        runMutation: t.mutation,
-      };
-      const get = (tokenHash: string) =>
-        ctx.runQuery(internal.mcp.tokenCache.getInternal, { tokenHash });
-      const put = (row: {
-        tokenHash: string;
-        clerkUserId: string;
-        expiresAt: number;
-      }) => ctx.runMutation(internal.mcp.tokenCache.putInternal, row);
-      const verifyToken = vi.fn(() =>
-        Promise.resolve({ clerkUserId: "user_abc" }),
-      );
-
-      const first = await authenticateWithTokenCache({
-        token: "opaque_token",
-        get,
-        put,
-        verify: verifyToken,
-      });
-      expect(first).toEqual({ clerkUserId: "user_abc" });
-      expect(verifyToken).toHaveBeenCalledTimes(1);
-
-      const second = await authenticateWithTokenCache({
-        token: "opaque_token",
-        get,
-        put,
-        verify: verifyToken,
-      });
-      expect(second).toEqual({ clerkUserId: "user_abc" });
-      expect(verifyToken).toHaveBeenCalledTimes(1);
-
-      const rows = await t.run((db) => db.db.query("mcpTokenCache").collect());
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.tokenHash).not.toContain("opaque_token");
-      expect(rows[0]?.expiresAt).toBeLessThan(FAR_FUTURE_MS);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "invalid tokens are never cached",
-    async () => {
-      const t = convexTest(schema, modules);
-      const result = await authenticateWithTokenCache({
-        token: "bad_token",
-        get: (tokenHash) =>
-          t.query(internal.mcp.tokenCache.getInternal, { tokenHash }),
-        put: (row) => t.mutation(internal.mcp.tokenCache.putInternal, row),
-        verify: () => Promise.resolve(null),
-      });
-      expect(result).toBeNull();
-      const rows = await t.run((db) => db.db.query("mcpTokenCache").collect());
-      expect(rows).toEqual([]);
-    },
-    TIMEOUT_MS,
-  );
 });

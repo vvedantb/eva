@@ -448,7 +448,6 @@ import type * as mcp_sendEmail from "../mcp/sendEmail.js";
 import type * as mcp_sessionRef from "../mcp/sessionRef.js";
 import type * as mcp_supabase from "../mcp/supabase.js";
 import type * as mcp_tabQueueTools from "../mcp/tabQueueTools.js";
-import type * as mcp_tokenCache from "../mcp/tokenCache.js";
 import type * as mcp_toolShared from "../mcp/toolShared.js";
 import type * as mcp_tools from "../mcp/tools.js";
 import type * as mcp_workTools from "../mcp/workTools.js";
@@ -998,7 +997,6 @@ declare const fullApi: ApiFromModules<{
   "mcp/sessionRef": typeof mcp_sessionRef;
   "mcp/supabase": typeof mcp_supabase;
   "mcp/tabQueueTools": typeof mcp_tabQueueTools;
-  "mcp/tokenCache": typeof mcp_tokenCache;
   "mcp/toolShared": typeof mcp_toolShared;
   "mcp/tools": typeof mcp_tools;
   "mcp/workTools": typeof mcp_workTools;
