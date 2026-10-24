@@ -104,8 +104,10 @@ export function SheetSection() {
           </SheetContent>
         </Sheet>
       </GalleryItem>
-      <GalleryItem label="SheetContent side=right with SheetClose">
-        <Sheet open onOpenChange={noop}>
+      <GalleryItem label="SheetContent side=right with SheetClose (modal=false)">
+        {/* Non-modal so it renders no second scrim over the left sheet; the
+            left sheet's scrim already shows the overlay styling. */}
+        <Sheet open onOpenChange={noop} modal={false}>
           <SheetTrigger asChild>
             <Button variant="outline">Open right</Button>
           </SheetTrigger>
