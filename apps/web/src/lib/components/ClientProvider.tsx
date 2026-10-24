@@ -18,7 +18,7 @@ import { FaviconController } from "@/lib/components/FaviconController";
 import { ThemeModeProvider } from "@/lib/components/ThemeModeProvider";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
-import { ensureRuntimeVisibility } from "@eva/ui";
+import { ensureRuntimeVisibility } from "@vvedantb/ui";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { AuthLoadingScreen } from "./AuthLoadingScreen";
 import { WelcomeSetupDialog } from "./onboarding/WelcomeSetupDialog";

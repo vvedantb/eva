@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconPencil } from "@tabler/icons-react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";

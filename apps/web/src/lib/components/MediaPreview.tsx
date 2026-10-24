@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@eva/ui";
 import {
-  cn,
   VideoPlayer,
   VideoPlayerContent,
   VideoPlayerControlBar,
@@ -15,7 +15,7 @@ import {
   VideoPlayerTimeDisplay,
   VideoPlayerTimeRange,
   VideoPlayerVolumeRange,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { ImageLightbox } from "@/lib/components/ImageLightbox";
 
 export function VideoPreview({

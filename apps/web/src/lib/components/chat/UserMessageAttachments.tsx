@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import {
   iconForAttachment,
   isImageContentType,

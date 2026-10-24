@@ -3,7 +3,7 @@
 import { useQueryState } from "nuqs";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { CenteredSpinner, motionFast } from "@eva/ui";
+import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -142,7 +142,7 @@ export function UsageClient() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <UsageOverviewView
               repoId={repo._id}
@@ -157,7 +157,7 @@ export function UsageClient() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {isLoading ? (
               <CenteredSpinner label="Loading logs" />

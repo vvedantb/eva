@@ -13,11 +13,8 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
-import {
-  formatModelDisplayLabel,
-  getProviderLabel,
-  type ModelAccount,
-} from "@eva/ui";
+import { formatModelDisplayLabel, getProviderLabel } from "@vvedantb/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
 import { useMinuteNow } from "@/lib/components/usage-limits/_useMinuteNow";

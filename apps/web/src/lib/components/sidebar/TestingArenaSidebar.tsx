@@ -6,6 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Link } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import {
   Button,
   Dialog,
@@ -14,8 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
   Spinner,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconAlertTriangle, IconFileText } from "@tabler/icons-react";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { useQueryState } from "nuqs";

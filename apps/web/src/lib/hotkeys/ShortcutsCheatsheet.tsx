@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { Link } from "@tanstack/react-router";
 import { EDITING_KEYS } from "@/lib/components/settings/shortcuts/editingKeys";
 import {

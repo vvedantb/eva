@@ -10,7 +10,8 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 
 type SetHeaderAction = (node: ReactNode) => void;
 

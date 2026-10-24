@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * The per-step fields that only ever render inside a row's expanded disclosure
- * (`ActivityStepDetail` in @eva/ui): the tool transcript, the edit before/after
+ * (`ActivityStepDetail` in @vvedantb/ui): the tool transcript, the edit before/after
  * pair, and the write preview.
  *
  * On a heavy session they are the bulk of what `listByParent` ships — measured

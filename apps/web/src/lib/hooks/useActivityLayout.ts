@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import type { ActivityLayout } from "@eva/ui";
+import type { ActivityLayout } from "@vvedantb/ui";
 
 /**
  * Chat activity layout from the "Claude-style activity steps" opt-in. Folded

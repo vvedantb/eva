@@ -12,6 +12,7 @@ import { convex } from "./lib/convex";
 import { DeploymentErrorFallback } from "./lib/components/DeploymentErrorFallback";
 import { RouteNotFound } from "./lib/components/RouteNotFound";
 import { MotionProvider } from "./lib/components/MotionProvider";
+import { EvaUiProvider } from "@eva/ui";
 import { isChunkLoadError } from "./lib/utils/isChunkLoadError";
 import {
   claimStaleDeployReload,
@@ -186,13 +187,15 @@ if (rootElement) {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <MotionProvider>
-          <ClerkProvider
-            publishableKey={clientEnv.VITE_CLERK_PUBLISHABLE_KEY}
-            signInFallbackRedirectUrl="/home"
-            signUpFallbackRedirectUrl="/home"
-          >
-            <InnerApp hadSession={hadSession} router={router} />
-          </ClerkProvider>
+          <EvaUiProvider>
+            <ClerkProvider
+              publishableKey={clientEnv.VITE_CLERK_PUBLISHABLE_KEY}
+              signInFallbackRedirectUrl="/home"
+              signUpFallbackRedirectUrl="/home"
+            >
+              <InnerApp hadSession={hadSession} router={router} />
+            </ClerkProvider>
+          </EvaUiProvider>
         </MotionProvider>
       </QueryClientProvider>
     </StrictMode>,

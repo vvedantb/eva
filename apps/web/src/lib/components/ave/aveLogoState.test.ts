@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { aveLogoState } from "@/lib/components/ave/aveLogoState";
 
 function step(
@@ -28,12 +28,22 @@ const SEARCH_TYPES: ActivityStep["type"][] = [
   "search_code",
   "search_files",
 ];
-const TOOL_TYPES: ActivityStep["type"][] = ["bash", "edit", "write", "read", "tool"];
+const TOOL_TYPES: ActivityStep["type"][] = [
+  "bash",
+  "edit",
+  "write",
+  "read",
+  "tool",
+];
 
 describe("aveLogoState", () => {
   it("is idle when no run is going and nothing waits on the user", () => {
     expect(
-      aveLogoState({ ...running, threadStatus: "idle", currentActivity: undefined }),
+      aveLogoState({
+        ...running,
+        threadStatus: "idle",
+        currentActivity: undefined,
+      }),
     ).toBe("idle");
     expect(
       aveLogoState({
@@ -51,31 +61,28 @@ describe("aveLogoState", () => {
     ["legacy plain text", "Working..."],
     ["a thinking step", activity(step("thinking"))],
     ["a reasoning step", activity(step("reasoning"))],
-    ["a finished tool and nothing after it", activity(step("bash", "complete"))],
+    [
+      "a finished tool and nothing after it",
+      activity(step("bash", "complete")),
+    ],
   ])("thinks on %s", (_, currentActivity) => {
     expect(aveLogoState({ ...running, currentActivity })).toBe("thinking");
   });
 
-  it.each(SEARCH_TYPES)(
-    "searches during %s",
-    (type) => {
-      expect(
-        aveLogoState({
-          ...running,
-          currentActivity: activity(step("bash", "complete"), step(type)),
-        }),
-      ).toBe("searching");
-    },
-  );
+  it.each(SEARCH_TYPES)("searches during %s", (type) => {
+    expect(
+      aveLogoState({
+        ...running,
+        currentActivity: activity(step("bash", "complete"), step(type)),
+      }),
+    ).toBe("searching");
+  });
 
-  it.each(TOOL_TYPES)(
-    "uses tools during %s",
-    (type) => {
-      expect(
-        aveLogoState({ ...running, currentActivity: activity(step(type)) }),
-      ).toBe("tools");
-    },
-  );
+  it.each(TOOL_TYPES)("uses tools during %s", (type) => {
+    expect(
+      aveLogoState({ ...running, currentActivity: activity(step(type)) }),
+    ).toBe("tools");
+  });
 
   it("prefers tools over a search running alongside", () => {
     expect(

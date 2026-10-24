@@ -3,7 +3,8 @@
 import { type api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { Badge, Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Badge, Button } from "@vvedantb/ui";
 import { IconFileText } from "@tabler/icons-react";
 import { SkillContentDialog } from "./SkillContentDialog";
 

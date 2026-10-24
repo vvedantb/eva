@@ -22,7 +22,10 @@ export function PrDiffStat({
 }) {
   return (
     <span
-      className={cn("inline-flex shrink-0 gap-1 font-mono tabular-nums", className)}
+      className={cn(
+        "inline-flex shrink-0 gap-1 font-mono tabular-nums",
+        className,
+      )}
       aria-label={`${additions} additions, ${deletions} deletions`}
     >
       {hideZero && additions === 0 ? null : (

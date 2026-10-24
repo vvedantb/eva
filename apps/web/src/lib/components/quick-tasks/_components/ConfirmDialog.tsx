@@ -5,8 +5,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+} from "@vvedantb/ui";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -48,7 +48,7 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button variant={variant} onClick={onConfirm} disabled={isLoading}>
-            {isLoading && <CircleSpinner size="sm" />}
+            {isLoading && <Spinner variant="circle" size="sm" />}
             {confirmLabel}
           </Button>
         </DialogFooter>

@@ -5,7 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
 import { useLocalStorage } from "usehooks-ts";
 import type { Id } from "@eva/backend";
-import { Button, Spinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import { IconFileText, IconRefresh } from "@tabler/icons-react";
 import { toRepoRelativePath } from "@/lib/components/chat/ChangedFilesCard";
 import { RepoLogo } from "@/lib/components/RepoLogo";
@@ -159,7 +160,10 @@ export function FilesPanel({
     onRootChange?.(nextRoot || null);
     // The previously open file belongs to the repo we are leaving. Same
     // TanStack-search rule as `handleSelectFile`, not nuqs.
-    void navigate({ to: ".", search: (prev) => ({ ...prev, file: undefined }) });
+    void navigate({
+      to: ".",
+      search: (prev) => ({ ...prev, file: undefined }),
+    });
   };
 
   if (!sandboxId || !isActive) {

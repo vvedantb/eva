@@ -3,7 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
-import { Button, Spinner, Textarea } from "@eva/ui";
+import { Button, Spinner, Textarea } from "@vvedantb/ui";
 import { prErrorMessage } from "@/lib/prReviewQueries";
 
 /**

@@ -61,7 +61,8 @@
       "@vercel/sandbox": "patches/@vercel__sandbox.patch"
     },
     "onlyBuiltDependencies": [
-      "@swc/core"
+      "@swc/core",
+      "@vvedantb/ui"
     ],
     "packageExtensions": {
       "@convex-dev/prosemirror-sync": {

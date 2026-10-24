@@ -1,6 +1,6 @@
 "use client";
 
-import { quantizedSnapshot, subscribeQuantized } from "@eva/ui";
+import { quantizedSnapshot, subscribeQuantized } from "@vvedantb/ui";
 import { useSyncExternalStore } from "react";
 
 /**

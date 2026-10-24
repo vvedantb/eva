@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useMutation } from "convex/react";

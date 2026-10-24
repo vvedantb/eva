@@ -1,6 +1,6 @@
 "use client";
 
-import { DropdownMenuItem } from "@eva/ui";
+import { DropdownMenuItem } from "@vvedantb/ui";
 import { IconLink } from "@tabler/icons-react";
 
 /**

@@ -1,4 +1,5 @@
-import { Button, cn, motionSpring } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, springTransition } from "@vvedantb/ui";
 import { IconArrowUp, IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
@@ -44,14 +45,17 @@ export function ChatNewMessagesPill({
             initial={{ opacity: 0, y: -8, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.94 }}
-            transition={motionSpring}
+            transition={springTransition}
             className="pointer-events-auto flex items-center"
           >
             <Button
               type="button"
               size="sm"
               onClick={onJump}
-              className={cn(PILL_HALF, "gap-1.5 rounded-l-full rounded-r-none pr-1.5 pl-3")}
+              className={cn(
+                PILL_HALF,
+                "gap-1.5 rounded-l-full rounded-r-none pr-1.5 pl-3",
+              )}
             >
               <IconArrowUp />
               {label}
@@ -62,7 +66,10 @@ export function ChatNewMessagesPill({
               aria-label="Dismiss"
               title="Dismiss"
               onClick={() => setDismissed(true)}
-              className={cn(PILL_HALF, "rounded-l-none rounded-r-full pr-2.5 pl-1.5")}
+              className={cn(
+                PILL_HALF,
+                "rounded-l-none rounded-r-full pr-2.5 pl-1.5",
+              )}
             >
               <IconX />
             </Button>

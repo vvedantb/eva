@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Spinner, Surface, Textarea } from "@eva/ui";
+import { Button, Spinner, Surface, Textarea } from "@vvedantb/ui";
 import { SECTION_LABEL_CLASS } from "./prOverviewMeta";
 
 /**

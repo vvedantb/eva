@@ -5,7 +5,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCopy, IconCheck, IconPlayerStop } from "@tabler/icons-react";
 import { toast } from "sonner";
 import type { PresentationSync } from "../usePresentationSync";

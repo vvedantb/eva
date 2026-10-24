@@ -7,7 +7,7 @@ import { api } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
-import { Badge, Button, Spinner, Switch, toast } from "@eva/ui";
+import { Badge, Button, Spinner, Switch, toast } from "@vvedantb/ui";
 import { FigmaLogo, LinearLogo } from "@/lib/components/ui/providerLogos";
 import {
   catchMutationError,

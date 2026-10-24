@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Button, Card, CardContent } from "@eva/ui";
+import { Button, Card, CardContent } from "@vvedantb/ui";
 import { IconEye, IconEyeOff, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { useFollow } from "@/lib/contexts/FollowContext";

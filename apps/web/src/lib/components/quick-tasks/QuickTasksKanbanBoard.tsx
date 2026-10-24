@@ -10,7 +10,7 @@ import { KanbanBoard } from "@/lib/components/kanban/KanbanBoard";
 import { QuickTaskCard } from "./QuickTaskCard";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { RunAllDialog } from "./RunAllDialog";
-import { Button, Spinner, toast } from "@eva/ui";
+import { Button, Spinner, toast } from "@vvedantb/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -51,7 +51,9 @@ export function QuickTasksKanbanBoard({
   const projects = useQuery(api.projects.list, { repoId });
   const projectNumIds = new Map(
     (projects ?? []).flatMap((project) =>
-      project.numId === undefined ? [] : [[project._id, project.numId] as const],
+      project.numId === undefined
+        ? []
+        : [[project._id, project.numId] as const],
     ),
   );
   const updateStatus = useMutation(

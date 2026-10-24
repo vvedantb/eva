@@ -1,6 +1,6 @@
 "use client";
 
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { IconInbox } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
@@ -58,9 +58,7 @@ export function InboxListPane({
   onToggleCheck,
 }: InboxListPaneProps) {
   if (notifications === undefined) {
-    return (
-      <CenteredSpinner label="Loading inbox" />
-    );
+    return <CenteredSpinner label="Loading inbox" />;
   }
 
   if (notifications.length === 0) {

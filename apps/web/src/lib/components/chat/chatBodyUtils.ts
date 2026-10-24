@@ -1,5 +1,6 @@
 import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
-import { getProviderLabel, type ActivityStep } from "@eva/ui";
+import { getProviderLabel } from "@vvedantb/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { isSandboxPausedAlert } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";

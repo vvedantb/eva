@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 
 /** Wrapping row of pending context chips above the composer. */

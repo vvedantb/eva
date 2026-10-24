@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogBody,
   DialogFooter,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPencil } from "@tabler/icons-react";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { withMutationToast } from "@/lib/utils/mutationToast";

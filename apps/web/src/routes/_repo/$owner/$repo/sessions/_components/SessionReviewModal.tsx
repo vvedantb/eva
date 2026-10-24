@@ -7,10 +7,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  motionBase,
-  motionSlow,
+  tokenTransition,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCircleCheck } from "@tabler/icons-react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
@@ -86,7 +85,7 @@ export function SessionReviewModal({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={motionBase}
+              transition={tokenTransition.base}
             >
               <DialogHeader>
                 <DialogTitle>Send for Code Review</DialogTitle>
@@ -114,7 +113,7 @@ export function SessionReviewModal({
               className="space-y-4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={motionSlow}
+              transition={tokenTransition.slow}
             >
               <DialogHeader>
                 <DialogTitle>Review Sent</DialogTitle>
@@ -122,7 +121,7 @@ export function SessionReviewModal({
               <m.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...motionSlow, delay: 0.1 }}
+                transition={{ ...tokenTransition.slow, delay: 0.1 }}
                 className="rounded-surface bg-status-code-review-bg p-4 text-center"
               >
                 <IconCircleCheck

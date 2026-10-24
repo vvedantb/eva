@@ -3,7 +3,7 @@
 import { type ReactNode } from "react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { Spinner } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { useQuickTaskNeighbors } from "../_utils/useQuickTaskNeighbors";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";

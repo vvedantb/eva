@@ -10,7 +10,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconUserPlus, IconCheck } from "@tabler/icons-react";
 import { getUserInitials } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";

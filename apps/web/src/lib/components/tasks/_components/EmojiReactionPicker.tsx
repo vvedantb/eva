@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import { EmojiPicker } from "frimousse";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   HoverCard,
   HoverCardContent,
@@ -11,8 +12,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconMoodSmile } from "@tabler/icons-react";
 import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
 

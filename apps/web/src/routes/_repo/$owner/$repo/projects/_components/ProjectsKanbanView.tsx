@@ -15,7 +15,7 @@ import {
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
-import { motionBase } from "@eva/ui";
+import { tokenTransition } from "@vvedantb/ui";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
@@ -60,7 +60,7 @@ export function ProjectsKanbanView({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <VirtualProjectColumn
                   phase={phase}

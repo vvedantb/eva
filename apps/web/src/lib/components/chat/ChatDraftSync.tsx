@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { usePromptInputController } from "@eva/ui";
+import { usePromptInputController } from "@vvedantb/ui";
 import { useDraftAutosave } from "@/lib/hooks/useDraftAutosave";
 import { decideDraftPull, rememberOwnSave } from "./chatDraftPull";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";

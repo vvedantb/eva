@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import {
   Button,
   Checkbox,
@@ -14,8 +15,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCheck, IconDots, IconLink } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";

@@ -2,8 +2,7 @@
 
 import { Suspense, lazy } from "react";
 import type { ThemeTypes } from "@pierre/diffs";
-import { Button, Spinner } from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+import { Button, Spinner, Markdown } from "@vvedantb/ui";
 import { IconRefresh } from "@tabler/icons-react";
 import { ScreenshotPreview, VideoPreview } from "@/lib/components/MediaPreview";
 import { formatBytes, type ViewerState } from "../_utils/-fileViewerState";
@@ -108,9 +107,7 @@ export function FileViewerBody({
         </p>
       ) : null}
       {renderMarkdown ? (
-        <Markdown className="px-4 py-3 text-sm">
-          {state.content}
-        </Markdown>
+        <Markdown className="px-4 py-3 text-sm">{state.content}</Markdown>
       ) : editing ? (
         <Suspense fallback={<Loading />}>
           <SandboxFileEditor

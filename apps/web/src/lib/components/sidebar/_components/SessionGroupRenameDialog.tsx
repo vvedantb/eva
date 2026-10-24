@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 interface SessionGroupRenameDialogProps {

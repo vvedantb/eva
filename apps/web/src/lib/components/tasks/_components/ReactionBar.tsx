@@ -1,13 +1,13 @@
 ﻿"use client";
 
 import { AnimatePresence, m } from "motion/react";
+import { cn } from "@eva/ui";
 import {
-  cn,
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import type { ReactionGroup } from "./TaskReactionsProvider";
@@ -37,7 +37,7 @@ export function ReactionBar({ groups, toggle }: ReactionBarProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <HoverCard>
               <HoverCardTrigger asChild>

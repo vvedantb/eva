@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useQueryState } from "nuqs";
-import { cn, OpenSubagentContext } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { OpenSubagentContext } from "@vvedantb/ui";
 import { subagentParser } from "@/lib/search-params";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {

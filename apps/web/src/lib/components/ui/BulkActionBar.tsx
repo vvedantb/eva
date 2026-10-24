@@ -4,13 +4,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  motionFast,
+  tokenTransition,
   Separator,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconDots, IconX } from "@tabler/icons-react";
 import type { ComponentType } from "react";
 import { CountPop } from "@/lib/components/ui/CountPop";
@@ -117,7 +117,7 @@ export function BulkActionBar({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <TooltipProvider>
             <div className="flex max-w-[calc(100vw-2rem)] items-center gap-1 overflow-x-auto rounded-surface bg-popover/95 px-2.5 py-2 backdrop-blur-md smooth-shadow-ring-lg scrollbar-none">

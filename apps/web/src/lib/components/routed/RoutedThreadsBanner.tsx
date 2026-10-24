@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Badge } from "@eva/ui";
+import { Badge } from "@vvedantb/ui";
 import type { ChatEntityRef } from "@/lib/components/chat/sandboxChatSurface";
 import { useAskTeammates } from "@/lib/hooks/useAskTeammates";
 import {

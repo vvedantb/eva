@@ -13,7 +13,7 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
