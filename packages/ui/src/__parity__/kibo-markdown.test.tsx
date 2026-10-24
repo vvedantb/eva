@@ -54,7 +54,7 @@ import {
   VideoPlayerTimeRange,
   VideoPlayerVolumeRange,
 } from "../__legacy__/kibo/video-player";
-import { Markdown } from "../markdown";
+import { Markdown } from "../__legacy__/markdown";
 import { renderPair } from "./harness";
 
 /**

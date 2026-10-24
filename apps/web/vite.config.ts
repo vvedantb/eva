@@ -73,6 +73,9 @@ function agentLoginPlugin(): Plugin {
   };
 }
 
+/** Everything in node_modules except @vvedantb/ui (also under pnpm's `.pnpm` store). */
+const COMPILER_EXCLUDE = /\/node_modules\/(?!\.pnpm\/@vvedantb\+ui@|@vvedantb\/ui\/)/;
+
 export default defineConfig({
   plugins: [
     tailwindcss(),
@@ -92,7 +95,9 @@ export default defineConfig({
     // memoization. `compiler: true` runs oxc-transform-react (Rust) in-process —
     // no Babel pass. Bailouts surface as build warnings; `pnpm compiler:check`
     // is the gate that fails on a new one.
-    react({ compiler: true }),
+    // @vvedantb/ui ships TSX source and holds what used to be @eva/ui, so it
+    // is compiled like app code; the plugin skips node_modules by default.
+    react({ compiler: true, exclude: COMPILER_EXCLUDE }),
     // Nothing imports the icon barrel anymore: static imports are rewritten to
     // deep paths here, and icon-by-name resolution reads raw path data from
     // the virtual module below — see lib/components/TablerIconByName.tsx.
@@ -109,6 +114,64 @@ export default defineConfig({
         brotliSize: true,
       }),
   ].filter(Boolean),
+  // Served as source in dev (not pre-bundled) so the React Compiler sees it.
+  // Its own dependencies are still pre-bundled: several ship CommonJS, which
+  // the browser cannot import from unbundled source.
+  optimizeDeps: {
+    exclude: ["@vvedantb/ui"],
+    include: [
+      "@vvedantb/ui > @dnd-kit/core",
+      "@vvedantb/ui > @dnd-kit/modifiers",
+      "@vvedantb/ui > @dnd-kit/sortable",
+      "@vvedantb/ui > @dnd-kit/utilities",
+      "@vvedantb/ui > @radix-ui/react-accordion",
+      "@vvedantb/ui > @radix-ui/react-checkbox",
+      "@vvedantb/ui > @radix-ui/react-collapsible",
+      "@vvedantb/ui > @radix-ui/react-context-menu",
+      "@vvedantb/ui > @radix-ui/react-dialog",
+      "@vvedantb/ui > @radix-ui/react-dropdown-menu",
+      "@vvedantb/ui > @radix-ui/react-hover-card",
+      "@vvedantb/ui > @radix-ui/react-label",
+      "@vvedantb/ui > @radix-ui/react-popover",
+      "@vvedantb/ui > @radix-ui/react-progress",
+      "@vvedantb/ui > @radix-ui/react-scroll-area",
+      "@vvedantb/ui > @radix-ui/react-select",
+      "@vvedantb/ui > @radix-ui/react-separator",
+      "@vvedantb/ui > @radix-ui/react-slider",
+      "@vvedantb/ui > @radix-ui/react-slot",
+      "@vvedantb/ui > @radix-ui/react-switch",
+      "@vvedantb/ui > @radix-ui/react-tabs",
+      "@vvedantb/ui > @radix-ui/react-tooltip",
+      "@vvedantb/ui > @radix-ui/react-use-controllable-state",
+      "@vvedantb/ui > @radix-ui/react-visually-hidden",
+      "@vvedantb/ui > @streamdown/cjk",
+      "@vvedantb/ui > @streamdown/code",
+      "@vvedantb/ui > @streamdown/math",
+      "@vvedantb/ui > @streamdown/mermaid",
+      "@vvedantb/ui > @tabler/icons-react",
+      "@vvedantb/ui > @tanstack/react-hotkeys",
+      "@vvedantb/ui > @vvedantb/server",
+      "@vvedantb/ui > ai",
+      "@vvedantb/ui > class-variance-authority",
+      "@vvedantb/ui > clsx",
+      "@vvedantb/ui > cmdk",
+      "@vvedantb/ui > dayjs",
+      "@vvedantb/ui > dayjs/plugin/relativeTime",
+      "@vvedantb/ui > embla-carousel-react",
+      "@vvedantb/ui > media-chrome/react",
+      "@vvedantb/ui > motion/react",
+      "@vvedantb/ui > nanoid",
+      "@vvedantb/ui > radix-ui",
+      "@vvedantb/ui > react-day-picker",
+      "@vvedantb/ui > shiki",
+      "@vvedantb/ui > sonner",
+      "@vvedantb/ui > streamdown",
+      "@vvedantb/ui > tailwind-merge",
+      "@vvedantb/ui > use-stick-to-bottom",
+      "@vvedantb/ui > vaul",
+      "@vvedantb/ui > zod",
+    ],
+  },
   server: {
     host: "0.0.0.0",
     cors: false,
