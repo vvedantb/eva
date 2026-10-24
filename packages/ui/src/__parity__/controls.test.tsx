@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 // Parity for the controls family: each legacy @eva/ui control against its
-// @vvedantb/ui replacement under `controlsConfig`. `controls.sites.json` holds
+// @vvedantb/ui replacement under `evaUiConfig`. `controls.sites.json` holds
 // the static variant / size / className combinations found at eva call sites
 // (apps/web and packages/ui, literals inside `cn(...)` joined as if every
 // condition held).
 import type { ReactNode } from "react";
 import { describe, expect, test } from "vitest";
 import * as Next from "@vvedantb/ui";
-import { controlsConfig } from "../config/controls";
+import { evaUiConfig } from "../config";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -54,7 +54,7 @@ const INVISIBLE_ATTRS =
   / data-slot="(?:calendar|carousel|carousel-content|carousel-item|carousel-dots|accordion|accordion-item|accordion-trigger|accordion-content)"| data-variant="segmented"/g;
 
 async function expectSame(legacy: ReactNode, next: ReactNode, interact?: () => Promise<void> | void) {
-  const pair = await renderPair(legacy, next, controlsConfig, interact);
+  const pair = await renderPair(legacy, next, evaUiConfig, interact);
   expect(pair.next.replace(INVISIBLE_ATTRS, "")).toBe(pair.legacy);
 }
 
@@ -184,7 +184,7 @@ describe("Slider", () => {
     const pair = await renderPair(
       <Slider min={0} max={4} step={1} value={[2]} disabled aria-label="Model" aria-valuetext="Fast" />,
       <Next.Slider min={0} max={4} step={1} value={[2]} disabled aria-label="Model" aria-valuetext="Fast" />,
-      controlsConfig,
+      evaUiConfig,
     );
     const strip = (html: string) => html.replace(/ aria-label="Model"| aria-valuetext="Fast"/g, "");
     expect(pair.legacy).toContain('aria-label="Model"');
@@ -220,7 +220,7 @@ describe("ButtonGroup", () => {
   // full parity needs that family's config too; this checks the classes this
   // family adds on top (eva has no call site for it).
   test("ButtonGroupSeparator adds the same classes", async () => {
-    const pair = await renderPair(<ButtonGroupSeparator />, <Next.ButtonGroupSeparator />, controlsConfig);
+    const pair = await renderPair(<ButtonGroupSeparator />, <Next.ButtonGroupSeparator />, evaUiConfig);
     for (const token of ["bg-input", "relative", "m-0!", "self-stretch", "data-[orientation=vertical]:h-auto"]) {
       expect(pair.legacy).toContain(token);
       expect(pair.next).toContain(token);
@@ -341,7 +341,7 @@ describe("Calendar", () => {
     const pair = await renderPair(
       <Calendar {...props} month={month} today={today} disabled={disabled} className="rounded-lg" />,
       <Next.Calendar {...props} month={month} today={today} disabled={disabled} className="rounded-lg" />,
-      controlsConfig,
+      evaUiConfig,
     );
     expect(pair.legacy).toContain('day="[object Object]"');
     expect(pair.next.replace(INVISIBLE_ATTRS, "")).toBe(stripDay(pair.legacy));
@@ -351,7 +351,7 @@ describe("Calendar", () => {
     const pair = await renderPair(
       <Calendar mode="single" month={month} today={today} numberOfMonths={2} />,
       <Next.Calendar mode="single" month={month} today={today} numberOfMonths={2} />,
-      controlsConfig,
+      evaUiConfig,
     );
     expect(pair.next.replace(INVISIBLE_ATTRS, "")).toBe(stripDay(pair.legacy));
   });

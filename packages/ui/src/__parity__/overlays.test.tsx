@@ -5,7 +5,8 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import * as Next from "@vvedantb/ui";
 import { UiConfigProvider } from "@vvedantb/ui";
-import { overlaysConfig, menuContentClass } from "../config/overlays";
+import { evaUiConfig } from "../config";
+import { menuContentClass } from "../config/overlays";
 import * as LegacyDialog from "../ui/dialog";
 import * as LegacySheet from "../ui/sheet";
 import * as LegacyPopover from "../ui/popover";
@@ -27,7 +28,7 @@ type Case = {
 };
 
 async function expectParity({ legacy, next, interact, normalise = (html) => html }: Case) {
-  const pair = await renderPair(legacy, next, overlaysConfig, interact);
+  const pair = await renderPair(legacy, next, evaUiConfig, interact);
   expect(normalise(pair.next)).toBe(normalise(pair.legacy));
   return pair;
 }
@@ -458,7 +459,7 @@ describe("open delays", () => {
       [150, 450],
     );
     const next = await openStates(
-      <UiConfigProvider config={overlaysConfig}>
+      <UiConfigProvider config={evaUiConfig}>
         <Next.TooltipProvider>
           <Next.Tooltip>
             <Next.TooltipTrigger data-target="">Tip</Next.TooltipTrigger>
@@ -483,7 +484,7 @@ describe("open delays", () => {
       [150, 400],
     );
     const next = await openStates(
-      <UiConfigProvider config={overlaysConfig}>
+      <UiConfigProvider config={evaUiConfig}>
         <Next.HoverCard>
           <Next.HoverCardTrigger data-target="">Hover</Next.HoverCardTrigger>
           <Next.HoverCardContent>Body</Next.HoverCardContent>
@@ -641,7 +642,7 @@ describe("ContextMenu", () => {
     },
   ]);
   it("really opened", async () => {
-    const { next } = await renderPair(contextTree(LegacyContext), contextTree(Next), overlaysConfig, rightClick);
+    const { next } = await renderPair(contextTree(LegacyContext), contextTree(Next), evaUiConfig, rightClick);
     expect(next).toContain('role="menu"');
     expect(next).toContain("Sub item");
   });
@@ -729,7 +730,7 @@ describe("Select", () => {
     const { legacy, next } = await renderPair(
       selectTree(LegacySelect, { trigger: FIELD_TRIGGER_CLASS }),
       selectTree(Next, { trigger: FIELD_TRIGGER_CLASS }),
-      overlaysConfig,
+      evaUiConfig,
     );
     expect(legacy).toContain("rounded-control rounded-lg");
     expect(next).not.toContain("rounded-control");
@@ -806,7 +807,7 @@ describe("Command", () => {
     const { legacy, next } = await renderPair(
       commandTree(LegacyCommand, { root }),
       commandTree(Next, { root }),
-      overlaysConfig,
+      evaUiConfig,
     );
     expect(legacy).toContain("rounded-none rounded-surface");
     expect(next).toBe(legacy.replace(" rounded-surface", ""));
@@ -860,10 +861,10 @@ describe("menu content motion", () => {
   });
 
   it("each menu scales from its own Radix origin var", () => {
-    expect(overlaysConfig.DropdownMenu.classes.content).toContain(
+    expect(evaUiConfig.DropdownMenu.classes.content).toContain(
       "origin-(--radix-dropdown-menu-content-transform-origin)",
     );
-    expect(overlaysConfig.ContextMenu.classes.content).toContain(
+    expect(evaUiConfig.ContextMenu.classes.content).toContain(
       "origin-(--radix-context-menu-content-transform-origin)",
     );
   });

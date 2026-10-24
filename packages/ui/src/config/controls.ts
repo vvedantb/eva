@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { getDefaultClassNames } from "react-day-picker";
 import { CalendarDayButton, type UiConfig } from "@vvedantb/ui";
-import { cn } from "../utils/cn";
+import { evaCn as cn } from "./cn";
 
 const buttonBase =
   "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold tracking-[-0.01em] motion-press focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 active:scale-[0.96] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
@@ -47,10 +47,6 @@ const calendarNavButton = cn(
 const rdp = getDefaultClassNames();
 
 export const controlsConfig = {
-  // eva's tailwind-merge does not know the `rounded-surface` / `-control` /
-  // `-menu-item` radius tokens, so a caller `rounded-*` class sits next to them
-  // and the CSS order decides. Keep that merge so call sites render as before.
-  cn,
   Button: {
     classes: { base: buttonBase, variant: buttonVariant, size: buttonSize },
   },

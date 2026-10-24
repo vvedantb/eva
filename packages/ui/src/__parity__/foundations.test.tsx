@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import * as Next from "@vvedantb/ui";
 
-import { foundationsConfig } from "../config/foundations";
+import { evaUiConfig } from "../config";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { BorderBeam } from "../ui/border-beam";
@@ -46,7 +46,7 @@ Object.defineProperty(Element.prototype, "animate", {
 });
 
 async function same(legacy: ReactNode, next: ReactNode, interact?: () => Promise<void> | void) {
-  const pair = await renderPair(legacy, next, foundationsConfig, interact);
+  const pair = await renderPair(legacy, next, evaUiConfig, interact);
   expect(pair.next).toBe(pair.legacy);
   return pair.legacy;
 }
