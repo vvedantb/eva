@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { Spinner, transitionFast } from "@vvedantb/ui";
+import { Spinner, tokenTransition } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 
@@ -30,7 +30,7 @@ export function ArenaSplitPane({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {detail}
             </m.div>

@@ -30,11 +30,6 @@ import {
   PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
-  PromptInputSelect,
-  PromptInputSelectContent,
-  PromptInputSelectItem,
-  PromptInputSelectTrigger,
-  PromptInputSelectValue,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
@@ -178,17 +173,6 @@ function PromptInputSample({
             <IconWorld className="size-4" />
             <span>Search</span>
           </PromptInputButton>
-          <PromptInputSelect value="sonnet">
-            <PromptInputSelectTrigger>
-              <PromptInputSelectValue />
-            </PromptInputSelectTrigger>
-            <PromptInputSelectContent>
-              <PromptInputSelectItem value="sonnet">
-                Sonnet
-              </PromptInputSelectItem>
-              <PromptInputSelectItem value="opus">Opus</PromptInputSelectItem>
-            </PromptInputSelectContent>
-          </PromptInputSelect>
         </PromptInputTools>
         <PromptInputSubmit status={status} />
       </PromptInputFooter>

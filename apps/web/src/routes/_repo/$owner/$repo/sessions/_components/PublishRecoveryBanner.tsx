@@ -12,7 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
@@ -184,7 +184,7 @@ export function PublishRecoveryBanner({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5">
               <Badge

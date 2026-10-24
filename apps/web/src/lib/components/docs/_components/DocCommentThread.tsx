@@ -11,7 +11,7 @@ import {
   Button,
   LIST_ROW_CONTROL_CLASS,
   Textarea,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconCheck, IconArrowBackUp } from "@tabler/icons-react";
@@ -192,7 +192,7 @@ export function DocCommentThread({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <Textarea
               value={replyContent}

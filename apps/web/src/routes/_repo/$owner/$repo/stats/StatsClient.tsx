@@ -2,7 +2,7 @@ import { useQueryState } from "nuqs";
 import { timeRangeParser } from "@/lib/search-params";
 import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { CenteredSpinner, transitionBase } from "@vvedantb/ui";
+import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -172,7 +172,7 @@ export function StatsClient() {
           <m.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={transitionBase}
+            transition={tokenTransition.base}
           >
             <Kpi
               icon={IconClockHour4}

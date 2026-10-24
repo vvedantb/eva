@@ -1,5 +1,5 @@
 import { createElement, type CSSProperties } from "react";
-import { CircleSpinner, type UiConfig } from "@vvedantb/ui";
+import { Spinner, type UiConfig } from "@vvedantb/ui";
 
 // Eva's look for the foundations family (spinners, loaders, status dot, list
 // row, toaster, card, table, progress, separator, label) on @vvedantb/ui.
@@ -40,14 +40,16 @@ export const foundationsConfig = {
         { points: BLUE_MARK, stroke: EVA_BLUE },
       ],
     },
-  },
-  CircleSpinner: {
-    colors: { track: EVA_PURPLE, arc: EVA_PURPLE, lead: EVA_BLUE },
+    circle: { track: EVA_PURPLE, arc: EVA_PURPLE, lead: EVA_BLUE },
   },
   LoadingState: {
     label: "Churning",
-    // Brand purple→blue sweep; blue leads, as on CircleSpinner's arc.
-    colors: [EVA_PURPLE, `color-mix(in oklab, ${EVA_PURPLE}, ${EVA_BLUE})`, EVA_BLUE],
+    // Brand purple→blue sweep; blue leads, as on the circle Spinner's arc.
+    colors: [
+      EVA_PURPLE,
+      `color-mix(in oklab, ${EVA_PURPLE}, ${EVA_BLUE})`,
+      EVA_BLUE,
+    ],
     classes: {
       label: "shimmer-text bg-clip-text text-2sm font-medium text-transparent",
     },
@@ -85,7 +87,11 @@ export const foundationsConfig = {
     visibleToasts: 3,
     toastIcons: "filled24",
     // Replaces sonner's 16px bar spinner so the loading slot matches the 24px icons.
-    loadingIcon: createElement(CircleSpinner, { size: "md", "aria-hidden": "true" }),
+    loadingIcon: createElement(Spinner, {
+      variant: "circle",
+      size: "md",
+      "aria-hidden": "true",
+    }),
     style: TOASTER_STYLE,
     classes: {
       toaster: "",
@@ -140,7 +146,8 @@ export const foundationsConfig = {
   Progress: {
     classes: {
       root: "relative h-2 w-full overflow-hidden rounded-full bg-secondary",
-      indicator: "h-full w-full flex-1 bg-primary transition-transform duration-[var(--motion-base)]",
+      indicator:
+        "h-full w-full flex-1 bg-primary transition-transform duration-[var(--motion-base)]",
     },
   },
   Separator: {

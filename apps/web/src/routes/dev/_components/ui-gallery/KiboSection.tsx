@@ -9,20 +9,20 @@ import {
   ContributionGraphFooter,
   ContributionGraphLegend,
   ContributionGraphTotalCount,
-  Cursor,
-  CursorBody,
-  CursorName,
-  CursorPointer,
+  LiveCursor,
+  LiveCursorBody,
+  LiveCursorName,
+  LiveCursorPointer,
   KanbanBoard,
   KanbanCard,
   KanbanCards,
   KanbanHeader,
   KanbanProvider,
-  ListGroup,
-  ListHeader,
-  ListItem,
-  ListItems,
-  ListProvider,
+  SortableListGroup,
+  SortableListHeader,
+  SortableListItem,
+  SortableListItems,
+  SortableListProvider,
   ThemeSwitcher,
   VideoPlayer,
   VideoPlayerContent,
@@ -37,7 +37,11 @@ import {
   VideoPlayerTimeRange,
   VideoPlayerVolumeRange,
 } from "@vvedantb/ui";
-import type { Activity, KanbanColumnDef, KanbanItem } from "@vvedantb/ui";
+import type {
+  ContributionGraphActivity,
+  KanbanColumnDef,
+  KanbanItem,
+} from "@vvedantb/ui";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 import { KiboGantt } from "./KiboGantt";
 
@@ -71,8 +75,8 @@ const LIST_GROUPS = [
 ];
 
 /** Every day of 2025 with a fixed count/level pattern (no randomness). */
-function buildActivity(): Activity[] {
-  const days: Activity[] = [];
+function buildActivity(): ContributionGraphActivity[] {
+  const days: ContributionGraphActivity[] = [];
   for (let day = 0; day < 365; day++) {
     const date = new Date(Date.UTC(2025, 0, 1 + day))
       .toISOString()
@@ -125,13 +129,13 @@ export function KiboSection() {
           label="ListProvider / Group / Header / Items / Item"
           className="w-[420px]"
         >
-          <ListProvider onDragEnd={noop}>
+          <SortableListProvider onDragEnd={noop}>
             {LIST_GROUPS.map((group) => (
-              <ListGroup id={group.id} key={group.id}>
-                <ListHeader name={group.name} color={group.color} />
-                <ListItems>
+              <SortableListGroup id={group.id} key={group.id}>
+                <SortableListHeader name={group.name} color={group.color} />
+                <SortableListItems>
                   {group.items.map((name, index) => (
-                    <ListItem
+                    <SortableListItem
                       id={`${group.id}-${index}`}
                       index={index}
                       key={name}
@@ -139,10 +143,10 @@ export function KiboSection() {
                       parent={group.id}
                     />
                   ))}
-                </ListItems>
-              </ListGroup>
+                </SortableListItems>
+              </SortableListGroup>
             ))}
-          </ListProvider>
+          </SortableListProvider>
         </GalleryItem>
       </GalleryGroup>
 
@@ -199,19 +203,19 @@ export function KiboSection() {
       <GalleryGroup title="Cursor / AvatarStack / ThemeSwitcher">
         <GalleryItem label="Cursor / CursorPointer / CursorBody / CursorName">
           <div className="flex gap-10 p-2">
-            <Cursor>
-              <CursorPointer className="text-primary" />
-              <CursorBody className="bg-primary text-primary-foreground">
-                <CursorName>Ada</CursorName>
+            <LiveCursor>
+              <LiveCursorPointer className="text-primary" />
+              <LiveCursorBody className="bg-primary text-primary-foreground">
+                <LiveCursorName>Ada</LiveCursorName>
                 <span>Reviewing tabs</span>
-              </CursorBody>
-            </Cursor>
-            <Cursor>
-              <CursorPointer className="text-success" />
-              <CursorBody className="bg-success/10 text-success">
-                <CursorName>Linus</CursorName>
-              </CursorBody>
-            </Cursor>
+              </LiveCursorBody>
+            </LiveCursor>
+            <LiveCursor>
+              <LiveCursorPointer className="text-success" />
+              <LiveCursorBody className="bg-success/10 text-success">
+                <LiveCursorName>Linus</LiveCursorName>
+              </LiveCursorBody>
+            </LiveCursor>
           </div>
         </GalleryItem>
         <GalleryItem label="AvatarStack (size 24, 32)">

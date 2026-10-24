@@ -7,7 +7,6 @@ import { ControlsSection } from "./_components/ui-gallery/ControlsSection";
 import {
   CommandSection,
   DialogSection,
-  SheetSection,
 } from "./_components/ui-gallery/DialogSections";
 import {
   HoverCardSection,
@@ -33,7 +32,6 @@ const SECTION_NAMES = [
   "feedback",
   "controls",
   "dialog",
-  "sheet",
   "popover",
   "hover-card",
   "tooltip",
@@ -51,7 +49,6 @@ const SECTIONS: Record<(typeof SECTION_NAMES)[number], () => ReactNode> = {
   feedback: FeedbackSection,
   controls: ControlsSection,
   dialog: DialogSection,
-  sheet: SheetSection,
   popover: PopoverSection,
   "hover-card": HoverCardSection,
   tooltip: TooltipSection,

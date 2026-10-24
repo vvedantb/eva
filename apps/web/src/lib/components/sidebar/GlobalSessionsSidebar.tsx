@@ -14,7 +14,7 @@ import {
   DialogTitle,
   Input,
   CenteredSpinner,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
@@ -220,7 +220,7 @@ export function GlobalSessionsSidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {orderedRepos === undefined ? (
                 <CenteredSpinner

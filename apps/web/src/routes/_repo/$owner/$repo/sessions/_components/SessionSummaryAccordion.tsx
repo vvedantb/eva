@@ -5,7 +5,7 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-  transitionBase,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { IconSparkles } from "@tabler/icons-react";
 import { m, AnimatePresence } from "motion/react";
@@ -31,7 +31,7 @@ export function SessionSummaryAccordion({
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -8 }}
-        transition={transitionBase}
+        transition={tokenTransition.base}
       >
         <Accordion
           type="single"

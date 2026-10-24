@@ -8,7 +8,7 @@ import {
   SelectValue,
   SelectGroup,
   SelectLabel,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { FIELD_TRIGGER_CLASS } from "@/lib/components/fields/FieldsSection";
@@ -51,7 +51,7 @@ export function ProjectPhaseSelect({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <Icon size={14} />
               <span>{config.label}</span>

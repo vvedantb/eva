@@ -8,7 +8,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  CircleSpinner,
+  Spinner,
 } from "@vvedantb/ui";
 import { IconBrandVercel, IconGitPullRequest } from "@tabler/icons-react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -68,7 +68,7 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
             disabled={createPr.isCreating}
           >
             {createPr.isCreating ? (
-              <CircleSpinner size="sm" className="size-3.5" />
+              <Spinner variant="circle" size="sm" className="size-3.5" />
             ) : (
               <IconGitPullRequest size={14} />
             )}

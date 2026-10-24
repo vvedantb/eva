@@ -8,13 +8,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { cn } from "@eva/ui";
 import {
   Button,
-  Plan,
-  PlanHeader,
-  PlanTitle,
-  PlanAction,
-  PlanContent,
-  PlanFooter,
-  PlanTrigger,
+  AgentPlan,
+  AgentPlanHeader,
+  AgentPlanTitle,
+  AgentPlanAction,
+  AgentPlanContent,
+  AgentPlanFooter,
+  AgentPlanTrigger,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
@@ -173,16 +173,16 @@ export function SessionPrdPlanView({
   const planTitle = proposedPlanTitle(planContent) ?? "Plan";
 
   return (
-    <Plan
+    <AgentPlan
       defaultOpen
       className={cn(
         isPanel ? "flex min-h-0 flex-1 flex-col" : undefined,
         !isPanel && "mb-2",
       )}
     >
-      <PlanHeader className={cn("p-4", isPanel && "shrink-0")}>
-        <PlanTitle>{planTitle}</PlanTitle>
-        <PlanAction>
+      <AgentPlanHeader className={cn("p-4", isPanel && "shrink-0")}>
+        <AgentPlanTitle>{planTitle}</AgentPlanTitle>
+        <AgentPlanAction>
           <Button
             size="icon"
             variant="ghost"
@@ -207,10 +207,10 @@ export function SessionPrdPlanView({
           >
             <IconDownload className="size-4" />
           </Button>
-          <PlanTrigger />
-        </PlanAction>
-      </PlanHeader>
-      <PlanContent
+          <AgentPlanTrigger />
+        </AgentPlanAction>
+      </AgentPlanHeader>
+      <AgentPlanContent
         className={cn(
           "flex min-h-0 flex-col px-3 pb-3 pt-0 sm:px-4",
           isPanel
@@ -234,8 +234,8 @@ export function SessionPrdPlanView({
             <Markdown className="text-sm">{planContent}</Markdown>
           </div>
         )}
-      </PlanContent>
-      <PlanFooter
+      </AgentPlanContent>
+      <AgentPlanFooter
         className={cn(
           "flex flex-wrap gap-2 px-4 pb-4 pt-0",
           isPanel && "shrink-0",
@@ -302,7 +302,7 @@ export function SessionPrdPlanView({
             Approve Plan
           </Button>
         ) : null}
-      </PlanFooter>
-    </Plan>
+      </AgentPlanFooter>
+    </AgentPlan>
   );
 }

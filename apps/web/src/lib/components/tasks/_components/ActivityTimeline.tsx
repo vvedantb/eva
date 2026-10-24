@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  CircleSpinner,
   Spinner,
   toast,
 } from "@vvedantb/ui";
@@ -345,7 +344,7 @@ export function ActivityTimeline({
               onClick={handleDeleteComment}
               disabled={isDeletingComment}
             >
-              {isDeletingComment && <CircleSpinner size="sm" />}
+              {isDeletingComment && <Spinner variant="circle" size="sm" />}
               Delete
             </Button>
           </DialogFooter>

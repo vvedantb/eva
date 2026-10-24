@@ -6,7 +6,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  transitionFast,
+  tokenTransition,
   toast,
 } from "@vvedantb/ui";
 import { useState } from "react";
@@ -118,7 +118,7 @@ export function SidebarSessionRow<T extends SessionItem>({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <SharedLayoutNavSurface
               itemId={session._id}

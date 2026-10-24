@@ -1,37 +1,37 @@
 import {
   Button,
-  Plan,
-  PlanAction,
-  PlanContent,
-  PlanFooter,
-  PlanHeader,
-  PlanTitle,
-  PlanTrigger,
-  Test,
-  TestDuration,
-  TestError,
-  TestErrorMessage,
-  TestErrorStack,
-  TestName,
+  AgentPlan,
+  AgentPlanAction,
+  AgentPlanContent,
+  AgentPlanFooter,
+  AgentPlanHeader,
+  AgentPlanTitle,
+  AgentPlanTrigger,
+  TestResult,
+  TestResultDuration,
+  TestResultError,
+  TestResultErrorMessage,
+  TestResultErrorStack,
+  TestResultName,
   TestResults,
   TestResultsContent,
   TestResultsDuration,
   TestResultsHeader,
   TestResultsProgress,
   TestResultsSummary,
-  TestStatusIndicator,
+  TestResultStatusIndicator,
   TestSuite,
   TestSuiteContent,
   TestSuiteName,
   TestSuiteStats,
-  Trace,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceDescription,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
+  AgentTrace,
+  AgentTraceCollapsible,
+  AgentTraceCollapsibleContent,
+  AgentTraceCollapsibleTrigger,
+  AgentTraceDescription,
+  AgentTraceIcon,
+  AgentTraceLine,
+  AgentTraceTitle,
   WebPreview,
   WebPreviewBody,
   WebPreviewConsole,
@@ -58,59 +58,61 @@ export function TraceSpecimens() {
       label="Trace (line / running / error / pending / collapsible open + closed)"
       className="w-96"
     >
-      <Trace>
-        <TraceLine>
-          <TraceIcon>
+      <AgentTrace>
+        <AgentTraceLine>
+          <AgentTraceIcon>
             <IconFileSearch />
-          </TraceIcon>
-          <TraceTitle>Read trace.tsx</TraceTitle>
-          <TraceDescription>2s</TraceDescription>
-        </TraceLine>
-        <TraceLine status="running">
-          <TraceIcon>
+          </AgentTraceIcon>
+          <AgentTraceTitle>Read trace.tsx</AgentTraceTitle>
+          <AgentTraceDescription>2s</AgentTraceDescription>
+        </AgentTraceLine>
+        <AgentTraceLine status="running">
+          <AgentTraceIcon>
             <IconTerminal2 />
-          </TraceIcon>
-          <TraceTitle shimmer>Running pnpm test</TraceTitle>
-        </TraceLine>
-        <TraceLine status="error">
-          <TraceIcon>
+          </AgentTraceIcon>
+          <AgentTraceTitle shimmer>Running pnpm test</AgentTraceTitle>
+        </AgentTraceLine>
+        <AgentTraceLine status="error">
+          <AgentTraceIcon>
             <IconTerminal2 />
-          </TraceIcon>
-          <TraceTitle>pnpm tsc --noEmit</TraceTitle>
-          <TraceDescription>exit 2</TraceDescription>
-        </TraceLine>
-        <TraceLine status="pending">
-          <TraceIcon>
+          </AgentTraceIcon>
+          <AgentTraceTitle>pnpm tsc --noEmit</AgentTraceTitle>
+          <AgentTraceDescription>exit 2</AgentTraceDescription>
+        </AgentTraceLine>
+        <AgentTraceLine status="pending">
+          <AgentTraceIcon>
             <IconTerminal2 />
-          </TraceIcon>
-          <TraceTitle>Install dependencies</TraceTitle>
-        </TraceLine>
-        <TraceCollapsible open onOpenChange={noop}>
-          <TraceCollapsibleTrigger>
-            <TraceLine>
-              <TraceIcon>
+          </AgentTraceIcon>
+          <AgentTraceTitle>Install dependencies</AgentTraceTitle>
+        </AgentTraceLine>
+        <AgentTraceCollapsible open onOpenChange={noop}>
+          <AgentTraceCollapsibleTrigger>
+            <AgentTraceLine>
+              <AgentTraceIcon>
                 <IconBrain />
-              </TraceIcon>
-              <TraceTitle>Thought</TraceTitle>
-              <TraceDescription>12s</TraceDescription>
-            </TraceLine>
-          </TraceCollapsibleTrigger>
-          <TraceCollapsibleContent>
+              </AgentTraceIcon>
+              <AgentTraceTitle>Thought</AgentTraceTitle>
+              <AgentTraceDescription>12s</AgentTraceDescription>
+            </AgentTraceLine>
+          </AgentTraceCollapsibleTrigger>
+          <AgentTraceCollapsibleContent>
             Two callers render the old Reasoning fold. Both move to Trace.
-          </TraceCollapsibleContent>
-        </TraceCollapsible>
-        <TraceCollapsible open={false} onOpenChange={noop}>
-          <TraceCollapsibleTrigger trailing={<span>3 files</span>}>
-            <TraceLine>
-              <TraceIcon>
+          </AgentTraceCollapsibleContent>
+        </AgentTraceCollapsible>
+        <AgentTraceCollapsible open={false} onOpenChange={noop}>
+          <AgentTraceCollapsibleTrigger trailing={<span>3 files</span>}>
+            <AgentTraceLine>
+              <AgentTraceIcon>
                 <IconBrain />
-              </TraceIcon>
-              <TraceTitle>Thought (closed, trailing)</TraceTitle>
-            </TraceLine>
-          </TraceCollapsibleTrigger>
-          <TraceCollapsibleContent>Hidden body.</TraceCollapsibleContent>
-        </TraceCollapsible>
-      </Trace>
+              </AgentTraceIcon>
+              <AgentTraceTitle>Thought (closed, trailing)</AgentTraceTitle>
+            </AgentTraceLine>
+          </AgentTraceCollapsibleTrigger>
+          <AgentTraceCollapsibleContent>
+            Hidden body.
+          </AgentTraceCollapsibleContent>
+        </AgentTraceCollapsible>
+      </AgentTrace>
     </GalleryItem>
   );
 }
@@ -147,33 +149,33 @@ export function PlanSpecimen() {
       label="Plan (open) + Plan (streaming, closed)"
       className="w-96"
     >
-      <Plan open onOpenChange={noop}>
-        <PlanHeader>
-          <PlanTitle>Move activity UI to Trace</PlanTitle>
-          <PlanAction>
-            <PlanTrigger />
-          </PlanAction>
-        </PlanHeader>
-        <PlanContent>
+      <AgentPlan open onOpenChange={noop}>
+        <AgentPlanHeader>
+          <AgentPlanTitle>Move activity UI to Trace</AgentPlanTitle>
+          <AgentPlanAction>
+            <AgentPlanTrigger />
+          </AgentPlanAction>
+        </AgentPlanHeader>
+        <AgentPlanContent>
           <ol className="list-decimal space-y-1 pl-4 text-sm">
             <li>Read the activity code.</li>
             <li>Replace the Reasoning fold.</li>
             <li>Run the type check.</li>
           </ol>
-        </PlanContent>
-        <PlanFooter>
+        </AgentPlanContent>
+        <AgentPlanFooter>
           <Button size="sm">Build</Button>
-        </PlanFooter>
-      </Plan>
-      <Plan isStreaming open={false} onOpenChange={noop}>
-        <PlanHeader>
-          <PlanTitle>Drafting plan</PlanTitle>
-          <PlanAction>
-            <PlanTrigger />
-          </PlanAction>
-        </PlanHeader>
-        <PlanContent>Hidden.</PlanContent>
-      </Plan>
+        </AgentPlanFooter>
+      </AgentPlan>
+      <AgentPlan isStreaming open={false} onOpenChange={noop}>
+        <AgentPlanHeader>
+          <AgentPlanTitle>Drafting plan</AgentPlanTitle>
+          <AgentPlanAction>
+            <AgentPlanTrigger />
+          </AgentPlanAction>
+        </AgentPlanHeader>
+        <AgentPlanContent>Hidden.</AgentPlanContent>
+      </AgentPlan>
     </GalleryItem>
   );
 }
@@ -207,20 +209,22 @@ export function TestResultsSpecimen() {
             <TestSuiteName />
             <TestSuiteStats passed={2} failed={1} skipped={1} />
             <TestSuiteContent>
-              <Test name="renders a line" status="passed" duration={12} />
-              <Test name="opens the fold" status="failed" duration={48}>
-                <TestStatusIndicator />
-                <TestName />
-                <TestDuration />
-                <TestError>
-                  <TestErrorMessage>Expected open to be true</TestErrorMessage>
-                  <TestErrorStack>
+              <TestResult name="renders a line" status="passed" duration={12} />
+              <TestResult name="opens the fold" status="failed" duration={48}>
+                <TestResultStatusIndicator />
+                <TestResultName />
+                <TestResultDuration />
+                <TestResultError>
+                  <TestResultErrorMessage>
+                    Expected open to be true
+                  </TestResultErrorMessage>
+                  <TestResultErrorStack>
                     {"at trace.test.tsx:42:7\nat runTest (vitest.js:10:3)"}
-                  </TestErrorStack>
-                </TestError>
-              </Test>
-              <Test name="skips on CI" status="skipped" />
-              <Test name="streams" status="running" />
+                  </TestResultErrorStack>
+                </TestResultError>
+              </TestResult>
+              <TestResult name="skips on CI" status="skipped" />
+              <TestResult name="streams" status="running" />
             </TestSuiteContent>
           </TestSuite>
           <TestSuite
@@ -232,7 +236,7 @@ export function TestResultsSpecimen() {
             <TestSuiteName />
             <TestSuiteStats passed={6} />
             <TestSuiteContent>
-              <Test name="hidden" status="passed" />
+              <TestResult name="hidden" status="passed" />
             </TestSuiteContent>
           </TestSuite>
         </TestResultsContent>

@@ -13,9 +13,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  transitionFast,
+  tokenTransition,
   CrossfadeIconSlot,
-  CircleSpinner,
+  Spinner,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -171,7 +171,7 @@ export function TaskFooter({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             {executionError ?? latestPrError}
           </m.p>
@@ -192,7 +192,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {executionError ?? latestPrError}
             </m.p>
@@ -205,7 +205,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <SplitRunButton
                 taskId={taskId}
@@ -246,7 +246,11 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -264,7 +268,11 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -279,7 +287,11 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -293,7 +305,11 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -329,7 +345,7 @@ export function TaskFooter({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={transitionFast}
+                transition={tokenTransition.fast}
               >
                 <SandboxStartStopButton
                   isActive={isSandboxActive}
@@ -397,7 +413,8 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <CircleSpinner
+                  <Spinner
+                    variant="circle"
                     size="sm"
                     style={{ width: iconSize, height: iconSize }}
                   />

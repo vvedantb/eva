@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, Checkbox, Spinner, transitionFast } from "@vvedantb/ui";
+import { Button, Checkbox, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
@@ -99,7 +99,7 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <Checkbox
               className="max-sm:hit-target"
@@ -136,7 +136,7 @@ export function FindingsList({ run, repoOwner, repoName }: FindingsListProps) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <Button
               size="sm"

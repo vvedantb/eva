@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { transitionFast } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -69,7 +69,7 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <span className="text-xs font-medium text-muted-foreground">
               Files

@@ -1,7 +1,7 @@
 import { m, AnimatePresence } from "motion/react";
 import {
   Button,
-  transitionFast,
+  tokenTransition,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -28,7 +28,7 @@ export function ProjectsSelectButton({
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
-          transition={transitionFast}
+          transition={tokenTransition.fast}
         >
           <Tooltip>
             <TooltipTrigger asChild>

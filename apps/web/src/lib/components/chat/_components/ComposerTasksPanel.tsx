@@ -4,7 +4,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  transitionBase,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -205,7 +205,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={transitionBase}
+          transition={tokenTransition.base}
         >
           {/* Flush above the input card. The dock in ComposerStash owns the inset, so
               this fills its column; the squared bottom matches QueuedMessagesPanel so

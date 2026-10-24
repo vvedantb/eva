@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import { CenteredSpinner, transitionBase, staggerDelay } from "@vvedantb/ui";
+import { CenteredSpinner, tokenTransition, staggerDelay } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { CountPop } from "@/lib/components/ui/CountPop";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -105,7 +105,10 @@ function AutomationsHubPage() {
                 key={entry.key}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...transitionBase, delay: staggerDelay(index) }}
+                transition={{
+                  ...tokenTransition.base,
+                  delay: staggerDelay(index),
+                }}
               >
                 <SystemAutomationCard
                   entryKey={entry.key}

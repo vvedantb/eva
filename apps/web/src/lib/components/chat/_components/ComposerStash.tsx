@@ -14,7 +14,7 @@ import {
   Command,
   CommandEmpty,
   CommandList,
-  transitionFast,
+  tokenTransition,
   springTransition,
   Popover,
   PopoverAnchor,
@@ -114,7 +114,7 @@ export function ComposerStash({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={transitionFast}
+          transition={tokenTransition.fast}
         >
           <button
             ref={tabRef}

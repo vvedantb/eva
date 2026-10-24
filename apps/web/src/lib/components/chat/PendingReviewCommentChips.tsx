@@ -4,7 +4,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconMessage, IconX } from "@tabler/icons-react";
@@ -25,7 +25,7 @@ export function PendingReviewCommentChips() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={transitionFast}
+          transition={tokenTransition.fast}
         >
           <AnimatePresence initial={false} mode="popLayout">
             {comments.map((comment) => {
@@ -38,7 +38,7 @@ export function PendingReviewCommentChips() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  transition={transitionFast}
+                  transition={tokenTransition.fast}
                 >
                   <Tooltip>
                     <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-card py-0.5 pl-2 pr-1 text-xs text-foreground">

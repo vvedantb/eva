@@ -13,9 +13,9 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  CircleSpinner,
-  formatElapsed,
-  useElapsedSeconds,
+  Spinner,
+  formatActivityElapsed,
+  useActivityElapsedSeconds,
 } from "@vvedantb/ui";
 import {
   subagentTone,
@@ -33,14 +33,14 @@ const DOT_CLASS: Record<SubagentTone, string> = {
 
 function AgentDuration({ agent }: { agent: SubagentView }) {
   const running = subagentTone(agent.status) === "active";
-  const liveElapsed = useElapsedSeconds(agent.startedAt, running);
+  const liveElapsed = useActivityElapsedSeconds(agent.startedAt, running);
   if (agent.startedAt === undefined) return null;
   const seconds =
     running || agent.settledAt === undefined
       ? liveElapsed
       : Math.max(0, Math.floor((agent.settledAt - agent.startedAt) / 1000));
   if (!running && agent.settledAt === undefined) return null;
-  return <span className="tabular-nums">{formatElapsed(seconds)}</span>;
+  return <span className="tabular-nums">{formatActivityElapsed(seconds)}</span>;
 }
 
 export function AgentStopButton({
@@ -76,7 +76,7 @@ export function AgentStopButton({
       }}
     >
       {isStopping ? (
-        <CircleSpinner size="sm" className="size-3.5" />
+        <Spinner variant="circle" size="sm" className="size-3.5" />
       ) : (
         <IconPlayerStop className="size-3.5" />
       )}

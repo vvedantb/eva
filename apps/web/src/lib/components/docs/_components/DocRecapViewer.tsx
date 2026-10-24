@@ -32,7 +32,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  transitionFast,
+  tokenTransition,
   CrossfadeIcon,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -312,7 +312,7 @@ export function DocRecapViewer({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <Surface density="tight" className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -389,7 +389,7 @@ export function DocRecapViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="recap"
@@ -405,7 +405,7 @@ export function DocRecapViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="summary"

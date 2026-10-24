@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@eva/ui";
-import { Badge, Button, transitionFast } from "@vvedantb/ui";
+import { Badge, Button, tokenTransition } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconClipboardList, IconCode } from "@tabler/icons-react";
 import { proposedPlanTitle } from "./planExport";
@@ -36,7 +36,7 @@ export function ComposerPlanReadyBanner({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 8 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
     >
       <Badge
         variant="secondary"

@@ -8,7 +8,7 @@ import {
   type Id,
 } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { getProviderLabel, transitionFast } from "@vvedantb/ui";
+import { getProviderLabel, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
@@ -143,7 +143,7 @@ export function UsageLimitRecoveryBanner({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
       >
         <div className="flex items-start gap-2.5">
           <IconAlertTriangle

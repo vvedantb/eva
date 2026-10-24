@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, transitionFast } from "@vvedantb/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { api, type Doc } from "@eva/backend";
 import {
   HTML_RENDER_SIZE_CHANGED,
@@ -48,7 +48,7 @@ export function ChatHtmlFrame({ render }: { render: Doc<"chatHtmlRenders"> }) {
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
       data-testid="chat-html-frame"
     >
       {html === undefined ? (

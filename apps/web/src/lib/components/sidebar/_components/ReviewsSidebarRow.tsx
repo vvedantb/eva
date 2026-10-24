@@ -8,7 +8,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconGitPullRequest, IconPencil } from "@tabler/icons-react";
@@ -75,7 +75,7 @@ export function ReviewsSidebarRow({
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
     >
       <ContextMenu>
         <ContextMenuTrigger asChild>

@@ -1,19 +1,24 @@
 // eva's look for the @vvedantb/ui AI chat family: Conversation, Message,
-// PromptInput (+ settings, traits), QueuePanel (eva's old `Queue`), Shimmer,
-// CodeBlock, Artifact and Attachments. The class strings are the ones the old
-// @eva/ui components rendered; `__parity__/aichat.test.tsx` checks the DOM
-// stays the same. FileChip, Confirmation, Sandbox and PromptInputSpeech moved
-// as they were and need no entry.
+// PromptInput (+ settings, traits), Queue, Shimmer, CodeBlock, Artifact and
+// Attachments. The class strings are the ones the old @eva/ui components
+// rendered; `__parity__/aichat.test.tsx` checks the DOM stays the same.
+// FileChip and PromptInputSpeech moved as they were and need no entry.
 import { createElement } from "react";
 import { IconArrowUp, IconChevronDown } from "@tabler/icons-react";
-import { getProviderLabel, ProviderIcon, Spinner, type UiConfig } from "@vvedantb/ui";
+import {
+  getProviderLabel,
+  ProviderIcon,
+  Spinner,
+  type UiConfig,
+} from "@vvedantb/ui";
 
 export const aichatConfig = {
   Conversation: {
     classes: {
       content: "flex flex-col gap-8 p-4",
       scroll: "scrollbar scroll-fade",
-      download: "absolute top-4 right-4 rounded-full bg-background hover:bg-muted",
+      download:
+        "absolute top-4 right-4 rounded-full bg-background hover:bg-muted",
       // The pill sits in a static frame; the animated wrapper has no class.
       scrollButtonFrame:
         "pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 justify-center",
@@ -65,8 +70,6 @@ export const aichatConfig = {
       // than a phone-width composer: wrap instead of squashing.
       footer: "justify-between gap-1 max-sm:flex-wrap",
       submit: "rounded-full",
-      selectTrigger:
-        "border-none bg-transparent font-medium text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
       tabItem: "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent",
     },
     submitIcons: {
@@ -78,7 +81,8 @@ export const aichatConfig = {
   },
   PromptInputSettings: {
     providerLabel: getProviderLabel,
-    providerIcon: (provider) => createElement(ProviderIcon, { provider, size: 14 }),
+    providerIcon: (provider) =>
+      createElement(ProviderIcon, { provider, size: 14 }),
     classes: {
       trigger:
         "motion-press rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.92] disabled:opacity-50",
@@ -86,13 +90,15 @@ export const aichatConfig = {
   },
   TraitsPanel: {
     classes: {
-      label: "w-[4.75rem] shrink-0 pt-1 text-2xs font-medium text-muted-foreground",
+      label:
+        "w-[4.75rem] shrink-0 pt-1 text-2xs font-medium text-muted-foreground",
       empty: "flex h-6 items-center text-2xs text-muted-foreground/70",
-      option: "h-6 rounded-md px-2 text-2xs font-medium motion-press transition-colors active:scale-[0.96]",
+      option:
+        "h-6 rounded-md px-2 text-2xs font-medium motion-press transition-colors active:scale-[0.96]",
       note: "pl-[5.375rem] text-2xs leading-snug text-muted-foreground/80",
     },
   },
-  QueuePanel: {
+  Queue: {
     classes: {
       sectionTrigger:
         "group motion-press flex w-full items-center rounded-md px-1 py-1 text-left text-xs font-medium text-muted-foreground hover:text-foreground active:scale-[0.99]",
@@ -123,7 +129,8 @@ export const aichatConfig = {
     actionLabel: "sr-only",
     classes: {
       root: "flex flex-col overflow-hidden border bg-background rounded-surface",
-      header: "flex items-center justify-between border-b bg-muted/50 px-4 py-3",
+      header:
+        "flex items-center justify-between border-b bg-muted/50 px-4 py-3",
       description: "text-muted-foreground text-sm",
       action: "size-8 p-0 text-muted-foreground hover:text-foreground",
       content: "flex-1 overflow-auto p-4",

@@ -3,7 +3,7 @@
 import { Children, type ReactNode } from "react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
-import { Card, CardContent, transitionBase, staggerDelay } from "@vvedantb/ui";
+import { Card, CardContent, tokenTransition, staggerDelay } from "@vvedantb/ui";
 import {
   type Icon as TablerIcon,
   IconTrendingUp,
@@ -190,7 +190,7 @@ export function KpiGroup({
         <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ ...transitionBase, delay: staggerDelay(index) }}
+          transition={{ ...tokenTransition.base, delay: staggerDelay(index) }}
         >
           {child}
         </m.div>

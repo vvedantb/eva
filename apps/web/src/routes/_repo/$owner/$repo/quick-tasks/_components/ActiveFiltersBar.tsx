@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconX } from "@tabler/icons-react";
-import { transitionFast } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface ActiveFiltersBarProps {
@@ -26,7 +26,7 @@ export function ActiveFiltersBar({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
       >
         <span className="text-xs text-muted-foreground mr-0.5">
           Filtered by

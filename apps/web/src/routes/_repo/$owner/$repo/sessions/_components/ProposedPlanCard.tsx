@@ -3,7 +3,7 @@
 import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { useRef, useState } from "react";
 import { cn } from "@eva/ui";
-import { Badge, Button, transitionBase, Markdown } from "@vvedantb/ui";
+import { Badge, Button, tokenTransition, Markdown } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -107,7 +107,7 @@ export function ProposedPlanCard({
         )}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={transitionBase}
+        transition={tokenTransition.base}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">

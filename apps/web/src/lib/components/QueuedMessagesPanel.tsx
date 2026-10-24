@@ -10,13 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
   ProviderIcon,
-  QueuePanel,
-  QueuePanelItem,
+  Queue,
+  QueueItem,
   QueueItemAction,
   QueueItemActions,
   QueueItemContent,
   QueueItemIndicator,
-  QueuePanelList,
+  QueueList,
   QueueSection,
   QueueSectionContent,
   QueueSectionLabel,
@@ -26,7 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   formatModelDisplayLabel,
-  transitionBase,
+  tokenTransition,
   useDragSensors,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -168,7 +168,7 @@ function SortableQueuedItem<TId extends string>({
   };
 
   return (
-    <QueuePanelItem
+    <QueueItem
       ref={setNodeRef}
       style={style}
       className={isDragging ? "opacity-50" : undefined}
@@ -238,7 +238,7 @@ function SortableQueuedItem<TId extends string>({
           </QueueItemActions>
         )}
       </div>
-    </QueuePanelItem>
+    </QueueItem>
   );
 }
 
@@ -322,18 +322,18 @@ export function QueuedMessagesPanel<TId extends string>({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionBase}
+            transition={tokenTransition.base}
           >
             {/* Flush above the composer: fills the dock column in ComposerStash,
                 which owns the inset, with a square bottom so it blends into the
                 input card (mirrors underCardLeading below). */}
-            <QueuePanel className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
+            <Queue className="w-full rounded-b-none rounded-t-surface bg-muted/50 shadow-none">
               <QueueSection defaultOpen>
                 <QueueSectionTrigger>
                   <QueueSectionLabel count={items.length} label={label} />
                 </QueueSectionTrigger>
                 <QueueSectionContent>
-                  <QueuePanelList>
+                  <QueueList>
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
@@ -377,10 +377,10 @@ export function QueuedMessagesPanel<TId extends string>({
                         ))}
                       </SortableContext>
                     </DndContext>
-                  </QueuePanelList>
+                  </QueueList>
                 </QueueSectionContent>
               </QueueSection>
-            </QueuePanel>
+            </Queue>
           </m.div>
         ) : null}
       </AnimatePresence>

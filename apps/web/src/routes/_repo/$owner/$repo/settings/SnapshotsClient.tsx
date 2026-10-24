@@ -21,7 +21,7 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -265,7 +265,7 @@ export function SnapshotsClient({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={transitionFast}
+          transition={tokenTransition.fast}
         >
           {activeTab === "configuration" ? (
             <>

@@ -13,7 +13,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CircleSpinner,
+  Spinner,
 } from "@vvedantb/ui";
 import { IconGitBranch, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -121,7 +121,7 @@ export function BranchSelect({
           >
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                <CircleSpinner size="sm" className="size-3.5" />
+                <Spinner variant="circle" size="sm" className="size-3.5" />
                 <span>Loading branches...</span>
               </div>
             ) : (

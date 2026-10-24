@@ -3,7 +3,7 @@
 import {
   CommandItem,
   CommandShortcut,
-  transitionFast,
+  tokenTransition,
   staggerDelay,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
@@ -37,7 +37,7 @@ export function SpotlightItem({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
-        ...transitionFast,
+        ...tokenTransition.fast,
         delay: staggerDelay(index, 0.02, 0.08),
       }}
     >

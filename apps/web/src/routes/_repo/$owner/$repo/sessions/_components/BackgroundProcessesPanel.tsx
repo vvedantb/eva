@@ -4,18 +4,18 @@ import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
-  QueuePanel,
-  QueuePanelItem,
+  Queue,
+  QueueItem,
   QueueItemAction,
   QueueItemActions,
-  QueuePanelList,
+  QueueList,
   QueueSection,
   QueueSectionContent,
   QueueSectionLabel,
   QueueSectionTrigger,
   toast,
-  transitionBase,
-  CircleSpinner,
+  tokenTransition,
+  Spinner,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconPlayerStop, IconTerminal2 } from "@tabler/icons-react";
@@ -117,9 +117,9 @@ export function BackgroundProcessesPanel({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={transitionBase}
+          transition={tokenTransition.base}
         >
-          <QueuePanel className="mb-2">
+          <Queue className="mb-2">
             <QueueSection defaultOpen>
               <QueueSectionTrigger>
                 <QueueSectionLabel
@@ -132,11 +132,11 @@ export function BackgroundProcessesPanel({
                 />
               </QueueSectionTrigger>
               <QueueSectionContent>
-                <QueuePanelList>
+                <QueueList>
                   {rows.map((row, index) => {
                     const isKilling = killingIds.has(row._id);
                     return (
-                      <QueuePanelItem key={row._id}>
+                      <QueueItem key={row._id}>
                         <ListEnter index={index} fast>
                           <div className="flex items-start gap-2">
                             <IconTerminal2 className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
@@ -178,7 +178,8 @@ export function BackgroundProcessesPanel({
                                 }}
                               >
                                 {isKilling ? (
-                                  <CircleSpinner
+                                  <Spinner
+                                    variant="circle"
                                     size="sm"
                                     className="size-3.5"
                                   />
@@ -189,13 +190,13 @@ export function BackgroundProcessesPanel({
                             </QueueItemActions>
                           </div>
                         </ListEnter>
-                      </QueuePanelItem>
+                      </QueueItem>
                     );
                   })}
-                </QueuePanelList>
+                </QueueList>
               </QueueSectionContent>
             </QueueSection>
-          </QueuePanel>
+          </Queue>
         </m.div>
       ) : null}
     </AnimatePresence>

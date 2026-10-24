@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { Badge, CircleSpinner, transitionFast } from "@vvedantb/ui";
+import { Badge, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
@@ -221,7 +221,7 @@ export function TaskDetailInline({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <CircleSpinner size="sm" className="size-5" />
+        <Spinner variant="circle" size="sm" className="size-5" />
       </div>
     );
   }
@@ -581,7 +581,7 @@ export function TaskDetailInline({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {sandboxContent}
             </m.div>
@@ -592,7 +592,7 @@ export function TaskDetailInline({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {detailContent}
             </m.div>

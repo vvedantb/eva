@@ -10,19 +10,19 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
+  AgentTraceCollapsible,
+  AgentTraceCollapsibleContent,
+  AgentTraceCollapsibleTrigger,
+  AgentTraceIcon,
+  AgentTraceLine,
+  AgentTraceTitle,
   ActivityTasks,
-  formatElapsed,
+  formatActivityElapsed,
   ProviderIcon,
   formatModelDisplayLabel,
   findModelOption,
-  transitionFast,
-  CircleSpinner,
+  tokenTransition,
+  Spinner,
   Markdown,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -115,7 +115,7 @@ export function RunTimelineItem({
   const runDuration =
     isActiveRun && run.startedAt ? (
       <span className="text-xs text-muted-foreground tabular-nums">
-        {formatElapsed(activeRunElapsed)}
+        {formatActivityElapsed(activeRunElapsed)}
       </span>
     ) : run.startedAt && run.finishedAt ? (
       <Tooltip>
@@ -170,7 +170,7 @@ export function RunTimelineItem({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={transitionFast}
+                      transition={tokenTransition.fast}
                       className="inline-flex"
                     >
                       <Badge
@@ -233,7 +233,11 @@ export function RunTimelineItem({
                       disabled={isStopping}
                     >
                       {isStopping ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
+                        <Spinner
+                          variant="circle"
+                          size="sm"
+                          className="size-3.5"
+                        />
                       ) : (
                         <IconPlayerStop size={14} />
                       )}
@@ -274,21 +278,23 @@ export function RunTimelineItem({
                     return steps ? (
                       <ActivityTasks steps={steps} isStreaming />
                     ) : (
-                      <TraceCollapsible defaultOpen>
-                        <TraceCollapsibleTrigger>
-                          <TraceLine status="running">
-                            <TraceIcon>
+                      <AgentTraceCollapsible defaultOpen>
+                        <AgentTraceCollapsibleTrigger>
+                          <AgentTraceLine status="running">
+                            <AgentTraceIcon>
                               <IconBrain />
-                            </TraceIcon>
-                            <TraceTitle shimmer>Working...</TraceTitle>
-                          </TraceLine>
-                        </TraceCollapsibleTrigger>
-                        <TraceCollapsibleContent>
+                            </AgentTraceIcon>
+                            <AgentTraceTitle shimmer>
+                              Working...
+                            </AgentTraceTitle>
+                          </AgentTraceLine>
+                        </AgentTraceCollapsibleTrigger>
+                        <AgentTraceCollapsibleContent>
                           <Markdown className="text-sm">
                             {streaming.currentActivity}
                           </Markdown>
-                        </TraceCollapsibleContent>
-                      </TraceCollapsible>
+                        </AgentTraceCollapsibleContent>
+                      </AgentTraceCollapsible>
                     );
                   })()}
                 <RunActivityLog

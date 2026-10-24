@@ -5,7 +5,7 @@ import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { transitionFast } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 export function DocPresenceFacepile({ docId }: { docId: Id<"docs"> }) {
@@ -32,7 +32,7 @@ export function DocPresenceFacepile({ docId }: { docId: Id<"docs"> }) {
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.85 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             {others.slice(0, 5).map((p) => (
               <UserAvatar key={p.userId} name={p.name} />

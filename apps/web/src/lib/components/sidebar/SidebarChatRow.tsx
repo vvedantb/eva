@@ -12,7 +12,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
   LoadingState,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { IconLink, IconPencil, IconX } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
@@ -65,7 +65,7 @@ export function SidebarChatRow({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <SharedLayoutNavSurface
               itemId={chat._id}

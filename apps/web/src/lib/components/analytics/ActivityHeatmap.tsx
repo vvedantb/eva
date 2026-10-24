@@ -11,7 +11,7 @@ import {
   ContributionGraphFooter,
   ContributionGraphLegend,
 } from "@vvedantb/ui";
-import type { Activity } from "@vvedantb/ui";
+import type { ContributionGraphActivity } from "@vvedantb/ui";
 import { IconFlame } from "@tabler/icons-react";
 import { Widget } from "@/lib/components/Widget";
 import { useCountUpDisplay } from "./useCountUpDisplay";
@@ -23,7 +23,7 @@ interface ActivityHeatmapProps {
 const MAX_LEVEL = 4;
 
 function toActivities(data: Array<{ date: string; count: number }>): {
-  activities: Activity[];
+  activities: ContributionGraphActivity[];
   totalCount: number;
 } {
   let max = 0;
@@ -34,7 +34,7 @@ function toActivities(data: Array<{ date: string; count: number }>): {
   }
 
   const safeMax = max || 1;
-  const activities: Activity[] = data.map((entry) => ({
+  const activities: ContributionGraphActivity[] = data.map((entry) => ({
     date: entry.date,
     count: entry.count,
     level:
@@ -107,7 +107,10 @@ export function ActivityHeatmap({ data }: ActivityHeatmapProps) {
   const countedTotal = useCountUpDisplay(totalCount);
 
   return (
-    <Widget title="Activity" subtitle="Tasks completed over the last year.">
+    <Widget
+      title="Activity"
+      subtitle="Tasks completed over the last year."
+    >
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <p className="text-3xl font-bold tabular-nums text-foreground">
           {countedTotal}

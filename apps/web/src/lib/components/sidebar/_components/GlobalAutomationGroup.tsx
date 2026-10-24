@@ -10,7 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Spinner,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconChevronDown, IconLayoutGrid, IconPlus } from "@tabler/icons-react";
@@ -183,7 +183,7 @@ export function GlobalAutomationGroup({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 8 }}
-                      transition={transitionFast}
+                      transition={tokenTransition.fast}
                     >
                       <SharedLayoutNavSurface
                         itemId={automation._id}

@@ -1,18 +1,18 @@
 import {
   ActivityQuestionCard,
   ActivityTasks,
-  Context,
-  ContextCacheUsage,
-  ContextContent,
-  ContextContentBody,
-  ContextContentFooter,
-  ContextContentHeader,
-  ContextInputUsage,
-  ContextOutputUsage,
-  ContextTrigger,
+  ContextUsage,
+  ContextUsageCache,
+  ContextUsageContent,
+  ContextUsageContentBody,
+  ContextUsageContentFooter,
+  ContextUsageContentHeader,
+  ContextUsageInput,
+  ContextUsageOutput,
+  ContextUsageTrigger,
   ActivityThinkingIcon,
   ModelPickerContent,
-  ModelSelect,
+  ModelPicker,
   modelPickerSurfaceClass,
   PromptInputSettings,
   PromptInputSpeech,
@@ -111,7 +111,7 @@ function ModelGroup() {
         </div>
       </GalleryItem>
       <GalleryItem label="ModelSelect (trigger; popover open state is internal)">
-        <ModelSelect
+        <ModelPicker
           value="claude-opus"
           onValueChange={noop}
           options={MODEL_OPTIONS}
@@ -155,7 +155,7 @@ function ContextGroup() {
         label="Context open: header / body usage rows / footer"
         className="h-[420px]"
       >
-        <Context
+        <ContextUsage
           open
           onOpenChange={noop}
           usedTokens={84_000}
@@ -174,17 +174,17 @@ function ContextGroup() {
             cacheWriteUSD: 0.0075,
           }}
         >
-          <ContextTrigger />
-          <ContextContent align="start" side="bottom">
-            <ContextContentHeader />
-            <ContextContentBody>
-              <ContextInputUsage />
-              <ContextOutputUsage />
-              <ContextCacheUsage />
-            </ContextContentBody>
-            <ContextContentFooter />
-          </ContextContent>
-        </Context>
+          <ContextUsageTrigger />
+          <ContextUsageContent align="start" side="bottom">
+            <ContextUsageContentHeader />
+            <ContextUsageContentBody>
+              <ContextUsageInput />
+              <ContextUsageOutput />
+              <ContextUsageCache />
+            </ContextUsageContentBody>
+            <ContextUsageContentFooter />
+          </ContextUsageContent>
+        </ContextUsage>
       </GalleryItem>
     </GalleryGroup>
   );

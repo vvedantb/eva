@@ -6,7 +6,7 @@ import { QuickTaskTaskPageContent } from "./QuickTaskTaskPageContent";
 import type { QuickTaskRouteState } from "../_utils/useQuickTaskRouteState";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import { transitionFast } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 
 interface QuickTaskSplitDetailPaneProps {
   taskId: Id<"agentTasks">;
@@ -40,7 +40,7 @@ export function QuickTaskSplitDetailPane({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
       >
         <QuickTaskTaskPageContent taskId={taskId} routeState={routeState} />
       </m.div>

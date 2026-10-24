@@ -7,8 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  transitionBase,
-  transitionSlow,
+  tokenTransition,
   Spinner,
 } from "@vvedantb/ui";
 import { IconCircleCheck } from "@tabler/icons-react";
@@ -86,7 +85,7 @@ export function SessionReviewModal({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={transitionBase}
+              transition={tokenTransition.base}
             >
               <DialogHeader>
                 <DialogTitle>Send for Code Review</DialogTitle>
@@ -114,7 +113,7 @@ export function SessionReviewModal({
               className="space-y-4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={transitionSlow}
+              transition={tokenTransition.slow}
             >
               <DialogHeader>
                 <DialogTitle>Review Sent</DialogTitle>
@@ -122,7 +121,7 @@ export function SessionReviewModal({
               <m.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...transitionSlow, delay: 0.1 }}
+                transition={{ ...tokenTransition.slow, delay: 0.1 }}
                 className="rounded-surface bg-status-code-review-bg p-4 text-center"
               >
                 <IconCircleCheck

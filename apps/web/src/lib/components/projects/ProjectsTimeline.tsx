@@ -19,7 +19,7 @@ import {
   GanttToday,
   useGanttContext,
 } from "@vvedantb/ui";
-import type { GanttFeature, GanttStatus, Range } from "@vvedantb/ui";
+import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
 import {
   phaseConfig,
   type ProjectPhase,
@@ -45,9 +45,9 @@ type ProjectProgress = FunctionReturnType<
 interface ProjectsTimelineProps {
   projects: Project[];
   basePath: string;
-  range: Range;
+  range: GanttRange;
   zoom: number;
-  onRangeChange: (range: Range) => void;
+  onRangeChange: (range: GanttRange) => void;
   onZoomChange: (zoom: number) => void;
 }
 

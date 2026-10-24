@@ -5,7 +5,7 @@ import {
   AvatarFallback,
   Message as AIMessage,
   MessageContent,
-  transitionFast,
+  tokenTransition,
   Markdown,
 } from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -54,7 +54,7 @@ export function ChatMessage({
     <m.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
     >
       <AIMessage from={role}>
         <MessageContent

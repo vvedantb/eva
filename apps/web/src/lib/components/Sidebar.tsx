@@ -22,7 +22,7 @@ import { api } from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
   Button,
-  transitionBase,
+  tokenTransition,
   springTransition,
   projectVelocity,
   Spinner,
@@ -425,7 +425,7 @@ export function Sidebar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionBase}
+            transition={tokenTransition.base}
           />
         )}
       </AnimatePresence>
@@ -515,7 +515,7 @@ export function Sidebar() {
                       )}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={transitionBase}
+                      transition={tokenTransition.base}
                     >
                       {isFlatPanel ? (
                         <>
@@ -653,7 +653,7 @@ export function Sidebar() {
                         key={`${panelKey}-nav`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={transitionBase}
+                        transition={tokenTransition.base}
                       >
                         <Suspense fallback={sidebarPanelFallback}>
                           {showGlobalSessionsPanel ? (

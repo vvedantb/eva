@@ -1,7 +1,7 @@
-// eva's look for the @vvedantb/ui overlay family: Dialog, SideSheet (eva's
-// old `Sheet`), Popover, HoverCard, Tooltip, DropdownMenu, ContextMenu, Select
-// and Command. The class strings are the ones the old @eva/ui components
-// rendered; `__parity__/overlays.test.tsx` checks the DOM stays the same.
+// eva's look for the @vvedantb/ui overlay family: Dialog, Popover, HoverCard,
+// Tooltip, DropdownMenu, ContextMenu, Select and Command. The class strings
+// are the ones the old @eva/ui components rendered;
+// `__parity__/overlays.test.tsx` checks the DOM stays the same.
 import { createElement } from "react";
 import {
   IconCheck,
@@ -80,14 +80,18 @@ const menuRowClasses = {
     "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item py-2 max-sm:min-h-10 pl-9 pr-2.5 text-sm outline-hidden transition-colors motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
   radioItem:
     "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item py-2 max-sm:min-h-10 pl-9 pr-2.5 text-sm outline-hidden transition-colors motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
-  label: "px-2.5 py-1 text-2xs font-medium tracking-[-0.01em] text-muted-foreground",
+  label:
+    "px-2.5 py-1 text-2xs font-medium tracking-[-0.01em] text-muted-foreground",
   separator: "-mx-1.5 my-1.5 h-px bg-border",
   shortcut: "ml-auto text-2xs tracking-[0.08em] text-muted-foreground",
 };
 
 const menuIcons = {
   check: createElement(IconCheck, { size: 16 }),
-  radio: createElement(IconCircleFilled, { size: 8, className: "fill-current" }),
+  radio: createElement(IconCircleFilled, {
+    size: 8,
+    className: "fill-current",
+  }),
 };
 
 export const overlaysConfig = {
@@ -109,21 +113,6 @@ export const overlaysConfig = {
       footer: "flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end",
       title: "text-lg font-semibold leading-none tracking-[-0.02em]",
       description: "text-sm text-muted-foreground",
-    },
-  },
-  SideSheet: {
-    classes: {
-      trigger: "cursor-pointer",
-      overlay: overlayClass,
-      // `dvh` + a viewport width guard so the panel cannot exceed the visible
-      // area on a phone when a caller forgets to size it.
-      content:
-        "fixed z-50 flex flex-col h-full top-0 max-sm:h-dvh max-sm:max-w-[100vw] border-border bg-card smooth-shadow-ring-xl duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out",
-      left: "left-0 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
-      right:
-        "right-0 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
-      close:
-        "absolute right-3 top-3 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground motion-press active:scale-[0.94] hover:text-foreground focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 after:absolute after:inset-[-6px]",
     },
   },
   Popover: {
@@ -177,7 +166,10 @@ export const overlaysConfig = {
     triggerSlot: true,
     collisionPadding: 8,
     icons: {
-      trigger: createElement(IconChevronDown, { size: 16, className: "opacity-60" }),
+      trigger: createElement(IconChevronDown, {
+        size: 16,
+        className: "opacity-60",
+      }),
       scrollUp: createElement(IconChevronUp, { size: 16 }),
       scrollDown: createElement(IconChevronDown, { size: 16 }),
       check: createElement(IconCheck, { size: 16 }),
@@ -202,7 +194,9 @@ export const overlaysConfig = {
     // eva's CommandEmpty took a `className` as its whole class list.
     emptyClassNameReplaces: true,
     icons: {
-      search: createElement(IconSearch, { className: "size-4 shrink-0 text-muted-foreground" }),
+      search: createElement(IconSearch, {
+        className: "size-4 shrink-0 text-muted-foreground",
+      }),
     },
     classes: {
       root: "flex h-full w-full flex-col overflow-hidden border border-border bg-popover/95 text-popover-foreground backdrop-blur-md rounded-surface",

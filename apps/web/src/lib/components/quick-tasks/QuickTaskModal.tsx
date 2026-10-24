@@ -7,7 +7,6 @@ import {
   DialogFooter,
   Button,
   Input,
-  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -535,7 +534,11 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (

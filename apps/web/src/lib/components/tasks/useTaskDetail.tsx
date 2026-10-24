@@ -1,6 +1,6 @@
 "use client";
 
-import { toast, useElapsedSeconds } from "@vvedantb/ui";
+import { toast, useActivityElapsedSeconds } from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -65,7 +65,7 @@ export function useTaskDetail(
   const hasRuns = (runs?.length ?? 0) > 0;
   const isProjectTask = task?.projectId !== undefined;
   const activeRun = runs?.find((run) => run.status === "running");
-  const activeRunElapsed = useElapsedSeconds(
+  const activeRunElapsed = useActivityElapsedSeconds(
     activeRun?.startedAt,
     Boolean(activeRun),
   );

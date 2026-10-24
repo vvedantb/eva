@@ -15,7 +15,7 @@ import { cn } from "@eva/ui";
 import {
   KanbanCard,
   KanbanProvider,
-  transitionBase,
+  tokenTransition,
   toast,
 } from "@vvedantb/ui";
 import type { KanbanColumnDef, KanbanItem } from "@vvedantb/ui";
@@ -188,7 +188,7 @@ export function KanbanBoard<T extends BaseTask>({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 8 }}
-                      transition={transitionBase}
+                      transition={tokenTransition.base}
                     >
                       <VirtualKanbanColumn
                         status={status}

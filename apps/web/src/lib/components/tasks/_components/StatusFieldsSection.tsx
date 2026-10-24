@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
   TooltipContent,
   Badge,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -242,7 +242,7 @@ export function StatusFieldsSection({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={transitionFast}
+                            transition={tokenTransition.fast}
                             className={`flex items-center gap-1.5 ${config.text}`}
                           >
                             <Icon size={14} />
@@ -256,7 +256,7 @@ export function StatusFieldsSection({
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
-                              transition={transitionFast}
+                              transition={tokenTransition.fast}
                               className="inline-flex"
                             >
                               <Badge variant="warning" className="ml-0.5">
@@ -359,7 +359,7 @@ export function StatusFieldsSection({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={transitionFast}
+                    transition={tokenTransition.fast}
                   >
                     {assignedUser ? (
                       <UserInitials
@@ -451,7 +451,7 @@ export function StatusFieldsSection({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {status === "todo" ? (
                 <BranchSelect
@@ -492,7 +492,7 @@ export function StatusFieldsSection({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <IconBrandVercelFilled
                 size={14}

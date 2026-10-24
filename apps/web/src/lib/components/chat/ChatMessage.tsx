@@ -3,7 +3,7 @@ import {
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  transitionFast,
+  tokenTransition,
   ProviderIcon,
   Tooltip,
   TooltipContent,
@@ -353,7 +353,7 @@ export const ChatMessage = memo(function ChatMessage({
           data-message-id={message._id}
           initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
-          transition={transitionFast}
+          transition={tokenTransition.fast}
           className={cn(
             citeHighlight && "rounded-md ring-2 ring-primary/50",
             linkHighlight && "rounded-md t-anchor-flash",
@@ -493,7 +493,7 @@ export const ChatMessage = memo(function ChatMessage({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={transitionFast}
+                            transition={tokenTransition.fast}
                           >
                             <TurnErrorNotice
                               title={turnErrorTitle}
@@ -508,7 +508,7 @@ export const ChatMessage = memo(function ChatMessage({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={transitionFast}
+                            transition={tokenTransition.fast}
                           >
                             {panelTabs ? (
                               <ChatUiPanelTabs
@@ -658,7 +658,7 @@ function HandoffModelChip({
       )}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
     >
       <ProviderIcon provider={option.provider} size={10} />
       {formatModelDisplayLabel(option.provider, option.label)}

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "motion/react";
-import { Button, transitionFast } from "@vvedantb/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { IconChecklist, IconChecks } from "@tabler/icons-react";
 import { PageHeader } from "@/lib/components/PageHeader";
 import { InboxFilterMenu } from "@/lib/components/inbox/InboxFilterMenu";
@@ -46,7 +46,7 @@ export function InboxHeader({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={transitionFast}
+                transition={tokenTransition.fast}
               >
                 <Button
                   size="sm"

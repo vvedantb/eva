@@ -14,7 +14,7 @@ import {
   CollapsibleTrigger,
   CrossfadeIcon,
   Spinner,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -143,7 +143,7 @@ export function IssuesList({ report }: { report: EvaluationReport }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <Button
               size="sm"

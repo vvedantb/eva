@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Button, transitionFast } from "@vvedantb/ui";
+import { Input, Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { Id } from "@eva/backend";
 import { IconPlus, IconX } from "@tabler/icons-react";
@@ -53,7 +53,7 @@ export function DomainsSection({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={transitionFast}
+                  transition={tokenTransition.fast}
                 >
                   {domain}
                   <button

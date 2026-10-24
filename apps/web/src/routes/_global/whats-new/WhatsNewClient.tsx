@@ -6,7 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { cn } from "@eva/ui";
 import {
   CenteredSpinner,
-  transitionBase,
+  tokenTransition,
   staggerDelay,
   Markdown,
 } from "@vvedantb/ui";
@@ -43,7 +43,10 @@ export function WhatsNewClient() {
               className="relative"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...transitionBase, delay: staggerDelay(index) }}
+              transition={{
+                ...tokenTransition.base,
+                delay: staggerDelay(index),
+              }}
             >
               <span
                 className={cn(

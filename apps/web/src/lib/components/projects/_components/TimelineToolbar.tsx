@@ -9,20 +9,20 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@vvedantb/ui";
-import type { Range } from "@vvedantb/ui";
+import type { GanttRange } from "@vvedantb/ui";
 import {
   IconZoomIn,
   IconZoomOut,
   IconCalendarEvent,
 } from "@tabler/icons-react";
 
-const RANGE_OPTIONS: { value: Range; label: string }[] = [
+const RANGE_OPTIONS: { value: GanttRange; label: string }[] = [
   { value: "quarterly", label: "Quarter" },
   { value: "monthly", label: "Month" },
   { value: "daily", label: "Week" },
 ];
 
-function isRange(value: string): value is Range {
+function isRange(value: string): value is GanttRange {
   return value === "quarterly" || value === "monthly" || value === "daily";
 }
 
@@ -31,9 +31,9 @@ const ZOOM_MAX = 200;
 const ZOOM_STEP = 25;
 
 interface TimelineToolbarProps {
-  range: Range;
+  range: GanttRange;
   zoom: number;
-  onRangeChange: (range: Range) => void;
+  onRangeChange: (range: GanttRange) => void;
   onZoomChange: (zoom: number) => void;
   onToday: () => void;
 }

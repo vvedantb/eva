@@ -1,5 +1,5 @@
 import { cn } from "@eva/ui";
-import { CrossfadeIcon, transitionFast } from "@vvedantb/ui";
+import { CrossfadeIcon, tokenTransition } from "@vvedantb/ui";
 import { IconCheck, IconChevronRight, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import type { BackgroundAgentEntry } from "@eva/backend";
@@ -109,7 +109,7 @@ export function AgentSpawnCtaRow({
       <m.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
       >
         <button
           type="button"

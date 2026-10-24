@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  CircleSpinner,
+  Spinner,
 } from "@vvedantb/ui";
 
 export function RunDevServerConfirmDialog({
@@ -60,7 +60,7 @@ export function RunDevServerConfirmDialog({
             }}
             disabled={isRunning}
           >
-            {isRunning && <CircleSpinner size="sm" />}
+            {isRunning && <Spinner variant="circle" size="sm" />}
             Run dev server
           </Button>
         </DialogFooter>

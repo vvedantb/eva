@@ -5,16 +5,16 @@ import { api, contextWindowForRawModel } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import {
   Button,
-  Context,
-  ContextTrigger,
-  ContextContent,
-  ContextContentHeader,
-  ContextContentBody,
-  ContextContentFooter,
-  ContextInputUsage,
-  ContextOutputUsage,
-  ContextCacheReadUsage,
-  ContextCacheWriteUsage,
+  ContextUsage,
+  ContextUsageTrigger,
+  ContextUsageContent,
+  ContextUsageContentHeader,
+  ContextUsageContentBody,
+  ContextUsageContentFooter,
+  ContextUsageInput,
+  ContextUsageOutput,
+  ContextUsageCacheRead,
+  ContextUsageCacheWrite,
 } from "@vvedantb/ui";
 import { parseResultEvent } from "@/lib/utils/logs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -111,11 +111,11 @@ export function ContextUsageDisplay({
       : compactFormat(Math.max(0, maxTokens - aggregated.usedTokens));
   const autoCompact = contextCompactsAutomatically(aggregated.model);
 
-  // `Context` requires a numeric `maxTokens`, so an unknown window passes the
+  // `ContextUsage` requires a numeric `maxTokens`, so an unknown window passes the
   // used tokens as the denominator and suppresses every percentage instead: a
   // hardcoded 200k denominator is what made this meter lie in the first place.
   return (
-    <Context
+    <ContextUsage
       {...(defaultOpen ? { open: true } : {})}
       usedTokens={aggregated.usedTokens}
       maxTokens={maxTokens ?? aggregated.usedTokens}
@@ -123,9 +123,9 @@ export function ContextUsageDisplay({
       costs={aggregated.costs}
     >
       {maxTokens === null ? (
-        // `ContextTrigger` only forwards props to its own fallback Button, so
+        // `ContextUsageTrigger` only forwards props to its own fallback Button, so
         // the test id has to ride on the Button we hand it as children.
-        <ContextTrigger>
+        <ContextUsageTrigger>
           <Button
             type="button"
             variant="ghost"
@@ -137,16 +137,16 @@ export function ContextUsageDisplay({
               —
             </span>
           </Button>
-        </ContextTrigger>
+        </ContextUsageTrigger>
       ) : (
-        <ContextTrigger
+        <ContextUsageTrigger
           data-testid="context-meter"
           className={overloaded ? "text-destructive" : undefined}
         />
       )}
-      <ContextContent data-testid="context-meter-popover">
+      <ContextUsageContent data-testid="context-meter-popover">
         {maxTokens === null ? (
-          <ContextContentHeader>
+          <ContextUsageContentHeader>
             <div className="flex items-center justify-between gap-3 text-xs tabular-nums">
               <p title={UNKNOWN_WINDOW_TITLE}>—</p>
               <p className="font-mono text-muted-foreground">
@@ -156,16 +156,16 @@ export function ContextUsageDisplay({
             <p className="text-xs text-muted-foreground">
               {UNKNOWN_WINDOW_TITLE}
             </p>
-          </ContextContentHeader>
+          </ContextUsageContentHeader>
         ) : (
-          <ContextContentHeader />
+          <ContextUsageContentHeader />
         )}
-        <ContextContentBody className="space-y-1">
-          <ContextInputUsage />
-          <ContextOutputUsage />
-          <ContextCacheReadUsage />
-          <ContextCacheWriteUsage />
-        </ContextContentBody>
+        <ContextUsageContentBody className="space-y-1">
+          <ContextUsageInput />
+          <ContextUsageOutput />
+          <ContextUsageCacheRead />
+          <ContextUsageCacheWrite />
+        </ContextUsageContentBody>
         <div className="space-y-2 px-3 pb-3 text-2xs leading-4 text-muted-foreground">
           {remainingLabel === null ? null : (
             <p>
@@ -187,9 +187,9 @@ export function ContextUsageDisplay({
             </button>
           ) : null}
         </div>
-        <ContextContentFooter />
-      </ContextContent>
-    </Context>
+        <ContextUsageContentFooter />
+      </ContextUsageContent>
+    </ContextUsage>
   );
 }
 

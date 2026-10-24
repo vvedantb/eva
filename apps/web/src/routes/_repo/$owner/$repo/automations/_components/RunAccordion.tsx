@@ -8,11 +8,11 @@ import {
   ActivityTasks,
   Badge,
   Button,
-  useElapsedSeconds,
-  formatElapsed,
+  useActivityElapsedSeconds,
+  formatActivityElapsed,
   Spinner as UISpinner,
   Surface,
-  transitionFast,
+  tokenTransition,
   Markdown,
 } from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -155,7 +155,7 @@ function RunAccordion({
     isActive ? { entityId: streamingEntityId } : "skip",
   );
 
-  const elapsed = useElapsedSeconds(run.startedAt, isActive);
+  const elapsed = useActivityElapsedSeconds(run.startedAt, isActive);
 
   const badgeVariant =
     run.status === "success"
@@ -170,7 +170,7 @@ function RunAccordion({
     run.finishedAt && run.startedAt
       ? formatDuration(run.startedAt, run.finishedAt)
       : isActive && run.startedAt
-        ? formatElapsed(elapsed)
+        ? formatActivityElapsed(elapsed)
         : "";
 
   const liveSteps = streaming?.currentActivity
@@ -234,7 +234,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <Button
                 size="sm"
@@ -263,7 +263,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <Button
                 size="sm"
@@ -285,7 +285,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               Read
             </m.span>
@@ -298,7 +298,7 @@ function RunAccordion({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
             className="px-4 py-3 space-y-3"
           >
             {isActive && liveSteps && (

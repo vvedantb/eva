@@ -11,7 +11,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  transitionFast,
+  tokenTransition,
   springTransition,
   usePromptInputController,
 } from "@vvedantb/ui";
@@ -188,7 +188,7 @@ export function ComposerInputChrome({
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             {/* A tooltip rather than `title`: the binding is a `ShortcutKbd`
                 that follows the user's own setting, and a title attribute can

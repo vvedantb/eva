@@ -12,7 +12,7 @@ import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docModeParser, type DocMode } from "@/lib/search-params";
 import { nanoid } from "nanoid";
-import { Button, Spinner, transitionFast } from "@vvedantb/ui";
+import { Button, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconMessage } from "@tabler/icons-react";
 import { FloatingToc } from "../FloatingToc";
@@ -391,7 +391,7 @@ export function DocContentTab({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <DocVersionDiff
                 versionId={selectedVersionId}
@@ -406,7 +406,7 @@ export function DocContentTab({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               {!commentsOpen &&
                 !historyOpen &&
@@ -459,7 +459,7 @@ export function DocContentTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <DocCommentsPanel
               docId={doc._id}
@@ -481,7 +481,7 @@ export function DocContentTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <DocHistoryPanel
               docId={doc._id}
@@ -498,7 +498,7 @@ export function DocContentTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <DocSuggestionsPanel
               editor={editor}

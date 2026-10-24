@@ -3,7 +3,7 @@ import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner, transitionBase } from "@vvedantb/ui";
+import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -453,7 +453,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={transitionBase}
+                transition={tokenTransition.base}
               >
                 <CenteredSpinner label="Loading quick tasks" />
               </m.div>
@@ -465,7 +465,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={transitionBase}
+                transition={tokenTransition.base}
               >
                 <EmptyState
                   icon={
@@ -498,7 +498,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={transitionBase}
+                transition={tokenTransition.base}
               >
                 <QuickTasksKanbanBoard
                   tasks={quickTasks}
@@ -515,7 +515,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={transitionBase}
+                transition={tokenTransition.base}
               >
                 <QuickTasksListSplit
                   tasks={quickTasks}

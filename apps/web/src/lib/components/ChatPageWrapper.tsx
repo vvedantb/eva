@@ -1,7 +1,7 @@
 "use client";
 
 import { IconArchive } from "@tabler/icons-react";
-import { transitionBase } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface ChatPageWrapperProps {
@@ -44,7 +44,7 @@ export function ChatPageWrapper({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionBase}
+            transition={tokenTransition.base}
           >
             <IconArchive size={16} className="text-muted-foreground" />
             <span className="text-sm text-muted-foreground">
@@ -58,7 +58,7 @@ export function ChatPageWrapper({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionBase}
+            transition={tokenTransition.base}
           >
             {headerLeft ? (
               <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden sm:gap-2">

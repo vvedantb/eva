@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { cn } from "@eva/ui";
-import { Button, Surface, transitionFast } from "@vvedantb/ui";
+import { Button, Surface, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconArrowRight,
@@ -145,7 +145,7 @@ export function SystemAutomationCard({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <span className="flex items-center gap-1.5 text-2xs font-medium text-success">
                 <IconCheck size={13} />
@@ -173,7 +173,7 @@ export function SystemAutomationCard({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <span className="text-2xs text-muted-foreground">
                 Not installed

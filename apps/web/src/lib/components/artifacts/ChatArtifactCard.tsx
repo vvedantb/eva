@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button, Spinner, Surface, transitionFast } from "@vvedantb/ui";
+import { Button, Spinner, Surface, tokenTransition } from "@vvedantb/ui";
 import {
   IconExternalLink,
   IconLayoutDashboard,
@@ -41,7 +41,7 @@ export function ChatArtifactCard({
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
       data-testid="chat-artifact-card"
     >
       <Surface

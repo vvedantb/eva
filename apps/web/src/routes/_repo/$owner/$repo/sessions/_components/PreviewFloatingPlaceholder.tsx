@@ -2,7 +2,7 @@
 
 import { AnimatePresence, m } from "motion/react";
 import { IconPictureInPicture } from "@tabler/icons-react";
-import { Button, transitionFast } from "@vvedantb/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { closePreviewMiniPlayer } from "@/lib/components/sandbox/previewMiniPlayerStore";
 
 /**
@@ -21,7 +21,7 @@ export function PreviewFloatingPlaceholder() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
         className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground"
       >
         <IconPictureInPicture className="size-12 opacity-50" />

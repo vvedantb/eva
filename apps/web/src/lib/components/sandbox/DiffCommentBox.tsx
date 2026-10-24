@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Textarea, transitionFast } from "@vvedantb/ui";
+import { Button, Textarea, tokenTransition } from "@vvedantb/ui";
 import { IconMessage, IconTrash } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";
@@ -27,7 +27,7 @@ export function DiffCommentDraftBox({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
       >
         <div className="flex items-center gap-2">
           <IconMessage className="size-4 text-muted-foreground" />
@@ -95,7 +95,7 @@ export function DiffCommentPendingCard({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={transitionFast}
+        transition={tokenTransition.fast}
       >
         <div className="flex items-center gap-2">
           <IconMessage className="size-4 text-muted-foreground" />

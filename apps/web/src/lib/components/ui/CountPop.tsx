@@ -2,7 +2,7 @@
 
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
-import { transitionBase, transitionFast } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import type { ReactNode } from "react";
 
 /**
@@ -42,8 +42,8 @@ export function CountPop({
           key={label}
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.5, transition: transitionFast }}
-          transition={{ ...transitionBase, ease: [0.2, 0.8, 0.2, 1] }}
+          exit={{ opacity: 0, scale: 0.5, transition: tokenTransition.fast }}
+          transition={{ ...tokenTransition.base, ease: [0.2, 0.8, 0.2, 1] }}
           className={className}
         >
           {children ?? label}

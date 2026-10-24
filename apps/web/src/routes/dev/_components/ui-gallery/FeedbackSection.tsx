@@ -1,7 +1,5 @@
 import { useEffect } from "react";
 import {
-  Alert,
-  AlertDescription,
   Avatar,
   AvatarFallback,
   AvatarImage,
@@ -14,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
   CenteredSpinner,
-  CircleSpinner,
+  Spinner,
   CrossfadeIcon,
   CrossfadeIconSlot,
   Label,
@@ -23,7 +21,6 @@ import {
   Progress,
   RefreshSpinIcon,
   Separator,
-  Spinner,
   StatusDot,
   Surface,
   Table,
@@ -32,17 +29,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Toaster,
+  SonnerToaster,
   Button,
   toast,
 } from "@vvedantb/ui";
 import type { StatusTone } from "@vvedantb/ui";
-import {
-  IconAlertTriangle,
-  IconCheck,
-  IconCopy,
-  IconInfoCircle,
-} from "@tabler/icons-react";
+import { IconCheck, IconCopy } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
@@ -106,7 +98,7 @@ export function FeedbackSection() {
         ))}
       </GalleryGroup>
       <SurfaceGroup />
-      <GalleryGroup title="Avatar / Alert / Progress / Separator / Label">
+      <GalleryGroup title="Avatar / Progress / Separator / Label">
         <GalleryItem label="Avatar image + fallback">
           <div className="flex gap-2">
             <Avatar>
@@ -117,18 +109,6 @@ export function FeedbackSection() {
               <AvatarFallback>VB</AvatarFallback>
             </Avatar>
           </div>
-        </GalleryItem>
-        <GalleryItem label="Alert default" className="w-80">
-          <Alert>
-            <IconInfoCircle className="size-4" />
-            <AlertDescription>Heads up: a new version is out.</AlertDescription>
-          </Alert>
-        </GalleryItem>
-        <GalleryItem label="Alert destructive" className="w-80">
-          <Alert variant="destructive">
-            <IconAlertTriangle className="size-4" />
-            <AlertDescription>The sandbox stopped.</AlertDescription>
-          </Alert>
         </GalleryItem>
         <GalleryItem label="Progress 0 / 40 / 100" className="w-60">
           <div className="flex flex-col gap-2">
@@ -157,7 +137,7 @@ export function FeedbackSection() {
           </span>
         </GalleryItem>
       </GalleryGroup>
-      <Toaster
+      <SonnerToaster
         id={GALLERY_TOASTER}
         theme={resolvedTheme}
         position="top-right"
@@ -178,11 +158,11 @@ function SpinnerGroup() {
           <Spinner size="lg" />
         </div>
       </GalleryItem>
-      <GalleryItem label="CircleSpinner sm / md / lg">
+      <GalleryItem label="Spinner sm / md / lg">
         <div className="flex items-center gap-3">
-          <CircleSpinner size="sm" />
-          <CircleSpinner />
-          <CircleSpinner size="lg" />
+          <Spinner variant="circle" size="sm" />
+          <Spinner variant="circle" />
+          <Spinner variant="circle" size="lg" />
         </div>
       </GalleryItem>
       <GalleryItem label="CenteredSpinner" className="w-48">

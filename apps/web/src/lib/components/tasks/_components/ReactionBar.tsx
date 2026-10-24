@@ -6,7 +6,7 @@ import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
@@ -37,7 +37,7 @@ export function ReactionBar({ groups, toggle }: ReactionBarProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={transitionFast}
+            transition={tokenTransition.fast}
           >
             <HoverCard>
               <HoverCardTrigger asChild>

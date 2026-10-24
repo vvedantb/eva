@@ -1,6 +1,6 @@
 import { IconWorld, IconX } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
-import { transitionFast } from "@vvedantb/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface PreviewPaneTabsProps {
@@ -39,7 +39,7 @@ export function PreviewPaneTabs({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
               className={cn(
                 // The wrapper only shifts colour; the press lives on the button
                 // inside it, so `transform` here named a property nothing sets.

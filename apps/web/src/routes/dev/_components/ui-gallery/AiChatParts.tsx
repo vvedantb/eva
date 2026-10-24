@@ -15,31 +15,18 @@ import {
   Attachments,
   CodeBlock,
   CodeBlockCopyButton,
-  Confirmation,
-  ConfirmationAccepted,
-  ConfirmationAction,
-  ConfirmationActions,
-  ConfirmationRejected,
-  ConfirmationRequest,
-  ConfirmationTitle,
   FileChip,
-  QueuePanel,
-  QueuePanelItem,
+  Queue,
+  QueueItem,
   QueueItemAction,
   QueueItemActions,
   QueueItemContent,
   QueueItemIndicator,
-  QueuePanelList,
+  QueueList,
   QueueSection,
   QueueSectionContent,
   QueueSectionLabel,
   QueueSectionTrigger,
-  Sandbox,
-  SandboxContent,
-  SandboxTabContent,
-  SandboxTabs,
-  SandboxTabsList,
-  SandboxTabsTrigger,
   Shimmer,
 } from "@vvedantb/ui";
 import type { AttachmentData, AttachmentVariant } from "@vvedantb/ui";
@@ -112,7 +99,7 @@ const QUEUE_ITEMS = [
 
 export function QueueSample() {
   return (
-    <QueuePanel className="w-96">
+    <Queue className="w-96">
       <QueueSection>
         <QueueSectionTrigger>
           <QueueSectionLabel
@@ -122,9 +109,9 @@ export function QueueSample() {
           />
         </QueueSectionTrigger>
         <QueueSectionContent>
-          <QueuePanelList>
+          <QueueList>
             {QUEUE_ITEMS.map((item) => (
-              <QueuePanelItem key={item.id}>
+              <QueueItem key={item.id}>
                 <div className="flex items-start gap-2">
                   <QueueItemIndicator completed={item.done} />
                   <QueueItemContent completed={item.done}>
@@ -139,9 +126,9 @@ export function QueueSample() {
                     </QueueItemAction>
                   </QueueItemActions>
                 </div>
-              </QueuePanelItem>
+              </QueueItem>
             ))}
-          </QueuePanelList>
+          </QueueList>
         </QueueSectionContent>
       </QueueSection>
       <QueueSection defaultOpen={false}>
@@ -149,34 +136,12 @@ export function QueueSample() {
           <QueueSectionLabel count={2} label="todos (closed)" />
         </QueueSectionTrigger>
         <QueueSectionContent>
-          <QueuePanelList>
-            <QueuePanelItem>Hidden item</QueuePanelItem>
-          </QueuePanelList>
+          <QueueList>
+            <QueueItem>Hidden item</QueueItem>
+          </QueueList>
         </QueueSectionContent>
       </QueueSection>
-    </QueuePanel>
-  );
-}
-
-function ConfirmationSample({
-  state,
-}: {
-  state: "pending" | "accepted" | "rejected";
-}) {
-  return (
-    <Confirmation state={state} className="w-80">
-      <ConfirmationTitle>
-        <ConfirmationRequest>
-          Run `rm -rf dist` in the sandbox?
-        </ConfirmationRequest>
-        <ConfirmationAccepted>You approved this command.</ConfirmationAccepted>
-        <ConfirmationRejected>You rejected this command.</ConfirmationRejected>
-      </ConfirmationTitle>
-      <ConfirmationActions>
-        <ConfirmationAction variant="outline">Reject</ConfirmationAction>
-        <ConfirmationAction>Approve</ConfirmationAction>
-      </ConfirmationActions>
-    </Confirmation>
+    </Queue>
   );
 }
 
@@ -257,44 +222,6 @@ export function AiChatParts() {
         <GalleryItem label="AttachmentEmpty">
           <AttachmentEmpty />
         </GalleryItem>
-      </GalleryGroup>
-
-      <GalleryGroup title="Confirmation / Sandbox">
-        <GalleryItem label="Confirmation pending">
-          <ConfirmationSample state="pending" />
-        </GalleryItem>
-        <GalleryItem label="Confirmation accepted">
-          <ConfirmationSample state="accepted" />
-        </GalleryItem>
-        <GalleryItem label="Confirmation rejected">
-          <ConfirmationSample state="rejected" />
-        </GalleryItem>
-        {(["running", "completed", "error", "pending"] as const).map(
-          (state) => (
-            <GalleryItem
-              key={state}
-              label={`Sandbox ${state}`}
-              className="w-96"
-            >
-              <Sandbox state={state}>
-                <SandboxContent>
-                  <SandboxTabs defaultValue="code">
-                    <SandboxTabsList>
-                      <SandboxTabsTrigger value="code">Code</SandboxTabsTrigger>
-                      <SandboxTabsTrigger value="output">
-                        Output
-                      </SandboxTabsTrigger>
-                    </SandboxTabsList>
-                    <SandboxTabContent value="code">
-                      <CodeBlock code="print('hello')" language="python" />
-                    </SandboxTabContent>
-                    <SandboxTabContent value="output">hello</SandboxTabContent>
-                  </SandboxTabs>
-                </SandboxContent>
-              </Sandbox>
-            </GalleryItem>
-          ),
-        )}
       </GalleryGroup>
     </>
   );

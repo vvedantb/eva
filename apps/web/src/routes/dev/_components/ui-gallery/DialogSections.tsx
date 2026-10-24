@@ -21,11 +21,6 @@ import {
   DialogTrigger,
   Input,
   Label,
-  SideSheet,
-  SideSheetClose,
-  SideSheetContent,
-  SideSheetTitle,
-  SideSheetTrigger,
 } from "@vvedantb/ui";
 import {
   IconFile,
@@ -75,65 +70,6 @@ export function DialogSection() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </GalleryItem>
-    </GalleryGroup>
-  );
-}
-
-export function SheetSection() {
-  return (
-    <GalleryGroup title="Sheet (left + right open, controlled)">
-      <GalleryItem label="SheetTrigger + SheetContent side=left">
-        <SideSheet open onOpenChange={noop}>
-          <SideSheetTrigger asChild>
-            <Button variant="outline">Open left</Button>
-          </SideSheetTrigger>
-          <SideSheetContent
-            className="w-80 p-6"
-            onOpenAutoFocus={skipAutoFocus}
-          >
-            <SideSheetTitle className="text-base font-semibold">
-              Navigation
-            </SideSheetTitle>
-            <nav className="mt-4 flex flex-col gap-1 text-sm">
-              <span className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5">
-                <IconHome className="size-4" /> Home
-              </span>
-              <span className="flex items-center gap-2 px-2 py-1.5">
-                <IconGitBranch className="size-4" /> Branches
-              </span>
-              <span className="flex items-center gap-2 px-2 py-1.5">
-                <IconSettings className="size-4" /> Settings
-              </span>
-            </nav>
-          </SideSheetContent>
-        </SideSheet>
-      </GalleryItem>
-      <GalleryItem label="SheetContent side=right with SheetClose (modal=false)">
-        {/* Non-modal so it renders no second scrim over the left sheet; the
-            left sheet's scrim already shows the overlay styling. */}
-        <SideSheet open onOpenChange={noop} modal={false}>
-          <SideSheetTrigger asChild>
-            <Button variant="outline">Open right</Button>
-          </SideSheetTrigger>
-          <SideSheetContent
-            side="right"
-            className="w-96 p-6"
-            onOpenAutoFocus={skipAutoFocus}
-          >
-            <SideSheetTitle className="text-base font-semibold">
-              Details
-            </SideSheetTitle>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Run 1042 finished in 3m 12s.
-            </p>
-            <SideSheetClose asChild>
-              <Button className="mt-6" variant="secondary">
-                Done
-              </Button>
-            </SideSheetClose>
-          </SideSheetContent>
-        </SideSheet>
       </GalleryItem>
     </GalleryGroup>
   );

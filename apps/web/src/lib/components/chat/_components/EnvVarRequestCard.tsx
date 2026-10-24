@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useAction, useMutation } from "convex/react";
 import { m } from "motion/react";
 import { api, type Doc } from "@eva/backend";
-import { Button, Input, transitionFast, Surface } from "@vvedantb/ui";
+import { Button, Input, tokenTransition, Surface } from "@vvedantb/ui";
 import { IconCheck, IconMinus, IconShieldCheck } from "@tabler/icons-react";
 
 type EnvVarRequest = Pick<
@@ -93,7 +93,7 @@ function PendingEnvVarRequestForm({
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={transitionFast}
+      transition={tokenTransition.fast}
     >
       <Surface density="tight" className="min-w-0 max-w-full">
         <form

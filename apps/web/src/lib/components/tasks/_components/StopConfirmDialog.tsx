@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  CircleSpinner,
+  Spinner,
 } from "@vvedantb/ui";
 
 export function StopConfirmDialog({
@@ -43,7 +43,7 @@ export function StopConfirmDialog({
             }}
             disabled={isStopping}
           >
-            {isStopping && <CircleSpinner size="sm" />}
+            {isStopping && <Spinner variant="circle" size="sm" />}
             Stop Execution
           </Button>
         </DialogFooter>

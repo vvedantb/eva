@@ -9,7 +9,7 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-  transitionFast,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { SandboxIdlePauseMode } from "@eva/shared";
@@ -142,7 +142,7 @@ export function SandboxAutoStopSettingsClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <SettingsField
                 label="Pause after the agent finishes"
@@ -216,7 +216,7 @@ export function SandboxAutoStopSettingsClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={transitionFast}
+              transition={tokenTransition.fast}
             >
               <SettingsField
                 label="Stop time"

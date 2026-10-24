@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  CircleSpinner,
+  Spinner,
 } from "@vvedantb/ui";
 
 export function ResolveConfirmDialog({
@@ -43,7 +43,7 @@ export function ResolveConfirmDialog({
             }}
             disabled={isStarting}
           >
-            {isStarting && <CircleSpinner size="sm" />}
+            {isStarting && <Spinner variant="circle" size="sm" />}
             Resolve Conflicts
           </Button>
         </DialogFooter>
