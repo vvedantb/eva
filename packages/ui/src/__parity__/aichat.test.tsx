@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import type { ReactNode } from "react";
+import { act, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
 import { describe, expect, test } from "vitest";
 import { domMax, LazyMotion, MotionGlobalConfig } from "motion/react";
 import {
@@ -380,6 +381,68 @@ describe("PromptInput", () => {
     expect(html).toContain('role="menu"');
   });
 
+  // eva's item used `onSelect`, vvedantb's uses `onClick`. Radix turns Enter
+  // and Space into a click, so both open the picker the same way; checked here
+  // (picker opened, menu left open) for mouse, Enter and Space.
+  test.each(["mouse", "Enter", " "] as const)("add attachments opens the file picker (%j)", async (how) => {
+    const run = async (P: typeof LegacyPromptInput | typeof Next, wrap: (node: ReactNode) => ReactNode) => {
+      let picked = 0;
+      const click = HTMLInputElement.prototype.click;
+      HTMLInputElement.prototype.click = function (this: HTMLInputElement) {
+        if (this.type === "file") picked += 1;
+        else click.call(this);
+      };
+      const host = document.body.appendChild(document.createElement("div"));
+      const root = createRoot(host);
+      try {
+        await act(async () =>
+          root.render(
+            wrap(
+              <P.PromptInput onSubmit={noop}>
+                <P.PromptInputActionMenu>
+                  <P.PromptInputActionMenuTrigger />
+                  <P.PromptInputActionMenuContent>
+                    <P.PromptInputActionAddAttachments />
+                  </P.PromptInputActionMenuContent>
+                </P.PromptInputActionMenu>
+              </P.PromptInput>,
+            ),
+          ),
+        );
+        await act(async () => {
+          host
+            .querySelector('button[aria-haspopup="menu"]')
+            ?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+        });
+        const item = document.querySelector('[role="menuitem"]');
+        if (!(item instanceof HTMLElement)) throw new Error("menu item missing");
+        await act(async () => {
+          if (how === "mouse") {
+            item.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+            item.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0 }));
+            item.click();
+          } else {
+            item.dispatchEvent(new KeyboardEvent("keydown", { key: how, bubbles: true }));
+          }
+        });
+        await act(() => wait(0));
+        return { picked, menuOpen: document.querySelector('[role="menu"]') !== null };
+      } finally {
+        await act(async () => root.unmount());
+        host.remove();
+        HTMLInputElement.prototype.click = click;
+      }
+    };
+    const legacy = await run(LegacyPromptInput, (node) => <LegacyTooltipProvider>{node}</LegacyTooltipProvider>);
+    const next = await run(Next, (node) => (
+      <Next.UiConfigProvider config={evaUiConfig}>
+        <Next.TooltipProvider>{node}</Next.TooltipProvider>
+      </Next.UiConfigProvider>
+    ));
+    expect(legacy).toEqual({ picked: 1, menuOpen: true });
+    expect(next).toEqual(legacy);
+  });
+
   test("status change cross-fades the submit icon", async () => {
     const tree = (P: typeof LegacyPromptInput | typeof Next, status?: "streaming") => (
       <P.PromptInput onSubmit={noop}>
@@ -744,6 +807,48 @@ describe("CodeBlock", () => {
     });
     expect(html).toContain("tabler-icon-check");
   });
+
+  // eva's copy button copies on every click, also while it shows the check,
+  // and the check goes 2 s after the first click (`CodeBlock.copyEveryClick`).
+  // Steps run in separate `act` calls so the DOM is read between timers.
+  test("copy button copies on every click and resets 2 s after the first", async () => {
+    const run = async (C: typeof LegacyCodeBlock | typeof Next, wrap: (node: ReactNode) => ReactNode) => {
+      const copies: string[] = [];
+      const icons: string[] = [];
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (text: string) => void copies.push(text) },
+      });
+      const host = document.body.appendChild(document.createElement("div"));
+      const root = createRoot(host);
+      const icon = () => host.querySelector("button svg")?.getAttribute("class") ?? "";
+      const click = () => act(async () => host.querySelector("button")?.click());
+      await act(async () =>
+        root.render(
+          wrap(
+            <C.CodeBlock code="x">
+              <C.CodeBlockCopyButton />
+            </C.CodeBlock>,
+          ),
+        ),
+      );
+      await click();
+      await act(() => wait(1000));
+      await click();
+      icons.push(icon());
+      await act(() => wait(1100));
+      icons.push(icon());
+      await act(async () => root.unmount());
+      host.remove();
+      return { copies, icons };
+    };
+    const legacy = await run(LegacyCodeBlock, (node) => node);
+    const next = await run(Next, (node) => <Next.UiConfigProvider config={evaUiConfig}>{node}</Next.UiConfigProvider>);
+    expect(legacy.copies).toEqual(["x", "x"]);
+    expect(legacy.icons[0]).toContain("tabler-icon-check");
+    expect(legacy.icons[1]).toContain("tabler-icon-copy");
+    expect(next).toEqual(legacy);
+  }, 10_000);
 });
 
 // ---------------------------------------------------------------------------

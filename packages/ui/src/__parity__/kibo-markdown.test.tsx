@@ -667,25 +667,9 @@ const DOCUMENT = [
   "```",
 ].join("\n");
 
-/**
- * EXCEPTION, until the AI chat family lands eva's `MessageAction`: vvedantb's
- * `MessageAction` mounts its tooltip with the button, so the code block's wrap
- * and copy buttons carry the `data-state="closed"` a Radix `TooltipTrigger`
- * adds. eva's mounts the tooltip on first hover or focus. Nothing styles
- * `data-state` on these buttons, so the rendered page is the same; the
- * attribute is dropped from those buttons only, and this goes once
- * `MessageAction` matches.
- */
-function dropCodeActionTooltipState(html: string): string {
-  return html.replace(
-    /(<span class="markdown-code-actions">[\s\S]*?<\/span>\n<\/div>)/g,
-    (actions) => actions.replaceAll(' data-state="closed">', ">"),
-  );
-}
-
 async function sameMarkdown(legacy: ReactNode, next: ReactNode, interact?: () => Promise<void> | void) {
   const pair = await renderPair(legacy, next, evaUiConfig, interact);
-  expect(dropCodeActionTooltipState(pair.next)).toBe(pair.legacy);
+  expect(pair.next).toBe(pair.legacy);
   return pair.legacy;
 }
 
@@ -714,6 +698,18 @@ describe("Markdown", () => {
       <Markdown components={components}>{"Some *emphasis* here."}</Markdown>,
       <Next.Markdown components={components}>{"Some *emphasis* here."}</Next.Markdown>,
     );
+  });
+
+  test("code-block wrap and copy buttons mount their tooltips on hover and focus", async () => {
+    const fence = "```ts\nconst a = 1;\n```";
+    const buttons = () => document.querySelectorAll(".markdown-code-actions button");
+    const html = await sameMarkdown(<Markdown>{fence}</Markdown>, <Next.Markdown>{fence}</Next.Markdown>, () => {
+      // React derives `onPointerEnter` from `pointerover`.
+      buttons()[0]?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+      const copy = buttons()[1];
+      if (copy instanceof HTMLElement) copy.focus();
+    });
+    expect(html).toContain("data-state=");
   });
 
   test("a streaming (unterminated) fence", async () => {

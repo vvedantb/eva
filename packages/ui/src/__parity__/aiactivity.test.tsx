@@ -37,31 +37,6 @@ type Case = {
 };
 
 /**
- * `Shimmer` belongs to the AI chat core family, which moves eva's compositor
- * shimmer (`shimmer-overlay` / `-band` / `-copy`, `as` default `p`) into
- * vvedantb in parallel. Until that lands, vvedantb's `Shimmer` is its older
- * `background-clip: text` sweep, so both sides collapse every shimmer to its
- * text here. Everything around the shimmer is still compared. Remove this once
- * the chat core config is in `evaUiConfig`.
- */
-function collapseShimmer(html: string): string {
-  const template = document.createElement("template");
-  template.innerHTML = html;
-  const hosts: Element[] = [];
-  for (const overlay of template.content.querySelectorAll(".shimmer-overlay")) {
-    if (overlay.parentElement) hosts.push(overlay.parentElement);
-    overlay.remove();
-  }
-  hosts.push(...template.content.querySelectorAll('[class~="bg-clip-text"]'));
-  for (const host of hosts) {
-    const stand = document.createElement("x-shimmer");
-    stand.textContent = host.textContent?.trim() ?? "";
-    host.replaceWith(stand);
-  }
-  return template.innerHTML;
-}
-
-/**
  * vvedantb's `TabsList` (WebPreviewConsole) adds `data-variant="segmented"`.
  * Same exception as the controls parity test: no eva CSS, test or script
  * selects `data-variant`, so dropping it hides no visible change.
@@ -70,7 +45,7 @@ const stripTabsVariant = (html: string) => html.replaceAll(' data-variant="segme
 
 async function expectParity({ legacy, next, interact, normalise = (html) => html }: Case) {
   const pair = await renderPair(legacy, next, evaUiConfig, interact);
-  expect(normalise(stripTabsVariant(collapseShimmer(pair.next)))).toBe(normalise(collapseShimmer(pair.legacy)));
+  expect(normalise(stripTabsVariant(pair.next))).toBe(normalise(pair.legacy));
   return pair;
 }
 

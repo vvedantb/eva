@@ -108,6 +108,8 @@ export const aichatConfig = {
   CodeBlock: {
     // Plain text; callers pass their own `pre` as children.
     plain: true,
+    // eva's copy button copies on every click, also while it shows the check.
+    copyEveryClick: true,
     copyButtonSize: "sm",
     copyLabel: "Copy code",
     classes: {
