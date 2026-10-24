@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { cn } from "@eva/ui";
 import {
   Badge,
   Button,
@@ -10,8 +11,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   LIST_ROW_CONTROL_CLASS,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,

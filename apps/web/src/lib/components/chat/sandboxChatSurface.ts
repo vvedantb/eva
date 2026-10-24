@@ -4,7 +4,7 @@ import type {
   BackgroundAgentEntry,
   Id,
 } from "@eva/backend";
-import type { ModelAccount } from "@eva/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 import type { ChatBodyMessage } from "./chatBodyUtils";
 
 /**

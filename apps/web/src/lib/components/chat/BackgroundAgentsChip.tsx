@@ -6,10 +6,10 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  motionFast,
-  CircleSpinner,
+  tokenTransition,
+  Spinner,
   OpenSubagentContext,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
@@ -75,7 +75,7 @@ export function BackgroundAgentsChip({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
@@ -141,7 +141,11 @@ export function BackgroundAgentsChip({
                           }}
                         >
                           {isStopping ? (
-                            <CircleSpinner size="sm" className="size-3.5" />
+                            <Spinner
+                              variant="circle"
+                              size="sm"
+                              className="size-3.5"
+                            />
                           ) : (
                             <IconPlayerStop className="size-3.5" />
                           )}

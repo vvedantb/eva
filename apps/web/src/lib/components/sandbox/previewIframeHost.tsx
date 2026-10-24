@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { cn, useWebPreview } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { useWebPreview } from "@vvedantb/ui";
 import {
   armPreviewMiniPlayer,
   disarmPreviewMiniPlayer,

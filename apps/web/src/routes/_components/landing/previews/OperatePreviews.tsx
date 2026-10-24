@@ -1,5 +1,6 @@
 import { IconCheck, IconFileCode, IconFolder } from "@tabler/icons-react";
-import { CircleSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { MockChip, MockDot, MockLabel, MockWindow } from "./MockParts";
 
 const AUTOMATIONS = [
@@ -111,7 +112,8 @@ export function SnapshotsPreview() {
                 aria-hidden
               />
             ) : (
-              <CircleSpinner
+              <Spinner
+                variant="circle"
                 size="sm"
                 className="size-3 shrink-0"
                 aria-hidden

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { IconPaperclip } from "@tabler/icons-react";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { api, type Id } from "@eva/backend";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import {
@@ -75,9 +75,13 @@ export function TaskFilesSection({
       storageId: attachment.storageId,
       label: labelForAttachment(attachment.name, attachment.contentType),
     };
-    requestConfirm(altHeld, () => setPending(next), () => {
-      void removeStored(next);
-    });
+    requestConfirm(
+      altHeld,
+      () => setPending(next),
+      () => {
+        void removeStored(next);
+      },
+    );
   };
 
   const removeStored = async (file: {
@@ -120,7 +124,8 @@ export function TaskFilesSection({
       const mediaType = attachment.contentType || "text/plain";
       // Hydrated drafts have storageId + no local File — open read-only so
       // editing would not orphan the stored blob.
-      const readOnly = attachment.file === null && attachment.storageId !== null;
+      const readOnly =
+        attachment.file === null && attachment.storageId !== null;
 
       try {
         if (attachment.file) {

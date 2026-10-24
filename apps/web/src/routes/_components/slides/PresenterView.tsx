@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import {
   IconChevronLeft,
   IconChevronRight,

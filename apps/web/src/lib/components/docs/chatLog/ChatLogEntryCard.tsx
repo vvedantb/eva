@@ -1,7 +1,11 @@
 import { cn } from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+import { Markdown } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
-import { CHAT_LOG_KIND_LABELS, chatLogDay, shortSha } from "@eva/shared/chatLog";
+import {
+  CHAT_LOG_KIND_LABELS,
+  chatLogDay,
+  shortSha,
+} from "@eva/shared/chatLog";
 import type { ChatLogEntry } from "./useChatLog";
 
 const AUTHOR_LABELS: Record<ChatLogEntry["author"], string> = {

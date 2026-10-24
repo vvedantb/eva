@@ -10,7 +10,7 @@ import {
   storedTraitsFromRepoDefaults,
   type Id,
 } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";

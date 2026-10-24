@@ -20,7 +20,7 @@ import {
   Spinner,
   Surface,
   Textarea,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconFile,
   IconMessage,

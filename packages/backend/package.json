@@ -50,7 +50,7 @@
     "@tiptap/pm": "^3.20.1",
     "@tiptap/starter-kit": "^3.20.1",
     "@vercel/sandbox": "^3.8.0",
-    "@vvedantb/server": "0.5.0",
+    "@vvedantb/server": "0.7.1",
     "ai": "^7.0.105",
     "convex": "^1.40.0",
     "convex-helpers": "0.1.114",

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 /** Match t3code MessagesTimeline collapsible user prompts. */
 const MAX_COLLAPSED_USER_MESSAGE_LINES = 8;

@@ -3,7 +3,7 @@ import { SignInButton, useAuth } from "@clerk/clerk-react";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useState } from "react";
 import { api } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import {
   clearMcpOauthParams,

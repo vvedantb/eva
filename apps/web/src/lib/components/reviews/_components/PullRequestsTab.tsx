@@ -3,7 +3,8 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
-import { Badge, LIST_ROW_CONTROL_CLASS, ListRow, cn, toast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Badge, LIST_ROW_CONTROL_CLASS, ListRow, toast } from "@vvedantb/ui";
 import {
   IconExternalLink,
   IconEye,

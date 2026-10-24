@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode, RefObject } from "react";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -11,7 +11,7 @@ import {
   Spinner,
   WebPreviewNavigation,
   useWebPreview,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconAspectRatio,
   IconCamera,
@@ -92,8 +92,7 @@ export function PreviewPanelNavBar({
   const webMcp = usePreviewWebMcp({ iframeElement: frame });
   const deviceActive = viewport.mode !== "fill";
   const containActive = contain || deviceActive;
-  const busy =
-    screenshot.capturing || snapshot.capturing || webMcp.discovering;
+  const busy = screenshot.capturing || snapshot.capturing || webMcp.discovering;
   // The menu hides these modes, so the trigger carries their "on" state.
   const anyModeActive =
     deviceActive || containActive || annotationMode || popOut?.active === true;

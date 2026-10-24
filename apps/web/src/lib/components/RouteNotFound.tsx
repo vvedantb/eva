@@ -2,7 +2,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { IconMapSearch } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { useSearch } from "@/lib/contexts/SearchContext";
 

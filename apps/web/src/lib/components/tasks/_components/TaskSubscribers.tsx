@@ -12,8 +12,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuCheckboxItem,
   CrossfadeIcon,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconBell, IconBellOff, IconUserPlus } from "@tabler/icons-react";
 import { getUserInitials } from "@eva/shared";
@@ -89,7 +89,7 @@ export function TaskSubscribers({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
               >
                 <UserInitials user={user} size="sm" hideLastSeen />
               </m.span>

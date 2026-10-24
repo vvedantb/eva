@@ -7,16 +7,16 @@ import { api } from "@eva/backend";
 import {
   ActivityTasks,
   Shimmer,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
+  AgentTraceCollapsible,
+  AgentTraceCollapsibleContent,
+  AgentTraceCollapsibleTrigger,
+  AgentTraceIcon,
+  AgentTraceLine,
+  AgentTraceTitle,
   Spinner,
-  formatElapsed,
-  useElapsedSeconds,
-} from "@eva/ui";
+  formatActivityElapsed,
+  useActivityElapsedSeconds,
+} from "@vvedantb/ui";
 import {
   isEmptyActivityPayload,
   isSandboxStartupActivity,
@@ -43,7 +43,7 @@ import {
 const SILENT_STREAM_NOTICE_AFTER_SECONDS = 60;
 
 function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
-  const elapsed = useElapsedSeconds(startedAt, true);
+  const elapsed = useActivityElapsedSeconds(startedAt, true);
   return (
     <div className="flex items-center gap-2 text-muted-foreground text-sm">
       <Spinner size="sm" />
@@ -51,7 +51,7 @@ function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
         <Shimmer as="span" duration={2.5} spread={1.5}>
           Working for
         </Shimmer>{" "}
-        <span className="tabular-nums">{formatElapsed(elapsed)}</span>
+        <span className="tabular-nums">{formatActivityElapsed(elapsed)}</span>
       </span>
     </div>
   );
@@ -66,7 +66,7 @@ function SimpleViewHeartbeat({
   isStreaming: boolean;
   startedAt?: number;
 }) {
-  const sinceLastOutput = useElapsedSeconds(
+  const sinceLastOutput = useActivityElapsedSeconds(
     lastOutputAt,
     Boolean(isStreaming && startedAt),
   );
@@ -323,20 +323,20 @@ export function ActivityLogDisplay({
   }
 
   return (
-    <TraceCollapsible defaultOpen={false}>
-      <TraceCollapsibleTrigger>
-        <TraceLine>
-          <TraceIcon>
+    <AgentTraceCollapsible defaultOpen={false}>
+      <AgentTraceCollapsibleTrigger>
+        <AgentTraceLine>
+          <AgentTraceIcon>
             <IconBrain />
-          </TraceIcon>
-          <TraceTitle>View logs</TraceTitle>
-        </TraceLine>
-      </TraceCollapsibleTrigger>
-      <TraceCollapsibleContent>
+          </AgentTraceIcon>
+          <AgentTraceTitle>View logs</AgentTraceTitle>
+        </AgentTraceLine>
+      </AgentTraceCollapsibleTrigger>
+      <AgentTraceCollapsibleContent>
         <pre className="whitespace-pre-wrap max-sm:wrap-break-word font-mono text-xs max-h-64 overflow-y-auto scroll-fade">
           {activityLog}
         </pre>
-      </TraceCollapsibleContent>
-    </TraceCollapsible>
+      </AgentTraceCollapsibleContent>
+    </AgentTraceCollapsible>
   );
 }

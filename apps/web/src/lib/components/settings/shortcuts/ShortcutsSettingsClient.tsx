@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import { normalizeHotkey, type Hotkey } from "@tanstack/react-hotkeys";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";

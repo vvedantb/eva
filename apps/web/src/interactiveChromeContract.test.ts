@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
-const uiPrimitives = join(webSrc, "..", "..", "..", "packages", "ui", "src", "ui");
+// eva's classes for the shared @vvedantb/ui primitives (its UiConfig).
+const uiPrimitives = join(webSrc, "..", "..", "..", "packages", "ui", "src", "config");
 
 /** Comments below name the very declarations these rules ban, so they go first. */
 const css = stripComments(
@@ -110,12 +111,13 @@ describe("the interactive cursor base rule", () => {
    * the missing base rule with `cursor-default` kept the arrow once the rule
    * came back, since the class wins on specificity. Decorative app-level
    * elements (badges, timestamps) may still use it — shared primitives under
-   * packages/ui/src/ui are controls, so they may not.
+   * eva's @vvedantb/ui config (packages/ui/src/config) are controls, so they
+   * may not.
    */
   it("is not overridden inside the shared UI primitives", () => {
     const offenders = readdirSync(uiPrimitives, { recursive: true })
       .map(String)
-      .filter((file) => file.endsWith(".tsx"))
+      .filter((file) => file.endsWith(".ts"))
       .filter((file) =>
         readFileSync(join(uiPrimitives, file), "utf8").includes("cursor-default"),
       );

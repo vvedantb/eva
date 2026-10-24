@@ -17,7 +17,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPlus, IconFolder } from "@tabler/icons-react";
 import { TeamRepoCard } from "./TeamRepoCard";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";

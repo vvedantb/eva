@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
@@ -316,6 +316,7 @@ export function SessionDetailClient({
       title={session.title}
       branchName={session.branchName}
       sandboxBranch={session.sandboxBranch}
+      sandboxGitSync={session.sandboxGitSync}
       prUrl={session.prUrl}
       prState={session.prState}
       summary={session.summary}

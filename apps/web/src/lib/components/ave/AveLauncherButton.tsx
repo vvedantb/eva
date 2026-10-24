@@ -1,11 +1,19 @@
 "use client";
 
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import { useId, useState, type ReactNode } from "react";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
-import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
+import { AveStatePip } from "@/lib/components/ave/AveActiveDot";
 import { AveEyes } from "@/lib/components/ave/AveEyes";
 import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
+import {
+  aveLogoState,
+  type AveLogoState,
+} from "@/lib/components/ave/aveLogoState";
 import {
   LAUNCHER_POSITION_STYLE,
   type AveLauncherDragHandlers,
@@ -43,6 +51,7 @@ export function AveLauncherButton({
   /** True for the click the browser fires after a drop; see the hook. */
   shouldIgnoreClick: () => boolean;
 }) {
+  const stateLabelId = useId();
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -57,6 +66,7 @@ export function AveLauncherButton({
           onFocus={onIntent}
           aria-label={isOpen ? "Close Manager Ave" : "Manager Ave"}
           aria-expanded={isOpen}
+          aria-describedby={isOpen ? undefined : stateLabelId}
           style={LAUNCHER_POSITION_STYLE}
           className={cn(
             "motion-press fixed z-50",
@@ -78,7 +88,7 @@ export function AveLauncherButton({
           {/* Open → a close affordance: the mark says "summon Ave", but once the
               panel is up the same button dismisses it, and an unchanged glyph
               reads as "open it again". Both glyphs stay mounted so the swap
-              can crossfade instead of teleporting. The dot rides the Eva layer
+              can crossfade instead of teleporting. The pip rides the Eva layer
               so it leaves with the mark. */}
           <span className="relative size-full">
             <span
@@ -88,11 +98,10 @@ export function AveLauncherButton({
               )}
               aria-hidden={isOpen}
             >
-              <AveMark className="size-full" />
-              <AveEyes />
-              <QueryErrorBoundary>
-                <AveActiveDot />
-                <AveQuestionsBadge />
+              <QueryErrorBoundary
+                fallback={<AveFace state="idle" labelId={stateLabelId} />}
+              >
+                <AveLiveFace labelId={stateLabelId} />
               </QueryErrorBoundary>
             </span>
             <span
@@ -112,4 +121,96 @@ export function AveLauncherButton({
       </TooltipContent>
     </Tooltip>
   );
+}
+
+/** The CSS animation that times the done/error one-shots; see globals.css. */
+const ONE_SHOT_ANIMATION = "ave-hold";
+
+/**
+ * The launcher's face: mark, eyes and corner cues for one `AveLogoState`.
+ * `data-ave-state` drives every animation from globals.css, so the state is
+ * the only thing React decides. A one-shot reports its end through
+ * `onOneShotEnd` when its `ave-hold` timer runs out.
+ */
+function AveFace({
+  state,
+  labelId,
+  onOneShotEnd,
+  children,
+}: {
+  state: AveLogoState;
+  labelId: string;
+  onOneShotEnd?: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <span
+      data-ave-state={state}
+      className="ave-face relative size-full"
+      onAnimationEnd={(event) => {
+        if (event.animationName === ONE_SHOT_ANIMATION) onOneShotEnd?.();
+      }}
+    >
+      {state === "waiting" && (
+        <span className="ave-halo absolute inset-0 rounded-full" />
+      )}
+      <span className="ave-mark absolute inset-0">
+        <AveMark state={state} className="size-full" />
+        <AveEyes state={state} />
+      </span>
+      <AveStatePip state={state} labelId={labelId} />
+      {children}
+    </span>
+  );
+}
+
+function AveLiveFace({ labelId }: { labelId: string }) {
+  const { state, clearOneShot } = useAveLogoState();
+  return (
+    <AveFace state={state} labelId={labelId} onOneShotEnd={clearOneShot}>
+      <AveQuestionsBadge />
+    </AveFace>
+  );
+}
+
+/**
+ * Subscribes to Ave's thread, live activity, transcript and waiting
+ * questions, and derives the face. Each query is shared with `useAveChat` and
+ * the badge through the cached `useQuery`, so nothing subscribes twice.
+ *
+ * Done and error play only on a running → idle edge seen while mounted, never
+ * on first load. The edge is caught during render by comparing against the
+ * last status seen; whether the run failed is read at that moment, from the
+ * alert row `_ave/run.ts` writes in the same mutation that idles the thread.
+ */
+function useAveLogoState() {
+  const thread = useQuery(api.ave.getThread, {});
+  const streaming = useQuery(api.ave.getStreaming, {});
+  const messages = useQuery(api.ave.listMessages, {});
+  const waitingCount = useQuery(api.routedThreads.countWaitingForMe, {});
+  const status = thread?.status;
+  const [seenStatus, setSeenStatus] = useState(status);
+  const [finished, setFinished] = useState<{ errored: boolean } | null>(null);
+  if (status !== seenStatus) {
+    setSeenStatus(status);
+    const last = messages?.[messages.length - 1];
+    setFinished(
+      seenStatus === "running" && status === "idle"
+        ? {
+            errored:
+              last?.isSystemAlert === true && last.errorDetail !== undefined,
+          }
+        : null,
+    );
+  }
+  return {
+    state: aveLogoState({
+      threadStatus: status,
+      currentActivity: streaming?.currentActivity,
+      waitingCount,
+      justFinished: finished !== null,
+      lastRunErrored: finished?.errored === true,
+    }),
+    clearOneShot: () => setFinished(null),
+  };
 }

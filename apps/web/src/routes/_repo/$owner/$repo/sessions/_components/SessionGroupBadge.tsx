@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconLink,

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -14,7 +14,7 @@ import {
   Input,
   Spinner,
   Textarea,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { mutationError } from "@/lib/utils/mutationToast";
 import type { ChatSourceArg } from "@/lib/components/sandbox/chatSource";
 
@@ -110,7 +110,9 @@ export function AddLogEntryDialog({
             autoFocus
           />
           <Textarea
-            placeholder={kind === "decision" ? "Why (optional)" : "Detail (optional)"}
+            placeholder={
+              kind === "decision" ? "Why (optional)" : "Detail (optional)"
+            }
             value={body}
             onChange={(event) => setBody(event.target.value)}
           />

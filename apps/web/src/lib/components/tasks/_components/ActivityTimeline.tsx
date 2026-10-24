@@ -10,10 +10,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  CircleSpinner,
   Spinner,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
@@ -345,7 +344,7 @@ export function ActivityTimeline({
               onClick={handleDeleteComment}
               disabled={isDeletingComment}
             >
-              {isDeletingComment && <CircleSpinner size="sm" />}
+              {isDeletingComment && <Spinner variant="circle" size="sm" />}
               Delete
             </Button>
           </DialogFooter>

@@ -14,7 +14,7 @@ import { describe, expect, test } from "vitest";
 // is why the count is pinned here.
 //
 // Disk-read contract check (matching the suite's other *Contract tests): the
-// component is a "use client" module pulling @eva/ui, Radix and motion, none of
+// component is a "use client" module pulling @vvedantb/ui, Radix and motion, none of
 // which load in the node test environment.
 
 const here = dirname(fileURLToPath(import.meta.url));

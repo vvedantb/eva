@@ -1,4 +1,4 @@
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 export const LANDING_MOCK_REPO = "acme/web";
 export const LANDING_MOCK_TASK_NUMBER = 142;

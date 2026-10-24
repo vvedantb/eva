@@ -10,7 +10,7 @@ import {
   DialogTitle,
   Input,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 /**
  * "New Document" title dialog, shared by the Documents sidebar and the sandbox

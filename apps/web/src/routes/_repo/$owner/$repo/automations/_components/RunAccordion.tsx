@@ -8,12 +8,13 @@ import {
   ActivityTasks,
   Badge,
   Button,
-  useElapsedSeconds,
-  formatElapsed,
+  useActivityElapsedSeconds,
+  formatActivityElapsed,
   Spinner as UISpinner,
   Surface,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  Markdown,
+} from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconAlertTriangle,
@@ -27,7 +28,6 @@ import dayjs from "@eva/shared/dates";
 import { formatDuration } from "@eva/shared/duration";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { Markdown } from "@eva/ui/markdown";
 import { FindingsList } from "./FindingsList";
 
 export function LatestRun({
@@ -155,7 +155,7 @@ function RunAccordion({
     isActive ? { entityId: streamingEntityId } : "skip",
   );
 
-  const elapsed = useElapsedSeconds(run.startedAt, isActive);
+  const elapsed = useActivityElapsedSeconds(run.startedAt, isActive);
 
   const badgeVariant =
     run.status === "success"
@@ -170,7 +170,7 @@ function RunAccordion({
     run.finishedAt && run.startedAt
       ? formatDuration(run.startedAt, run.finishedAt)
       : isActive && run.startedAt
-        ? formatElapsed(elapsed)
+        ? formatActivityElapsed(elapsed)
         : "";
 
   const liveSteps = streaming?.currentActivity
@@ -234,7 +234,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <Button
                 size="sm"
@@ -263,7 +263,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <Button
                 size="sm"
@@ -285,7 +285,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               Read
             </m.span>
@@ -298,7 +298,7 @@ function RunAccordion({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
             className="px-4 py-3 space-y-3"
           >
             {isActive && liveSteps && (

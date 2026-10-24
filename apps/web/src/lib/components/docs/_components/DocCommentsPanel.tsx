@@ -6,7 +6,8 @@ import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useQueryState } from "nuqs";
 import { docCommentFilterParser } from "@/lib/search-params";
-import { Button, cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconX } from "@tabler/icons-react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -113,7 +114,7 @@ export function DocCommentsPanel({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <DocNewCommentComposer
                 docId={docId}
@@ -133,7 +134,7 @@ export function DocCommentsPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {displayRoots.length === 0 && !composingAnchorId && (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">

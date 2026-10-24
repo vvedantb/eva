@@ -12,7 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 type SkillContentDialogProps = {
   skillId: Id<"repoSkills">;

@@ -2,7 +2,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { IconAlertCircle } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 

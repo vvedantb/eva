@@ -31,7 +31,7 @@ import {
   TabsContent,
   Spinner,
   useDragSensors,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { ProjectPhaseBadge } from "@/lib/components/projects/ProjectPhaseBadge";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { entityPathSegment } from "@/lib/numId";

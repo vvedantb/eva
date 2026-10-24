@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
+/** eva's class strings per vvedantb component, the exact ones eva renders. */
+const uiConfig = join(uiSrc, "config");
+/** The `@vvedantb/ui` sources: the behaviour behind eva's primitives. */
+const vvedantbSrc = join(webSrc, "..", "node_modules", "@vvedantb", "ui", "src");
 
 /** Comments name classes and queries these rules ban, so they have to go first. */
 const cssRules = stripComments(
@@ -90,23 +94,27 @@ describe("measured-height panels", () => {
   const panels = [
     {
       name: "accordion",
-      file: "ui/accordion.tsx",
+      component: "Accordion",
       utility: "t-accordion-content",
       heightVar: "--radix-accordion-content-height",
     },
     {
       name: "collapsible",
-      file: "ui/collapsible.tsx",
+      component: "Collapsible",
       utility: "t-collapsible-content",
       heightVar: "--radix-collapsible-content-height",
     },
   ];
 
-  it.each(panels)("the $name content carries $utility", ({ file, utility }) => {
-    const source = stripComments(readFileSync(join(uiSrc, file), "utf8"));
+  it.each(panels)("the $name content carries $utility", ({ component, utility }) => {
+    // eva's config replaces vvedantb's content class outright, so the utility
+    // has to be in eva's string, not just in vvedantb's default.
+    const controls = stripComments(
+      readFileSync(join(uiConfig, "controls.ts"), "utf8"),
+    );
     expect(
-      source,
-      "a bare Radix re-export snaps open — wrap it",
+      configClass(controls, component, "content"),
+      "a content class without the utility snaps open",
     ).toContain(utility);
   });
 
@@ -176,14 +184,22 @@ describe("infinite animations pause when the user cannot see them", () => {
     expect(cssRules).not.toMatch(
       /\[aria-hidden="true"\]\s+\.beam::before/,
     );
-    const beam = readFileSync(join(uiSrc, "ui", "border-beam.tsx"), "utf8");
-    const loading = readFileSync(join(uiSrc, "ui", "loading-state.tsx"), "utf8");
+    // The overlays and the visibility check are vvedantb code; eva's config
+    // sets no attributes on them.
+    const beam = readFileSync(
+      join(vvedantbSrc, "ui", "border-beam.tsx"),
+      "utf8",
+    );
+    const loading = readFileSync(
+      join(vvedantbSrc, "ui", "loading-state.tsx"),
+      "utf8",
+    );
     const shimmer = readFileSync(
-      join(uiSrc, "ai-elements", "shimmer.tsx"),
+      join(vvedantbSrc, "ai-elements", "shimmer.tsx"),
       "utf8",
     );
     const visibility = readFileSync(
-      join(uiSrc, "utils", "runtimeVisibility.ts"),
+      join(vvedantbSrc, "utils", "runtimeVisibility.ts"),
       "utf8",
     );
     expect(beam).toContain("data-anim-chrome");
@@ -207,7 +223,11 @@ describe("beam halo blur is banned", () => {
       /\.beam[\w-]*(?:::[a-z-]+)?\s*\{[^}]*filter:\s*(?:blur|drop-shadow)/,
     );
     expect(cssRules).not.toContain("beam-halo");
-    const beam = readFileSync(join(uiSrc, "ui", "border-beam.tsx"), "utf8");
+    // eva's config does not override BorderBeam, so vvedantb's markup is it.
+    const beam = readFileSync(
+      join(vvedantbSrc, "ui", "border-beam.tsx"),
+      "utf8",
+    );
     expect(beam).not.toContain("beam-halo");
     expect(beam).not.toContain("glow");
   });
@@ -299,6 +319,21 @@ function utilityBlock(name: string): string {
   const startAt = cssRules.indexOf(`@utility ${name} {`);
   expect(startAt, `the ${name} utility is gone`).toBeGreaterThan(-1);
   return cssRules.slice(startAt, cssRules.indexOf("\n}", startAt));
+}
+
+/**
+ * The string literal set for `part` inside eva's `component: { … }` config
+ * entry. Entries sit at two-space indent and close on `\n  },`.
+ */
+function configClass(config: string, component: string, part: string): string {
+  const startAt = config.indexOf(`\n  ${component}: {`);
+  expect(startAt, `eva's config has no ${component} entry`).toBeGreaterThan(-1);
+  const entry = config.slice(startAt, config.indexOf("\n  },", startAt));
+  const value = new RegExp(`\\b${part}:\\s*(["\`])([\\s\\S]*?)\\1`).exec(
+    entry,
+  );
+  expect(value, `${component} sets no ${part} class`).not.toBeNull();
+  return value?.[2] ?? "";
 }
 
 /** Every hand-written component source that can carry a class name. */

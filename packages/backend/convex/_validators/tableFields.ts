@@ -53,6 +53,7 @@ import {
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
+  sandboxGitSyncValidator,
   scopeCheckValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
@@ -638,6 +639,8 @@ export const agentTaskFields = {
    * where the checkout really is. Detached HEAD is reported as the short sha.
    */
   sandboxBranch: v.optional(v.string()),
+  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
+  sandboxGitSync: v.optional(sandboxGitSyncValidator),
   ...prSummaryFields,
 };
 
@@ -794,6 +797,8 @@ export const sessionFields = {
    * Detached HEAD is reported as the short commit sha.
    */
   sandboxBranch: v.optional(v.string()),
+  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
+  sandboxGitSync: v.optional(sandboxGitSyncValidator),
   // Saved codebase group the session was created from, when one prefilled the
   // linked repo selection. Informational: the `sessionRepos` rows are the
   // source of truth, so editing the group later never rewrites this session.
@@ -1147,6 +1152,8 @@ export const projectFields = {
    * Detached HEAD is reported as the short commit sha.
    */
   sandboxBranch: v.optional(v.string()),
+  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
+  sandboxGitSync: v.optional(sandboxGitSyncValidator),
 };
 
 export const projectDetailsFields = {

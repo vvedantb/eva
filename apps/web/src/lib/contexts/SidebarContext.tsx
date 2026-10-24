@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocalStorage, useSessionStorage } from "usehooks-ts";
-import { rubberband } from "@eva/ui";
+import { rubberband } from "@vvedantb/ui";
 
 const COOKIE_NAME = "sidebar-collapsed";
 const ONE_YEAR = 60 * 60 * 24 * 365;

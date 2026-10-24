@@ -1,12 +1,13 @@
 import { statSync, watch, type FSWatcher } from "fs";
+import { COMMIT_EXCLUDE_PATHSPECS } from "@eva/shared/gitDefaults";
 import { ENTITY_ID, ENTITY_ID_FIELD, WORK_DIR } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { log } from "../utils.js";
 import { git } from "./gitExec.js";
 
 /**
- * Reports the branch the sandbox checkout is actually on, so the UI can show it
- * live. Deliberately independent of the turn lifecycle: the user can `git
+ * Reports the branch the sandbox checkout is actually on, plus how much of its
+ * work is not on GitHub yet, so the UI can show both live. Deliberately independent of the turn lifecycle: the user can `git
  * checkout` in the Terminal panel with no turn running, and heartbeats only fire
  * while the daemon holds a turn lease.
  */
@@ -56,13 +57,27 @@ export function formatBranch(
   return sha.length > 0 ? sha : null;
 }
 
-/** The branch worth sending, or null when nothing changed since the last send. */
-export function decideBranchReport(input: {
-  current: string | null;
-  lastReported: string | null;
-}): string | null {
+/** Work on the checked-out branch that origin does not have yet. */
+export type GitSync = { uncommittedFiles: number; unpushedCommits: number };
+export type GitState = { branch: string; sync: GitSync | null };
+
+function sameState(a: GitState, b: GitState): boolean {
+  return (
+    a.branch === b.branch &&
+    a.sync?.uncommittedFiles === b.sync?.uncommittedFiles &&
+    a.sync?.unpushedCommits === b.sync?.unpushedCommits
+  );
+}
+
+/** The state worth sending, or null when nothing changed since the last send. */
+export function decideGitStateReport(input: {
+  current: GitState | null;
+  lastReported: GitState | null;
+}): GitState | null {
   if (input.current === null) return null;
-  if (input.current === input.lastReported) return null;
+  if (input.lastReported !== null && sameState(input.current, input.lastReported)) {
+    return null;
+  }
   return input.current;
 }
 
@@ -74,8 +89,38 @@ function readCurrentBranch(): string | null {
   return formatBranch(abbrev.out, short.ok ? short.out : "");
 }
 
+/**
+ * Counts with the turn-end commit's exclusions, so they match what "Commit &
+ * push" would publish. Unpushed is measured against every origin ref: a new
+ * branch forked from `origin/main` counts only its own commits. Null when git
+ * cannot answer — the branch is still reported.
+ */
+function readGitSync(): GitSync | null {
+  const status = git(
+    ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
+    GIT_TIMEOUT_MS,
+  );
+  const ahead = git(
+    ["rev-list", "--count", "HEAD", "--not", "--remotes=origin"],
+    GIT_TIMEOUT_MS,
+  );
+  const unpushedCommits = Number(ahead.out);
+  if (!status.ok || !ahead.ok || !Number.isSafeInteger(unpushedCommits)) {
+    return null;
+  }
+  const uncommittedFiles =
+    status.out.length === 0 ? 0 : status.out.split("\n").length;
+  return { uncommittedFiles, unpushedCommits };
+}
+
+function readGitState(): GitState | null {
+  const branch = readCurrentBranch();
+  if (branch === null) return null;
+  return { branch, sync: readGitSync() };
+}
+
 let target: BranchTarget | null = null;
-let lastReported: string | null = null;
+let lastReported: GitState | null = null;
 let pollInterval: NodeJS.Timeout | null = null;
 let debounceTimer: NodeJS.Timeout | null = null;
 let headWatcher: FSWatcher | null = null;
@@ -97,19 +142,20 @@ async function runCheckLoop(): Promise<void> {
     let again = true;
     while (again) {
       again = false;
-      const branch = decideBranchReport({
-        current: readCurrentBranch(),
+      const state = decideGitStateReport({
+        current: readGitState(),
         lastReported,
       });
-      if (branch !== null) {
+      if (state !== null) {
         try {
           await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
             target: activeTarget,
-            branch,
+            branch: state.branch,
+            ...(state.sync ? { sync: state.sync } : {}),
           });
-          lastReported = branch;
+          lastReported = state;
         } catch (error) {
-          // Leave lastReported alone so the next tick retries this branch.
+          // Leave lastReported alone so the next tick retries this state.
           log(
             "branchWatcher: report failed: " +
               (error instanceof Error ? error.message : String(error)),
@@ -150,6 +196,15 @@ function watchHeadIn(gitDir: string): void {
         (error instanceof Error ? error.message : String(error)),
     );
   }
+}
+
+/**
+ * Re-reads now instead of on the next poll. Called after the turn-end commit
+ * and push, which move refs the HEAD watcher does not see.
+ */
+export function requestGitStateCheck(): void {
+  if (!started) return;
+  scheduleCheck();
 }
 
 /** Starts the watcher. Idempotent — safe to call from every daemon entry point. */

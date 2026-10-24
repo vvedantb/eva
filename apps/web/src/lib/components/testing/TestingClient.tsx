@@ -2,7 +2,7 @@
 
 import { useNavigate } from "@tanstack/react-router";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { Route } from "@/routes/_global/testing";
 
 export function TestingClient() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import { IconBrandGithub } from "@tabler/icons-react";
 import { Container } from "@/lib/components/ui/Container";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
@@ -52,7 +52,9 @@ export function RepoSetupNeedsAuth({
             Cancel
           </Button>
         </div>
-        {error ? <p className="text-destructive text-sm mt-4">{error}</p> : null}
+        {error ? (
+          <p className="text-destructive text-sm mt-4">{error}</p>
+        ) : null}
       </div>
     </Container>
   );

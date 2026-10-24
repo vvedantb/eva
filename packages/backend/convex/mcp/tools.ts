@@ -43,6 +43,12 @@ export const ASK_TEAMMATE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "ask_teammate",
 ]);
 
+/** Hidden unless the caller opts in to Experimental → PR watch. */
+export const PR_WATCH_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "watch_pull_request",
+  "unwatch_pull_request",
+]);
+
 interface RepoCredentials {
   convexUrl: string;
   deployKey: string;

@@ -10,7 +10,7 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconMessage, IconTrash, IconX } from "@tabler/icons-react";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { PrCommentForm } from "./PrCommentForm";

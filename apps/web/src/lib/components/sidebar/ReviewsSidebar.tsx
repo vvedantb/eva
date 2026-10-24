@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button, Spinner, motionFast } from "@eva/ui";
+import { Button, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconGitPullRequest } from "@tabler/icons-react";
 import { useQueryState } from "nuqs";
@@ -85,7 +85,7 @@ export function ReviewsSidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {pullsQuery.isPending ? (
                 <div className="flex items-center justify-center py-8">

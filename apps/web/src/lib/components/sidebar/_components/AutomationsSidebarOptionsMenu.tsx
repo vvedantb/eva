@@ -15,7 +15,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconAdjustmentsHorizontal,
   IconList,

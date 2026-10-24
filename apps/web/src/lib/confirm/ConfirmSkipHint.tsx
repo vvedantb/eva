@@ -23,5 +23,7 @@ export function skipConfirmTitle(actionTitle?: string): string {
 export function ConfirmSkipHint({ className }: { className?: string }) {
   const altHeld = useAltHeld();
   if (!altHeld) return null;
-  return <Kbd hotkey={ALT_HOTKEY} className={cn("ml-auto shrink-0", className)} />;
+  return (
+    <Kbd hotkey={ALT_HOTKEY} className={cn("ml-auto shrink-0", className)} />
+  );
 }

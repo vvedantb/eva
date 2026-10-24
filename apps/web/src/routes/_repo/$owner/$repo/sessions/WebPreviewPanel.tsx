@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Id } from "@eva/backend";
-import { cn, Spinner, Button, WebPreview } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner, Button, WebPreview } from "@vvedantb/ui";
 import { useSessionStorage } from "usehooks-ts";
 import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
 import { IconRefresh, IconWorld } from "@tabler/icons-react";

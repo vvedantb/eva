@@ -3,7 +3,8 @@ import {
   IconGripHorizontal,
   IconX,
 } from "@tabler/icons-react";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import type { PointerGestureHandlers } from "../usePreviewMiniPlayerFrame";
 
 const BUTTON_CLASS =

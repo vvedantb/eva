@@ -5,6 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
   Checkbox,
@@ -13,9 +14,8 @@ import {
   CollapsibleTrigger,
   CrossfadeIcon,
   Spinner,
-  cn,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
@@ -143,7 +143,7 @@ export function IssuesList({ report }: { report: EvaluationReport }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Button
               size="sm"
@@ -236,36 +236,36 @@ function IssueRow({
         )}
       </div>
       <CollapsibleContent className="px-3 pb-3 pl-10 space-y-2">
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-            {issue.description}
-          </p>
-          {issue.filePaths && issue.filePaths.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Files
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {issue.filePaths.map((fp) => (
-                  <span
-                    key={fp}
-                    className="inline-block max-sm:max-w-full max-sm:break-all rounded bg-muted px-1.5 py-0.5 text-xs font-mono"
-                  >
-                    {fp}
-                  </span>
-                ))}
-              </div>
+        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+          {issue.description}
+        </p>
+        {issue.filePaths && issue.filePaths.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Files
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {issue.filePaths.map((fp) => (
+                <span
+                  key={fp}
+                  className="inline-block max-sm:max-w-full max-sm:break-all rounded bg-muted px-1.5 py-0.5 text-xs font-mono"
+                >
+                  {fp}
+                </span>
+              ))}
             </div>
-          )}
-          {issue.suggestedFix && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">
-                Suggested Fix
-              </p>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {issue.suggestedFix}
-              </p>
-            </div>
-          )}
+          </div>
+        )}
+        {issue.suggestedFix && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">
+              Suggested Fix
+            </p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+              {issue.suggestedFix}
+            </p>
+          </div>
+        )}
       </CollapsibleContent>
     </Collapsible>
   );

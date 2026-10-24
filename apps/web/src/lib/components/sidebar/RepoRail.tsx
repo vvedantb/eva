@@ -5,16 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
-} from "@eva/ui";
+import { cn } from "@eva/ui";
 import { IconPencil } from "@tabler/icons-react";
 import {
   AutomationIcon,
@@ -22,6 +13,13 @@ import {
   SearchIcon,
   SidebarToggleIcon,
   TerminalIcon,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";

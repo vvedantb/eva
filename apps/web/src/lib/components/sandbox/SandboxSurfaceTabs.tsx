@@ -1,4 +1,4 @@
-import { LoadingState, Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { LoadingState, Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import {

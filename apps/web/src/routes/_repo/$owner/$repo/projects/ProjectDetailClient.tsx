@@ -24,9 +24,9 @@ import {
   DialogBody,
   CenteredSpinner,
   toast,
-  motionFast,
-  CircleSpinner,
-} from "@eva/ui";
+  tokenTransition,
+  Spinner,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
@@ -46,6 +46,7 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -504,7 +505,11 @@ export function ProjectDetailClient({
                       disabled={isResolvingConflicts}
                     >
                       {isResolvingConflicts ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
+                        <Spinner
+                          variant="circle"
+                          size="sm"
+                          className="size-3.5"
+                        />
                       ) : (
                         <IconHammer size={14} />
                       )}
@@ -528,7 +533,11 @@ export function ProjectDetailClient({
                       disabled={isRetryingStartupCommands}
                     >
                       {isRetryingStartupCommands ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
+                        <Spinner
+                          variant="circle"
+                          size="sm"
+                          className="size-3.5"
+                        />
                       ) : (
                         <IconRefresh size={14} />
                       )}
@@ -542,7 +551,11 @@ export function ProjectDetailClient({
                       disabled={isRunningBackgroundCommands}
                     >
                       {isRunningBackgroundCommands ? (
-                        <CircleSpinner size="sm" className="size-3.5" />
+                        <Spinner
+                          variant="circle"
+                          size="sm"
+                          className="size-3.5"
+                        />
                       ) : (
                         <IconServerBolt size={14} />
                       )}
@@ -581,6 +594,11 @@ export function ProjectDetailClient({
                   own confirmed "Stop Build", so it is not gated here. This is the
                   only wake/sleep control now, the sandbox chat header carries
                   usage alone. */}
+              <SandboxCommitPushButton
+                gitSync={project.sandboxGitSync}
+                isSandboxActive={isSandboxActive}
+                target={{ kind: "project", projectId }}
+              />
               {isSandboxActive || canStartSandbox ? (
                 <SandboxStartStopButton
                   isActive={isSandboxActive}
@@ -611,7 +629,7 @@ export function ProjectDetailClient({
                     disabled={isStoppingBuild}
                   >
                     {isStoppingBuild ? (
-                      <CircleSpinner size="sm" aria-hidden />
+                      <Spinner variant="circle" size="sm" aria-hidden />
                     ) : (
                       <IconPlayerStop size={16} aria-hidden />
                     )}
@@ -641,7 +659,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {projectSandboxContent}
             </m.div>
@@ -652,7 +670,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <ProjectOverviewTab
                 projectId={projectId}
@@ -667,7 +685,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <ProjectTabs
                 projectId={projectId}
@@ -689,7 +707,7 @@ export function ProjectDetailClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <ProjectActiveLayout
                 projectId={projectId}

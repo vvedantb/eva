@@ -5,7 +5,7 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { toast, usePromptInputController } from "@eva/ui";
+import { toast, usePromptInputController } from "@vvedantb/ui";
 import {
   isAllowedAttachmentFile,
   labelForAttachment,

@@ -16,7 +16,7 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsField } from "@/lib/components/settings/SettingsField";
 

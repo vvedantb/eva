@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 import { isReviewTab, type ReviewTab } from "@/lib/search-params";
 import { REVIEW_TAB_LABEL } from "./reviewTabMeta";
 
@@ -47,7 +47,10 @@ export function ReviewTabNav({
           ))}
         </TabsList>
       </Tabs>
-      <div ref={controlsRef} className="ml-auto flex shrink-0 items-center gap-1" />
+      <div
+        ref={controlsRef}
+        className="ml-auto flex shrink-0 items-center gap-1"
+      />
     </nav>
   );
 }

@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { cn } from "@eva/ui";
-import { ImageLightbox, type GalleryImage } from "@/lib/components/ImageLightbox";
+import {
+  ImageLightbox,
+  type GalleryImage,
+} from "@/lib/components/ImageLightbox";
 
 export type { GalleryImage };
 

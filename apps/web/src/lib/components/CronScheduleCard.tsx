@@ -1,7 +1,7 @@
 import { useId } from "react";
 import cronstrue from "cronstrue";
 import { CronExpressionParser } from "cron-parser";
-import { Input } from "@eva/ui";
+import { Input } from "@vvedantb/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsField } from "@/lib/components/settings/SettingsField";
 
@@ -172,9 +172,7 @@ function CronPreview({
   return (
     <div className="mb-2 rounded-surface bg-muted/50 px-3 py-2 text-center">
       <p className="text-lg font-medium">{result.text}</p>
-      {next && (
-        <p className="text-2xs text-muted-foreground">next at {next}</p>
-      )}
+      {next && <p className="text-2xs text-muted-foreground">next at {next}</p>}
     </div>
   );
 }

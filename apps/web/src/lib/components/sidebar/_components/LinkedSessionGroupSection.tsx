@@ -12,7 +12,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconChevronDown, IconLink, IconPencil } from "@tabler/icons-react";
 import { AnimatePresence } from "motion/react";
 import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";

@@ -6,7 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Markdown, MarkdownLink } from "@eva/ui/markdown";
+import { Markdown, MarkdownLink } from "@vvedantb/ui";
 import remarkBreaks from "remark-breaks";
 import {
   DataMentionChip,

@@ -1,6 +1,12 @@
 "use client";
 
-import { Button, CrossfadeIcon, Tooltip, TooltipContent, TooltipTrigger } from "@eva/ui";
+import {
+  Button,
+  CrossfadeIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import {
   IconLayoutSidebarRightCollapse,
   IconLayoutSidebarRightExpand,
