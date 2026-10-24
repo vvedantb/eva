@@ -92,7 +92,8 @@ export function FeedbackSection() {
   const { resolvedTheme } = useThemeMode();
   useGalleryToasts();
   return (
-    <>
+    // Capped width keeps the specimens clear of the fixed top-right toasts.
+    <div className="flex max-w-[960px] flex-col gap-10">
       <SpinnerGroup />
       <GalleryGroup title="StatusDot">
         {STATUS_TONES.map((tone) => (
@@ -160,9 +161,10 @@ export function FeedbackSection() {
         id={GALLERY_TOASTER}
         theme={resolvedTheme}
         position="top-right"
+        visibleToasts={5}
         expand
       />
-    </>
+    </div>
   );
 }
 
