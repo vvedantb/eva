@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "shadow-plugin";
-@import "./__stage__/legacy/markdown/markdown.css";
+@import "@vvedantb/ui/tokens/css/markdown.css";
 @import "@vvedantb/ui/tokens/css/nav-icons.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
  * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the

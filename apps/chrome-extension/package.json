@@ -29,7 +29,7 @@
     "@streamdown/math": "^1.0.1",
     "@streamdown/mermaid": "^1.0.1",
     "@tabler/icons-react": "^3.36.1",
-    "@vvedantb/ui": "github:vvedantb/packages#2d4f31b58a1acd499b9185e8b6711dfe4cda625c&path:packages/ui",
+    "@vvedantb/ui": "github:vvedantb/packages#e1ba229c0af6f41ee45ef4d45401a9f4904bca82&path:packages/ui",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
