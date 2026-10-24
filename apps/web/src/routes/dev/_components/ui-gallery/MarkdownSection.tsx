@@ -2,10 +2,6 @@ import { Markdown, MarkdownLink } from "@eva/ui/markdown";
 import { GalleryGroup, GalleryItem } from "./GalleryItem";
 
 /**
- * Links stay network-free: a relative path, and github.com, which renders a
- * built-in icon. Any other external host would fetch `/favicon.ico`.
- */
-/**
  * Mermaid only renders once its fence is within 400px of the viewport
  * (IntersectionObserver in MarkdownMermaid), so it goes first, above the fold.
  * Until then it shows as a plain code block.
@@ -18,6 +14,10 @@ graph LR
 \`\`\`
 `;
 
+/**
+ * Links stay network-free: a relative path, and github.com, which renders a
+ * built-in icon. Any other external host would fetch `/favicon.ico`.
+ */
 const SAMPLE = `# Heading one
 
 Intro paragraph with **bold**, _italic_, ~~strike~~, \`inline code\`, a [relative link](/settings) and a [GitHub link](https://github.com/vercel/next.js).
