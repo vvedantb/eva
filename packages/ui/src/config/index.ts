@@ -4,6 +4,7 @@ import type { UiConfig } from "@vvedantb/ui";
 import { evaCn } from "./cn";
 import { controlsConfig } from "./controls";
 import { foundationsConfig } from "./foundations";
+import { kiboMarkdownConfig } from "./kibo-markdown";
 import { overlaysConfig } from "./overlays";
 
 export const evaUiConfig: UiConfig = {
@@ -11,4 +12,5 @@ export const evaUiConfig: UiConfig = {
   ...foundationsConfig,
   ...controlsConfig,
   ...overlaysConfig,
+  ...kiboMarkdownConfig,
 };
