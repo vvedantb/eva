@@ -1,3 +1,4 @@
+import { LazyMotion, domMax } from "motion/react";
 import {
   Avatar,
   AvatarFallback,
@@ -195,9 +196,14 @@ export function KiboSection() {
           </div>
         </GalleryItem>
         <GalleryItem label="ThemeSwitcher (value=dark, controlled)">
-          <div className="w-fit">
-            <ThemeSwitcher value="dark" onChange={noop} />
-          </div>
+          {/* ThemeSwitcher renders `motion.*`, which throws under the app's
+              `<LazyMotion strict>` (MotionProvider). A non-strict LazyMotion
+              scope lets it render; the app itself does not use it yet. */}
+          <LazyMotion features={domMax}>
+            <div className="w-fit">
+              <ThemeSwitcher value="dark" onChange={noop} />
+            </div>
+          </LazyMotion>
         </GalleryItem>
       </GalleryGroup>
     </>
