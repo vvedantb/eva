@@ -20,17 +20,12 @@ import {
   stripStaleDeployReloadParam,
 } from "./lib/utils/staleDeployReload";
 import { readSignedInHint } from "./lib/authHint";
-import { saveMcpOauthParamsFromUrl } from "./lib/mcpOauthStorage";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
 
-// Persist any in-flight MCP OAuth params before Clerk's session handshake
-// gets a chance to redirect us off `/mcp/oauth/authorize`. See
-// `mcpOauthStorage.ts` for the full flow.
 stripStaleDeployReloadParam();
-saveMcpOauthParamsFromUrl();
 
 // Moves persisted sandbox UI state off the legacy `conductor:` key prefix. Must
 // run before React mounts so the hooks reading these keys see migrated values on
