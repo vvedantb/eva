@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "shadow-plugin";
-@import "../../../packages/ui/src/markdown/markdown.css";
+@import "@vvedantb/ui/tokens/css/markdown.css";
 @import "@vvedantb/ui/tokens/css/nav-icons.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
  * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
@@ -8,6 +8,11 @@
 @import "@vvedantb/ui/tokens/css/compat-shadcn-rgb.css";
 
 @config '../tailwind.config.js';
+
+/* eva colours the `[!IMPORTANT]` markdown alert with the code-review status hue. */
+.markdown {
+  --markdown-alert-important: var(--status-code-review);
+}
 
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
  * inside its own dist, which the content globs never reach. */
