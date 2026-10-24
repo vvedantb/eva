@@ -13,7 +13,9 @@ export function GalleryItem({
 }) {
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", className)}>
-      <span className="font-mono text-[11px] text-muted-foreground">
+      {/* Fixed line height: `normal` on an 11px font is fractional, which put
+          specimens on half pixels and made their antialiasing flip between runs. */}
+      <span className="font-mono text-[11px] leading-4 text-muted-foreground">
         {label}
       </span>
       {children}
