@@ -13,13 +13,10 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { defineTool, type EvaTool } from "../mcp/registry";
 import {
   DEFAULT_EXECUTE_LIMITS,
-  executeCode,
-  type ExecuteOutcome,
+  runSandboxedScript,
+  serializeExecuteOutcome,
   type SandboxTool,
-} from "./codeModeRuntime";
-
-/** Serialized `execute` payloads longer than this are cut down to a preview. */
-const RESULT_CHAR_CAP = 100_000;
+} from "@vvedantb/server";
 
 const searchArgs = z.object({ query: z.string().optional() });
 
@@ -98,30 +95,6 @@ function text(value: string, isError: boolean): CallToolResult {
     : { content: [{ type: "text", text: value }] };
 }
 
-/** Serializes an outcome, replacing an oversized result with a preview. */
-function serializeOutcome(outcome: ExecuteOutcome): string {
-  const base = { logs: outcome.logs, calls: outcome.calls, ms: outcome.ms };
-  const full = JSON.stringify(
-    outcome.ok
-      ? { result: outcome.result, ...base }
-      : { error: outcome.error, ...base },
-    null,
-    2,
-  );
-  if (full.length <= RESULT_CHAR_CAP || !outcome.ok) return full;
-  const preview = JSON.stringify(outcome.result);
-  return JSON.stringify(
-    {
-      truncated: true,
-      note: `Result was ${preview.length} characters; showing the first ${RESULT_CHAR_CAP}. Filter or summarise inside the script instead.`,
-      resultPreview: `${preview.slice(0, RESULT_CHAR_CAP)}…`,
-      ...base,
-    },
-    null,
-    2,
-  );
-}
-
 function executeDescription(tools: readonly EvaTool[]): string {
   const names = (mutating: boolean) =>
     tools
@@ -176,8 +149,8 @@ export function codeModeTools(tools: readonly EvaTool[]): EvaTool[] {
           ),
       },
       handler: async ({ code }) => {
-        const outcome = await executeCode(code, sandboxTools);
-        return text(serializeOutcome(outcome), !outcome.ok);
+        const outcome = await runSandboxedScript(code, sandboxTools);
+        return text(serializeExecuteOutcome(outcome), !outcome.ok);
       },
     }),
     defineTool({
