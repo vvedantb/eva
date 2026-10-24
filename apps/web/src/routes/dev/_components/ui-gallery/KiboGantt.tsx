@@ -88,7 +88,7 @@ export function KiboGantt() {
         </div>
       </GalleryItem>
       <GalleryItem label="GanttFeatureRow (lanes) + custom bar content" className="w-full">
-        <div className="h-[180px] w-[1100px]">
+        <div className="h-[240px] w-[1100px]">
           <GanttProvider range="quarterly" zoom={100}>
             <GanttTimeline>
               <GanttHeader />

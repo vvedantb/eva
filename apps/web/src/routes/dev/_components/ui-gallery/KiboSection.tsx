@@ -162,15 +162,15 @@ export function KiboSection() {
         <GalleryItem label="Cursor / CursorPointer / CursorBody / CursorName">
           <div className="flex gap-10 p-2">
             <Cursor>
-              <CursorPointer className="text-sky-500" />
-              <CursorBody className="bg-sky-500/10 text-sky-700 dark:text-sky-300">
+              <CursorPointer className="text-primary" />
+              <CursorBody className="bg-primary text-primary-foreground">
                 <CursorName>Ada</CursorName>
                 <span>Reviewing tabs</span>
               </CursorBody>
             </Cursor>
             <Cursor>
-              <CursorPointer className="text-emerald-500" />
-              <CursorBody className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+              <CursorPointer className="text-success" />
+              <CursorBody className="bg-success/10 text-success">
                 <CursorName>Linus</CursorName>
               </CursorBody>
             </Cursor>
@@ -195,7 +195,9 @@ export function KiboSection() {
           </div>
         </GalleryItem>
         <GalleryItem label="ThemeSwitcher (value=dark, controlled)">
-          <ThemeSwitcher value="dark" onChange={noop} />
+          <div className="w-fit">
+            <ThemeSwitcher value="dark" onChange={noop} />
+          </div>
         </GalleryItem>
       </GalleryGroup>
     </>

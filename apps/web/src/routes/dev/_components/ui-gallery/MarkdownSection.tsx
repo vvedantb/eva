@@ -5,6 +5,19 @@ import { GalleryGroup, GalleryItem } from "./GalleryItem";
  * Links stay network-free: a relative path, and github.com, which renders a
  * built-in icon. Any other external host would fetch `/favicon.ico`.
  */
+/**
+ * Mermaid only renders once its fence is within 400px of the viewport
+ * (IntersectionObserver in MarkdownMermaid), so it goes first, above the fold.
+ * Until then it shows as a plain code block.
+ */
+const MERMAID = `\`\`\`mermaid
+graph LR
+  A[Before] --> B{Diff}
+  B -->|0 px| C[Ship]
+  B -->|changed| D[Fix]
+\`\`\`
+`;
+
 const SAMPLE = `# Heading one
 
 Intro paragraph with **bold**, _italic_, ~~strike~~, \`inline code\`, a [relative link](/settings) and a [GitHub link](https://github.com/vercel/next.js).
@@ -50,25 +63,21 @@ echo "done"
 > [!WARNING]
 > GitHub-style warning callout.
 
-Inline math $E = mc^2$ and a block:
+Inline math $$E = mc^2$$ and a block:
 
 $$
 \\int_0^1 x^2 \\, dx = \\frac{1}{3}
 $$
-
-\`\`\`mermaid
-graph LR
-  A[Before] --> B{Diff}
-  B -->|0 px| C[Ship]
-  B -->|changed| D[Fix]
-\`\`\`
 `;
 
 export function MarkdownSection() {
   return (
     <>
       <GalleryGroup title="Markdown">
-        <GalleryItem label='Markdown mode="static" (headings, lists, table, code, quote, alerts, links, KaTeX, mermaid)' className="w-[760px]">
+        <GalleryItem label="Markdown mermaid fence (renders async)" className="w-[760px]">
+          <Markdown mode="static">{MERMAID}</Markdown>
+        </GalleryItem>
+        <GalleryItem label='Markdown mode="static" (headings, lists, table, code, quote, alerts, links, KaTeX)' className="w-[760px]">
           <Markdown mode="static">{SAMPLE}</Markdown>
         </GalleryItem>
         <GalleryItem label='Markdown className="text-sm" (short)' className="w-[420px]">
