@@ -161,6 +161,25 @@ function updateGitExclude(names: string[]): void {
   writeFileSync(excludeFile, next);
 }
 
+/** Writes, prunes and git-excludes stubs so the checkout matches `skills`. */
+export function reconcileSystemSkills(skills: SystemSkillStub[]): void {
+  const written: string[] = [];
+  for (const skill of skills) {
+    try {
+      if (writeStub(skill)) written.push(skill.name);
+    } catch (err) {
+      log(`[system-skills] write failed for ${skill.name}: ${String(err)}`);
+    }
+  }
+
+  pruneStaleStubs(new Set(written));
+  updateGitExclude(written);
+  log(
+    `[system-skills] materialized ${written.length}/${skills.length}` +
+      (written.length > 0 ? ` (${written.join(", ")})` : ""),
+  );
+}
+
 /**
  * Reconciles the checkout against this launch's installed skills. Best-effort:
  * a failure here must never take down the turn.
@@ -181,21 +200,7 @@ export function materializeSystemSkills(): void {
       return;
     }
 
-    const written: string[] = [];
-    for (const skill of skills) {
-      try {
-        if (writeStub(skill)) written.push(skill.name);
-      } catch (err) {
-        log(`[system-skills] write failed for ${skill.name}: ${String(err)}`);
-      }
-    }
-
-    pruneStaleStubs(new Set(written));
-    updateGitExclude(written);
-    log(
-      `[system-skills] materialized ${written.length}/${skills.length}` +
-        (written.length > 0 ? ` (${written.join(", ")})` : ""),
-    );
+    reconcileSystemSkills(skills);
   } catch (err) {
     log(`[system-skills] materialize failed: ${String(err)}`);
   }
