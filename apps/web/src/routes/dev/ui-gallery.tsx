@@ -85,7 +85,7 @@ export const Route = createFileRoute("/dev/ui-gallery")({
 function useGalleryTheme(theme: "light" | "dark") {
   const { theme: current, setTheme } = useThemeMode();
   useEffect(() => {
-    if (current !== theme) setTheme(theme);
+    setTheme(theme);
   }, [current, theme, setTheme]);
 }
 
