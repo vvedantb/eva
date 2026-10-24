@@ -281,7 +281,20 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("claudeStyleActivity"),
   v.literal("openPrsOnGithub"),
   v.literal("scopeCheck"),
+  v.literal("manualSideBranchPublish"),
+  v.literal("prWatch"),
 );
+
+/**
+ * Work in the sandbox checkout that is not on GitHub yet, reported live with
+ * `sandboxBranch` (see callback-src/runtime/branchWatcher.ts). Counts use the
+ * same media exclusions as the turn-end commit, so they match what a
+ * "Commit & push" would publish.
+ */
+export const sandboxGitSyncValidator = v.object({
+  uncommittedFiles: v.number(),
+  unpushedCommits: v.number(),
+});
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
 export const experimentalFlagsFields = {
@@ -300,6 +313,8 @@ export const experimentalFlagsFields = {
   claudeStyleActivity: v.optional(v.boolean()),
   openPrsOnGithub: v.optional(v.boolean()),
   scopeCheck: v.optional(v.boolean()),
+  manualSideBranchPublish: v.optional(v.boolean()),
+  prWatch: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -321,6 +336,8 @@ export const resolvedExperimentalFlagsValidator = v.object({
   claudeStyleActivity: v.boolean(),
   openPrsOnGithub: v.boolean(),
   scopeCheck: v.boolean(),
+  manualSideBranchPublish: v.boolean(),
+  prWatch: v.boolean(),
 });
 
 /**

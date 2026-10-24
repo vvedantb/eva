@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, CircleSpinner, motionFast } from "@eva/ui";
+import { Badge, Button, Spinner, tokenTransition } from "@vvedantb/ui";
 import type { AgentGoal } from "@eva/backend";
 import { IconTargetArrow, IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
@@ -49,7 +49,7 @@ export function GoalBanner({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <IconTargetArrow
             size={18}
@@ -87,7 +87,7 @@ export function GoalBanner({
               onClick={() => handleClear(sendCommand)}
             >
               {isClearing ? (
-                <CircleSpinner size="sm" className="size-3.5" />
+                <Spinner variant="circle" size="sm" className="size-3.5" />
               ) : (
                 <IconX className="size-3.5" />
               )}

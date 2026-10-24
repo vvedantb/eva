@@ -18,14 +18,14 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  motionBase,
+  tokenTransition,
   Tabs,
   TabsList,
   TabsTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
@@ -411,7 +411,7 @@ export function ProjectsClient() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  transition={motionBase}
+                  transition={tokenTransition.base}
                 >
                   <div className="flex h-full min-h-0 min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar scroll-fade-x snap-x snap-mandatory sm:gap-3 sm:snap-none">
                     <ProjectsKanbanView
@@ -434,7 +434,7 @@ export function ProjectsClient() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  transition={motionBase}
+                  transition={tokenTransition.base}
                 >
                   <ProjectsTimeline
                     projects={filteredSorted}
@@ -452,7 +452,7 @@ export function ProjectsClient() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  transition={motionBase}
+                  transition={tokenTransition.base}
                 >
                   <ProjectsListView
                     projectsByPhase={projectsByPhase}

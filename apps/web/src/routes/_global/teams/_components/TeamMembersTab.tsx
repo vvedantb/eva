@@ -13,7 +13,7 @@ import {
   SelectContent,
   SelectItem,
   SelectValue,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconTrash, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";

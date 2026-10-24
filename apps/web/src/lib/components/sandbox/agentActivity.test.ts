@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { deriveSubagents, subagentTone } from "./agentActivity";
 
 function log(steps: ActivityStep[]): string {
@@ -18,10 +18,7 @@ const spawn = (
   ...overrides,
 });
 
-const child = (
-  parentToolUseId: string,
-  toolUseId: string,
-): ActivityStep => ({
+const child = (parentToolUseId: string, toolUseId: string): ActivityStep => ({
   type: "bash",
   label: "Ran command",
   status: "complete",
@@ -32,9 +29,7 @@ const child = (
 describe("deriveSubagents", () => {
   it("folds subtask steps and nests their children as the transcript", () => {
     const agents = deriveSubagents({
-      activityLogs: [
-        log([spawn("a1"), child("a1", "c1"), child("a1", "c2")]),
-      ],
+      activityLogs: [log([spawn("a1"), child("a1", "c1"), child("a1", "c2")])],
     });
     expect(agents).toHaveLength(1);
     expect(agents[0].toolUseId).toBe("a1");
@@ -85,9 +80,7 @@ describe("deriveSubagents", () => {
   it("keeps lifecycle-only agents whose steps were never captured", () => {
     const agents = deriveSubagents({
       activityLogs: [],
-      backgroundAgents: [
-        { toolUseId: "bg1", status: "running", startedAt: 5 },
-      ],
+      backgroundAgents: [{ toolUseId: "bg1", status: "running", startedAt: 5 }],
     });
     expect(agents).toHaveLength(1);
     expect(agents[0].steps).toEqual([]);
@@ -97,9 +90,7 @@ describe("deriveSubagents", () => {
   it("marks errored subtasks as failed and captures the result text", () => {
     const agents = deriveSubagents({
       activityLogs: [
-        log([
-          spawn("a1", { isError: true, output: { text: "boom" } }),
-        ]),
+        log([spawn("a1", { isError: true, output: { text: "boom" } })]),
       ],
     });
     expect(agents[0].status).toBe("failed");
@@ -117,9 +108,7 @@ describe("deriveSubagents", () => {
   it("downgrades running agents to stale when the sandbox is off", () => {
     const agents = deriveSubagents({
       activityLogs: [],
-      backgroundAgents: [
-        { toolUseId: "bg1", status: "running", startedAt: 5 },
-      ],
+      backgroundAgents: [{ toolUseId: "bg1", status: "running", startedAt: 5 }],
       sandboxRunning: false,
     });
     expect(agents[0].status).toBe("stale");

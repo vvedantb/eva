@@ -1,4 +1,5 @@
-import { catColorForSlot, catSlotForId, type CatSlot } from "@eva/ui";
+import { catColorForSlot, catSlotForId } from "@vvedantb/ui";
+import type { CatSlot } from "@vvedantb/ui";
 
 /** Stable Chrome-like tab-group accent for a repo id. */
 export interface TabGroupColor {

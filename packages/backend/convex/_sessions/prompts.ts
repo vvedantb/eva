@@ -30,7 +30,11 @@ export interface ChatRuntimeFacts {
   agentMemoryEnabled?: boolean;
   /** Owner opted in to Experimental → Ask teammates (`ask_teammate` MCP tool). */
   askTeammatesEnabled?: boolean;
+  /** Owner opted in to Experimental → PR watch (`watch_pull_request` MCP tool). */
+  prWatchEnabled?: boolean;
 }
+
+const PR_WATCH_INSTRUCTION = ` \`watch_pull_request\` after a PR is opened or pushed, so Eva wakes this chat when its checks fail or pass, a reviewer comments, or it conflicts (\`unwatch_pull_request\` stops it);`;
 
 const ASK_TEAMMATES_INSTRUCTION = `
 - Design / product / role questions: call \`list_work_profiles\` then \`ask_teammate\` with \`context\` (what we are building, why this call matters, constraints). Do not dump those only in this chat. The tool is non-blocking — finish the turn after asking.`;
@@ -56,7 +60,7 @@ function buildChatRuntimeSection(
 ${prLine} Never run \`gh pr create\` for this branch — Eva opens its PR. A chat can hold several PRs: to open another one yourself, push a side branch named \`${branchName}-<short-slug>\` and open the PR from it, and Eva links it to this chat. A PR from any other branch name is not linked.
 - Dev server: \`${runtime.devCommand ?? "auto-detected from package.json"}\` on port ${devPortText}. Startup commands: ${commandList(runtime.startupCommands)}. Background commands: ${commandList(runtime.backgroundCommands)}.
 - Dev server logs: \`tmux capture-pane -p -S -200 -t ${consoleSession}\` (the Preview Console). Read them before concluding the app is broken. To restart it, call eva MCP \`restart_dev_server\` — never kill it or launch your own. A dead daemon (e.g. \`convex dev\`) comes back with \`restart_background_commands\`; \`rerun_startup_commands\` reseeds and may reset local data, so ask first.
-- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked; \`watch_pull_request\` after a PR is opened or pushed, so Eva wakes this chat when its checks fail or pass, a reviewer comments, or it conflicts (\`unwatch_pull_request\` stops it); queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
+- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked;${runtime.prWatchEnabled === true ? PR_WATCH_INSTRUCTION : ""} queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
 - Deleting anything through eva MCP (tasks, automations, artifacts, docs) needs the user's explicit yes in chat first. Ask, wait for the answer, then pass \`confirmed: true\`.`;
 }
 /**

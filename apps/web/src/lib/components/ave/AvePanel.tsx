@@ -5,13 +5,13 @@ import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { IconArrowsDiagonal, IconMinus } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-  motionSpring,
-} from "@eva/ui";
+  springTransition,
+} from "@vvedantb/ui";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { AVE_HEADER_BUTTON_CLASS } from "@/lib/components/ave/aveHeaderButton";
 import { PANEL_POSITION_STYLE } from "@/lib/components/ave/useAveLauncherPosition";
@@ -71,7 +71,7 @@ export function AvePanel({
               transitionEnd: { visibility: "hidden" },
             }
       }
-      transition={motionSpring}
+      transition={springTransition}
       style={isDesktop ? PANEL_POSITION_STYLE : undefined}
       className={cn(
         "fixed z-50",

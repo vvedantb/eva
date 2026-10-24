@@ -61,7 +61,7 @@ const STEP_OUTPUT_CHARS = 2_000;
 const REPLAY_TOOL_OUTPUT_CHARS = 4_000;
 const REPLAY_TOTAL_CHARS = 200_000;
 
-/** The `ActivityStep` JSON shape the shared chat UI renders (`@eva/ui`). */
+/** The `ActivityStep` JSON shape the shared chat UI renders (`@vvedantb/ui`). */
 type AveStep = {
   type: "tool" | "response";
   label: string;

@@ -9,8 +9,8 @@ import {
   ConversationEmptyState,
   Message as AIMessage,
   MessageContent,
-} from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+  Markdown,
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { RepoSectionBreadcrumb } from "@/lib/components/RepoSectionBreadcrumb";

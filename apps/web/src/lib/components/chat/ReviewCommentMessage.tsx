@@ -1,5 +1,5 @@
 import { IconMessage } from "@tabler/icons-react";
-import { Surface } from "@eva/ui";
+import { Surface } from "@vvedantb/ui";
 import {
   MarkdownMentionText,
   PlainMarkdownText,

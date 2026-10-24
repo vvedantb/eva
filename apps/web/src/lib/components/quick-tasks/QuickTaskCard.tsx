@@ -1,10 +1,10 @@
 ﻿"use client";
 
+import { cn } from "@eva/ui";
 import {
   Badge,
   BorderBeam,
   Checkbox,
-  cn,
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
@@ -18,7 +18,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";

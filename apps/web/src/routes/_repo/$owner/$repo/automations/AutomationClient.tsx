@@ -13,10 +13,10 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  ModelSelect,
+  ModelPicker,
   toast,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -148,7 +148,7 @@ export function AutomationClient({
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "latest" ? 1 : 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={activeTab !== "latest" ? "hidden" : undefined}
         >
           <LatestRun
@@ -163,7 +163,7 @@ export function AutomationClient({
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "run-history" ? 1 : 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={activeTab !== "run-history" ? "hidden" : undefined}
         >
           <RunHistory
@@ -177,7 +177,7 @@ export function AutomationClient({
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "settings" ? 1 : 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={activeTab !== "settings" ? "hidden" : undefined}
         >
           {automation.systemKey === undefined ? (
@@ -393,7 +393,7 @@ function SettingsForm({
 
       <SettingsSection title="Model">
         <SettingsField label="Provider and model">
-          <ModelSelect
+          <ModelPicker
             value={model}
             options={modelOptions}
             onValueChange={(m) => commit({ model: m })}

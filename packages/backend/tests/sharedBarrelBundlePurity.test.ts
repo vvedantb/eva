@@ -11,7 +11,7 @@ const sharedBarrel = join(sharedDir, "src/index.ts");
 
 /**
  * `@eva/shared`'s root barrel is imported by Convex functions, and the Convex
- * bundler cannot resolve frontend packages — React, `@eva/ui`, `facehash`,
+ * bundler cannot resolve frontend packages — React, `@eva/ui`, `@vvedantb/ui`, `facehash`,
  * `convex-helpers/react`. A single component re-exported from the barrel
  * therefore breaks every Convex deploy, not just the module that pulled it in
  * (2026-09-02: `UserInitials` did exactly that, and moved to the
@@ -67,6 +67,7 @@ const FRONTEND_ONLY = [
   "react",
   "react-dom",
   "@eva/ui",
+  "@vvedantb/ui",
   "facehash",
   "convex-helpers/react",
 ];

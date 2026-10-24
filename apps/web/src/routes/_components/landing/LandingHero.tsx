@@ -3,7 +3,7 @@
 import { SignUpButton } from "@clerk/clerk-react";
 import { IconArrowRight, IconBrandGithub } from "@tabler/icons-react";
 import { m, type Variants } from "motion/react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { LandingTaskDetailMock } from "../LandingTaskDetailMock";
 import {
   EVA_GITHUB_URL,
@@ -133,7 +133,10 @@ export function LandingHero() {
           </m.div>
         </div>
 
-        <m.div variants={MOCK_ITEM} className="relative mx-auto mt-16 max-w-4xl">
+        <m.div
+          variants={MOCK_ITEM}
+          className="relative mx-auto mt-16 max-w-4xl"
+        >
           <div
             aria-hidden
             className="landing-glow -inset-x-16 -top-10 bottom-1/3"

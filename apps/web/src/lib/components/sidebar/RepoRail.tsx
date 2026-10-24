@@ -5,7 +5,14 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
+import { IconPencil } from "@tabler/icons-react";
 import {
+  AutomationIcon,
+  InboxArrowIcon,
+  SearchIcon,
+  SidebarToggleIcon,
+  TerminalIcon,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -13,16 +20,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-} from "@eva/ui";
-import { IconPencil } from "@tabler/icons-react";
-import {
-  AutomationsIcon,
-  InboxIcon,
-  SearchIcon,
-  SessionsIcon,
-  SidebarCollapseIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+} from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
@@ -78,6 +76,12 @@ function isRowActive(
 
 const RAIL_TILE_CLASS =
   "relative flex size-11 items-center justify-center rounded-lg border motion-press active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35";
+
+/**
+ * Cut-out tone for the solid active rail icons. `--sidebar-accent` holds bare
+ * RGB channels, so this is what `stroke-sidebar-accent` compiles to.
+ */
+const CUTOUT_COLOR = "rgb(var(--sidebar-accent) / 1)";
 
 function railTileActive(active: boolean): string {
   return active
@@ -232,7 +236,12 @@ function RepoRailView({
                 railTileActive(inboxActive),
               )}
             >
-              <InboxIcon size={22} filled={inboxActive} className="shrink-0" />
+              <InboxArrowIcon
+                size={22}
+                active={inboxActive}
+                cutoutColor={CUTOUT_COLOR}
+                className="shrink-0"
+              />
               <QueryErrorBoundary>
                 <InboxUnreadBadge />
               </QueryErrorBoundary>
@@ -258,9 +267,10 @@ function RepoRailView({
                 railTileActive(sessionsActive),
               )}
             >
-              <SessionsIcon
+              <TerminalIcon
                 size={22}
-                filled={sessionsActive}
+                active={sessionsActive}
+                cutoutColor={CUTOUT_COLOR}
                 className="shrink-0"
               />
               <CountPop
@@ -388,9 +398,10 @@ function RepoRailView({
                   railTileActive(automationsActive),
                 )}
               >
-                <AutomationsIcon
+                <AutomationIcon
                   size={22}
-                  filled={automationsActive}
+                  active={automationsActive}
+                  cutoutColor={CUTOUT_COLOR}
                   className="shrink-0"
                 />
                 <QueryErrorBoundary>
@@ -413,7 +424,7 @@ function RepoRailView({
                 "group border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground",
               )}
             >
-              <SidebarCollapseIcon
+              <SidebarToggleIcon
                 size={22}
                 collapsed={collapsed}
                 className="shrink-0"

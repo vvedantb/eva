@@ -1,7 +1,7 @@
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import type { ChatDraftTarget } from "@/lib/components/chat/useChatDraftSeed";
 
 /**

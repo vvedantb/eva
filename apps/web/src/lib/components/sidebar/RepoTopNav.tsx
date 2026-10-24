@@ -5,8 +5,13 @@ import type { ComponentType, ReactNode } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { IconSunrise } from "@tabler/icons-react";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
-import { DraftsIcon } from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+import { cn } from "@eva/ui";
+import {
+  DraftIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import { DraftsCountBadge } from "@/lib/components/sidebar/DraftsCountBadge";
 import {
@@ -65,7 +70,7 @@ export function RepoTopNav({
     {
       name: "Drafts",
       href: `${repoBasePath}/drafts`,
-      icon: DraftsIcon,
+      icon: DraftIcon,
       badge:
         !collapsed && repo ? <DraftsCountBadge repoId={repo._id} /> : undefined,
     },

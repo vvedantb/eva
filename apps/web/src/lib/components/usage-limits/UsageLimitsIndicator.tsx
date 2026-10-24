@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button, Popover, PopoverContent, PopoverTrigger } from "@eva/ui";
+import { Button, Popover, PopoverContent, PopoverTrigger } from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   chipSummaryForActive,

@@ -7,8 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+} from "@vvedantb/ui";
 
 export function StartupCommandsConfirmDialog({
   open,
@@ -42,7 +42,7 @@ export function StartupCommandsConfirmDialog({
             }}
             disabled={isStarting}
           >
-            {isStarting && <CircleSpinner size="sm" />}
+            {isStarting && <Spinner variant="circle" size="sm" />}
             Run Startup Commands
           </Button>
         </DialogFooter>

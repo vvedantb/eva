@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input } from "@eva/ui";
+import { Button, Input } from "@vvedantb/ui";
 import { RepoSetupCard, type GitHubRepo } from "./RepoSetupCard";
 import { MonorepoAppsPanel, type MonorepoApp } from "./MonorepoAppsPanel";
 

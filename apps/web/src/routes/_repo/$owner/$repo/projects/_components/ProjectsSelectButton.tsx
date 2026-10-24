@@ -1,11 +1,11 @@
 import { m, AnimatePresence } from "motion/react";
 import {
   Button,
-  motionFast,
+  tokenTransition,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCheckbox } from "@tabler/icons-react";
 
 interface ProjectsSelectButtonProps {
@@ -28,7 +28,7 @@ export function ProjectsSelectButton({
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <Tooltip>
             <TooltipTrigger asChild>

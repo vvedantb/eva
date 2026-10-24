@@ -1,7 +1,8 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { CenteredSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { Link } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
 import {

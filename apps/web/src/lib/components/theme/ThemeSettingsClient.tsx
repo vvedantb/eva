@@ -11,7 +11,7 @@ import type {
   FontFamily,
   LetterSpacing,
 } from "@/lib/contexts/ThemeContext";
-import { Spinner } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { type ThemeMode } from "@/lib/hooks/useThemeMode";
 import { AppearanceSection } from "./_components/AppearanceSection";
 import { PresetsSection } from "./_components/PresetsSection";
@@ -67,7 +67,10 @@ export function ThemeSettingsClient() {
         description="Choose light, dark, or system."
         bodyClassName="max-w-2xl"
       >
-        <AppearanceSection currentMode={theme} onModeChange={handleModeChange} />
+        <AppearanceSection
+          currentMode={theme}
+          onModeChange={handleModeChange}
+        />
       </SettingsSection>
 
       <SettingsSection
@@ -75,7 +78,10 @@ export function ThemeSettingsClient() {
         description="Start from a ready-made look."
         bodyClassName="max-w-2xl"
       >
-        <PresetsSection currentTheme={resolved} onApplyPreset={handleApplyPreset} />
+        <PresetsSection
+          currentTheme={resolved}
+          onApplyPreset={handleApplyPreset}
+        />
       </SettingsSection>
 
       <SettingsSection

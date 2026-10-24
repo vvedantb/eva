@@ -1,4 +1,4 @@
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 /**
  * One streaming tick fans the same `currentActivity` string out to every
@@ -30,8 +30,10 @@ function parseUncached(data: string): ParsedActivity {
   try {
     const parsed = JSON.parse(data);
     if (Array.isArray(parsed)) {
-      if (parsed.length === 0) return { source: data, steps: null, isEmpty: true };
-      if (parsed[0].type) return { source: data, steps: parsed, isEmpty: false };
+      if (parsed.length === 0)
+        return { source: data, steps: null, isEmpty: true };
+      if (parsed[0].type)
+        return { source: data, steps: parsed, isEmpty: false };
     }
   } catch {
     // Legacy plain text format

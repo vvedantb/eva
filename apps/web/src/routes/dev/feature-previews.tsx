@@ -1,7 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 import { useLayoutEffect, useRef, useState } from "react";
-import { ActivityTasks, Button, WebPreview, type ActivityStep } from "@eva/ui";
+import { ActivityTasks, Button, WebPreview } from "@vvedantb/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
@@ -161,7 +162,11 @@ const DEMO_STARTUP_ACTIVITY = JSON.stringify([
   { type: "tool", label: "Fetching base branch...", status: "complete" },
   { type: "tool", label: "Setting up branch...", status: "active" },
   { type: "tool", label: "Restoring seeded runtime...", status: "pending" },
-  { type: "tool", label: "Launching background commands...", status: "pending" },
+  {
+    type: "tool",
+    label: "Launching background commands...",
+    status: "pending",
+  },
   { type: "tool", label: "Running startup commands...", status: "pending" },
 ]);
 

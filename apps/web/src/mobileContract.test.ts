@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const webApp = join(webSrc, "..");
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
+/** eva's class strings per vvedantb component, the exact ones eva renders. */
+const uiConfig = join(uiSrc, "config");
 
 /** Comments here name the very declarations these rules ban, so they go first. */
 const cssRules = stripComments(
@@ -23,6 +25,32 @@ function utility(name: string): string {
   const endAt = cssRules.indexOf("\n}", startAt);
   expect(endAt, `the ${name} utility is unterminated`).toBeGreaterThan(startAt);
   return cssRules.slice(startAt, endAt);
+}
+
+/**
+ * One of eva's config files with comments stripped: the notes next to the class
+ * strings name the very utilities these rules look for.
+ */
+function configSource(file: string): string {
+  return stripComments(readFileSync(join(uiConfig, file), "utf8")).replaceAll(
+    /\/\/.*$/gm,
+    "",
+  );
+}
+
+/**
+ * The string literal set for `part` inside eva's `component: { … }` config
+ * entry. Entries sit at two-space indent and close on `\n  },`.
+ */
+function configClass(config: string, component: string, part: string): string {
+  const startAt = config.indexOf(`\n  ${component}: {`);
+  expect(startAt, `eva's config has no ${component} entry`).toBeGreaterThan(-1);
+  const entry = config.slice(startAt, config.indexOf("\n  },", startAt));
+  const value = new RegExp(`\\b${part}:\\s*(["\`])([\\s\\S]*?)\\1`).exec(
+    entry,
+  );
+  expect(value, `${component} sets no ${part} class`).not.toBeNull();
+  return value?.[2] ?? "";
 }
 
 /**
@@ -200,14 +228,15 @@ describe("small Button sizes", () => {
   it.each([...ungated, ...mobileOnly])(
     "%s reaches the 40px floor on touch",
     (size) => {
-      // Comments stripped first: the note above these variants quotes the very
-      // keys and utilities this searches for.
-      const button = stripComments(
-        readFileSync(join(uiSrc, "ui", "button.tsx"), "utf8"),
-      ).replaceAll(/\/\/.*$/gm, "");
-      const variants = button.slice(
-        button.indexOf("size:"),
-        button.indexOf("defaultVariants"),
+      // eva's config replaces vvedantb's Button sizes with `buttonSize`;
+      // InputGroup's button sizes reuse the same keys, so slice to it.
+      const controls = configSource("controls.ts");
+      expect(controls, "Button no longer renders buttonSize").toContain(
+        "size: buttonSize",
+      );
+      const variants = controls.slice(
+        controls.indexOf("const buttonSize = {"),
+        controls.indexOf("\n};", controls.indexOf("const buttonSize = {")),
       );
       // Only the hyphenated keys are quoted in the object literal.
       const at = variants.search(new RegExp(`"?${size}"?:`));
@@ -238,15 +267,8 @@ describe("small Button sizes", () => {
  */
 describe("the TabsList primitive", () => {
   it("scrolls its own overflow on a phone, and only there", () => {
-    // Comments stripped first: the one above this class names the very utility
-    // the rules below check for.
-    const tabs = stripComments(
-      readFileSync(join(uiSrc, "ui", "tabs.tsx"), "utf8"),
-    ).replaceAll(/\/\/.*$/gm, "");
-    const base = tabs.slice(
-      tabs.indexOf("tabsListVariants"),
-      tabs.indexOf("variants:"),
-    );
+    // eva's `list` class replaces vvedantb's; sizes add only heights.
+    const base = configClass(configSource("controls.ts"), "Tabs", "list");
     expect(base).toContain("max-sm:overflow-x-auto");
     expect(base).toContain("max-sm:max-w-full");
     // Centred content that overflows spills past *both* edges, and `scrollLeft`
@@ -303,10 +325,11 @@ describe("the split-pane primitives", () => {
  */
 describe("the Table primitive", () => {
   it("scrolls wide tables inside their own box on a phone", () => {
-    const table = stripComments(
-      readFileSync(join(uiSrc, "ui", "table.tsx"), "utf8"),
-    ).replaceAll(/\/\/.*$/gm, "");
-    const wrapper = table.slice(0, table.indexOf("<table"));
+    const wrapper = configClass(
+      configSource("foundations.ts"),
+      "Table",
+      "wrapper",
+    );
     expect(wrapper, "the wrapper has to be able to scroll").toMatch(
       /overflow-(?:auto|x-auto)/,
     );
@@ -327,15 +350,23 @@ describe("the Table primitive", () => {
  */
 describe("floating overlays", () => {
   const overlays = [
-    "dialog.tsx",
-    "popover.tsx",
-    "hover-card.tsx",
-    "tooltip.tsx",
-    "_menu-classes.ts",
+    "Dialog",
+    "Popover",
+    "HoverCard",
+    "Tooltip",
+    "menuContentClass",
   ] as const;
 
-  it.each(overlays)("%s caps its width against the viewport", (file) => {
-    const source = readFileSync(join(uiSrc, "ui", file), "utf8");
+  it.each(overlays)("%s caps its width against the viewport", (name) => {
+    const config = configSource("overlays.ts");
+    // Dropdown and context menus share `menuContentClass` for their panels.
+    const source =
+      name === "menuContentClass"
+        ? config.slice(
+            config.indexOf("function menuContentClass"),
+            config.indexOf("\n}", config.indexOf("function menuContentClass")),
+          )
+        : configClass(config, name, "content");
     // `w-` counts as well as `max-w-`: a dialog sets its width outright, and a
     // gutter-aware `w-[calc(100vw-2rem)]` is already bounded.
     expect(source, "an overlay can be wider than a 320px screen").toMatch(

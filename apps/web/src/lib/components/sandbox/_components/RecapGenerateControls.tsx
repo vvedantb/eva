@@ -6,7 +6,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
-import { Button, CrossfadeIcon, Spinner } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner } from "@vvedantb/ui";
 import { IconRefresh } from "@tabler/icons-react";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";

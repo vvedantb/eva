@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import { Spinner } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
 import { githubPrUrl } from "@/lib/githubPr";

@@ -227,6 +227,15 @@ export const getExperimentalFlags = authQuery({
   },
 });
 
+/** A given user's resolved flags, for actions that act on their behalf. */
+export const getExperimentalFlagsInternal = internalQuery({
+  args: { userId: v.id("users") },
+  returns: resolvedExperimentalFlagsValidator,
+  handler: async (ctx, args) => {
+    return resolveExperimentalFlags(await ctx.db.get(args.userId));
+  },
+});
+
 /** Updates one experimental flag on the current user. */
 export const setExperimentalFlag = authMutation({
   args: {

@@ -866,6 +866,13 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   }
   const toolUseId = readStringField(message, "tool_use_id");
   if (subtype === "task_started" && toolUseId) {
+    // Shell commands also arrive as tasks. They are not subagents: background
+    // shells have their own registry (`backgroundShells`), and a dev server
+    // run in the background never ends, so as an entry it held the chat queue
+    // for the full 2-hour cap.
+    if (readStringField(message, "task_type") === "local_bash") {
+      return;
+    }
     const entry: BackgroundAgentEntry = {
       toolUseId,
       taskId: readStringField(message, "task_id"),

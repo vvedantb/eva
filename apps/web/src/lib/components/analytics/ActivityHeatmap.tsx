@@ -10,8 +10,8 @@ import {
   ContributionGraphCalendar,
   ContributionGraphFooter,
   ContributionGraphLegend,
-} from "@eva/ui";
-import type { Activity } from "@eva/ui";
+} from "@vvedantb/ui";
+import type { ContributionGraphActivity } from "@vvedantb/ui";
 import { IconFlame } from "@tabler/icons-react";
 import { Widget } from "@/lib/components/Widget";
 import { useCountUpDisplay } from "./useCountUpDisplay";
@@ -23,7 +23,7 @@ interface ActivityHeatmapProps {
 const MAX_LEVEL = 4;
 
 function toActivities(data: Array<{ date: string; count: number }>): {
-  activities: Activity[];
+  activities: ContributionGraphActivity[];
   totalCount: number;
 } {
   let max = 0;
@@ -34,7 +34,7 @@ function toActivities(data: Array<{ date: string; count: number }>): {
   }
 
   const safeMax = max || 1;
-  const activities: Activity[] = data.map((entry) => ({
+  const activities: ContributionGraphActivity[] = data.map((entry) => ({
     date: entry.date,
     count: entry.count,
     level:

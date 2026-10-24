@@ -1,15 +1,15 @@
+import { cn } from "@eva/ui";
 import {
-  cn,
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  motionFast,
+  tokenTransition,
   ProviderIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+  Markdown,
+} from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
@@ -353,7 +353,7 @@ export const ChatMessage = memo(function ChatMessage({
           data-message-id={message._id}
           initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={cn(
             citeHighlight && "rounded-md ring-2 ring-primary/50",
             linkHighlight && "rounded-md t-anchor-flash",
@@ -420,10 +420,7 @@ export const ChatMessage = memo(function ChatMessage({
                         : undefined
                     }
                   >
-                    <UserMessageBody
-                      message={message}
-                      repo={repo}
-                    />
+                    <UserMessageBody message={message} repo={repo} />
                   </MessageContent>
                 </div>
                 {isHandoffBoundary && message.model !== undefined ? (
@@ -496,7 +493,7 @@ export const ChatMessage = memo(function ChatMessage({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={motionFast}
+                            transition={tokenTransition.fast}
                           >
                             <TurnErrorNotice
                               title={turnErrorTitle}
@@ -511,7 +508,7 @@ export const ChatMessage = memo(function ChatMessage({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={motionFast}
+                            transition={tokenTransition.fast}
                           >
                             {panelTabs ? (
                               <ChatUiPanelTabs
@@ -633,10 +630,7 @@ function UserMessageBody({
       />
       {message.content ? (
         <CollapsibleUserMessageBody text={message.content}>
-          <ReviewCommentMessage
-            text={message.content}
-            repo={repo}
-          />
+          <ReviewCommentMessage text={message.content} repo={repo} />
         </CollapsibleUserMessageBody>
       ) : null}
     </>
@@ -664,7 +658,7 @@ function HandoffModelChip({
       )}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionFast}
+      transition={tokenTransition.fast}
     >
       <ProviderIcon provider={option.provider} size={10} />
       {formatModelDisplayLabel(option.provider, option.label)}

@@ -3,7 +3,7 @@ import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner, motionBase } from "@eva/ui";
+import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -43,10 +43,7 @@ import {
 } from "@/lib/components/quick-tasks/selectionRange";
 import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
 import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 export function QuickTasksClient() {
   const navigate = useNavigate();
@@ -456,19 +453,19 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <CenteredSpinner label="Loading quick tasks" />
               </m.div>
             ) : !hasQuickTasks &&
-            !(view === "list" && numIdParam !== undefined) ? (
+              !(view === "list" && numIdParam !== undefined) ? (
               <m.div
                 key="quick-tasks-empty"
                 className="flex min-h-0 flex-1 items-center justify-center"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <EmptyState
                   icon={
@@ -501,7 +498,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <QuickTasksKanbanBoard
                   tasks={quickTasks}
@@ -518,7 +515,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <QuickTasksListSplit
                   tasks={quickTasks}

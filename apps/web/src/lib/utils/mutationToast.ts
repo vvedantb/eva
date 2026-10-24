@@ -1,4 +1,4 @@
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 
 /** Deduped success toast for a user-initiated mutation. */
 export function mutationSuccess(message: string, id: string): void {

@@ -7,7 +7,6 @@ import {
   DialogFooter,
   Button,
   Input,
-  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -22,7 +21,7 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import {
@@ -535,7 +534,11 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (

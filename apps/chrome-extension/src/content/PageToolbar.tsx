@@ -35,7 +35,7 @@ import {
   toolbarIconClasses,
 } from "./appearance-styles";
 import { getPageUrl } from "./page-url";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { requestBackground, type BgError } from "@/shared/messaging";
 
 function dividerStyle(appearance: ExtensionAppearance): React.CSSProperties {

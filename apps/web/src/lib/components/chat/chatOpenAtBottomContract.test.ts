@@ -7,7 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const chatBody = read(join(here, "ChatBody.tsx"));
 const conversation = read(
-  join(here, "../../../../../../packages/ui/src/ai-elements/conversation.tsx"),
+  join(here, "../../../../node_modules/@vvedantb/ui/src/ai-elements/conversation.tsx"),
 );
 
 /**

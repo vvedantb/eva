@@ -1,12 +1,24 @@
 @import "tailwindcss";
 @import "shadow-plugin";
-@import "../../../packages/ui/src/markdown/markdown.css";
+@import "@vvedantb/ui/tokens/css/markdown.css";
+@import "@vvedantb/ui/tokens/css/nav-icons.css";
+/* vvedantb components read their colour names (`surface-*`, `field-*`,
+ * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
+ * shadcn `R G B` variables below; it never redefines them. */
+@import "@vvedantb/ui/tokens/css/compat-shadcn-rgb.css";
 
 @config '../tailwind.config.js';
 
+/* eva colours the `[!IMPORTANT]` markdown alert with the code-review status hue. */
+.markdown {
+  --markdown-alert-important: var(--status-code-review);
+}
+
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
  * inside its own dist, which the content globs never reach. */
-@source "../../../packages/ui/node_modules/streamdown/dist";
+@source "../node_modules/streamdown/dist";
+@source "../node_modules/@vvedantb/ui/src";
+@source "../node_modules/@vvedantb/ui/shell/src";
 
 /* v4 changed the default border colour to `currentcolor`. The upgrade codemod
  * adds a gray-200 compatibility shim here; it is not needed, because the base
@@ -1231,7 +1243,7 @@ html[data-blur-pid] [data-pii] {
  *  1. --card and --secondary swap lightness between modes (light: card is
  *     lightest; dark: secondary is lightest), so the active pill cannot be
  *     expressed as a single utility — it needs a per-mode value.
- *  2. New utility classes added under packages/ui are not recompiled by the
+ *  2. New utility classes added in eva's UI config are not recompiled by the
  *     running dev server without a full restart; these CSS-variable rules
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
  *     over the list's own bg utility at equal specificity.
@@ -1361,7 +1373,7 @@ html[data-blur-pid] [data-pii] {
 }
 
 /* Brand purple→blue, same as the spinners and the session-row Drive grid.
- * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `brand-colors.ts`. */
+ * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `config/foundations.ts`. */
 .beam-colorful {
   --eva-purple: 139 63 184;
   --eva-blue: 59 125 216;
@@ -1408,579 +1420,7 @@ html[data-blur-pid] [data-pii] {
   transition: transform var(--mq-dur, 0s) linear var(--mq-delay, 400ms);
 }
 
-/* ───────────────────────────────────────────────────────────────────
- * Animated sidebar nav icons
- * Each icon's parent <a/button> has the `group` class, so we drive
- * animation on the SVG sub-shapes via `.group:hover .nav-icon-*`.
- * ─────────────────────────────────────────────────────────────────── */
-
-/* The SVG itself scales up on hover for an extra prominence boost */
-.nav-icon-root {
-  transform-origin: center;
-  transition: transform 0.25s var(--motion-ease-out);
-}
-.group:hover .nav-icon-root {
-  transform: scale(1.12);
-}
-
-/* Common: SVG transforms need an explicit box + origin */
-.nav-icon-card,
-.nav-icon-bubble,
-.nav-icon-bar,
-.nav-icon-doc-line,
-.nav-icon-doc-corner,
-.nav-icon-check,
-.nav-icon-check-ring,
-.nav-icon-task-line,
-.nav-icon-cursor,
-.nav-icon-prompt,
-.nav-icon-typed,
-.nav-icon-letter,
-.nav-icon-notif,
-.nav-icon-orbit,
-.nav-icon-play,
-.nav-icon-sparks,
-.nav-icon-gear,
-.nav-icon-flask,
-.nav-icon-traveler,
-.nav-icon-trend,
-.nav-icon-search,
-.nav-icon-search-glint,
-.nav-icon-sidebar-panel,
-.nav-icon-sidebar-chevron {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.nav-icon-bar {
-  transform-origin: bottom center;
-}
-
-.nav-icon-doc-line,
-.nav-icon-task-line,
-.nav-icon-trend {
-  transform-origin: left center;
-}
-
-.nav-icon-doc-corner {
-  transform-origin: top right;
-}
-
-/* ── Projects — cards rocket in from above, bounce hard, then keep
- *    bobbing while a traveler card sweeps across all columns. */
-@keyframes nav-icon-card-drop {
-  0% {
-    transform: translateY(-9px) scaleY(0.5);
-    opacity: 0;
-  }
-  45% {
-    transform: translateY(2.5px) scaleY(1.4);
-    opacity: 1;
-  }
-  70% {
-    transform: translateY(-1.5px) scaleY(0.9);
-  }
-  100% {
-    transform: translateY(0) scaleY(1);
-    opacity: 1;
-  }
-}
-@keyframes nav-icon-card-breathe {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-1.2px) scale(1.18);
-  }
-}
-@keyframes nav-icon-traveler {
-  0% {
-    transform: translate(0, 0) scale(0);
-    opacity: 0;
-  }
-  8% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  30% {
-    transform: translate(0, 0) scale(1);
-  }
-  45% {
-    transform: translate(6.25px, 0) scale(1);
-  }
-  62% {
-    transform: translate(6.25px, 0) scale(1);
-  }
-  82% {
-    transform: translate(12.5px, 0) scale(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(12.5px, 0) scale(0);
-    opacity: 0;
-  }
-}
-.nav-icon-traveler {
-  opacity: 0;
-}
-.group:hover .nav-icon-card-1 {
-  animation:
-    nav-icon-card-drop 0.55s var(--motion-ease-emphasized) both,
-    nav-icon-card-breathe 1.2s ease-in-out 0.55s infinite;
-}
-.group:hover .nav-icon-card-2 {
-  animation:
-    nav-icon-card-drop 0.55s var(--motion-ease-emphasized) 0.1s both,
-    nav-icon-card-breathe 1.2s ease-in-out 0.75s infinite;
-}
-.group:hover .nav-icon-card-3 {
-  animation:
-    nav-icon-card-drop 0.55s var(--motion-ease-emphasized) 0.2s both,
-    nav-icon-card-breathe 1.2s ease-in-out 0.95s infinite;
-}
-.group:hover .nav-icon-traveler {
-  animation: nav-icon-traveler 1.8s ease-in-out 0.5s infinite;
-}
-
-/* ── Designs — palette swings hard, dots pump big in sequence. */
-@keyframes nav-icon-dot-pulse {
-  0%,
-  100% {
-    transform: scale(0.7);
-  }
-  40% {
-    transform: scale(2.1);
-  }
-}
-/* ── Quick Tasks — checks redraw on a loop, rings burst outward, lines
- *    sweep aggressively. */
-.nav-icon-check {
-  stroke-dasharray: 9;
-  stroke-dashoffset: 0;
-}
-.nav-icon-check-ring {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  opacity: 0;
-}
-@keyframes nav-icon-check-loop {
-  0%,
-  20% {
-    stroke-dashoffset: 9;
-  }
-  60%,
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-@keyframes nav-icon-ring-burst {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(2.1);
-    opacity: 0;
-  }
-}
-@keyframes nav-icon-task-sweep-loop {
-  0%,
-  20% {
-    transform: scaleX(0);
-  }
-  60%,
-  100% {
-    transform: scaleX(1);
-  }
-}
-.group:hover .nav-icon-check-1 {
-  animation: nav-icon-check-loop 1.6s var(--motion-ease-out) infinite;
-}
-.group:hover .nav-icon-check-2 {
-  animation: nav-icon-check-loop 1.6s var(--motion-ease-out) 0.25s infinite;
-}
-.group:hover .nav-icon-check-ring-1 {
-  animation: nav-icon-ring-burst 1.6s var(--motion-ease-out) 0.4s infinite;
-}
-.group:hover .nav-icon-check-ring-2 {
-  animation: nav-icon-ring-burst 1.6s var(--motion-ease-out) 0.65s infinite;
-}
-.group:hover .nav-icon-task-line-1 {
-  animation: nav-icon-task-sweep-loop 1.6s var(--motion-ease-out) infinite;
-}
-.group:hover .nav-icon-task-line-2 {
-  animation: nav-icon-task-sweep-loop 1.6s var(--motion-ease-out) 0.25s infinite;
-}
-
-/* ── Sessions — prompt jumps right and back, cursor blinks fast,
- *    three typed characters POP in big. */
-@keyframes nav-icon-prompt-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(3px);
-  }
-}
-@keyframes nav-icon-cursor-blink {
-  0%,
-  49% {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-  50%,
-  100% {
-    opacity: 0;
-    transform: scaleX(0.4);
-  }
-}
-@keyframes nav-icon-typed {
-  0%,
-  100% {
-    transform: scale(0) translateY(2px);
-    opacity: 0;
-  }
-  18%,
-  82% {
-    transform: scale(1.6) translateY(0);
-    opacity: 1;
-  }
-}
-.nav-icon-typed {
-  transform: scale(0);
-  opacity: 0;
-}
-.group:hover .nav-icon-prompt {
-  animation: nav-icon-prompt-nudge 0.7s ease-in-out infinite;
-}
-.group:hover .nav-icon-cursor {
-  animation: nav-icon-cursor-blink 0.45s steps(2, end) infinite;
-}
-.group:hover .nav-icon-typed-1 {
-  animation: nav-icon-typed 1.4s var(--motion-ease-emphasized) 0s infinite;
-}
-.group:hover .nav-icon-typed-2 {
-  animation: nav-icon-typed 1.4s var(--motion-ease-emphasized) 0.2s infinite;
-}
-.group:hover .nav-icon-typed-3 {
-  animation: nav-icon-typed 1.4s var(--motion-ease-emphasized) 0.4s infinite;
-}
-
-/* ── Documents — lines draw on a loop, page corner flips dramatically. */
-@keyframes nav-icon-line-draw-loop {
-  0%,
-  18% {
-    transform: scaleX(0);
-  }
-  55%,
-  100% {
-    transform: scaleX(1);
-  }
-}
-@keyframes nav-icon-corner-fold {
-  0%,
-  100% {
-    transform: rotate(0) scale(1);
-  }
-  50% {
-    transform: rotate(-25deg) scale(0.78);
-  }
-}
-.group:hover .nav-icon-doc-line-1 {
-  animation: nav-icon-line-draw-loop 1.5s var(--motion-ease-out) infinite;
-}
-.group:hover .nav-icon-doc-line-2 {
-  animation: nav-icon-line-draw-loop 1.5s var(--motion-ease-out) 0.15s infinite;
-}
-.group:hover .nav-icon-doc-line-3 {
-  animation: nav-icon-line-draw-loop 1.5s var(--motion-ease-out) 0.3s infinite;
-}
-.group:hover .nav-icon-doc-corner {
-  animation: nav-icon-corner-fold 1.2s ease-in-out 0.2s infinite;
-}
-
-/* ── Testing Arena — flask sloshes hard, bubbles erupt big and far. */
-@keyframes nav-icon-bubble-rise {
-  0% {
-    transform: translateY(0) scale(0.4);
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-    transform: translateY(-1.5px) scale(1.6);
-  }
-  60% {
-    transform: translateY(-7px) scale(1.2);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-13px) scale(0.4);
-    opacity: 0;
-  }
-}
-@keyframes nav-icon-flask-slosh {
-  0%,
-  100% {
-    transform: rotate(-9deg);
-  }
-  50% {
-    transform: rotate(9deg);
-  }
-}
-.group:hover .nav-icon-flask {
-  animation: nav-icon-flask-slosh 1.4s ease-in-out infinite;
-}
-.group:hover .nav-icon-bubble-1 {
-  animation: nav-icon-bubble-rise 1.1s ease-out infinite;
-}
-.group:hover .nav-icon-bubble-2 {
-  animation: nav-icon-bubble-rise 1.1s ease-out 0.27s infinite;
-}
-.group:hover .nav-icon-bubble-3 {
-  animation: nav-icon-bubble-rise 1.1s ease-out 0.55s infinite;
-}
-.group:hover .nav-icon-bubble-4 {
-  animation: nav-icon-bubble-rise 1.1s ease-out 0.82s infinite;
-}
-
-/* ── Inbox — letter slams down into the tray, notification pulses huge. */
-@keyframes nav-icon-letter-drop {
-  0% {
-    transform: translateY(-7px) scale(0.7);
-    opacity: 0;
-  }
-  20% {
-    opacity: 1;
-    transform: translateY(-3px) scale(1);
-  }
-  55% {
-    transform: translateY(7px) scale(0.95);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(7px) scale(0.6);
-    opacity: 0;
-  }
-}
-@keyframes nav-icon-notif-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(2);
-    opacity: 0.4;
-  }
-}
-.nav-icon-notif {
-  opacity: 0;
-}
-.group:hover .nav-icon-letter {
-  animation: nav-icon-letter-drop 1.1s var(--motion-ease-emphasized) infinite;
-}
-.group:hover .nav-icon-notif {
-  animation: nav-icon-notif-pulse 0.7s ease-in-out 0.3s infinite;
-  opacity: 1;
-}
-
-/* ── Automations — orbit zooms around fast, sparks burst, play
- *    triangle pumps. */
-@keyframes nav-icon-orbit-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes nav-icon-play-pulse {
-  0%,
-  100% {
-    transform: scale(0.85);
-  }
-  50% {
-    transform: scale(1.35);
-  }
-}
-@keyframes nav-icon-sparks-burst {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.6);
-  }
-}
-.nav-icon-sparks {
-  opacity: 0;
-}
-.group:hover .nav-icon-orbit {
-  animation: nav-icon-orbit-spin 1.8s linear infinite;
-}
-.group:hover .nav-icon-play {
-  animation: nav-icon-play-pulse 0.9s ease-in-out infinite;
-}
-.group:hover .nav-icon-sparks {
-  animation: nav-icon-sparks-burst 0.9s ease-in-out infinite;
-}
-
-/* ── Stats — bars rocket up with a hard bounce, trend line draws fast
- *    and loops. */
-@keyframes nav-icon-bar-grow-loop {
-  0%,
-  10% {
-    transform: scaleY(0.05);
-  }
-  55% {
-    transform: scaleY(1.3);
-  }
-  75% {
-    transform: scaleY(0.88);
-  }
-  100% {
-    transform: scaleY(1);
-  }
-}
-.nav-icon-trend {
-  stroke-dasharray: 16;
-  stroke-dashoffset: 16;
-  fill: none;
-}
-@keyframes nav-icon-trend-loop {
-  0%,
-  20% {
-    stroke-dashoffset: 16;
-  }
-  55%,
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-.group:hover .nav-icon-bar-1 {
-  animation: nav-icon-bar-grow-loop 1.6s var(--motion-ease-emphasized) infinite;
-}
-.group:hover .nav-icon-bar-2 {
-  animation: nav-icon-bar-grow-loop 1.6s var(--motion-ease-emphasized) 0.12s
-    infinite;
-}
-.group:hover .nav-icon-bar-3 {
-  animation: nav-icon-bar-grow-loop 1.6s var(--motion-ease-emphasized) 0.24s
-    infinite;
-}
-.group:hover .nav-icon-trend {
-  animation: nav-icon-trend-loop 1.6s var(--motion-ease-out) 0.4s infinite;
-}
-
-/* ── Settings — six-tooth cog clicks one notch at a time. */
-@keyframes nav-icon-gear-turn {
-  0% {
-    transform: rotate(0deg);
-  }
-  10%,
-  16.66% {
-    transform: rotate(60deg);
-  }
-  26.66%,
-  33.33% {
-    transform: rotate(120deg);
-  }
-  43.33%,
-  50% {
-    transform: rotate(180deg);
-  }
-  60%,
-  66.66% {
-    transform: rotate(240deg);
-  }
-  76.66%,
-  83.33% {
-    transform: rotate(300deg);
-  }
-  93.33%,
-  100% {
-    transform: rotate(360deg);
-  }
-}
-.group:hover .nav-icon-gear {
-  animation: nav-icon-gear-turn 2.4s var(--motion-ease-emphasized) infinite;
-}
-
-/* ── Search — glass scans, handle wags, lens glint pops. */
-.nav-icon-search-glint {
-  opacity: 0;
-}
-@keyframes nav-icon-search-scan {
-  0%,
-  100% {
-    transform: rotate(-8deg) translate(0, 0);
-  }
-  50% {
-    transform: rotate(8deg) translate(0.6px, -0.8px);
-  }
-}
-@keyframes nav-icon-search-glint {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  40% {
-    opacity: 1;
-    transform: scale(1.6);
-  }
-}
-.group:hover .nav-icon-search {
-  animation: nav-icon-search-scan 1.2s ease-in-out infinite;
-}
-.group:hover .nav-icon-search-glint {
-  animation: nav-icon-search-glint 1.2s ease-in-out infinite;
-}
-
-/* ── Sidebar collapse — rail squeezes, chevron nudges the collapse direction. */
-.nav-icon-sidebar-panel {
-  transform-origin: left center;
-}
-@keyframes nav-icon-sidebar-squeeze {
-  0%,
-  100% {
-    transform: scaleX(1);
-  }
-  50% {
-    transform: scaleX(0.7);
-  }
-}
-@keyframes nav-icon-sidebar-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(-2.5px);
-  }
-}
-@keyframes nav-icon-sidebar-nudge-out {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(2.5px);
-  }
-}
-.group:hover .nav-icon-sidebar-panel {
-  animation: nav-icon-sidebar-squeeze 0.9s ease-in-out infinite;
-}
-.group:hover .nav-icon-sidebar-chevron {
-  animation: nav-icon-sidebar-nudge 0.8s ease-in-out infinite;
-}
-.group:hover .nav-icon-sidebar-collapsed .nav-icon-sidebar-chevron {
-  animation: nav-icon-sidebar-nudge-out 0.8s ease-in-out infinite;
-}
-
-/* LoadingState (packages/ui) — label shimmer (the pixel grid runs on WAAPI) */
+/* LoadingState (@vvedantb/ui, eva config) — label shimmer (the pixel grid runs on WAAPI) */
 @keyframes shimmer-text {
   0% {
     background-position: 200% 0;
@@ -1993,7 +1433,7 @@ html[data-blur-pid] [data-pii] {
   animation: shimmer-text 1.4s linear infinite;
 }
 
-/* <Shimmer/> (packages/ui) — highlight sweep across text, on the compositor.
+/* <Shimmer/> (@vvedantb/ui, mask mode) — highlight sweep across text, on the compositor.
  * `.shimmer-overlay` clips a copy of the text in the highlight colour;
  * `.shimmer-band` masks that copy to a soft band and translates one way while
  * `.shimmer-copy` inside it translates the other by the same amount, so the
@@ -2131,6 +1571,433 @@ html[data-page-hidden] .question-nudge,
   animation:
     logo-draw-stroke 1.8s ease forwards,
     logo-draw-fill 1.8s ease forwards;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+ * Manager Ave launcher states. `aveLogoState` picks one; `AveFace`
+ * writes it to `data-ave-state`. Each state's base declarations are its
+ * settled pose and the animations layer on top. Eye poses are the
+ * approved preview's 512-unit poses at the 48px disc (1px = 10.67 units);
+ * SVG parts (star, shimmer, sweep) keep their 512 units.
+ * ─────────────────────────────────────────────────────────────────── */
+.ave-star {
+  transform-box: view-box;
+  transform-origin: 256px 256px;
+}
+
+/* All states blink; AveEyes sets a random 7–9s duration per mount. */
+.ave-face .ave-eye {
+  animation: ave-blink 8s ease-in-out infinite;
+  transition: transform 0.4s ease-out 0.15s;
+}
+
+/* Thinking: eyes up and aside and drifting, star sways, shimmer crosses it. */
+.ave-face[data-ave-state="thinking"] .ave-look {
+  transform: translate(2.44px, -3.19px) skewX(-8.53deg);
+  animation:
+    ave-pose-in 0.45s var(--motion-ease-emphasized) both,
+    ave-think 4.8s ease-in-out 0.45s infinite;
+}
+.ave-face[data-ave-state="thinking"] .ave-star {
+  animation: ave-sway 3.6s ease-in-out infinite;
+}
+.ave-shimmer {
+  animation: ave-shimmer 2.4s ease-in-out infinite;
+}
+
+/* Searching: eyes scan left-right in step with a sweeping band. */
+.ave-face[data-ave-state="searching"] .ave-look {
+  transform: translate(-3.56px, 0) skewX(12.47deg);
+  animation:
+    ave-pose-in 0.3s ease-out both,
+    ave-scan 1.2s ease-in-out 0.3s infinite alternate;
+}
+.ave-scan {
+  opacity: 0;
+  animation: ave-sweep 1.2s ease-in-out 0.3s infinite alternate;
+}
+
+/* Tools: eyes narrow and step along a line; the pip ticks and ripples. */
+.ave-face[data-ave-state="tools"] .ave-open {
+  transform: scaleY(0.85);
+}
+.ave-face[data-ave-state="tools"] .ave-look {
+  transform: translate(-1.5px, 2.81px) skewX(5.25deg);
+  animation:
+    ave-pose-in 0.4s var(--motion-ease-emphasized) both,
+    ave-type 2.4s ease-in-out 0.4s infinite;
+}
+.ave-face[data-ave-state="tools"] .ave-pip {
+  animation: ave-tick 0.6s ease-out 0.4s infinite;
+}
+.ave-ripple {
+  opacity: 0;
+  box-shadow: 0 0 0 1px rgb(var(--success));
+  animation: ave-ripple 0.6s ease-out 0.4s infinite;
+}
+
+/* Waiting: eyes widen on the viewer and a halo pulses off the disc. */
+.ave-face[data-ave-state="waiting"] .ave-open {
+  transform: scale(1.06);
+  animation: ave-attend 0.5s var(--motion-ease-emphasized) both;
+}
+.ave-halo {
+  opacity: 0.3;
+  transform: scale(1.1);
+  box-shadow: 0 0 0 1.5px rgb(var(--foreground));
+  animation: ave-halo 1.8s ease-out infinite;
+}
+
+/* Done: disc pop, happy squint, a check pops and draws, then fades as
+ * `ave-hold` ends and AveFace returns to idle. */
+.ave-face[data-ave-state="done"] {
+  animation: ave-hold 3s linear both;
+}
+.ave-face[data-ave-state="done"] .ave-mark {
+  animation: ave-mark-pop 1.6s ease-out both;
+}
+.ave-face[data-ave-state="done"] .ave-open {
+  animation: ave-squint 1.6s ease-in-out both;
+}
+.ave-happy {
+  stroke: rgb(var(--foreground));
+  opacity: 0;
+  animation: ave-happy 1.6s ease-in-out both;
+}
+.ave-check {
+  animation:
+    ave-check-pop 1.6s ease-out both,
+    ave-fade-out var(--motion-fast) ease-out 2.85s forwards;
+}
+.ave-check-path {
+  stroke: rgb(var(--success-foreground));
+  animation: ave-check-draw 1.6s ease-out both;
+}
+
+/* Error: a shake, a red ring flash, a red pip, eyes flinch into a worried
+ * slant. Held a little longer than done so it is not missed. */
+.ave-face[data-ave-state="error"] {
+  animation:
+    ave-shake 0.6s ease-in-out both,
+    ave-hold 5s linear both;
+}
+.ave-face[data-ave-state="error"] .ave-look {
+  transform: translateY(1.5px);
+}
+.ave-face[data-ave-state="error"] .ave-open {
+  transform: scale(0.92, 0.8);
+  animation: ave-flinch 0.5s ease-out both;
+}
+.ave-face[data-ave-state="error"] .ave-eye-l {
+  transform: skewX(-14deg);
+}
+.ave-face[data-ave-state="error"] .ave-eye-r {
+  transform: skewX(14deg);
+}
+.ave-face[data-ave-state="error"] .ave-pip {
+  animation: ave-pip-pop 0.45s var(--motion-ease-emphasized) 0.1s both;
+}
+.ave-alarm {
+  stroke: rgb(var(--destructive));
+  opacity: 0.45;
+  animation: ave-alarm 1.4s ease-out both;
+}
+
+/* A hidden tab or an open panel (the face's layer is aria-hidden then)
+ * stops the loops. The face's own `ave-hold` is not a descendant, so a
+ * one-shot still clears. `!important` because each state's `animation`
+ * shorthand resets the play state. */
+html[data-page-hidden] .ave-face *,
+[aria-hidden="true"] .ave-face * {
+  animation-play-state: paused !important;
+}
+
+/* Animates from neutral into whatever pose the state declares. */
+@keyframes ave-pose-in {
+  from {
+    transform: none;
+  }
+}
+@keyframes ave-hold {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ave-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+/* Two blinks per period, 44% and 56% of it apart. */
+@keyframes ave-blink {
+  0%,
+  38.8%,
+  41.2%,
+  82.8%,
+  85.2%,
+  100% {
+    scale: 1;
+  }
+  40%,
+  84% {
+    scale: 1 0.1;
+  }
+}
+@keyframes ave-think {
+  0%,
+  90%,
+  100% {
+    transform: translate(2.44px, -3.19px) skewX(-8.53deg);
+  }
+  30% {
+    transform: translate(2.81px, -3.38px) skewX(-9.84deg);
+  }
+  45% {
+    transform: translate(0.75px, -3.75px) skewX(-2.62deg);
+  }
+  75% {
+    transform: translate(0.56px, -3.56px) skewX(-1.97deg);
+  }
+}
+@keyframes ave-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(7deg);
+  }
+  75% {
+    transform: rotate(-7deg);
+  }
+}
+@keyframes ave-shimmer {
+  0% {
+    transform: translateX(0);
+  }
+  65%,
+  100% {
+    transform: translateX(900px);
+  }
+}
+@keyframes ave-scan {
+  from {
+    transform: translate(-3.56px, 0) skewX(12.47deg);
+  }
+  to {
+    transform: translate(3.56px, 0) skewX(-12.47deg);
+  }
+}
+@keyframes ave-sweep {
+  from {
+    transform: translateX(-60px);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(392px);
+    opacity: 1;
+  }
+}
+/* Four reading steps along a line, a small dip on each, then back. */
+@keyframes ave-type {
+  0%,
+  10%,
+  20%,
+  100% {
+    transform: translate(-1.5px, 2.81px) skewX(5.25deg);
+  }
+  4% {
+    transform: translate(-1.5px, 3.56px) skewX(5.25deg);
+  }
+  25%,
+  35%,
+  45% {
+    transform: translate(-0.56px, 2.81px) skewX(1.97deg);
+  }
+  29% {
+    transform: translate(-0.56px, 3.56px) skewX(1.97deg);
+  }
+  50%,
+  60%,
+  70% {
+    transform: translate(0.38px, 2.81px) skewX(-1.31deg);
+  }
+  54% {
+    transform: translate(0.38px, 3.56px) skewX(-1.31deg);
+  }
+  75%,
+  85%,
+  95% {
+    transform: translate(1.31px, 2.81px) skewX(-4.59deg);
+  }
+  79% {
+    transform: translate(1.31px, 3.56px) skewX(-4.59deg);
+  }
+}
+@keyframes ave-tick {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.25);
+  }
+}
+@keyframes ave-ripple {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+@keyframes ave-attend {
+  from {
+    transform: none;
+  }
+  60% {
+    transform: scale(1.12);
+  }
+}
+@keyframes ave-halo {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+@keyframes ave-mark-pop {
+  0% {
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.08);
+  }
+  32% {
+    transform: scale(0.98);
+  }
+  44%,
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes ave-squint {
+  0% {
+    transform: scale(1, 1);
+    opacity: 1;
+  }
+  14%,
+  74% {
+    transform: scale(1, 0.12);
+    opacity: 0;
+  }
+  90%,
+  100% {
+    transform: scale(1, 1);
+    opacity: 1;
+  }
+}
+@keyframes ave-happy {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  22% {
+    opacity: 1;
+    transform: translateY(-0.94px);
+  }
+  30%,
+  72% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  86%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+@keyframes ave-check-pop {
+  0%,
+  22% {
+    transform: scale(0);
+  }
+  34% {
+    transform: scale(1.15);
+  }
+  44%,
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes ave-check-draw {
+  0%,
+  30% {
+    stroke-dashoffset: 1;
+  }
+  56%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ave-flinch {
+  from {
+    transform: none;
+  }
+  30% {
+    transform: scale(1, 0.35);
+  }
+}
+@keyframes ave-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  10% {
+    transform: translateX(-2.81px) rotate(-3deg);
+  }
+  25% {
+    transform: translateX(2.63px) rotate(3deg);
+  }
+  40% {
+    transform: translateX(-1.88px) rotate(-2deg);
+  }
+  55% {
+    transform: translateX(1.31px) rotate(1deg);
+  }
+  70% {
+    transform: translateX(-0.56px);
+  }
+  85% {
+    transform: translateX(0.28px);
+  }
+}
+@keyframes ave-alarm {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 0.9;
+  }
+}
+@keyframes ave-pip-pop {
+  from {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.2);
+  }
 }
 
 /* ───────────────────────────────────────────────────────────────────

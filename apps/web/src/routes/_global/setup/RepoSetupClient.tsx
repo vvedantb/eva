@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useAction, useMutation } from "convex/react";
 import { api, GITHUB_AUTH_REQUIRED } from "@eva/backend";
 import { Container } from "@/lib/components/ui/Container";
-import { Button, Spinner, toast } from "@eva/ui";
+import { Button, Spinner, toast } from "@vvedantb/ui";
 import { RepoSetupList } from "./_components/RepoSetupList";
 import {
   RepoSetupEmpty,

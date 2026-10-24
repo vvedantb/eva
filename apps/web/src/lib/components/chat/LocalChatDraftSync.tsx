@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { usePromptInputController } from "@eva/ui";
+import { usePromptInputController } from "@vvedantb/ui";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 
 interface LocalChatDraftSyncProps {

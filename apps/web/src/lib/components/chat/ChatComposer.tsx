@@ -1,10 +1,9 @@
-import {
-  PromptInputProvider,
-  toast,
-  type ModelAccount,
-  type ModelOption,
-  type PromptInputMessage,
-} from "@eva/ui";
+import { PromptInputProvider, toast } from "@vvedantb/ui";
+import type {
+  ModelAccount,
+  ModelOption,
+  PromptInputMessage,
+} from "@vvedantb/ui";
 import {
   describeFailedAttachments,
   useUploadChatAttachments,

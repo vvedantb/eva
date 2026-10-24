@@ -3,7 +3,7 @@
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
 import { isTitleRegenerating } from "@eva/shared";
-import { ContextMenuItem, ContextMenuSeparator, toast } from "@eva/ui";
+import { ContextMenuItem, ContextMenuSeparator, toast } from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,

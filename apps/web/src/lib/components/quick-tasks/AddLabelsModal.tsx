@@ -16,7 +16,7 @@ import {
   Spinner,
   Input,
   Badge,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 interface TaskForLabel {

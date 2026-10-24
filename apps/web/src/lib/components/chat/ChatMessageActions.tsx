@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CrossfadeIcon, MessageActions, MessageAction, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { CrossfadeIcon, MessageActionsBar, MessageAction } from "@vvedantb/ui";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
 
 export interface ChatMessageActionItem {
@@ -30,7 +31,7 @@ interface ChatMessageActionsProps {
 /**
  * Inline hover action row for chat messages (copy, retry, rating, share, ...).
  *
- * Built on the shared MessageActions/MessageAction primitives so it inherits
+ * Built on the shared MessageActionsBar/MessageAction primitives so it inherits
  * the ghost-button + tooltip styling. The parent Message wrapper carries the
  * `group` class, so the row stays hidden until the message is hovered or an
  * action receives focus (keyboard-accessible). Renders nothing when it would
@@ -62,7 +63,7 @@ export function ChatMessageActions({
   if (copyText === undefined && actions.length === 0) return null;
 
   return (
-    <MessageActions
+    <MessageActionsBar
       className={cn(
         "gap-0.5",
         // `reveal-on-hover transition-opacity` keeps the quiet hover reveal on pointer devices but
@@ -107,6 +108,6 @@ export function ChatMessageActions({
           {action.icon}
         </MessageAction>
       ))}
-    </MessageActions>
+    </MessageActionsBar>
   );
 }

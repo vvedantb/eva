@@ -3,7 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { IconCheck } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { cn, motionSlow } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import type { LandingFeature } from "./landingContent";
 import { LANDING_PREVIEWS } from "./previews";
 
@@ -28,8 +29,8 @@ interface ShowcaseState {
  * someone who is reading it.
  *
  * Each tab carries `group` so the animated sidebar icons play the same hover
- * animation here as they do in the app: the keyframes in `globals.css` are all
- * scoped to `.group:hover .nav-icon-*`.
+ * animation here as they do in the app: the keyframes in
+ * `@vvedantb/ui/tokens/css/nav-icons.css` are all scoped to `.group:hover .vv-icon`.
  */
 export function LandingShowcase({
   idPrefix,
@@ -209,7 +210,7 @@ function SwapIn({
       className={className}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionSlow}
+      transition={tokenTransition.slow}
     >
       {children}
     </m.div>

@@ -13,7 +13,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
