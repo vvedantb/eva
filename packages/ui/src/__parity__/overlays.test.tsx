@@ -681,13 +681,6 @@ function selectTree(
   );
 }
 
-/**
- * eva's cn does not know `rounded-control` is a radius, so legacy kept it next
- * to the call site's `rounded-lg`; vvedantb's cn drops it. Invisible: eva's CSS
- * emits radius utilities alphabetically, so `rounded-lg` already won.
- */
-const stripDeadControlRadius = (html: string) => html.replace(/ ?rounded-control(?= rounded-lg)/g, "");
-
 describe("Select", () => {
   runCases([
     { name: "closed", legacy: selectTree(LegacySelect, {}), next: selectTree(Next, {}) },
@@ -719,22 +712,14 @@ describe("Select", () => {
           "border-none bg-transparent font-medium text-muted-foreground shadow-none transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
       }),
     },
+    // eva's cn does not treat `rounded-control` as a radius, so both keep it
+    // beside the call site's `rounded-lg` (vvedantb merges with `UiConfig.cn`).
     {
-      name: "trigger FIELD_TRIGGER_CLASS (radius exception)",
+      name: "trigger FIELD_TRIGGER_CLASS",
       legacy: selectTree(LegacySelect, { trigger: FIELD_TRIGGER_CLASS, open: true }),
       next: selectTree(Next, { trigger: FIELD_TRIGGER_CLASS, open: true }),
-      normalise: stripDeadControlRadius,
     },
   ]);
-  it("FIELD_TRIGGER_CLASS: the only difference is the dead rounded-control", async () => {
-    const { legacy, next } = await renderPair(
-      selectTree(LegacySelect, { trigger: FIELD_TRIGGER_CLASS }),
-      selectTree(Next, { trigger: FIELD_TRIGGER_CLASS }),
-      evaUiConfig,
-    );
-    expect(legacy).toContain("rounded-control rounded-lg");
-    expect(next).not.toContain("rounded-control");
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -778,6 +763,8 @@ const commandVariants: Parameters<typeof commandTree>[1][] = [
   { list: "max-h-72 p-1", item: "gap-2" },
   { item: "group flex cursor-pointer items-center gap-2 text-xs aria-selected:bg-muted" },
   { shortcut: "max-w-[55%] truncate normal-case tracking-normal" },
+  // ModelPickerContent: `rounded-none` beside the config's `rounded-surface`.
+  { root: "flex min-w-0 flex-1 flex-col rounded-none border-0 bg-muted/40" },
   // CommandEmpty: eva let a className replace the classes (see `emptyClassNameReplaces`).
   { withItems: false },
   { withItems: false, empty: "px-4 text-muted-foreground" },
@@ -797,20 +784,19 @@ describe("Command", () => {
   );
 
   /**
-   * ModelPickerContent passes `rounded-none`. eva's cn kept `rounded-surface`
-   * beside it, and eva's CSS emits `rounded-surface` after `rounded-none`, so
-   * the old panel stayed rounded. vvedantb's cn drops `rounded-surface`, so the
-   * new panel is square. VISIBLE unless the parent clips the corners (reported).
+   * ModelPickerContent (`ai-elements/model-picker-content.tsx`) passes
+   * `rounded-none`. eva's cn keeps `rounded-surface` beside it, and eva's CSS
+   * emits `rounded-surface` after `rounded-none`, so the panel stays rounded.
+   * vvedantb merges with eva's cn (`UiConfig.cn`), so it keeps it too.
    */
-  it("rounded-none on the root (visible radius exception)", async () => {
-    const root = "flex min-w-0 flex-1 flex-col rounded-none border-0 bg-muted/40";
-    const { legacy, next } = await renderPair(
-      commandTree(LegacyCommand, { root }),
-      commandTree(Next, { root }),
-      evaUiConfig,
-    );
+  it("rounded-none on the root keeps rounded-surface (ModelPickerContent)", async () => {
+    const { legacy, next } = await expectParity({
+      name: "ModelPickerContent root",
+      legacy: <LegacyCommand.Command className="rounded-none">x</LegacyCommand.Command>,
+      next: <Next.Command className="rounded-none">x</Next.Command>,
+    });
     expect(legacy).toContain("rounded-none rounded-surface");
-    expect(next).toBe(legacy.replace(" rounded-surface", ""));
+    expect(next).toContain("rounded-surface");
   });
 
   runCases([
