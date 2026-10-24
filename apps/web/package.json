@@ -61,7 +61,7 @@
     "@tiptap/starter-kit": "^3.20.1",
     "@vercel/analytics": "^1.5.0",
     "@vvedantb/server": "^0.7.1",
-    "@vvedantb/ui": "github:vvedantb/packages#a4f98e0b7d70578165581761af530baf7f90bee1&path:packages/ui",
+    "@vvedantb/ui": "github:vvedantb/packages#270f87f3e78884b71ad7debd9a2732fb63830234&path:packages/ui",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",

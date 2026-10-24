@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@vvedantb/ui": "github:vvedantb/packages#a4f98e0b7d70578165581761af530baf7f90bee1&path:packages/ui"
+    "@vvedantb/ui": "github:vvedantb/packages#270f87f3e78884b71ad7debd9a2732fb63830234&path:packages/ui"
   },
   "peerDependencies": {
     "@tabler/icons-react": "^3.33.0",
