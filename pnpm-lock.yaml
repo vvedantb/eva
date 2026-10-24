@@ -126,8 +126,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: file:../../../vv-packages/packages/ui
-        version: file:../vv-packages/packages/ui(f4b241521966f7d0f94b7b0b8a3bf5b9)
+        specifier: github:vvedantb/packages#2d4f31b58a1acd499b9185e8b6711dfe4cda625c&path:packages/ui
+        version: https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(f4b241521966f7d0f94b7b0b8a3bf5b9)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -167,9 +167,6 @@ importers:
       use-stick-to-bottom:
         specifier: ^1.1.3
         version: 1.1.3(react@19.3.0)
-    dependenciesMeta:
-      '@vvedantb/ui':
-        injected: true
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.3.3
@@ -355,8 +352,8 @@ importers:
         specifier: ^0.7.1
         version: 0.7.1(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       '@vvedantb/ui':
-        specifier: file:../../../vv-packages/packages/ui
-        version: file:../vv-packages/packages/ui(cf81e58ba96b66ea4f7efff26fcf2d83)
+        specifier: github:vvedantb/packages#2d4f31b58a1acd499b9185e8b6711dfe4cda625c&path:packages/ui
+        version: https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(cf81e58ba96b66ea4f7efff26fcf2d83)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -465,9 +462,6 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
-    dependenciesMeta:
-      '@vvedantb/ui':
-        injected: true
     devDependencies:
       '@tailwindcss/typography':
         specifier: ^0.5.19
@@ -670,7 +664,7 @@ importers:
         version: 1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)
       convex-helpers:
         specifier: 0.1.114
-        version: 0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@5.9.3)(zod@3.25.76)
+        version: 0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@5.9.3)(zod@3.25.76)
       dayjs:
         specifier: '>=1.0.0'
         version: 1.11.20
@@ -680,9 +674,6 @@ importers:
       react:
         specifier: 19.3.0
         version: 19.3.0
-    dependenciesMeta:
-      '@vvedantb/ui':
-        injected: true
     devDependencies:
       '@json-render/core':
         specifier: 0.21.0
@@ -694,8 +685,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: file:../../../vv-packages/packages/ui
-        version: file:../vv-packages/packages/ui(5683f87a26c4d8da9aa4ca6f08bbd0de)
+        specifier: github:vvedantb/packages#2d4f31b58a1acd499b9185e8b6711dfe4cda625c&path:packages/ui
+        version: https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(5683f87a26c4d8da9aa4ca6f08bbd0de)
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
@@ -709,8 +700,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: file:../../../vv-packages/packages/ui
-        version: file:../vv-packages/packages/ui(685a0fe5d13768ffe77fc87a5ac00137)
+        specifier: github:vvedantb/packages#2d4f31b58a1acd499b9185e8b6711dfe4cda625c&path:packages/ui
+        version: https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(685a0fe5d13768ffe77fc87a5ac00137)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -723,9 +714,6 @@ importers:
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.1
-    dependenciesMeta:
-      '@vvedantb/ui':
-        injected: true
     devDependencies:
       '@types/react':
         specifier: 19.3.0
@@ -6069,8 +6057,9 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@file:../vv-packages/packages/ui':
-    resolution: {directory: ../vv-packages/packages/ui, type: directory}
+  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui':
+    resolution: {path: packages/ui, tarball: https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c}
+    version: 0.18.0
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -6734,25 +6723,6 @@ packages:
     resolution: {integrity: sha512-GPHeYFOi70n7UtW0eCEQFVhzl/+m8PvbWkDCbKpHLybI1MrScf4sVpGeM0cC2qmtxiduxa2nLPbehPalhh9oyQ==}
     peerDependencies:
       convex: ^1.16.4
-
-  convex@1.35.1:
-    resolution: {integrity: sha512-g23KrTjBiXqRHzWIN0PVFagKjrmFxWUaOSiBsAWPTpXX2rXl0L1F4PR0YpAcMJEzMgfZR9AGymJvLTM+KA6lsQ==}
-    engines: {node: '>=18.0.0', npm: '>=7.0.0'}
-    hasBin: true
-    peerDependencies:
-      '@auth0/auth0-react': ^2.0.1
-      '@clerk/clerk-react': 5.61.6
-      '@clerk/react': ^6.0.0
-      react: 19.3.0
-    peerDependenciesMeta:
-      '@auth0/auth0-react':
-        optional: true
-      '@clerk/clerk-react':
-        optional: true
-      '@clerk/react':
-        optional: true
-      react:
-        optional: true
 
   convex@1.40.0:
     resolution: {integrity: sha512-jChWEB45q+9Ibryc7hg0l6hB1xA4zwE2y6ZhkhGP6oJkqYeiURkMagA2ZQZYMy1/T8PZ9ztoVJJtbL/+Ob851Q==}
@@ -15629,7 +15599,7 @@ snapshots:
       zod: 4.4.3
     optional: true
 
-  '@vvedantb/ui@file:../vv-packages/packages/ui(5683f87a26c4d8da9aa4ca6f08bbd0de)':
+  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(5683f87a26c4d8da9aa4ca6f08bbd0de)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15687,7 +15657,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@file:../vv-packages/packages/ui(685a0fe5d13768ffe77fc87a5ac00137)':
+  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(685a0fe5d13768ffe77fc87a5ac00137)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15745,7 +15715,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@file:../vv-packages/packages/ui(cf81e58ba96b66ea4f7efff26fcf2d83)':
+  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(cf81e58ba96b66ea4f7efff26fcf2d83)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15803,7 +15773,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@file:../vv-packages/packages/ui(f4b241521966f7d0f94b7b0b8a3bf5b9)':
+  '@vvedantb/ui@https://codeload.github.com/vvedantb/packages/tar.gz/2d4f31b58a1acd499b9185e8b6711dfe4cda625c#path:packages/ui(f4b241521966f7d0f94b7b0b8a3bf5b9)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -16477,9 +16447,9 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@5.9.3)(zod@3.25.76):
+  convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@5.9.3)(zod@3.25.76):
     dependencies:
-      convex: 1.35.1(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)
+      convex: 1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
       hono: 4.12.25
@@ -16500,18 +16470,6 @@ snapshots:
   convex-test@0.0.41(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)):
     dependencies:
       convex: 1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6)
-
-  convex@1.35.1(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6):
-    dependencies:
-      esbuild: 0.27.0
-      prettier: 3.8.3
-      ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-    optionalDependencies:
-      '@clerk/clerk-react': 5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      react: 19.3.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6):
     dependencies:

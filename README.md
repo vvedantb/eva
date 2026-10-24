@@ -263,7 +263,7 @@ Standard iframe security. Not Eva-specific.
 | `apps/chrome-extension` | `eva-assist-extension` | On-page toolbar to annotate apps and file tasks        |
 | `packages/backend`      | `@eva/backend`         | Convex backend, workflows, in-sandbox callback runtime |
 | `packages/shared`       | `@eva/shared`          | Shared constants and types                             |
-| `packages/ui`           | `@eva/ui`              | Shared component library                               |
+| `packages/ui`           | `@eva/ui`              | eva config for `@vvedantb/ui` components               |
 
 ## Sandbox code
 

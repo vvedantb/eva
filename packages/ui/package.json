@@ -8,12 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@vvedantb/ui": "file:../../../vv-packages/packages/ui"
-  },
-  "dependenciesMeta": {
-    "@vvedantb/ui": {
-      "injected": true
-    }
+    "@vvedantb/ui": "github:vvedantb/packages#2d4f31b58a1acd499b9185e8b6711dfe4cda625c&path:packages/ui"
   },
   "peerDependencies": {
     "@tabler/icons-react": "^3.33.0",
