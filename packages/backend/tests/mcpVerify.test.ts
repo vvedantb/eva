@@ -61,7 +61,10 @@ const bearer = vi.hoisted(() => ({
 }));
 
 vi.mock("@vvedantb/server", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vvedantb/server")>();
+  const actual = await importOriginal();
+  if (typeof actual !== "object" || actual === null) {
+    throw new Error("expected @vvedantb/server module object");
+  }
   return { ...actual, authenticateClerkBearer: bearer.authenticate };
 });
 
