@@ -184,9 +184,15 @@ export default defineConfig({
     format: "es",
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      // STAGE CHECK (temporary): eva's "@vvedantb/ui" goes through the stage module.
+      { find: /^@vvedantb\/ui$/, replacement: "/tmp/repo/apps/web/src/__stage__/vvedantb.tsx" },
+      { find: /^@vvedantb\/ui-real$/, replacement: "/tmp/repo/apps/web/node_modules/@vvedantb/ui/src/index.ts" },
+      { find: /^@streamdown\/(cjk|code|math|mermaid)$/, replacement: "/tmp/repo/node_modules/.pnpm/@vvedantb+ui@https+++codeload.github.com+vvedantb+packages+tar.gz+2d4f31b58a1acd499b918_1def7fedb9cf7ae94d1a231bc795e582/node_modules/@streamdown/$1" },
+      { find: /^katex\/(.*)$/, replacement: "/tmp/repo/node_modules/.pnpm/@vvedantb+ui@https+++codeload.github.com+vvedantb+packages+tar.gz+2d4f31b58a1acd499b918_1def7fedb9cf7ae94d1a231bc795e582/node_modules/katex/$1" },
+      { find: /^katex$/, replacement: "/tmp/repo/node_modules/.pnpm/@vvedantb+ui@https+++codeload.github.com+vvedantb+packages+tar.gz+2d4f31b58a1acd499b918_1def7fedb9cf7ae94d1a231bc795e582/node_modules/katex" },
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+    ],
     // Packages using React Context MUST be deduplicated to prevent "Context not found" errors
     // When pnpm installs multiple copies (different peer deps), each has its own context instance
     // This forces all imports to resolve to the same instance at bundle time
