@@ -7,15 +7,15 @@ import * as Next from "@vvedantb/ui";
 import { UiConfigProvider } from "@vvedantb/ui";
 import { evaUiConfig } from "../config";
 import { menuContentClass } from "../config/overlays";
-import * as LegacyDialog from "../ui/dialog";
-import * as LegacySheet from "../ui/sheet";
-import * as LegacyPopover from "../ui/popover";
-import * as LegacyHoverCard from "../ui/hover-card";
-import * as LegacyTooltip from "../ui/tooltip";
-import * as LegacyDropdown from "../ui/dropdown-menu";
-import * as LegacyContext from "../ui/context-menu";
-import * as LegacySelect from "../ui/select";
-import * as LegacyCommand from "../ui/command";
+import * as LegacyDialog from "../__legacy__/ui/dialog";
+import * as LegacySheet from "../__legacy__/ui/sheet";
+import * as LegacyPopover from "../__legacy__/ui/popover";
+import * as LegacyHoverCard from "../__legacy__/ui/hover-card";
+import * as LegacyTooltip from "../__legacy__/ui/tooltip";
+import * as LegacyDropdown from "../__legacy__/ui/dropdown-menu";
+import * as LegacyContext from "../__legacy__/ui/context-menu";
+import * as LegacySelect from "../__legacy__/ui/select";
+import * as LegacyCommand from "../__legacy__/ui/command";
 import { renderPair } from "./harness";
 
 type Case = {

@@ -6,9 +6,7 @@
 // as they were and need no entry.
 import { createElement } from "react";
 import { IconArrowUp, IconChevronDown } from "@tabler/icons-react";
-import { Spinner, type UiConfig } from "@vvedantb/ui";
-import { getProviderLabel } from "../ai-elements/model-picker-types";
-import { ProviderIcon } from "../ai-elements/provider-icon";
+import { getProviderLabel, ProviderIcon, Spinner, type UiConfig } from "@vvedantb/ui";
 
 export const aichatConfig = {
   Conversation: {

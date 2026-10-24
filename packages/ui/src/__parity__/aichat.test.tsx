@@ -14,21 +14,21 @@ import {
 import * as Next from "@vvedantb/ui";
 
 import { evaUiConfig } from "../config";
-import * as LegacyArtifact from "../ai-elements/artifact";
-import * as LegacyAttachments from "../ai-elements/attachments";
-import * as LegacyCodeBlock from "../ai-elements/code-block";
-import * as LegacyConfirmation from "../ai-elements/confirmation";
-import * as LegacyConversation from "../ai-elements/conversation";
-import { FileChip as LegacyFileChip } from "../ai-elements/file-chip";
-import * as LegacyMessage from "../ai-elements/message";
-import * as LegacyPromptInput from "../ai-elements/prompt-input";
-import { PromptInputSettings as LegacyPromptInputSettings } from "../ai-elements/prompt-input-settings";
-import { PromptInputSpeech as LegacyPromptInputSpeech } from "../ai-elements/prompt-input-speech";
-import { TraitsPanel as LegacyTraitsPanel } from "../ai-elements/prompt-input-traits";
-import * as LegacyQueue from "../ai-elements/queue";
-import * as LegacySandbox from "../ai-elements/sandbox";
-import { Shimmer as LegacyShimmer } from "../ai-elements/shimmer";
-import { TooltipProvider as LegacyTooltipProvider } from "../ui/tooltip";
+import * as LegacyArtifact from "../__legacy__/ai-elements/artifact";
+import * as LegacyAttachments from "../__legacy__/ai-elements/attachments";
+import * as LegacyCodeBlock from "../__legacy__/ai-elements/code-block";
+import * as LegacyConfirmation from "../__legacy__/ai-elements/confirmation";
+import * as LegacyConversation from "../__legacy__/ai-elements/conversation";
+import { FileChip as LegacyFileChip } from "../__legacy__/ai-elements/file-chip";
+import * as LegacyMessage from "../__legacy__/ai-elements/message";
+import * as LegacyPromptInput from "../__legacy__/ai-elements/prompt-input";
+import { PromptInputSettings as LegacyPromptInputSettings } from "../__legacy__/ai-elements/prompt-input-settings";
+import { PromptInputSpeech as LegacyPromptInputSpeech } from "../__legacy__/ai-elements/prompt-input-speech";
+import { TraitsPanel as LegacyTraitsPanel } from "../__legacy__/ai-elements/prompt-input-traits";
+import * as LegacyQueue from "../__legacy__/ai-elements/queue";
+import * as LegacySandbox from "../__legacy__/ai-elements/sandbox";
+import { Shimmer as LegacyShimmer } from "../__legacy__/ai-elements/shimmer";
+import { TooltipProvider as LegacyTooltipProvider } from "../__legacy__/ui/tooltip";
 import { renderPair } from "./harness";
 
 // happy-dom has no Web Animations API (the submit spinner starts its loop with

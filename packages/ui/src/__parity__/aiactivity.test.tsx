@@ -4,17 +4,17 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import * as Next from "@vvedantb/ui";
 import { evaUiConfig } from "../config";
-import * as LegacyTrace from "../ai-elements/trace";
-import * as LegacyShared from "../ai-elements/activity-shared";
-import { ActivityTasks as LegacyActivityTasks, OpenSubagentContext as LegacyOpenSubagentContext } from "../ai-elements/activity-tasks";
-import { ActivityQuestionCard as LegacyActivityQuestionCard } from "../ai-elements/activity-question";
-import * as LegacyWebPreview from "../ai-elements/web-preview";
-import * as LegacyContext from "../ai-elements/context";
-import * as LegacyPlan from "../ai-elements/plan";
-import * as LegacyTestResults from "../ai-elements/test-results";
-import * as LegacyModelPicker from "../ai-elements/model-picker";
-import { ProviderIcon as LegacyProviderIcon } from "../ai-elements/provider-icon";
-import type { ActivityStep } from "../ai-elements/activity-shared";
+import * as LegacyTrace from "../__legacy__/ai-elements/trace";
+import * as LegacyShared from "../__legacy__/ai-elements/activity-shared";
+import { ActivityTasks as LegacyActivityTasks, OpenSubagentContext as LegacyOpenSubagentContext } from "../__legacy__/ai-elements/activity-tasks";
+import { ActivityQuestionCard as LegacyActivityQuestionCard } from "../__legacy__/ai-elements/activity-question";
+import * as LegacyWebPreview from "../__legacy__/ai-elements/web-preview";
+import * as LegacyContext from "../__legacy__/ai-elements/context";
+import * as LegacyPlan from "../__legacy__/ai-elements/plan";
+import * as LegacyTestResults from "../__legacy__/ai-elements/test-results";
+import * as LegacyModelPicker from "../__legacy__/ai-elements/model-picker";
+import { ProviderIcon as LegacyProviderIcon } from "../__legacy__/ai-elements/provider-icon";
+import type { ActivityStep } from "../__legacy__/ai-elements/activity-shared";
 import { renderPair } from "./harness";
 
 // happy-dom has no Web Animations API. Spinner and CircleSpinner start their

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import * as Next from "@vvedantb/ui";
 
 import { evaUiConfig } from "../config";
-import { AvatarStack } from "../kibo/avatar-stack";
+import { AvatarStack } from "../__legacy__/kibo/avatar-stack";
 import {
   ContributionGraph,
   ContributionGraphBlock,
@@ -13,22 +13,22 @@ import {
   ContributionGraphLegend,
   ContributionGraphTotalCount,
   type Activity,
-} from "../kibo/contribution-graph";
-import { Cursor, CursorBody, CursorName, CursorPointer } from "../kibo/cursor";
+} from "../__legacy__/kibo/contribution-graph";
+import { Cursor, CursorBody, CursorName, CursorPointer } from "../__legacy__/kibo/cursor";
 import {
   GanttFeatureItem,
   GanttFeatureList,
   GanttFeatureListGroup,
   GanttFeatureRow,
-} from "../kibo/gantt-features";
-import { GanttHeader } from "../kibo/gantt-header";
-import { GanttProvider, type GanttFeature, type Range } from "../kibo/gantt-provider";
+} from "../__legacy__/kibo/gantt-features";
+import { GanttHeader } from "../__legacy__/kibo/gantt-header";
+import { GanttProvider, type GanttFeature, type Range } from "../__legacy__/kibo/gantt-provider";
 import {
   GanttSidebar,
   GanttSidebarGroup,
   GanttSidebarItem,
-} from "../kibo/gantt-sidebar";
-import { GanttTimeline, GanttToday } from "../kibo/gantt-timeline";
+} from "../__legacy__/kibo/gantt-sidebar";
+import { GanttTimeline, GanttToday } from "../__legacy__/kibo/gantt-timeline";
 import {
   KanbanBoard,
   KanbanCard,
@@ -37,9 +37,9 @@ import {
   KanbanProvider,
   type KanbanColumnDef,
   type KanbanItem,
-} from "../kibo/kanban";
-import { ListGroup, ListHeader, ListItem, ListItems, ListProvider } from "../kibo/list";
-import { ThemeSwitcher } from "../kibo/theme-switcher";
+} from "../__legacy__/kibo/kanban";
+import { ListGroup, ListHeader, ListItem, ListItems, ListProvider } from "../__legacy__/kibo/list";
+import { ThemeSwitcher } from "../__legacy__/kibo/theme-switcher";
 import {
   VideoPlayer,
   VideoPlayerContent,
@@ -53,7 +53,7 @@ import {
   VideoPlayerTimeDisplay,
   VideoPlayerTimeRange,
   VideoPlayerVolumeRange,
-} from "../kibo/video-player";
+} from "../__legacy__/kibo/video-player";
 import { Markdown } from "../markdown";
 import { renderPair } from "./harness";
 

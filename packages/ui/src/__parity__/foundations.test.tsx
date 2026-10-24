@@ -5,9 +5,9 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import * as Next from "@vvedantb/ui";
 
 import { evaUiConfig } from "../config";
-import { Alert, AlertDescription } from "../ui/alert";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { BorderBeam } from "../ui/border-beam";
+import { Alert, AlertDescription } from "../__legacy__/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "../__legacy__/ui/avatar";
+import { BorderBeam } from "../__legacy__/ui/border-beam";
 import {
   Card,
   CardAction,
@@ -16,25 +16,25 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "../ui/card";
-import { CenteredSpinner } from "../ui/centered-spinner";
-import { CrossfadeIcon, CrossfadeIconSlot } from "../ui/crossfade-icon";
-import { Label } from "../ui/label";
-import { LIST_ROW_CONTROL_CLASS, ListRow } from "../ui/list-row";
-import { LoadingState } from "../ui/loading-state";
-import { Progress } from "../ui/progress";
-import { RefreshSpinIcon } from "../ui/refresh-spin-icon";
-import { Separator } from "../ui/separator";
-import { Toaster, toast } from "../ui/sonner";
-import { CircleSpinner, Spinner } from "../ui/spinner";
-import { StatusDot, type StatusTone } from "../ui/status-dot";
-import { Surface, surfaceVariants } from "../ui/surface";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { CAT_SLOT_COUNT, catColorForId, catColorForSlot, catSlotForId } from "../utils/cat-color";
-import { DRAG_ACTIVATION_DISTANCE_PX, projectVelocity, rubberband } from "../utils/gesture";
-import { motionBase, motionFast, motionSlow, motionSpring, motionStagger } from "../utils/motion";
-import { msUntilNextBoundary, quantizedSnapshot } from "../utils/sharedClock";
-import { CONTROL_RADIUS_CLASS, SURFACE_RADIUS_CLASS } from "../utils/surface-radius";
+} from "../__legacy__/ui/card";
+import { CenteredSpinner } from "../__legacy__/ui/centered-spinner";
+import { CrossfadeIcon, CrossfadeIconSlot } from "../__legacy__/ui/crossfade-icon";
+import { Label } from "../__legacy__/ui/label";
+import { LIST_ROW_CONTROL_CLASS, ListRow } from "../__legacy__/ui/list-row";
+import { LoadingState } from "../__legacy__/ui/loading-state";
+import { Progress } from "../__legacy__/ui/progress";
+import { RefreshSpinIcon } from "../__legacy__/ui/refresh-spin-icon";
+import { Separator } from "../__legacy__/ui/separator";
+import { Toaster, toast } from "../__legacy__/ui/sonner";
+import { CircleSpinner, Spinner } from "../__legacy__/ui/spinner";
+import { StatusDot, type StatusTone } from "../__legacy__/ui/status-dot";
+import { Surface, surfaceVariants } from "../__legacy__/ui/surface";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../__legacy__/ui/table";
+import { CAT_SLOT_COUNT, catColorForId, catColorForSlot, catSlotForId } from "../__legacy__/utils/cat-color";
+import { DRAG_ACTIVATION_DISTANCE_PX, projectVelocity, rubberband } from "../__legacy__/utils/gesture";
+import { motionBase, motionFast, motionSlow, motionSpring, motionStagger } from "../__legacy__/utils/motion";
+import { msUntilNextBoundary, quantizedSnapshot } from "../__legacy__/utils/sharedClock";
+import { CONTROL_RADIUS_CLASS, SURFACE_RADIUS_CLASS } from "../__legacy__/utils/surface-radius";
 import { renderPair } from "./harness";
 
 // happy-dom has no Web Animations API. Spinner, CircleSpinner and LoadingState

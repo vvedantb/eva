@@ -8,16 +8,16 @@ import type { ReactNode } from "react";
 import { describe, expect, test } from "vitest";
 import * as Next from "@vvedantb/ui";
 import { evaUiConfig } from "../config";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
-import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "../ui/button-group";
-import { Calendar } from "../ui/calendar";
-import { Carousel, CarouselContent, CarouselDots, CarouselItem } from "../ui/carousel";
-import { Checkbox } from "../ui/checkbox";
-import { ClearInput } from "../ui/clear-input";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
-import { Input } from "../ui/input";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../__legacy__/ui/accordion";
+import { Badge } from "../__legacy__/ui/badge";
+import { Button } from "../__legacy__/ui/button";
+import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "../__legacy__/ui/button-group";
+import { Calendar } from "../__legacy__/ui/calendar";
+import { Carousel, CarouselContent, CarouselDots, CarouselItem } from "../__legacy__/ui/carousel";
+import { Checkbox } from "../__legacy__/ui/checkbox";
+import { ClearInput } from "../__legacy__/ui/clear-input";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../__legacy__/ui/collapsible";
+import { Input } from "../__legacy__/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
@@ -25,12 +25,12 @@ import {
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-} from "../ui/input-group";
-import { SearchInput } from "../ui/search-input";
-import { Slider } from "../ui/slider";
-import { Switch } from "../ui/switch";
-import { Tabs, TabsBar, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Textarea } from "../ui/textarea";
+} from "../__legacy__/ui/input-group";
+import { SearchInput } from "../__legacy__/ui/search-input";
+import { Slider } from "../__legacy__/ui/slider";
+import { Switch } from "../__legacy__/ui/switch";
+import { Tabs, TabsBar, TabsContent, TabsList, TabsTrigger } from "../__legacy__/ui/tabs";
+import { Textarea } from "../__legacy__/ui/textarea";
 import sites from "./controls.sites.json";
 import { renderPair } from "./harness";
 

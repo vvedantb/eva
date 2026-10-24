@@ -2,7 +2,7 @@
 // timeline, its question card and the model picker. Each value is what the
 // legacy @eva/ui component rendered, so the swap changes no DOM.
 import type { UiConfig } from "@vvedantb/ui";
-import { Markdown } from "../markdown/Markdown";
+import { Markdown } from "@vvedantb/ui";
 
 export const aiactivityConfig = {
   ActivityTasks: {

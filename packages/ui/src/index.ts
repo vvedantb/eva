@@ -1,3 +1,5 @@
+export { EvaUiProvider } from "./EvaUiProvider";
+export { evaUiConfig } from "./config";
 export { cn } from "./utils/cn";
 export {
   motionBase,

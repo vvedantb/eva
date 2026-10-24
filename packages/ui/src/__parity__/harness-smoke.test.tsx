@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { expect, test } from "vitest";
 import { Label as NextLabel } from "@vvedantb/ui";
-import { Label } from "../ui/label";
+import { Label } from "../__legacy__/ui/label";
 import { renderPair } from "./harness";
 
 test("harness renders both trees and normalises class order", async () => {
