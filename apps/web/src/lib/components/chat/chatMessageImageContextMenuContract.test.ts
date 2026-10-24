@@ -16,7 +16,7 @@ import { describe, expect, test } from "vitest";
 // type-check, so pin them here.
 //
 // Disk-read contract check (matching the suite's other *Contract tests): the
-// component pulls @eva/ui and Radix, and the node test env has no DOM.
+// component pulls @vvedantb/ui and Radix, and the node test env has no DOM.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(join(here, "ChatMessageContextMenu.tsx"), "utf8");

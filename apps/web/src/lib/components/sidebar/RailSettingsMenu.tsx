@@ -1,8 +1,13 @@
 "use client";
 
 import { Link, useLocation } from "@tanstack/react-router";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
-import { SettingsIcon } from "@vvedantb/ui";
+import { cn } from "@eva/ui";
+import {
+  SettingsIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import { GLOBAL_SETTINGS_NAV } from "@/lib/components/sidebar/globalSettingsNav";
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";

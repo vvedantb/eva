@@ -16,14 +16,14 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
   Spinner,
-  ListProvider,
-  ListGroup,
-  ListHeader,
-  ListItems,
-  ListItem,
+  SortableListProvider,
+  SortableListGroup,
+  SortableListHeader,
+  SortableListItems,
+  SortableListItem,
   toast,
-  type ListDragEndEvent,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { SortableListDragEndEvent } from "@vvedantb/ui";
 import { IconChevronRight, IconPlayerPlay } from "@tabler/icons-react";
 import {
   ConfirmSkipHint,
@@ -44,7 +44,7 @@ import { RunAllDialog } from "./RunAllDialog";
 
 type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 
-function parseDragEvent(event: ListDragEndEvent) {
+function parseDragEvent(event: SortableListDragEndEvent) {
   const source = event.active.data.current?.parent;
   if (typeof source !== "string" || !event.over) return null;
   return {
@@ -89,7 +89,9 @@ export function QuickTasksListView({
   const projectsList = useQuery(api.projects.list, { repoId });
   const projectNumIds = new Map(
     (projectsList ?? []).flatMap((project) =>
-      project.numId === undefined ? [] : [[project._id, project.numId] as const],
+      project.numId === undefined
+        ? []
+        : [[project._id, project.numId] as const],
     ),
   );
   const updateStatus = useMutation(
@@ -164,7 +166,7 @@ export function QuickTasksListView({
     });
   };
 
-  const handleDragEnd = async (event: ListDragEndEvent) => {
+  const handleDragEnd = async (event: SortableListDragEndEvent) => {
     const data = parseDragEvent(event);
     if (!data) return;
     if (data.source === data.target) return;
@@ -219,7 +221,7 @@ export function QuickTasksListView({
 
   return (
     <>
-      <ListProvider
+      <SortableListProvider
         onDragEnd={handleDragEnd}
         className="flex-1 min-h-0 gap-2 sm:gap-3"
       >
@@ -242,8 +244,8 @@ export function QuickTasksListView({
                 open={openSections.has(status)}
                 onOpenChange={() => toggleSection(status)}
               >
-                <ListGroup id={status}>
-                  <ListHeader>
+                <SortableListGroup id={status}>
+                  <SortableListHeader>
                     <div className="flex items-center sticky top-0 z-10 bg-background pb-1.5 pt-0.5">
                       <CollapsibleTrigger asChild>
                         <button className="flex flex-1 items-center gap-2 rounded-lg px-2 py-3 sm:px-3 sm:py-2 text-left transition-colors hover:bg-muted/50 min-h-[44px]">
@@ -290,14 +292,14 @@ export function QuickTasksListView({
                         </Button>
                       )}
                     </div>
-                  </ListHeader>
+                  </SortableListHeader>
                   <CollapsibleContent>
                     {items.length === 0 ? (
                       <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
                         No tasks
                       </div>
                     ) : (
-                      <ListItems className="pr-1.5 pb-1.5">
+                      <SortableListItems className="pr-1.5 pb-1.5">
                         {scrollParent && (
                           <Virtuoso
                             customScrollParent={scrollParent}
@@ -306,7 +308,7 @@ export function QuickTasksListView({
                             itemContent={(index) => {
                               const task = items[index];
                               return (
-                                <ListItem
+                                <SortableListItem
                                   id={task._id}
                                   name={task.title}
                                   index={index}
@@ -317,88 +319,90 @@ export function QuickTasksListView({
                                     index={index}
                                     firstPaint={firstPaint.current}
                                   >
-                                  <QuickTaskCard
-                                    id={task._id}
-                                    title={task.title}
-                                    description={task.description}
-                                    status={task.status}
-                                    isAgentActive={task.isExecuting}
-                                    hasUnread={task.hasUnread}
-                                    isAwaitingAnswer={task.isAwaitingAnswer}
-                                    priority={task.priority}
-                                    numId={task.numId}
-                                    projectNumId={
-                                      task.projectId
-                                        ? projectNumIds.get(task.projectId)
-                                        : undefined
-                                    }
-                                    hasError={errorTaskIdSet.has(task._id)}
-                                    sandboxStatus={task.reviewTaskSandboxStatus}
-                                    scheduledAt={task.scheduledAt}
-                                    tags={task.tags}
-                                    createdByUser={users?.find(
-                                      (u) => u._id === task.createdBy,
-                                    )}
-                                    createdAt={task.createdAt}
-                                    projectName={
-                                      task.projectId
-                                        ? projectNames.get(task.projectId)
-                                        : undefined
-                                    }
-                                    href={
-                                      entityPathSegment(task)
-                                        ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
-                                        : `${basePath}/quick-tasks`
-                                    }
-                                    onClick={
-                                      isSelecting
-                                        ? (event) => {
-                                            event.preventDefault();
-                                            onToggleSelect(task._id, {
-                                              range: event.shiftKey,
-                                              orderedIds: sectionIds,
-                                            });
-                                          }
-                                        : onOpenTask
-                                          ? () => onOpenTask(task._id)
+                                    <QuickTaskCard
+                                      id={task._id}
+                                      title={task.title}
+                                      description={task.description}
+                                      status={task.status}
+                                      isAgentActive={task.isExecuting}
+                                      hasUnread={task.hasUnread}
+                                      isAwaitingAnswer={task.isAwaitingAnswer}
+                                      priority={task.priority}
+                                      numId={task.numId}
+                                      projectNumId={
+                                        task.projectId
+                                          ? projectNumIds.get(task.projectId)
                                           : undefined
-                                    }
-                                    isSelecting={isSelecting}
-                                    isSelected={selectedIds.has(task._id)}
-                                    isActive={selectedTaskId === task._id}
-                                    onToggleSelect={(event) =>
-                                      onToggleSelect(task._id, {
-                                        range: event.shiftKey,
-                                        orderedIds: sectionIds,
-                                      })
-                                    }
-                                    groupedCodebases={
-                                      groupedCodebases ?? undefined
-                                    }
-                                    assignedTo={task.assignedTo}
-                                    model={task.model}
-                                    providerAccountId={task.providerAccountId}
-                                    projectId={task.projectId}
-                                    repoId={task.repoId ?? repoId}
-                                    users={users ?? undefined}
-                                    currentUserId={currentUserId ?? undefined}
-                                    projects={projectsList ?? undefined}
-                                  />
+                                      }
+                                      hasError={errorTaskIdSet.has(task._id)}
+                                      sandboxStatus={
+                                        task.reviewTaskSandboxStatus
+                                      }
+                                      scheduledAt={task.scheduledAt}
+                                      tags={task.tags}
+                                      createdByUser={users?.find(
+                                        (u) => u._id === task.createdBy,
+                                      )}
+                                      createdAt={task.createdAt}
+                                      projectName={
+                                        task.projectId
+                                          ? projectNames.get(task.projectId)
+                                          : undefined
+                                      }
+                                      href={
+                                        entityPathSegment(task)
+                                          ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
+                                          : `${basePath}/quick-tasks`
+                                      }
+                                      onClick={
+                                        isSelecting
+                                          ? (event) => {
+                                              event.preventDefault();
+                                              onToggleSelect(task._id, {
+                                                range: event.shiftKey,
+                                                orderedIds: sectionIds,
+                                              });
+                                            }
+                                          : onOpenTask
+                                            ? () => onOpenTask(task._id)
+                                            : undefined
+                                      }
+                                      isSelecting={isSelecting}
+                                      isSelected={selectedIds.has(task._id)}
+                                      isActive={selectedTaskId === task._id}
+                                      onToggleSelect={(event) =>
+                                        onToggleSelect(task._id, {
+                                          range: event.shiftKey,
+                                          orderedIds: sectionIds,
+                                        })
+                                      }
+                                      groupedCodebases={
+                                        groupedCodebases ?? undefined
+                                      }
+                                      assignedTo={task.assignedTo}
+                                      model={task.model}
+                                      providerAccountId={task.providerAccountId}
+                                      projectId={task.projectId}
+                                      repoId={task.repoId ?? repoId}
+                                      users={users ?? undefined}
+                                      currentUserId={currentUserId ?? undefined}
+                                      projects={projectsList ?? undefined}
+                                    />
                                   </ListEnter>
-                                </ListItem>
+                                </SortableListItem>
                               );
                             }}
                           />
                         )}
-                      </ListItems>
+                      </SortableListItems>
                     )}
                   </CollapsibleContent>
-                </ListGroup>
+                </SortableListGroup>
               </Collapsible>,
             ];
           })}
         </div>
-      </ListProvider>
+      </SortableListProvider>
       <RunAllDialog
         isOpen={isConfirmOpen}
         onOpenChange={setIsConfirmOpen}

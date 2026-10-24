@@ -16,7 +16,7 @@ import {
   Input,
   CenteredSpinner,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { GlobalAutomationGroup } from "@/lib/components/sidebar/_components/GlobalAutomationGroup";
 import { repoBasePaths } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { sortAppsForSidebar } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";

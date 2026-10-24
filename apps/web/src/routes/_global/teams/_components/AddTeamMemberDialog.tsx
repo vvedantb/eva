@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
   Input,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconUserPlus } from "@tabler/icons-react";
 import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
 

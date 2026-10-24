@@ -3,7 +3,10 @@
 import { forwardRef, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { usePromptInputController, usePromptInputAttachments } from "@eva/ui";
+import {
+  usePromptInputController,
+  usePromptInputAttachments,
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { attachPastedTextIfLarge } from "@/lib/components/attachments/attachmentMeta";

@@ -3,7 +3,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Spinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
   repoBasePaths,
@@ -102,9 +103,7 @@ export function SessionChromeTabGroup({
   const handleClose = (entry: ChromeTabEntry) => {
     close(entry.session._id);
     if (!entry.isSelected) return;
-    const next = openTabs.find(
-      (tab) => tab.session._id !== entry.session._id,
-    );
+    const next = openTabs.find((tab) => tab.session._id !== entry.session._id);
     navigate({ to: next ? next.href : "/sessions" });
   };
 

@@ -3,7 +3,7 @@ import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, ModelSelect, Switch, toast } from "@eva/ui";
+import { Button, ModelPicker, Switch, toast } from "@vvedantb/ui";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import { SettingsStack } from "@/lib/components/settings/SettingsStack";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
@@ -121,7 +121,7 @@ export function SystemAutomationSettings({
 
       <SettingsSection title="Model">
         <SettingsField label="Provider and model">
-          <ModelSelect
+          <ModelPicker
             value={model}
             options={modelOptions}
             onValueChange={(m) => commit({ model: m })}

@@ -13,7 +13,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPlus } from "@tabler/icons-react";
 import {
   FIELD_ROW_CLASS,

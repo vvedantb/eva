@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { useQueryState } from "nuqs";
 import { useStickToBottomContext } from "use-stick-to-bottom";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { messageLinkParser } from "@/lib/search-params";
 
 /** `?message=<id>`: the chat message a shared link points at. */

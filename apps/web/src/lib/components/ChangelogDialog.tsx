@@ -13,8 +13,8 @@ import {
   DialogFooter,
   Button,
   Surface,
-} from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+  Markdown,
+} from "@vvedantb/ui";
 import { IconSparkles } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import {

@@ -1,7 +1,8 @@
 "use client";
 
 import type { Id } from "@eva/backend";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import {
   IconRocket,
   IconTag,
@@ -11,7 +12,11 @@ import {
 import { usePrMetaEdit } from "../usePrMetaEdit";
 import { PrMetaEditor, type PrMetaOption } from "./PrMetaEditor";
 import { PrPreviewList } from "./PrPreviewList";
-import { reviewStateMeta, type PrLabel, type PrOverview } from "./prOverviewMeta";
+import {
+  reviewStateMeta,
+  type PrLabel,
+  type PrOverview,
+} from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";
 import { SummaryMetaRow } from "./SummarySection";
 
@@ -68,7 +73,10 @@ export function SummaryMetaRows({
 
   return (
     <section className="space-y-1 px-4 pt-3 pb-1">
-      <SummaryMetaRow icon={<IconUsers size={13} aria-hidden />} label="Reviewers">
+      <SummaryMetaRow
+        icon={<IconUsers size={13} aria-hidden />}
+        label="Reviewers"
+      >
         <span className="flex min-w-0 flex-wrap items-center gap-1.5">
           {reviewers.length === 0 ? (
             <span className="text-muted-foreground">None</span>
@@ -124,7 +132,10 @@ export function SummaryMetaRows({
           ) : (
             overview.assignees.map((assignee) => (
               <span key={assignee.login} className="flex items-center gap-1">
-                <PrAvatar login={assignee.login} avatarUrl={assignee.avatarUrl} />
+                <PrAvatar
+                  login={assignee.login}
+                  avatarUrl={assignee.avatarUrl}
+                />
                 {assignee.login}
               </span>
             ))
@@ -166,7 +177,10 @@ export function SummaryMetaRows({
 
       {/* Only where something deploys: most repositories have no preview. */}
       {overview.previews.length === 0 ? null : (
-        <SummaryMetaRow icon={<IconRocket size={13} aria-hidden />} label="Previews">
+        <SummaryMetaRow
+          icon={<IconRocket size={13} aria-hidden />}
+          label="Previews"
+        >
           <PrPreviewList previews={overview.previews} />
         </SummaryMetaRow>
       )}

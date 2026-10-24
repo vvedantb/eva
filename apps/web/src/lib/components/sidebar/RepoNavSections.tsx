@@ -13,9 +13,13 @@ import {
   ReviewIcon,
   SettingsIcon,
   type IconProps,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@vvedantb/ui";
 import { type api } from "@eva/backend";
-import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
 import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksBadge";
 import { BuildingProjectsBadge } from "@/lib/components/sidebar/BuildingProjectsBadge";
 import {

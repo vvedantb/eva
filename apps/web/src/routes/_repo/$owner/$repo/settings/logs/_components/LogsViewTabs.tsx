@@ -1,4 +1,4 @@
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 
 type LogView = "overview" | "type" | "project";
 

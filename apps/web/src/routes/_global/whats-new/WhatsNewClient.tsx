@@ -3,9 +3,14 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { CenteredSpinner, cn, motionBase, motionStagger } from "@eva/ui";
+import { cn } from "@eva/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  staggerDelay,
+  Markdown,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
-import { Markdown } from "@eva/ui/markdown";
 import { IconSparkles } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -38,7 +43,10 @@ export function WhatsNewClient() {
               className="relative"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...motionBase, delay: motionStagger(index) }}
+              transition={{
+                ...tokenTransition.base,
+                delay: staggerDelay(index),
+              }}
             >
               <span
                 className={cn(

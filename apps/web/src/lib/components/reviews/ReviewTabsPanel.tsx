@@ -3,7 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button, Spinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { IconAlertTriangle, IconGitPullRequest } from "@tabler/icons-react";
 import type { ReviewTab } from "@/lib/search-params";
@@ -81,7 +82,8 @@ export function ReviewTabsPanel({
   refresh,
   pullRequests,
 }: ReviewTabsPanelProps) {
-  const tabs = pullRequests === undefined ? SINGLE_PR_REVIEW_TABS : REVIEW_TAB_ORDER;
+  const tabs =
+    pullRequests === undefined ? SINGLE_PR_REVIEW_TABS : REVIEW_TAB_ORDER;
   const recapDoc = useQuery(
     api.docs.getRecapByPrUrl,
     prUrl ? { repoId, prUrl } : "skip",
@@ -145,7 +147,10 @@ export function ReviewTabsPanel({
           {tabs.map((tab) => (
             <div
               key={tab}
-              className={cn("absolute inset-0", activeTab !== tab && "invisible")}
+              className={cn(
+                "absolute inset-0",
+                activeTab !== tab && "invisible",
+              )}
               inert={activeTab !== tab}
             >
               {tab === "prs" && pullRequests !== undefined ? (

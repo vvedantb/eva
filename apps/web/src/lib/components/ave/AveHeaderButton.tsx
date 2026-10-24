@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
 import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";

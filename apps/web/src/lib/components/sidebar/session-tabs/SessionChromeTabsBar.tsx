@@ -5,7 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useMemo, useState } from "react";
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import {
   sessionActivityAt,
   sortAppsForSidebar,

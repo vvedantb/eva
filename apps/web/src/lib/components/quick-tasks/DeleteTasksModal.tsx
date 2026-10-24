@@ -15,7 +15,7 @@ import {
   Button,
   Spinner,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   catchMutationError,
   mutationError,
@@ -58,7 +58,10 @@ export function useBulkDeleteTasks() {
         onClick: () => {
           void Promise.all(ids.map((id) => restoreTask({ id })))
             .then(() => {
-              mutationSuccess(`${ids.length} ${noun} restored`, "tasks-bulk-restore");
+              mutationSuccess(
+                `${ids.length} ${noun} restored`,
+                "tasks-bulk-restore",
+              );
             })
             .catch(() => {
               mutationError("Couldn't restore tasks", "tasks-bulk-restore");

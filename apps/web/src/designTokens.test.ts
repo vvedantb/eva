@@ -4,16 +4,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const primitivesDir = join(
-  here,
-  "..",
-  "..",
-  "..",
-  "packages",
-  "ui",
-  "src",
-  "ui",
-);
+/**
+ * Where eva's primitive defaults live: eva's config holds the class strings it
+ * overrides, and vvedantb's primitives hold the built-in ones for every part
+ * the config leaves alone.
+ */
+const primitiveDirs = [
+  join(here, "..", "..", "..", "packages", "ui", "src", "config"),
+  join(here, "..", "node_modules", "@vvedantb", "ui", "src", "ui"),
+];
 
 const globalsCss = readFileSync(join(here, "globals.css"), "utf8").replaceAll(
   "\r\n",
@@ -109,18 +108,25 @@ describe("primitive insets", () => {
    * call site that wants one can still write `p-3 md:p-6` and get exactly that.
    */
   it("keeps primitive padding defaults free of responsive variants", () => {
-    const files = readdirSync(primitivesDir).filter((name) =>
-      name.endsWith(".tsx"),
+    const files = primitiveDirs.flatMap((dir) =>
+      readdirSync(dir)
+        .filter((name) => /\.tsx?$/.test(name) && !name.includes(".test."))
+        .map((name) => join(dir, name)),
     );
-    expect(files.length, "no primitives found").toBeGreaterThan(0);
+    for (const dir of primitiveDirs) {
+      expect(
+        files.some((path) => path.startsWith(dir)),
+        `no primitives found in ${dir}`,
+      ).toBe(true);
+    }
 
-    for (const name of files) {
-      const source = readFileSync(join(primitivesDir, name), "utf8")
+    for (const path of files) {
+      const source = readFileSync(path, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/\/\/.*$/gm, "");
       expect(
         source,
-        `${name} pairs a responsive padding with a default inset`,
+        `${path} pairs a responsive padding with a default inset`,
       ).not.toMatch(/\b(?:sm|md|lg|xl|2xl):p[trblxy]?-/);
     }
   });

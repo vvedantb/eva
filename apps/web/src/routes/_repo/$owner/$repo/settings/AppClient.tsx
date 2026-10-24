@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { Input, Textarea } from "@eva/ui";
+import { Input, Textarea } from "@vvedantb/ui";
 import { parseCommandLines } from "./_utils";
 import { LogoSettingsSection } from "./_components/LogoSettingsSection";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
@@ -38,9 +38,7 @@ export function AppClient() {
   const backgroundCommands = repo.backgroundCommands?.join("\n") ?? "";
   const stopCommands = repo.stopCommands?.join("\n") ?? "";
 
-  const saveConfig = (
-    args: Parameters<typeof updateConfig>[0],
-  ) => {
+  const saveConfig = (args: Parameters<typeof updateConfig>[0]) => {
     void catchMutationError(
       updateConfig(args),
       "Couldn't save app settings",

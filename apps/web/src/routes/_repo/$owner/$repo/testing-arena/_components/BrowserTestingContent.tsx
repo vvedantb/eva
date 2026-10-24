@@ -4,9 +4,9 @@ import type { FunctionReturnType } from "convex/server";
 import {
   ActivityTasks,
   Spinner,
-  TestError,
-  TestErrorMessage,
-} from "@eva/ui";
+  TestResultError,
+  TestResultErrorMessage,
+} from "@vvedantb/ui";
 import {
   IconAlertTriangle,
   IconCheck,
@@ -64,9 +64,11 @@ function BrowserReportCard({
 
   if (report.status === "error") {
     return (
-      <TestError>
-        <TestErrorMessage>{report.error ?? "The run failed"}</TestErrorMessage>
-      </TestError>
+      <TestResultError>
+        <TestResultErrorMessage>
+          {report.error ?? "The run failed"}
+        </TestResultErrorMessage>
+      </TestResultError>
     );
   }
 

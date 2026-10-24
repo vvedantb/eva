@@ -33,22 +33,19 @@ export function AveMark({
   return (
     <span
       className={cn("inline-flex overflow-hidden rounded-full", className)}
-      style={
-        size === undefined ? undefined : { width: size, height: size }
-      }
+      style={size === undefined ? undefined : { width: size, height: size }}
     >
-      <svg
-        viewBox="0 0 512 512"
-        className="size-full"
-        aria-hidden
-      >
+      <svg viewBox="0 0 512 512" className="size-full" aria-hidden>
         <circle cx="256" cy="256" r="256" className="fill-card" />
         <g className="ave-star">
           <g
             transform={`translate(256 256) scale(${EVA_DISC_STAR_SCALE}) translate(-256 -256)`}
           >
             <polygon points={EVA_DISC_STAR_TOP_POINTS} fill={EVA_MARK_PURPLE} />
-            <polygon points={EVA_DISC_STAR_BOTTOM_POINTS} fill={EVA_MARK_BLUE} />
+            <polygon
+              points={EVA_DISC_STAR_BOTTOM_POINTS}
+              fill={EVA_MARK_BLUE}
+            />
             {state === "thinking" && (
               <g clipPath={`url(#${starClipId})`}>
                 <defs>
@@ -103,7 +100,13 @@ export function AveMark({
 }
 
 /** A soft white band, clear at both edges, for the shimmer and the sweep. */
-function BandGradient({ id, peakOpacity }: { id: string; peakOpacity: number }) {
+function BandGradient({
+  id,
+  peakOpacity,
+}: {
+  id: string;
+  peakOpacity: number;
+}) {
   return (
     <linearGradient id={id}>
       <stop offset="0" stopColor="#fff" stopOpacity="0" />

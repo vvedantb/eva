@@ -2,7 +2,8 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { IconDeviceDesktop } from "@tabler/icons-react";
-import { BorderBeam, Button, cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { BorderBeam, Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   SandboxIframeService,
@@ -179,7 +180,7 @@ export function DesktopPanel({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <BorderBeam
               active={beamPane}

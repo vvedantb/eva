@@ -4,14 +4,14 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
+import { cn } from "@eva/ui";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
   Spinner,
-  cn,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconChevronDown, IconLayoutGrid, IconPlus } from "@tabler/icons-react";
 import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
@@ -183,7 +183,7 @@ export function GlobalAutomationGroup({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 8 }}
-                      transition={motionFast}
+                      transition={tokenTransition.fast}
                     >
                       <SharedLayoutNavSurface
                         itemId={automation._id}

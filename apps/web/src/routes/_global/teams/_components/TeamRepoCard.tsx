@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
+import { cn } from "@eva/ui";
 import {
-  cn,
   Button,
   Card,
   CardContent,
@@ -12,7 +12,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconGitBranch,

@@ -7,7 +7,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCopy, IconMarkdown } from "@tabler/icons-react";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type { ChatMessageActionItem } from "./ChatMessageActions";

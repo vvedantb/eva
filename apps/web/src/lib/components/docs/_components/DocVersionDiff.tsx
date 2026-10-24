@@ -4,7 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { diffWords } from "diff";
-import { Spinner, Button, motionFast } from "@eva/ui";
+import { Spinner, Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 export function DocVersionDiff({
@@ -57,7 +57,7 @@ export function DocVersionDiff({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           {changes.map((part, i) => {
             if (part.added) {

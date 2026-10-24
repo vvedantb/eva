@@ -13,7 +13,7 @@ import {
   DialogFooter,
   Button,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 /** Starts selected quick tasks. Shared by the modal and Alt-click bypass. */

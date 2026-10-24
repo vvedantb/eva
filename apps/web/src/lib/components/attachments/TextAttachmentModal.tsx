@@ -9,7 +9,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 interface TextAttachmentModalProps {
   title: string;

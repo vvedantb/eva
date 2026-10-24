@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, toast } from "@eva/ui";
+import { Button, toast } from "@vvedantb/ui";
 import { IconBookmark, IconQuote } from "@tabler/icons-react";
 import {
   createCitation,

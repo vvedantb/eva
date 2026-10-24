@@ -12,11 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-} from "@eva/ui";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+} from "@vvedantb/ui";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];

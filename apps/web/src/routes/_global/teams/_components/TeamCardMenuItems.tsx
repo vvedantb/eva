@@ -3,7 +3,7 @@ import {
   ContextMenuSeparator,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPhoto, IconPhotoOff, IconTrash } from "@tabler/icons-react";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 

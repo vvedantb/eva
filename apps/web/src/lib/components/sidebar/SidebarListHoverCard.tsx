@@ -6,15 +6,12 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
 import { compactRelativeTime } from "@eva/shared/dates";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@eva/ui";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@vvedantb/ui";
 import { IconGitBranch, IconGitFork } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { sessionHrefForRow } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-import {
-  RepoAppMark,
-  type RepoAppMarkRepo,
-} from "@/lib/components/RepoLogo";
+import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 
 function authorDisplayName(user: {
   firstName?: string | null;

@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
-import { useWebPreview } from "@eva/ui";
+import { useWebPreview } from "@vvedantb/ui";
 import {
   buildAnnotationDisplay,
   buildAnnotationPrompt,

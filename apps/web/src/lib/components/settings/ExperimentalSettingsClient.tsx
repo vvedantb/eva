@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
-import { Spinner, Switch } from "@eva/ui";
+import { Spinner, Switch } from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
@@ -172,17 +172,17 @@ const pageDescription = (
 
 export function ExperimentalSettingsClient() {
   const flags = useQuery(api.auth.getExperimentalFlags);
-  const setFlag = useMutation(api.auth.setExperimentalFlag).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.auth.getExperimentalFlags, {});
-      if (current === undefined) return;
-      localStore.setQuery(
-        api.auth.getExperimentalFlags,
-        {},
-        { ...current, [args.key]: args.enabled },
-      );
-    },
-  );
+  const setFlag = useMutation(
+    api.auth.setExperimentalFlag,
+  ).withOptimisticUpdate((localStore, args) => {
+    const current = localStore.getQuery(api.auth.getExperimentalFlags, {});
+    if (current === undefined) return;
+    localStore.setQuery(
+      api.auth.getExperimentalFlags,
+      {},
+      { ...current, [args.key]: args.enabled },
+    );
+  });
 
   const toggle = (key: ExperimentalFlagKey, enabled: boolean) => {
     void catchMutationError(
@@ -207,7 +207,11 @@ export function ExperimentalSettingsClient() {
     <SettingsPage title="Experimental">
       {pageDescription}
       {FLAG_GROUPS.map((group, groupIndex) => (
-        <SettingsSection key={group.title} title={group.title} bodyVariant="list">
+        <SettingsSection
+          key={group.title}
+          title={group.title}
+          bodyVariant="list"
+        >
           {group.flags.map((flag, flagIndex) => (
             <ListEnter
               key={flag.key}

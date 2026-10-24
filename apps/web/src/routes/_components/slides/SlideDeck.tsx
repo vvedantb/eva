@@ -1,6 +1,6 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { motionBase, motionFast } from "@eva/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { SLIDES } from "./slides/index";
 import { SlideStepContext, SlideThemeContext } from "./_components/SlideShell";
 import { SlideOutlinePanel } from "./_components/SlideOutlinePanel";
@@ -160,12 +160,18 @@ export function SlideDeck({
     center: {
       opacity: 1,
       x: 0,
-      transition: { duration: motionBase.duration, ease: motionBase.ease },
+      transition: {
+        duration: tokenTransition.base.duration,
+        ease: tokenTransition.base.ease,
+      },
     },
     exit: (dir: number) => ({
       opacity: 0,
       x: dir > 0 ? -24 : 24,
-      transition: { duration: motionFast.duration, ease: motionFast.ease },
+      transition: {
+        duration: tokenTransition.fast.duration,
+        ease: tokenTransition.fast.ease,
+      },
     }),
   };
 

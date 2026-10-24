@@ -13,7 +13,7 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconExternalLink,
@@ -87,7 +87,9 @@ export function PrHeaderActions({
             size="icon-xs"
             variant="ghost"
             aria-label={
-              refreshing ? "Refreshing pull request" : "More pull request actions"
+              refreshing
+                ? "Refreshing pull request"
+                : "More pull request actions"
             }
           >
             <CrossfadeIcon
@@ -111,7 +113,11 @@ export function PrHeaderActions({
             Copy link
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <a href={overview.htmlUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={overview.htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <IconExternalLink size={14} aria-hidden />
               View on GitHub
             </a>

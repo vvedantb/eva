@@ -1,4 +1,5 @@
-import { cn, Separator, Surface } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Separator, Surface } from "@vvedantb/ui";
 import type { ComponentRenderProps } from "@json-render/react";
 
 /**

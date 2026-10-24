@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { convex } from "@/lib/convex";
 import { fetchDeployFingerprint } from "@/lib/utils/deployFingerprint";
 

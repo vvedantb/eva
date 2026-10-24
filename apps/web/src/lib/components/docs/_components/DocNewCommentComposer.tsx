@@ -3,7 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button, Textarea } from "@eva/ui";
+import { Button, Textarea } from "@vvedantb/ui";
 import { useState } from "react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 

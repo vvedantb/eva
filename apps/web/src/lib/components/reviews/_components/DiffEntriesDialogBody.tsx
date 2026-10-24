@@ -2,7 +2,8 @@
 
 import { useId, useState, type ReactNode } from "react";
 import type { GitStatus } from "@pierre/trees";
-import { cn, DialogBody } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { DialogBody } from "@vvedantb/ui";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {

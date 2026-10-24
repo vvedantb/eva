@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@eva/ui";
 import {
   Button,
   DropdownMenu,
@@ -12,8 +13,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconChevronsDown,
   IconChevronsUp,
@@ -92,8 +92,14 @@ export function DiffsToolbar({
       )}
       <IconToggle
         pressed={false}
-        onPress={() => onDiffViewChange(diffView === "unified" ? "split" : "unified")}
-        label={diffView === "unified" ? "Switch to split view" : "Switch to stacked view"}
+        onPress={() =>
+          onDiffViewChange(diffView === "unified" ? "split" : "unified")
+        }
+        label={
+          diffView === "unified"
+            ? "Switch to split view"
+            : "Switch to stacked view"
+        }
         className="max-md:hidden"
       >
         {diffView === "unified" ? <IconLayoutRows /> : <IconLayoutColumns />}
@@ -128,7 +134,9 @@ export function DiffsToolbar({
             Hide whitespace changes
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={allExpanded ? onCollapseAll : onExpandAll}>
+          <DropdownMenuItem
+            onSelect={allExpanded ? onCollapseAll : onExpandAll}
+          >
             {allExpanded ? (
               <IconChevronsUp className="size-4" />
             ) : (

@@ -26,7 +26,8 @@ import {
 } from "@/lib/hooks/useSimpleView";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSandboxRailLabels } from "@/lib/components/sandbox/useSandboxRailLabels";
-import { cn, Tabs, TabsList } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Tabs, TabsList } from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SandboxTabTrigger, type SandboxTabLayout } from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";

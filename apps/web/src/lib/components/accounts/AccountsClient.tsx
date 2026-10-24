@@ -20,7 +20,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { relativeTime } from "@/lib/components/artifacts/_format";
 import { PROVIDER_LABELS } from "./_credentialSpec";
@@ -29,11 +29,7 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
+import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 /** Ties every sharing switch to the one visible explanation under the list. */
 const SHARING_HELP_ID = "account-sharing-help";

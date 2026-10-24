@@ -19,9 +19,9 @@
   },
   "peerDependencies": {
     "@eva/backend": "workspace:*",
-    "@eva/ui": "workspace:*",
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
+    "@vvedantb/ui": ">=0.18.0",
     "convex": ">=1.0.0",
     "convex-helpers": "0.1.114",
     "dayjs": ">=1.0.0",
@@ -33,6 +33,8 @@
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
+    "@vvedantb/ui": "^0.18.0",
+    "tailwind-merge": "^2.6.1",
     "zod": "3.25.76"
   }
 }

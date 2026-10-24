@@ -10,7 +10,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPencil, IconQuote, IconX } from "@tabler/icons-react";
 import { citationPreview } from "@/lib/components/chat/assistantCitation";
 import { usePendingCitations } from "@/lib/contexts/PendingCitationsContext";

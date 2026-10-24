@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { m } from "motion/react";
-import { motionBase, motionFast, motionStagger } from "@eva/ui";
+import { tokenTransition, staggerDelay } from "@vvedantb/ui";
 
 /**
  * First-paint / first-seen fade+slide. Pass `firstPaint` from the list so
@@ -42,7 +42,7 @@ export function ListEnter({
   as?: "div" | "tr" | "li";
 }) {
   const skip = firstPaint === false;
-  const transition = fast ? motionFast : motionBase;
+  const transition = fast ? tokenTransition.fast : tokenTransition.base;
   const MotionTag = as === "tr" ? m.tr : as === "li" ? m.li : m.div;
   return (
     <MotionTag
@@ -51,7 +51,7 @@ export function ListEnter({
       animate={{ opacity: 1, y: 0 }}
       transition={{
         ...transition,
-        delay: skip ? 0 : motionStagger(index, staggerStep, staggerMax),
+        delay: skip ? 0 : staggerDelay(index, staggerStep, staggerMax),
       }}
     >
       {children}

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@eva/ui";
 import {
-  cn,
   Input,
   Select,
   SelectContent,
@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
   WebPreviewNavigationButton,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconLink,
   IconLinkOff,
@@ -94,9 +94,12 @@ export function PreviewDeviceToolbar({
   function updateDraft(axis: "width" | "height", value: string) {
     setDraft((current) => {
       const next = {
-        width: axis === "width" ? value : (current?.width ?? String(viewport.width)),
+        width:
+          axis === "width" ? value : (current?.width ?? String(viewport.width)),
         height:
-          axis === "height" ? value : (current?.height ?? String(viewport.height)),
+          axis === "height"
+            ? value
+            : (current?.height ?? String(viewport.height)),
       };
       const numeric = Number(value);
       if (
@@ -217,11 +220,14 @@ export function PreviewDeviceToolbar({
         )}
       />
       <WebPreviewNavigationButton
-        tooltip={aspectRatio === null ? "Lock aspect ratio" : "Unlock aspect ratio"}
+        tooltip={
+          aspectRatio === null ? "Lock aspect ratio" : "Unlock aspect ratio"
+        }
         aria-pressed={aspectRatio !== null}
         className={cn(
           "max-sm:hit-target",
-          aspectRatio !== null && "bg-secondary text-primary hover:text-primary",
+          aspectRatio !== null &&
+            "bg-secondary text-primary hover:text-primary",
         )}
         onClick={() => {
           if (aspectRatio !== null) {

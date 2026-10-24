@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";

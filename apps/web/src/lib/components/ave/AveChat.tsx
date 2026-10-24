@@ -1,7 +1,7 @@
 "use client";
 
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { useAveChat } from "@/lib/components/ave/useAveChat";

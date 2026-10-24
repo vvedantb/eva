@@ -1,4 +1,4 @@
-import { CrossfadeIconSlot } from "@eva/ui";
+import { CrossfadeIconSlot } from "@vvedantb/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
