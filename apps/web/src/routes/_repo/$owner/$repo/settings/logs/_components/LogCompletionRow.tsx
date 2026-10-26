@@ -1,7 +1,7 @@
 import dayjs from "@eva/shared/dates";
 import { formatDurationMsShort } from "@eva/shared/duration";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { formatCost, labelFor, parseResultEvent } from "../_utils";
+import { SettingsToggleRow } from "@vvedantb/ui";
 
 interface LogCompletionRowProps {
   title: string;

@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { m } from "motion/react";
-import { tokenTransition } from "@vvedantb/ui";
+import {
+  composerSlashOptionId as optionId,
+  tokenTransition,
+} from "@vvedantb/ui";
 import type { MentionPopupPlacement } from "./mentionPopupPosition";
-import { optionId } from "./mentionOptionId";
 
 /**
  * `caret` is the compact list next to the caret (comment boxes, modals, task

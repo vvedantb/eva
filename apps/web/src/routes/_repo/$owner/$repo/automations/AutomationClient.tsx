@@ -19,14 +19,14 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  SettingsField,
+  SettingsStack,
+  SettingsToggleRow,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { SettingsStack } from "@/lib/components/settings/SettingsStack";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
 import { TriggerSection } from "./_components/TriggerSection";

@@ -2,7 +2,7 @@
 
 import { animate } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
+import { useDisablePageMotion } from "@vvedantb/ui";
 
 /** Suffixes we will count; compound durations like "1h 12m" stay static. */
 const COUNTABLE_SUFFIX = /^(?:%|h|k|m|s|ms)?$/i;

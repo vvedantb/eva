@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Input, toast } from "@vvedantb/ui";
+import { Button, Input, toast, SettingsField } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import {
@@ -15,7 +15,6 @@ import { CustomTabRow } from "./_components/CustomTabRow";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { IconLayoutNavbar } from "@tabler/icons-react";
 import { mutationSuccess } from "@/lib/utils/mutationToast";
 

@@ -3,7 +3,7 @@
 import type { AIModel, StoredModelTraits } from "@eva/backend";
 import type { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
+import { SettingsField } from "@vvedantb/ui";
 
 type ModelFieldState = Pick<
   ReturnType<typeof useAvailableAiModels>,

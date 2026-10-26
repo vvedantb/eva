@@ -2,11 +2,10 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Spinner } from "@vvedantb/ui";
+import { Button, Spinner, SettingsToggleRow } from "@vvedantb/ui";
 import { normalizeHotkey, type Hotkey } from "@tanstack/react-hotkeys";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { ShortcutRow } from "@/lib/components/settings/shortcuts/_components/ShortcutRow";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { EDITING_KEYS } from "@/lib/components/settings/shortcuts/editingKeys";

@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Button, tokenTransition } from "@vvedantb/ui";
+import { Input, Button, tokenTransition, SettingsField } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { Id } from "@eva/backend";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { extractHostname } from "../_utils";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 
 type UpdateRepoConfig = (args: {
   repoId: Id<"githubRepos">;

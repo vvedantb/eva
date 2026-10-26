@@ -16,9 +16,9 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  SettingsField,
 } from "@vvedantb/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 
 /**
  * Trigger picker for a user automation: its cron schedule (rendered by the

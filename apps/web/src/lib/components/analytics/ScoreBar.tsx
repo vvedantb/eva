@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@eva/ui";
-import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
+import { useDisablePageMotion } from "@vvedantb/ui";
 
 const SEGMENTS = 32;
 
