@@ -109,12 +109,16 @@ export function GlobalSessionsSidebar({
   const { listMode } = settings;
   const altHeld = useAltHeld();
   const { archive, isArchiving } = useArchiveSession();
+  const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/sessions",
+    repos,
   });
-  const linkedGroupOpen = useStoredGroupOpen(LINKED_SESSION_GROUPS_OPEN_KEY);
-  const repos = useQuery(api.githubRepos.list, {});
+  const linkedGroupOpen = useStoredGroupOpen(
+    LINKED_SESSION_GROUPS_OPEN_KEY,
+    true,
+  );
   const [sessionToRename, setSessionToRename] = useState<{
     session: SessionListItem;
     repo: RepoRow;
