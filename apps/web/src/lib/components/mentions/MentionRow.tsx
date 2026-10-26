@@ -7,14 +7,9 @@ import {
   BoardIcon,
   ChecklistIcon,
   DocumentIcon,
+  ProviderIcon,
   TerminalIcon,
 } from "@vvedantb/ui";
-import {
-  ClaudeLogo,
-  CursorLogo,
-  OpenAILogo,
-  OpenCodeLogo,
-} from "@/lib/components/ui/providerLogos";
 
 /**
  * What a Data `@` entry points at. Mirrors the backend `DataMentionKind` union
@@ -45,25 +40,13 @@ function MentionKindIcon({ kind }: { kind: MentionKind }) {
  * recognisable before the word is read. Badges naming anything else (Eva,
  * Person) are text-only.
  */
-const PROVIDER_LOGO: Record<
-  AIProvider,
-  (props: { size: number }) => ReactNode
-> = {
-  claude: ClaudeLogo,
-  codex: OpenAILogo,
-  opencode: OpenCodeLogo,
-  cursor: CursorLogo,
-};
-
-/** The provider mark for a badge, or nothing when the badge names no provider. */
 function BadgeLogo({
   provider,
 }: {
   provider: AIProvider | undefined;
 }): ReactNode {
   if (provider === undefined) return null;
-  const Logo = PROVIDER_LOGO[provider];
-  return <Logo size={11} />;
+  return <ProviderIcon provider={provider} size={11} />;
 }
 
 function previewOneLine(text: string, maxLength = 72): string {

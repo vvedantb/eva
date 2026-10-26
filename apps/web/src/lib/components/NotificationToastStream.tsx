@@ -9,7 +9,7 @@ import { Badge, Button, Card, CardContent } from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { playNotificationBell } from "@/lib/utils/notificationChime";
+import { playNotificationBell } from "@/lib/utils/notificationBell";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 import {
   NotificationIcon,
