@@ -9,7 +9,7 @@ import { AnimatePresence, m } from "motion/react";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { labelForAttachment } from "@/lib/components/attachments/attachmentMeta";
-import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 /**

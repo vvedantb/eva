@@ -15,7 +15,7 @@ import {
 } from "@eva/backend";
 import { formatModelDisplayLabel, getProviderLabel } from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
-import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
 import { useMinuteNow } from "@/lib/components/usage-limits/_useMinuteNow";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";

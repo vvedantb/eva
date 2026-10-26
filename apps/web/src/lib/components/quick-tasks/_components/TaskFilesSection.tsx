@@ -13,7 +13,7 @@ import {
 } from "@/lib/components/attachments/attachmentMeta";
 import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachmentModal";
 import type { TaskAttachment } from "../useTaskAttachments";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 interface TaskFilesSectionProps {

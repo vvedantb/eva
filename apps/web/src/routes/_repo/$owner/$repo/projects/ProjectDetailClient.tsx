@@ -84,9 +84,11 @@ import {
 import dayjs from "@eva/shared/dates";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
 import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
-import { StopConfirmDialog } from "@/lib/components/tasks/_components/StopConfirmDialog";
-import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/ResolveConfirmDialog";
-import { StartupCommandsConfirmDialog } from "@/lib/components/tasks/_components/StartupCommandsConfirmDialog";
+import {
+  StopConfirmDialog,
+  ResolveConfirmDialog,
+  StartupCommandsConfirmDialog,
+} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
@@ -773,21 +775,21 @@ export function ProjectDetailClient({
         open={showStopBuildConfirm}
         onOpenChange={setShowStopBuildConfirm}
         onConfirm={handleStopBuild}
-        isStopping={isStoppingBuild}
+        isLoading={isStoppingBuild}
       />
 
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
-        isStarting={isResolvingConflicts}
+        isLoading={isResolvingConflicts}
       />
 
       <StartupCommandsConfirmDialog
         open={showStartupCommandsConfirm}
         onOpenChange={setShowStartupCommandsConfirm}
         onConfirm={handleRetryStartupCommands}
-        isStarting={isRetryingStartupCommands}
+        isLoading={isRetryingStartupCommands}
       />
 
       {parsedSpec && (

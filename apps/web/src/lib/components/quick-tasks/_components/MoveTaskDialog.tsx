@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { toast } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 
 /** Moves a quick task to another app. Shared by the confirm dialog and Alt-click bypass. */
 export function useMoveAgentTask() {

@@ -21,10 +21,12 @@ import { TaskSubscribers } from "./_components/TaskSubscribers";
 import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
 import { StatusFieldsSection } from "./_components/StatusFieldsSection";
 import { TaskFooter } from "./_components/TaskFooter";
-import { StopConfirmDialog } from "./_components/StopConfirmDialog";
-import { ResolveConfirmDialog } from "./_components/ResolveConfirmDialog";
-import { StartupCommandsConfirmDialog } from "./_components/StartupCommandsConfirmDialog";
-import { RunDevServerConfirmDialog } from "./_components/RunDevServerConfirmDialog";
+import {
+  StopConfirmDialog,
+  ResolveConfirmDialog,
+  StartupCommandsConfirmDialog,
+  RunDevServerConfirmDialog,
+} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
@@ -598,25 +600,25 @@ export function TaskDetailInline({
         open={showStopConfirm}
         onOpenChange={setShowStopConfirm}
         onConfirm={handleStopExecution}
-        isStopping={isStopping}
+        isLoading={isStopping}
       />
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
-        isStarting={isStarting}
+        isLoading={isStarting}
       />
       <StartupCommandsConfirmDialog
         open={showStartupCommandsConfirm}
         onOpenChange={setShowStartupCommandsConfirm}
         onConfirm={handleRetryStartupCommands}
-        isStarting={isRetryingStartupCommands}
+        isLoading={isRetryingStartupCommands}
       />
       <RunDevServerConfirmDialog
         open={showRunDevServerConfirm}
         onOpenChange={setShowRunDevServerConfirm}
         onConfirm={handleRunDevServer}
-        isRunning={isRunningDevServer}
+        isLoading={isRunningDevServer}
         devCommandLabel={devServerCommandLabel}
       />
     </>

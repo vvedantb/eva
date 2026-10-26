@@ -7,7 +7,7 @@ import { api, type Id } from "@eva/backend";
 import { toast } from "@vvedantb/ui";
 import { IconArrowBackUp, IconGitCompare } from "@tabler/icons-react";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
-import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { TurnDiffDialog } from "./TurnDiffDialog";
 
