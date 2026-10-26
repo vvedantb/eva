@@ -18,9 +18,10 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
 ## 1. Copy
 
 - One idea per slide. The title says it. The visual proves it.
-- **No full stop at the end of a title.** A stop inside a title is fine
-  ("One switch. Less machinery"). This also covers cover slides and text
-  inside `<Accent>`.
+- **No full stop at the end of any slide text:** titles, captions, chat
+  messages, tips and answers. A stop inside the text is fine ("One switch.
+  Less machinery", "Merged. It is live"). This also covers cover slides and
+  text inside `<Accent>`.
 - **No footers, footnotes or source lines on the slide.** Put sources, dates
   and caveats in the speaker note (`Detail:` or `Figures:`).
 - No subtext paragraphs under the title. If a line needs more than about 12

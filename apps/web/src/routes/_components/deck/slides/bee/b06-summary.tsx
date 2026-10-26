@@ -122,7 +122,7 @@ export function BeeSummary() {
               <IconArrowBackUp size={28} />
             </span>
             <p className="m-0 text-3xl leading-snug font-semibold text-balance text-[#2a1e0c]">
-              Saved to your notes, so Bee finds it next time.
+              Saved to your notes, so Bee finds it next time
             </p>
           </m.div>
         </div>

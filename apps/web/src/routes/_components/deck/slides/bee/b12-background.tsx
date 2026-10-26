@@ -57,9 +57,9 @@ interface Update {
 /** One message from you; the rest are updates, as a co-worker would send. Example thread. */
 const THREAD: readonly Update[] = [
   { from: "you", text: "Ship the referral export fix" },
-  { from: "bot", text: "On it." },
-  { from: "bot", text: "Migration applied, deploying now." },
-  { from: "bot", text: "Merged. It is live." },
+  { from: "bot", text: "On it" },
+  { from: "bot", text: "Migration applied, deploying now" },
+  { from: "bot", text: "Merged. It is live" },
 ];
 
 const SHOTS: readonly CameraShot[] = [
@@ -188,7 +188,7 @@ export function BeeBackground() {
       >
         <BeeLogo size={52} glow={false} />
         <span className="text-[26px] font-medium text-[#2a1e0c]">
-          Bee does the same for meetings: it listens, searches and reminds you.
+          Bee does the same for meetings: it listens, searches and reminds you
         </span>
       </m.div>
 
@@ -206,7 +206,7 @@ export function BeeBackground() {
           <EvaDiscMark size={34} />
         </span>
         <span className="text-[22px] text-[#2a1e0c]/70">
-          Eva&apos;s Simple Mode too: workspaces wake and sleep on their own.
+          Eva&apos;s Simple Mode too: workspaces wake and sleep on their own
         </span>
       </m.div>
     </Shell>

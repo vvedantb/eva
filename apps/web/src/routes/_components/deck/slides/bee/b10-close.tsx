@@ -28,7 +28,7 @@ export function BeeClose() {
         animate={{ opacity: 1 }}
         transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.9 }}
       >
-        For Windows and Mac.
+        For Windows and Mac
       </m.p>
     </Shell>
   );

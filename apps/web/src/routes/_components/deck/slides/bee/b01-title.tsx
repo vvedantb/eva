@@ -29,7 +29,7 @@ export function BeeTitle() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: DUR.hero, ease: EASE.expo, delay: 0.9 }}
       >
-        It listens to your meeting and finds what you already know.
+        It listens to your meeting and finds what you already know
       </m.p>
     </Shell>
   );

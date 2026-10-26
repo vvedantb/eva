@@ -32,14 +32,14 @@ const EXCHANGES: readonly Exchange[] = [
     step: FIRST,
     asked: "Can Convex run more than one local deployment, so Eva can use it?",
     answer:
-      "Yes. Each copy of the project gets its own local deployment, and agent mode starts one with no login.",
+      "Yes. Each copy of the project gets its own local deployment, and agent mode starts one with no login",
     source: "docs.convex.dev",
   },
   {
     step: SECOND,
     asked: "Can you pass MCP servers into the Claude Agent SDK?",
     answer:
-      "Yes. Pass them in the mcpServers option: a local command, a web address, or one inside your own app.",
+      "Yes. Pass them in the mcpServers option: a local command, a web address, or one inside your own app",
     source: "platform.claude.com",
   },
 ];
@@ -148,7 +148,7 @@ export function BeeRealMeeting() {
                   Would have saved 5+ minutes
                 </span>
                 <span className="block text-xl text-[#2a1e0c]/60">
-                  Instead, I searched the web mid-meeting.
+                  Instead, I searched the web mid-meeting
                 </span>
               </span>
             </m.div>

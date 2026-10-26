@@ -65,7 +65,7 @@ export function BeeNotch() {
               <div className="flex flex-col gap-3">
                 <BeeTip shown={open} delay={0.35}>
                   Last time you agreed they join the AQP list, if their forms
-                  are back by Friday.
+                  are back by Friday
                 </BeeTip>
                 <m.span
                   className="self-start"

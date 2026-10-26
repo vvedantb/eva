@@ -47,7 +47,7 @@ export function BeeWeb() {
             <div className="flex flex-col">
               <BeeTip shown={answered} delay={0.3}>
                 Personal data can be kept only as long as you need it, and you
-                must say why.
+                must say why
               </BeeTip>
 
               <m.div

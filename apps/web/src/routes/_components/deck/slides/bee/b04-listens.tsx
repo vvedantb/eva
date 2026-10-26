@@ -133,7 +133,7 @@ export function BeeListens() {
               width={368}
             >
               <BeeTip shown={tips} delay={0.4}>
-                Joins the AQP list if their forms are back by Friday.
+                Joins the AQP list if their forms are back by Friday
               </BeeTip>
             </BeeIsland>
           </div>
