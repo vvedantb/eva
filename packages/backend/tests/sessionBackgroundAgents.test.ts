@@ -1,5 +1,6 @@
 import { test, expect } from "vitest";
 import {
+  MAX_SETTLED_BACKGROUND_AGENTS,
   mergeBackgroundAgents,
   runningBackgroundAgents,
 } from "../convex/_sessions/backgroundAgents";
@@ -150,4 +151,26 @@ test("readStopTaskToolUseIds unwraps Convex HTTP envelope", () => {
       stopTaskToolUseIds: ["tool-3"],
     }),
   ).toEqual(["tool-3"]);
+});
+
+test("mergeBackgroundAgents keeps running entries and only the newest settled ones", () => {
+  const settled = Array.from(
+    { length: MAX_SETTLED_BACKGROUND_AGENTS + 5 },
+    (_, index) => ({
+      toolUseId: `done-${index}`,
+      status: "completed",
+      startedAt: index,
+      settledAt: 1000 + index,
+    }),
+  );
+  const merged = mergeBackgroundAgents(settled, [
+    { toolUseId: "live", status: "running", startedAt: 5000 },
+  ]);
+
+  expect(merged).toHaveLength(MAX_SETTLED_BACKGROUND_AGENTS + 1);
+  expect(merged.some((entry) => entry.toolUseId === "done-0")).toBe(false);
+  expect(merged.at(-2)?.toolUseId).toBe(
+    `done-${MAX_SETTLED_BACKGROUND_AGENTS + 4}`,
+  );
+  expect(merged.at(-1)?.toolUseId).toBe("live");
 });

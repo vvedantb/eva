@@ -657,10 +657,19 @@ export const reconcile = internalAction({
           );
         }
       }
-      await ctx.runMutation(internal.turns.finalizeExpired, {
-        turnId: turn.turnId,
-        cause: decision.cause,
-      });
+      // One turn that cannot finalise must not starve the rest: the batch is
+      // ordered by lease expiry, so a throw here would block every later turn
+      // on every cycle.
+      try {
+        await ctx.runMutation(internal.turns.finalizeExpired, {
+          turnId: turn.turnId,
+          cause: decision.cause,
+        });
+      } catch (error) {
+        console.error(
+          `[watchdog][lease-finalize-failed] turnId=${turn.turnId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
     return null;
   },
