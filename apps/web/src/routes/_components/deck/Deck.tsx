@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
@@ -93,6 +93,11 @@ const slideVariants = {
         },
 };
 
+/** Seconds before an auto-playing build starts, so the slide's entrance lands first. */
+const AUTO_FIRST_MS = 1100;
+/** Gap between auto-played build steps. */
+const AUTO_STEP_MS = 1500;
+
 export function Deck({
   slides,
   slide,
@@ -113,6 +118,8 @@ export function Deck({
   const stage = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  // Builds play on their own unless the presenter turns it off (A) or the slide is manual.
+  const [autoBuild, setAutoBuild] = useState(true);
 
   const { entry, step, direction, total } = nav;
   const theme = entry.theme ?? "dark";
@@ -130,6 +137,24 @@ export function Deck({
   const driven: DeckNavigation = share.isFollower
     ? { ...nav, next: noop, prev: noop, goTo: noop }
     : nav;
+
+  // A timer is outside React, so this is an effect: one pending step at a time,
+  // only while moving forward, and never in a follower's window.
+  const autoNext =
+    autoBuild &&
+    !entry.manual &&
+    !share.isFollower &&
+    direction > 0 &&
+    step < entry.steps;
+  const advance = driven.next;
+  useEffect(() => {
+    if (!autoNext) return;
+    const timer = setTimeout(
+      advance,
+      step === 0 ? AUTO_FIRST_MS : AUTO_STEP_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [autoNext, advance, step]);
 
   function openPresenter() {
     openPresenterWindow(basePath, share.effectiveSlide);
@@ -156,6 +181,10 @@ export function Deck({
       case "p":
         event.preventDefault();
         openPresenter();
+        return;
+      case "a":
+        event.preventDefault();
+        setAutoBuild((on) => !on);
         return;
       case "Escape":
         if (!outlineOpen) return;

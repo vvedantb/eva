@@ -90,7 +90,8 @@ export function useDeckNavigation(
 
   function prev() {
     if (step > 0) {
-      setDeckState({ slide, step: step - 1, direction });
+      // Backwards, so an auto-playing build does not step forward again.
+      setDeckState({ slide, step: step - 1, direction: -1 });
       onMove(slide, step - 1);
       return;
     }
@@ -107,7 +108,14 @@ export function useDeckNavigation(
     setDeckState({
       slide: destination,
       step: clamp(remoteStep, 0, slides[destination - 1].steps),
-      direction: destination >= slide ? 1 : -1,
+      direction:
+        destination === slide
+          ? remoteStep >= step
+            ? 1
+            : -1
+          : destination > slide
+            ? 1
+            : -1,
     });
     if (destination !== slide) onNavigate(destination);
   }

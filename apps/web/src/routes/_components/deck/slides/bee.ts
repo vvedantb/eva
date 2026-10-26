@@ -44,6 +44,7 @@ const SLIDES: DeckSlide[] = [
     title: "Meet the notch",
     Component: BeeNotch,
     steps: 2,
+    manual: true,
   },
   {
     id: "bee-04-listens",
@@ -62,6 +63,7 @@ const SLIDES: DeckSlide[] = [
     title: "A real meeting",
     Component: BeeRealMeeting,
     steps: 3,
+    manual: true,
   },
   {
     id: "bee-06-summary",

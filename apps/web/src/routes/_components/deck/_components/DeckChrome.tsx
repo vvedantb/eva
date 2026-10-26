@@ -126,7 +126,7 @@ export function DeckChrome({
               tone.muted,
             )}
           >
-            ← → navigate · F fullscreen · O outline · P notes
+            ← → navigate · A auto-build · F fullscreen · O outline · P notes
           </m.div>
         )}
       </AnimatePresence>

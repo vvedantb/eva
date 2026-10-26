@@ -17,6 +17,8 @@ export interface DeckSlide {
    * shared element can glide from one place to the other on a still stage.
    */
   morph?: boolean;
+  /** Keeps the build on the presenter's clicks when the deck plays builds on its own. */
+  manual?: boolean;
   /** A blank lead-in before the title, so its entrance plays live. Index thumbnails skip it. */
   blank?: boolean;
 }
