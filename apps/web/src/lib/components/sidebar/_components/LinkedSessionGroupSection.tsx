@@ -27,6 +27,8 @@ type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 
 interface LinkedSessionGroupSectionProps {
   group: LinkedSessionGroup<SessionListItem, RepoWithLogo>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   pathname: string;
   listMode: SessionListMode;
   onNavigate?: () => void;
@@ -41,6 +43,8 @@ interface LinkedSessionGroupSectionProps {
  */
 export function LinkedSessionGroupSection({
   group,
+  open,
+  onOpenChange,
   pathname,
   listMode,
   onNavigate,
@@ -52,7 +56,7 @@ export function LinkedSessionGroupSection({
   const [first] = group.members;
 
   return (
-    <Collapsible defaultOpen>
+    <Collapsible open={open} onOpenChange={onOpenChange}>
       <ContextMenu>
         {/* The menu trigger wraps the collapsible trigger: both set
             `data-state`, and the chevron must read the collapsible's. */}

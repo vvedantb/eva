@@ -17,6 +17,26 @@ function parseOpenByRepoId(
   return out;
 }
 
+/** Persisted expand/collapse map keyed by group id; unset ids return `undefined`. */
+export function useStoredGroupOpen(storageKey: string) {
+  const [openById, setOpenById] = useLocalStorage<Record<string, boolean>>(
+    storageKey,
+    {},
+  );
+
+  const storedOpen = (id: string): boolean | undefined =>
+    parseOpenByRepoId(openById)[id];
+
+  const setGroupOpen = (id: string, open: boolean) => {
+    setOpenById((prev) => ({
+      ...parseOpenByRepoId(prev),
+      [id]: open,
+    }));
+  };
+
+  return { storedOpen, setGroupOpen };
+}
+
 interface SidebarAppGroupOpenOptions {
   /** localStorage key — one per sidebar section so they do not collide. */
   storageKey: string;
@@ -29,25 +49,16 @@ export function useSidebarAppGroupOpen(
   pathname: string,
   options: SidebarAppGroupOpenOptions,
 ) {
-  const [openByRepoId, setOpenByRepoId] = useLocalStorage<
-    Record<string, boolean>
-  >(options.storageKey, {});
+  const { storedOpen, setGroupOpen } = useStoredGroupOpen(options.storageKey);
 
   const isGroupOpen = (repo: RepoRow): boolean => {
-    const stored = parseOpenByRepoId(openByRepoId)[repo._id];
+    const stored = storedOpen(repo._id);
     if (stored !== undefined) return stored;
     // Default: collapsed unless this app owns the active URL in this section.
     return (
       repoMatchesPath(repo, pathname) &&
       pathname.includes(options.sectionSegment)
     );
-  };
-
-  const setGroupOpen = (repoId: string, open: boolean) => {
-    setOpenByRepoId((prev) => ({
-      ...parseOpenByRepoId(prev),
-      [repoId]: open,
-    }));
   };
 
   return { isGroupOpen, setGroupOpen };

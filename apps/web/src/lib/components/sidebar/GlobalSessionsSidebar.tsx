@@ -24,12 +24,16 @@ import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/Sessi
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
   filterSessionsStartedBy,
+  LINKED_SESSION_GROUPS_OPEN_KEY,
   sessionActivityAt,
   sortAppsForSidebar,
   SESSIONS_APP_GROUPS_OPEN_KEY,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
-import { useSidebarAppGroupOpen } from "@/lib/components/sidebar/useSidebarAppGroupOpen";
+import {
+  useSidebarAppGroupOpen,
+  useStoredGroupOpen,
+} from "@/lib/components/sidebar/useSidebarAppGroupOpen";
 import { entityPathSegment } from "@/lib/numId";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
@@ -109,6 +113,7 @@ export function GlobalSessionsSidebar({
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/sessions",
   });
+  const linkedGroupOpen = useStoredGroupOpen(LINKED_SESSION_GROUPS_OPEN_KEY);
   const repos = useQuery(api.githubRepos.list, {});
   const [sessionToRename, setSessionToRename] = useState<{
     session: SessionListItem;
@@ -242,6 +247,11 @@ export function GlobalSessionsSidebar({
                     <LinkedSessionGroupSection
                       key={group.groupId}
                       group={group}
+                      // Linked groups start open; a toggle is remembered.
+                      open={linkedGroupOpen.storedOpen(group.groupId) ?? true}
+                      onOpenChange={(open) => {
+                        linkedGroupOpen.setGroupOpen(group.groupId, open);
+                      }}
                       pathname={pathname}
                       listMode={settings.listMode}
                       onNavigate={onNavigate}
