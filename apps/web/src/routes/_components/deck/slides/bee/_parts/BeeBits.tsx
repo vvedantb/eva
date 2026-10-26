@@ -120,18 +120,3 @@ export function SourceChip({
     </span>
   );
 }
-
-interface Action {
-  text: string;
-  owner: string;
-}
-
-/** The example meeting's outcome, shared by the summary and catch-up slides. */
-export const DECIDED: readonly string[] = [
-  "Provider joins the AQP list, if forms are back by Friday",
-  "Start with nursing home placements only",
-];
-export const ACTION_ITEMS: readonly Action[] = [
-  { text: "Send the onboarding pack", owner: "Sam" },
-  { text: "Book the follow-up call", owner: "Jo" },
-];

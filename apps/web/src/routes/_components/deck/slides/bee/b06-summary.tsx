@@ -1,22 +1,39 @@
 import type { ReactNode } from "react";
-import { IconArrowBackUp, IconFileText } from "@tabler/icons-react";
+import { IconArrowBackUp, IconFileText, IconShare3 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
 import { BEE_SPRING } from "./_parts/BeeIsland";
-import { ACTION_ITEMS, BEE_CARD, DECIDED } from "./_parts/BeeBits";
+import { BEE_CARD, SourceChip } from "./_parts/BeeBits";
 
 const DECISIONS = 1;
 const ACTIONS = 2;
 const SAVED = 3;
+const FORWARD = 4;
+
+interface Action {
+  text: string;
+  owner: string;
+}
+
+/** Example meeting: what was decided and who does what. */
+const DECIDED: readonly string[] = [
+  "Provider joins the AQP list, if forms are back by Friday",
+  "Start with nursing home placements only",
+];
+const ACTION_ITEMS: readonly Action[] = [
+  { text: "Send the onboarding pack", owner: "Sam" },
+  { text: "Book the follow-up call", owner: "Jo" },
+];
 
 const SHOTS: readonly CameraShot[] = [
   { rotateY: -8, translateZ: -40, x: -60 },
   { rotateY: -4, x: -30 },
   { rotateY: 0 },
   { rotateY: 5, translateZ: -40, x: -90 },
+  { rotateY: 6, translateZ: -50, x: -100 },
 ];
 
 function Section({
@@ -45,6 +62,7 @@ function Section({
 export function BeeSummary() {
   const step = useDeckStep();
   const saved = step >= SAVED;
+  const forward = step >= FORWARD;
 
   return (
     <Shell className="py-14">
@@ -109,6 +127,24 @@ export function BeeSummary() {
             <p className="m-0 text-3xl leading-snug font-semibold text-balance text-[#2a1e0c]">
               Saved to your notes, so Bee finds it next time
             </p>
+
+            {/* Missed it: whoever was there forwards the same file. */}
+            <m.div
+              className="mt-6 flex flex-col gap-3"
+              initial={{ opacity: 0, y: 16 }}
+              animate={forward ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
+              transition={cueTransition(forward, 0.2, BEE_SPRING)}
+            >
+              <span className="flex size-14 items-center justify-center rounded-2xl bg-[#fabe28]/30 text-[#7a4800]">
+                <IconShare3 size={28} />
+              </span>
+              <p className="m-0 text-3xl leading-snug font-semibold text-balance text-[#2a1e0c]">
+                Missed it? A colleague forwards it to you
+              </p>
+              <span className="self-start">
+                <SourceChip label="Provider onboarding summary.md" />
+              </span>
+            </m.div>
           </m.div>
         </div>
       </Camera>

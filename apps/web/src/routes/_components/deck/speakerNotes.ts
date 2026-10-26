@@ -329,15 +329,10 @@ Next: And when the meeting ends, the summary writes itself.`,
 → Step 1: the decisions, in plain sentences.
 → Step 2: the action items, each with an owner.
 → Step 3: it is saved as a note, so next time someone says "last time we…", Bee can find it.
-Detail: if the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
-Next: And if you could not make the meeting at all?`,
-
-  "bee-15-catch-up": `Missing a meeting no longer means missing what happened.
-→ Step 1: a colleague who was there forwards the summary their Bee saved. It is a normal file, so it can go by email or Teams chat.
-→ Step 2: what was decided, in plain sentences.
-→ Step 3: who does what, each action with a name, so you know what is yours.
-Detail: Bee does not send summaries by itself; each attendee's Bee saves its own copy on their computer, and someone forwards it. A summary covers only the people running Bee in that meeting, and it holds colleagues' words, so share it the way you would share meeting notes. The meeting is an invented example.
+→ Step 4: and if you missed the meeting, a colleague who was there forwards the same file, with what was decided and who does what.
+Detail: Bee does not send summaries by itself: each attendee's Bee saves its own copy, and a summary covers only the people running Bee. if the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
 Next: That works for one person. It is better for a team.`,
+
   "bee-07-teams": `In Teams mode, everyone's Bee works together.
 → Step 1: each person's Bee shares only what its own microphone heard. That is why everyone in the meeting needs Bee running on their own laptop.
 → Step 2: so the summary knows exactly who said what, and labels each line with a name. Each line comes from that person's own microphone, so the name is never a guess.
