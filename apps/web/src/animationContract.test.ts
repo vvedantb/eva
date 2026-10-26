@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
@@ -12,7 +13,7 @@ const vvedantbSrc = join(webSrc, "..", "node_modules", "@vvedantb", "ui", "src")
 
 /** Comments name classes and queries these rules ban, so they have to go first. */
 const cssRules = stripComments(
-  readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll("\r\n", "\n"),
+  readAppStylesheet(),
 );
 const tailwindConfig = stripComments(
   readFileSync(join(webSrc, "..", "tailwind.config.js"), "utf8"),

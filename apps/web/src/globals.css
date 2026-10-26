@@ -2,6 +2,9 @@
 @import "shadow-plugin";
 @import "@vvedantb/ui/tokens/css/markdown.css";
 @import "@vvedantb/ui/tokens/css/nav-icons.css";
+@import "@vvedantb/ui/tokens/css/modal.css";
+@import "@vvedantb/ui/tokens/css/utilities.css";
+@import "@vvedantb/ui/tokens/css/border-beam.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
  * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
  * shadcn `R G B` variables below; it never redefines them. */
@@ -39,34 +42,6 @@
 
 @utility ui-panel {
   @apply ui-surface p-5 md:p-6;
-}
-
-@utility t-modal {
-  /* transitions.dev — modal open / close. The dialog is always centered, so
-   * .t-modal owns the centering transform (translate -50%) plus scale/fade. */
-  transform-origin: center;
-  transform: translate(-50%, -50%) scale(var(--modal-scale));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--modal-open-dur) var(--modal-ease),
-    opacity var(--modal-open-dur) var(--modal-ease);
-  will-change: transform, opacity;
-  &.is-open {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-    pointer-events: auto;
-  }
-  &.is-closing {
-    transform: translate(-50%, -50%) scale(var(--modal-scale-close));
-    opacity: 0;
-    pointer-events: none;
-    transition:
-      transform var(--modal-close-dur) var(--modal-ease),
-      opacity var(--modal-close-dur) var(--modal-ease);
-    /* Radix Presence waits on animationend, not transitionend */
-    animation: t-modal-presence-wait var(--modal-close-dur) linear forwards;
-  }
 }
 
 @utility t-tabs-pill {
@@ -259,67 +234,6 @@
   transition-timing-function:
     var(--motion-ease-emphasized), var(--motion-ease-emphasized),
     var(--motion-ease-out);
-}
-
-@utility hit-target {
-  /* Extends sub-40px controls to a 40×40px tap target without changing layout.
-     Only force `relative` when the element is otherwise static — absolute /
-     fixed / sticky already form a containing block for ::after, and a blanket
-     `position: relative` would override Tailwind `absolute` (same specificity,
-     later rule wins), dropping absolutely-positioned icon-xs buttons into flow. */
-  &:not(.absolute):not(.fixed):not(.sticky) {
-    position: relative;
-  }
-  &::after {
-    content: "";
-    position: absolute;
-    inset: -8px;
-  }
-}
-
-@utility reveal-on-hover {
-  /* Row / message / attachment actions that only appear on `group-hover`.
-     Touch has no hover, so on a phone those controls are not merely hard to
-     find — they are unreachable: a chat attachment cannot be removed and a
-     comment's overflow menu cannot be opened at all. This keeps the quiet
-     hover reveal on pointer devices and ships the control visible below `sm`.
-
-     Why it is not just `opacity-0 group-hover:opacity-100` plus a `max-sm:`
-     override at the call site: that is three or four utilities whose order has
-     to be right at every one of ~17 sites, and it was already wrong at several
-     of them.
-
-     The hidden state is gated on `(hover: hover)` as well as the `sm` width,
-     not on width alone: this project's `hover:` variant compiles with that
-     capability query, so hiding at `sm` and revealing on `group-hover` would
-     leave the control permanently invisible on a landscape tablet — wide
-     enough for `sm`, with no hover to bring it back.
-
-     Deliberately narrow, so that at `sm` and up this is byte-for-byte the
-     `opacity-0 group-hover:opacity-100 focus-within:opacity-100` it replaced:
-
-     - **no `pointer-events`.** Moving it with the opacity would fix a real dead
-       tap zone (an invisible control still swallows clicks meant for the row),
-       but that is a *desktop* behaviour change, and desktop is out of scope.
-       It costs nothing on touch, where the control is visible anyway.
-     - **no transition.** `transition-opacity` is 150ms with Tailwind's default
-       easing; the house `--motion-base` is 220ms, so baking a transition in here
-       would have quietly reslowed every hover reveal in the app. Call sites keep
-       their own `transition-opacity` where they already had one.
-
-     Needs an ancestor carrying Tailwind's `group` class. Pair with
-     `max-sm:hit-target` when the control itself is under 40px. */
-  opacity: 1;
-
-  @media (hover: hover) and (width >= theme(--breakpoint-sm)) {
-    opacity: 0;
-
-    &:is(:where(.group):hover *),
-    &:is(:where(.group):focus-within *),
-    &:focus-visible {
-      opacity: 1;
-    }
-  }
 }
 
 @utility media-outline {
@@ -972,15 +886,6 @@
 }
 
 @layer components {
-  @keyframes t-modal-presence-wait {
-    from {
-      clip-path: inset(0);
-    }
-    to {
-      clip-path: inset(0);
-    }
-  }
-
   @keyframes t-accordion-down {
     from {
       height: 0;
@@ -1291,90 +1196,18 @@ html[data-blur-pid] [data-pii] {
   color: rgb(var(--foreground));
 }
 
-/* ───────────────────────────────────────────────────────────────────
- * Border beam (<BorderBeam/>) — hairline of light that travels around a
- * surface while an async task runs (chat composer while Eva replies, quick
- * task / project cards while building). The overlay is inset -1px: its
- * wrapper owns the radius, the beam inherits it, and the child's opaque
- * background hides the gradient's interior so only the ring reads.
- *
- * Do not animate the conic gradient's angle: a registered custom property
- * can't run on the compositor, so it repaints the gradient every frame.
- * The ring spins an oversized `from 0deg` gradient square under a static
- * rounded clip via `rotate` — a cached-texture compositor animation.
- *
- * The square is sized to its clip's diagonal — `hypot()` of the container
- * units the clip exposes — the smallest square that covers a rotating
- * rounded rect at every angle.
- *
- * Color stops live on `.beam-root` as `--beam-stops`. Named `beam-*`, NOT
- * `border-beam-*`: tailwind-merge (inside cn()) reads a `border-` prefix as
- * a border-colour utility and would drop the class.
- *
- * No `.beam-halo`. A live `filter: blur()` on this spinning conic was the
- * leftover GPU floor and is banned (CLAUDE.md / animationContract.test.ts).
- * ─────────────────────────────────────────────────────────────────── */
-@keyframes beam-rotate {
-  to {
-    rotate: 1turn;
-  }
-}
-
+/* Border beam (<BorderBeam/>): the `.beam-*` rules come from
+ * `@vvedantb/ui/tokens/css/border-beam.css`. eva sets its colours here.
+ * No `.beam-halo`: a live `filter: blur()` on the spinning conic was the
+ * leftover GPU floor and is banned (CLAUDE.md / animationContract.test.ts). */
 .beam-root {
-  --beam-duration: 3s;
-  --beam-spread: 12%;
-  --beam-stops:
-    transparent 0%, rgb(var(--foreground) / 0.75) var(--beam-spread),
-    transparent calc(var(--beam-spread) * 2);
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-/* Static rounded clip over the spinning square. `container-type: size`
- * is what gives the square `cqw`/`cqh` for its diagonal. */
-.beam {
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  overflow: hidden;
-  container-type: size;
-}
-
-/* Spinning gradient square, centred on the clip and sized to its diagonal.
- * +12px of slack so the padding box stays covered. */
-.beam::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: calc(hypot(100cqw, 100cqh) + 12px);
-  aspect-ratio: 1;
-  translate: -50% -50%;
-  background-image: conic-gradient(from 0deg, var(--beam-stops));
-  animation: beam-rotate var(--beam-duration) linear infinite;
-}
-
-.beam-sm {
-  --beam-duration: 2.4s;
-  --beam-spread: 8%;
-}
-
-.beam-lg {
-  --beam-duration: 3.6s;
-  --beam-spread: 18%;
-}
-
-.beam-progress {
-  --beam-stops:
-    transparent 0%, rgb(var(--status-progress-bar) / 0.9) var(--beam-spread),
-    transparent calc(var(--beam-spread) * 2);
+  --beam-color: rgb(var(--foreground) / 0.75);
+  --beam-progress-color: rgb(var(--status-progress-bar) / 0.9);
 }
 
 /* Brand purple→blue, same as the spinners and the session-row Drive grid.
- * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `config/foundations.ts`. */
+ * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `config/foundations.ts`.
+ * Full stops, not `--beam-colorful-*`, to keep the softer ends. */
 .beam-colorful {
   --eva-purple: 139 63 184;
   --eva-blue: 59 125 216;

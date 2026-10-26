@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 import { fileURLToPath } from "node:url";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
@@ -8,10 +9,7 @@ const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
 /** The `@vvedantb/ui` sources: the markup and inline styles behind eva's bars. */
 const vvedantbSrc = join(webSrc, "..", "node_modules", "@vvedantb", "ui", "src");
 
-const css = readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll(
-  "\r\n",
-  "\n",
-);
+const css = readAppStylesheet();
 /** Comments name the very classes these rules ban, so they have to go first. */
 const cssRules = stripComments(css);
 const tailwindConfig = stripComments(

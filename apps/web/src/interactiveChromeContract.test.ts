@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 // eva's classes for the shared @vvedantb/ui primitives (its UiConfig).
@@ -9,7 +10,7 @@ const uiPrimitives = join(webSrc, "..", "..", "..", "packages", "ui", "src", "co
 
 /** Comments below name the very declarations these rules ban, so they go first. */
 const css = stripComments(
-  readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll("\r\n", "\n"),
+  readAppStylesheet(),
 );
 
 function stripComments(source: string): string {

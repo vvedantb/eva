@@ -2,14 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
 
 /** Comments here name the very declarations these rules ban, so they go first. */
-const cssRules = stripComments(
-  readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll("\r\n", "\n"),
-);
+const cssRules = stripComments(readAppStylesheet());
 
 /** `@utility hit-target { … }`, up to the brace that closes it at column 0. */
 function hitTargetUtility(): string {
