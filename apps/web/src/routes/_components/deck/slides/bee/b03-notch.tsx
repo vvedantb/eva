@@ -63,8 +63,8 @@ export function BeeNotch() {
             >
               <div className="flex flex-col gap-3">
                 <BeeTip shown={open} delay={0.35}>
-                  Last time you agreed a 12-month renewal, if Acme signs by
-                  Friday.
+                  Last time you agreed they join the AQP list, if their forms
+                  are back by Friday.
                 </BeeTip>
                 <m.p
                   className="m-0 text-[15px]"
@@ -73,7 +73,7 @@ export function BeeNotch() {
                   animate={{ opacity: open ? 1 : 0 }}
                   transition={{ duration: DUR.base, delay: open ? 0.6 : 0 }}
                 >
-                  From Call with Acme.md
+                  From Provider call.md
                 </m.p>
               </div>
             </BeeIsland>

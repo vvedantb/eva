@@ -286,7 +286,7 @@ Detail: Bee is a desktop app for Windows and Mac. It is not a meeting bot; nobod
 Next: Start with a moment everyone has had.`,
 
   "bee-02-problem": `Everyone has been in this meeting: someone remembers you agreed something, and nobody can find it.
-→ Step 1: someone says it out loud: "Last time we agreed something on the Acme renewal. What was it?"
+→ Step 1: someone says it out loud: "Last time we agreed something on the provider onboarding. What was it?"
 → Step 2: the notes that hold the answer blur and drift, and you start searching by hand while the meeting carries on.
 Detail: the answer usually exists, in your own notes or last meeting's summary. The problem is finding it in the ten seconds before the conversation moves on. The note names and the line are examples.
 Next: Before the product, one idea about which AI tools people actually keep using.`,
@@ -306,7 +306,7 @@ Detail: one or two short tips at most, never a wall of text. You can press Cmd o
 Next: What happens between hearing and showing?`,
 
   "bee-04-listens": `Three steps, in about the time it takes to finish a sentence.
-→ Step 1: it hears. Bee picks up a phrase from the meeting, for example "the Acme renewal we talked about last time".
+→ Step 1: it hears. Bee picks up a phrase from the meeting, for example "the provider onboarding we talked about last time".
 → Step 2: it finds. It searches your own markdown notes, and Jev, a small fast model, ranks which ones actually match.
 → Step 3: it tips. A writing model turns the best match into one short line in the notch.
 Detail: the words Bee hears are never shown on screen. Only the tip is. The models are Grok for speech, Jev for ranking and GPT-6 Luna for the tip. The notes and tip are an example.

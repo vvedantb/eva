@@ -12,11 +12,11 @@ const LOST = 2;
 
 /** Your notes, scattered: the answer is in here somewhere. Names are examples. */
 const NOTES = [
-  { name: "Acme renewal.md", x: 620, y: 20, r: -6 },
+  { name: "Provider onboarding.md", x: 620, y: 20, r: -6 },
   { name: "Pricing ideas.md", x: 860, y: 70, r: 5 },
   { name: "1:1 notes.md", x: 700, y: 190, r: 3 },
   { name: "Q3 plan.md", x: 900, y: 240, r: -4 },
-  { name: "Call with Acme.md", x: 640, y: 330, r: 7 },
+  { name: "Provider call.md", x: 640, y: 330, r: 7 },
   { name: "Ideas.md", x: 870, y: 400, r: -2 },
 ];
 
@@ -48,7 +48,8 @@ export function BeeProblem() {
             }
             transition={cueTransition(step >= SAID, 0.1, BEE_SPRING)}
           >
-            “Last time we agreed something on the Acme renewal. What was it?”
+            “Last time we agreed something on the provider onboarding. What was
+            it?”
           </m.div>
 
           {/* The notes that hold the answer, out of reach. */}
@@ -90,7 +91,7 @@ export function BeeProblem() {
                   : { duration: DUR.fast }
               }
             >
-              acme… renewal… notes…
+              provider… onboarding… notes…
             </m.span>
           </m.div>
         </div>

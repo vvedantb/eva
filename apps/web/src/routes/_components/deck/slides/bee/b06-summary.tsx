@@ -19,11 +19,11 @@ interface Action {
 
 /** Example meeting: what was decided and who does what. */
 const DECIDED = [
-  "12-month renewal, if Acme signs by Friday",
-  "Keep the current price for year one",
+  "Provider joins the AQP list, if forms are back by Friday",
+  "Start with nursing home placements only",
 ];
 const ACTION_ITEMS: readonly Action[] = [
-  { text: "Send the renewal contract", owner: "Sam" },
+  { text: "Send the onboarding pack", owner: "Sam" },
   { text: "Book the follow-up call", owner: "Jo" },
 ];
 
@@ -72,7 +72,7 @@ export function BeeSummary() {
             <div className="flex items-center gap-3">
               <IconFileText size={22} className="text-[#c27406]" />
               <span className="text-2xl font-semibold text-[#2a1e0c]">
-                Acme renewal · summary
+                Provider onboarding · summary
               </span>
             </div>
 

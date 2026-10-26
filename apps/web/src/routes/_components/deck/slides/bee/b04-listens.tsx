@@ -23,8 +23,8 @@ const COL = { hear: 0, find: 380, tip: 720 };
 
 /** Your notes, best match first once Bee has ranked them. Names are examples. */
 const FOUND = [
-  { name: "Call with Acme.md", best: true },
-  { name: "Acme renewal.md", best: false },
+  { name: "Provider call.md", best: true },
+  { name: "Provider onboarding.md", best: false },
   { name: "Pricing ideas.md", best: false },
 ];
 
@@ -86,7 +86,7 @@ export function BeeListens() {
                 animate={{ opacity: hears ? 1 : 0 }}
                 transition={cueTransition(hears, 0.3, { duration: DUR.slow })}
               >
-                “…the Acme renewal we talked about last time…”
+                “…the provider onboarding we talked about last time…”
               </m.p>
             </m.div>
           </div>
@@ -133,7 +133,7 @@ export function BeeListens() {
               width={368}
             >
               <BeeTip shown={tips} delay={0.4}>
-                12-month renewal agreed, if Acme signs by Friday.
+                Joins the AQP list if their forms are back by Friday.
               </BeeTip>
             </BeeIsland>
           </div>

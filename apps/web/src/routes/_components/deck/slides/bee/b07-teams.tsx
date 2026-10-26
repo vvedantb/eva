@@ -28,9 +28,9 @@ const PEOPLE: readonly Person[] = [
 
 /** The shared summary, with who said what. Example lines. */
 const LINES = [
-  { who: "Alex", text: "Acme wants to sign by Friday." },
-  { who: "Sam", text: "I will send the contract today." },
-  { who: "Jo", text: "Let's keep year-one pricing." },
+  { who: "Alex", text: "They can return the forms by Friday." },
+  { who: "Sam", text: "I will send the onboarding pack today." },
+  { who: "Jo", text: "Let's start with nursing home placements." },
 ];
 
 const PERSON = { x: 0, w: 250, h: 86 };
