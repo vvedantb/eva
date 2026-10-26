@@ -34,12 +34,6 @@ const SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
-    id: "bee-12-background",
-    title: "Works in the background",
-    Component: BeeBackground,
-    steps: 4,
-  },
-  {
     id: "bee-03-notch",
     title: "Meet the notch",
     Component: BeeNotch,
@@ -86,6 +80,12 @@ const SLIDES: DeckSlide[] = [
     steps: 2,
   },
   { id: "bee-09-tools", title: "Your tools", Component: BeeTools, steps: 2 },
+    {
+    id: "bee-12-background",
+    title: "Works in the background",
+    Component: BeeBackground,
+    steps: 4,
+  },
   { id: "bee-10-close", title: "Try it", Component: BeeClose, steps: 0 },
 ];
 

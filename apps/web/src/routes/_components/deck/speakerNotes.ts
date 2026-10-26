@@ -289,7 +289,7 @@ Next: Start with a moment everyone has had.`,
 → Step 1: someone says it out loud: "Last time we agreed something on the provider onboarding. What was it?"
 → Step 2: the notes that hold the answer blur and drift, and you start searching by hand while the meeting carries on.
 Detail: the answer usually exists, in your own notes or last meeting's summary. The problem is finding it in the ten seconds before the conversation moves on. The note names and the line are examples.
-Next: Before the product, one idea about which AI tools people actually keep using.`,
+Next: Here is the small bar that answers it.`,
 
   "bee-12-background": `The AI tools that win are the ones with the least friction: they just work, and they do most of it in the background.
 → Step 1: an agent you have to steer. You choose the model and how hard it should think, pick the skill, connect the MCP tools, watch the context window fill up and get compacted, read the thinking, parse paragraphs of output, and steer it again. It only works while you watch it.
@@ -297,7 +297,7 @@ Next: Before the product, one idea about which AI tools people actually keep usi
 → Step 3: Bee is that idea for meetings. It listens, searches and reminds you, without you asking or steering it.
 → Step 4: and the same lesson has gone back into Eva. In Simple Mode you no longer think about starting or stopping a workspace: it wakes when you send a message and sleeps when it is idle.
 Detail: the thread on screen is an example in the shape of a real Grok bot run on Eva: one message, then updates until the change is live. The point for the room: the less a tool asks of you, the more you use it.
-Next: So here is Bee.`,
+Next: So, one thing to do.`,
 
   "bee-03-notch": `Bee lives in a small bar at the top centre of your screen, like a phone's notch.
 → Step 1: the view moves in close on the bar. During the call it listens: the bee flutters and the little bars move; nothing else changes.
@@ -348,7 +348,7 @@ Next: Last, it fits with the tools you already use.`,
 → Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.
 → Step 2: meeting context: Bee works out which meeting you are in, and who is in it, from Outlook and Teams on your own computer.
 Detail: connectors use a normal sign-in. Meeting context is read locally; nothing is sent to join the meeting.
-Next: So, one thing to do.`,
+Next: Step back for a moment: why is Bee built this way?`,
 
   "bee-10-close": `Close on one ask: try it in your next meeting.
 Detail: it runs on Windows and Mac. Offer to help anyone set it up after the session. Then open the floor for questions.
