@@ -458,12 +458,6 @@ export async function restartUnresponsiveSandbox(
 }
 
 /** Returns the value of a required environment variable, throwing if missing. */
-export function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
-}
-
 /** Returns a promise that resolves after the specified milliseconds. */
 export async function sleep(ms: number): Promise<void> {
   await new Promise<void>((resolve) => {

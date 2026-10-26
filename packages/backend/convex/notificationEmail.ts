@@ -1,5 +1,6 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -7,14 +8,6 @@ import { sendEmail } from "./email";
 import { buildNotificationDigestHtml } from "./emailTemplates";
 
 /** Reads a required environment variable, throwing a clear error when it is missing. */
-function getEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set in the Convex environment`);
-  }
-  return value;
-}
-
 /**
  * Sends the instant notification email for a user, debounced via the scheduler
  * delay in createNotification. It re-reads the user's unread, not-yet-emailed,
@@ -33,7 +26,7 @@ export const sendUnreadForUser = internalAction({
     );
     if (!data) return null;
 
-    const appUrl = getEnv("WEB_APP_URL");
+    const appUrl = requiredEnv("WEB_APP_URL");
     const count = data.notifications.length;
     const [first] = data.notifications;
 

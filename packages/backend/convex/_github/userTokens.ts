@@ -1,3 +1,4 @@
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { authMutation } from "../functions";
@@ -83,10 +84,7 @@ export const startUserAuthorization = authMutation({
   args: { installationId: v.union(v.number(), v.null()) },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const clientId = process.env.GITHUB_CLIENT_ID;
-    if (!clientId) {
-      throw new Error("GITHUB_CLIENT_ID is not set in Convex env");
-    }
+    const clientId = requiredEnv("GITHUB_CLIENT_ID");
     const siteUrl = process.env.CONVEX_SITE_URL;
     if (!siteUrl) {
       throw new Error("CONVEX_SITE_URL is not set");

@@ -11,6 +11,7 @@ import {
   defineMcpServerInfo,
   formatConvexQueryError,
   getClerkClient,
+  requiredEnv,
   runSdkMcpRequest,
   verifyClerkAccessToken,
 } from "@vvedantb/server";
@@ -44,6 +45,7 @@ import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
+import { getEvaBaseUrl } from "../_taskWorkflow/urls";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -190,18 +192,6 @@ const repoCredentialsCache = new Map<
 >();
 const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
 
-function getConvexSiteUrl(): string {
-  const url = process.env.CONVEX_SITE_URL;
-  if (!url) throw new Error("CONVEX_SITE_URL is required");
-  return url;
-}
-
-function getBootstrapSecret(): string {
-  const secret = process.env.MCP_BOOTSTRAP_SECRET;
-  if (!secret) throw new Error("MCP_BOOTSTRAP_SECRET is required");
-  return secret;
-}
-
 /**
  * Eva's own Convex API URL, used for the `runQueryAsUser`/`runMutationAsUser`
  * calls below.
@@ -216,23 +206,25 @@ function getBootstrapSecret(): string {
 function getEvaConvexCloudUrl(): string {
   const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
-  return getConvexSiteUrl().replace(".convex.site", ".convex.cloud");
+  return requiredEnv("CONVEX_SITE_URL").replace(
+    ".convex.site",
+    ".convex.cloud",
+  );
 }
 
 /** Deployed web app origin, used to build hosted artifact view links. */
-function getWebAppUrl(): string {
-  const url = process.env.WEB_APP_URL;
-  if (!url) throw new Error("WEB_APP_URL is required");
-  return url.replace(/\/$/, "");
-}
-
 async function getDeployKey(): Promise<string> {
   if (cachedDeployKey && cachedDeployKey.expiresAt > Date.now()) {
     return cachedDeployKey.value;
   }
-  const response = await fetch(`${getConvexSiteUrl()}/api/mcp/bootstrap`, {
-    headers: { Authorization: `MCPBootstrap ${getBootstrapSecret()}` },
-  });
+  const response = await fetch(
+    `${requiredEnv("CONVEX_SITE_URL")}/api/mcp/bootstrap`,
+    {
+      headers: {
+        Authorization: `MCPBootstrap ${requiredEnv("MCP_BOOTSTRAP_SECRET")}`,
+      },
+    },
+  );
   if (!response.ok) {
     throw new Error(`Failed to bootstrap deploy key: HTTP ${response.status}`);
   }
@@ -301,7 +293,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
   if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
 
-  const issuer = getConvexSiteUrl();
+  const issuer = requiredEnv("CONVEX_SITE_URL");
   const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");
@@ -1029,7 +1021,7 @@ export const createArtifact = internalAction({
 
     return {
       artifactId,
-      viewUrl: `${getWebAppUrl()}/artifacts/${artifactId}`,
+      viewUrl: `${getEvaBaseUrl()}/artifacts/${artifactId}`,
     };
   },
 });
@@ -1047,7 +1039,7 @@ export const getArtifact = internalAction({
     if (artifact === null) return null;
     return {
       artifact,
-      viewUrl: `${getWebAppUrl()}/artifacts/${artifactId}`,
+      viewUrl: `${getEvaBaseUrl()}/artifacts/${artifactId}`,
     };
   },
 });
@@ -1063,7 +1055,7 @@ export const listArtifacts = internalAction({
       {},
     );
     if (!Array.isArray(artifacts)) return [];
-    const webAppUrl = getWebAppUrl();
+    const webAppUrl = getEvaBaseUrl();
     return artifacts.map((artifact) => {
       const id =
         artifact !== null &&

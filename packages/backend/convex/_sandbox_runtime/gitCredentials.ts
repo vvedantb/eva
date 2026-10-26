@@ -1,16 +1,12 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { randomBytes } from "crypto";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
-import {
-  execHandle,
-  LEGACY_WORKSPACE_DIR,
-  requireEnv,
-  WORKSPACE_DIR,
-} from "./helpers";
+import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
@@ -126,7 +122,7 @@ printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 function resolveConvexSiteUrl(): string {
   return (
     resolvePublicConvexSiteUrl(process.env) ??
-    requireEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
+    requiredEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
   );
 }
 
