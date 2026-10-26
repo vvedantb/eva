@@ -11,10 +11,11 @@ const ANSWER = 2;
 /** Meeting tiles under the notch: a call in progress, people as initials. */
 const TILES = ["A", "S", "J", "M", "R", "K"];
 
+/** Wide on the call, then in close on the notch as it starts listening, then back a little for the answer. */
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 10, translateZ: -40 },
-  { rotateX: 6, translateZ: -10 },
-  { rotateX: 2, translateZ: 20, y: 20 },
+  { rotateX: 0, scale: 1.9, y: 330 },
+  { rotateX: 2, scale: 1.3, y: 150 },
 ];
 
 export function BeeNotch() {

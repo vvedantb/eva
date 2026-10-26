@@ -300,8 +300,8 @@ Detail: the thread on screen is an example in the shape of a real Grok bot run o
 Next: So here is Bee.`,
 
   "bee-03-notch": `Bee lives in a small bar at the top centre of your screen, like a phone's notch.
-→ Step 1: during the call it listens. The little bars move; nothing else changes.
-→ Step 2: when it hears something it can help with, the bar grows into a short answer, and tells you which note it came from.
+→ Step 1: the view moves in close on the bar. During the call it listens: the bee flutters and the little bars move; nothing else changes.
+→ Step 2: the view pulls back a little. When it hears something it can help with, the bar grows into a short answer, and tells you which note it came from.
 Detail: one or two short tips at most, never a wall of text. You can press Cmd or Ctrl, Shift and Space to show or hide it. The meeting and the tip are an example.
 Next: What happens between hearing and showing?`,
 
