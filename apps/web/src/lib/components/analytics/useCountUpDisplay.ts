@@ -2,7 +2,7 @@
 
 import { animate } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { useDisablePageMotion } from "@vvedantb/ui";
+import { useDisablePageMotion, motionEase } from "@vvedantb/ui";
 
 /** Suffixes we will count; compound durations like "1h 12m" stay static. */
 const COUNTABLE_SUFFIX = /^(?:%|h|k|m|s|ms)?$/i;
@@ -59,7 +59,7 @@ export function useCountUpDisplay(value: string | number): string | number {
     lastAmount.current = parsed.amount;
     const controls = animate(from, parsed.amount, {
       duration: 0.22,
-      ease: [0.22, 1, 0.36, 1],
+      ease: motionEase,
       onUpdate: (latest) => {
         const rounded =
           parsed.decimals > 0

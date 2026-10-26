@@ -14,7 +14,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
-import { useMinuteNow } from "@/lib/components/usage-limits/_useMinuteNow";
+import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import {
   usageLimitResetClock,
   usageLimitResetText,
@@ -52,7 +52,7 @@ export function UsageLimitRecoveryBanner({
   const recovery = surface.usageLimitRecovery;
   const [inFlightKey, setInFlightKey] = useState<string | null>(null);
   const retryLastTurn = useRetryLastTurnWithAccount(surface.entity);
-  const now = useMinuteNow();
+  const now = useQuantizedNow(60_000);
   const newest = recovery?.messages.at(-1);
   // Its own const so the narrowing below survives: `undefined` here is either
   // "no recovery" or "entity still loading", and `showsCard` rules out both.
