@@ -98,8 +98,9 @@ export function BeeIsland({
       transition={{ duration: 0.36 }}
     >
       <div className="flex h-[60px] items-center gap-3 pr-5 pl-4">
+        {/* As in the app (`NOTCH_LOGO_PX`): the logo is 32 of the 52px notch, scaled to this 60px pill. */}
         <BeeLogo
-          size={34}
+          size={37}
           tone="dark"
           glow={false}
           state={state ?? (listening ? "listening" : "idle")}

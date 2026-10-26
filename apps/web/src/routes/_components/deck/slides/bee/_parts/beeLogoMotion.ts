@@ -53,7 +53,8 @@ export type LogoState =
   | "error";
 
 /**
- * Sizes for the state extras (rings, orbit, figure-8, loop) in view-box units, so they stay inside the view.
+ * Sizes for the state extras (rings, orbit, figure-8, loop) in view-box units, so they stay inside the view. The ring is
+ * centred on the orb (32, 35), so its largest size must fit the 29 units below it.
  * The tiny view is widened a little when animated (the static mark keeps its crop), and its paths are smaller to fit it.
  */
 export type LogoMotion = {
@@ -86,9 +87,9 @@ export function logoMotion(size: number): LogoMotion {
   }
   return {
     viewBox: "0 0 64 64",
-    ringR: 23,
+    ringR: 22,
     ringGain: 0.3,
-    echoScale: 1.5,
+    echoScale: 1.3,
     eightX: 11,
     eightY: 4.5,
     orbitX: 26,
