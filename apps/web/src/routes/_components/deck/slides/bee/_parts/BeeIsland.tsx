@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import type { Transition } from "motion/react";
 import { cn } from "@eva/ui";
-import { DUR, EASE } from "../../../_components/motion";
+import { DUR } from "../../../_components/motion";
 import { BeeLogo } from "./BeeLogo";
 import type { LogoState } from "./BeeLogo";
 
@@ -109,23 +109,23 @@ export function BeeIsland({
         </span>
         <Waveform live={listening} />
       </div>
-      <m.div
-        initial={false}
-        animate={
-          open ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }
-        }
-        transition={
-          open
-            ? {
-                ...BEE_SPRING,
-                delay: openDelay,
-                opacity: { duration: DUR.base, delay: openDelay },
-              }
-            : { duration: DUR.fast, ease: EASE.in }
-        }
+      {/* Grows with grid rows, not Motion's `height: "auto"`: that measures
+          on screen, so under a zooming camera it picks a wrong height,
+          overshoots, then snaps back. Grid rows follow layout size. */}
+      <div
+        className="grid"
+        style={{
+          gridTemplateRows: open ? "1fr" : "0fr",
+          opacity: open ? 1 : 0,
+          transition: open
+            ? `grid-template-rows 600ms cubic-bezier(0.22, 1, 0.36, 1) ${openDelay}s, opacity ${DUR.base}s ease-out ${openDelay}s`
+            : `grid-template-rows ${DUR.fast}s ease-in, opacity ${DUR.fast}s ease-in`,
+        }}
       >
-        <div className="px-6 pt-1 pb-6">{children}</div>
-      </m.div>
+        <div className="min-h-0 overflow-hidden">
+          <div className="px-6 pt-1 pb-6">{children}</div>
+        </div>
+      </div>
     </m.div>
   );
 }
