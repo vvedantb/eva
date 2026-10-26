@@ -15,13 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
   Spinner,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { IconAlertTriangle, IconFileText } from "@tabler/icons-react";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { useQueryState } from "nuqs";
 import { branchParser } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 import {
   SharedLayoutNav,
   SharedLayoutNavSurface,
@@ -53,7 +54,7 @@ export function TestingArenaSidebar({
 
   const [branch] = useQueryState("branch", branchParser);
   const [showTestAllModal, setShowTestAllModal] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isTestingAll, setIsTestingAll] = useState(false);
   const lastCreateRequestIdRef = useRef(createRequestId ?? 0);
 
@@ -103,7 +104,6 @@ export function TestingArenaSidebar({
         className="text-warning"
         onClick={() =>
           requestConfirm(
-            altHeld,
             () => setShowTestAllModal(true),
             () => {
               void handleTestAll();

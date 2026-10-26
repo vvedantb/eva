@@ -12,11 +12,11 @@ import {
   DialogTitle,
   Spinner,
   toast,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import type { Id } from "@eva/backend";
 import { CreatedTimelineItem } from "./CreatedTimelineItem";
 import { TaskActivityItem } from "./TaskActivityItem";
@@ -99,7 +99,7 @@ export function ActivityTimeline({
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const removeComment = useMutation(
     api.taskComments.remove,
@@ -278,7 +278,6 @@ export function ActivityTimeline({
                     repliesByParentId={repliesByParentId}
                     onDeleteRequest={(commentId) =>
                       requestConfirm(
-                        altHeld,
                         () => setDeletingCommentId(commentId),
                         () => {
                           void deleteComment(commentId);

@@ -20,6 +20,9 @@ import {
   Spinner,
   Surface,
   Textarea,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import {
   IconFile,
@@ -46,12 +49,6 @@ import {
 } from "@/lib/components/sidebar/SharedLayoutNav";
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment, routeNumIdFromPath } from "@/lib/numId";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
@@ -98,7 +95,7 @@ export function DocsSidebar({
     title: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isUploading, setIsUploading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [showUploadSection, setShowUploadSection] = useState(false);
@@ -362,7 +359,6 @@ export function DocsSidebar({
                           onClick={() => {
                             const target = { id: doc._id, title: doc.title };
                             requestConfirm(
-                              altHeld,
                               () => setDocToDelete(target),
                               () => {
                                 void handleDelete(target);

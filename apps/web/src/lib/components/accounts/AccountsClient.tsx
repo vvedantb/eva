@@ -20,6 +20,8 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { relativeTime } from "@/lib/components/artifacts/_format";
@@ -29,7 +31,6 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 /** Ties every sharing switch to the one visible explanation under the list. */
 const SHARING_HELP_ID = "account-sharing-help";
@@ -52,7 +53,7 @@ export function AccountsClient() {
   const [deleteId, setDeleteId] = useState<Id<"userProviderAccounts"> | null>(
     null,
   );
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const deleteAccount = (accountId: Id<"userProviderAccounts">) => {
     void withMutationToast(
@@ -174,7 +175,6 @@ export function AccountsClient() {
                       variant="ghost"
                       onClick={(event) =>
                         requestConfirm(
-                          altHeld,
                           () => setDeleteId(account._id),
                           () => deleteAccount(account._id),
                           event,

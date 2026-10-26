@@ -28,6 +28,8 @@ import {
   formatModelDisplayLabel,
   tokenTransition,
   useDragSensors,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -44,7 +46,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 /** `TId` is the row's id: a `queuedMessages` doc, or Manager Ave's held message. */
 interface QueuedMessageItem<TId extends string> {
@@ -266,7 +267,7 @@ export function QueuedMessagesPanel<TId extends string>({
   const [draftForId, setDraftForId] = useState<TId | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const deleteQueued = async (item: QueuedMessageItem<TId>) => {
     if (!onDelete) return;
@@ -355,7 +356,6 @@ export function QueuedMessagesPanel<TId extends string>({
                               onDelete
                                 ? (item) =>
                                     requestConfirm(
-                                      altHeld,
                                       () => setDeletingItem(item),
                                       () => {
                                         void deleteQueued(item);

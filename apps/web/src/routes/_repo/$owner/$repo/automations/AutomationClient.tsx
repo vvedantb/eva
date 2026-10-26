@@ -16,6 +16,9 @@ import {
   ModelPicker,
   toast,
   tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
@@ -36,12 +39,6 @@ import { entityPathSegment } from "@/lib/numId";
 import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { isAutomationTab, type AutomationTab } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import {
   catchMutationError,
   withMutationToast,
@@ -249,7 +246,7 @@ function SettingsForm({
   const [cronDraft, setCronDraft] = useState(automation.cronSchedule);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const titleFieldId = useId();
   const promptFieldId = useId();
   const model = normalizeAIModel(automation.model ?? repo.defaultModel);
@@ -413,7 +410,6 @@ function SettingsForm({
           title={skipConfirmTitle("Delete")}
           onClick={(event) =>
             requestConfirm(
-              altHeld,
               () => setShowDeleteDialog(true),
               () => {
                 void handleDelete();

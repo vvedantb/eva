@@ -3,9 +3,10 @@ import {
   ContextMenuSeparator,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  ConfirmSkipHint,
+  skipConfirmTitle,
 } from "@vvedantb/ui";
 import { IconPhoto, IconPhotoOff, IconTrash } from "@tabler/icons-react";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 /**
  * The team card's actions, hosted in either menu surface. Right-click covers

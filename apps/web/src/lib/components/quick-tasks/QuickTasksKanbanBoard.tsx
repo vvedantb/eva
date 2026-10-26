@@ -10,15 +10,9 @@ import { KanbanBoard } from "@/lib/components/kanban/KanbanBoard";
 import { QuickTaskCard } from "./QuickTaskCard";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { RunAllDialog } from "./RunAllDialog";
-import { Button, Spinner, toast } from "@vvedantb/ui";
+import { Button, Spinner, toast, ConfirmSkipHint, skipConfirmTitle, useRequestConfirm } from "@vvedantb/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { entityPathSegment } from "@/lib/numId";
 import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import type { DisplayTaskStatus } from "@/lib/components/tasks/TaskStatusBadge";
@@ -77,7 +71,7 @@ export function QuickTasksKanbanBoard({
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   // Respect the sort order applied by QuickTasksClient (default: updatedAt).
   // Re-sorting here would override the user's chosen sort.
@@ -173,7 +167,6 @@ export function QuickTasksKanbanBoard({
               title={skipConfirmTitle("Run All")}
               onClick={(event) =>
                 requestConfirm(
-                  altHeld,
                   () => setIsConfirmOpen(true),
                   () => {
                     void handleRunAll();

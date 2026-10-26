@@ -13,6 +13,8 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
+  ConfirmSkipHint,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import {
   IconDots,
@@ -24,7 +26,6 @@ import {
 import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
-import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
 
 /**
  * The header's right-hand cluster, in t3code's order: the one filled button that
@@ -53,7 +54,7 @@ export function PrHeaderActions({
   const update = useAction(api.github.updatePullRequest);
   const [closing, setClosing] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const close = async () => {
     setClosing(true);
@@ -133,7 +134,6 @@ export function PrHeaderActions({
                 disabled={closing}
                 onSelect={() =>
                   requestConfirm(
-                    altHeld,
                     () => setConfirmingClose(true),
                     () => {
                       void close();

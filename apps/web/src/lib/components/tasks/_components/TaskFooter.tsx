@@ -16,6 +16,8 @@ import {
   tokenTransition,
   CrossfadeIconSlot,
   Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -35,7 +37,6 @@ import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitP
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>

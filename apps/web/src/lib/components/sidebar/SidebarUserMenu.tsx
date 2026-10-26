@@ -15,6 +15,9 @@ import {
   DialogTitle,
   DialogFooter,
   Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -28,12 +31,6 @@ import {
 } from "@tabler/icons-react";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 interface SidebarUserMenuProps {
   name: string;
@@ -54,7 +51,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
   const { openSearch } = useSearch();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -132,7 +129,6 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
           <DropdownMenuItem
             onSelect={() =>
               requestConfirm(
-                altHeld,
                 () => setConfirmOpen(true),
                 () => {
                   void handleSignOut();

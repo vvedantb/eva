@@ -22,15 +22,12 @@ import {
   SortableListItems,
   SortableListItem,
   toast,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import type { SortableListDragEndEvent } from "@vvedantb/ui";
 import { IconChevronRight, IconPlayerPlay } from "@tabler/icons-react";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import {
   statusConfig,
   TASK_STATUSES,
@@ -119,7 +116,7 @@ export function QuickTasksListView({
 
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [openSections, setOpenSections] = useState<Set<DisplayTaskStatus>>(
     () => new Set(TASK_STATUSES),
   );
@@ -270,7 +267,6 @@ export function QuickTasksListView({
                           title={skipConfirmTitle("Run All")}
                           onClick={(event) =>
                             requestConfirm(
-                              altHeld,
                               () => setIsConfirmOpen(true),
                               () => {
                                 void handleRunAll();

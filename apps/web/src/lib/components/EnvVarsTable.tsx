@@ -18,6 +18,8 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import {
   IconCheck,
@@ -51,7 +53,6 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 export interface EnvVar {
   key: string;
@@ -97,7 +98,7 @@ export function EnvVarsTable({
   const [editValue, setEditValue] = useState("");
 
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>(
     {},
@@ -411,7 +412,6 @@ export function EnvVarsTable({
                   variant="ghost"
                   onClick={(event) =>
                     requestConfirm(
-                      altHeld,
                       () => setDeleteKey(v.key),
                       () => {
                         void confirmDelete(v.key);

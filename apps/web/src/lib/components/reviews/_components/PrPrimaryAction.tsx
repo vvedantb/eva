@@ -20,6 +20,9 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import {
   IconArrowBackUp,
@@ -31,12 +34,6 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
 import type { PrOverview } from "./prOverviewMeta";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type MergeMethod = "merge" | "squash" | "rebase";
 
@@ -91,7 +88,7 @@ function MergeAction({
   const [method, setMethod] = useState<MergeMethod>("squash");
   const [confirming, setConfirming] = useState(false);
   const [merging, setMerging] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const canMerge = !overview.draft && overview.mergeable === true;
   const blocked = mergeBlocker(overview)?.detail ?? null;
@@ -131,7 +128,6 @@ function MergeAction({
           disabled={!canMerge}
           onClick={(event) =>
             requestConfirm(
-              altHeld,
               () => setConfirming(true),
               () => {
                 void runMerge();
@@ -264,7 +260,7 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const createSession = useConvexMutation(api.sessions.create);
   const [starting, setStarting] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const sha = overview.mergeCommitSha;
 
@@ -301,7 +297,6 @@ function RevertAction({ overview }: { overview: PrOverview }) {
         title={skipConfirmTitle("Revert")}
         onClick={(event) =>
           requestConfirm(
-            altHeld,
             () => setConfirming(true),
             () => {
               void start();

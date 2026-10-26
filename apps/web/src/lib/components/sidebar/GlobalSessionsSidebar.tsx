@@ -15,6 +15,7 @@ import {
   Input,
   CenteredSpinner,
   tokenTransition,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
@@ -37,7 +38,6 @@ import {
 import { entityPathSegment } from "@/lib/numId";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -107,7 +107,7 @@ export function GlobalSessionsSidebar({
 }: GlobalSessionsSidebarProps) {
   const { settings, setListMode } = useSessionsSidebarSettings();
   const { listMode } = settings;
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { archive, isArchiving } = useArchiveSession();
   const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
@@ -202,7 +202,6 @@ export function GlobalSessionsSidebar({
     if (!pathSegment) return;
     const target = { session, repo: groupRepo, pathSegment };
     requestConfirm(
-      altHeld,
       () => setSessionToArchive(target),
       () => {
         void archive(target, pathname, () => {

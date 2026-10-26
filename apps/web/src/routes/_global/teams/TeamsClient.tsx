@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
   CenteredSpinner,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
@@ -21,7 +22,6 @@ import { TeamCard } from "./_components/TeamCard";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 export function TeamsClient() {
   const teams = useQuery(api.teams.list);
@@ -44,7 +44,7 @@ export function TeamsClient() {
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const handleDelete = async (
     target: { id: Id<"teams">; name: string } | null = deleteTarget,
@@ -144,7 +144,6 @@ export function TeamsClient() {
                 team={team}
                 onDelete={(target) =>
                   requestConfirm(
-                    altHeld,
                     () => setDeleteTarget(target),
                     () => {
                       void handleDelete(target);

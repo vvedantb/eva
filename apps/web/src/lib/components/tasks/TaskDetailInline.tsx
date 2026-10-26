@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { Badge, Spinner, tokenTransition } from "@vvedantb/ui";
+import { Badge, Spinner, tokenTransition, useRequestConfirm } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
@@ -25,7 +25,6 @@ import { StopConfirmDialog } from "./_components/StopConfirmDialog";
 import { ResolveConfirmDialog } from "./_components/ResolveConfirmDialog";
 import { StartupCommandsConfirmDialog } from "./_components/StartupCommandsConfirmDialog";
 import { RunDevServerConfirmDialog } from "./_components/RunDevServerConfirmDialog";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
@@ -142,7 +141,7 @@ export function TaskDetailInline({
   } = useTaskDetail(taskId, routing);
   const isAgentActive = useTaskAgentActive(taskId, task);
   const chatUnread = useChatUnread(taskId);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   useEffect(() => {
     if (!isSandboxActive || !sandboxId) return;
@@ -452,7 +451,6 @@ export function TaskDetailInline({
                       isStopping={isStopping}
                       onStopConfirm={() =>
                         requestConfirm(
-                          altHeld,
                           () => setShowStopConfirm(true),
                           handleStopExecution,
                         )
@@ -522,14 +520,12 @@ export function TaskDetailInline({
         onStopSandbox={handleStopSandbox}
         onRunStartupCommands={() =>
           requestConfirm(
-            altHeld,
             () => setShowStartupCommandsConfirm(true),
             handleRetryStartupCommands,
           )
         }
         onRunDevServer={() =>
           requestConfirm(
-            altHeld,
             () => setShowRunDevServerConfirm(true),
             handleRunDevServer,
           )
@@ -540,7 +536,6 @@ export function TaskDetailInline({
         onStartExecution={handleStartExecution}
         onResolveConfirm={() =>
           requestConfirm(
-            altHeld,
             () => setShowResolveConfirm(true),
             handleResolveConflicts,
           )

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { IconPaperclip } from "@tabler/icons-react";
-import { toast } from "@vvedantb/ui";
+import { toast, useRequestConfirm } from "@vvedantb/ui";
 import { api, type Id } from "@eva/backend";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import {
@@ -15,7 +15,6 @@ import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachment
 import type { TaskAttachment } from "../useTaskAttachments";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface TaskFilesSectionProps {
   attachments: TaskAttachment[];
@@ -60,7 +59,7 @@ export function TaskFilesSection({
     label: string;
   } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [open, setOpen] = useState<OpenTextAttachment | null>(null);
 
   const requestRemove = (attachment: TaskAttachment) => {
@@ -76,7 +75,6 @@ export function TaskFilesSection({
       label: labelForAttachment(attachment.name, attachment.contentType),
     };
     requestConfirm(
-      altHeld,
       () => setPending(next),
       () => {
         void removeStored(next);

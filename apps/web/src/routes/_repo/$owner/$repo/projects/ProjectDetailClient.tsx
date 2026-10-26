@@ -26,6 +26,9 @@ import {
   toast,
   tokenTransition,
   Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -88,12 +91,6 @@ import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { parseSpec } from "@/lib/utils/parseSpec";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
@@ -129,7 +126,7 @@ export function ProjectDetailClient({
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
     useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -495,7 +492,6 @@ export function ProjectDetailClient({
                       title={skipConfirmTitle("Resolve Conflicts")}
                       onClick={() =>
                         requestConfirm(
-                          altHeld,
                           () => setShowResolveConfirm(true),
                           () => {
                             void handleResolveConflicts();
@@ -525,7 +521,6 @@ export function ProjectDetailClient({
                       title={skipConfirmTitle("Run Startup Commands")}
                       onClick={() =>
                         requestConfirm(
-                          altHeld,
                           () => setShowStartupCommandsConfirm(true),
                           handleRetryStartupCommands,
                         )
@@ -619,7 +614,6 @@ export function ProjectDetailClient({
                     title={skipConfirmTitle("Stop Build")}
                     onClick={() =>
                       requestConfirm(
-                        altHeld,
                         () => setShowStopBuildConfirm(true),
                         () => {
                           void handleStopBuild();

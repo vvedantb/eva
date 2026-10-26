@@ -1,11 +1,10 @@
-import { ContextMenuItem, DropdownMenuItem } from "@vvedantb/ui";
+import { ContextMenuItem, DropdownMenuItem, ConfirmSkipHint, skipConfirmTitle } from "@vvedantb/ui";
 import {
   IconExternalLink,
   IconLayoutDashboard,
   IconMessage,
   IconTrash,
 } from "@tabler/icons-react";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 /**
  * The artifact tile's actions, hosted in either menu surface. Right-click covers
