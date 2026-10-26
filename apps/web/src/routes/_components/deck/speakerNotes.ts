@@ -342,8 +342,13 @@ Next: Which raises the obvious question: what about privacy?`,
 → Step 1: you start sharing your screen, and the notch disappears from what others see.
 → Step 2: the four promises: no transcript on screen, hidden during screen share, your notes and summaries stay on your computer, and nothing joins a meeting without your click.
 Detail: be precise if asked. Notes and summaries are saved only on your computer, and keys never leave it. Speech is sent to the AI models to be understood. In Teams mode, shared phrases pass through a short-lived online room that is deleted when the meeting ends, after four hours at most. Screen-share hiding is part of meeting mode.
-Next: Last, it fits with the tools you already use.`,
+Next: And the question after "is it safe": what does it cost?`,
 
+  "bee-13-cost": `Trying Bee costs us nothing extra: the AI it uses is already paid for.
+→ Step 1: the $500 counts up. Our Teams plan includes $500 of AI use every month, at no extra cost.
+→ Step 2: what it pays for. Bee's three AI jobs in a meeting: turning speech into text, finding the right note, and writing the tip. The allowance is meant for projects like this one.
+Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
+Next: Last, it fits with the tools you already use.`,
   "bee-09-tools": `Bee connects to the tools you already have.
 → Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.
 → Step 2: meeting context: Bee works out which meeting you are in, and who is in it, from Outlook and Teams on your own computer.

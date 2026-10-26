@@ -10,6 +10,7 @@ import { BeeRealMeeting } from "./bee/b11-real-meeting";
 import { BeeSummary } from "./bee/b06-summary";
 import { BeeTeams } from "./bee/b07-teams";
 import { BeePrivate } from "./bee/b08-private";
+import { BeeCost } from "./bee/b13-cost";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 
@@ -79,8 +80,14 @@ const SLIDES: DeckSlide[] = [
     Component: BeePrivate,
     steps: 2,
   },
+  {
+    id: "bee-13-cost",
+    title: "Already paid for",
+    Component: BeeCost,
+    steps: 2,
+  },
   { id: "bee-09-tools", title: "Your tools", Component: BeeTools, steps: 2 },
-    {
+  {
     id: "bee-12-background",
     title: "Works in the background",
     Component: BeeBackground,
