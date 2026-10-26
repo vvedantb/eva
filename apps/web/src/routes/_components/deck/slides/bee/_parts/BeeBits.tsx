@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Icon } from "@tabler/icons-react";
-import { IconFileText, IconX } from "@tabler/icons-react";
+import { IconExternalLink, IconFileText } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { DUR, EASE, cueTransition } from "../../../_components/motion";
@@ -88,24 +88,35 @@ export function BeeChip({
 }
 
 /**
- * A suggested link, as Bee's notch shows it (`LinkChips` in the app): a pill
- * with the site's favicon on a light square, the domain, and a dismiss cross.
- * Favicons come from Google's favicon service, as the app's fetch does.
+ * A source under an answer, in the style of Bee's link chips: a pill with an
+ * icon, the label and an open-link arrow. A web source shows the site's
+ * favicon from Google's favicon service; a note shows a file icon.
  */
-export function SourceChip({ domain }: { domain: string }) {
+export function SourceChip({
+  label,
+  domain,
+}: {
+  label: string;
+  /** The website, for its favicon. Omit for one of your notes. */
+  domain?: string;
+}) {
   return (
     <span
-      className="inline-flex h-9 items-center gap-2 rounded-full pr-2 pl-3 text-[16px]"
+      className="inline-flex h-9 items-center gap-2 rounded-full pr-3 pl-3 text-[16px]"
       style={{ background: BEE.raised, color: BEE.text }}
     >
-      <img
-        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
-        alt=""
-        className="size-5 rounded-[5px] object-contain p-px"
-        style={{ background: BEE.text }}
-      />
-      {domain}
-      <IconX size={15} stroke={2} style={{ color: BEE.muted }} />
+      {domain ? (
+        <img
+          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+          alt=""
+          className="size-5 rounded-[5px] object-contain p-px"
+          style={{ background: BEE.text }}
+        />
+      ) : (
+        <IconFileText size={18} stroke={1.75} style={{ color: BEE.accent }} />
+      )}
+      {label}
+      <IconExternalLink size={15} stroke={2} style={{ color: BEE.muted }} />
     </span>
   );
 }

@@ -3,7 +3,8 @@ import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE } from "../../_components/motion";
-import { BEE, BeeIsland, BeeTip } from "./_parts/BeeIsland";
+import { BeeIsland, BeeTip } from "./_parts/BeeIsland";
+import { SourceChip } from "./_parts/BeeBits";
 
 const LISTEN = 1;
 const ANSWER = 2;
@@ -66,15 +67,14 @@ export function BeeNotch() {
                   Last time you agreed they join the AQP list, if their forms
                   are back by Friday.
                 </BeeTip>
-                <m.p
-                  className="m-0 text-[15px]"
-                  style={{ color: BEE.muted }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: open ? 1 : 0 }}
+                <m.span
+                  className="self-start"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={open ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
                   transition={{ duration: DUR.base, delay: open ? 0.6 : 0 }}
                 >
-                  From Provider call.md
-                </m.p>
+                  <SourceChip label="Provider call.md" />
+                </m.span>
               </div>
             </BeeIsland>
           </div>

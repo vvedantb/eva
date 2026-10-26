@@ -74,7 +74,7 @@ export function BeeWeb() {
                         BEE_SPRING,
                       )}
                     >
-                      <SourceChip domain={link} />
+                      <SourceChip label={link} domain={link} />
                     </m.span>
                   ))}
                 </div>

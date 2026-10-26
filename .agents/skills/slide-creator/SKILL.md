@@ -57,7 +57,7 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
 - Generic icons (Tabler) are only for ideas, never for products.
 - **Show UI as the product really draws it.** Port the real component, or
   copy its markup and styles. Examples: Bee's link chips are small pills with
-  a favicon, the domain and a dismiss cross, not cards. Bee's logo plays its
+  a favicon (or a file icon for a note), the label and an open-link arrow, not cards. Bee's logo plays its
   real animated states (idle, listening, thinking, searching, tool, done,
   error).
 - Site icons use real favicons

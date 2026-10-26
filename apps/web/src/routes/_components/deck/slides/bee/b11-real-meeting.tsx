@@ -120,7 +120,10 @@ export function BeeRealMeeting() {
                       {active.answer}
                     </p>
                     <div className="mt-4">
-                      <SourceChip domain={active.source} />
+                      <SourceChip
+                        label={active.source}
+                        domain={active.source}
+                      />
                     </div>
                   </m.div>
                 ) : null}
