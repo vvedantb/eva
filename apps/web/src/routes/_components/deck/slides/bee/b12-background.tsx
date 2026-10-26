@@ -52,15 +52,14 @@ const CHORES: readonly Chore[] = [
 interface Update {
   from: "you" | "bot";
   text: string;
-  time: string;
 }
 
 /** One message from you; the rest are updates, as a co-worker would send. Example thread. */
 const THREAD: readonly Update[] = [
-  { from: "you", text: "Ship the referral export fix", time: "10:02" },
-  { from: "bot", text: "On it.", time: "10:02" },
-  { from: "bot", text: "Migration applied, deploying now.", time: "10:09" },
-  { from: "bot", text: "Merged. It is live.", time: "10:11" },
+  { from: "you", text: "Ship the referral export fix" },
+  { from: "bot", text: "On it." },
+  { from: "bot", text: "Migration applied, deploying now." },
+  { from: "bot", text: "Merged. It is live." },
 ];
 
 const SHOTS: readonly CameraShot[] = [
@@ -134,7 +133,7 @@ function Background() {
             <m.div
               key={update.text}
               className={cn(
-                "flex max-w-[86%] items-baseline gap-3 rounded-[20px] px-4 py-3 text-lg",
+                "max-w-[86%] rounded-[20px] px-4 py-3 text-lg",
                 mine ? "self-end rounded-br-md" : "self-start rounded-bl-md",
               )}
               style={
@@ -151,12 +150,6 @@ function Background() {
               )}
             >
               <span className="font-medium">{update.text}</span>
-              <span
-                className="ml-auto shrink-0 text-[13px] tabular-nums"
-                style={{ color: mine ? "rgba(23,20,15,0.6)" : BEE.muted }}
-              >
-                {update.time}
-              </span>
             </m.div>
           );
         })}
