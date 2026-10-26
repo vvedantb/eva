@@ -134,15 +134,24 @@ export function Deck({
   // A follower is a passenger: every way of moving the deck by hand is taken
   // away in one place, rather than guarded at each call site. `applyRemote` is
   // untouched, so a host's own presenter window still drives this stage.
-  const driven: DeckNavigation = share.isFollower
-    ? { ...nav, next: noop, prev: noop, goTo: noop }
+  // With auto-build on, the presenter's next and back move whole slides; the
+  // build plays itself. With it off (A), they step through the build as before.
+  const presenterNav: DeckNavigation = autoBuild
+    ? {
+        ...nav,
+        next: () => nav.goTo(share.effectiveSlide + 1),
+        prev: nav.prevSlide,
+      }
     : nav;
+  const driven: DeckNavigation = share.isFollower
+    ? { ...nav, next: noop, prev: noop, prevSlide: noop, goTo: noop }
+    : presenterNav;
 
   // A timer is outside React, so this is an effect: one pending step at a time,
   // only while moving forward, and never in a follower's window.
   const autoNext =
     autoBuild && !share.isFollower && direction > 0 && step < entry.steps;
-  const advance = driven.next;
+  const advance = nav.next;
   useEffect(() => {
     if (!autoNext) return;
     const wait =

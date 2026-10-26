@@ -32,6 +32,8 @@ export interface DeckNavigation {
   goTo: (target: number) => void;
   next: () => void;
   prev: () => void;
+  /** Back one whole slide, landing on its finished build. */
+  prevSlide: () => void;
   /** Jumps to a slide *and* a build step, for the other window's messages. */
   applyRemote: (slide: number, step: number) => void;
 }
@@ -88,6 +90,15 @@ export function useDeckNavigation(
     if (slide < total) goTo(slide + 1);
   }
 
+  function prevSlide() {
+    if (slide <= 1) return;
+    // Step back onto the *finished* previous slide rather than replaying its build.
+    const resting = slides[slide - 2].steps;
+    setDeckState({ slide: slide - 1, step: resting, direction: -1 });
+    onNavigate(slide - 1);
+    onMove(slide - 1, resting);
+  }
+
   function prev() {
     if (step > 0) {
       // Backwards, so an auto-playing build does not step forward again.
@@ -95,12 +106,7 @@ export function useDeckNavigation(
       onMove(slide, step - 1);
       return;
     }
-    if (slide <= 1) return;
-    // Step back onto the *finished* previous slide rather than replaying its build.
-    const resting = slides[slide - 2].steps;
-    setDeckState({ slide: slide - 1, step: resting, direction: -1 });
-    onNavigate(slide - 1);
-    onMove(slide - 1, resting);
+    prevSlide();
   }
 
   function applyRemote(remoteSlide: number, remoteStep: number) {
@@ -120,7 +126,17 @@ export function useDeckNavigation(
     if (destination !== slide) onNavigate(destination);
   }
 
-  return { entry, total, step, direction, goTo, next, prev, applyRemote };
+  return {
+    entry,
+    total,
+    step,
+    direction,
+    goTo,
+    next,
+    prev,
+    prevSlide,
+    applyRemote,
+  };
 }
 
 /**
