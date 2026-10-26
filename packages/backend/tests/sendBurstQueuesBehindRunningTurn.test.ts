@@ -32,9 +32,45 @@ async function baseFixture() {
   return { t, asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
 
+type Fixture = Awaited<ReturnType<typeof baseFixture>>;
+type Row = { role: "user" | "assistant"; content: string; finished?: true };
+
+/** A session chat with a running turn and `rows` stored oldest first. */
+function busySessionChat(f: Fixture, rows: Row[]) {
+  return f.t.run(async (ctx) => {
+    const sessionId = await ctx.db.insert("sessions", {
+      repoId: f.repoId,
+      userId: f.userId,
+      title: "Send burst",
+      status: "active",
+      numId: 1,
+    });
+    const id = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId: f.repoId,
+      userId: f.userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
+      activeWorkflowId: "wf-first-send",
+    });
+    const start = Date.now();
+    for (const [index, row] of rows.entries()) {
+      await ctx.db.insert("messages", {
+        parentId: id,
+        role: row.role,
+        content: row.content,
+        timestamp: start + index,
+        ...(row.finished ? { finishedAt: start + index } : {}),
+      });
+    }
+    return id;
+  });
+}
+
 function chatState(
-  t: ReturnType<typeof convexTest>,
-  parentId: Id<"sessionChats"> | Id<"agentTasks">,
+  t: Fixture["t"],
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">,
 ) {
   return t.run(async (ctx) => {
     const queued = await ctx.db
@@ -58,31 +94,9 @@ describe("a send that lands behind a running turn", () => {
     "queues on a session chat instead of starting a second turn",
     async () => {
       const f = await baseFixture();
-      const chatId = await f.t.run(async (ctx) => {
-        const sessionId = await ctx.db.insert("sessions", {
-          repoId: f.repoId,
-          userId: f.userId,
-          title: "Send burst",
-          status: "active",
-          numId: 1,
-        });
-        const id = await ctx.db.insert("sessionChats", {
-          sessionId,
-          repoId: f.repoId,
-          userId: f.userId,
-          title: "Main",
-          number: 1,
-          isMain: true,
-          activeWorkflowId: "wf-first-send",
-        });
-        await ctx.db.insert("messages", {
-          parentId: id,
-          role: "user",
-          content: BURST_MESSAGE,
-          timestamp: Date.now(),
-        });
-        return id;
-      });
+      const chatId = await busySessionChat(f, [
+        { role: "user", content: BURST_MESSAGE },
+      ]);
 
       const outcome = await f.asUser.mutation(
         api.sessionWorkflow.startExecute,
@@ -145,6 +159,96 @@ describe("a send that lands behind a running turn", () => {
       expect(queued?.attachmentStorageIds).toEqual([storageId]);
       const task = await f.t.run((ctx) => ctx.db.get(taskId));
       expect(task?.activeChatWorkflowId).toBe("wf-first-send");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "queues on a project chat instead of starting a second turn",
+    async () => {
+      const f = await baseFixture();
+      const projectId = await f.t.run(async (ctx) => {
+        const id = await ctx.db.insert("projects", {
+          repoId: f.repoId,
+          userId: f.userId,
+          title: "Send burst",
+          phase: "in_progress",
+          rawInput: "send burst",
+          updatedAt: Date.now(),
+          activeChatWorkflowId: "wf-first-send",
+        });
+        await ctx.db.insert("messages", {
+          parentId: id,
+          role: "user",
+          content: BURST_MESSAGE,
+          timestamp: Date.now(),
+        });
+        return id;
+      });
+
+      await f.asUser.mutation(api.projectChatWorkflow.startExecute, {
+        projectId,
+        message: BURST_MESSAGE,
+        model: "claude:sonnet",
+      });
+
+      expect(await chatState(f.t, projectId)).toEqual({
+        queued: [BURST_MESSAGE],
+        userRows: [],
+      });
+      const project = await f.t.run((ctx) => ctx.db.get(projectId));
+      expect(project?.activeChatWorkflowId).toBe("wf-first-send");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "drops its row even when the first turn's placeholder is newer",
+    async () => {
+      // Both composer rows land, then the first send's turn inserts its
+      // placeholder, so the burst row is no longer the chat's newest row.
+      const f = await baseFixture();
+      const chatId = await busySessionChat(f, [
+        { role: "user", content: "fix the header" },
+        { role: "user", content: BURST_MESSAGE },
+        { role: "assistant", content: "" },
+      ]);
+
+      await f.asUser.mutation(api.sessionWorkflow.startExecute, {
+        chatId,
+        message: BURST_MESSAGE,
+        model: "claude:sonnet",
+      });
+
+      expect(await chatState(f.t, chatId)).toEqual({
+        queued: [BURST_MESSAGE],
+        userRows: ["fix the header"],
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "keeps the same prompt from an earlier, finished turn",
+    async () => {
+      const f = await baseFixture();
+      const chatId = await busySessionChat(f, [
+        { role: "user", content: BURST_MESSAGE },
+        { role: "assistant", content: "Renamed.", finished: true },
+        { role: "user", content: "fix the header" },
+        { role: "assistant", content: "" },
+      ]);
+
+      await f.asUser.mutation(api.sessionWorkflow.startExecute, {
+        chatId,
+        message: BURST_MESSAGE,
+        model: "claude:sonnet",
+      });
+
+      expect(await chatState(f.t, chatId)).toEqual({
+        queued: [BURST_MESSAGE],
+        userRows: [BURST_MESSAGE, "fix the header"],
+      });
     },
     TIMEOUT_MS,
   );
