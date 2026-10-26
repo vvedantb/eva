@@ -11,6 +11,7 @@ import { BeeSummary } from "./bee/b06-summary";
 import { BeeTeams } from "./bee/b07-teams";
 import { BeePrivate } from "./bee/b08-private";
 import { BeeCost } from "./bee/b13-cost";
+import { BeeCompare } from "./bee/b14-compare";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 
@@ -73,6 +74,12 @@ const SLIDES: DeckSlide[] = [
     title: "Better together",
     Component: BeeTeams,
     steps: 2,
+  },
+  {
+    id: "bee-14-compare",
+    title: "Teams and Bee",
+    Component: BeeCompare,
+    steps: 3,
   },
   {
     id: "bee-08-private",

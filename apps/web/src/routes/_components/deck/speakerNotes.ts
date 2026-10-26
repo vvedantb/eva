@@ -336,8 +336,14 @@ Next: That works for one person. It is better for a team.`,
 → Step 1: each person's Bee shares only what its own microphone heard. That is why everyone in the meeting needs Bee running on their own laptop.
 → Step 2: so the summary knows exactly who said what, and labels each line with a name. Each line comes from that person's own microphone, so the name is never a guess.
 Detail: say it aloud if it helps: this is the only way to be sure who said what. Tools that label speakers from one shared recording have to guess, and in my experience Teams often gets it wrong. Keep that as your own view; we have not measured it. The catch: people without Bee are not in the transcript, and the summary says it is partial. There is no bot in the call and nothing joins automatically. Names and lines are an example.
-Next: Which raises the obvious question: what about privacy?`,
+Next: So how is that different from the transcript Teams already makes?`,
 
+  "bee-14-compare": `Teams already makes a transcript, so it is fair to ask what Bee adds. This compares how each one works.
+→ Step 1: who said what. Teams works out the speakers from the shared meeting audio. Bee takes each line from that person's own microphone, so the name is known, not worked out.
+→ Step 2: during the meeting. Teams gives you a live transcript to read. Bee gives you one or two short tips from your own notes and the web, when they help.
+→ Step 3: your notes. Teams keeps transcripts in Microsoft 365. Bee keeps notes and summaries on your computer.
+Detail: this is a comparison of approach, not a measured accuracy test; we have not measured Teams. Copilot and some Teams Rooms set-ups add more, so say "the standard Teams transcript" if asked. Keep it neutral: Teams is fine for a record; Bee is for help while you talk.
+Next: Which raises the obvious question: what about privacy?`,
   "bee-08-private": `Bee was built to be safe to leave on.
 → Step 1: you start sharing your screen, and the notch disappears from what others see.
 → Step 2: the four promises: no transcript on screen, hidden during screen share, your notes and summaries stay on your computer, and nothing joins a meeting without your click.
