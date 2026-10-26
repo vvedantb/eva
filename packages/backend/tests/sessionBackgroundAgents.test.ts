@@ -2,7 +2,9 @@ import { test, expect } from "vitest";
 import {
   MAX_SETTLED_BACKGROUND_AGENTS,
   mergeBackgroundAgents,
+  pruneSettledBackgroundAgents,
   runningBackgroundAgents,
+  settleOrphanedBackgroundAgents,
 } from "../convex/_sessions/backgroundAgents";
 import { readStopTaskToolUseIds } from "../callback-src/providers/claimPendingTurnParse";
 
@@ -173,4 +175,38 @@ test("mergeBackgroundAgents keeps running entries and only the newest settled on
     `done-${MAX_SETTLED_BACKGROUND_AGENTS + 4}`,
   );
   expect(merged.at(-1)?.toolUseId).toBe("live");
+});
+
+function settledEntries(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    toolUseId: `done-${index}`,
+    status: "completed",
+    startedAt: index,
+    settledAt: 1000 + index,
+  }));
+}
+
+/** The prune migration skips the write when it gets the same array back. */
+test("pruneSettledBackgroundAgents returns the same array when under the cap", () => {
+  const entries = settledEntries(MAX_SETTLED_BACKGROUND_AGENTS);
+  expect(pruneSettledBackgroundAgents(entries)).toBe(entries);
+});
+
+/** A sandbox resume also writes the array, so it must not regrow it past the cap. */
+test("settleOrphanedBackgroundAgents caps settled entries after staling orphans", () => {
+  const result = settleOrphanedBackgroundAgents(
+    [
+      ...settledEntries(MAX_SETTLED_BACKGROUND_AGENTS),
+      { toolUseId: "orphan", status: "running", startedAt: 5000 },
+    ],
+    9000,
+  );
+
+  expect(result).toHaveLength(MAX_SETTLED_BACKGROUND_AGENTS);
+  expect(result?.some((entry) => entry.toolUseId === "done-0")).toBe(false);
+  expect(result?.at(-1)).toMatchObject({
+    toolUseId: "orphan",
+    status: "stale",
+    settledAt: 9000,
+  });
 });
