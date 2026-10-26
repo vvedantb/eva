@@ -21,6 +21,7 @@ import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
+  dropComposerUserRow,
 } from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
 import {
@@ -417,23 +418,19 @@ export const startExecute = authMutation({
       }
     }
 
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
+    // A send that lands behind this chat's own running turn queues too: a
+    // burst of sends can all reach here before the composer sees the first
+    // turn, and starting each one ran two turns at once.
+    const chatBusy =
+      chat.activeWorkflowId !== undefined || chat.pendingTurn !== undefined;
+    if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
       await enqueueChatMessage(ctx, {
         context,
         userId: ctx.userId,
         content: message,
         settings,
       });
-      // The composer already inserted the user row (addMessage); drop it so
-      // the queue drain's own insert does not show the prompt twice.
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-        .order("desc")
-        .first();
-      if (last && last.role === "user" && last.content === message) {
-        await ctx.db.delete(last._id);
-      }
+      await dropComposerUserRow(ctx, chat._id, message);
       return "queued";
     }
 

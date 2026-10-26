@@ -15,7 +15,10 @@ import {
 import { toast } from "@vvedantb/ui";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
-import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import {
+  openChatTurnOptimistically,
+  useChatTurnOpen,
+} from "@/lib/components/chat/useChatTurnOpen";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
@@ -75,7 +78,11 @@ export function ProjectSandboxChatPanel({
   });
 
   const addMessage = useMutation(api.projectChatWorkflow.addMessage);
-  const startExecute = useMutation(api.projectChatWorkflow.startExecute);
+  const startExecute = useMutation(
+    api.projectChatWorkflow.startExecute,
+  ).withOptimisticUpdate((localStore, args) =>
+    openChatTurnOptimistically(localStore, args.projectId),
+  );
   const enqueueMessage = useMutation(api.projectChatWorkflow.enqueueMessage);
   const cancelExecution = useMutation(api.projectChatWorkflow.cancelExecution);
   const prewarmChatDaemonNow = useAction(
@@ -270,21 +277,27 @@ export function ProjectSandboxChatPanel({
     }
     const accountId = resolveAccountId(providerAccountId);
     try {
-      await addMessage({
-        projectId,
-        content,
-        attachmentStorageIds,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel: displayTraits.effortLevel,
-      });
-      await startExecute({
-        projectId,
-        message: content,
-        model,
-        ...executionTraits,
-        providerAccountId: accountId,
-      });
+      // Fired together, not one after the other: `startExecute`'s optimistic
+      // status must apply at once, so a second send before the server answers
+      // queues. Convex runs one client's mutations in order, so the user row
+      // still lands first.
+      await Promise.all([
+        addMessage({
+          projectId,
+          content,
+          attachmentStorageIds,
+          providerAccountId: accountId,
+          model,
+          reasoningLevel: displayTraits.effortLevel,
+        }),
+        startExecute({
+          projectId,
+          message: content,
+          model,
+          ...executionTraits,
+          providerAccountId: accountId,
+        }),
+      ]);
     } catch (error) {
       raiseSendFailure(
         error instanceof Error ? error.message : "",

@@ -31,6 +31,7 @@ import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
 import { finalizeCancelledAssistantMessage } from "./streaming";
 import {
   drainChatQueueQuietly,
+  dropComposerUserRow,
   startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
 import {
@@ -444,6 +445,27 @@ export const startExecute = authMutation({
       surface: { kind: "task", task },
     });
 
+    // A send that lands behind a running turn queues: a burst of sends can all
+    // reach here before the composer sees the first turn, and starting each
+    // one ran two turns at once. Same busy rule as the queue's own drain.
+    if (
+      task.activeChatWorkflowId !== undefined ||
+      task.activeWorkflowId !== undefined ||
+      task.pendingTurn !== undefined
+    ) {
+      await enqueueTaskChatMessage(ctx, task, {
+        ...args,
+        userId: ctx.userId,
+        attachmentStorageIds: await dropComposerUserRow(
+          ctx,
+          args.taskId,
+          args.message,
+        ),
+        resolvedProviderAccountId: providerAccountId,
+      });
+      return null;
+    }
+
     // The user row for this turn is already stored (the client sends addMessage
     // first), so the alert lands above the new placeholder, not below the reply.
     await maybeInsertModelHandoffAlert(
@@ -655,37 +677,63 @@ export const enqueueMessage = authMutation({
       surface: { kind: "task", task },
     });
 
-    await ctx.db.insert("queuedMessages", {
-      parentId: args.taskId,
-      content,
-      createdAt: Date.now(),
-      order: Date.now(),
+    await enqueueTaskChatMessage(ctx, task, {
+      ...args,
+      message: content,
       userId: ctx.userId,
-      model: args.model,
-      reasoningLevel: args.reasoningLevel,
-      thinkingEnabled: args.thinkingEnabled,
-      use1mContext: args.use1mContext,
-      fastMode: args.fastMode,
-      // The sender's raw pick, re-resolved against the owner's accounts at
-      // dequeue: the model and the owner's accounts can both move while the
-      // message waits.
-      providerAccountId: args.providerAccountId,
-      attachmentStorageIds: args.attachmentStorageIds,
-      sentViaOrchestrator: args.sentViaOrchestrator,
+      resolvedProviderAccountId: providerAccountId,
     });
-    await ctx.db.patch(args.taskId, {
-      lastChatModel: normalizedModel,
-      providerAccountId,
-      ...composerTraitFields(args),
-      updatedAt: Date.now(),
-    });
-    // Sends at once when the chat is idle. Otherwise the queue waits: behind
-    // the running turn, for a usage-limit reset, or for Eva to wake — a
-    // sleeping sandbox is woken here and its ready drain sends the message.
-    await drainChatQueueQuietly(ctx, args.taskId);
     return null;
   },
 });
+
+/** Parks a message on the task's chat queue; shared by enqueue and a busy send. */
+async function enqueueTaskChatMessage(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  args: {
+    message: string;
+    userId: Id<"users">;
+    model: Infer<typeof aiModelValidator>;
+    reasoningLevel?: Doc<"queuedMessages">["reasoningLevel"];
+    thinkingEnabled?: boolean;
+    use1mContext?: boolean;
+    fastMode?: boolean;
+    providerAccountId?: Id<"userProviderAccounts">;
+    resolvedProviderAccountId: Id<"userProviderAccounts"> | undefined;
+    attachmentStorageIds?: Id<"_storage">[];
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  await ctx.db.insert("queuedMessages", {
+    parentId: task._id,
+    content: args.message,
+    createdAt: Date.now(),
+    order: Date.now(),
+    userId: args.userId,
+    model: args.model,
+    reasoningLevel: args.reasoningLevel,
+    thinkingEnabled: args.thinkingEnabled,
+    use1mContext: args.use1mContext,
+    fastMode: args.fastMode,
+    // The sender's raw pick, re-resolved against the owner's accounts at
+    // dequeue: the model and the owner's accounts can both move while the
+    // message waits.
+    providerAccountId: args.providerAccountId,
+    attachmentStorageIds: args.attachmentStorageIds,
+    sentViaOrchestrator: args.sentViaOrchestrator,
+  });
+  await ctx.db.patch(task._id, {
+    lastChatModel: normalizeAIModel(args.model),
+    providerAccountId: args.resolvedProviderAccountId,
+    ...composerTraitFields(args),
+    updatedAt: Date.now(),
+  });
+  // Sends at once when the chat is idle. Otherwise the queue waits: behind
+  // the running turn, for a usage-limit reset, or for Eva to wake — a
+  // sleeping sandbox is woken here and its ready drain sends the message.
+  await drainChatQueueQuietly(ctx, task._id);
+}
 
 /**
  * Cancels the active task chat workflow and starts any queued message. For a

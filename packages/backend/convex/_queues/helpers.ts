@@ -276,6 +276,37 @@ async function scheduleDrainAtBackgroundAgentExpiry<
 }
 
 /**
+ * Drops the user row the composer stored (`addMessage`) for a send that
+ * `startExecute` queued instead of starting: the dequeue inserts its own row,
+ * so keeping it would show the prompt twice. The composer picks send or queue
+ * from its own subscription, so a burst of sends can all reach `startExecute`
+ * before it sees the first turn. Their rows interleave with that turn's
+ * placeholder, so this takes the newest matching user row since the last
+ * finished reply, not just the newest row. Returns the row's attachments.
+ */
+export async function dropComposerUserRow(
+  ctx: MutationCtx,
+  parentId: ChatQueueId,
+  content: string,
+): Promise<Id<"_storage">[] | undefined> {
+  const recent = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .order("desc")
+    .take(20);
+  for (const message of recent) {
+    if (message.role === "assistant" && message.finishedAt !== undefined) {
+      return undefined;
+    }
+    if (message.role === "user" && message.content === content) {
+      await ctx.db.delete(message._id);
+      return message.attachmentStorageIds;
+    }
+  }
+  return undefined;
+}
+
+/**
  * The usage-limit hold on `next`, if any: the chat's newest turn ran out of
  * usage on the credential `next` would run on. A message moved to another
  * provider or another account is not held — that is how switching either one
