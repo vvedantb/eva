@@ -2,8 +2,46 @@ import { describe, expect, it } from "vitest";
 import {
   applyIgnoreWhitespace,
   buildDiffFileEntries,
+  diffFileKind,
   ignoreWhitespaceInPatch,
+  summarizeDiffSize,
 } from "./diffFiles";
+
+describe("diffFileKind", () => {
+  it.each([
+    ["apps/web/src/lib/diffFiles.ts", "code"],
+    ["apps/web/src/lib/diffFiles.test.ts", "tests"],
+    ["packages/backend/tests/prDescription.test.ts", "tests"],
+    ["pkg/server/handler_test.go", "tests"],
+    ["src/__mocks__/convex.ts", "mocks"],
+    ["tests/fixtures/pr.json", "mocks"],
+    ["reviews/_components/prOverviewFixture.ts", "mocks"],
+    ["pnpm-lock.yaml", "generated"],
+    ["packages/backend/convex/_generated/api.d.ts", "generated"],
+    ["apps/web/src/routeTree.gen.ts", "generated"],
+    ["src/__tests__/__snapshots__/view.test.tsx.snap", "generated"],
+  ])("%s is %s", (path, kind) => {
+    expect(diffFileKind(path)).toBe(kind);
+  });
+});
+
+describe("summarizeDiffSize", () => {
+  it("splits a lockfile-heavy diff into its kinds", () => {
+    const entries = buildDiffFileEntries(
+      [
+        patch("src/a.ts", "const b = 2;"),
+        patch("src/a.test.ts", "it();"),
+        patch("pnpm-lock.yaml", "foo: 1"),
+      ].join("\n"),
+    );
+    const { total, byKind } = summarizeDiffSize(entries);
+    expect(total).toEqual({ files: 3, additions: 3, deletions: 0 });
+    expect(byKind.code).toEqual({ files: 1, additions: 1, deletions: 0 });
+    expect(byKind.tests.additions).toBe(1);
+    expect(byKind.generated.additions).toBe(1);
+    expect(byKind.mocks.files).toBe(0);
+  });
+});
 
 const PROCUREMENTS = "apps/eprocurement/convex/procurements.ts";
 
