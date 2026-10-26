@@ -4,6 +4,10 @@ export const SESSIONS_SIDEBAR_SETTINGS_KEY = "eva:sessions-sidebar-settings:v1";
 /** Per-app expand/collapse in global Sessions sidebar + chrome tabs. */
 export const SESSIONS_APP_GROUPS_OPEN_KEY = "eva:sessions-app-groups-open:v1";
 
+/** Per-group expand/collapse for linked-session groups in the Sessions sidebar. */
+export const LINKED_SESSION_GROUPS_OPEN_KEY =
+  "eva:linked-session-groups-open:v1";
+
 export const APP_SORT_ORDERS = ["updated_at", "created_at", "manual"] as const;
 export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
 
