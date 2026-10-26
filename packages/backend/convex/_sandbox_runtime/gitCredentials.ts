@@ -1,7 +1,6 @@
 "use node";
 
-import { requiredEnv } from "@vvedantb/server";
-import { randomBytes } from "crypto";
+import { randomToken, requiredEnv } from "@vvedantb/server";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
@@ -153,7 +152,7 @@ export async function ensureGitCredentialHelper(
   homeRepo: { owner: string; name: string },
   extraInstallationIds: number[] = [],
 ): Promise<void> {
-  const secret = randomBytes(32).toString("hex");
+  const secret = randomToken(32, "hex");
   const siteUrl = resolveConvexSiteUrl();
   const envFileContent = `EVA_SANDBOX_SECRET=${secret}\nCONVEX_SITE_URL=${siteUrl}\n`;
 

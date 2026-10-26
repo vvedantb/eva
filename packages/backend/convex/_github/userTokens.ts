@@ -143,7 +143,7 @@ export const purgeExpiredOauthStates = internalMutation({
     const now = Date.now();
     const stale = await ctx.db
       .query("githubOauthStates")
-      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .withIndex("by_expires_at", (q) => q.lt("expiresAt", now))
       .take(200);
     for (const row of stale) {
       await ctx.db.delete(row._id);
