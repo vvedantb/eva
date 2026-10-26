@@ -44,7 +44,8 @@ const SLIDES: DeckSlide[] = [
     title: "Meet the notch",
     Component: BeeNotch,
     steps: 2,
-    manual: true,
+    // Time to watch it listen, close up, before the answer opens.
+    autoMs: [1100, 3200],
   },
   {
     id: "bee-04-listens",
@@ -63,7 +64,8 @@ const SLIDES: DeckSlide[] = [
     title: "A real meeting",
     Component: BeeRealMeeting,
     steps: 3,
-    manual: true,
+    // Each answer stays long enough to read aloud.
+    autoMs: [1100, 5500, 5000],
   },
   {
     id: "bee-06-summary",

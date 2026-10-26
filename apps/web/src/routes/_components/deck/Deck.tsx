@@ -118,7 +118,7 @@ export function Deck({
   const stage = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
   const [outlineOpen, setOutlineOpen] = useState(false);
-  // Builds play on their own unless the presenter turns it off (A) or the slide is manual.
+  // Builds play on their own unless the presenter turns it off (A).
   const [autoBuild, setAutoBuild] = useState(true);
 
   const { entry, step, direction, total } = nav;
@@ -141,20 +141,15 @@ export function Deck({
   // A timer is outside React, so this is an effect: one pending step at a time,
   // only while moving forward, and never in a follower's window.
   const autoNext =
-    autoBuild &&
-    !entry.manual &&
-    !share.isFollower &&
-    direction > 0 &&
-    step < entry.steps;
+    autoBuild && !share.isFollower && direction > 0 && step < entry.steps;
   const advance = driven.next;
   useEffect(() => {
     if (!autoNext) return;
-    const timer = setTimeout(
-      advance,
-      step === 0 ? AUTO_FIRST_MS : AUTO_STEP_MS,
-    );
+    const wait =
+      entry.autoMs?.[step] ?? (step === 0 ? AUTO_FIRST_MS : AUTO_STEP_MS);
+    const timer = setTimeout(advance, wait);
     return () => clearTimeout(timer);
-  }, [autoNext, advance, step]);
+  }, [autoNext, advance, step, entry]);
 
   function openPresenter() {
     openPresenterWindow(basePath, share.effectiveSlide);
