@@ -12,6 +12,7 @@ import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
 import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
 import { ContextUsageDisplay } from "@/lib/components/context-usage";
 import { DiffsToolbar } from "@/lib/components/sandbox/DiffsToolbar";
+import type { DiffSize } from "@/lib/components/sandbox/diffFiles";
 import { PreviewSnapshotButton } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { PreviewWebMcpButton } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import { DEMO_PREVIEW_SNAPSHOT } from "@/lib/components/sandbox/previewSnapshot";
@@ -40,6 +41,7 @@ const FEATURES = [
   "snapshot",
   "diffs-files",
   "ignore-whitespace",
+  "pr-size",
   "context-meter",
   "webmcp",
   "thread-find",
@@ -69,6 +71,7 @@ function FeaturePreviewsPage() {
   if (feature === "snapshot") return <SnapshotPreview />;
   if (feature === "diffs-files") return <DiffsFilesPreview />;
   if (feature === "ignore-whitespace") return <IgnoreWhitespacePreview />;
+  if (feature === "pr-size") return <PrSizePreview />;
   if (feature === "context-meter") return <ContextMeterPreview />;
   if (feature === "webmcp") return <WebMcpPreview />;
   if (feature === "thread-find") return <ThreadFindPreview />;
@@ -304,6 +307,52 @@ function DiffsFilesPreview() {
   );
 }
 
+/** A "+2,000" pull request that is about 300 lines of code. */
+const DEMO_DIFF_SIZE: DiffSize = {
+  total: { files: 14, additions: 2034, deletions: 61 },
+  byKind: {
+    code: { files: 6, additions: 287, deletions: 41 },
+    tests: { files: 4, additions: 512, deletions: 12 },
+    mocks: { files: 2, additions: 168, deletions: 0 },
+    generated: { files: 2, additions: 1067, deletions: 8 },
+  },
+};
+
+function PrSizePreview() {
+  return (
+    <div className="min-h-dvh bg-background text-foreground">
+      <div className="px-10 pt-12">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          PR size split
+        </p>
+        <h1 className="mt-1 text-xl font-semibold">
+          How much of this diff is code?
+        </h1>
+      </div>
+      <div className="mt-8 flex items-center justify-end border-y border-border px-4 py-1">
+        <DiffsToolbar
+          size={DEMO_DIFF_SIZE}
+          scopedCommit={null}
+          onClearScope={() => {}}
+          diffView="unified"
+          onDiffViewChange={() => {}}
+          wrapLines={false}
+          onWrapLinesChange={() => {}}
+          ignoreWhitespace={false}
+          onIgnoreWhitespaceChange={() => {}}
+          allExpanded
+          onExpandAll={() => {}}
+          onCollapseAll={() => {}}
+          isLoading={false}
+          onRefresh={() => {}}
+          treeOpen
+          onTreeOpenChange={() => {}}
+        />
+      </div>
+    </div>
+  );
+}
+
 function IgnoreWhitespacePreview() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
@@ -315,6 +364,7 @@ function IgnoreWhitespacePreview() {
       </div>
       <div className="mt-8 border-y border-border">
         <DiffsToolbar
+          size={null}
           scopedCommit={null}
           onClearScope={() => {}}
           diffView="unified"

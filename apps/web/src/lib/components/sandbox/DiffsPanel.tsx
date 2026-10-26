@@ -26,7 +26,11 @@ import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
 import { useDiffIgnoreWhitespace } from "./useDiffIgnoreWhitespace";
-import { applyIgnoreWhitespace, type DiffFileEntry } from "./diffFiles";
+import {
+  applyIgnoreWhitespace,
+  summarizeDiffSize,
+  type DiffFileEntry,
+} from "./diffFiles";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
@@ -367,6 +371,11 @@ export function DiffsPanel({
         ? null
         : createPortal(
             <DiffsToolbar
+              size={
+                source.status === "ready"
+                  ? summarizeDiffSize(fileEntries)
+                  : null
+              }
               scopedCommit={
                 scopedCommit === undefined
                   ? null
