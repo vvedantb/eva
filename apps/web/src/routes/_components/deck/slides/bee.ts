@@ -12,6 +12,7 @@ import { BeeTeams } from "./bee/b07-teams";
 import { BeePrivate } from "./bee/b08-private";
 import { BeeCost } from "./bee/b13-cost";
 import { BeeCompare } from "./bee/b14-compare";
+import { BeeCatchUp } from "./bee/b15-catch-up";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 
@@ -67,6 +68,12 @@ const SLIDES: DeckSlide[] = [
     id: "bee-06-summary",
     title: "The summary",
     Component: BeeSummary,
+    steps: 3,
+  },
+  {
+    id: "bee-15-catch-up",
+    title: "Missed it? Catch up",
+    Component: BeeCatchUp,
     steps: 3,
   },
   {

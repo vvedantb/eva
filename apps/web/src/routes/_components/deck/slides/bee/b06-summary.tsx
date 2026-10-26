@@ -6,26 +6,11 @@ import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
 import { BEE_SPRING } from "./_parts/BeeIsland";
-import { BEE_CARD } from "./_parts/BeeBits";
+import { ACTION_ITEMS, BEE_CARD, DECIDED } from "./_parts/BeeBits";
 
 const DECISIONS = 1;
 const ACTIONS = 2;
 const SAVED = 3;
-
-interface Action {
-  text: string;
-  owner: string;
-}
-
-/** Example meeting: what was decided and who does what. */
-const DECIDED = [
-  "Provider joins the AQP list, if forms are back by Friday",
-  "Start with nursing home placements only",
-];
-const ACTION_ITEMS: readonly Action[] = [
-  { text: "Send the onboarding pack", owner: "Sam" },
-  { text: "Book the follow-up call", owner: "Jo" },
-];
 
 const SHOTS: readonly CameraShot[] = [
   { rotateY: -8, translateZ: -40, x: -60 },
