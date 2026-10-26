@@ -7,9 +7,9 @@
  * as `run`, which keeps SendGrid and markdown inside the node module.
  */
 
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";
-import { errorResult, textResult } from "../mcp/toolShared";
 
 export const MAX_SUBJECT_CHARS = 200;
 export const MAX_BODY_CHARS = 50_000;
@@ -72,8 +72,8 @@ export function sendEmailTool(
     input: sendEmailInputShape,
     handler: async ({ subject, body }) => {
       const outcome = await run({ subject, body });
-      if (!outcome.ok) return errorResult(sendEmailErrorMessage(outcome));
-      return textResult({ status: "sent", to: outcome.to, subject });
+      if (!outcome.ok) return toolErrorResult(sendEmailErrorMessage(outcome));
+      return toolJsonResult({ status: "sent", to: outcome.to, subject });
     },
   });
 }

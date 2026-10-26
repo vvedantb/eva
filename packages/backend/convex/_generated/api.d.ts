@@ -430,7 +430,6 @@ import type * as mcp_chatContentTools from "../mcp/chatContentTools.js";
 import type * as mcp_chatSelfNodeActions from "../mcp/chatSelfNodeActions.js";
 import type * as mcp_chatSelfQueries from "../mcp/chatSelfQueries.js";
 import type * as mcp_chatSelfTools from "../mcp/chatSelfTools.js";
-import type * as mcp_convexQueryLimits from "../mcp/convexQueryLimits.js";
 import type * as mcp_entityRef from "../mcp/entityRef.js";
 import type * as mcp_entityTools from "../mcp/entityTools.js";
 import type * as mcp_evaluate from "../mcp/evaluate.js";
@@ -979,7 +978,6 @@ declare const fullApi: ApiFromModules<{
   "mcp/chatSelfNodeActions": typeof mcp_chatSelfNodeActions;
   "mcp/chatSelfQueries": typeof mcp_chatSelfQueries;
   "mcp/chatSelfTools": typeof mcp_chatSelfTools;
-  "mcp/convexQueryLimits": typeof mcp_convexQueryLimits;
   "mcp/entityRef": typeof mcp_entityRef;
   "mcp/entityTools": typeof mcp_entityTools;
   "mcp/evaluate": typeof mcp_evaluate;

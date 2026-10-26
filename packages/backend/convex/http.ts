@@ -1,5 +1,9 @@
 import { httpRouter } from "convex/server";
-import { registerMcpRoutes } from "@vvedantb/server";
+import {
+  registerMcpRoutes,
+  sha256Hex,
+  timingSafeEqual,
+} from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -31,19 +35,6 @@ import {
 
 const http = httpRouter();
 
-/** Compares two strings in constant time to prevent timing attacks. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const bufA = encoder.encode(a);
-  const bufB = encoder.encode(b);
-  if (bufA.byteLength !== bufB.byteLength) return false;
-  let mismatch = 0;
-  for (let i = 0; i < bufA.byteLength; i++) {
-    mismatch |= (bufA[i] ?? 0) ^ (bufB[i] ?? 0);
-  }
-  return mismatch === 0;
-}
-
 /** Verifies the MCP bootstrap authorization token from the request header. */
 function verifyMcpBootstrapToken(request: Request): boolean {
   const auth = request.headers.get("Authorization");
@@ -70,14 +61,6 @@ async function computeScopedHmac(message: string): Promise<string | null> {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
   return hmacSha256Hex(secret, message);
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 /** Reads a required form field from an x-www-form-urlencoded request body. */
@@ -501,10 +484,7 @@ const prWebhookSchema = z.object({
         ref: nullableString,
         sha: nullableString,
         // Fork PRs carry the fork here; their branch is not in the base repo.
-        repo: z
-          .object({ full_name: nullableString })
-          .nullable()
-          .catch(null),
+        repo: z.object({ full_name: nullableString }).nullable().catch(null),
       })
       .nullable()
       .catch(null),

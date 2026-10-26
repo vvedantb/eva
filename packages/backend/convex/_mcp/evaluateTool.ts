@@ -9,9 +9,9 @@
  * SDK types confined to the node module.
  */
 
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import type { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";
-import { errorResult, textResult } from "../mcp/toolShared";
 import {
   MAX_OPTIONS,
   MAX_QUESTIONS,
@@ -89,13 +89,13 @@ export function evaluateTool(
     handler: async (args) => {
       const parsed = evaluateInput.safeParse(args);
       if (!parsed.success) {
-        return errorResult(
+        return toolErrorResult(
           `Invalid evaluate input: ${describeIssues(parsed.error)}`,
         );
       }
       const outcome = await run(parsed.data);
-      if (!outcome.ok) return errorResult(evaluateErrorMessage(outcome));
-      return textResult({
+      if (!outcome.ok) return toolErrorResult(evaluateErrorMessage(outcome));
+      return toolJsonResult({
         model: outcome.model,
         answers: outcome.answers,
         usage: outcome.usage,

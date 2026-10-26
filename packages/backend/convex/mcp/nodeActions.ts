@@ -8,7 +8,10 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
   consoleClerkVerifyLogger,
+  defineMcpServerInfo,
+  formatConvexQueryError,
   getClerkClient,
+  runSdkMcpRequest,
   verifyClerkAccessToken,
 } from "@vvedantb/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -39,7 +42,6 @@ import {
 } from "../_chat/surfaceAdapters";
 import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { formatConvexQueryError } from "./convexQueryLimits";
 import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 
@@ -1217,13 +1219,16 @@ async function loadSessionChatsAsUser(
   clerkUserId: string,
   sessionId: string,
 ) {
-  const rows = z
-    .array(sessionChatRowSchema)
-    .parse(
-      await runQueryAsUser(convexUrl, clerkUserId, "sessionChats:listForSession", {
+  const rows = z.array(sessionChatRowSchema).parse(
+    await runQueryAsUser(
+      convexUrl,
+      clerkUserId,
+      "sessionChats:listForSession",
+      {
         sessionId,
-      }),
-    );
+      },
+    ),
+  );
   return rows.filter((row) => row.archived !== true);
 }
 
@@ -1527,9 +1532,9 @@ export const orchestratorGetAgentState = internalAction({
       kind === "session"
         ? await loadSessionChatsAsUser(convexUrl, clerkUserId, id)
         : [];
-    const mainChat = sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
-    const transcriptParentId =
-      kind === "session" ? (mainChat?._id ?? id) : id;
+    const mainChat =
+      sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
+    const transcriptParentId = kind === "session" ? (mainChat?._id ?? id) : id;
     const streamingEntityId =
       kind === "session"
         ? transcriptParentId
@@ -1882,7 +1887,13 @@ export const orchestratorSendMessage = internalAction({
       internal.mcp.queries.entityIsExecuting,
       { kind, id: targetId },
     );
-    const delivery = chatDelivery(kind, rawDoc, queuedAhead, model, isExecuting);
+    const delivery = chatDelivery(
+      kind,
+      rawDoc,
+      queuedAhead,
+      model,
+      isExecuting,
+    );
     for (const call of buildChatMessageCalls({
       kind,
       id: targetId,
@@ -2290,6 +2301,11 @@ export const resolveSupabaseToken = internalAction({
 // MCP Request Handler
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MCP_SERVER_INFO = defineMcpServerInfo({
+  name: "eva-mcp",
+  version: "1.0.0",
+});
+
 export const handleMcpRequest = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -2307,88 +2323,44 @@ export const handleMcpRequest = internalAction({
     ctx,
     { clerkUserId, scopedRepoId, entityId, entityKind, chatId, body },
   ) => {
-    try {
-      const parsedBody = JSON.parse(body);
-
-      // Create MCP server with tools registered
-      const server = new McpServer({
-        name: "eva-mcp",
-        version: "1.0.0",
-      });
-
-      // Register tools with credentials (including optional scoped repo /
-      // session entity for browser tools).
-      const credentials = {
-        clerkUserId,
-        scopedRepoId,
-        entityId,
-        entityKind,
-        chatId,
-      };
-      const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
-        clerkId: clerkUserId,
-      });
-      const flags = resolveExperimentalFlags(user);
-      const tools = buildTools(credentials, ctx).filter(
-        (tool) =>
-          (flags.askTeammates || !ASK_TEAMMATE_TOOL_NAMES.has(tool.name)) &&
-          (flags.prWatch || !PR_WATCH_TOOL_NAMES.has(tool.name)),
-      );
-      let supabase: EvaTool[] = [];
-      try {
-        supabase = await supabaseTools(credentials, ctx);
-      } catch (err) {
-        console.error(
-          "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
-          err instanceof Error ? err.message : err,
+    return runSdkMcpRequest({
+      body,
+      Transport: WebStandardStreamableHTTPServerTransport,
+      createServer: async () => {
+        const server = new McpServer(MCP_SERVER_INFO);
+        // Register tools with credentials (including optional scoped repo /
+        // session entity for browser tools).
+        const credentials = {
+          clerkUserId,
+          scopedRepoId,
+          entityId,
+          entityKind,
+          chatId,
+        };
+        const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+          clerkId: clerkUserId,
+        });
+        const flags = resolveExperimentalFlags(user);
+        const tools = buildTools(credentials, ctx).filter(
+          (tool) =>
+            (flags.askTeammates || !ASK_TEAMMATE_TOOL_NAMES.has(tool.name)) &&
+            (flags.prWatch || !PR_WATCH_TOOL_NAMES.has(tool.name)),
         );
-      }
-      const allTools = [...tools, ...supabase];
-      // Code mode is additive: `execute` and `search_tools` sit beside the flat
-      // tools and dispatch to the same definitions.
-      mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
-
-      // Create transport in stateless mode with JSON responses (no SSE).
-      // WebStandardStreamableHTTPServerTransport works with Web Standard
-      // Request/Response, avoiding Node.js req/res shimming entirely.
-      const transport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-
-      // Connect server to transport
-      await server.connect(transport);
-
-      // Build a Web Standard Request for the transport.
-      // The transport validates Accept + Content-Type headers.
-      const req = new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json, text/event-stream",
-        },
-        body,
-      });
-
-      const response = await transport.handleRequest(req, { parsedBody });
-      const responseBody = await response.text();
-
-      return {
-        status: response.status,
-        body: responseBody,
-      };
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Internal server error";
-      console.error("[MCP][handleMcpRequest] threw:", message, err);
-      return {
-        status: 500,
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32603, message },
-          id: null,
-        }),
-      };
-    }
+        let supabase: EvaTool[] = [];
+        try {
+          supabase = await supabaseTools(credentials, ctx);
+        } catch (err) {
+          console.error(
+            "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
+            err instanceof Error ? err.message : err,
+          );
+        }
+        const allTools = [...tools, ...supabase];
+        // Code mode is additive: `execute` and `search_tools` sit beside the
+        // flat tools and dispatch to the same definitions.
+        mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
+        return server;
+      },
+    });
   },
 });
