@@ -65,11 +65,10 @@ async function withSource(
 // ─────────────────────────────────────────────────────────────────────────────
 // MCP CallToolResult envelope
 //
-// Mirrors `textResult`/`errorResult` in mcp/tools.ts. Re-declared here (rather
-// than imported) because mcp/tools.ts pulls in the MCP SDK and only runs in the
-// "use node" runtime; this module runs in the default isolate. The shape is kept
-// byte-identical so hosted artifacts (which parse `content[].text`) work
-// unchanged.
+// Same output as `toolJsonResult`/`toolErrorResult` from @vvedantb/server, but
+// typed text-only: `callTool`'s `returns` validator allows only text blocks, and
+// the package's `ToolResult` also allows image and audio. Hosted artifacts parse
+// `content[].text`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ToolResult = {

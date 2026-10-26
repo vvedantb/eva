@@ -1,3 +1,4 @@
+import { toolErrorResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
@@ -5,7 +6,6 @@ import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
 import { canonicalPrUrl } from "./sessionRef";
 import {
-  errorResult,
   matchRepoByName,
   mcpListUserRepos,
   type McpCredentials,
@@ -238,16 +238,16 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   async function resolveRepoRef(
     ref: RepoRef,
     userId: string,
-  ): Promise<{ repoId: string } | ReturnType<typeof errorResult>> {
+  ): Promise<{ repoId: string } | ReturnType<typeof toolErrorResult>> {
     if (ref.repoId) return { repoId: ref.repoId };
     if (!ref.repoName) {
-      return errorResult(
+      return toolErrorResult(
         "Provide either repoId (from list_repos) or repoName.",
       );
     }
     const repos = await mcpListUserRepos(ctx, userId);
     const matched = matchRepoByName(repos, ref.repoName, ref.app);
-    if ("isError" in matched) return matched;
+    if ("content" in matched) return matched;
     return { repoId: matched.repo.id };
   }
 
@@ -259,15 +259,15 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   async function resolveEntityTarget(
     ref: EntityRef,
     userId: string,
-  ): Promise<{ target: EntityTarget } | ReturnType<typeof errorResult>> {
+  ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
     const { id, prUrl, numId, kind } = ref;
     if (id === undefined && prUrl === undefined && numId === undefined) {
-      return errorResult(
+      return toolErrorResult(
         'Name the chat: pass "id", "prUrl", or "numId" with "kind" and "repoName".',
       );
     }
     if (id === undefined && prUrl === undefined && kind === undefined) {
-      return errorResult(
+      return toolErrorResult(
         'A numId needs "kind" too ("session", "task" or "project"): each numbers its own rows, so 42 alone is ambiguous.',
       );
     }
@@ -278,7 +278,7 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     if (prUrl !== undefined) {
       const parsed = canonicalPrUrl(prUrl);
       if (parsed === null) {
-        return errorResult(
+        return toolErrorResult(
           'prUrl must be a GitHub pull request link, e.g. "https://github.com/vvedantb/eva/pull/664".',
         );
       }
@@ -290,7 +290,7 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
     let scopeRepoId: string | undefined;
     if (id === undefined && canonicalPr === undefined) {
       const repo = await resolveRepoRef(ref, userId);
-      if ("isError" in repo) return repo;
+      if ("content" in repo) return repo;
       scopeRepoId = repo.repoId;
     }
 
@@ -299,7 +299,7 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
       { userId, kind, id, numId, prUrl: canonicalPr, repoId: scopeRepoId },
     );
     if (!target) {
-      return errorResult(
+      return toolErrorResult(
         "Nothing matched that reference, or you do not have access to it. A PR opened by a quick task resolves to that task, not a session.",
       );
     }

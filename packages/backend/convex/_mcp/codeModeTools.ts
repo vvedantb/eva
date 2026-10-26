@@ -15,6 +15,9 @@ import {
   DEFAULT_EXECUTE_LIMITS,
   runSandboxedScript,
   serializeExecuteOutcome,
+  toolErrorResult,
+  toolJsonResult,
+  toolTextResult,
   type SandboxTool,
 } from "@vvedantb/server";
 
@@ -44,7 +47,7 @@ function searchTools(tools: readonly EvaTool[], query: string) {
 /**
  * Converts a tool's MCP result into the JSON text a script receives. A single
  * text block that already is JSON passes through untouched, so scripts get
- * objects back from `textResult` tools; anything else becomes a JSON string or
+ * objects back from `toolJsonResult` tools; anything else becomes a JSON string or
  * the raw content array. Error results become rejections the script can catch.
  */
 function resultToJson(result: CallToolResult): string {
@@ -87,12 +90,6 @@ function toSandboxTool(tool: EvaTool): SandboxTool {
       }
     },
   };
-}
-
-function text(value: string, isError: boolean): CallToolResult {
-  return isError
-    ? { content: [{ type: "text", text: value }], isError: true }
-    : { content: [{ type: "text", text: value }] };
 }
 
 function executeDescription(tools: readonly EvaTool[]): string {
@@ -150,7 +147,8 @@ export function codeModeTools(tools: readonly EvaTool[]): EvaTool[] {
       },
       handler: async ({ code }) => {
         const outcome = await runSandboxedScript(code, sandboxTools);
-        return text(serializeExecuteOutcome(outcome), !outcome.ok);
+        const text = serializeExecuteOutcome(outcome);
+        return outcome.ok ? toolTextResult(text) : toolErrorResult(text);
       },
     }),
     defineTool({
@@ -168,10 +166,7 @@ export function codeModeTools(tools: readonly EvaTool[]): EvaTool[] {
       },
       handler: async ({ query }) => {
         const matches = searchTools(catalog, query ?? "");
-        return text(
-          JSON.stringify({ tools: matches, count: matches.length }, null, 2),
-          false,
-        );
+        return toolJsonResult({ tools: matches, count: matches.length });
       },
     }),
   ];

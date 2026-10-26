@@ -1,3 +1,4 @@
+import { bytesToBase64Url, randomToken } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
@@ -42,27 +43,12 @@ function safeReturnPath(path: string | undefined): string {
 }
 
 async function createPkce(): Promise<{ verifier: string; challenge: string }> {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  const verifier = btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  const verifier = randomToken(32, "base64url");
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(verifier),
   );
-  let challengeBinary = "";
-  for (const byte of new Uint8Array(digest)) {
-    challengeBinary += String.fromCharCode(byte);
-  }
-  const challenge = btoa(challengeBinary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return { verifier, challenge };
+  return { verifier, challenge: bytesToBase64Url(new Uint8Array(digest)) };
 }
 
 async function envFallbackForUser(
@@ -105,7 +91,11 @@ export const listStatuses = authQuery({
         )
         .first();
       const env = await envFallbackForUser(ctx, ctx.userId, provider);
-      const source = row ? ("oauth" as const) : env ? ("env" as const) : ("none" as const);
+      const source = row
+        ? ("oauth" as const)
+        : env
+          ? ("env" as const)
+          : ("none" as const);
       statuses.push({
         provider,
         label: CONNECTOR_LABEL[provider],

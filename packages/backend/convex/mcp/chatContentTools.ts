@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import {
   CHAT_LOG_AGENT_BODY_MAX,
@@ -14,10 +15,8 @@ import {
 } from "./entityRef";
 import {
   confirmedDeleteArg,
-  errorResult,
   mcpCallAsUser,
   mcpGetContext,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -101,7 +100,7 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
           },
           nullReply,
         );
-        return textResult({ artifactId, status: "deleted" });
+        return toolJsonResult({ artifactId, status: "deleted" });
       },
     }),
   );
@@ -127,7 +126,7 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
           { type: "mutation", path: "docs:remove", args: { id: docId } },
           nullReply,
         );
-        return textResult({ docId, status: "deleted" });
+        return toolJsonResult({ docId, status: "deleted" });
       },
     }),
   );
@@ -163,7 +162,9 @@ The reply is the chat's identity with the title it now has.`,
       handler: async ({ title, regenerate, ...ref }) => {
         const wantsRegenerate = regenerate === true;
         if (wantsRegenerate === (title !== undefined)) {
-          return errorResult('Pass exactly one of "title" or "regenerate".');
+          return toolErrorResult(
+            'Pass exactly one of "title" or "regenerate".',
+          );
         }
 
         const { userId } = await mcpGetContext(ctx, clerkUserId);
@@ -171,12 +172,12 @@ The reply is the chat's identity with the title it now has.`,
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         if (title === undefined) {
           if (target.kind !== "session") {
-            return errorResult(
+            return toolErrorResult(
               'regenerate only works on sessions. Pass "title" to rename a quick task or project.',
             );
           }
@@ -190,7 +191,7 @@ The reply is the chat's identity with the title it now has.`,
             },
             z.object({ title: z.string() }),
           );
-          return textResult({
+          return toolJsonResult({
             ...entitySummary(target),
             title: generated.title,
             status: "renamed",
@@ -207,7 +208,7 @@ The reply is the chat's identity with the title it now has.`,
           },
           nullReply,
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           title,
           status: "renamed",
@@ -239,10 +240,10 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "session") {
-          return errorResult(
+          return toolErrorResult(
             "Only sessions have a Plan tab. Quick tasks and projects keep their plan in the description or spec.",
           );
         }
@@ -257,7 +258,7 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           },
           nullReply,
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           planLength: planContent.length,
           status: "updated",
@@ -294,10 +295,10 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "session") {
-          return errorResult("Only sessions have proposed plans.");
+          return toolErrorResult("Only sessions have proposed plans.");
         }
 
         const plans = await mcpCallAsUser(
@@ -317,7 +318,7 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
                 .filter((row) => row.implementedAt === undefined)
                 .sort((a, b) => b.createdAt - a.createdAt)[0];
         if (plan === undefined) {
-          return errorResult(
+          return toolErrorResult(
             planId !== undefined
               ? "That plan does not belong to this session."
               : "This session has no proposed plan waiting to be implemented.",
@@ -337,7 +338,7 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           },
           nullReply,
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           planId: plan._id,
           status: "implemented",
@@ -373,10 +374,10 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
-          return errorResult(
+          return toolErrorResult(
             'Comments live on tasks only. Name a task (kind "task").',
           );
         }
@@ -394,7 +395,7 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           },
           z.string(),
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           commentId,
           status: "posted",
@@ -417,10 +418,10 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
-          return errorResult(
+          return toolErrorResult(
             'Comments live on tasks only. Name a task (kind "task").',
           );
         }
@@ -443,7 +444,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
           createdAt: row.createdAt,
           deletedAt: row.deletedAt,
         }));
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           comments,
           count: comments.length,
@@ -497,7 +498,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         const entryId = await mcpCallAsUser(
           ctx,
@@ -516,7 +517,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
           },
           z.string(),
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           entryId,
           status: "logged",
@@ -537,7 +538,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         const source = chatSourceArg(target);
         const [markdown, rows] = await Promise.all([
@@ -561,12 +562,16 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
             },
             z.array(
               z
-                .object({ _id: z.string(), kind: z.string(), title: z.string() })
+                .object({
+                  _id: z.string(),
+                  kind: z.string(),
+                  title: z.string(),
+                })
                 .passthrough(),
             ),
           ),
         ]);
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           markdown,
           entries: rows.map((row) => ({

@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "../appTabSlug";
@@ -13,12 +14,10 @@ import {
 } from "./entityRef";
 import {
   confirmedDeleteArg,
-  errorResult,
   guarded,
   mcpCallAsUser,
   mcpGetContext,
   queueParentId,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -51,7 +50,7 @@ const appTabRow = z.object({
 });
 type AppTabRow = z.infer<typeof appTabRow>;
 
-type ToolError = ReturnType<typeof errorResult>;
+type ToolError = ReturnType<typeof toolErrorResult>;
 
 /**
  * The settings UI stores the icon as a free-text Tabler component name and
@@ -184,18 +183,18 @@ export function tabQueueTools(
   ): Promise<{ repoId: string } | ToolError> {
     if (ref.repoId !== undefined || ref.repoName !== undefined) {
       const repo = await resolveRepoRef(ref, userId);
-      if ("isError" in repo) return repo;
+      if ("content" in repo) return repo;
       await assertUserRepoAccess(repo.repoId, userId);
       return repo;
     }
     const self = withSelfDefault<EntityRef>({}, credentials);
     if (self.id === undefined) {
-      return errorResult(
+      return toolErrorResult(
         "Name the repo: pass repoId (from list_repos) or repoName.",
       );
     }
     const resolved = await resolveEntityTarget(self, userId);
-    if ("isError" in resolved) return resolved;
+    if ("content" in resolved) return resolved;
     return { repoId: resolved.target.repoId };
   }
 
@@ -217,11 +216,11 @@ export function tabQueueTools(
   > {
     const { userId } = await mcpGetContext(ctx, clerkUserId);
     const repo = await resolveTabRepo(ref, userId);
-    if ("isError" in repo) return repo;
+    if ("content" in repo) return repo;
     const tabs = await listTabs(repo.repoId);
     const tab = tabs.find((row) => row._id === tabId);
     if (tab === undefined) {
-      return errorResult(
+      return toolErrorResult(
         "No tab with that id on this repo. Call list_app_tabs for the repo's tab ids, and pass repoName if the tab belongs to another repo.",
       );
     }
@@ -248,12 +247,12 @@ The queue drains as turns finish, so a message listed here can start running at 
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         const rows = await listQueue(target);
         const queued = rows.map(queuedMessageView);
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           queued,
           count: queued.length,
@@ -288,12 +287,12 @@ If the chat dequeued the message since you listed it, it is already running and 
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         const rows = await listQueue(target);
         if (!rows.some((row) => row._id === queuedMessageId)) {
-          return errorResult(
+          return toolErrorResult(
             "That message is not in this chat's queue. It may already have started running; call list_queued_messages to see what is still waiting.",
           );
         }
@@ -309,7 +308,7 @@ If the chat dequeued the message since you listed it, it is already running and 
             },
             nullReply,
           );
-          return textResult({
+          return toolJsonResult({
             ...entitySummary(target),
             queuedMessageId,
             contentLength: content.length,
@@ -355,12 +354,12 @@ If a message starts running between your list and this call, the reorder fails; 
         const movingOne =
           queuedMessageId !== undefined || position !== undefined;
         if (orderedIds !== undefined && movingOne) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "orderedIds" or "queuedMessageId" with "position", not both.',
           );
         }
         if (orderedIds === undefined && !movingOne) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "orderedIds" (the full queue in order) or "queuedMessageId" with "position".',
           );
         }
@@ -370,13 +369,13 @@ If a message starts running between your list and this call, the reorder fails; 
           withSelfDefault(ref, credentials),
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         const rows = await listQueue(target);
         const currentIds = rows.map((row) => row._id);
         if (currentIds.length === 0) {
-          return errorResult("This chat has nothing queued.");
+          return toolErrorResult("This chat has nothing queued.");
         }
 
         let nextIds: string[];
@@ -386,22 +385,22 @@ If a message starts running between your list and this call, the reorder fails; 
           const foreign = orderedIds.filter((id) => !current.has(id));
           const missing = currentIds.filter((id) => !requested.has(id));
           if (requested.size !== orderedIds.length) {
-            return errorResult("orderedIds lists the same message twice.");
+            return toolErrorResult("orderedIds lists the same message twice.");
           }
           if (foreign.length > 0 || missing.length > 0) {
-            return errorResult(
+            return toolErrorResult(
               `orderedIds must be exactly this chat's current queue. ${foreign.length > 0 ? `Not in the queue (possibly already running): ${foreign.join(", ")}. ` : ""}${missing.length > 0 ? `Missing: ${missing.join(", ")}. ` : ""}Call list_queued_messages and retry.`,
             );
           }
           nextIds = orderedIds;
         } else {
           if (queuedMessageId === undefined || position === undefined) {
-            return errorResult(
+            return toolErrorResult(
               'Moving one message needs both "queuedMessageId" and "position".',
             );
           }
           if (!currentIds.includes(queuedMessageId)) {
-            return errorResult(
+            return toolErrorResult(
               "That message is not in this chat's queue. It may already have started running; call list_queued_messages to see what is still waiting.",
             );
           }
@@ -432,7 +431,7 @@ If a message starts running between your list and this call, the reorder fails; 
             const row = byId.get(id);
             return row === undefined ? [] : [queuedMessageView(row, index)];
           });
-          return textResult({
+          return toolJsonResult({
             ...entitySummary(target),
             queued,
             status: "reordered",
@@ -458,9 +457,13 @@ A custom tab shows one port inside the chat's sandbox in its own tab, through th
       handler: async (ref) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repo = await resolveTabRepo(ref, userId);
-        if ("isError" in repo) return repo;
+        if ("content" in repo) return repo;
         const tabs = (await listTabs(repo.repoId)).map(appTabView);
-        return textResult({ repoId: repo.repoId, tabs, count: tabs.length });
+        return toolJsonResult({
+          repoId: repo.repoId,
+          tabs,
+          count: tabs.length,
+        });
       },
     }),
   );
@@ -485,10 +488,10 @@ The tab shows a port inside the sandbox (e.g. a database studio or storybook the
       handler: async ({ name, icon, port, enabled, ...ref }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repo = await resolveTabRepo(ref, userId);
-        if ("isError" in repo) return repo;
+        if ("content" in repo) return repo;
         const tabs = await listTabs(repo.repoId);
         const nameError = appTabNameError(name, tabs);
-        if (nameError !== null) return errorResult(nameError);
+        if (nameError !== null) return toolErrorResult(nameError);
 
         return guarded(async () => {
           const id = await mcpCallAsUser(
@@ -501,7 +504,7 @@ The tab shows a port inside the sandbox (e.g. a database studio or storybook the
             },
             z.string(),
           );
-          return textResult({
+          return toolJsonResult({
             repoId: repo.repoId,
             tab: {
               id,
@@ -534,14 +537,16 @@ Name no repo and it looks for the tab on the repo of the chat you are running in
       },
       handler: async ({ tabId, name, icon, port, ...ref }) => {
         if (name === undefined && icon === undefined && port === undefined) {
-          return errorResult('Pass at least one of "name", "icon" or "port".');
+          return toolErrorResult(
+            'Pass at least one of "name", "icon" or "port".',
+          );
         }
         const found = await findTab(ref, tabId);
-        if ("isError" in found) return found;
+        if ("content" in found) return found;
         const { tab, tabs } = found;
         if (name !== undefined) {
           const nameError = appTabNameError(name, tabs, tab._id);
-          if (nameError !== null) return errorResult(nameError);
+          if (nameError !== null) return toolErrorResult(nameError);
         }
 
         const next = {
@@ -557,7 +562,7 @@ Name no repo and it looks for the tab on the repo of the chat you are running in
             { type: "mutation", path: "appTabs:update", args: next },
             nullReply,
           );
-          return textResult({
+          return toolJsonResult({
             repoId: found.repoId,
             tab: appTabView({ ...tab, ...next }),
             status: "updated",
@@ -583,7 +588,7 @@ ${REPO_WIDE_NOTE}`,
       },
       handler: async ({ tabId, enabled, ...ref }) => {
         const found = await findTab(ref, tabId);
-        if ("isError" in found) return found;
+        if ("content" in found) return found;
         return guarded(async () => {
           await mcpCallAsUser(
             ctx,
@@ -595,7 +600,7 @@ ${REPO_WIDE_NOTE}`,
             },
             nullReply,
           );
-          return textResult({
+          return toolJsonResult({
             repoId: found.repoId,
             tab: appTabView({ ...found.tab, enabled }),
             status: enabled ? "enabled" : "disabled",
@@ -619,7 +624,7 @@ Name no repo and it looks for the tab on the repo of the chat you are running in
       },
       handler: async ({ tabId, ...ref }) => {
         const found = await findTab(ref, tabId);
-        if ("isError" in found) return found;
+        if ("content" in found) return found;
         return guarded(async () => {
           await mcpCallAsUser(
             ctx,
@@ -631,7 +636,7 @@ Name no repo and it looks for the tab on the repo of the chat you are running in
             },
             nullReply,
           );
-          return textResult({
+          return toolJsonResult({
             repoId: found.repoId,
             tabId: found.tab._id,
             name: found.tab.name,

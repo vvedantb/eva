@@ -534,16 +534,15 @@ const schema = defineSchema({
   githubUserTokens: defineTable(githubUserTokenFields).index("by_user", [
     "userId",
   ]),
-  githubOauthStates: defineTable(githubOauthStateFields).index("by_nonce", [
-    "nonce",
-  ]),
+  githubOauthStates: defineTable(githubOauthStateFields)
+    .index("by_nonce", ["nonce"])
+    .index("by_expires_at", ["expiresAt"]),
   connectedAccounts: defineTable(connectedAccountFields)
     .index("by_user", ["userId"])
     .index("by_user_and_provider", ["userId", "provider"]),
-  connectorOauthStates: defineTable(connectorOauthStateFields).index(
-    "by_nonce",
-    ["nonce"],
-  ),
+  connectorOauthStates: defineTable(connectorOauthStateFields)
+    .index("by_nonce", ["nonce"])
+    .index("by_expires_at", ["expiresAt"]),
   teamEnvVars: defineTable({
     teamId: v.id("teams"),
     vars: v.array(
