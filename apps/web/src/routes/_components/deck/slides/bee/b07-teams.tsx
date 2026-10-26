@@ -28,9 +28,9 @@ const PEOPLE: readonly Person[] = [
 
 /** The shared summary, with who said what. Example lines. */
 const LINES = [
-  { who: "Alex", text: "They can return the forms by Friday." },
-  { who: "Sam", text: "I will send the onboarding pack today." },
-  { who: "Jo", text: "Let's start with nursing home placements." },
+  { who: "Alex", text: "They can return the forms by Friday" },
+  { who: "Sam", text: "I will send the onboarding pack today" },
+  { who: "Jo", text: "Let's start with nursing home placements" },
 ];
 
 const PERSON = { x: 0, w: 250, h: 86 };
@@ -166,7 +166,7 @@ export function BeeTeams() {
               <IconMicrophone size={20} />
             </span>
             Each line comes from that person&apos;s own microphone, so it is
-            never a guess.
+            never a guess
           </m.div>
 
           {/* What it takes: Bee running on everyone's laptop. */}
@@ -177,7 +177,7 @@ export function BeeTeams() {
             animate={{ opacity: shared ? 1 : 0 }}
             transition={cueTransition(shared, 0.9, { duration: DUR.slow })}
           >
-            Everyone runs Bee on their own laptop.
+            Everyone runs Bee on their own laptop
           </m.div>
         </div>
       </Camera>
