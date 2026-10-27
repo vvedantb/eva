@@ -2,9 +2,14 @@
 
 import { Suspense, lazy } from "react";
 import type { ThemeTypes } from "@pierre/diffs";
-import { Button, Spinner, Markdown } from "@vvedantb/ui";
+import {
+  Button,
+  Spinner,
+  Markdown,
+  ScreenshotPreview,
+  VideoPreview,
+} from "@vvedantb/ui";
 import { IconRefresh } from "@tabler/icons-react";
-import { ScreenshotPreview, VideoPreview } from "@/lib/components/MediaPreview";
 import { formatBytes, type ViewerState } from "../_utils/-fileViewerState";
 import { SandboxFileCode } from "./SandboxFileCode";
 import { ViewerNotice } from "./ViewerNotice";

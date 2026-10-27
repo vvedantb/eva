@@ -11,10 +11,11 @@ import {
   CollapsibleTrigger,
   Spinner,
   tokenTransition,
+  CountPop,
+  countLabel,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconChevronDown, IconLayoutGrid, IconPlus } from "@tabler/icons-react";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
 import {

@@ -2,9 +2,8 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
-import { tokenTransition } from "@vvedantb/ui";
+import { tokenTransition, ListEnter } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { TypingUser } from "@/lib/hooks/useTypingPresence";
 
 function typingLabel(users: TypingUser[]): ReactNode {

@@ -5,9 +5,8 @@ import { useQuery } from "convex/react";
 import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
-import { Spinner, SettingsToggleRow } from "@vvedantb/ui";
+import { Spinner, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 
 type AwakeSandboxes = FunctionReturnType<
   typeof api.sandboxIdlePause.listAwakeSandboxes

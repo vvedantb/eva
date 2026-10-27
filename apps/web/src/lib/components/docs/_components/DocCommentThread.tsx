@@ -12,11 +12,11 @@ import {
   LIST_ROW_CONTROL_CLASS,
   Textarea,
   tokenTransition,
+  RelativeDateTime,
+  ListEnter,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconCheck, IconArrowBackUp } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { useState, useEffect, useRef } from "react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";

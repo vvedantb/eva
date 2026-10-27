@@ -24,6 +24,8 @@ import {
   AccordionContent,
   Button,
   useDragSensors,
+  ListEnter,
+  useFirstPaintGate,
 } from "@vvedantb/ui";
 import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
 import {
@@ -31,7 +33,6 @@ import {
   TASK_STATUSES,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { IconGripVertical, IconPlus } from "@tabler/icons-react";
-import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 
 type Task = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type TaskStatus = Task["status"];

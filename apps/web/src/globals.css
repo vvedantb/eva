@@ -5,6 +5,7 @@
 @import "@vvedantb/ui/tokens/css/modal.css";
 @import "@vvedantb/ui/tokens/css/utilities.css";
 @import "@vvedantb/ui/tokens/css/border-beam.css";
+@import "@vvedantb/ui/tokens/css/marquee.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
  * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
  * shadcn `R G B` variables below; it never redefines them. */
@@ -1217,41 +1218,6 @@ html[data-blur-pid] [data-pii] {
     color-mix(in oklab, rgb(var(--eva-purple)), rgb(var(--eva-blue))) var(--beam-spread),
     rgb(var(--eva-blue) / 0.95) calc(var(--beam-spread) * 1.5),
     transparent calc(var(--beam-spread) * 2);
-}
-
-/* ───────────────────────────────────────────────────────────────────
- * Marquee-on-hover for truncated single-line labels (<MarqueeOnHover/>).
- * Idle = plain ellipsis. On hover (only when the text overflows), the inner
- * span scrolls left to reveal its hidden tail and holds, then eases back on
- * leave. JS sets --mq-shift / --mq-dur per element and toggles
- * data-mq-overflow; --mq-delay defaults here so the dwell is a CSS concern.
- * Unlayered + after `@tailwind utilities` so these win at equal specificity
- * and hot-reload reliably (see the tabs-segmented note above).
- * ─────────────────────────────────────────────────────────────────── */
-.mq-host {
-  display: block;
-  overflow: hidden;
-  padding: 0; /* keep clientWidth == content box so the overflow measurement is honest */
-}
-.mq-inner {
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transform: translateX(0);
-  transition: transform var(--motion-base) var(--motion-ease-out); /* return ease on leave */
-  will-change: transform;
-}
-/* Reveal on hover of the label itself OR of any ancestor card/row marked with
- * Tailwind's `group` — so hovering anywhere on a task card / list row scrolls its
- * title, not only a direct hover over the text. */
-.mq-host[data-mq-overflow="true"]:hover .mq-inner,
-.group:hover .mq-host[data-mq-overflow="true"] .mq-inner {
-  max-width: none; /* let the text spill to its full width; the host clips it */
-  transform: translateX(calc(-1 * var(--mq-shift, 0px)));
-  transition: transform var(--mq-dur, 0s) linear var(--mq-delay, 400ms);
 }
 
 /* LoadingState (@vvedantb/ui, eva config) — label shimmer (the pixel grid runs on WAAPI) */

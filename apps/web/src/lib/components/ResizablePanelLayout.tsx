@@ -23,7 +23,6 @@ import {
   MobilePaneSwitcher,
   type MobilePaneLabels,
 } from "@/lib/components/MobilePaneSwitcher";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import {
   LEFT_PANEL_ID,
   RIGHT_PANEL_ID,
@@ -34,7 +33,7 @@ import {
   usableExpandedPanelSize,
   usePersistentPanelSize,
 } from "@/lib/hooks/usePersistentPanelSize";
-import { motionEase } from "@vvedantb/ui";
+import { motionEase, useMediaQuery } from "@vvedantb/ui";
 
 interface PanelContext {
   rightPanelCollapsed: boolean;

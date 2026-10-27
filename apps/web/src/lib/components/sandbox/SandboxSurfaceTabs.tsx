@@ -1,6 +1,11 @@
-import { LoadingState, Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
+import {
+  LoadingState,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import {
   SANDBOX_STATUS_STYLES,
   showsSandboxStatusDot,

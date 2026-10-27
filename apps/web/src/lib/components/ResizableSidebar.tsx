@@ -6,12 +6,12 @@ import {
   MobilePaneSwitcher,
   type MobilePaneLabels,
 } from "@/lib/components/MobilePaneSwitcher";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import {
   LEFT_PANEL_ID,
   RIGHT_PANEL_ID,
   usePersistentPanelSize,
 } from "@/lib/hooks/usePersistentPanelSize";
+import { useMediaQuery } from "@vvedantb/ui";
 
 interface ResizableSidebarProps {
   /** Sidebar content, usually a file tree. */

@@ -17,6 +17,8 @@ import {
   Spinner,
   skipConfirmTitle,
   useRequestConfirm,
+  ListEnter,
+  MarqueeOnHover,
 } from "@vvedantb/ui";
 import { IconAlertTriangle, IconFileText } from "@tabler/icons-react";
 import { compactRelativeTime } from "@eva/shared/dates";
@@ -30,8 +32,6 @@ import {
 } from "@/lib/components/sidebar/SharedLayoutNav";
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment } from "@/lib/numId";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 interface TestingArenaSidebarProps {

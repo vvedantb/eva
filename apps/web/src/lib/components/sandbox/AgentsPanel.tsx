@@ -16,13 +16,13 @@ import {
   Spinner,
   formatActivityElapsed,
   useActivityElapsedSeconds,
+  ListEnter,
 } from "@vvedantb/ui";
 import {
   subagentTone,
   type SubagentTone,
   type SubagentView,
 } from "./agentActivity";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 const DOT_CLASS: Record<SubagentTone, string> = {
   active: "bg-primary animate-pulse ring-2 ring-primary/30",

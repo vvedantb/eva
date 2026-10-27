@@ -9,13 +9,13 @@ import {
   tokenTransition,
   Spinner,
   OpenSubagentContext,
+  CountPop,
+  ListEnter,
 } from "@vvedantb/ui";
 import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { use, useState } from "react";
-import { CountPop } from "@/lib/components/ui/CountPop";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
 
 type BackgroundAgent = BackgroundAgentEntry;

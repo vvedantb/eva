@@ -8,12 +8,16 @@ import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
 import { cn } from "@eva/ui";
-import { Button, LIST_ROW_CONTROL_CLASS, tokenTransition } from "@vvedantb/ui";
+import {
+  Button,
+  LIST_ROW_CONTROL_CLASS,
+  tokenTransition,
+  RelativeDateTime,
+  CountPop,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconX, IconCheck, IconArrowBackUp } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { CountPop } from "@/lib/components/ui/CountPop";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   collectSuggestions,
   acceptSuggestion,

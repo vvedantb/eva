@@ -3,11 +3,16 @@
 import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Input, Spinner, SettingsField } from "@vvedantb/ui";
+import {
+  Button,
+  Input,
+  Spinner,
+  SettingsField,
+  SettingsSection,
+  convexErrorMessage,
+} from "@vvedantb/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 export function GrokBotSettingsClient() {
   const settings = useQuery(api.grokBot.getSettings);

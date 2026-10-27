@@ -34,6 +34,7 @@ import {
   TabsTrigger,
   tokenTransition,
   CrossfadeIcon,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -45,7 +46,6 @@ import {
   IconHistory,
   IconPencilCheck,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocContentTab } from "./DocContentTab";
 import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBody";
 import { RecapStaleBanner } from "@/lib/components/sandbox/_components/RecapStaleBanner";

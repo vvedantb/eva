@@ -1,12 +1,11 @@
 import { IconMessage } from "@tabler/icons-react";
-import { Surface } from "@vvedantb/ui";
+import { Surface, ListEnter } from "@vvedantb/ui";
 import {
   MarkdownMentionText,
   PlainMarkdownText,
 } from "@/lib/components/chat/MarkdownMentionText";
 import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import { parseReviewCommentSegments } from "@/lib/reviewComments";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface ReviewCommentMessageProps {
   text: string;

@@ -4,9 +4,13 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import { CenteredSpinner, tokenTransition, staggerDelay } from "@vvedantb/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  staggerDelay,
+  CountPop,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
-import { CountPop } from "@/lib/components/ui/CountPop";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SystemAutomationCard } from "./_components/SystemAutomationCard";

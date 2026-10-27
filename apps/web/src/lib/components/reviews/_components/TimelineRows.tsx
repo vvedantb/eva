@@ -7,6 +7,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Markdown,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import {
   IconChevronDown,
@@ -16,7 +17,6 @@ import {
   IconGitPullRequestClosed,
   IconMessage,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { PrCommentCard } from "./PrCommentCard";
 import {
   MARKDOWN_CLASS,

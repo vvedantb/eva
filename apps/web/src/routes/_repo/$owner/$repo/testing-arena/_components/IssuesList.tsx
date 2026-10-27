@@ -15,15 +15,15 @@ import {
   CrossfadeIcon,
   Spinner,
   tokenTransition,
+  ListEnter,
+  MarqueeOnHover,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconChevronDown,
   IconChevronRight,
   IconExternalLink,
 } from "@tabler/icons-react";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { withMutationToast } from "@/lib/utils/mutationToast";

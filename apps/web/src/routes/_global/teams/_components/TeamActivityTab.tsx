@@ -3,12 +3,11 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Button, Card, CardContent } from "@vvedantb/ui";
+import { Button, Card, CardContent, ListEnter } from "@vvedantb/ui";
 import { IconEye, IconEyeOff, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { useFollow } from "@/lib/contexts/FollowContext";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { describeLocation } from "../_utils";
 
 type Member = FunctionReturnType<typeof api.teamMembers.list>[number];

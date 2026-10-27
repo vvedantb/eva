@@ -5,8 +5,8 @@ import { type api } from "@eva/backend";
 import { IconLayoutDashboard } from "@tabler/icons-react";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { SessionSourceEmpty } from "@/lib/components/sandbox/SessionSourcePane";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { ArtifactCard } from "./ArtifactCard";
+import { ListEnter } from "@vvedantb/ui";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 

@@ -13,12 +13,12 @@ import {
   ContextMenuTrigger,
   LoadingState,
   tokenTransition,
+  MarqueeOnHover,
 } from "@vvedantb/ui";
 import { IconLink, IconPencil, IconX } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
 import { SharedLayoutNavSurface } from "@/lib/components/sidebar/SharedLayoutNav";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 
 interface SidebarChatRowProps {
   chat: Doc<"sessionChats">;

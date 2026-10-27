@@ -10,13 +10,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Spinner,
+  CountPop,
+  countLabel,
 } from "@vvedantb/ui";
 import { IconChevronDown, IconPlus } from "@tabler/icons-react";
 import { AnimatePresence } from "motion/react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
 import { SidebarSessionListRow } from "@/lib/components/sidebar/_components/SidebarSessionListRow";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";
 import {
   repoBasePaths,

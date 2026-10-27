@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { Spinner, tokenTransition } from "@vvedantb/ui";
+import { Spinner, tokenTransition, RelativeDateTime } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 
 /**
  * List / detail layout shared by the Code and Browser tabs. Stacks below `sm`.

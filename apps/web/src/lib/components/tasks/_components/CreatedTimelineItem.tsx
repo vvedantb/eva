@@ -1,10 +1,10 @@
 "use client";
 
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
 import { getUserDisplayName } from "./task-detail-constants";
+import { RelativeDateTime } from "@vvedantb/ui";
 
 type User = NonNullable<FunctionReturnType<typeof api.users.listAll>>[number];
 

@@ -11,9 +11,9 @@ import {
   TabsTrigger,
   TabsContent,
   tokenTransition,
+  ListEnter,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconCheck,
   IconDeviceDesktop,

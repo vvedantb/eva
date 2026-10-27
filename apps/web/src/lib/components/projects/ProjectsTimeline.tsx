@@ -18,6 +18,7 @@ import {
   GanttFeatureItem,
   GanttToday,
   useGanttContext,
+  ListEnter,
 } from "@vvedantb/ui";
 import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
 import {
@@ -26,7 +27,6 @@ import {
 } from "@/lib/components/projects/ProjectPhaseBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { TimelineBar } from "./_components/TimelineBar";
 import { TimelineSidebarMeta } from "./_components/TimelineSidebarMeta";
 import { TimelineToolbar } from "./_components/TimelineToolbar";

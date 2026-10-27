@@ -20,6 +20,9 @@ import {
   Textarea,
   skipConfirmTitle,
   useRequestConfirm,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
 } from "@vvedantb/ui";
 import {
   IconCheck,
@@ -35,9 +38,6 @@ import {
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { EnvVarProviderSlots } from "@/lib/components/EnvVarProviderSlots";
 import { parseEnvVars } from "./_utils/parseEnvVars";
 import {

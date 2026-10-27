@@ -8,9 +8,9 @@ import {
   DialogTitle,
   Button,
   Surface,
+  ListEnter,
 } from "@vvedantb/ui";
 import { IconEye, IconBrandGithub } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 interface HiddenReposSheetProps {

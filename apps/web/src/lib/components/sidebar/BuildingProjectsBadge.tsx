@@ -7,9 +7,10 @@ import {
   Badge,
   tokenTransition,
   Spinner,
+  CountPop,
+  countLabel,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { IconFolder } from "@tabler/icons-react";

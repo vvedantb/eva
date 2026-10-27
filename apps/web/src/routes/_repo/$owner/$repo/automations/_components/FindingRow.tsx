@@ -10,13 +10,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   CrossfadeIcon,
+  MarqueeOnHover,
 } from "@vvedantb/ui";
 import {
   IconChevronDown,
   IconChevronRight,
   IconExternalLink,
 } from "@tabler/icons-react";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { entityPathSegment } from "@/lib/numId";
 import {
   effectiveSeverity,

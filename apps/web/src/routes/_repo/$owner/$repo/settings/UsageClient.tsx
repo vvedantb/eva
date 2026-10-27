@@ -3,7 +3,13 @@
 import { useQueryState } from "nuqs";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -21,10 +27,7 @@ import { TimeRangeFilter } from "@/lib/components/analytics/TimeRangeFilter";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { IconFileOff } from "@tabler/icons-react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { groupLogsByType, logTotals, parseResultEvent } from "./logs/_utils";
 import { LogsPeriodSummary } from "./logs/_components/LogsPeriodSummary";
 import { LogsViewTabs } from "./logs/_components/LogsViewTabs";

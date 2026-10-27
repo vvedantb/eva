@@ -29,12 +29,12 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  convexErrorMessage,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";

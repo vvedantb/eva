@@ -1,7 +1,6 @@
 "use client";
 
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { resolveCustomTheme } from "@/lib/contexts/themeTokens";
 import type {
@@ -11,7 +10,7 @@ import type {
   FontFamily,
   LetterSpacing,
 } from "@/lib/contexts/ThemeContext";
-import { Spinner } from "@vvedantb/ui";
+import { Spinner, SettingsSection } from "@vvedantb/ui";
 import { type ThemeMode } from "@/lib/hooks/useThemeMode";
 import { AppearanceSection } from "./_components/AppearanceSection";
 import { PresetsSection } from "./_components/PresetsSection";

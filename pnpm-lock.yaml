@@ -126,8 +126,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.26.1
-        version: 0.26.1(36487707c2061b7a3e0e6ef7889f8ab5)
+        specifier: ^0.27.0
+        version: 0.27.0(36487707c2061b7a3e0e6ef7889f8ab5)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -352,8 +352,8 @@ importers:
         specifier: ^0.10.0
         version: 0.10.0(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       '@vvedantb/ui':
-        specifier: ^0.26.1
-        version: 0.26.1(f2c527651c7dfecf4f41509266afaca3)
+        specifier: ^0.27.0
+        version: 0.27.0(f2c527651c7dfecf4f41509266afaca3)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -688,8 +688,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: ^0.26.1
-        version: 0.26.1(f30f5641747bd60fda58ecea4a682941)
+        specifier: ^0.27.0
+        version: 0.27.0(f30f5641747bd60fda58ecea4a682941)
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
@@ -703,8 +703,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.26.1
-        version: 0.26.1(5534608dcb4b19e4f87f403087783f35)
+        specifier: ^0.27.0
+        version: 0.27.0(5534608dcb4b19e4f87f403087783f35)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6062,8 +6062,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.26.1':
-    resolution: {integrity: sha512-Khvmwxkevtovv76Tzth5COtJl9bW2DBmlCA+9srQIczOALoeMZzRPEwyXrlQuJYBFZqSy/Gyx/c+h4rGGYK0Ew==}
+  '@vvedantb/ui@0.27.0':
+    resolution: {integrity: sha512-z+V7qoeHMvcdozd2mnT0aBDN+B4sGHp+nr9B4al+1xszunvgG12ovJ0LX2IAy+RdkJYsWcG5yMvagDJReVenDw==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -15604,7 +15604,7 @@ snapshots:
       zod: 4.4.3
     optional: true
 
-  '@vvedantb/ui@0.26.1(36487707c2061b7a3e0e6ef7889f8ab5)':
+  '@vvedantb/ui@0.27.0(36487707c2061b7a3e0e6ef7889f8ab5)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15662,7 +15662,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.26.1(5534608dcb4b19e4f87f403087783f35)':
+  '@vvedantb/ui@0.27.0(5534608dcb4b19e4f87f403087783f35)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15720,7 +15720,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.26.1(f2c527651c7dfecf4f41509266afaca3)':
+  '@vvedantb/ui@0.27.0(f2c527651c7dfecf4f41509266afaca3)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15778,7 +15778,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@0.26.1(f30f5641747bd60fda58ecea4a682941)':
+  '@vvedantb/ui@0.27.0(f30f5641747bd60fda58ecea4a682941)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
