@@ -1,16 +1,11 @@
 "use node";
 
-import { randomBytes } from "crypto";
+import { randomToken, requiredEnv } from "@vvedantb/server";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
-import {
-  execHandle,
-  LEGACY_WORKSPACE_DIR,
-  requireEnv,
-  WORKSPACE_DIR,
-} from "./helpers";
+import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
@@ -126,7 +121,7 @@ printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 function resolveConvexSiteUrl(): string {
   return (
     resolvePublicConvexSiteUrl(process.env) ??
-    requireEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
+    requiredEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
   );
 }
 
@@ -157,7 +152,7 @@ export async function ensureGitCredentialHelper(
   homeRepo: { owner: string; name: string },
   extraInstallationIds: number[] = [],
 ): Promise<void> {
-  const secret = randomBytes(32).toString("hex");
+  const secret = randomToken(32, "hex");
   const siteUrl = resolveConvexSiteUrl();
   const envFileContent = `EVA_SANDBOX_SECRET=${secret}\nCONVEX_SITE_URL=${siteUrl}\n`;
 

@@ -1,3 +1,4 @@
+import { toolErrorResult } from "@vvedantb/server";
 import type { ActionCtx } from "../_generated/server";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { internal } from "../_generated/api";
@@ -8,19 +9,6 @@ import type { JsonValue } from "../_jev/jsonValue";
 // tools.ts so the orchestrator registration does not close an import cycle
 // (tools -> orchestratorTools -> tools), which would land in the "use node"
 // action chunk and break the prod push.
-
-export function errorResult(message: string) {
-  return {
-    content: [{ type: "text" as const, text: message }],
-    isError: true,
-  };
-}
-
-export function textResult(data: Record<string, unknown> | Array<unknown>) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-  };
-}
 
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
@@ -90,7 +78,7 @@ export async function guarded(
   } catch (error) {
     if (!(error instanceof Error)) throw error;
     const message = cleanErrorMessage(error);
-    return errorResult(hint ? `${message}. ${hint}` : message);
+    return toolErrorResult(hint ? `${message}. ${hint}` : message);
   }
 }
 
@@ -184,7 +172,7 @@ export function matchRepoByName(
   repos: RepoInfo[],
   repoName: string,
   app: string | undefined,
-): { repo: RepoInfo } | ReturnType<typeof errorResult> {
+): { repo: RepoInfo } | ReturnType<typeof toolErrorResult> {
   const normalizedInput = repoName.toLowerCase();
   const normalizedApp = app?.toLowerCase();
 
@@ -210,13 +198,13 @@ export function matchRepoByName(
       const apps = nameMatches
         .map((r) => r.rootDirectory ?? "(root)")
         .join(", ");
-      return errorResult(
+      return toolErrorResult(
         `Multiple apps found for "${repoName}" but none matched app "${app}". Available apps: ${apps}`,
       );
     }
   } else {
     const apps = nameMatches.map((r) => r.rootDirectory ?? "(root)").join(", ");
-    return errorResult(
+    return toolErrorResult(
       `Multiple apps found for "${repoName}". Specify the "app" parameter to disambiguate. Available apps: ${apps}`,
     );
   }
@@ -226,7 +214,9 @@ export function matchRepoByName(
     // bare `owner/name` list repeated the same string a dozen times and told
     // the caller nothing about which app to ask for.
     const available = repos.map(repoRefLabel).join(", ");
-    return errorResult(`Repo "${repoName}" not found. Your repos: ${available}`);
+    return toolErrorResult(
+      `Repo "${repoName}" not found. Your repos: ${available}`,
+    );
   }
 
   return { repo };

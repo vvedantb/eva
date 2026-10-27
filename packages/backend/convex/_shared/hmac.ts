@@ -1,3 +1,5 @@
+import { bytesToHex } from "@vvedantb/server";
+
 /**
  * HMAC-SHA256 as lowercase hex via WebCrypto, which both the Convex isolate
  * and Node actions provide, so signer and verifier share one implementation.
@@ -15,7 +17,5 @@ export async function hmacSha256Hex(
     ["sign"],
   );
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return bytesToHex(new Uint8Array(sig));
 }
