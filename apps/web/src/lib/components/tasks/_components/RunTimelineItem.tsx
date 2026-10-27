@@ -24,10 +24,11 @@ import {
   tokenTransition,
   Spinner,
   Markdown,
+  ConfirmSkipHint,
+  skipConfirmTitle,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconBrain, IconPlayerStop } from "@tabler/icons-react";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import dayjs, { formatExactDateTime } from "@eva/shared/dates";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";

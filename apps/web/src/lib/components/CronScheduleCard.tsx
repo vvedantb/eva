@@ -1,9 +1,8 @@
 import { useId } from "react";
 import cronstrue from "cronstrue";
 import { CronExpressionParser } from "cron-parser";
-import { Input } from "@vvedantb/ui";
+import { Input, SettingsField } from "@vvedantb/ui";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 
 function getOffsetMinutes(): number {
   return -new Date().getTimezoneOffset();

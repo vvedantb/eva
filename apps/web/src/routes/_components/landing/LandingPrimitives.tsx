@@ -4,10 +4,7 @@ import type { ReactNode } from "react";
 import { m, type Variants } from "motion/react";
 import { cn } from "@eva/ui";
 import { LANDING_HERO } from "./landingContent";
-
-export const LANDING_EASE: [number, number, number, number] = [
-  0.22, 1, 0.36, 1,
-];
+import { motionEase } from "@vvedantb/ui";
 
 /**
  * Tone-only card used by every grid on the page. Hierarchy comes from the
@@ -20,7 +17,7 @@ const REVEAL_VARIANTS: Variants = {
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: LANDING_EASE },
+    transition: { duration: 0.5, ease: motionEase },
   },
 };
 

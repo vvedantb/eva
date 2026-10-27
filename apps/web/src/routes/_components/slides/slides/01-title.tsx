@@ -1,6 +1,7 @@
 import { use } from "react";
 import { motion } from "motion/react";
 import { SlideStepContext } from "../_components/SlideShell";
+import { motionEase } from "@vvedantb/ui";
 
 export function Slide01Title() {
   const step = use(SlideStepContext);
@@ -9,7 +10,7 @@ export function Slide01Title() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.6, ease: motionEase }}
         className="text-center"
       >
         <span className="font-sans text-8xl font-semibold tracking-tight text-zinc-50">

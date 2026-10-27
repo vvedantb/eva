@@ -12,8 +12,10 @@ interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: React.ReactNode;
+  description?: React.ReactNode;
   detail?: string;
+  /** Extra body content after the description, for rich bodies. */
+  children?: React.ReactNode;
   confirmLabel: string;
   variant?: "default" | "destructive";
   onConfirm: () => void;
@@ -26,6 +28,7 @@ export function ConfirmDialog({
   title,
   description,
   detail,
+  children,
   confirmLabel,
   variant = "default",
   onConfirm,
@@ -38,10 +41,13 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div>
-          <p className="text-muted-foreground">{description}</p>
+          {description != null && (
+            <p className="text-muted-foreground">{description}</p>
+          )}
           {detail && (
             <p className="text-sm text-muted-foreground mt-3">{detail}</p>
           )}
+          {children}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

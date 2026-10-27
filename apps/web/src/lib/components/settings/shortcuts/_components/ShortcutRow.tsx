@@ -1,8 +1,7 @@
 "use client";
 
-import { Button } from "@vvedantb/ui";
+import { Button, SettingsToggleRow } from "@vvedantb/ui";
 import { type Hotkey } from "@tanstack/react-hotkeys";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { ShortcutRecorder } from "@/lib/components/settings/shortcuts/_components/ShortcutRecorder";
 import { shortcutDef, type ShortcutId } from "@/lib/hotkeys/registry";
 

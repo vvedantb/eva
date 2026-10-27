@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const webApp = join(webSrc, "..");
@@ -11,7 +12,7 @@ const uiConfig = join(uiSrc, "config");
 
 /** Comments here name the very declarations these rules ban, so they go first. */
 const cssRules = stripComments(
-  readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll("\r\n", "\n"),
+  readAppStylesheet(),
 );
 
 function stripComments(source: string): string {

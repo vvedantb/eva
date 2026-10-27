@@ -10,13 +10,13 @@ import {
   TabsList,
   TabsTrigger,
   tokenTransition,
+  SettingsField,
+  SettingsToggleRow,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { SandboxIdlePauseMode } from "@eva/shared";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 const IDLE_PAUSE_MODES: ReadonlyArray<{

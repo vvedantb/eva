@@ -12,7 +12,9 @@ import {
   BulkActionBar,
   type BulkBarAction,
 } from "@/lib/components/ui/BulkActionBar";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
+import {
+  useRequestConfirm,
+} from "@vvedantb/ui";
 
 export type BulkAction =
   | "actions"
@@ -94,7 +96,7 @@ export function QuickTasksBulkBar({
   onSetBulkAction,
   onSkipConfirm,
 }: QuickTasksBulkBarProps) {
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const activate = (action: BulkAction) => {
     const skip =
@@ -102,7 +104,7 @@ export function QuickTasksBulkBar({
         ? onSkipConfirm?.[action]
         : undefined;
     if (skip) {
-      requestConfirm(altHeld, () => onSetBulkAction(action), skip);
+      requestConfirm(() => onSetBulkAction(action), skip);
       return;
     }
     onSetBulkAction(action);

@@ -8,6 +8,7 @@ import {
   ContextMenuTrigger,
   tokenTransition,
   toast,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { useState } from "react";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
@@ -27,7 +28,6 @@ import {
   useSendSessionForReview,
 } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface SessionItem {
   _id: Id<"sessions">;
@@ -107,7 +107,7 @@ export function SidebarSessionRow<T extends SessionItem>({
   // Row-local: the dialog belongs to this session and the row outlives it
   // (unlike archive, which removes the row and so is owned by the sidebar).
   const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(session._id);
 
   return (
@@ -166,7 +166,6 @@ export function SidebarSessionRow<T extends SessionItem>({
               canSendForReview
                 ? () =>
                     requestConfirm(
-                      altHeld,
                       () => setIsReviewOpen(true),
                       () => {
                         void sendForReview().then((ok) => {

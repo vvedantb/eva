@@ -13,17 +13,14 @@ import {
   DialogHeader,
   DialogTitle,
   tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import type { SessionMessage } from "./useChatSend";
 
 interface PublishRecoveryBannerProps {
@@ -113,7 +110,7 @@ export function PublishRecoveryBanner({
   const [requestedOffers, setRequestedOffers] = useState<readonly string[]>([]);
   const forcePushBranch = useMutation(api.sessions.forcePushBranch);
   const repos = useQuery(api.sessions.listRepos, { sessionId });
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const newest = messages.length > 0 ? messages[messages.length - 1] : null;
   // Not an early return: the banner animates out, so it has to stay mounted
@@ -169,7 +166,6 @@ export function PublishRecoveryBanner({
     event: { altKey?: boolean },
   ) =>
     requestConfirm(
-      altHeld,
       () => setConfirmTarget(target),
       () => handleConfirm(target),
       event,

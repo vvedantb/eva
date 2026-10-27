@@ -3,11 +3,10 @@
 import { useQuery, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
-import { Spinner, Switch } from "@vvedantb/ui";
+import { Spinner, Switch, SettingsToggleRow } from "@vvedantb/ui";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type ExperimentalFlagKey = FunctionArgs<

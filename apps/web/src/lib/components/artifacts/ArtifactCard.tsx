@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
   Button,
   LIST_ROW_CONTROL_CLASS,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { IconDots, IconLayoutDashboard } from "@tabler/icons-react";
 import { compactRelativeTime } from "@eva/shared/dates";
@@ -35,7 +36,6 @@ import {
 } from "@/lib/components/sandbox/chatSource";
 import { openArtifactInNewTab } from "./_open";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type ArtifactRow = FunctionReturnType<typeof api.artifacts.listAll>[number];
 
@@ -58,7 +58,7 @@ export function ArtifactCard({
   const navigate = useNavigate();
   const remove = useMutation(api.artifacts.remove);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const source = showSource ? artifact.source : null;
   const sourceRoute = source ? chatSourceRoute(source, "artifacts") : null;
 
@@ -98,7 +98,6 @@ export function ArtifactCard({
       : {}),
     onDelete: () =>
       requestConfirm(
-        altHeld,
         () => setConfirmDeleteOpen(true),
         () => {
           void onDelete();

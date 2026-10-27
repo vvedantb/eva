@@ -19,6 +19,8 @@ import {
   DropdownMenuLabel,
   ModelPickerContent,
   modelPickerSurfaceClass,
+  ConfirmSkipHint,
+  skipConfirmTitle,
 } from "@vvedantb/ui";
 import { normalizeAIModel, type Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -47,7 +49,6 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase

@@ -18,6 +18,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   toast,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -51,7 +52,6 @@ import {
   useDeleteAgentTask,
 } from "./_components/DeleteTaskDialog";
 import { MoveTaskDialog, useMoveAgentTask } from "./_components/MoveTaskDialog";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
@@ -161,7 +161,7 @@ export function QuickTaskCard({
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const deleteTask = useDeleteAgentTask();
   const moveTask = useMoveAgentTask();
 
@@ -197,7 +197,6 @@ export function QuickTaskCard({
     projects,
     onDelete: () =>
       requestConfirm(
-        altHeld,
         () => setShowDeleteConfirm(true),
         () => {
           void deleteTask({ id }).catch((err) => {
@@ -208,7 +207,6 @@ export function QuickTaskCard({
       ),
     onMove: (targetId: Id<"githubRepos">) =>
       requestConfirm(
-        altHeld,
         () => setMoveTarget(targetId),
         () => {
           void moveTask({ id, repoId: targetId }).catch((err) => {

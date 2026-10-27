@@ -3,7 +3,7 @@
 import { SignUpButton } from "@clerk/clerk-react";
 import { IconArrowRight, IconBrandGithub } from "@tabler/icons-react";
 import { m, type Variants } from "motion/react";
-import { Button } from "@vvedantb/ui";
+import { Button, motionEase } from "@vvedantb/ui";
 import { LandingTaskDetailMock } from "../LandingTaskDetailMock";
 import {
   EVA_GITHUB_URL,
@@ -11,11 +11,7 @@ import {
   LANDING_HERO,
   LANDING_HERO_CAPABILITIES,
 } from "./landingContent";
-import {
-  LANDING_EASE,
-  LandingCapabilityLine,
-  LandingHeadline,
-} from "./LandingPrimitives";
+import { LandingCapabilityLine, LandingHeadline } from "./LandingPrimitives";
 
 const HERO_CONTAINER: Variants = {
   hidden: { opacity: 0 },
@@ -30,7 +26,7 @@ const HERO_ITEM: Variants = {
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: LANDING_EASE },
+    transition: { duration: 0.5, ease: motionEase },
   },
 };
 
@@ -40,7 +36,7 @@ const MOCK_ITEM: Variants = {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.8, ease: LANDING_EASE, delay: 0.24 },
+    transition: { duration: 0.8, ease: motionEase, delay: 0.24 },
   },
 };
 

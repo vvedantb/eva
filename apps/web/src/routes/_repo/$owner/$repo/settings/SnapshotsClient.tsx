@@ -22,11 +22,11 @@ import {
   TabsTrigger,
   Textarea,
   tokenTransition,
+  SettingsField,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import {

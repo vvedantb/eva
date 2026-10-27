@@ -26,6 +26,9 @@ import {
   toast,
   tokenTransition,
   Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -81,19 +84,15 @@ import {
 import dayjs from "@eva/shared/dates";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
 import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
-import { StopConfirmDialog } from "@/lib/components/tasks/_components/StopConfirmDialog";
-import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/ResolveConfirmDialog";
-import { StartupCommandsConfirmDialog } from "@/lib/components/tasks/_components/StartupCommandsConfirmDialog";
+import {
+  StopConfirmDialog,
+  ResolveConfirmDialog,
+  StartupCommandsConfirmDialog,
+} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { parseSpec } from "@/lib/utils/parseSpec";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
@@ -129,7 +128,7 @@ export function ProjectDetailClient({
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
     useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -495,7 +494,6 @@ export function ProjectDetailClient({
                       title={skipConfirmTitle("Resolve Conflicts")}
                       onClick={() =>
                         requestConfirm(
-                          altHeld,
                           () => setShowResolveConfirm(true),
                           () => {
                             void handleResolveConflicts();
@@ -525,7 +523,6 @@ export function ProjectDetailClient({
                       title={skipConfirmTitle("Run Startup Commands")}
                       onClick={() =>
                         requestConfirm(
-                          altHeld,
                           () => setShowStartupCommandsConfirm(true),
                           handleRetryStartupCommands,
                         )
@@ -619,7 +616,6 @@ export function ProjectDetailClient({
                     title={skipConfirmTitle("Stop Build")}
                     onClick={() =>
                       requestConfirm(
-                        altHeld,
                         () => setShowStopBuildConfirm(true),
                         () => {
                           void handleStopBuild();
@@ -779,21 +775,21 @@ export function ProjectDetailClient({
         open={showStopBuildConfirm}
         onOpenChange={setShowStopBuildConfirm}
         onConfirm={handleStopBuild}
-        isStopping={isStoppingBuild}
+        isLoading={isStoppingBuild}
       />
 
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
-        isStarting={isResolvingConflicts}
+        isLoading={isResolvingConflicts}
       />
 
       <StartupCommandsConfirmDialog
         open={showStartupCommandsConfirm}
         onOpenChange={setShowStartupCommandsConfirm}
         onConfirm={handleRetryStartupCommands}
-        isStarting={isRetryingStartupCommands}
+        isLoading={isRetryingStartupCommands}
       />
 
       {parsedSpec && (

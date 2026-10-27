@@ -20,6 +20,9 @@ import {
   CenteredSpinner,
   toast,
   RefreshSpinIcon,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import {
   IconDots,
@@ -28,12 +31,6 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
 import { HiddenReposSheet } from "./_components/HiddenReposSheet";
@@ -52,7 +49,7 @@ export function ReposClient() {
   const [syncing, setSyncing] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
     // Sync read avoids banner mount/unmount flash after hydration (CLS).
     // Only the storage read is wrapped: React Compiler bails on the whole file
@@ -150,7 +147,6 @@ export function ReposClient() {
                     title={skipConfirmTitle("Sync Repos")}
                     onClick={() =>
                       requestConfirm(
-                        altHeld,
                         () => setSyncConfirmOpen(true),
                         () => {
                           void handleSync();

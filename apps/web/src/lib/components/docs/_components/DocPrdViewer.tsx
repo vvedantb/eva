@@ -27,6 +27,9 @@ import {
   TabsList,
   TabsTrigger,
   tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -51,12 +54,6 @@ import { DocTestGenDialog } from "./DocTestGenDialog";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -97,7 +94,7 @@ export function DocPrdViewer({
   const [interviewOpen, setInterviewOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [testGenConfirmOpen, setTestGenConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isTriggeringTestGen, setIsTriggeringTestGen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -270,7 +267,6 @@ export function DocPrdViewer({
                   title={skipConfirmTitle("Generate Tests")}
                   onClick={() =>
                     requestConfirm(
-                      altHeld,
                       () => setTestGenConfirmOpen(true),
                       () => {
                         void handleGenerateTests();

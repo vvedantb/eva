@@ -7,6 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  ConfirmSkipHint,
+  skipConfirmTitle,
 } from "@vvedantb/ui";
 import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
 import type { Doc, Id } from "@eva/backend";
@@ -24,7 +26,6 @@ import { SessionSwitcher } from "./SessionSwitcher";
 import { SessionGroupBadge } from "./SessionGroupBadge";
 import { SessionRepoBadges } from "./SessionRepoBadges";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;

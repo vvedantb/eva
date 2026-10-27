@@ -5,7 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useMemo, useState } from "react";
-import { CenteredSpinner } from "@vvedantb/ui";
+import { CenteredSpinner, useRequestConfirm } from "@vvedantb/ui";
 import {
   sessionActivityAt,
   sortAppsForSidebar,
@@ -32,7 +32,6 @@ import {
 import { partitionSessionsForChromeTabs } from "@/lib/components/sidebar/session-tabs/sessionTabsPartition";
 import { entityPathSegment } from "@/lib/numId";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type ArchivedListItem = FunctionReturnType<
@@ -61,7 +60,7 @@ function listedSessions(
  */
 export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
   const { settings } = useSessionsSidebarSettings();
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { archive } = useArchiveSession();
   const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
@@ -192,7 +191,6 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
                   if (!pathSegment) return;
                   const target = { session, repo: groupRepo, pathSegment };
                   requestConfirm(
-                    altHeld,
                     () => setSessionToArchive(target),
                     () => {
                       void archive(target, pathname, () =>

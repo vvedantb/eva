@@ -3,7 +3,7 @@
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
 import { isTitleRegenerating } from "@eva/shared";
-import { ContextMenuItem, ContextMenuSeparator, toast } from "@vvedantb/ui";
+import { ContextMenuItem, ContextMenuSeparator, toast, ConfirmSkipHint, skipConfirmTitle } from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,
@@ -22,7 +22,6 @@ import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 export interface SessionMenuSession {
   _id: Id<"sessions">;
