@@ -1,6 +1,5 @@
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { formatCost, formatTokens, sharePercent } from "../_utils";
+import { SettingsSection, ListEnter } from "@vvedantb/ui";
 
 interface UsageModelRow {
   model: string;

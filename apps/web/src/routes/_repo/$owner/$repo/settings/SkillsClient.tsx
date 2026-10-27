@@ -12,14 +12,14 @@ import {
   tokenTransition,
   staggerDelay,
   RefreshSpinIcon,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconSparkles } from "@tabler/icons-react";
 import { useState } from "react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export function SkillsClient() {

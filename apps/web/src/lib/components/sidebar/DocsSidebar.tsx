@@ -23,6 +23,7 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  ListEnter,
 } from "@vvedantb/ui";
 import {
   IconFile,
@@ -51,7 +52,6 @@ import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverC
 import { entityPathSegment, routeNumIdFromPath } from "@/lib/numId";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface DocsSidebarProps {
   repoId: Id<"githubRepos">;

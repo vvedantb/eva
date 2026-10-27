@@ -5,9 +5,15 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
-import { Badge, Button, Spinner, Switch, toast } from "@vvedantb/ui";
+import {
+  Badge,
+  Button,
+  Spinner,
+  Switch,
+  toast,
+  SettingsSection,
+  ErrorBoundary,
+} from "@vvedantb/ui";
 import { FigmaLogo, LinearLogo } from "@/lib/components/ui/providerLogos";
 import {
   catchMutationError,
@@ -188,8 +194,8 @@ export function ConnectionsClient({
     return <ConnectionsView statuses={statusesOverride} />;
   }
   return (
-    <QueryErrorBoundary fallback={<ConnectionsFromEnv />}>
+    <ErrorBoundary fallback={<ConnectionsFromEnv />}>
       <ConnectionsFromServer />
-    </QueryErrorBoundary>
+    </ErrorBoundary>
   );
 }

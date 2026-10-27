@@ -12,10 +12,10 @@ import {
   TooltipTrigger,
   ConfirmSkipHint,
   skipConfirmTitle,
+  CountPop,
 } from "@vvedantb/ui";
 import { IconDots, IconX } from "@tabler/icons-react";
 import type { ComponentType } from "react";
-import { CountPop } from "@/lib/components/ui/CountPop";
 
 /**
  * One control in the bar. The bar is deliberately dumb: each action carries the

@@ -12,9 +12,9 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  useIdleCallback,
 } from "@vvedantb/ui";
 import { IconMoodSmile } from "@tabler/icons-react";
-import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
 
 // Fast-path reactions shown above the full searchable grid.
 const QUICK_REACTIONS = ["👍", "❤️", "🎉", "😄", "🚀", "👀"];

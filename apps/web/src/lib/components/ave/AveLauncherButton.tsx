@@ -4,7 +4,12 @@ import { useId, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  ErrorBoundary,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 import { AveStatePip } from "@/lib/components/ave/AveActiveDot";
 import { AveEyes } from "@/lib/components/ave/AveEyes";
@@ -18,7 +23,6 @@ import {
   LAUNCHER_POSITION_STYLE,
   type AveLauncherDragHandlers,
 } from "@/lib/components/ave/useAveLauncherPosition";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 
 const GLYPH_LAYER =
   "pointer-events-none absolute inset-0 flex items-center justify-center transition-[opacity,scale] duration-[var(--motion-fast)]";
@@ -98,11 +102,11 @@ export function AveLauncherButton({
               )}
               aria-hidden={isOpen}
             >
-              <QueryErrorBoundary
+              <ErrorBoundary
                 fallback={<AveFace state="idle" labelId={stateLabelId} />}
               >
                 <AveLiveFace labelId={stateLabelId} />
-              </QueryErrorBoundary>
+              </ErrorBoundary>
             </span>
             <span
               className={cn(

@@ -13,9 +13,9 @@ import {
   DialogTitle,
   DialogTrigger,
   Input,
+  userFacingErrorMessage,
 } from "@vvedantb/ui";
 import { IconUserPlus } from "@tabler/icons-react";
-import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 /**
  * `teamMembers.add` throws this when the email belongs to nobody who has ever

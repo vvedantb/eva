@@ -25,6 +25,8 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  ListEnter,
+  useFirstPaintGate,
 } from "@vvedantb/ui";
 import type { SortableListDragEndEvent } from "@vvedantb/ui";
 import { IconChevronRight, IconPlayerPlay } from "@tabler/icons-react";
@@ -33,7 +35,6 @@ import {
   TASK_STATUSES,
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
-import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import { QuickTaskCard } from "./QuickTaskCard";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";

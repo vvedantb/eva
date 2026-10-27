@@ -2,13 +2,12 @@
 
 import { IconStar, IconUser } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { tokenTransition, staggerDelay } from "@vvedantb/ui";
+import { tokenTransition, staggerDelay, MarqueeOnHover } from "@vvedantb/ui";
 import { Widget } from "@/lib/components/Widget";
 import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { ScoreBar } from "./ScoreBar";
 import { StatusChip } from "./StatusChip";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 
 type LeaderboardEntry = FunctionReturnType<
   typeof api.analytics.getLeaderboard

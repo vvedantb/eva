@@ -5,10 +5,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Surface,
+  ListEnter,
 } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { IconChevronDown, IconFileText } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   groupChangedFilesByRepo,
   selectChangedFilePreview,

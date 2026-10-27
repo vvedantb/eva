@@ -5,10 +5,16 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent, motionEase } from "@vvedantb/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  motionEase,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { playNotificationBell } from "@/lib/utils/notificationBell";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 import {

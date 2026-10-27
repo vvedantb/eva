@@ -13,8 +13,8 @@ import {
   Spinner,
   toast,
   useRequestConfirm,
+  ListEnter,
 } from "@vvedantb/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";

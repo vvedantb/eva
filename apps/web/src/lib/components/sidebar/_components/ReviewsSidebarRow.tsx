@@ -9,10 +9,10 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   tokenTransition,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconGitPullRequest, IconPencil } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import {
   SharedLayoutNavSurface,
   sidebarNavLinkClass,

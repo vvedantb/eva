@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { IconUsers } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { EnvVarsTable } from "@/lib/components/EnvVarsTable";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { SettingsEmptyState } from "@vvedantb/ui";
 
 export function TeamEnvVarsClient() {
   const { repo } = useRepo();

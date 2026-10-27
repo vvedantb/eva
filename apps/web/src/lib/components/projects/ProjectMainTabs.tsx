@@ -1,14 +1,13 @@
 "use client";
 
 import { useNavigate } from "@tanstack/react-router";
-import { Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
+import { Tabs, TabsList, TabsTrigger, UnreadDot } from "@vvedantb/ui";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
   SANDBOX_STATUS_STYLES,
   showsSandboxStatusDot,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 
 /** Primary project tabs. `work` is the index route, so it owns every deep link. */
 export type ProjectMainTab = "overview" | "work" | "sandbox";

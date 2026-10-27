@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { SlashItem } from "@/lib/components/mentions";
-import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
 import {
   pickSkillSuggestions,
   shouldSuggestFor,
   SUGGEST_IDLE_MS,
   type SkillSuggestionResponse,
 } from "@/lib/components/chat/_components/skillSuggestionsPick";
+import { useIdleCallback } from "@vvedantb/ui";
 
 /**
  * Ranks the composer's `/` skills against the draft as it is typed, and hands

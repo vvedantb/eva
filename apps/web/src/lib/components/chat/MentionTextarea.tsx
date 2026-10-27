@@ -6,6 +6,7 @@ import { useQuery } from "convex/react";
 import {
   usePromptInputController,
   usePromptInputAttachments,
+  useMediaQuery,
 } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
@@ -28,7 +29,6 @@ import {
   useComposerPrediction,
   type ComposerPredictionTarget,
 } from "@/lib/hooks/useComposerPrediction";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export type MentionTextareaHandle = MentionEditorHandle;

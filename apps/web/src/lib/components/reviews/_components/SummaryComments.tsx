@@ -7,9 +7,9 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import { IconArrowsSort, IconChevronRight } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { PrCommentCard } from "./PrCommentCard";
 import { NOTICE_CLASS, type PrOverview } from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";

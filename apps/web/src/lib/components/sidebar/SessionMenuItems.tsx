@@ -3,7 +3,14 @@
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
 import { isTitleRegenerating } from "@eva/shared";
-import { ContextMenuItem, ContextMenuSeparator, toast, ConfirmSkipHint, skipConfirmTitle } from "@vvedantb/ui";
+import {
+  ContextMenuItem,
+  ContextMenuSeparator,
+  toast,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  convexErrorMessage,
+} from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,
@@ -20,7 +27,6 @@ import {
 import { useAction } from "convex/react";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export interface SessionMenuSession {

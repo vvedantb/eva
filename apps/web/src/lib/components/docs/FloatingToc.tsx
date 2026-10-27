@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { cn } from "@eva/ui";
-import { tokenTransition } from "@vvedantb/ui";
+import { tokenTransition, ListEnter, useFirstPaintGate } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import {
   assignHeadingIds,
   getHeadingElements,

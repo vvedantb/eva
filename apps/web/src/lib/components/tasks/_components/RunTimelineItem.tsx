@@ -26,13 +26,13 @@ import {
   Markdown,
   ConfirmSkipHint,
   skipConfirmTitle,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconBrain, IconPlayerStop } from "@tabler/icons-react";
 import dayjs, { formatExactDateTime } from "@eva/shared/dates";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EvaIcon } from "@/lib/components/EvaIcon";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { FunctionReturnType } from "convex/server";
 import { AI_MODEL_OPTIONS, getAIModelProvider } from "@eva/backend";
 import type { api } from "@eva/backend";
@@ -212,6 +212,7 @@ export function RunTimelineItem({
                   </span>
                   <RelativeDateTime
                     at={run.startedAt}
+                    emptyLabel="Queued"
                     className="shrink-0 text-xs"
                   />
                 </div>

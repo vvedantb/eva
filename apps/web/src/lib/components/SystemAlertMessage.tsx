@@ -10,9 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
   tokenTransition,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 
 interface SystemAlertMessageProps {
   content: string;

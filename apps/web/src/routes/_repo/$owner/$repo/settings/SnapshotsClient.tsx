@@ -23,11 +23,11 @@ import {
   Textarea,
   tokenTransition,
   SettingsField,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import {
   CronScheduleCard,

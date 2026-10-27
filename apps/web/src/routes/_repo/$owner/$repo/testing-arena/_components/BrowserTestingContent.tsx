@@ -6,6 +6,8 @@ import {
   Spinner,
   TestResultError,
   TestResultErrorMessage,
+  RelativeDateTime,
+  ListEnter,
 } from "@vvedantb/ui";
 import {
   IconAlertTriangle,
@@ -13,8 +15,6 @@ import {
   IconListCheck,
   IconX,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { ScenariosPanel } from "./ScenariosPanel";
 import {

@@ -15,13 +15,13 @@ import {
   DialogFooter,
   CenteredSpinner,
   useRequestConfirm,
+  ListEnter,
+  userFacingErrorMessage,
 } from "@vvedantb/ui";
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 export function TeamsClient() {
   const teams = useQuery(api.teams.list);

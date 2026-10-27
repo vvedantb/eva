@@ -1,9 +1,8 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { formatCost } from "../_utils";
 import { LogCompletionRow } from "./LogCompletionRow";
+import { SettingsSection, ListEnter } from "@vvedantb/ui";
 
 type ProjectGroup = FunctionReturnType<typeof api.logs.listByProject>[number];
 type LogEntry = ProjectGroup["logs"][number];
