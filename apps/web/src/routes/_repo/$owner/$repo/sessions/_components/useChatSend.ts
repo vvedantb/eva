@@ -1,5 +1,6 @@
 import { api } from "@eva/backend";
 import type { AIModel, Id, ModelTraitsExecutionArgs } from "@eva/backend";
+import { tempId } from "@vvedantb/server";
 import { toast } from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
@@ -21,13 +22,6 @@ export type SessionMessage = NonNullable<
   FunctionReturnType<typeof api.messages.listByParent>
 >[number];
 
-// Convex has no non-assertion way to mint an Id<T> before the server assigns
-// one; this is the single, contained assertion for optimistic-insert temp ids.
-function optimisticMessageId(): Id<"messages"> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- Convex Id<T> is an opaque branded string; there is no non-assertion way to mint a client-side optimistic temp id
-  return crypto.randomUUID() as Id<"messages">;
-}
-
 function applyAddMessageOptimistically(
   localStore: OptimisticLocalStore,
   args: FunctionArgs<typeof api.sessions.addMessage>,
@@ -41,7 +35,7 @@ function applyAddMessageOptimistically(
 
   const now = Date.now();
   const userMsg: SessionMessage = {
-    _id: optimisticMessageId(),
+    _id: tempId("messages"),
     _creationTime: now,
     parentId: args.chatId,
     role: "user",
@@ -57,7 +51,7 @@ function applyAddMessageOptimistically(
     reasoningLevel: args.reasoningLevel,
   };
   const assistantPlaceholder: SessionMessage = {
-    _id: optimisticMessageId(),
+    _id: tempId("messages"),
     _creationTime: now + 1,
     parentId: args.chatId,
     role: "assistant",

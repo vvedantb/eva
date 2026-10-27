@@ -1,3 +1,4 @@
+import { toolErrorResult } from "@vvedantb/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
@@ -5,7 +6,6 @@ import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { errorResult } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
 
 const SUPABASE_PREFIX = "supabase_";
@@ -235,7 +235,9 @@ export async function supabaseTools(
             { clerkUserId },
           );
           if (!currentToken) {
-            return errorResult("SUPABASE_ACCESS_TOKEN is no longer available.");
+            return toolErrorResult(
+              "SUPABASE_ACCESS_TOKEN is no longer available.",
+            );
           }
 
           try {
@@ -283,7 +285,7 @@ export async function supabaseTools(
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            return errorResult(`Supabase tool error: ${message}`);
+            return toolErrorResult(`Supabase tool error: ${message}`);
           }
         },
       }),

@@ -1,5 +1,6 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { marked } from "marked";
 import { internalAction } from "./_generated/server";
@@ -18,24 +19,16 @@ import {
 import { hmacSha256Hex } from "./_shared/hmac";
 
 /** Reads a required environment variable, throwing a clear error when it is missing. */
-function getEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set in the Convex environment`);
-  }
-  return value;
-}
-
 /** Builds the signed one-click feedback link for one recipient of one changelog run. */
 async function changelogFeedbackUrlBuilder(
   runId: string,
   userId: string,
 ): Promise<(feedback: ChangelogFeedback) => string> {
   const sig = await hmacSha256Hex(
-    getEnv("ENCRYPTION_KEY"),
+    requiredEnv("ENCRYPTION_KEY"),
     changelogVoteHmacMessage(runId, userId),
   );
-  const base = `${getEnv("CONVEX_SITE_URL")}/api/changelog/vote`;
+  const base = `${requiredEnv("CONVEX_SITE_URL")}/api/changelog/vote`;
   return (feedback) => {
     const params = new URLSearchParams({ run: runId, user: userId, sig });
     params.set("vote", feedback.vote);
@@ -59,7 +52,7 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = getEnv("WEB_APP_URL");
+    const appUrl = requiredEnv("WEB_APP_URL");
     // The weekly changelog returns structured JSON and gets the card layout;
     // every other automation (and legacy markdown changelogs) gets plain HTML.
     const changelog =
