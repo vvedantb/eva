@@ -1,5 +1,6 @@
+"use client";
+
 import { VideoPreview, ImageGalleryPreview } from "@vvedantb/ui";
-("use client");
 
 /** A resolved capture: `url` is null when the stored blob is gone. */
 export type AgentMediaEntry = {
