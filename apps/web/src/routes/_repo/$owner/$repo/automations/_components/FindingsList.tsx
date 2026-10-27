@@ -4,9 +4,14 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, Checkbox, Spinner, tokenTransition } from "@vvedantb/ui";
+import {
+  Button,
+  Checkbox,
+  Spinner,
+  tokenTransition,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { FindingRow } from "./FindingRow";
 import {

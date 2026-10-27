@@ -11,11 +11,11 @@ import {
   TooltipContent,
   TooltipTrigger,
   springTransition,
+  useMediaQuery,
 } from "@vvedantb/ui";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { AVE_HEADER_BUTTON_CLASS } from "@/lib/components/ave/aveHeaderButton";
 import { PANEL_POSITION_STYLE } from "@/lib/components/ave/useAveLauncherPosition";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 const AvePanelBody = lazy(() =>
   import("@/lib/components/ave/AvePanelBody").then((m) => ({

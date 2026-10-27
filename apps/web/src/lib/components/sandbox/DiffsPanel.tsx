@@ -7,10 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, SearchInput, Spinner, toast } from "@vvedantb/ui";
+import {
+  Accordion,
+  SearchInput,
+  Spinner,
+  toast,
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { commitDiffQuery } from "@/lib/prReviewQueries";

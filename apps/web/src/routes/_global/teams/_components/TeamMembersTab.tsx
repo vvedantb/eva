@@ -15,11 +15,11 @@ import {
   SelectValue,
   skipConfirmTitle,
   useRequestConfirm,
+  SettingsEmptyState,
+  ListEnter,
 } from "@vvedantb/ui";
 import { IconTrash, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   catchMutationError,
   withMutationToast,

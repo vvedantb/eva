@@ -1,8 +1,7 @@
 "use client";
 
-import { Badge, tokenTransition } from "@vvedantb/ui";
+import { Badge, tokenTransition, CountPop, countLabel } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";

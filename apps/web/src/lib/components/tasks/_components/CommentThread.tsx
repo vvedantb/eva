@@ -3,8 +3,7 @@
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { cn } from "@eva/ui";
-import { Separator, Surface } from "@vvedantb/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+import { Separator, Surface, ListEnter } from "@vvedantb/ui";
 import { CommentActivityItem } from "./CommentActivityItem";
 import { CommentReplyComposer } from "./CommentReplyComposer";
 import type { TaskComment } from "../_utils/commentThread";

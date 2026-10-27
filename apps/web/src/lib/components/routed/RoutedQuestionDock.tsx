@@ -11,6 +11,8 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
+  RelativeDateTime,
+  useMediaQuery,
 } from "@vvedantb/ui";
 import {
   IconArrowUp,
@@ -20,8 +22,6 @@ import {
   IconChevronRight,
   IconInfoCircle,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { participantNames, sourceLabel } from "@/lib/components/routed/status";
 import {
   catchMutationError,

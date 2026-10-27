@@ -4,8 +4,8 @@ import { ACCENT_COLORS } from "@/lib/contexts/themeTokens";
 import type { AccentColor } from "@/lib/contexts/ThemeContext";
 import { cn } from "@eva/ui";
 import { IconCheck } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { OptionButton } from "./OptionButton";
+import { ListEnter } from "@vvedantb/ui";
 
 function isAccentColor(value: string): value is AccentColor {
   return value in ACCENT_COLORS;

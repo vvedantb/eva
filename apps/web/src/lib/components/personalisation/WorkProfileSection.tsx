@@ -2,9 +2,14 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Input, Spinner, Textarea } from "@vvedantb/ui";
+import {
+  Button,
+  Input,
+  Spinner,
+  Textarea,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { useState } from "react";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 interface WorkProfileDraft {

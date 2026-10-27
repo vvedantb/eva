@@ -2,9 +2,8 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
-import { Markdown } from "@vvedantb/ui";
+import { Markdown, RelativeDateTime } from "@vvedantb/ui";
 import { IconExternalLink, IconFileCode } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { MARKDOWN_CLASS } from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";
 

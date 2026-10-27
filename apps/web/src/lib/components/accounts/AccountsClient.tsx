@@ -5,9 +5,6 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   Button,
   Dialog,
@@ -22,6 +19,9 @@ import {
   TooltipTrigger,
   skipConfirmTitle,
   useRequestConfirm,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
 } from "@vvedantb/ui";
 import { IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { relativeTime } from "@/lib/components/artifacts/_format";

@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { UnreadCornerBadge } from "@/lib/components/ui/CountPop";
+import { UnreadCornerBadge } from "@/lib/components/ui/CornerBadge";
 
 /**
  * How many routed questions are waiting on the user, on whichever button

@@ -4,10 +4,9 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { Input, Textarea, SettingsField } from "@vvedantb/ui";
+import { Input, Textarea, SettingsField, SettingsSection } from "@vvedantb/ui";
 import { parseCommandLines } from "./_utils";
 import { LogoSettingsSection } from "./_components/LogoSettingsSection";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 const COMMAND_TEXTAREA_CLASS = "resize-y bg-background font-mono text-xs";

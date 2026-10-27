@@ -6,6 +6,8 @@ import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
+  ListEnter,
+  useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
@@ -17,7 +19,6 @@ import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
-import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];

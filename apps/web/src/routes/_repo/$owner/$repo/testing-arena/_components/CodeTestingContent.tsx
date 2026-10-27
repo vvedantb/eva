@@ -10,6 +10,8 @@ import {
   TestResultError,
   TestResultErrorMessage,
   tokenTransition,
+  RelativeDateTime,
+  ListEnter,
 } from "@vvedantb/ui";
 import {
   IconCheck,
@@ -17,8 +19,6 @@ import {
   IconGitPullRequest,
   IconTool,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { IssuesList } from "./IssuesList";
 import {

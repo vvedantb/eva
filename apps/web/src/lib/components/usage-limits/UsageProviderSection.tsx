@@ -5,8 +5,8 @@ import {
   snapshotOf,
   type UsageAccountEntry,
 } from "./_utils";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { UsageWindowRow } from "./UsageWindowRow";
+import { ListEnter } from "@vvedantb/ui";
 
 interface UsageProviderSectionProps {
   entry: UsageAccountEntry;

@@ -1,9 +1,8 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { formatCost, labelFor } from "../_utils";
 import { LogCompletionRow } from "./LogCompletionRow";
+import { SettingsSection, ListEnter } from "@vvedantb/ui";
 
 type LogEntry = FunctionReturnType<typeof api.logs.listByRepo>[number];
 

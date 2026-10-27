@@ -12,9 +12,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  convexErrorMessage,
 } from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 type SandboxGitTarget = FunctionArgs<
   typeof api.sandbox.commitAndPushSandbox

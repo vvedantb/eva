@@ -19,6 +19,8 @@ import {
   TooltipTrigger,
   toast,
   useRequestConfirm,
+  MarqueeOnHover,
+  UnreadDot,
 } from "@vvedantb/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -35,8 +37,6 @@ import {
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { PriorityIcon } from "@/lib/components/priority/PriorityIcon";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import {
   PRIORITY_LABELS,

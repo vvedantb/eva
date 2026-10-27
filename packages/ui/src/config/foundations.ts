@@ -2,7 +2,8 @@ import { createElement, type CSSProperties } from "react";
 import { Spinner, type UiConfig } from "@vvedantb/ui";
 
 // Eva's look for the foundations family (spinners, loaders, status dot, list
-// row, toaster, card, table, progress, separator, label) on @vvedantb/ui.
+// row, toaster, card, table, progress, separator, label, settings cards) on
+// @vvedantb/ui.
 
 // Eva logo colours (match public/icon.svg). Loaders use these, not theme
 // tokens, so they read the same on every surface and theme. The web app's
@@ -157,5 +158,18 @@ export const foundationsConfig = {
     classes: {
       root: "text-sm font-semibold leading-none tracking-[-0.01em] cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
     },
+  },
+  // Settings cards sit on `bg-card` with eva's clamped surface radius; fields
+  // inside step to `bg-muted` rather than the card tone.
+  SettingsSection: {
+    classes: {
+      card: "rounded-surface bg-card [&_input]:bg-muted [&_textarea]:bg-muted [&_[data-slot=select-trigger]]:bg-muted [&_[role=combobox]]:border-input [&_[role=combobox]]:bg-muted",
+      footer:
+        "flex items-center justify-end gap-2 rounded-b-surface bg-muted px-4 py-3",
+      body: { list: "divide-y divide-border/50 p-0" },
+    },
+  },
+  SettingsEmptyState: {
+    classes: { icon: "mb-5 text-muted-foreground" },
   },
 } satisfies UiConfig;

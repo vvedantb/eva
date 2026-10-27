@@ -22,11 +22,12 @@ import {
   SettingsField,
   SettingsStack,
   SettingsToggleRow,
+  SettingsSection,
+  MarqueeOnHover,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
 import { TriggerSection } from "./_components/TriggerSection";
@@ -36,7 +37,6 @@ import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { isAutomationTab, type AutomationTab } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {

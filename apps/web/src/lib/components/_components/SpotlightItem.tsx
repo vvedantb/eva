@@ -5,10 +5,10 @@ import {
   CommandShortcut,
   tokenTransition,
   staggerDelay,
+  MarqueeOnHover,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
 import type { ReactNode } from "react";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import type { SpotlightIcon } from "@/lib/components/_components/spotlightGroups";
 
 interface SpotlightItemProps {

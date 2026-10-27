@@ -20,13 +20,13 @@ import {
   PopoverAnchor,
   PopoverContent,
   usePromptInputController,
+  ListEnter,
 } from "@vvedantb/ui";
 import { IconBookmark, IconChevronDown } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { ComposerStashItem } from "@/lib/components/chat/_components/ComposerStashItem";
 import { useComposerStash } from "@/lib/components/chat/_components/useComposerStash";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 /**
  * Prompt-stash drawer plus the dock the tasks/queued panels sit in. The

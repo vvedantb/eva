@@ -3,9 +3,8 @@
 import { useId, useState, type ReactNode } from "react";
 import type { GitStatus } from "@pierre/trees";
 import { cn } from "@eva/ui";
-import { DialogBody } from "@vvedantb/ui";
+import { DialogBody, ListEnter } from "@vvedantb/ui";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   DiffCountBar,
   FileStatusChip,

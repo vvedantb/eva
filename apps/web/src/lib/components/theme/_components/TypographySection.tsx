@@ -11,9 +11,9 @@ import type {
   LetterSpacing,
 } from "@/lib/contexts/ThemeContext";
 import { IconCheck } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { SectionLabel } from "./SectionLabel";
 import { OptionButton } from "./OptionButton";
+import { ListEnter } from "@vvedantb/ui";
 
 function isFontFamily(value: string): value is FontFamily {
   return value in FONT_FAMILIES;

@@ -14,8 +14,8 @@ import {
   Surface,
   tokenTransition,
   Markdown,
+  ListEnter,
 } from "@vvedantb/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconAlertTriangle,
   IconCheck,

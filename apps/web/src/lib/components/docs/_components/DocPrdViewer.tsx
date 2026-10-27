@@ -30,6 +30,7 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  RelativeDateTime,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -44,7 +45,6 @@ import {
   IconHistory,
   IconPencilCheck,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocInterviewDialog } from "../DocInterviewDialog";
 import { DocContentTab } from "./DocContentTab";
 import { HtmlPreviewFrame } from "./HtmlPreviewFrame";

@@ -2,9 +2,13 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Spinner, Switch, SettingsToggleRow } from "@vvedantb/ui";
+import {
+  Spinner,
+  Switch,
+  SettingsToggleRow,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { catchMutationError, mutationError } from "@/lib/utils/mutationToast";
 import {
   disableDesktopNotifications,
