@@ -375,8 +375,6 @@ Next: Same as the slide before.`,
 Next: Same as the slide before.`,
   "bee-draft-jar": `Draft. A honey jar fills to $500, the monthly AI allowance on our Teams plan, then Bee takes small sips for its three jobs. Figure from the presenter, October 2026.
 Next: Same as the slide before.`,
-  "bee-draft-close": `Draft. The bee flies up into the empty bar at the top of your screen and starts listening. Then it opens with a tip for you, the presenter: the session has finished, ask for questions. Let the room read it; it is the hand-off to Q&A. Then the ask, and last a swarm of bees flies in from both sides as the send-off.
-Next: Same as the slide before.`,
   "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
 Bee connects to the tools you already have.
 → Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.
@@ -385,6 +383,10 @@ Detail: connectors use a normal sign-in. Meeting context is read locally; nothin
 Next: Step back for a moment: why is Bee built this way?`,
 
   "bee-10-close": `Close on one ask: try it in your next meeting.
+→ Step 1 (on its own): the bee flies up into the empty bar at the top of the screen and starts listening.
+→ Step 2: the bar opens with a tip for you, the presenter: the session has finished, ask for questions. Let the room read it; it is the hand-off to Q&A.
+→ Step 3: the ask, "Try it in your next meeting".
+→ Step 4: a swarm of bees flies in from both sides as the send-off.
 Detail: it runs on Windows and Mac. Offer to help anyone set it up after the session. Then open the floor for questions.
 Next: Questions.`,
 

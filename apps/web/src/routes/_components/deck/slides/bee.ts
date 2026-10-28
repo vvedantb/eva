@@ -20,7 +20,6 @@ import { DraftSummaryFold } from "./bee/drafts/d06-summary-fold";
 import { DraftTogetherRoom } from "./bee/drafts/d07-together-room";
 import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
 import { DraftCostJar } from "./bee/drafts/d12-cost-jar";
-import { DraftCloseLanding } from "./bee/drafts/d15-close-landing";
 
 /**
  * Bee, for colleagues who are not technical: the problem, what it does in a
@@ -162,12 +161,10 @@ const SLIDES: DeckSlide[] = [
     Component: BeeBackground,
     steps: 4,
   },
-  { id: "bee-10-close", title: "Try it", Component: BeeClose, steps: 0 },
-  // Draft for review: keep, merge into the slide above, or delete.
   {
-    id: "bee-draft-close",
-    title: "Draft: close, the landing",
-    Component: DraftCloseLanding,
+    id: "bee-10-close",
+    title: "Try it",
+    Component: BeeClose,
     steps: 4,
     autoMs: [1600, 1700, 1800, 1400],
   },
