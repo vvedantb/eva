@@ -38,8 +38,8 @@ export function DraftCostJar() {
   const step = useDeckStep();
   const fill = step >= FILL;
   const sips = step >= SIPS;
-  // Full to the brim, then a little lower once Bee has used some.
-  const level = sips ? 0.86 : fill ? 1 : 0;
+  // Fills once to the brim and stays full: the allowance is there to use.
+  const level = fill ? 1 : 0;
   const height = (JAR.bottom - JAR.top) * level;
 
   return (
@@ -78,9 +78,9 @@ export function DraftCostJar() {
                   initial={{ y: 310, height: 0 }}
                   animate={{ y: 310 - height, height }}
                   transition={{
-                    duration: fill && !sips ? 2.2 : 1.2,
+                    duration: 2.2,
                     ease: [0.22, 1, 0.36, 1],
-                    delay: fill && !sips ? 0.3 : 0.4,
+                    delay: 0.3,
                   }}
                 />
               </g>
@@ -106,7 +106,7 @@ export function DraftCostJar() {
             </div>
           </div>
 
-          {/* What it pays for: small sips, not the whole jar. */}
+          {/* What it pays for. */}
           <div className="flex flex-col gap-3">
             <m.div
               className="mb-1 text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase"
