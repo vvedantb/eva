@@ -371,7 +371,7 @@ Next: Same as the slide before.`,
 Next: Same as the slide before.`,
   "bee-draft-room": `Draft. The meeting room from above: each person's Bee hears only their own voice, shown as a ripple in their colour, and each summary line keeps that colour.
 Next: Same as the slide before.`,
-  "bee-draft-race": `Draft. The same Krzys question, side by side: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar. No times are shown, because none were measured.
+  "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
 Next: Same as the slide before.`,
   "bee-draft-jar": `Draft. A honey jar fills to $500, the monthly AI allowance on our Teams plan, then Bee takes small sips for its three jobs. Figure from the presenter, October 2026.
 Next: Same as the slide before.`,

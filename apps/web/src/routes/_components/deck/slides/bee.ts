@@ -97,8 +97,9 @@ const SLIDES: DeckSlide[] = [
     id: "bee-draft-race",
     title: "Draft: Krzys, the race",
     Component: DraftKrzysRace,
-    steps: 2,
-    autoMs: [1100, 6000],
+    steps: 3,
+    // Each round types four searches (about 4.7 s) before moving on.
+    autoMs: [1100, 5400, 5400],
   },
   {
     id: "bee-06-summary",
