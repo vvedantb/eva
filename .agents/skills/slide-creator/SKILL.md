@@ -49,6 +49,12 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
 - Real facts on a slide need a source in the speaker note: name and date, or
   the URL that was checked.
 
+- **A redesign or draft keeps every piece of content from the original slide:**
+  titles, labels, captions, list items, answers and steps. Change the motion,
+  not the message. Before you finish, diff the on-screen text of the original
+  against the new version and add back anything missing.
+- Keep "would have" wording wherever the original uses it.
+
 ## 3. Real assets, real UI
 
 - **Named products get their real logo, never a generic icon.**

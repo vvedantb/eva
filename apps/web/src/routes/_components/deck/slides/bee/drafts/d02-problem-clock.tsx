@@ -1,6 +1,6 @@
 import { IconSearch, IconFileText } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Shell, useDeckStep } from "../../../_components/DeckPrimitives";
+import { Shell, Title, useDeckStep } from "../../../_components/DeckPrimitives";
 import { Camera } from "../../../_components/DeckCamera";
 import type { CameraShot } from "../../../_components/DeckCamera";
 import { CountUp } from "../../../_components/CountUp";
@@ -17,6 +17,7 @@ const RESULTS = [
   "Q3 plan.md",
   "Ideas.md",
   "Provider onboarding.md",
+  "Provider call.md",
 ];
 
 const SHOTS: readonly CameraShot[] = [
@@ -35,8 +36,9 @@ export function DraftProblemClock() {
   const clock = step >= CLOCK;
 
   return (
-    <Shell className="justify-center py-14">
-      <Camera shots={SHOTS}>
+    <Shell className="py-14">
+      <Title size="md">“We talked about this last time…”</Title>
+      <Camera shots={SHOTS} className="mt-6">
         <div className="relative mx-auto h-[480px] w-[1000px] overflow-hidden rounded-[26px] bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10">
           {/* Someone asks the question in the call. */}
           <div

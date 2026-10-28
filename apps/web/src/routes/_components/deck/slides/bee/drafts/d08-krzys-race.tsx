@@ -1,5 +1,10 @@
 import { AnimatePresence, m } from "motion/react";
-import { Shell, useDeckStep } from "../../../_components/DeckPrimitives";
+import {
+  Accent,
+  Shell,
+  Title,
+  useDeckStep,
+} from "../../../_components/DeckPrimitives";
 import { Camera } from "../../../_components/DeckCamera";
 import type { CameraShot } from "../../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../../_components/motion";
@@ -28,7 +33,8 @@ const ROUNDS: readonly Round[] = [
       "convex dev two projects same machine",
       "convex agent mode",
     ],
-    answer: "Yes. Each copy of the project gets its own local deployment",
+    answer:
+      "Yes. Each copy of the project gets its own local deployment, and agent mode starts one with no login",
     source: "docs.convex.dev",
   },
   {
@@ -39,7 +45,8 @@ const ROUNDS: readonly Round[] = [
       "agent sdk typescript mcp server config",
       "claude agent sdk custom tools",
     ],
-    answer: "Yes. Pass them in the mcpServers option",
+    answer:
+      "Yes. Pass them in the mcpServers option: a local command, a web address, or one inside your own app",
     source: "platform.claude.com",
   },
 ];
@@ -132,8 +139,11 @@ export function DraftKrzysRace() {
   const round = ROUNDS[index];
 
   return (
-    <Shell className="justify-center py-14">
-      <Camera shots={SHOTS}>
+    <Shell className="py-14">
+      <Title size="md">
+        A real meeting, with <Accent>Krzys</Accent>
+      </Title>
+      <Camera shots={SHOTS} className="mt-6">
         <div className="flex w-[1088px] flex-col items-center gap-7">
           {/* The question being asked right now. */}
           <AnimatePresence mode="wait" initial={false}>

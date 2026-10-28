@@ -112,8 +112,8 @@ const SLIDES: DeckSlide[] = [
     id: "bee-draft-summary",
     title: "Draft: summary, the fold",
     Component: DraftSummaryFold,
-    steps: 2,
-    autoMs: [3000, 1800],
+    steps: 5,
+    autoMs: [3000, 1800, 1500, 1800, 1800],
   },
   {
     id: "bee-07-teams",

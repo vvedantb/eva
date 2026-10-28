@@ -1,3 +1,4 @@
+import { IconMicrophone } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, useDeckStep } from "../../../_components/DeckPrimitives";
 import { Camera } from "../../../_components/DeckCamera";
@@ -96,6 +97,15 @@ export function DraftTogetherRoom() {
                 </div>
               </div>
             ))}
+            {/* What it takes: Bee running on everyone's laptop. */}
+            <m.div
+              className="absolute bottom-0 left-0 w-full text-center text-[17px] text-[#2a1e0c]/60"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: voices ? 1 : 0 }}
+              transition={cueTransition(voices, 0.9, { duration: 0.5 })}
+            >
+              Everyone runs Bee on their own laptop
+            </m.div>
           </div>
 
           {/* One summary, every line in the colour of the voice it came from. */}
@@ -128,6 +138,18 @@ export function DraftTogetherRoom() {
                 {person.line}
               </m.div>
             ))}
+            <m.div
+              className="mt-2 flex items-center gap-3 text-[19px] font-semibold text-[#2a1e0c]"
+              initial={{ opacity: 0, y: 10 }}
+              animate={lines ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+              transition={cueTransition(lines, 0.9, BEE_SPRING)}
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#fabe28]/30 text-[#7a4800]">
+                <IconMicrophone size={18} />
+              </span>
+              Each line comes from that person&apos;s own microphone, so it is
+              never a guess
+            </m.div>
           </div>
         </div>
       </Camera>

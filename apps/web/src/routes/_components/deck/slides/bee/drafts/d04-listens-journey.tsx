@@ -22,7 +22,7 @@ const PHRASE_AT = [
 const NOTES = [
   { name: "Pricing ideas.md", best: false },
   { name: "Provider call.md", best: true },
-  { name: "Q3 plan.md", best: false },
+  { name: "Provider onboarding.md", best: false },
 ];
 
 // The camera follows the phrase: left, then middle, then right.
@@ -43,6 +43,24 @@ export function DraftListensJourney() {
     <Shell className="justify-center py-14">
       <Camera shots={SHOTS}>
         <div className="relative h-[460px] w-[1088px]">
+          {/* The three stages, named as on the original slide. */}
+          {[
+            { text: "Hears", left: 0, on: step >= HEARS },
+            { text: "Finds", left: 400, on: finds },
+            { text: "Tips", left: 740, on: tips },
+          ].map((stage) => (
+            <m.div
+              key={stage.text}
+              className="absolute top-[100px] text-sm font-semibold tracking-[0.14em] text-[#a15f00] uppercase"
+              style={{ left: stage.left }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={stage.on ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+              transition={cueTransition(stage.on, 0.1, BEE_SPRING)}
+            >
+              {stage.text}
+            </m.div>
+          ))}
+
           {/* A speaker in the call. */}
           <div className="absolute top-[180px] left-0 flex flex-col items-center gap-3">
             <span className="flex size-24 items-center justify-center rounded-full bg-[#d9d1c1] text-3xl font-semibold text-[#2a1e0c]/60">
@@ -80,7 +98,13 @@ export function DraftListensJourney() {
             transition={{ ...BEE_SPRING, duration: 1.1 }}
           >
             <IconMicrophone size={18} style={{ color: BEE.accent }} />
-            “…the provider onboarding…”
+            <span
+              className="text-[14px] font-normal"
+              style={{ color: BEE.muted }}
+            >
+              In the meeting
+            </span>
+            “…the provider onboarding we talked about last time…”
           </m.div>
 
           {/* Your notes; the right one lights up as the phrase lands. */}

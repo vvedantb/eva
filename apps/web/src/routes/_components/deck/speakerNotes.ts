@@ -367,7 +367,7 @@ Next: Last, it fits with the tools you already use.`,
 Next: Same as the slide before.`,
   "bee-draft-listens": `Draft. One phrase travels: it leaves Alex, flies into your notes, the right note lights up, and the tip appears in the bar. The camera follows it left to right.
 Next: Same as the slide before.`,
-  "bee-draft-summary": `Draft. The whole meeting scrolls past as a transcript, then folds down into four lines: two decisions and two actions with owners.
+  "bee-draft-summary": `Draft. The whole meeting scrolls past as a transcript, then folds down into the summary. Then, as on the original: the decisions, the action items with owners, saved to your notes so Bee finds it next time, and, if you missed it, a colleague forwards the file.
 Next: Same as the slide before.`,
   "bee-draft-room": `Draft. The meeting room from above: each person's Bee hears only their own voice, shown as a ripple in their colour, and each summary line keeps that colour.
 Next: Same as the slide before.`,
