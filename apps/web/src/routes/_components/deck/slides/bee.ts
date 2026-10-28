@@ -80,7 +80,9 @@ const SLIDES: DeckSlide[] = [
     id: "bee-05-web",
     title: "Answers from the web",
     Component: BeeWeb,
-    steps: 2,
+    // Three questions: each is heard and searched, then its sources show.
+    steps: 6,
+    autoMs: [1100, 2800, 2600, 2800, 2600, 2800],
   },
   {
     id: "bee-11-real-meeting",

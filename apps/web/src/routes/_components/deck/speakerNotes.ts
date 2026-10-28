@@ -315,10 +315,14 @@ Three steps, in about the time it takes to finish a sentence.
 Detail: the words Bee hears are never shown on screen. Only the tip is. The models are Grok for speech, Jev for ranking and GPT-6 Luna for the tip. The notes and tip are an example.
 Next: And when your notes do not have the answer?`,
 
-  "bee-05-web": `When the answer is not in your notes, Bee looks it up.
-→ Step 1: the tip appears as before, this time from the web.
+  "bee-05-web": `When the answer is not in your notes, Bee looks it up. Three questions you might hear on an AQP call.
+→ Step 1: "Do they need to complete the Data Security and Protection Toolkit?" Bee searches and answers: yes, with NHS-funded care such as CHC, the contract requires it every year.
 → Step 2: the sources appear under it, so you can see where the answer came from and open the link.
-Detail: this keeps Bee honest: a web answer always shows its sources. The question and sources on screen are an example.
+→ Step 3: "Can CHC pay for care in their own home?" Yes: CHC can be arranged in any setting, including the person's own home.
+→ Step 4: its sources.
+→ Step 5: "What is the FNC rate this year?" £267.68 a week from 1 April 2026, paid by the NHS straight to the nursing home.
+→ Step 6: its source. A web answer always shows where it came from.
+Detail: the questions are invented examples; the answers are real. DSPT: Digital Care Hub (Better Security, Better Care), checked October 2026; it is a contract requirement for NHS-funded services, and whether it is mandatory for every care provider is disputed, so do not claim more. CHC in any setting: National Framework for NHS Continuing Healthcare, GOV.UK. FNC: GOV.UK, "Better community care thanks to nursing funding boost", March 2026; the higher rate is £368.24 a week.
 Next: Here is what that looked like in a real meeting.`,
 
   "bee-11-real-meeting": `This is not a made-up example. It happened in a meeting with Krzys.
