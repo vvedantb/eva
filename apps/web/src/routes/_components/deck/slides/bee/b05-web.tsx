@@ -3,7 +3,7 @@ import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, Spotlight } from "../../_components/motion";
-import { BEE, BEE_SPRING, BeeIsland, BeeTip } from "./_parts/BeeIsland";
+import { BEE_SPRING, BeeIsland, BeeTip } from "./_parts/BeeIsland";
 import { SourceChip } from "./_parts/BeeBits";
 
 interface Round {
@@ -75,8 +75,7 @@ export function BeeWeb() {
             <AnimatePresence mode="wait" initial={false}>
               <m.div
                 key={round.asked}
-                className="rounded-[22px] rounded-bl-md px-6 py-4 text-[21px] font-medium"
-                style={{ background: BEE.surface, color: BEE.text }}
+                className="text-[24px] font-medium text-[#2a1e0c]/75"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: asking ? 1 : 0, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
