@@ -368,7 +368,7 @@ Next: Last, it fits with the tools you already use.`,
 Next: Same as the slide before.`,
   "bee-draft-listens": `Draft. One phrase travels: it leaves Alex, flies into your notes, the right note lights up, and the tip appears in the bar. The camera follows it left to right.
 Next: Same as the slide before.`,
-  "bee-draft-room": `Draft. The meeting room from above: each person's Bee hears only their own voice, shown as a ripple in their colour, and each summary line keeps that colour.
+  "bee-draft-room": `Draft. The meeting room from above, one speaker at a time: Alex speaks and that line types into the team summary, then Jo, then Sam. Each Bee hears only its own person, shown as a ripple in their colour, and each line keeps that colour. Last, the point: each line comes from that person's own microphone, so it is never a guess.
 Next: Same as the slide before.`,
   "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
 Next: Same as the slide before.`,
