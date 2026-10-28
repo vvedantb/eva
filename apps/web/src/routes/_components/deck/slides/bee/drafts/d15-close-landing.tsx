@@ -7,23 +7,25 @@ import {
   useDeckStep,
 } from "../../../_components/DeckPrimitives";
 import { DUR, EASE, cueTransition } from "../../../_components/motion";
-import { BeeIsland } from "../_parts/BeeIsland";
+import { BeeIsland, BeeTip } from "../_parts/BeeIsland";
 import { BeeLogo } from "../_parts/BeeLogo";
 
 const LANDED = 1;
-const ASK = 2;
+const NUDGE = 2;
+const ASK = 3;
 
 const FLY: Transition = { duration: 1.6, ease: [0.45, 0, 0.25, 1], delay: 0.5 };
 
 export function DraftCloseLanding() {
   const step = useDeckStep();
   const landed = step >= LANDED;
+  const nudge = step >= NUDGE;
   const ask = step >= ASK;
 
   return (
     <Shell center className="gap-10">
       {/* Your screen, with an empty spot where the bar lives. */}
-      <div className="relative h-[300px] w-[760px] rounded-[26px] bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10">
+      <div className="relative h-[300px] w-[760px] rounded-[26px] text-left bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10">
         <div className="absolute top-4 left-1/2 -translate-x-1/2">
           <m.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -35,7 +37,20 @@ export function DraftCloseLanding() {
               ease: EASE.out,
             })}
           >
-            <BeeIsland status="Listening…" listening width={420} />
+            {/* Then Bee does what it does in any meeting: one timely tip. */}
+            <BeeIsland
+              status={nudge ? "Tip" : "Listening…"}
+              listening={!nudge}
+              state={nudge ? "done" : "listening"}
+              open={nudge}
+              openDelay={0.2}
+              width={nudge ? 520 : 420}
+            >
+              <BeeTip shown={nudge} delay={0.45}>
+                Your Friday session has finished. Remember to ask if anyone has
+                questions
+              </BeeTip>
+            </BeeIsland>
           </m.div>
           {!landed && (
             <div className="absolute top-1 left-1/2 h-[58px] w-[420px] -translate-x-1/2 rounded-full border-2 border-dashed border-[#2a1e0c]/20" />

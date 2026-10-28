@@ -375,7 +375,7 @@ Next: Same as the slide before.`,
 Next: Same as the slide before.`,
   "bee-draft-jar": `Draft. A honey jar fills to $500, the monthly AI allowance on our Teams plan, then Bee takes small sips for its three jobs. Figure from the presenter, October 2026.
 Next: Same as the slide before.`,
-  "bee-draft-close": `Draft. The bee flies up into the empty bar at the top of your screen and starts listening; then the ask.
+  "bee-draft-close": `Draft. The bee flies up into the empty bar at the top of your screen and starts listening. Then it opens with a tip for you, the presenter: the session has finished, ask for questions. Let the room read it; it is the hand-off to Q&A. Then the ask.
 Next: Same as the slide before.`,
   "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
 Bee connects to the tools you already have.

@@ -168,8 +168,8 @@ const SLIDES: DeckSlide[] = [
     id: "bee-draft-close",
     title: "Draft: close, the landing",
     Component: DraftCloseLanding,
-    steps: 2,
-    autoMs: [2400, 1200],
+    steps: 3,
+    autoMs: [2400, 2400, 2600],
   },
 ];
 
