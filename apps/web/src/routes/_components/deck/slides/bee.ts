@@ -15,7 +15,6 @@ import { BeeCompare } from "./bee/b14-compare";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
-import { DraftListensJourney } from "./bee/drafts/d04-listens-journey";
 import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
 
 /**
@@ -65,13 +64,6 @@ const SLIDES: DeckSlide[] = [
     id: "bee-04-listens",
     title: "Listens, finds, tips",
     Component: BeeListens,
-    steps: 3,
-  },
-  // Draft for review: keep, merge into the slide above, or delete.
-  {
-    id: "bee-draft-listens",
-    title: "Draft: listens, one journey",
-    Component: DraftListensJourney,
     steps: 3,
     autoMs: [1100, 2200, 2200],
   },

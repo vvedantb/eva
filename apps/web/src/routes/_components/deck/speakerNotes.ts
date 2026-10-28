@@ -309,9 +309,9 @@ Next: What happens between hearing and showing?`,
 
   "bee-04-listens": `Say the headline (no title on screen): "It listens. It finds. It tips."
 Three steps, in about the time it takes to finish a sentence.
-→ Step 1: it hears. Bee picks up a phrase from the meeting, for example "the provider onboarding we talked about last time".
-→ Step 2: it finds. It searches your own markdown notes, and Jev, a small fast model, ranks which ones actually match.
-→ Step 3: it tips. A writing model turns the best match into one short line in the notch.
+→ Step 1: it hears. Alex is talking, and Bee picks up a phrase from the meeting, for example "the provider onboarding we talked about last time". The phrase stays on screen.
+→ Step 2: it finds. A line runs from the phrase to your notes. Bee searches your own markdown notes, and Jev, a small fast model, ranks which ones actually match: Provider call.md lights up.
+→ Step 3: it tips. A second line runs to the bar, and a writing model turns the best match into one short line in the notch, with the note it came from. The camera pulls back to show all three.
 Detail: the words Bee hears are never shown on screen. Only the tip is. The models are Grok for speech, Jev for ranking and GPT-6 Luna for the tip. The notes and tip are an example.
 Next: And when your notes do not have the answer?`,
 
@@ -370,8 +370,6 @@ Next: And the question after "is it safe": what does it cost?`,
 Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
 Next: Last, it fits with the tools you already use.`,
   "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
-Next: Same as the slide before.`,
-  "bee-draft-listens": `Draft. Alex speaks and the phrase stays under them; a line runs to your notes, the right note lights up, and a second line runs to the tip in the bar. The camera follows left to right, then pulls back to show all three.
 Next: Same as the slide before.`,
   "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
 Next: Same as the slide before.`,
