@@ -13,13 +13,12 @@ import {
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { CountUp } from "../../_components/CountUp";
-import { DUR, EASE, Spotlight, cueTransition } from "../../_components/motion";
-import { BEE_CARD, BeeChip } from "./_parts/BeeBits";
+import { cueTransition } from "../../_components/motion";
+import { BeeChip } from "./_parts/BeeBits";
 
-const BUDGET = 1;
-const COVERS = 2;
+const FILL = 1;
+const SIPS = 2;
 
-/** The three AI jobs Bee does in a meeting, as the listens slide shows them. */
 const JOBS = [
   { icon: IconMicrophone, label: "Turning speech into text" },
   { icon: IconListSearch, label: "Finding the right note" },
@@ -29,56 +28,91 @@ const JOBS = [
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 6, translateZ: -40 },
   { rotateX: 2, translateZ: 10 },
-  { rotateY: -4, translateZ: -20, x: -30 },
+  { rotateY: -4, translateZ: -10, x: -20 },
 ];
 
-const GLOW = [
-  { x: 300, y: 200, size: 360 },
-  { x: 300, y: 200, size: 520 },
-  { x: 544, y: 220, size: 640 },
-];
+/** Jar interior, in the svg's own units. */
+const JAR = { top: 70, bottom: 300 };
 
 export function BeeCost() {
   const step = useDeckStep();
-  const covers = step >= COVERS;
+  const fill = step >= FILL;
+  const sips = step >= SIPS;
+  // Fills once to the brim and stays full: the allowance is there to use.
+  const level = fill ? 1 : 0;
+  const height = (JAR.bottom - JAR.top) * level;
 
   return (
     <Shell className="py-14">
       <Title size="md">
         Already <Accent>paid for</Accent>
       </Title>
+      <Camera shots={SHOTS} className="mt-6">
+        <div className="flex w-[1088px] items-center justify-center gap-20">
+          {/* A honey jar that fills to $500. */}
+          <div className="relative">
+            <svg width="260" height="330" viewBox="0 0 260 330" aria-hidden>
+              <defs>
+                <clipPath id="draft-jar">
+                  <path d="M60 60 H200 Q230 60 230 100 V280 Q230 310 200 310 H60 Q30 310 30 280 V100 Q30 60 60 60 Z" />
+                </clipPath>
+                <linearGradient id="draft-honey" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#ffd75e" />
+                  <stop offset="1" stopColor="#e09a12" />
+                </linearGradient>
+              </defs>
+              <rect
+                x="70"
+                y="30"
+                width="120"
+                height="30"
+                rx="8"
+                fill="#2a1e0c"
+              />
+              <g clipPath="url(#draft-jar)">
+                <rect x="0" y="0" width="260" height="330" fill="#fffdf8" />
+                <m.rect
+                  x="0"
+                  width="260"
+                  fill="url(#draft-honey)"
+                  initial={{ y: 310, height: 0 }}
+                  animate={{ y: 310 - height, height }}
+                  transition={{
+                    duration: 2.2,
+                    ease: [0.22, 1, 0.36, 1],
+                    delay: 0.3,
+                  }}
+                />
+              </g>
+              <path
+                d="M60 60 H200 Q230 60 230 100 V280 Q230 310 200 310 H60 Q30 310 30 280 V100 Q30 60 60 60 Z"
+                fill="none"
+                stroke="#2a1e0c"
+                strokeOpacity="0.25"
+                strokeWidth="3"
+              />
+            </svg>
+            <div className="absolute inset-x-0 top-[150px] text-center text-6xl font-semibold tracking-[-0.03em] text-[#2a1e0c]">
+              <CountUp
+                value={500}
+                prefix="$"
+                step={FILL}
+                duration={2.2}
+                delay={0.3}
+              />
+            </div>
+            <div className="mt-3 text-center text-xl text-[#2a1e0c]/70">
+              a month, free on our Teams plan
+            </div>
+          </div>
 
-      <Camera shots={SHOTS} className="mt-10">
-        <div className="relative isolate flex h-[420px] w-[1088px] items-center justify-center gap-16">
-          <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
-
-          {/* The monthly allowance, counted up. */}
-          <m.div
-            className={`${BEE_CARD} flex w-[580px] flex-col gap-3 px-10 py-9`}
-            initial={{ opacity: 0, y: 16 }}
-            animate={
-              step >= BUDGET ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }
-            }
-            transition={cueTransition(step >= BUDGET, 0.1, {
-              duration: DUR.slow,
-              ease: EASE.out,
-            })}
-          >
-            <span className="text-[96px] leading-none font-semibold tracking-[-0.03em] text-[#2a1e0c]">
-              <CountUp value={500} prefix="$" step={BUDGET} delay={0.25} />
-            </span>
-            <span className="text-2xl text-[#2a1e0c]/70">
-              of AI use every month, free on our Teams plan
-            </span>
-          </m.div>
-
-          {/* What it pays for, and the point of it. */}
+          {/* What it pays for. */}
           <div className="flex flex-col gap-3">
             <m.div
               className="mb-1 text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase"
               initial={{ opacity: 0 }}
-              animate={{ opacity: covers ? 1 : 0 }}
-              transition={cueTransition(covers, 0, { duration: DUR.base })}
+              animate={{ opacity: sips ? 1 : 0 }}
+              transition={cueTransition(sips, 0, { duration: 0.3 })}
             >
               Meant for projects like this
             </m.div>
@@ -87,8 +121,8 @@ export function BeeCost() {
                 key={job.label}
                 icon={job.icon}
                 label={job.label}
-                shown={covers}
-                delay={0.15 + index * 0.12}
+                shown={sips}
+                delay={0.2 + index * 0.15}
               />
             ))}
           </div>

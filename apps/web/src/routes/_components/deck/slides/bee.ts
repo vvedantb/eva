@@ -18,7 +18,6 @@ import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
 import { DraftListensJourney } from "./bee/drafts/d04-listens-journey";
 import { DraftTogetherRoom } from "./bee/drafts/d07-together-room";
 import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
-import { DraftCostJar } from "./bee/drafts/d12-cost-jar";
 
 /**
  * Bee, for colleagues who are not technical: the problem, what it does in a
@@ -138,13 +137,6 @@ const SLIDES: DeckSlide[] = [
     id: "bee-13-cost",
     title: "Already paid for",
     Component: BeeCost,
-    steps: 2,
-  },
-  // Draft for review: keep, merge into the slide above, or delete.
-  {
-    id: "bee-draft-jar",
-    title: "Draft: cost, the honey jar",
-    Component: DraftCostJar,
     steps: 2,
     autoMs: [1100, 3000],
   },

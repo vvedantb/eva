@@ -360,7 +360,7 @@ Detail: be precise if asked. Notes and summaries are saved only on your computer
 Next: And the question after "is it safe": what does it cost?`,
 
   "bee-13-cost": `Trying Bee costs us nothing extra: the AI it uses is already paid for.
-→ Step 1: the $500 counts up. Our Teams plan includes $500 of AI use every month, at no extra cost.
+→ Step 1: the honey jar fills while $500 counts up. Our Teams plan includes $500 of AI use every month, at no extra cost.
 → Step 2: what it pays for. Bee's three AI jobs in a meeting: turning speech into text, finding the right note, and writing the tip. The allowance is meant for projects like this one.
 Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
 Next: Last, it fits with the tools you already use.`,
@@ -371,8 +371,6 @@ Next: Same as the slide before.`,
   "bee-draft-room": `Draft. The meeting room from above, one speaker at a time, as a short conversation: each line types into the team summary as it is said, and the summary scrolls to keep the newest line in view. Each Bee hears only its own person, shown as a ripple in their colour, and each line keeps that colour. Last, the point: each line comes from that person's own microphone, so it is never a guess.
 Next: Same as the slide before.`,
   "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
-Next: Same as the slide before.`,
-  "bee-draft-jar": `Draft. A honey jar fills to $500, the monthly AI allowance on our Teams plan, then the three jobs it pays for appear. Figure from the presenter, October 2026.
 Next: Same as the slide before.`,
   "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
 Bee connects to the tools you already have.
