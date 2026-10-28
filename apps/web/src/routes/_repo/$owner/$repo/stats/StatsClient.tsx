@@ -8,6 +8,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { Kpi, KpiGroup } from "@/lib/components/analytics/Kpi";
 import { PRsOverTimeChart } from "@/lib/components/analytics/PRsOverTimeChart";
+import { EvaMergeShareChart } from "@/lib/components/analytics/EvaMergeShareChart";
 import { SessionFunnel } from "@/lib/components/analytics/SessionFunnel";
 import { ActivityTimelineChart } from "@/lib/components/analytics/ActivityTimelineChart";
 import { Leaderboard } from "@/lib/components/analytics/Leaderboard";
@@ -192,6 +193,13 @@ export function StatsClient() {
               sessionsWithPr={impactStats.sessionsWithPr}
             />
           </div>
+
+          <EvaMergeShareChart
+            repoId={repo._id}
+            startTime={timelineStart}
+            endTime={today}
+            bucketSizeMs={bucketSize}
+          />
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2">
