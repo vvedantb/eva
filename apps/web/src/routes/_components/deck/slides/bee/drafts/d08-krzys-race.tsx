@@ -8,7 +8,7 @@ import {
 import { Camera } from "../../../_components/DeckCamera";
 import type { CameraShot } from "../../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../../_components/motion";
-import { BEE, BeeIsland, BeeTip } from "../_parts/BeeIsland";
+import { BeeIsland, BeeTip } from "../_parts/BeeIsland";
 import { BEE_CARD, SourceChip } from "../_parts/BeeBits";
 
 const FIRST = 1;
@@ -149,8 +149,7 @@ export function DraftKrzysRace() {
           <AnimatePresence mode="wait" initial={false}>
             <m.div
               key={round.asked}
-              className="rounded-[22px] rounded-bl-md px-6 py-4 text-[21px] font-medium"
-              style={{ background: BEE.surface, color: BEE.text }}
+              className="text-[24px] font-medium text-[#2a1e0c]/75"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: started ? 1 : 0, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
