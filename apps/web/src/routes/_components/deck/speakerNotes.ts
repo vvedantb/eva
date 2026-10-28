@@ -330,11 +330,12 @@ Next: And when the meeting ends, the summary writes itself.`,
 
   "bee-06-summary": `Say the headline (no title on screen): "The summary writes itself."
 When the meeting ends, Bee writes the summary for you.
-→ Step 1: the decisions, in plain sentences.
-→ Step 2: the action items, each with an owner.
-→ Step 3: it is saved as a note, so next time someone says "last time we…", Bee can find it.
-→ Step 4: and if you missed the meeting, a colleague who was there forwards the same file, with what was decided and who does what.
-Detail: Bee does not send summaries by itself: each attendee's Bee saves its own copy, and a summary covers only the people running Bee. if the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
+→ Step 1: the whole meeting scrolls past as a transcript, then folds down into one short summary. That is the work Bee saves you.
+→ Step 2: the decisions, in plain sentences.
+→ Step 3: the action items, each with an owner.
+→ Step 4: it is saved as a note, so next time someone says "last time we…", Bee can find it.
+→ Step 5: and if you missed the meeting, a colleague who was there forwards the same file, with what was decided and who does what.
+Detail: Bee does not send summaries by itself: each attendee's Bee saves its own copy, and a summary covers only the people running Bee. If the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
 Next: That works for one person. It is better for a team.`,
 
   "bee-07-teams": `Say the headline (no title on screen): "Better together."
@@ -366,8 +367,6 @@ Next: Last, it fits with the tools you already use.`,
   "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
 Next: Same as the slide before.`,
   "bee-draft-listens": `Draft. One phrase travels: it leaves Alex, flies into your notes, the right note lights up, and the tip appears in the bar. The camera follows it left to right.
-Next: Same as the slide before.`,
-  "bee-draft-summary": `Draft. The whole meeting scrolls past as a transcript, then folds down into the summary. Then, as on the original: the decisions, the action items with owners, saved to your notes so Bee finds it next time, and, if you missed it, a colleague forwards the file.
 Next: Same as the slide before.`,
   "bee-draft-room": `Draft. The meeting room from above: each person's Bee hears only their own voice, shown as a ripple in their colour, and each summary line keeps that colour.
 Next: Same as the slide before.`,

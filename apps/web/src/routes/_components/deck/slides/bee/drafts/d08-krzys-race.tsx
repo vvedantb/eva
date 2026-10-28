@@ -173,7 +173,9 @@ export function DraftKrzysRace() {
 
             {/* With Bee: it searches for you; the answer arrives while you are still typing. */}
             <div className="flex w-[480px] flex-col gap-3">
-              <div className={`${LABEL} text-[#a15f00]`}>What Bee would have answered</div>
+              <div className={`${LABEL} text-[#a15f00]`}>
+                What Bee would have answered
+              </div>
               <BeeIsland
                 status={started ? "Searched the web" : "Listening…"}
                 listening={!started}

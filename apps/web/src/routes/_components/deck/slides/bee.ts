@@ -16,7 +16,6 @@ import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
 import { DraftListensJourney } from "./bee/drafts/d04-listens-journey";
-import { DraftSummaryFold } from "./bee/drafts/d06-summary-fold";
 import { DraftTogetherRoom } from "./bee/drafts/d07-together-room";
 import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
 import { DraftCostJar } from "./bee/drafts/d12-cost-jar";
@@ -105,13 +104,6 @@ const SLIDES: DeckSlide[] = [
     id: "bee-06-summary",
     title: "The summary",
     Component: BeeSummary,
-    steps: 4,
-  },
-  // Draft for review: keep, merge into the slide above, or delete.
-  {
-    id: "bee-draft-summary",
-    title: "Draft: summary, the fold",
-    Component: DraftSummaryFold,
     steps: 5,
     autoMs: [3000, 1800, 1500, 1800, 1800],
   },
