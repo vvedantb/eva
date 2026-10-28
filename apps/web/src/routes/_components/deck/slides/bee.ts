@@ -16,7 +16,6 @@ import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
 import { DraftListensJourney } from "./bee/drafts/d04-listens-journey";
-import { DraftTogetherRoom } from "./bee/drafts/d07-together-room";
 import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
 
 /**
@@ -112,13 +111,6 @@ const SLIDES: DeckSlide[] = [
     id: "bee-07-teams",
     title: "Better together",
     Component: BeeTeams,
-    steps: 2,
-  },
-  // Draft for review: keep, merge into the slide above, or delete.
-  {
-    id: "bee-draft-room",
-    title: "Draft: together, the room",
-    Component: DraftTogetherRoom,
     steps: 7,
     // Six lines of conversation, each typed out before the next voice, then the point.
     autoMs: [1300, 2200, 2200, 2200, 2200, 2200, 2200],

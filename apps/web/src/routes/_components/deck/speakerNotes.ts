@@ -343,9 +343,10 @@ Detail: Bee does not send summaries by itself: each attendee's Bee saves its own
 Next: That works for one person. It is better for a team.`,
 
   "bee-07-teams": `Say the headline (no title on screen): "Better together."
-In Teams mode, everyone's Bee works together.
-→ Step 1: each person's Bee shares only what its own microphone heard. That is why everyone in the meeting needs Bee running on their own laptop.
-→ Step 2: so the summary knows exactly who said what, and labels each line with a name. Each line comes from that person's own microphone, so the name is never a guess.
+In Teams mode, everyone's Bee works together. The room from above: three people, each with Bee on their own laptop.
+→ Step 1: Alex speaks. Only Alex's Bee hears it, shown as a ripple in Alex's colour, and the line types into the team summary.
+→ Steps 2 to 6: Jo, Sam, Alex and Jo again. Each line arrives in the speaker's colour, and the summary scrolls to keep the newest line in view. That is why everyone in the meeting needs Bee running on their own laptop.
+→ Step 7: the point: each line comes from that person's own microphone, so the name is never a guess.
 Detail: say it aloud if it helps: this is the only way to be sure who said what. Tools that label speakers from one shared recording have to guess, and in my experience Teams often gets it wrong. Keep that as your own view; we have not measured it. The catch: people without Bee are not in the transcript, and the summary says it is partial. There is no bot in the call and nothing joins automatically. Names and lines are an example.
 Next: So how is that different from the transcript Teams already makes?`,
 
@@ -371,8 +372,6 @@ Next: Last, it fits with the tools you already use.`,
   "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
 Next: Same as the slide before.`,
   "bee-draft-listens": `Draft. One phrase travels: it leaves Alex, flies into your notes, the right note lights up, and the tip appears in the bar. The camera follows it left to right.
-Next: Same as the slide before.`,
-  "bee-draft-room": `Draft. The meeting room from above, one speaker at a time, as a short conversation: each line types into the team summary as it is said, and the summary scrolls to keep the newest line in view. Each Bee hears only its own person, shown as a ripple in their colour, and each line keeps that colour. Last, the point: each line comes from that person's own microphone, so it is never a guess.
 Next: Same as the slide before.`,
   "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
 Next: Same as the slide before.`,
