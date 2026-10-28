@@ -3,7 +3,12 @@ import { m } from "motion/react";
 import { Shell, useDeckStep } from "../../../_components/DeckPrimitives";
 import { Camera } from "../../../_components/DeckCamera";
 import type { CameraShot } from "../../../_components/DeckCamera";
-import { DUR, EASE, cueTransition } from "../../../_components/motion";
+import {
+  DUR,
+  DrawPath,
+  EASE,
+  cueTransition,
+} from "../../../_components/motion";
 import { BEE, BEE_SPRING, BeeIsland, BeeTip } from "../_parts/BeeIsland";
 import { NoteCard, SourceChip } from "../_parts/BeeBits";
 
@@ -11,15 +16,11 @@ const HEARS = 1;
 const FINDS = 2;
 const TIPS = 3;
 
-/** Where the travelling phrase sits at each step, in stage pixels. */
-const PHRASE_AT = [
-  { x: 0, y: 330, opacity: 0, scale: 0.9 },
-  // Heard: a short bubble under the speaker.
-  { x: 0, y: 330, opacity: 1, scale: 1 },
-  // Found: it flies onto the matching note and dissolves into it.
-  { x: 360, y: 230, opacity: 0, scale: 0.35 },
-  { x: 360, y: 230, opacity: 0, scale: 0.35 },
-];
+const W = 1088;
+const H = 460;
+
+/** Middle of the matching note, where the thread lands. */
+const NOTE_Y = 266;
 
 const NOTES = [
   { name: "Pricing ideas.md", best: false },
@@ -32,19 +33,20 @@ const SHOTS: readonly CameraShot[] = [
   { rotateY: 8, x: 320, translateZ: -40 },
   { rotateY: 6, x: 300, scale: 1.15 },
   { rotateY: 0, x: 0, scale: 1.1 },
-  { rotateY: -6, x: -260, scale: 1.1 },
+  // Pull back at the end, so the question, the note and the tip are all in view.
+  { rotateY: -4, x: 0, scale: 1 },
 ];
 
 export function DraftListensJourney() {
   const step = useDeckStep();
   const finds = step >= FINDS;
   const tips = step >= TIPS;
-  const at = PHRASE_AT[Math.min(step, PHRASE_AT.length - 1)];
+  const hears = step >= HEARS;
 
   return (
     <Shell className="justify-center py-14">
       <Camera shots={SHOTS}>
-        <div className="relative h-[460px] w-[1088px]">
+        <div className="relative" style={{ width: W, height: H }}>
           {/* The three stages, named as on the original slide. */}
           {[
             { text: "Hears", left: 0, on: step >= HEARS },
@@ -78,7 +80,7 @@ export function DraftListensJourney() {
                 className="absolute top-0 left-1/2 size-24 -translate-x-1/2 rounded-full border-2 border-[#fabe28]"
                 initial={{ opacity: 0, scale: 1 }}
                 animate={
-                  step >= HEARS
+                  hears
                     ? { opacity: [0.6, 0], scale: [1, 2.2] }
                     : { opacity: 0 }
                 }
@@ -91,21 +93,17 @@ export function DraftListensJourney() {
             ))}
           </div>
 
-          {/* The phrase, travelling from the voice into your notes. */}
+          {/* What was heard: stays under the speaker for the whole slide. */}
           <m.div
-            className="absolute top-0 left-0 z-10 flex w-[300px] origin-top-left flex-col gap-1 rounded-2xl rounded-tl-md px-4 py-3 text-[18px] leading-snug font-medium shadow-lg shadow-black/10"
+            className="absolute top-[330px] left-0 z-10 flex w-[300px] flex-col gap-1 rounded-2xl rounded-tl-md px-4 py-3 text-[18px] leading-snug font-medium shadow-lg shadow-black/10"
             style={{ background: BEE.surface, color: BEE.text }}
-            initial={PHRASE_AT[0]}
-            animate={at}
-            transition={
-              step >= 2
-                ? {
-                    duration: 1,
-                    ease: [0.45, 0, 0.25, 1],
-                    opacity: { duration: 0.3, delay: 0.7 },
-                  }
-                : { ...BEE_SPRING, duration: 0.8 }
+            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+            animate={
+              hears
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 10, scale: 0.9 }
             }
+            transition={{ ...BEE_SPRING, duration: 0.8 }}
           >
             <span
               className="flex items-center gap-2 text-[14px] font-normal"
@@ -116,6 +114,28 @@ export function DraftListensJourney() {
             </span>
             “…the provider onboarding we talked about last time…”
           </m.div>
+
+          {/* The thread through all three, as on the slide before. */}
+          <div className="absolute inset-0 -z-10">
+            <DrawPath
+              d={`M 306 372 C 360 372, 350 ${NOTE_Y}, 394 ${NOTE_Y}`}
+              width={W}
+              height={H}
+              step={FINDS}
+              duration={0.6}
+              dot
+            />
+          </div>
+          <div className="absolute inset-0 -z-10">
+            <DrawPath
+              d={`M 666 ${NOTE_Y} C 700 ${NOTE_Y}, 700 180, 734 180`}
+              width={W}
+              height={H}
+              step={TIPS}
+              duration={0.6}
+              dot
+            />
+          </div>
 
           {/* Your notes; the right one lights up as the phrase lands. */}
           <div className="absolute top-[150px] left-[400px] flex w-[260px] flex-col gap-3">

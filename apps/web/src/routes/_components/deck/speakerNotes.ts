@@ -371,7 +371,7 @@ Detail: the $500 a month figure is from the presenter, October 2026. We have not
 Next: Last, it fits with the tools you already use.`,
   "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
 Next: Same as the slide before.`,
-  "bee-draft-listens": `Draft. One phrase travels: it leaves Alex, flies into your notes, the right note lights up, and the tip appears in the bar. The camera follows it left to right.
+  "bee-draft-listens": `Draft. Alex speaks and the phrase stays under them; a line runs to your notes, the right note lights up, and a second line runs to the tip in the bar. The camera follows left to right, then pulls back to show all three.
 Next: Same as the slide before.`,
   "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
 Next: Same as the slide before.`,
