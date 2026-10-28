@@ -14,7 +14,10 @@ const LANDED = 1;
 const NUDGE = 2;
 const ASK = 3;
 
-const FLY: Transition = { duration: 1.6, ease: [0.45, 0, 0.25, 1], delay: 0.5 };
+/** One width for the bar, listening or open, as in the app. */
+const BAR_W = 520;
+
+const FLY: Transition = { duration: 1.2, ease: [0.45, 0, 0.25, 1], delay: 0.2 };
 
 export function DraftCloseLanding() {
   const step = useDeckStep();
@@ -44,7 +47,7 @@ export function DraftCloseLanding() {
               state={nudge ? "done" : "listening"}
               open={nudge}
               openDelay={0.2}
-              width={nudge ? 520 : 420}
+              width={BAR_W}
             >
               <BeeTip shown={nudge} delay={0.45}>
                 Your Friday session has finished. Remember to ask if anyone has
@@ -53,7 +56,7 @@ export function DraftCloseLanding() {
             </BeeIsland>
           </m.div>
           {!landed && (
-            <div className="absolute top-1 left-1/2 h-[58px] w-[420px] -translate-x-1/2 rounded-full border-2 border-dashed border-[#2a1e0c]/20" />
+            <div className="absolute top-1 left-1/2 h-[58px] w-[520px] -translate-x-1/2 rounded-full border-2 border-dashed border-[#2a1e0c]/20" />
           )}
         </div>
 
@@ -63,7 +66,7 @@ export function DraftCloseLanding() {
           initial={{ x: 0, y: 40, scale: 1.6, opacity: 0 }}
           animate={
             landed
-              ? { x: -170, y: -120, scale: 0.42, opacity: 0 }
+              ? { x: -220, y: -120, scale: 0.42, opacity: 0 }
               : { x: 0, y: 0, scale: 1.6, opacity: 1 }
           }
           transition={landed ? { duration: 0.5, ease: EASE.in } : FLY}

@@ -169,7 +169,7 @@ const SLIDES: DeckSlide[] = [
     title: "Draft: close, the landing",
     Component: DraftCloseLanding,
     steps: 3,
-    autoMs: [2400, 2400, 2600],
+    autoMs: [1600, 1700, 1800],
   },
 ];
 
