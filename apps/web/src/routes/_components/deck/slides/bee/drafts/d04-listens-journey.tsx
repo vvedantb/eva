@@ -1,0 +1,143 @@
+import { IconMicrophone } from "@tabler/icons-react";
+import { m } from "motion/react";
+import { Shell, useDeckStep } from "../../../_components/DeckPrimitives";
+import { Camera } from "../../../_components/DeckCamera";
+import type { CameraShot } from "../../../_components/DeckCamera";
+import { DUR, EASE, cueTransition } from "../../../_components/motion";
+import { BEE, BEE_SPRING, BeeIsland, BeeTip } from "../_parts/BeeIsland";
+import { NoteCard } from "../_parts/BeeBits";
+
+const HEARS = 1;
+const FINDS = 2;
+const TIPS = 3;
+
+/** Where the travelling phrase sits at each step, in stage pixels. */
+const PHRASE_AT = [
+  { x: 40, y: 250, opacity: 0, scale: 0.9 },
+  { x: 40, y: 250, opacity: 1, scale: 1 },
+  { x: 420, y: 120, opacity: 1, scale: 0.8 },
+  { x: 420, y: 120, opacity: 0, scale: 0.6 },
+];
+
+const NOTES = [
+  { name: "Pricing ideas.md", best: false },
+  { name: "Provider call.md", best: true },
+  { name: "Q3 plan.md", best: false },
+];
+
+// The camera follows the phrase: left, then middle, then right.
+const SHOTS: readonly CameraShot[] = [
+  { rotateY: 8, x: 320, translateZ: -40 },
+  { rotateY: 6, x: 300, scale: 1.15 },
+  { rotateY: 0, x: 0, scale: 1.1 },
+  { rotateY: -6, x: -260, scale: 1.1 },
+];
+
+export function DraftListensJourney() {
+  const step = useDeckStep();
+  const finds = step >= FINDS;
+  const tips = step >= TIPS;
+  const at = PHRASE_AT[Math.min(step, PHRASE_AT.length - 1)];
+
+  return (
+    <Shell className="justify-center py-14">
+      <Camera shots={SHOTS}>
+        <div className="relative h-[460px] w-[1088px]">
+          {/* A speaker in the call. */}
+          <div className="absolute top-[180px] left-0 flex flex-col items-center gap-3">
+            <span className="flex size-24 items-center justify-center rounded-full bg-[#d9d1c1] text-3xl font-semibold text-[#2a1e0c]/60">
+              A
+            </span>
+            <span className="text-[15px] text-[#2a1e0c]/60">
+              Alex is talking
+            </span>
+            {/* Sound leaving the speaker. */}
+            {[0, 1, 2].map((ring) => (
+              <m.span
+                key={ring}
+                className="absolute top-0 left-1/2 size-24 -translate-x-1/2 rounded-full border-2 border-[#fabe28]"
+                initial={{ opacity: 0, scale: 1 }}
+                animate={
+                  step >= HEARS
+                    ? { opacity: [0.6, 0], scale: [1, 2.2] }
+                    : { opacity: 0 }
+                }
+                transition={{
+                  duration: 1.8,
+                  repeat: step >= HEARS && !finds ? Infinity : 0,
+                  delay: ring * 0.5,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* The phrase, travelling from the voice into your notes. */}
+          <m.div
+            className="absolute top-0 left-0 flex items-center gap-2 rounded-2xl rounded-bl-md px-4 py-3 text-[19px] font-medium whitespace-nowrap"
+            style={{ background: BEE.surface, color: BEE.text }}
+            initial={PHRASE_AT[0]}
+            animate={at}
+            transition={{ ...BEE_SPRING, duration: 1.1 }}
+          >
+            <IconMicrophone size={18} style={{ color: BEE.accent }} />
+            “…the provider onboarding…”
+          </m.div>
+
+          {/* Your notes; the right one lights up as the phrase lands. */}
+          <div className="absolute top-[150px] left-[400px] flex w-[260px] flex-col gap-3">
+            {NOTES.map((note, index) => (
+              <m.div
+                key={note.name}
+                initial={{ opacity: 0, y: 12 }}
+                animate={
+                  step >= HEARS
+                    ? {
+                        opacity: finds && !note.best ? 0.4 : 1,
+                        y: 0,
+                        scale: finds && note.best ? 1.06 : 1,
+                      }
+                    : { opacity: 0, y: 12 }
+                }
+                transition={cueTransition(
+                  step >= HEARS,
+                  finds ? 0.7 : 0.3 + index * 0.1,
+                  BEE_SPRING,
+                )}
+              >
+                <NoteCard
+                  name={note.name}
+                  lines={2}
+                  match={finds && note.best}
+                />
+              </m.div>
+            ))}
+          </div>
+
+          {/* The tip, in the bar. */}
+          <div className="absolute top-[150px] left-[740px]">
+            <m.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={tips ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+              transition={cueTransition(tips, 0.2, {
+                duration: DUR.slow,
+                ease: EASE.out,
+              })}
+            >
+              <BeeIsland
+                status="From your notes"
+                state={tips ? "done" : "tool"}
+                open={tips}
+                openDelay={0.3}
+                width={340}
+              >
+                <BeeTip shown={tips} delay={0.5}>
+                  Joins the AQP list if their forms are back by Friday
+                </BeeTip>
+              </BeeIsland>
+            </m.div>
+          </div>
+        </div>
+      </Camera>
+    </Shell>
+  );
+}

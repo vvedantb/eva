@@ -363,6 +363,20 @@ Next: And the question after "is it safe": what does it cost?`,
 → Step 2: what it pays for. Bee's three AI jobs in a meeting: turning speech into text, finding the right note, and writing the tip. The allowance is meant for projects like this one.
 Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
 Next: Last, it fits with the tools you already use.`,
+  "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
+Next: Same as the slide before.`,
+  "bee-draft-listens": `Draft. One phrase travels: it leaves Alex, flies into your notes, the right note lights up, and the tip appears in the bar. The camera follows it left to right.
+Next: Same as the slide before.`,
+  "bee-draft-summary": `Draft. The whole meeting scrolls past as a transcript, then folds down into four lines: two decisions and two actions with owners.
+Next: Same as the slide before.`,
+  "bee-draft-room": `Draft. The meeting room from above: each person's Bee hears only their own voice, shown as a ripple in their colour, and each summary line keeps that colour.
+Next: Same as the slide before.`,
+  "bee-draft-race": `Draft. The same Krzys question as a race: by hand, browser tabs pile up and the clock runs past five minutes; with Bee, one answer in about four seconds.
+Next: Same as the slide before.`,
+  "bee-draft-jar": `Draft. A honey jar fills to $500, the monthly AI allowance on our Teams plan, then Bee takes small sips for its three jobs. Figure from the presenter, October 2026.
+Next: Same as the slide before.`,
+  "bee-draft-close": `Draft. The bee flies up into the empty bar at the top of your screen and starts listening; then the ask.
+Next: Same as the slide before.`,
   "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
 Bee connects to the tools you already have.
 → Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.

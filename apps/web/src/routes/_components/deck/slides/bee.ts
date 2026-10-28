@@ -14,6 +14,13 @@ import { BeeCost } from "./bee/b13-cost";
 import { BeeCompare } from "./bee/b14-compare";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
+import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
+import { DraftListensJourney } from "./bee/drafts/d04-listens-journey";
+import { DraftSummaryFold } from "./bee/drafts/d06-summary-fold";
+import { DraftTogetherRoom } from "./bee/drafts/d07-together-room";
+import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
+import { DraftCostJar } from "./bee/drafts/d12-cost-jar";
+import { DraftCloseLanding } from "./bee/drafts/d15-close-landing";
 
 /**
  * Bee, for colleagues who are not technical: the problem, what it does in a
@@ -42,6 +49,14 @@ const SLIDES: DeckSlide[] = [
     Component: BeeProblem,
     steps: 2,
   },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-problem",
+    title: "Draft: problem, the clock",
+    Component: DraftProblemClock,
+    steps: 2,
+    autoMs: [1100, 4500],
+  },
   {
     id: "bee-03-notch",
     title: "Meet the notch",
@@ -55,6 +70,14 @@ const SLIDES: DeckSlide[] = [
     title: "Listens, finds, tips",
     Component: BeeListens,
     steps: 3,
+  },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-listens",
+    title: "Draft: listens, one journey",
+    Component: DraftListensJourney,
+    steps: 3,
+    autoMs: [1100, 2200, 2200],
   },
   {
     id: "bee-05-web",
@@ -70,17 +93,41 @@ const SLIDES: DeckSlide[] = [
     // Each answer stays long enough to read aloud.
     autoMs: [1100, 5500, 5000],
   },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-race",
+    title: "Draft: Krzys, the race",
+    Component: DraftKrzysRace,
+    steps: 2,
+    autoMs: [1100, 6000],
+  },
   {
     id: "bee-06-summary",
     title: "The summary",
     Component: BeeSummary,
     steps: 4,
   },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-summary",
+    title: "Draft: summary, the fold",
+    Component: DraftSummaryFold,
+    steps: 2,
+    autoMs: [3000, 1800],
+  },
   {
     id: "bee-07-teams",
     title: "Better together",
     Component: BeeTeams,
     steps: 2,
+  },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-room",
+    title: "Draft: together, the room",
+    Component: DraftTogetherRoom,
+    steps: 2,
+    autoMs: [1100, 3000],
   },
   {
     id: "bee-14-compare",
@@ -100,6 +147,14 @@ const SLIDES: DeckSlide[] = [
     Component: BeeCost,
     steps: 2,
   },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-jar",
+    title: "Draft: cost, the honey jar",
+    Component: DraftCostJar,
+    steps: 2,
+    autoMs: [1100, 3000],
+  },
   { id: "bee-09-tools", title: "Your tools", Component: BeeTools, steps: 2 },
   {
     id: "bee-12-background",
@@ -108,6 +163,14 @@ const SLIDES: DeckSlide[] = [
     steps: 4,
   },
   { id: "bee-10-close", title: "Try it", Component: BeeClose, steps: 0 },
+  // Draft for review: keep, merge into the slide above, or delete.
+  {
+    id: "bee-draft-close",
+    title: "Draft: close, the landing",
+    Component: DraftCloseLanding,
+    steps: 2,
+    autoMs: [2400, 1200],
+  },
 ];
 
 export const BEE_SLIDES: DeckSlide[] = SLIDES.map(
