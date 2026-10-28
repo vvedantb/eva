@@ -1,4 +1,4 @@
-import { IconClockHour4 } from "@tabler/icons-react";
+import { IconSearch } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import {
   Accent,
@@ -141,11 +141,11 @@ export function BeeRealMeeting() {
               })}
             >
               <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/30 text-[#7a4800]">
-                <IconClockHour4 size={32} />
+                <IconSearch size={32} />
               </span>
               <span>
                 <span className="block text-4xl font-semibold text-[#2a1e0c]">
-                  Would have saved 5+ minutes
+                  Would have saved me typing and searching myself
                 </span>
                 <span className="block text-xl text-[#2a1e0c]/60">
                   Instead, I searched the web mid-meeting

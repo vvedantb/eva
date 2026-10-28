@@ -1,28 +1,26 @@
-import { IconBrandChrome, IconClockHour4 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, useDeckStep } from "../../../_components/DeckPrimitives";
 import { Camera } from "../../../_components/DeckCamera";
 import type { CameraShot } from "../../../_components/DeckCamera";
-import { CountUp } from "../../../_components/CountUp";
 import { DUR, EASE, cueTransition } from "../../../_components/motion";
-import { BEE_SPRING, BeeIsland, BeeTip } from "../_parts/BeeIsland";
+import { BeeIsland, BeeTip } from "../_parts/BeeIsland";
 import { BEE_CARD, SourceChip } from "../_parts/BeeBits";
 
 const RACE = 1;
 const RESULT = 2;
 
-/** The tabs you open looking for the answer yourself. */
-const TABS = [
+/** What you type into Google, one search after another, while the meeting goes on. */
+const SEARCHES = [
   "convex local deployment",
-  "convex docs: dev",
-  "multiple deployments?",
-  "github issue #…",
+  "convex multiple local deployments",
+  "convex dev two projects same machine",
+  "convex local backend port",
   "convex agent mode",
-  "stack overflow",
+  "convex self hosted multiple instances",
 ];
 
-const mmss = (n: number) =>
-  `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+/** Seconds each search takes: type it, glance at results, clear it. */
+const PER_SEARCH = 1.1;
 
 const SHOTS: readonly CameraShot[] = [
   { rotateY: 4, translateZ: -40 },
@@ -43,56 +41,94 @@ export function DraftKrzysRace() {
             “Can Convex run more than one local deployment, so Eva can use it?”
           </div>
           <div className="flex w-full items-start justify-center gap-10">
-            {/* By hand: tabs pile up while the clock runs. */}
+            {/* By hand: one Google search after another. */}
             <div
-              className={`${BEE_CARD} flex h-[320px] w-[480px] flex-col gap-3 p-6`}
+              className={`${BEE_CARD} flex h-[320px] w-[480px] flex-col gap-4 p-6`}
             >
-              <div className="flex items-center justify-between text-sm font-semibold tracking-[0.12em] text-[#2a1e0c]/50 uppercase">
+              <div className="text-sm font-semibold tracking-[0.12em] text-[#2a1e0c]/50 uppercase">
                 By hand
-                <span className="flex items-center gap-1.5 text-xl tracking-normal text-[#2a1e0c]">
-                  <IconClockHour4 size={20} />
-                  <CountUp
-                    value={312}
-                    step={RACE}
-                    duration={5}
-                    delay={0.3}
-                    format={mmss}
-                  />
-                </span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {TABS.map((tab, index) => (
-                  <m.span
-                    key={tab}
-                    className="flex items-center gap-2 rounded-lg bg-[#2a1e0c]/[0.06] px-3 py-1.5 text-[15px] text-[#2a1e0c]/70"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={race ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-                    transition={cueTransition(
-                      race,
-                      0.4 + index * 0.7,
-                      BEE_SPRING,
-                    )}
-                  >
-                    <IconBrandChrome size={15} />
-                    {tab}
-                  </m.span>
+              <div className="relative flex h-14 items-center gap-3 rounded-full px-5 ring-1 ring-[#2a1e0c]/15">
+                <img src="/brands/google.svg" alt="" className="size-6" />
+                {SEARCHES.map((query, index) => {
+                  const last = index === SEARCHES.length - 1;
+                  return (
+                    <m.span
+                      key={query}
+                      className="absolute left-14 overflow-hidden text-[17px] whitespace-nowrap text-[#2a1e0c]"
+                      initial={{ opacity: 0, clipPath: "inset(0 100% 0 0)" }}
+                      animate={
+                        race
+                          ? {
+                              opacity: last ? [0, 1, 1] : [0, 1, 1, 0],
+                              clipPath: last
+                                ? [
+                                    "inset(0 100% 0 0)",
+                                    "inset(0 100% 0 0)",
+                                    "inset(0 0% 0 0)",
+                                  ]
+                                : [
+                                    "inset(0 100% 0 0)",
+                                    "inset(0 100% 0 0)",
+                                    "inset(0 0% 0 0)",
+                                    "inset(0 0% 0 0)",
+                                  ],
+                            }
+                          : { opacity: 0, clipPath: "inset(0 100% 0 0)" }
+                      }
+                      transition={
+                        race
+                          ? {
+                              duration: PER_SEARCH,
+                              delay: 0.3 + index * PER_SEARCH,
+                              times: last
+                                ? [0, 0.05, 0.55]
+                                : [0, 0.05, 0.55, 1],
+                              ease: "linear",
+                            }
+                          : { duration: DUR.fast }
+                      }
+                    >
+                      {query}
+                    </m.span>
+                  );
+                })}
+              </div>
+              {/* Results flash up and get skimmed, each time. */}
+              <m.div
+                className="flex flex-col gap-3 px-2"
+                initial={{ opacity: 0 }}
+                animate={race ? { opacity: [0, 0, 1, 0.4] } : { opacity: 0 }}
+                transition={
+                  race
+                    ? {
+                        duration: PER_SEARCH,
+                        delay: 0.3,
+                        repeat: SEARCHES.length - 1,
+                        times: [0, 0.55, 0.7, 1],
+                      }
+                    : { duration: DUR.fast }
+                }
+              >
+                {[0.9, 0.7, 0.8, 0.6].map((width, row) => (
+                  <div key={row} className="flex flex-col gap-1.5">
+                    <span
+                      className="h-3 rounded-full bg-[#3b6fd4]/40"
+                      style={{ width: `${width * 60}%` }}
+                    />
+                    <span
+                      className="h-2.5 rounded-full bg-[#2a1e0c]/10"
+                      style={{ width: `${width * 100}%` }}
+                    />
+                  </div>
                 ))}
-              </div>
+              </m.div>
             </div>
 
             {/* With Bee: one answer, while the meeting carries on. */}
             <div className="flex w-[480px] flex-col gap-3">
               <div className="flex items-center justify-between text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase">
                 With Bee
-                <span className="text-xl tracking-normal text-[#2a1e0c]">
-                  <CountUp
-                    value={4}
-                    step={RACE}
-                    duration={1.2}
-                    delay={0.3}
-                    format={mmss}
-                  />
-                </span>
               </div>
               <BeeIsland
                 status={race ? "Searched the web" : "Listening…"}
@@ -129,7 +165,7 @@ export function DraftKrzysRace() {
               ease: EASE.expo,
             })}
           >
-            Would have saved 5+ minutes
+            Would have saved me typing and searching myself
           </m.div>
         </div>
       </Camera>

@@ -324,8 +324,8 @@ Next: Here is what that looked like in a real meeting.`,
   "bee-11-real-meeting": `This is not a made-up example. It happened in a meeting with Krzys.
 → Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
 → Step 2: then whether the Claude Agent SDK can take MCP servers. Bee would have answered: yes, through the mcpServers option.
-→ Step 3: instead, I searched the web myself while everyone waited. Having it listen, search in the background and show the answer would have saved five minutes or more.
-Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The five minutes is my own estimate from that meeting, not a measurement.
+→ Step 3: instead, I typed and searched the web myself while everyone waited. Having it listen, search in the background and show the answer would have saved me that.
+Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The time was not measured, so do not quote a number.
 Next: And when the meeting ends, the summary writes itself.`,
 
   "bee-06-summary": `Say the headline (no title on screen): "The summary writes itself."
@@ -371,7 +371,7 @@ Next: Same as the slide before.`,
 Next: Same as the slide before.`,
   "bee-draft-room": `Draft. The meeting room from above: each person's Bee hears only their own voice, shown as a ripple in their colour, and each summary line keeps that colour.
 Next: Same as the slide before.`,
-  "bee-draft-race": `Draft. The same Krzys question as a race: by hand, browser tabs pile up and the clock runs past five minutes; with Bee, one answer in about four seconds.
+  "bee-draft-race": `Draft. The same Krzys question, side by side: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar. No times are shown, because none were measured.
 Next: Same as the slide before.`,
   "bee-draft-jar": `Draft. A honey jar fills to $500, the monthly AI allowance on our Teams plan, then Bee takes small sips for its three jobs. Figure from the presenter, October 2026.
 Next: Same as the slide before.`,
