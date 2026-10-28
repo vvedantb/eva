@@ -118,9 +118,9 @@ const SLIDES: DeckSlide[] = [
     id: "bee-draft-room",
     title: "Draft: together, the room",
     Component: DraftTogetherRoom,
-    steps: 4,
-    // Alex, Jo, then Sam speak; each line types out before the next voice.
-    autoMs: [1300, 2400, 2400, 2400],
+    steps: 7,
+    // Six lines of conversation, each typed out before the next voice, then the point.
+    autoMs: [1300, 2200, 2200, 2200, 2200, 2200, 2200],
   },
   {
     id: "bee-14-compare",

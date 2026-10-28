@@ -14,46 +14,42 @@ interface Person {
   /** Seat round the table, in the room's own pixels. */
   x: number;
   y: number;
-  line: string;
-  /** The build step on which this person speaks. */
-  speaks: number;
 }
 
-/** Three people round one table, each with Bee on their own laptop. In speaking order. */
+/** Three people round one table, each with Bee on their own laptop. */
 const PEOPLE: readonly Person[] = [
-  {
-    name: "Alex",
-    colour: "#e0901a",
-    x: 178,
-    y: 20,
-    line: "They can return the forms by Friday",
-    speaks: 1,
-  },
-  {
-    name: "Jo",
-    colour: "#c2577a",
-    x: 334,
-    y: 178,
-    line: "Let's start with nursing home placements",
-    speaks: 2,
-  },
-  {
-    name: "Sam",
-    colour: "#3b8ea5",
-    x: 22,
-    y: 178,
-    line: "I will send the onboarding pack today",
-    speaks: 3,
-  },
+  { name: "Alex", colour: "#e0901a", x: 178, y: 20 },
+  { name: "Jo", colour: "#c2577a", x: 334, y: 178 },
+  { name: "Sam", colour: "#3b8ea5", x: 22, y: 178 },
 ];
 
-const EXPLAIN = 4;
+/** The conversation, one line per build step. Example lines. */
+const LINES: readonly { who: string; text: string }[] = [
+  { who: "Alex", text: "They can return the forms by Friday" },
+  { who: "Jo", text: "Let's start with nursing home placements" },
+  { who: "Sam", text: "I will send the onboarding pack today" },
+  { who: "Alex", text: "Their CQC report came back as good" },
+  { who: "Jo", text: "Then they join the AQP list" },
+  { who: "Jo", text: "I will book the follow-up call" },
+];
+
+/** How many lines the summary shows before it starts to scroll. */
+const VISIBLE = 4;
+const LINE_H = 42;
+
+const colourOf = (who: string) =>
+  PEOPLE.find((person) => person.name === who)?.colour ?? "#2a1e0c";
+
+const EXPLAIN = LINES.length + 1;
 
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 26, translateZ: -50 },
   { rotateX: 18, translateZ: -30 },
-  { rotateX: 12, translateZ: -20 },
-  { rotateX: 8, translateZ: -10 },
+  { rotateX: 14, translateZ: -24 },
+  { rotateX: 10, translateZ: -18 },
+  { rotateX: 8, translateZ: -12 },
+  { rotateX: 6, translateZ: -6 },
+  { rotateX: 4 },
   { rotateX: 4 },
 ];
 
@@ -83,6 +79,11 @@ function Ripples({ colour }: { colour: string }) {
 export function DraftTogetherRoom() {
   const step = useDeckStep();
   const explain = step >= EXPLAIN;
+  const said = Math.min(step, LINES.length);
+  const speaker =
+    step >= 1 && step <= LINES.length ? LINES[step - 1].who : null;
+  // Keep the newest line in view, like a live transcript.
+  const offset = Math.max(0, said - VISIBLE) * LINE_H;
 
   return (
     <Shell className="justify-center py-14">
@@ -92,7 +93,7 @@ export function DraftTogetherRoom() {
           <div className="relative h-[420px] w-[420px] shrink-0">
             <div className="absolute top-[110px] left-[110px] size-[200px] rounded-[40px] bg-[#e9e3d6] ring-1 ring-[#2a1e0c]/10" />
             {PEOPLE.map((person) => {
-              const speaking = step === person.speaks;
+              const speaking = speaker === person.name;
               return (
                 <div
                   key={person.name}
@@ -135,48 +136,64 @@ export function DraftTogetherRoom() {
             <span className="text-2xl font-semibold text-[#2a1e0c]">
               Team summary
             </span>
-            {PEOPLE.map((person) => {
-              const said = step >= person.speaks;
-              return (
-                <div
-                  key={person.name}
-                  className="flex min-h-[30px] items-center gap-3 text-xl text-[#2a1e0c]/85"
-                >
-                  <m.span
-                    className="flex items-center gap-3"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: said ? 1 : 0 }}
-                    transition={{ duration: DUR.base }}
-                  >
-                    <span
-                      className="size-3 shrink-0 rounded-full"
-                      style={{ background: person.colour }}
-                    />
-                    <span
-                      className="font-semibold"
-                      style={{ color: person.colour }}
+            <div
+              className="overflow-hidden [mask-image:linear-gradient(transparent,black_22%)]"
+              style={{ height: VISIBLE * LINE_H }}
+            >
+              <m.div
+                className="flex flex-col justify-end"
+                style={{ minHeight: VISIBLE * LINE_H }}
+                animate={{ y: -offset }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {LINES.map((line, index) => {
+                  const shown = index < said;
+                  const colour = colourOf(line.who);
+                  return (
+                    <div
+                      key={line.text}
+                      className="flex items-center gap-3 text-xl text-[#2a1e0c]/85"
+                      style={{ height: LINE_H }}
                     >
-                      {person.name}
-                    </span>
-                  </m.span>
-                  {/* Typed out as it is heard. */}
-                  <m.span
-                    className="whitespace-nowrap"
-                    initial={{ clipPath: "inset(0 100% 0 0)" }}
-                    animate={{
-                      clipPath: said ? "inset(0 0% 0 0)" : "inset(0 100% 0 0)",
-                    }}
-                    transition={
-                      said
-                        ? { duration: 1.4, ease: "linear", delay: 0.3 }
-                        : { duration: DUR.fast }
-                    }
-                  >
-                    {person.line}
-                  </m.span>
-                </div>
-              );
-            })}
+                      <m.span
+                        className="flex items-center gap-3"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: shown ? 1 : 0 }}
+                        transition={{ duration: DUR.base }}
+                      >
+                        <span
+                          className="size-3 shrink-0 rounded-full"
+                          style={{ background: colour }}
+                        />
+                        <span
+                          className="font-semibold"
+                          style={{ color: colour }}
+                        >
+                          {line.who}
+                        </span>
+                      </m.span>
+                      {/* Typed out as it is heard. */}
+                      <m.span
+                        className="whitespace-nowrap"
+                        initial={{ clipPath: "inset(0 100% 0 0)" }}
+                        animate={{
+                          clipPath: shown
+                            ? "inset(0 0% 0 0)"
+                            : "inset(0 100% 0 0)",
+                        }}
+                        transition={
+                          shown
+                            ? { duration: 1.3, ease: "linear", delay: 0.3 }
+                            : { duration: DUR.fast }
+                        }
+                      >
+                        {line.text}
+                      </m.span>
+                    </div>
+                  );
+                })}
+              </m.div>
+            </div>
             <m.div
               className="mt-2 flex items-center gap-3 text-[19px] font-semibold text-[#2a1e0c]"
               initial={{ opacity: 0, y: 10 }}
