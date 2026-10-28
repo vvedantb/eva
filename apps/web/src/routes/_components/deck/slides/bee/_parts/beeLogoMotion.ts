@@ -42,9 +42,13 @@ export function blinkTiming(seed: string): { periodS: number; delayS: number } {
   };
 }
 
-/** What the mark shows. The slides pick one per step. */
+/**
+ * What the mark shows. The slides pick one per step. `flying` is deck-only:
+ * buzzing wings and nothing else, for when a slide moves the whole mark.
+ */
 export type LogoState =
   | "idle"
+  | "flying"
   | "listening"
   | "thinking"
   | "searching"

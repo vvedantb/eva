@@ -14,29 +14,84 @@ const LANDED = 1;
 const SETTLED = 2;
 
 /**
- * The flight in: from off the left edge, a loose loop across the stage, then
- * down into its place above the title. Offsets are from the resting spot.
+ * The flight in: off the left edge, a loose loop across the stage, then down
+ * into its place above the title. Offsets are from the resting spot. The
+ * waypoints are joined with a Catmull-Rom curve and sampled finely, so speed
+ * and direction change smoothly instead of turning a corner at each one.
  */
-const FLIGHT = {
-  x: [-760, -420, -40, 320, 180, -60, 0],
-  y: [220, -60, -170, 10, 150, 40, 0],
-  rotate: [14, -10, -4, 12, -8, 4, 0],
-  scale: [0.5, 0.62, 0.7, 0.78, 0.86, 0.95, 1],
-  opacity: [0, 1, 1, 1, 1, 1, 1],
-};
+const WAYPOINTS: readonly (readonly [number, number])[] = [
+  [-760, 220],
+  [-420, -60],
+  [-40, -170],
+  [320, 10],
+  [180, 150],
+  [-60, 40],
+  [0, 0],
+];
+const SAMPLES = 60;
+
+function catmullRom(a: number, b: number, c: number, d: number, t: number) {
+  return (
+    0.5 *
+    (2 * b +
+      (-a + c) * t +
+      (2 * a - 5 * b + 4 * c - d) * t * t +
+      (-a + 3 * b - 3 * c + d) * t * t * t)
+  );
+}
+
+/** Position on the curve at `u` in 0..1. */
+function pointAt(u: number): readonly [number, number] {
+  const last = WAYPOINTS.length - 1;
+  const at = Math.min(u * last, last - 1e-6);
+  const i = Math.floor(at);
+  const t = at - i;
+  const p = (k: number) => WAYPOINTS[Math.max(0, Math.min(last, k))];
+  return [
+    catmullRom(p(i - 1)[0], p(i)[0], p(i + 1)[0], p(i + 2)[0], t),
+    catmullRom(p(i - 1)[1], p(i)[1], p(i + 1)[1], p(i + 2)[1], t),
+  ];
+}
+
+/** Slow off the start, cruise, then a long soft landing. */
+const easeInOut = (t: number) => 0.5 - 0.5 * Math.cos(Math.PI * t);
+
+const FLIGHT = (() => {
+  const x: number[] = [];
+  const y: number[] = [];
+  const rotate: number[] = [];
+  const scale: number[] = [];
+  const opacity: number[] = [];
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+    const u = easeInOut(t);
+    const [px, py] = pointAt(u);
+    const [nx] = pointAt(Math.min(1, u + 0.01));
+    x.push(Math.round(px * 10) / 10);
+    y.push(Math.round(py * 10) / 10);
+    // Bank gently into the direction of travel, level again on landing.
+    rotate.push(
+      Math.round(Math.max(-12, Math.min(12, (nx - px) * 0.9)) * (1 - t) * 10) /
+        10,
+    );
+    scale.push(Math.round((0.5 + 0.5 * easeInOut(t)) * 1000) / 1000);
+    opacity.push(Math.min(1, t * 8));
+  }
+  return { x, y, rotate, scale, opacity };
+})();
 
 const FLIGHT_TRANSITION: Transition = {
-  duration: 2.4,
-  delay: 0.2,
-  ease: "easeInOut",
-  times: [0, 0.16, 0.36, 0.56, 0.74, 0.9, 1],
+  duration: 2.6,
+  // After the slide's own entrance, so the two motions do not fight.
+  delay: 0.45,
+  ease: "linear",
 };
 
-/** Searching while it flies, a loop and sparkle as it lands, then idle. */
+/** Buzzing while it flies, a loop and sparkle as it lands, then idle. */
 function logoState(step: number): LogoState {
   if (step >= SETTLED) return "idle";
   if (step >= LANDED) return "done";
-  return "searching";
+  return "flying";
 }
 
 export function BeeTitle() {
@@ -47,7 +102,7 @@ export function BeeTitle() {
   return (
     <Shell center className="gap-8">
       <m.div
-        initial={{ opacity: 0, x: -760, y: 220, scale: 0.5 }}
+        initial={{ opacity: 0, x: -760, y: 220, scale: 0.5, rotate: 0 }}
         animate={FLIGHT}
         transition={FLIGHT_TRANSITION}
       >

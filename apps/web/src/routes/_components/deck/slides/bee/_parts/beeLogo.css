@@ -118,7 +118,8 @@
 }
 
 .bee-logo[data-state="searching"] .bee-logo-wing,
-.bee-logo[data-state="tool"] .bee-logo-wing {
+.bee-logo[data-state="tool"] .bee-logo-wing,
+.bee-logo[data-state="flying"] .bee-logo-wing {
   animation: bee-buzz 120ms ease-in-out infinite alternate;
 }
 

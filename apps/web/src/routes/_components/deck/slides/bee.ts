@@ -33,8 +33,8 @@ const SLIDES: DeckSlide[] = [
     title: "Bee",
     Component: BeeTitle,
     steps: 2,
-    // The flight takes about 2.6 s; then the name, then the line under it.
-    autoMs: [2700, 1400],
+    // The flight lands at about 3 s; then the name, then the line under it.
+    autoMs: [3100, 1400],
   },
   {
     id: "bee-02-problem",
