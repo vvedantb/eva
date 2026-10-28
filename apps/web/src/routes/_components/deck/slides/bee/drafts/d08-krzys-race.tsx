@@ -1,4 +1,5 @@
 import { AnimatePresence, m } from "motion/react";
+import type { Transition } from "motion/react";
 import {
   Accent,
   Shell,
@@ -51,8 +52,25 @@ const ROUNDS: readonly Round[] = [
   },
 ];
 
-/** Seconds each search takes: type it, skim the results, clear it. */
-const PER_SEARCH = 1.1;
+/**
+ * Seconds each search takes. Within it, as fractions: type the query, wait
+ * for the page, show the results, read them, then clear for the next one.
+ */
+const PER_SEARCH = 2.6;
+const TYPED = 0.4;
+const LOADED = 0.46;
+const SHOWN = 0.52;
+const CLEARED = 0.93;
+
+/** Same timing for a query and its results, so results never show mid-typing. */
+function searchTransition(index: number, times: number[]): Transition {
+  return {
+    duration: PER_SEARCH,
+    delay: 0.3 + index * PER_SEARCH,
+    times,
+    ease: "linear",
+  };
+}
 
 const SHOTS: readonly CameraShot[] = [
   { rotateY: 4, translateZ: -40 },
@@ -63,7 +81,7 @@ const SHOTS: readonly CameraShot[] = [
 
 const LABEL = "text-sm font-semibold tracking-[0.12em] uppercase";
 
-/** One round of searching by hand: the queries typed in turn, results skimmed after each. */
+/** One round of searching by hand: type a query, skim the results, clear, try again. */
 function ByHand({ round }: { round: Round }) {
   return (
     <div className={`${BEE_CARD} flex h-[290px] flex-col gap-4 p-6`}>
@@ -77,7 +95,7 @@ function ByHand({ round }: { round: Round }) {
               className="absolute left-14 overflow-hidden text-[17px] whitespace-nowrap text-[#2a1e0c]"
               initial={{ opacity: 0, clipPath: "inset(0 100% 0 0)" }}
               animate={{
-                opacity: last ? [0, 1, 1] : [0, 1, 1, 0],
+                opacity: last ? [0, 1, 1] : [0, 1, 1, 1, 0],
                 clipPath: last
                   ? [
                       "inset(0 100% 0 0)",
@@ -89,44 +107,53 @@ function ByHand({ round }: { round: Round }) {
                       "inset(0 100% 0 0)",
                       "inset(0 0% 0 0)",
                       "inset(0 0% 0 0)",
+                      "inset(0 0% 0 0)",
                     ],
               }}
-              transition={{
-                duration: PER_SEARCH,
-                delay: 0.3 + index * PER_SEARCH,
-                times: last ? [0, 0.05, 0.55] : [0, 0.05, 0.55, 1],
-                ease: "linear",
-              }}
+              transition={searchTransition(
+                index,
+                last ? [0, 0.02, TYPED] : [0, 0.02, TYPED, CLEARED, 1],
+              )}
             >
               {query}
             </m.span>
           );
         })}
       </div>
-      <m.div
-        className="flex flex-col gap-3 px-2"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0, 1, 0.4] }}
-        transition={{
-          duration: PER_SEARCH,
-          delay: 0.3,
-          repeat: round.searches.length - 1,
-          times: [0, 0.55, 0.7, 1],
-        }}
-      >
-        {[0.9, 0.7, 0.8, 0.6].map((width, row) => (
-          <div key={row} className="flex flex-col gap-1.5">
-            <span
-              className="h-3 rounded-full bg-[#3b6fd4]/40"
-              style={{ width: `${width * 60}%` }}
-            />
-            <span
-              className="h-2.5 rounded-full bg-[#2a1e0c]/10"
-              style={{ width: `${width * 100}%` }}
-            />
-          </div>
-        ))}
-      </m.div>
+      {/* Each query's results appear only once it is typed and the page has loaded. */}
+      <div className="relative flex-1">
+        {round.searches.map((query, index) => {
+          const last = index === round.searches.length - 1;
+          return (
+            <m.div
+              key={query}
+              className="absolute inset-0 flex flex-col gap-3 px-2"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{
+                opacity: last ? [0, 0, 1] : [0, 0, 1, 1, 0],
+                y: last ? [6, 6, 0] : [6, 6, 0, 0, 0],
+              }}
+              transition={searchTransition(
+                index,
+                last ? [0, LOADED, SHOWN] : [0, LOADED, SHOWN, CLEARED, 1],
+              )}
+            >
+              {[0.9, 0.7, 0.8, 0.6].map((width, row) => (
+                <div key={row} className="flex flex-col gap-1.5">
+                  <span
+                    className="h-3 rounded-full bg-[#3b6fd4]/40"
+                    style={{ width: `${width * 60}%` }}
+                  />
+                  <span
+                    className="h-2.5 rounded-full bg-[#2a1e0c]/10"
+                    style={{ width: `${width * 100}%` }}
+                  />
+                </div>
+              ))}
+            </m.div>
+          );
+        })}
+      </div>
     </div>
   );
 }
