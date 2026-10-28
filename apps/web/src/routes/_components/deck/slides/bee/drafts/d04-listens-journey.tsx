@@ -13,10 +13,12 @@ const TIPS = 3;
 
 /** Where the travelling phrase sits at each step, in stage pixels. */
 const PHRASE_AT = [
-  { x: 40, y: 250, opacity: 0, scale: 0.9 },
-  { x: 40, y: 250, opacity: 1, scale: 1 },
-  { x: 420, y: 120, opacity: 1, scale: 0.8 },
-  { x: 420, y: 120, opacity: 0, scale: 0.6 },
+  { x: 0, y: 330, opacity: 0, scale: 0.9 },
+  // Heard: a short bubble under the speaker.
+  { x: 0, y: 330, opacity: 1, scale: 1 },
+  // Found: it flies onto the matching note and dissolves into it.
+  { x: 360, y: 230, opacity: 0, scale: 0.35 },
+  { x: 360, y: 230, opacity: 0, scale: 0.35 },
 ];
 
 const NOTES = [
@@ -91,17 +93,25 @@ export function DraftListensJourney() {
 
           {/* The phrase, travelling from the voice into your notes. */}
           <m.div
-            className="absolute top-0 left-0 flex items-center gap-2 rounded-2xl rounded-bl-md px-4 py-3 text-[19px] font-medium whitespace-nowrap"
+            className="absolute top-0 left-0 z-10 flex w-[300px] origin-top-left flex-col gap-1 rounded-2xl rounded-tl-md px-4 py-3 text-[18px] leading-snug font-medium shadow-lg shadow-black/10"
             style={{ background: BEE.surface, color: BEE.text }}
             initial={PHRASE_AT[0]}
             animate={at}
-            transition={{ ...BEE_SPRING, duration: 1.1 }}
+            transition={
+              step >= 2
+                ? {
+                    duration: 1,
+                    ease: [0.45, 0, 0.25, 1],
+                    opacity: { duration: 0.3, delay: 0.7 },
+                  }
+                : { ...BEE_SPRING, duration: 0.8 }
+            }
           >
-            <IconMicrophone size={18} style={{ color: BEE.accent }} />
             <span
-              className="text-[14px] font-normal"
+              className="flex items-center gap-2 text-[14px] font-normal"
               style={{ color: BEE.muted }}
             >
+              <IconMicrophone size={16} style={{ color: BEE.accent }} />
               In the meeting
             </span>
             “…the provider onboarding we talked about last time…”
