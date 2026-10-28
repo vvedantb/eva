@@ -22,6 +22,9 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
   messages, tips and answers. A stop inside the text is fine ("One switch.
   Less machinery", "Merged. It is live"). This also covers cover slides and
   text inside `<Accent>`.
+- A title is optional. Drop it when the visual makes the point; then centre
+  the content and open the speaker note with `Say the headline (no title on
+  screen): "…"`.
 - **No footers, footnotes or source lines on the slide.** Put sources, dates
   and caveats in the speaker note (`Detail:` or `Figures:`).
 - No subtext paragraphs under the title. If a line needs more than about 12

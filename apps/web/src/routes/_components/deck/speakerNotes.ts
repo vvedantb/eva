@@ -335,19 +335,22 @@ When the meeting ends, Bee writes the summary for you.
 Detail: Bee does not send summaries by itself: each attendee's Bee saves its own copy, and a summary covers only the people running Bee. if the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
 Next: That works for one person. It is better for a team.`,
 
-  "bee-07-teams": `In Teams mode, everyone's Bee works together.
+  "bee-07-teams": `Say the headline (no title on screen): "Better together."
+In Teams mode, everyone's Bee works together.
 → Step 1: each person's Bee shares only what its own microphone heard. That is why everyone in the meeting needs Bee running on their own laptop.
 → Step 2: so the summary knows exactly who said what, and labels each line with a name. Each line comes from that person's own microphone, so the name is never a guess.
 Detail: say it aloud if it helps: this is the only way to be sure who said what. Tools that label speakers from one shared recording have to guess, and in my experience Teams often gets it wrong. Keep that as your own view; we have not measured it. The catch: people without Bee are not in the transcript, and the summary says it is partial. There is no bot in the call and nothing joins automatically. Names and lines are an example.
 Next: So how is that different from the transcript Teams already makes?`,
 
-  "bee-14-compare": `Teams already makes a transcript, so it is fair to ask what Bee adds. This compares how each one works.
+  "bee-14-compare": `Say the headline (no title on screen): "Teams and Bee, side by side."
+Teams already makes a transcript, so it is fair to ask what Bee adds. This compares how each one works.
 → Step 1: who said what. Teams works out the speakers from the shared meeting audio. Bee takes each line from that person's own microphone, so the name is known, not worked out.
 → Step 2: during the meeting. Teams gives you a live transcript to read. Bee gives you one or two short tips from your own notes and the web, when they help.
 → Step 3: your notes. Teams keeps transcripts in Microsoft 365. Bee keeps notes and summaries on your computer.
 Detail: this is a comparison of approach, not a measured accuracy test; we have not measured Teams. Copilot and some Teams Rooms set-ups add more, so say "the standard Teams transcript" if asked. Keep it neutral: Teams is fine for a record; Bee is for help while you talk.
 Next: Which raises the obvious question: what about privacy?`,
-  "bee-08-private": `Bee was built to be safe to leave on.
+  "bee-08-private": `Say the headline (no title on screen): "Private by design."
+Bee was built to be safe to leave on.
 → Step 1: you start sharing your screen, and the notch disappears from what others see.
 → Step 2: the four promises: no transcript on screen, hidden during screen share, your notes and summaries stay on your computer, and nothing joins a meeting without your click.
 Detail: be precise if asked. Notes and summaries are saved only on your computer, and keys never leave it. Speech is sent to the AI models to be understood. In Teams mode, shared phrases pass through a short-lived online room that is deleted when the meeting ends, after four hours at most. Screen-share hiding is part of meeting mode.

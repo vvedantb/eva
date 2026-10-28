@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
+import { Shell, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
@@ -61,10 +61,8 @@ function CompareRow({ row, index }: { row: Row; index: number }) {
 
 export function BeeCompare() {
   return (
-    <Shell className="py-14">
-      <Title size="md">Teams and Bee, side by side</Title>
-
-      <Camera shots={SHOTS} className="mt-10">
+    <Shell className="justify-center py-14">
+      <Camera shots={SHOTS}>
         <div className="flex w-[1088px] justify-center">
           <m.div
             className={`${BEE_CARD} w-[1000px] px-10 pt-7 pb-3`}
