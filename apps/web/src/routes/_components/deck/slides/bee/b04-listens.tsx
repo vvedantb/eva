@@ -1,6 +1,6 @@
 import { IconMicrophone } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
+import { Shell, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, DrawPath, cueTransition } from "../../_components/motion";
@@ -55,10 +55,8 @@ export function BeeListens() {
   const tips = step >= TIPS;
 
   return (
-    <Shell className="py-14">
-      <Title size="md">It listens. It finds. It tips</Title>
-
-      <Camera shots={SHOTS} className="mt-8">
+    <Shell className="justify-center py-14">
+      <Camera shots={SHOTS}>
         <div className="relative" style={{ width: W, height: H }}>
           {/* 1 — what was said. */}
           <div className="absolute top-0" style={{ left: COL.hear }}>

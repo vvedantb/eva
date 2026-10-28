@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { IconArrowBackUp, IconFileText, IconShare3 } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
+import { Shell, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
@@ -65,10 +65,8 @@ export function BeeSummary() {
   const forward = step >= FORWARD;
 
   return (
-    <Shell className="py-14">
-      <Title size="md">The summary writes itself</Title>
-
-      <Camera shots={SHOTS} className="mt-6">
+    <Shell className="justify-center py-14">
+      <Camera shots={SHOTS}>
         <div className="relative flex h-[460px] w-[1088px] items-start gap-12">
           {/* The note Bee writes when the meeting ends. */}
           <div className={`${BEE_CARD} flex w-[620px] flex-col gap-6 p-8`}>
