@@ -206,7 +206,7 @@ export function BeeBackground() {
           <EvaDiscMark size={34} />
         </span>
         <span className="text-[22px] text-[#2a1e0c]/70">
-          Eva&apos;s Simple Mode too: workspaces wake and sleep on their own
+          Eva&apos;s Simple Mode too: sandboxes wake and sleep on their own
         </span>
       </m.div>
     </Shell>
