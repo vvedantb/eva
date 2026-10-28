@@ -40,8 +40,8 @@ const SLIDES: DeckSlide[] = [
     title: "Meet the notch",
     Component: BeeNotch,
     steps: 2,
-    // Time to watch it listen, close up, before the answer opens.
-    autoMs: [1100, 3200],
+    // A moment on the wide call before the zoom, then time to watch it listen.
+    autoMs: [2800, 3200],
   },
   {
     id: "bee-04-listens",
