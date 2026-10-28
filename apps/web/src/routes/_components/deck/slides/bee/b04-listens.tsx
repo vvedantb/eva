@@ -11,7 +11,7 @@ import {
   BeeTip,
   Waveform,
 } from "./_parts/BeeIsland";
-import { NoteCard } from "./_parts/BeeBits";
+import { NoteCard, SourceChip } from "./_parts/BeeBits";
 
 const HEARS = 1;
 const FINDS = 2;
@@ -133,6 +133,15 @@ export function BeeListens() {
               <BeeTip shown={tips} delay={0.4}>
                 Joins the AQP list if their forms are back by Friday
               </BeeTip>
+              {/* Where the tip came from, as Bee shows it. */}
+              <m.span
+                className="mt-4 inline-block"
+                initial={{ opacity: 0, y: 6 }}
+                animate={tips ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+                transition={cueTransition(tips, 0.7, BEE_SPRING)}
+              >
+                <SourceChip label="Provider call.md" />
+              </m.span>
             </BeeIsland>
           </div>
 
