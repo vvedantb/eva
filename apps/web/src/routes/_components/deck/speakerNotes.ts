@@ -305,7 +305,8 @@ Next: So, one thing to do.`,
 Detail: one or two short tips at most, never a wall of text. You can press Cmd or Ctrl, Shift and Space to show or hide it. The meeting and the tip are an example.
 Next: What happens between hearing and showing?`,
 
-  "bee-04-listens": `Three steps, in about the time it takes to finish a sentence.
+  "bee-04-listens": `Say the headline (no title on screen): "It listens. It finds. It tips."
+Three steps, in about the time it takes to finish a sentence.
 → Step 1: it hears. Bee picks up a phrase from the meeting, for example "the provider onboarding we talked about last time".
 → Step 2: it finds. It searches your own markdown notes, and Jev, a small fast model, ranks which ones actually match.
 → Step 3: it tips. A writing model turns the best match into one short line in the notch.
@@ -325,7 +326,8 @@ Next: Here is what that looked like in a real meeting.`,
 Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The five minutes is my own estimate from that meeting, not a measurement.
 Next: And when the meeting ends, the summary writes itself.`,
 
-  "bee-06-summary": `When the meeting ends, Bee writes the summary for you.
+  "bee-06-summary": `Say the headline (no title on screen): "The summary writes itself."
+When the meeting ends, Bee writes the summary for you.
 → Step 1: the decisions, in plain sentences.
 → Step 2: the action items, each with an owner.
 → Step 3: it is saved as a note, so next time someone says "last time we…", Bee can find it.
@@ -356,7 +358,8 @@ Next: And the question after "is it safe": what does it cost?`,
 → Step 2: what it pays for. Bee's three AI jobs in a meeting: turning speech into text, finding the right note, and writing the tip. The allowance is meant for projects like this one.
 Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
 Next: Last, it fits with the tools you already use.`,
-  "bee-09-tools": `Bee connects to the tools you already have.
+  "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
+Bee connects to the tools you already have.
 → Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.
 → Step 2: meeting context: Bee works out which meeting you are in, and who is in it, from Outlook and Teams on your own computer.
 Detail: connectors use a normal sign-in. Meeting context is read locally; nothing is sent to join the meeting.

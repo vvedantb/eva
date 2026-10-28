@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { IconPlug } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
+import { Shell, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { Connector, Spotlight, cueTransition } from "../../_components/motion";
@@ -126,10 +126,8 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
 export function BeeTools() {
   const connected = useDeckStep() >= CONNECT;
   return (
-    <Shell className="py-14">
-      <Title size="md">Works with your tools</Title>
-
-      <Camera shots={SHOTS} className="mt-8">
+    <Shell className="justify-center py-14">
+      <Camera shots={SHOTS}>
         <div className="relative isolate" style={{ width: W, height: H }}>
           <Spotlight shots={GLOW} className="-inset-16 overflow-visible" />
 
