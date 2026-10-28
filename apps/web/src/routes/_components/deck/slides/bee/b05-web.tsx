@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
@@ -39,6 +40,33 @@ const ROUNDS: readonly Round[] = [
 const roundAt = (step: number) =>
   Math.min(ROUNDS.length - 1, Math.max(0, Math.ceil(step / 2) - 1));
 
+const LAST = ROUNDS.length * 2;
+/** Milliseconds each phase stays up while looping: answer, then sources. */
+const HOLD = { answer: 2800, sources: 2600 };
+
+/**
+ * The deck step during the first pass. Once the last step is reached, the
+ * rounds keep cycling on a timer, so the slide never sits still.
+ */
+function useLoopedStep() {
+  const step = useDeckStep();
+  const [lap, setLap] = useState(0);
+  // Back below the end (deck went back): start the loop fresh next time.
+  if (step < LAST && lap !== 0) setLap(0);
+  const phase = step < LAST ? step : ((LAST - 1 + lap) % LAST) + 1;
+
+  useEffect(() => {
+    if (step < LAST) return;
+    const id = setTimeout(
+      () => setLap((n) => n + 1),
+      phase % 2 === 1 ? HOLD.answer : HOLD.sources,
+    );
+    return () => clearTimeout(id);
+  }, [step, phase]);
+
+  return phase;
+}
+
 const SHOTS: readonly CameraShot[] = [
   { rotateX: 8, translateZ: -40 },
   { rotateX: 4, translateZ: 0 },
@@ -56,7 +84,7 @@ const GLOW = SHOTS.map((_, step) => ({
 }));
 
 export function BeeWeb() {
-  const step = useDeckStep();
+  const step = useLoopedStep();
   const asking = step >= 1;
   const searching = step % 2 === 1;
   const sourced = asking && !searching;
