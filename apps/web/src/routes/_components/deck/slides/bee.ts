@@ -28,7 +28,14 @@ const SLIDES: DeckSlide[] = [
     steps: 0,
     blank: true,
   },
-  { id: "bee-01-title", title: "Bee", Component: BeeTitle, steps: 0 },
+  {
+    id: "bee-01-title",
+    title: "Bee",
+    Component: BeeTitle,
+    steps: 2,
+    // The flight takes about 2.6 s; then the name, then the line under it.
+    autoMs: [2700, 1400],
+  },
   {
     id: "bee-02-problem",
     title: "The problem",

@@ -282,6 +282,8 @@ Next: two lessons from the year, in the project's own words.`,
 Next: Bee.`,
 
   "bee-01-title": `Open with what Bee is in one breath: a small assistant that sits at the top of your screen in meetings, listens, and finds what you already know.
+→ Step 1 (on its own, after the flight): the bee flies in from the left, loops across the stage and lands with a small loop and sparkle; the name appears.
+→ Step 2: the line under it fades in, and the bee settles into a slow hover.
 Detail: Bee is a desktop app for Windows and Mac. It is not a meeting bot; nobody else in the call sees it. Keep the technical side out of this deck: the room only needs to know what it does for them.
 Next: Start with a moment everyone has had.`,
 
