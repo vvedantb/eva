@@ -116,16 +116,22 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
 
 ## 7. Speaker notes
 
-Each slide has a note in `speakerNotes.ts`, keyed by slide id:
+Each slide has a note in `speakerNotes.ts`, keyed by slide id. Write it as a
+script the presenter reads out, in their own voice
+(https://github.com/vvedantb/skills/tree/main/skills/vedant-voice; the Bee
+deck is the model):
 
-- an opening line with the one idea;
-- one `→ Step n:` line per build step;
-- `Detail:` for sources, caveats and the "example is invented" line;
-- `Next:` for the hand-off line to the following slide.
+- one spoken sentence per line, opening with "So…", contractions, "cos";
+- teach from zero: the normal painful way first, then what changes, then why;
+- start the line where a build step lands with `→ `, so the presenter can keep
+  in time with the auto-build;
+- end with the spoken hand-off to the next slide;
+- after a blank line, `If asked:` for sources, caveats and the "example is
+  invented" line, still in the presenter's voice.
 
 When slides move, are added or are removed:
 
-1. Rewrite the `Next:` lines on both sides of each gap.
+1. Rewrite the hand-off lines on both sides of each gap.
 2. Fix any "slide 23" style number references.
 
 ## 8. Verify and finish

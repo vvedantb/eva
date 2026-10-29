@@ -278,111 +278,156 @@ Next: two lessons from the year, in the project's own words.`,
   // ---------------------------------------------------------------------------
   // Bee deck
   // ---------------------------------------------------------------------------
-  "bee-00-blank": `A blank stage while the room settles. Press the right arrow to bring in the title.
-Next: Bee.`,
+  "bee-00-blank": `Nothing to say on this one, it's just a blank stage while everyone settles in.
+When you're ready, press the right arrow and the title flies in.`,
 
-  "bee-01-title": `Open with what Bee is in one breath: a small assistant that sits at the top of your screen in meetings, listens, and finds what you already know.
-→ Step 1 (on its own, after the flight): the bee flies in from the left, loops across the stage and lands with a small loop and sparkle; the name appears.
-→ Step 2: the line under it fades in, and the bee settles into a slow hover.
-Detail: Bee is a desktop app for Windows and Mac. It is not a meeting bot; nobody else in the call sees it. Keep the technical side out of this deck: the room only needs to know what it does for them.
-Next: Start with a moment everyone has had.`,
+  "bee-01-title": `So, this is Bee.
+→ It's a small app I built that sits at the top of your screen during meetings.
+It listens to the conversation, and when something comes up that you've already got notes on, it finds them and shows you, right there.
+→ So the short version — it listens to your meeting and finds what you already know.
+And it's not a meeting bot either — nobody else in the call can see it, it's just on your own laptop.
+Let me start with why I built it.`,
 
-  "bee-02-problem": `Everyone has been in this meeting: someone remembers you agreed something, and nobody can find it.
-→ Step 1: someone says it out loud: "Last time we agreed something on the provider onboarding. What was it?" The meeting clock starts running.
-→ Step 2: the notes that hold the answer blur and drift, and you start searching by hand. The clock keeps going: "…and the meeting moves on".
-Detail: the answer usually exists, in your own notes or last meeting's summary. The problem is finding it in the ten seconds before the conversation moves on. The note names and the line are examples.
-Next: Here is the small bar that answers it.`,
+  "bee-02-problem": `So I'm pretty sure everyone's been in this meeting.
+→ Someone goes, "Last time we agreed something on the provider onboarding. What was it?"
+And you know the answer's somewhere — it's in your notes, or in last meeting's summary.
+And you can see the clock's already running.
+→ So you start searching by hand, typing "provider… onboarding… notes…", and your notes are all over the place.
+And meanwhile the meeting just moves on without you.
+So the problem isn't that the answer doesn't exist — it's finding it in those ten seconds before the conversation's moved on.
+And that's exactly what Bee's for.
 
-  "bee-12-background": `The AI tools that win are the ones with the least friction: they just work, and they do most of it in the background.
-→ Step 1: an agent you have to steer. You choose the model and how hard it should think, pick the skill, connect the MCP tools, watch the context window fill up and get compacted, read the thinking, parse paragraphs of output, and steer it again. It only works while you watch it.
-→ Step 2: the Grok bot. You send it one message, and it does the work in the background and sends you updates, as a co-worker would. No skills, no tools, no traces to read.
-→ Step 3: Bee is that idea for meetings. It listens, searches and reminds you, without you asking or steering it.
-→ Step 4: and the same lesson has gone back into Eva. In Simple Mode you no longer think about starting or stopping a sandbox: it wakes when you send a message and sleeps when it is idle.
-Detail: the thread on screen is an example in the shape of a real Grok bot run on Eva: one message, then updates until the change is live. The point for the room: the less a tool asks of you, the more you use it.
-Next: So, one thing to do.`,
+If asked: the note names and the quote are just examples.`,
 
-  "bee-03-notch": `Bee lives in a small bar at the top centre of your screen, like a phone's notch.
-→ Step 1: the view moves in close on the bar. During the call it listens: the bee flutters and the little bars move; nothing else changes.
-→ Step 2: the view pulls back a little. When it hears something it can help with, the bar grows into a short answer, and tells you which note it came from.
-Detail: one or two short tips at most, never a wall of text. You can press Cmd or Ctrl, Shift and Space to show or hide it. The meeting and the tip are an example.
-Next: What happens between hearing and showing?`,
+  "bee-03-notch": `So this is where Bee lives — a small bar at the top centre of your screen, kinda like the notch on a phone.
+→ During the call it's just listening — the little bee flutters and the bars move, and that's it, it stays out of your way.
+→ Then when it hears something it can actually help with, the bar grows into a short answer, and it tells you which note it came from.
+It's only ever one or two short tips, never a wall of text, cos you're meant to be in the meeting, not reading.
+And if you want it gone, you just press Cmd or Ctrl, Shift, Space and it hides.
+So how does it get from hearing something to showing you the answer?
 
-  "bee-04-listens": `Say the headline (no title on screen): "It listens. It finds. It tips."
-Three steps, in about the time it takes to finish a sentence.
-→ Step 1: it hears. Alex is talking, and Bee picks up a phrase from the meeting, for example "the provider onboarding we talked about last time". The phrase stays on screen.
-→ Step 2: it finds. A line runs from the phrase to your notes. Bee searches your own markdown notes, and Jev, a small fast model, ranks which ones actually match: Provider call.md lights up.
-→ Step 3: it tips. A second line runs to the bar, and a writing model turns the best match into one short line in the notch, with the note it came from. The camera pulls back to show all three.
-Detail: the words Bee hears are never shown on screen. Only the tip is. The models are Grok for speech, Jev for ranking and GPT-6 Luna for the tip. The notes and tip are an example.
-Next: And when your notes do not have the answer?`,
+If asked: the meeting and the tip shown are examples.`,
 
-  "bee-05-web": `When the answer is not in your notes, Bee looks it up. Three questions you might hear on an AQP call.
-→ Step 1: "Do they need to complete the Data Security and Protection Toolkit?" Bee searches and answers: yes, with NHS-funded care such as CHC, the contract requires it every year.
-→ Step 2: the sources appear under it, so you can see where the answer came from and open the link.
-→ Step 3: "Can CHC pay for care in their own home?" Yes: CHC can be arranged in any setting, including the person's own home.
-→ Step 4: its sources.
-→ Step 5: "What is the FNC rate this year?" £267.68 a week from 1 April 2026, paid by the NHS straight to the nursing home.
-→ Step 6: its source. A web answer always shows where it came from.
-Detail: the questions are invented examples; the answers are real. DSPT: Digital Care Hub (Better Security, Better Care), checked October 2026; it is a contract requirement for NHS-funded services, and whether it is mandatory for every care provider is disputed, so do not claim more. CHC in any setting: National Framework for NHS Continuing Healthcare, GOV.UK. FNC: GOV.UK, "Better community care thanks to nursing funding boost", March 2026; the higher rate is £368.24 a week.
-Next: Here is what that looked like in a real chat.`,
+  "bee-04-listens": `So it's three steps — it listens, it finds, it tips — and it all happens in about the time it takes someone to finish their sentence.
+→ First, it hears.
+Alex says something like "the provider onboarding we talked about last time", and Bee picks that phrase up.
+→ Then it finds.
+It searches through your own notes, and a small fast model called Jev ranks which ones actually match.
+So here it's Provider call.md that lights up — not just any note with "provider" in it.
+→ And then it tips.
+Another model turns that best match into one short line in the bar, and shows you the note it came from, so you can check it.
+So you didn't have to ask it anything — it heard the question and had the answer ready.
+But what if the answer's not in your notes at all?
 
-  "bee-11-real-meeting": `This is not a made-up example. It happened in a casual chat with Krzys.
-→ Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. On the left, what I did by hand: one Google search after another, skimming the results each time. On the right, what Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
-→ Step 2: then whether the Claude Agent SDK can take MCP servers. Same again: more searches by hand, while Bee would have answered: yes, through the mcpServers option.
-→ Step 3: Bee would have answered before I finished typing. Instead, I did it the old-fashioned way: typing, while Krzys waited.
-Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The searches shown are illustrations, not a log of what I typed. The time was not measured, so do not quote a number.
-Next: And when the meeting ends, the summary writes itself.`,
+If asked: in the actual app, the words Bee hears are never shown on screen, only the tip — the phrase is on this slide just to explain it. Grok turns the speech into text, Jev does the ranking, and GPT-6 Luna writes the tip. The notes and the tip are examples.`,
 
-  "bee-06-summary": `Say the headline (no title on screen): "The summary writes itself."
-When the meeting ends, Bee writes the summary for you.
-→ Step 1: the whole meeting scrolls past as a transcript, then folds down into one short summary. That is the work Bee saves you.
-→ Step 2: the decisions, in plain sentences.
-→ Step 3: the action items, each with an owner.
-→ Step 4: it is saved as a note, so next time someone says "last time we…", Bee can find it.
-→ Step 5: and if you missed the meeting, a colleague who was there forwards the same file, with what was decided and who does what.
-Detail: Bee does not send summaries by itself: each attendee's Bee saves its own copy, and a summary covers only the people running Bee. If the AI call fails, Bee still saves a plain version, so a meeting is never lost. The meeting shown is an example.
-Next: That works for one person. It is better for a team.`,
+  "bee-05-web": `So when the answer's not in your notes, Bee just looks it up on the web.
+And these are the kind of questions you'd actually hear on an AQP call.
+→ Say someone asks, "Do they need to complete the Data Security and Protection Toolkit?"
+Bee searches, and comes back with: yes, with NHS-funded care like CHC, the contract requires it every year.
+→ And underneath you get the sources, so you can see exactly where it came from and open the link.
+→ Or someone asks, "Can CHC pay for care in their own home?"
+Yes — CHC can be arranged in any setting, including the person's own home.
+→ Or, "What's the FNC rate this year?"
+£267.68 a week from 1 April, paid by the NHS straight to the nursing home.
+So it's not just making things up — every web answer shows you where it came from.
+And this actually happened to me, with Krzys.
 
-  "bee-07-teams": `Say the headline (no title on screen): "Better together."
-In Teams mode, everyone's Bee works together. The room from above: three people, each with Bee on their own laptop.
-→ Step 1: Alex speaks. Only Alex's Bee hears it, shown as a ripple in Alex's colour, and the line types into the team summary.
-→ Steps 2 to 6: Jo, Sam, Alex and Jo again. Each line arrives in the speaker's colour, and the summary scrolls to keep the newest line in view. That is why everyone in the meeting needs Bee running on their own laptop.
-→ Step 7: the point: each line comes from that person's own microphone, so the name is never a guess.
-Detail: say it aloud if it helps: this is the only way to be sure who said what. Tools that label speakers from one shared recording have to guess, and in my experience Teams often gets it wrong. Keep that as your own view; we have not measured it. The catch: people without Bee are not in the transcript, and the summary says it is partial. There is no bot in the call and nothing joins automatically. Names and lines are an example.
-Next: So how is that different from the transcript Teams already makes?`,
+If asked: the questions are examples, but the answers are real. DSPT is a contract requirement for NHS-funded services — whether it's mandatory for every care provider is disputed, so I wouldn't claim more than that (Digital Care Hub, checked October 2026). CHC in any setting is from the National Framework for NHS Continuing Healthcare on GOV.UK. The FNC rate is from GOV.UK, March 2026, and the higher rate is £368.24 a week.`,
 
-  "bee-14-compare": `Say the headline (no title on screen): "Teams and Bee, side by side."
-Teams already makes a transcript, so it is fair to ask what Bee adds. This compares how each one works.
-→ Step 1: who said what. Teams works out the speakers from the shared meeting audio. Bee takes each line from that person's own microphone, so the name is known, not worked out.
-→ Step 2: during the meeting. Teams gives you a live transcript to read. Bee gives you one or two short tips from your own notes and the web, when they help.
-→ Step 3: your notes. Teams keeps transcripts in Microsoft 365. Bee keeps notes and summaries on your computer.
-Detail: this is a comparison of approach, not a measured accuracy test; we have not measured Teams. Copilot and some Teams Rooms set-ups add more, so say "the standard Teams transcript" if asked. Keep it neutral: Teams is fine for a record; Bee is for help while you talk.
-Next: Which raises the obvious question: what about privacy?`,
-  "bee-08-private": `Say the headline (no title on screen): "Private by design."
-Bee was built to be safe to leave on.
-→ Step 1: you start sharing your screen, and the notch disappears from what others see.
-→ Step 2: the four promises: no transcript on screen, hidden during screen share, your notes and summaries stay on your computer, and nothing joins a meeting without your click.
-Detail: be precise if asked. Notes and summaries are saved only on your computer, and keys never leave it. Speech is sent to the AI models to be understood. In Teams mode, shared phrases pass through a short-lived online room that is deleted when the meeting ends, after four hours at most. Screen-share hiding is part of meeting mode.
-Next: And the question after "is it safe": what does it cost?`,
+  "bee-11-real-meeting": `So this one's a real example — it was just a casual chat with Krzys.
+→ I asked whether Convex can run more than one local deployment, so Eva could use it.
+On the left is what I actually did — one Google search after another, skimming the results each time.
+On the right is what Bee would have shown me: yes, each copy of the project gets its own, and agent mode starts one with no login.
+→ Then I asked whether you can pass MCP servers into the Claude Agent SDK.
+Same thing again — more searching by hand, while Bee would've just said yes, through the mcpServers option.
+→ So Bee would have answered before I'd even finished typing.
+Instead, I did it the old-fashioned way — typing, while Krzys sat there waiting.
+And then when the meeting ends, the summary just writes itself.
 
-  "bee-13-cost": `Trying Bee costs us nothing extra: the AI it uses is already paid for.
-→ Step 1: the honey jar fills while $500 counts up. Our Teams plan includes $500 of AI use every month, at no extra cost.
-→ Step 2: what it pays for. Bee's three AI jobs in a meeting: turning speech into text, finding the right note, and writing the tip. The allowance is meant for projects like this one.
-Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
-Next: Last, it fits with the tools you already use.`,
-  "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
-Bee connects to the tools you already have.
-→ Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.
-→ Step 2: meeting context: Bee works out which meeting you are in, and who is in it, from Outlook and Teams on your own computer.
-Detail: connectors use a normal sign-in. Meeting context is read locally; nothing is sent to join the meeting.
-Next: Step back for a moment: why is Bee built this way?`,
+If asked: both answers are checked against the Convex agent-mode docs and the Claude Agent SDK TypeScript reference, October 2026. The searches on screen are illustrations, not a log of what I actually typed. I didn't time it, so I won't put a number on it.`,
 
-  "bee-10-close": `Close on one ask: try it in your next meeting.
-→ Step 1 (on its own): the bee flies up into the empty bar at the top of the screen and starts listening.
-→ Step 2: the bar opens with a tip for you, the presenter: the session has finished, ask for questions. Let the room read it; it is the hand-off to Q&A.
-→ Step 3: the ask, "Try it in your next meeting".
-→ Step 4: a swarm of bees flies in from both sides as the send-off.
-Detail: it runs on Windows and Mac. Offer to help anyone set it up after the session. Then open the floor for questions.
-Next: Questions.`,
+  "bee-06-summary": `So normally, after a meeting, someone has to sit there and write up the notes.
+→ With Bee, the summary just writes itself — the whole meeting folds down into one short summary, on its own.
+→ You get the decisions, in plain sentences.
+→ The action items, each with an owner, so it's clear who's doing what.
+→ And it's saved as a note — so next time someone says "last time we…", Bee can actually find it.
+→ And if you missed the meeting, someone who was there just forwards you that file, and you're caught up on what was decided and who's doing what.
+So that works great for one person, but it's even better as a team.
+
+If asked: Bee doesn't send summaries out by itself — each person's Bee saves its own copy, and a summary only covers the people running Bee. If the AI call fails it still saves a plain version, so a meeting's never lost. The meeting shown is an example.`,
+
+  "bee-07-teams": `So this is Teams mode, where everyone's Bee works together.
+Picture the room from above — three people, each with Bee on their own laptop.
+→ Alex speaks, and only Alex's Bee hears it — that's the ripple — and the line goes straight into the team summary.
+→ Then Jo, then Sam, and so on — and every line lands in that person's colour.
+That's why everyone in the meeting needs Bee running on their own laptop.
+→ Cos each line comes from that person's own microphone, so the name's never a guess.
+Normally, tools that label speakers from one shared recording have to guess who's talking, and in my experience Teams gets that wrong quite a lot.
+So you might be thinking — Teams already does transcripts, so what's the difference?
+
+If asked: the Teams bit is my own experience, we haven't measured it. The catch is that people without Bee aren't in the transcript, and the summary says it's partial. There's no bot in the call, and nothing joins automatically. The names and lines are examples.`,
+
+  "bee-14-compare": `So Teams already makes a transcript, so it's fair to ask what Bee actually adds.
+This is just how each one works.
+→ Who said what — Teams works out the speakers from the shared meeting audio, but Bee takes each line from that person's own mic, so it knows rather than guesses.
+→ During the meeting — Teams gives you a live transcript to read, Bee gives you one or two short tips from your notes and the web, only when they help.
+→ And your notes — Teams keeps transcripts in Microsoft 365, Bee keeps your notes and summaries on your own computer.
+So Teams is fine as a record — Bee's more about helping you while you're actually in the conversation.
+Which brings up the obvious question — what about privacy?
+
+If asked: this compares how they work, it's not an accuracy test, and we haven't measured Teams. Copilot and some Teams Rooms setups add more, so I'd call it "the standard Teams transcript".`,
+
+  "bee-08-private": `So privacy — Bee was built to be safe to just leave on.
+→ Say you start sharing your screen — the bar just disappears from what everyone else sees, so you're never accidentally showing a tip.
+→ And there's four things it promises.
+No transcript on screen.
+It hides when you share your screen.
+Your notes and summaries stay on your computer.
+And nothing joins a meeting unless you click.
+So you're always the one in control of what it does.
+And after "is it safe", the next question's always — what does it cost?
+
+If asked: be precise here. Notes and summaries are only saved on your computer, and keys never leave it. Speech does get sent to the AI models so it can be understood. In Teams mode, shared phrases go through a short-lived online room that's deleted when the meeting ends, or after four hours at most. Screen-share hiding is part of meeting mode. Before anyone uses it on calls with providers or anything with patient data, we'd want a proper consent and privacy check first.`,
+
+  "bee-13-cost": `So what does it cost us? Basically nothing extra.
+→ Our Teams plan comes with $500 of AI usage every month, included, at no extra cost.
+→ And that's what Bee runs on — turning speech into text, finding the right note, and writing the tip.
+That allowance is meant for exactly this kind of project.
+So trying it doesn't cost us anything we're not already paying for.
+And it fits in with the tools you already use.
+
+If asked: I haven't measured what one meeting costs, so I wouldn't give a per-meeting number.`,
+
+  "bee-09-tools": `So Bee plugs into the tools you already use.
+→ There's connectors — Eva for the team's work, vmem for your history, or basically any tool that speaks MCP, which is just a standard way for AI tools to plug into other apps.
+→ And it reads the meeting details from Outlook and Teams on your own computer, so it knows which meeting you're in and who's in it.
+So you don't have to tell it anything — it already knows the context.
+Now let me step back for a sec — why's Bee built this way?
+
+If asked: connectors use a normal sign-in. Meeting details are read locally, and nothing gets sent to join the meeting. The Teams meeting detection is Windows-only right now, and I haven't tested it on a real Windows machine yet.`,
+
+  "bee-12-background": `So here's the bigger idea behind it.
+I think the AI tools that actually win are the ones with the least friction — they just work, and they do most of it in the background.
+→ Think about an agent you have to steer.
+You pick the model, how hard it should think, the skill, the MCP tools, you watch the context window fill up and get compacted, you read the thinking, parse paragraphs of output, and then steer it again.
+It only works while you're sat there watching it.
+→ Now compare that to the Grok bot.
+You send it one message, and it just does the work in the background and sends you updates, like a co-worker would.
+No skills, no tools, no traces to read.
+→ And Bee's that same idea, but for meetings — it listens, searches and reminds you, without you asking or steering it.
+→ And we've taken the same lesson back into Eva.
+In Simple Mode you don't think about starting or stopping a sandbox any more — it wakes up when you send a message, and goes to sleep when it's idle.
+So yeah, the less a tool asks of you, the more you actually use it.
+So, one thing I'd ask.
+
+If asked: the thread on screen is an example, shaped like a real Grok bot run on Eva — one message, then updates until the change is live.`,
+
+  "bee-10-close": `→ (Let the bee fly up into the bar.)
+→ And actually — Bee's just told me the session's finished, and I should ask if anyone's got questions.
+→ So the one thing I'd ask is, just try it in your next meeting.
+It runs on Windows and Mac, and if you want a hand setting it up, just grab me after.
+→ So yeah, that's pretty much it — any questions?`,
 
   // ---------------------------------------------------------------------------
   // Annual CDM deck
