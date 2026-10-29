@@ -321,18 +321,16 @@ But what if the answer's not in your notes at all?
 If asked: in the actual app, the words Bee hears are never shown on screen, only the tip — the phrase is on this slide just to explain it. Grok turns the speech into text, Jev does the ranking, and GPT-6 Luna writes the tip. The notes and the tip are examples.`,
 
   "bee-05-web": `So when the answer's not in your notes, Bee just looks it up on the web.
-And these are the kind of questions you'd actually hear on an AQP call.
-→ Say someone asks, "Do they need to complete the Data Security and Protection Toolkit?"
-Bee searches, and comes back with: yes, with NHS-funded care like CHC, the contract requires it every year.
-→ And underneath you get the sources, so you can see exactly where it came from and open the link.
-→ Or someone asks, "Can CHC pay for care in their own home?"
-Yes — CHC can be arranged in any setting, including the person's own home.
-→ Or, "What's the FNC rate this year?"
-£267.68 a week from 1 April, paid by the NHS straight to the nursing home.
-So it's not just making things up — every web answer shows you where it came from.
+And honestly, I'm a developer, so I don't know the answers to half of these myself — which is kinda the point.
+→ These are just the sort of questions that come up on our calls with providers.
+Someone asks one, and Bee searches and puts a short answer in the bar.
+→ And underneath you get the sources, so you can see exactly where it came from and click through to check.
+→ Then it moves on to the next one, and the next.
+I'm not gonna read them all out — you can see them on screen.
+So the point is, you don't need to be the expert in the room — Bee looks it up and shows you where the answer came from.
 And this actually happened to me, with Krzys.
 
-If asked: the questions are examples, but the answers are real. DSPT is a contract requirement for NHS-funded services — whether it's mandatory for every care provider is disputed, so I wouldn't claim more than that (Digital Care Hub, checked October 2026). CHC in any setting is from the National Framework for NHS Continuing Healthcare on GOV.UK. The FNC rate is from GOV.UK, March 2026, and the higher rate is £368.24 a week.`,
+If asked: the questions are examples, but the answers on screen are real, checked in October 2026 — the sources are the chips under each one. If anyone asks about the details, I'd point them to those links, or to someone on the commissioning side.`,
 
   "bee-11-real-meeting": `So this one's a real example — it was just a casual chat with Krzys.
 → I asked whether Convex can run more than one local deployment, so Eva could use it.
