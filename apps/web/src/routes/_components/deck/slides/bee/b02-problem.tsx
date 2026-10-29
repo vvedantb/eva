@@ -2,6 +2,7 @@ import { IconSearch } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { Shell, Title, useDeckStep } from "../../_components/DeckPrimitives";
 import { Camera } from "../../_components/DeckCamera";
+import { CountUp } from "../../_components/CountUp";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
 import { BEE, BEE_SPRING } from "./_parts/BeeIsland";
@@ -20,6 +21,9 @@ const NOTES = [
   { name: "Ideas.md", x: 870, y: 400, r: -2 },
 ];
 
+const mmss = (n: number) =>
+  `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+
 const SHOTS: readonly CameraShot[] = [
   { rotateY: -6, translateZ: -20 },
   { rotateY: -3 },
@@ -36,6 +40,40 @@ export function BeeProblem() {
 
       <Camera shots={SHOTS} className="mt-6">
         <div className="relative h-[470px] w-[1088px]">
+          {/* The meeting clock, running from the moment the question is asked. */}
+          <m.div
+            className="absolute top-[30px] left-0 flex items-center gap-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={
+              step >= SAID ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }
+            }
+            transition={cueTransition(step >= SAID, 0, BEE_SPRING)}
+          >
+            <span className="flex items-center gap-2 rounded-full bg-[#2a1e0c] px-4 py-2 text-[17px] font-semibold text-[#fff]">
+              <span className="size-2.5 rounded-full bg-[#ff6b5a]" />
+              In meeting
+              <CountUp
+                value={92}
+                step={SAID}
+                duration={6}
+                delay={0.2}
+                format={mmss}
+                className="ml-1 text-[#fabe28] tabular-nums"
+              />
+            </span>
+            <m.span
+              className="text-[17px] font-semibold text-[#2a1e0c]/60"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: lost ? 1 : 0 }}
+              transition={cueTransition(lost, 1.2, {
+                duration: DUR.slow,
+                ease: EASE.out,
+              })}
+            >
+              …and the meeting moves on
+            </m.span>
+          </m.div>
+
           {/* Someone says it in the meeting. */}
           <m.div
             className="absolute top-[120px] left-0 max-w-[460px] rounded-[28px] rounded-bl-md px-7 py-6 text-[26px] leading-snug font-medium"

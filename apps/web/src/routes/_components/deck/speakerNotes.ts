@@ -288,8 +288,8 @@ Detail: Bee is a desktop app for Windows and Mac. It is not a meeting bot; nobod
 Next: Start with a moment everyone has had.`,
 
   "bee-02-problem": `Everyone has been in this meeting: someone remembers you agreed something, and nobody can find it.
-→ Step 1: someone says it out loud: "Last time we agreed something on the provider onboarding. What was it?"
-→ Step 2: the notes that hold the answer blur and drift, and you start searching by hand while the meeting carries on.
+→ Step 1: someone says it out loud: "Last time we agreed something on the provider onboarding. What was it?" The meeting clock starts running.
+→ Step 2: the notes that hold the answer blur and drift, and you start searching by hand. The clock keeps going: "…and the meeting moves on".
 Detail: the answer usually exists, in your own notes or last meeting's summary. The problem is finding it in the ten seconds before the conversation moves on. The note names and the line are examples.
 Next: Here is the small bar that answers it.`,
 
@@ -369,8 +369,6 @@ Next: And the question after "is it safe": what does it cost?`,
 → Step 2: what it pays for. Bee's three AI jobs in a meeting: turning speech into text, finding the right note, and writing the tip. The allowance is meant for projects like this one.
 Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
 Next: Last, it fits with the tools you already use.`,
-  "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
-Next: Same as the slide before.`,
   "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
 Bee connects to the tools you already have.
 → Step 1: connectors: Eva for your team's work, vmem for your history, or any tool that speaks the MCP connector standard.

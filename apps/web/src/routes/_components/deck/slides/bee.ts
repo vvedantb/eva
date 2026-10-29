@@ -14,7 +14,6 @@ import { BeeCost } from "./bee/b13-cost";
 import { BeeCompare } from "./bee/b14-compare";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
-import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
 
 /**
  * Bee, for colleagues who are not technical: the problem, what it does in a
@@ -42,14 +41,8 @@ const SLIDES: DeckSlide[] = [
     title: "The problem",
     Component: BeeProblem,
     steps: 2,
-  },
-  // Draft for review: keep, merge into the slide above, or delete.
-  {
-    id: "bee-draft-problem",
-    title: "Draft: problem, the clock",
-    Component: DraftProblemClock,
-    steps: 2,
-    autoMs: [1100, 4500],
+    // The clock runs while you search: leave time to watch it.
+    autoMs: [1100, 3000],
   },
   {
     id: "bee-03-notch",
