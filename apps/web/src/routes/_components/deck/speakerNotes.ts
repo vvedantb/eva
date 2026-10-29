@@ -327,7 +327,7 @@ Bee hears it, searches, and puts a short answer in the bar.
 → Then it just moves on to the next one, and the next.
 I'm not gonna read these out — honestly I don't know half of this stuff myself, which is kinda the point.
 You don't need to be the expert in the room — Bee looks it up and shows you where the answer came from.
-And this actually happened to me, with Krzys.
+And having Bee would have been useful during a recent chat with Krzys.
 
 If asked: the questions are examples, but the answers on screen are real, checked in October 2026 — the sources are the chips under each one.`,
 
