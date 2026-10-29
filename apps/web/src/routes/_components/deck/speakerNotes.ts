@@ -359,20 +359,20 @@ Picture the room from above — three people, each with Bee on their own laptop.
 → Then Jo, then Sam, and so on — and every line lands in that person's colour.
 That's why everyone in the meeting needs Bee running on their own laptop.
 → Cos each line comes from that person's own microphone, so the name's never a guess.
-Normally, tools that label speakers from one shared recording have to guess who's talking, and in my experience Teams gets that wrong quite a lot.
 So you might be thinking — Teams already does transcripts, so what's the difference?
 
-If asked: the Teams bit is my own experience, we haven't measured it. The catch is that people without Bee aren't in the transcript, and the summary says it's partial. There's no bot in the call, and nothing joins automatically. The names and lines are examples.`,
+If asked: the catch is that people without Bee aren't in the transcript, and the summary says it's partial. There's no bot in the call, and nothing joins automatically. The names and lines are examples.`,
 
   "bee-14-compare": `So Teams already makes a transcript, so it's fair to ask what Bee actually adds.
 This is just how each one works.
-→ Who said what — Teams works out the speakers from the shared meeting audio, but Bee takes each line from that person's own mic, so it knows rather than guesses.
+→ What was said — to be fair, Teams gets the names right, but it mishears some of the words, so the transcript isn't always what people actually said.
+Bee takes each line from that person's own mic, up close, so it's working from clear audio.
 → During the meeting — Teams gives you a live transcript to read, Bee gives you one or two short tips from your notes and the web, only when they help.
 → And your notes — Teams keeps transcripts in Microsoft 365, Bee keeps your notes and summaries on your own computer.
 So Teams is fine as a record — Bee's more about helping you while you're actually in the conversation.
 Which brings up the obvious question — what about privacy?
 
-If asked: this compares how they work, it's not an accuracy test, and we haven't measured Teams. Copilot and some Teams Rooms setups add more, so I'd call it "the standard Teams transcript".`,
+If asked: the misheard words bit is my own experience — I haven't measured Teams or Bee for accuracy, so I wouldn't claim Bee is more accurate, just that it's working from clearer audio. Copilot and some Teams Rooms setups add more, so I'd call it "the standard Teams transcript".`,
 
   "bee-08-private": `So privacy — Bee was built to be safe to just leave on.
 → Say you start sharing your screen — the bar just disappears from what everyone else sees, so you're never accidentally showing a tip.

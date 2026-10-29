@@ -16,9 +16,9 @@ interface Row {
 /** How each one works, not a measured accuracy test. */
 const ROWS: readonly Row[] = [
   {
-    topic: "Who said what",
-    teams: "Worked out from the shared audio",
-    bee: "Each person's own microphone",
+    topic: "What was said",
+    teams: "Right names, but some words misheard",
+    bee: "Clear audio from each person's own mic",
   },
   {
     topic: "During the meeting",
