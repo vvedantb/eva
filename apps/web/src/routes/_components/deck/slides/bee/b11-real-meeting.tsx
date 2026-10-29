@@ -1,5 +1,5 @@
-import { IconSearch } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
+import type { Transition } from "motion/react";
 import {
   Accent,
   Shell,
@@ -9,150 +9,246 @@ import {
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import { DUR, EASE, cueTransition } from "../../_components/motion";
-import { BEE, BEE_SPRING, BeeIsland } from "./_parts/BeeIsland";
-import { SourceChip } from "./_parts/BeeBits";
+import { BeeIsland, BeeTip } from "./_parts/BeeIsland";
+import { BEE_CARD, SourceChip } from "./_parts/BeeBits";
 
 const FIRST = 1;
 const SECOND = 2;
-const SAVED = 3;
+const RESULT = 3;
 
-interface Exchange {
-  step: number;
+interface Round {
   asked: string;
+  /** What you type into Google, one search after another. */
+  searches: readonly string[];
   answer: string;
   source: string;
 }
 
-/**
- * Two questions from a real meeting with Krzys. The answers are checked
- * against each product's own documentation (October 2026).
- */
-const EXCHANGES: readonly Exchange[] = [
+/** The two questions from the meeting with Krzys; answers as on the slide before. */
+const ROUNDS: readonly Round[] = [
   {
-    step: FIRST,
     asked: "Can Convex run more than one local deployment, so Eva can use it?",
+    searches: [
+      "convex local deployment",
+      "convex multiple local deployments",
+      "convex dev two projects same machine",
+      "convex agent mode",
+    ],
     answer:
       "Yes. Each copy of the project gets its own local deployment, and agent mode starts one with no login",
     source: "docs.convex.dev",
   },
   {
-    step: SECOND,
     asked: "Can you pass MCP servers into the Claude Agent SDK?",
+    searches: [
+      "claude agent sdk mcp",
+      "claude agent sdk mcpServers option",
+      "agent sdk typescript mcp server config",
+      "claude agent sdk custom tools",
+    ],
     answer:
       "Yes. Pass them in the mcpServers option: a local command, a web address, or one inside your own app",
     source: "platform.claude.com",
   },
 ];
 
+/**
+ * Seconds each search takes. Within it, as fractions: type the query, wait
+ * for the page, show the results, read them, then clear for the next one.
+ */
+const PER_SEARCH = 2.6;
+const TYPED = 0.4;
+const LOADED = 0.46;
+const SHOWN = 0.52;
+const CLEARED = 0.93;
+
+/** Same timing for a query and its results, so results never show mid-typing. */
+function searchTransition(index: number, times: number[]): Transition {
+  return {
+    duration: PER_SEARCH,
+    delay: 0.3 + index * PER_SEARCH,
+    times,
+    ease: "linear",
+  };
+}
+
 const SHOTS: readonly CameraShot[] = [
-  { rotateY: 6, translateZ: -30, x: 40 },
-  { rotateY: 3 },
-  { rotateY: 0, y: -6 },
-  { rotateY: -4, translateZ: -30, x: -30 },
+  { rotateY: 4, translateZ: -40 },
+  { rotateY: 0, translateZ: -10 },
+  { rotateY: 0, translateZ: -10 },
+  { rotateY: 0, translateZ: 10 },
 ];
 
-function Question({ exchange }: { exchange: Exchange }) {
-  const step = useDeckStep();
-  const shown = step >= exchange.step;
-  const current = step === exchange.step;
+const LABEL = "text-sm font-semibold tracking-[0.12em] uppercase";
+
+/** One round of searching by hand: type a query, skim the results, clear, try again. */
+function ByHand({ round }: { round: Round }) {
   return (
-    <m.div
-      className="rounded-[24px] rounded-bl-md px-6 py-5 text-[21px] leading-snug font-medium"
-      style={{ background: BEE.surface, color: BEE.text }}
-      initial={{ opacity: 0, x: -20 }}
-      animate={
-        shown ? { opacity: current ? 1 : 0.45, x: 0 } : { opacity: 0, x: -20 }
-      }
-      transition={cueTransition(shown, 0.1, BEE_SPRING)}
-    >
-      “{exchange.asked}”
-    </m.div>
+    <div className={`${BEE_CARD} flex h-[290px] flex-col gap-4 p-6`}>
+      <div className="relative flex h-14 items-center gap-3 rounded-full px-5 ring-1 ring-[#2a1e0c]/15">
+        <img src="/brands/google.svg" alt="" className="size-6" />
+        {round.searches.map((query, index) => {
+          const last = index === round.searches.length - 1;
+          return (
+            <m.span
+              key={query}
+              className="absolute left-14 overflow-hidden text-[17px] whitespace-nowrap text-[#2a1e0c]"
+              initial={{ opacity: 0, clipPath: "inset(0 100% 0 0)" }}
+              animate={{
+                opacity: last ? [0, 1, 1] : [0, 1, 1, 1, 0],
+                clipPath: last
+                  ? [
+                      "inset(0 100% 0 0)",
+                      "inset(0 100% 0 0)",
+                      "inset(0 0% 0 0)",
+                    ]
+                  : [
+                      "inset(0 100% 0 0)",
+                      "inset(0 100% 0 0)",
+                      "inset(0 0% 0 0)",
+                      "inset(0 0% 0 0)",
+                      "inset(0 0% 0 0)",
+                    ],
+              }}
+              transition={searchTransition(
+                index,
+                last ? [0, 0.02, TYPED] : [0, 0.02, TYPED, CLEARED, 1],
+              )}
+            >
+              {query}
+            </m.span>
+          );
+        })}
+      </div>
+      {/* Each query's results appear only once it is typed and the page has loaded. */}
+      <div className="relative flex-1">
+        {round.searches.map((query, index) => {
+          const last = index === round.searches.length - 1;
+          return (
+            <m.div
+              key={query}
+              className="absolute inset-0 flex flex-col gap-3 px-2"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{
+                opacity: last ? [0, 0, 1] : [0, 0, 1, 1, 0],
+                y: last ? [6, 6, 0] : [6, 6, 0, 0, 0],
+              }}
+              transition={searchTransition(
+                index,
+                last ? [0, LOADED, SHOWN] : [0, LOADED, SHOWN, CLEARED, 1],
+              )}
+            >
+              {[0.9, 0.7, 0.8, 0.6].map((width, row) => (
+                <div key={row} className="flex flex-col gap-1.5">
+                  <span
+                    className="h-3 rounded-full bg-[#3b6fd4]/40"
+                    style={{ width: `${width * 60}%` }}
+                  />
+                  <span
+                    className="h-2.5 rounded-full bg-[#2a1e0c]/10"
+                    style={{ width: `${width * 100}%` }}
+                  />
+                </div>
+              ))}
+            </m.div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
 export function BeeRealMeeting() {
   const step = useDeckStep();
-  const active =
-    EXCHANGES.findLast((exchange) => step >= exchange.step) ?? null;
-  const saved = step >= SAVED;
+  const started = step >= FIRST;
+  const result = step >= RESULT;
+  const index = step >= SECOND ? 1 : 0;
+  const round = ROUNDS[index];
 
   return (
     <Shell className="py-14">
       <Title size="md">
         A real meeting, with <Accent>Krzys</Accent>
       </Title>
-
-      <Camera shots={SHOTS} className="mt-8">
-        <div className="relative flex h-[440px] w-[1088px] items-start gap-10">
-          {/* What was asked, in order. */}
-          <div className="flex w-[440px] flex-col gap-4">
-            <div className="text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase">
-              Asked in the meeting
-            </div>
-            {EXCHANGES.map((exchange) => (
-              <Question key={exchange.step} exchange={exchange} />
-            ))}
-          </div>
-
-          {/* What Bee would have shown, while the meeting carried on. */}
-          <div className="flex flex-col gap-4">
-            <div className="text-sm font-semibold tracking-[0.12em] text-[#a15f00] uppercase">
-              What Bee would have answered
-            </div>
-            <BeeIsland
-              status={active ? "Searched the web" : "Listening…"}
-              listening={!active}
-              state={saved ? "done" : active ? "searching" : "listening"}
-              open={Boolean(active)}
-              openDelay={0.3}
-              width={600}
+      <Camera shots={SHOTS} className="mt-6">
+        <div className="flex w-[1088px] flex-col items-center gap-7">
+          {/* The question being asked right now. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={round.asked}
+              className="text-[24px] font-medium text-[#2a1e0c]/75"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: started ? 1 : 0, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: DUR.base, ease: EASE.out }}
             >
-              <AnimatePresence mode="wait" initial={false}>
-                {active ? (
+              “{round.asked}”
+            </m.div>
+          </AnimatePresence>
+
+          <div className="flex w-full items-start justify-center gap-10">
+            {/* By hand: one Google search after another. */}
+            <div className="flex w-[480px] flex-col gap-3">
+              <div className={`${LABEL} text-[#2a1e0c]/50`}>By hand</div>
+              {started ? (
+                <ByHand key={round.asked} round={round} />
+              ) : (
+                <div className={`${BEE_CARD} h-[290px]`} />
+              )}
+            </div>
+
+            {/* With Bee: it searches for you; the answer arrives while you are still typing. */}
+            <div className="flex w-[480px] flex-col gap-3">
+              <div className={`${LABEL} text-[#a15f00]`}>
+                What Bee would have answered
+              </div>
+              <BeeIsland
+                status={started ? "Searched the web" : "Listening…"}
+                listening={!started}
+                state={started ? "done" : "listening"}
+                open={started}
+                openDelay={1.2}
+                width={480}
+              >
+                <AnimatePresence mode="wait" initial={false}>
                   <m.div
-                    key={active.step}
-                    initial={{ opacity: 0, y: 10 }}
+                    key={round.answer}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    transition={{ ...BEE_SPRING, delay: 0.45 }}
+                    transition={{
+                      duration: DUR.base,
+                      delay: index === 0 ? 0 : 1.2,
+                    }}
                   >
-                    <p className="m-0 text-[21px] leading-snug font-medium text-pretty">
-                      {active.answer}
-                    </p>
-                    <div className="mt-4">
-                      <SourceChip
-                        label={active.source}
-                        domain={active.source}
-                      />
-                    </div>
+                    <BeeTip shown={started} delay={index === 0 ? 1.5 : 0}>
+                      {round.answer}
+                    </BeeTip>
+                    <span className="mt-3 inline-block">
+                      <SourceChip label={round.source} domain={round.source} />
+                    </span>
                   </m.div>
-                ) : null}
-              </AnimatePresence>
-            </BeeIsland>
-
-            {/* What it would have saved. */}
-            <m.div
-              className="mt-2 flex items-center gap-5"
-              initial={{ opacity: 0, y: 16 }}
-              animate={saved ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
-              transition={cueTransition(saved, 0.25, {
-                duration: DUR.hero,
-                ease: EASE.expo,
-              })}
-            >
-              <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#fabe28]/30 text-[#7a4800]">
-                <IconSearch size={32} />
-              </span>
-              <span>
-                <span className="block text-4xl font-semibold text-[#2a1e0c]">
-                  Bee would have answered before I finished typing
-                </span>
-                <span className="block text-xl text-[#2a1e0c]/60">
-                  Instead, I searched the web mid-meeting
-                </span>
-              </span>
-            </m.div>
+                </AnimatePresence>
+              </BeeIsland>
+            </div>
           </div>
+
+          <m.div
+            className="flex flex-col items-center gap-1"
+            initial={{ opacity: 0, y: 12 }}
+            animate={result ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+            transition={cueTransition(result, 0.2, {
+              duration: DUR.hero,
+              ease: EASE.expo,
+            })}
+          >
+            <span className="text-4xl font-semibold text-[#2a1e0c]">
+              Bee would have answered before I finished typing
+            </span>
+            <span className="text-xl text-[#2a1e0c]/60">
+              Instead, I searched the web mid-meeting
+            </span>
+          </m.div>
         </div>
       </Camera>
     </Shell>

@@ -326,10 +326,10 @@ Detail: the questions are invented examples; the answers are real. DSPT: Digital
 Next: Here is what that looked like in a real meeting.`,
 
   "bee-11-real-meeting": `This is not a made-up example. It happened in a meeting with Krzys.
-→ Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
-→ Step 2: then whether the Claude Agent SDK can take MCP servers. Bee would have answered: yes, through the mcpServers option.
-→ Step 3: instead, I typed and searched the web myself while everyone waited. Having it listen, search in the background and show the answer would have saved me that.
-Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The time was not measured, so do not quote a number.
+→ Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. On the left, what I did by hand: one Google search after another, skimming the results each time. On the right, what Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
+→ Step 2: then whether the Claude Agent SDK can take MCP servers. Same again: more searches by hand, while Bee would have answered: yes, through the mcpServers option.
+→ Step 3: Bee would have answered before I finished typing. Instead, I searched the web mid-meeting while everyone waited.
+Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The searches shown are illustrations, not a log of what I typed. The time was not measured, so do not quote a number.
 Next: And when the meeting ends, the summary writes itself.`,
 
   "bee-06-summary": `Say the headline (no title on screen): "The summary writes itself."
@@ -370,8 +370,6 @@ Next: And the question after "is it safe": what does it cost?`,
 Detail: the $500 a month figure is from the presenter, October 2026. We have not measured what one meeting costs, so do not quote a per-meeting figure.
 Next: Last, it fits with the tools you already use.`,
   "bee-draft-problem": `Draft. Same story as the slide before, told as a scene: Alex asks, you search your own files by hand, and the meeting clock keeps running; the camera ends in close on the clock.
-Next: Same as the slide before.`,
-  "bee-draft-race": `Draft. Both Krzys questions, side by side, one after the other: by hand, you type one Google search after another and skim the results; with Bee, it searches for you and the answer appears in the bar while you are still typing. No times are shown, because none were measured.
 Next: Same as the slide before.`,
   "bee-09-tools": `Say the headline (no title on screen): "Works with your tools."
 Bee connects to the tools you already have.

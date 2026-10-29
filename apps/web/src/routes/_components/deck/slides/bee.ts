@@ -15,7 +15,6 @@ import { BeeCompare } from "./bee/b14-compare";
 import { BeeTools } from "./bee/b09-tools";
 import { BeeClose } from "./bee/b10-close";
 import { DraftProblemClock } from "./bee/drafts/d02-problem-clock";
-import { DraftKrzysRace } from "./bee/drafts/d08-krzys-race";
 
 /**
  * Bee, for colleagues who are not technical: the problem, what it does in a
@@ -79,15 +78,6 @@ const SLIDES: DeckSlide[] = [
     id: "bee-11-real-meeting",
     title: "A real meeting",
     Component: BeeRealMeeting,
-    steps: 3,
-    // Each answer stays long enough to read aloud.
-    autoMs: [1100, 5500, 5000],
-  },
-  // Draft for review: keep, merge into the slide above, or delete.
-  {
-    id: "bee-draft-race",
-    title: "Draft: Krzys, the race",
-    Component: DraftKrzysRace,
     steps: 3,
     // Each round types four searches (about 10.7 s) before moving on.
     autoMs: [1100, 11400, 11400],
