@@ -323,12 +323,12 @@ Next: And when your notes do not have the answer?`,
 → Step 5: "What is the FNC rate this year?" £267.68 a week from 1 April 2026, paid by the NHS straight to the nursing home.
 → Step 6: its source. A web answer always shows where it came from.
 Detail: the questions are invented examples; the answers are real. DSPT: Digital Care Hub (Better Security, Better Care), checked October 2026; it is a contract requirement for NHS-funded services, and whether it is mandatory for every care provider is disputed, so do not claim more. CHC in any setting: National Framework for NHS Continuing Healthcare, GOV.UK. FNC: GOV.UK, "Better community care thanks to nursing funding boost", March 2026; the higher rate is £368.24 a week.
-Next: Here is what that looked like in a real meeting.`,
+Next: Here is what that looked like in a real chat.`,
 
-  "bee-11-real-meeting": `This is not a made-up example. It happened in a meeting with Krzys.
+  "bee-11-real-meeting": `This is not a made-up example. It happened in a casual chat with Krzys.
 → Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. On the left, what I did by hand: one Google search after another, skimming the results each time. On the right, what Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
 → Step 2: then whether the Claude Agent SDK can take MCP servers. Same again: more searches by hand, while Bee would have answered: yes, through the mcpServers option.
-→ Step 3: Bee would have answered before I finished typing. Instead, I searched the web mid-meeting while everyone waited.
+→ Step 3: Bee would have answered before I finished typing. Instead, I had to move my fingers and search, like it was 2015, while Krzys waited.
 Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The searches shown are illustrations, not a log of what I typed. The time was not measured, so do not quote a number.
 Next: And when the meeting ends, the summary writes itself.`,
 

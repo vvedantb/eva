@@ -76,7 +76,7 @@ const SLIDES: DeckSlide[] = [
   },
   {
     id: "bee-11-real-meeting",
-    title: "A real meeting",
+    title: "A convo with Krzys",
     Component: BeeRealMeeting,
     steps: 3,
     // Each round types four searches (about 10.7 s) before moving on.

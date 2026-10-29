@@ -24,7 +24,7 @@ interface Round {
   source: string;
 }
 
-/** The two questions from the meeting with Krzys; answers as on the slide before. */
+/** The two questions from a chat with Krzys; answers checked as in the speaker note. */
 const ROUNDS: readonly Round[] = [
   {
     asked: "Can Convex run more than one local deployment, so Eva can use it?",
@@ -168,7 +168,7 @@ export function BeeRealMeeting() {
   return (
     <Shell className="py-14">
       <Title size="md">
-        A real meeting, with <Accent>Krzys</Accent>
+        A convo with <Accent>Krzys</Accent>
       </Title>
       <Camera shots={SHOTS} className="mt-6">
         <div className="flex w-[1088px] flex-col items-center gap-7">
@@ -246,7 +246,7 @@ export function BeeRealMeeting() {
               Bee would have answered before I finished typing
             </span>
             <span className="text-xl text-[#2a1e0c]/60">
-              Instead, I searched the web mid-meeting
+              Instead, I had to move my fingers and search, like it was 2015
             </span>
           </m.div>
         </div>
