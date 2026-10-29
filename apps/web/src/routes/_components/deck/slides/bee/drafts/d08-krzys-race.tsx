@@ -242,7 +242,7 @@ export function DraftKrzysRace() {
               ease: EASE.expo,
             })}
           >
-            Would have saved me typing and searching myself
+            Would have answered before I finished typing
           </m.div>
         </div>
       </Camera>
