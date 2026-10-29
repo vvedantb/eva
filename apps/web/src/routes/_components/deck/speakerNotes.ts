@@ -291,9 +291,8 @@ Let me start with why I built it.`,
   "bee-02-problem": `So I'm pretty sure everyone's been in this meeting.
 → Someone goes, "Last time we agreed something on the provider onboarding. What was it?"
 And you know the answer's somewhere — it's in your notes, or in last meeting's summary.
-And you can see the clock's already running.
 → So you start searching by hand, typing "provider… onboarding… notes…", and your notes are all over the place.
-And meanwhile the meeting just moves on without you.
+And meanwhile the clock's running, and the meeting just moves on without you.
 So the problem isn't that the answer doesn't exist — it's finding it in those ten seconds before the conversation's moved on.
 And that's exactly what Bee's for.
 

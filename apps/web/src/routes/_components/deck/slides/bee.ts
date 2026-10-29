@@ -42,7 +42,7 @@ const SLIDES: DeckSlide[] = [
     Component: BeeProblem,
     steps: 2,
     // The clock runs while you search: leave time to watch it.
-    autoMs: [1100, 3000],
+    autoMs: [1100, 4500],
   },
   {
     id: "bee-03-notch",
@@ -107,7 +107,7 @@ const SLIDES: DeckSlide[] = [
     title: "Already paid for",
     Component: BeeCost,
     steps: 2,
-    autoMs: [1100, 3000],
+    autoMs: [1100, 4500],
   },
   { id: "bee-09-tools", title: "Your tools", Component: BeeTools, steps: 2 },
   {
