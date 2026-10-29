@@ -328,7 +328,7 @@ Next: Here is what that looked like in a real chat.`,
   "bee-11-real-meeting": `This is not a made-up example. It happened in a casual chat with Krzys.
 → Step 1: I asked whether Convex can run more than one local deployment, so Eva could use it. On the left, what I did by hand: one Google search after another, skimming the results each time. On the right, what Bee would have answered on screen: yes, each copy of the project gets its own, and agent mode starts one with no login.
 → Step 2: then whether the Claude Agent SDK can take MCP servers. Same again: more searches by hand, while Bee would have answered: yes, through the mcpServers option.
-→ Step 3: Bee would have answered before I finished typing. Instead, I had to move my fingers and search, like it was 2015, while Krzys waited.
+→ Step 3: Bee would have answered before I finished typing. Instead, I did it the old-fashioned way: typing, while Krzys waited.
 Detail: both answers are checked against the Convex agent-mode documentation and the Claude Agent SDK TypeScript reference, October 2026. The searches shown are illustrations, not a log of what I typed. The time was not measured, so do not quote a number.
 Next: And when the meeting ends, the summary writes itself.`,
 

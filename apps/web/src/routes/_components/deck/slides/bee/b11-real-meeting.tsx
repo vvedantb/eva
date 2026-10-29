@@ -246,7 +246,7 @@ export function BeeRealMeeting() {
               Bee would have answered before I finished typing
             </span>
             <span className="text-xl text-[#2a1e0c]/60">
-              Instead, I had to move my fingers and search, like it was 2015
+              Instead, I did it the old-fashioned way: typing
             </span>
           </m.div>
         </div>
