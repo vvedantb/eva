@@ -321,16 +321,15 @@ But what if the answer's not in your notes at all?
 If asked: in the actual app, the words Bee hears are never shown on screen, only the tip — the phrase is on this slide just to explain it. Grok turns the speech into text, Jev does the ranking, and GPT-6 Luna writes the tip. The notes and the tip are examples.`,
 
   "bee-05-web": `So when the answer's not in your notes, Bee just looks it up on the web.
-And honestly, I'm a developer, so I don't know the answers to half of these myself — which is kinda the point.
-→ These are just the sort of questions that come up on our calls with providers.
-Someone asks one, and Bee searches and puts a short answer in the bar.
+→ Say someone in the meeting asks a question nobody knows off the top of their head.
+Bee hears it, searches, and puts a short answer in the bar.
 → And underneath you get the sources, so you can see exactly where it came from and click through to check.
-→ Then it moves on to the next one, and the next.
-I'm not gonna read them all out — you can see them on screen.
-So the point is, you don't need to be the expert in the room — Bee looks it up and shows you where the answer came from.
+→ Then it just moves on to the next one, and the next.
+I'm not gonna read these out — honestly I don't know half of this stuff myself, which is kinda the point.
+You don't need to be the expert in the room — Bee looks it up and shows you where the answer came from.
 And this actually happened to me, with Krzys.
 
-If asked: the questions are examples, but the answers on screen are real, checked in October 2026 — the sources are the chips under each one. If anyone asks about the details, I'd point them to those links, or to someone on the commissioning side.`,
+If asked: the questions are examples, but the answers on screen are real, checked in October 2026 — the sources are the chips under each one.`,
 
   "bee-11-real-meeting": `So this one's a real example — it was just a casual chat with Krzys.
 → I asked whether Convex can run more than one local deployment, so Eva could use it.
