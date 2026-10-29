@@ -242,7 +242,7 @@ export function DraftKrzysRace() {
               ease: EASE.expo,
             })}
           >
-            Would have answered before I finished typing
+            Bee would have answered before I finished typing
           </m.div>
         </div>
       </Camera>

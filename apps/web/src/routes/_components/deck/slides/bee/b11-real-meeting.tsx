@@ -145,7 +145,7 @@ export function BeeRealMeeting() {
               </span>
               <span>
                 <span className="block text-4xl font-semibold text-[#2a1e0c]">
-                  Would have answered before I finished typing
+                  Bee would have answered before I finished typing
                 </span>
                 <span className="block text-xl text-[#2a1e0c]/60">
                   Instead, I searched the web mid-meeting
