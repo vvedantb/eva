@@ -370,10 +370,10 @@ And after "is it safe", the next question's always — what does it cost?`,
 → And that's what Bee runs on — turning speech into text, finding the right note, and writing the tip.
 That allowance is meant for exactly this kind of project.
 So trying it doesn't cost us anything we're not already paying for.
-And it fits in with the tools you already use.`,
+And it fits in with the connectors you already use.`,
 
-  "bee-09-tools": `So Bee plugs into the tools you already use.
-→ There's connectors — Eva for the team's work, vmem for your history, or basically any tool that speaks MCP, which is just a standard way for AI tools to plug into other apps.
+  "bee-09-tools": `So Bee plugs into the connectors you already use.
+→ Eva for the team's work, vmem for your history, or basically any app that speaks MCP, which is just a standard way for AI to plug into other apps.
 → And it reads the meeting details from Outlook and Teams on your own computer, so it knows which meeting you're in and who's in it.
 So you don't have to tell it anything — it already knows the context.
 Now let me step back for a sec — why's Bee built this way?`,
