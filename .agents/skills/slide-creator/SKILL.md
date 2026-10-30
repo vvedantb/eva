@@ -84,7 +84,7 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
 - **Builds play on their own.** The deck auto-plays each step (1.1 s first,
   then 1.5 s apart). When a step needs reading or talking time, set `autoMs`
   on the slide, one value per step. Do not add manual slides.
-- Next and back move whole slides. Back lands on the finished slide.
+- Next and back move whole slides. In the presenter window both start the slide from step 0 and the build replays; on the stage, back lands on the finished slide.
 - Use a `Camera` shot per step. Zoom in on small UI (a notch, a chip, a
   button) when it is the point of the step, then pull back.
 - Use `layoutId` morphs (`SHARED` ids, `morph: true` on the second slide) for

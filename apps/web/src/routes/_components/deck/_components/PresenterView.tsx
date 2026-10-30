@@ -49,11 +49,12 @@ export function PresenterView({
   const stage = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
 
-  // Next and back move whole slides, as on the stage: the build plays itself.
+  // Next and back move whole slides, each starting from its first step: the
+  // stage plays the build itself.
   const slideNav: DeckNavigation = {
     ...nav,
     next: () => nav.goTo(slide + 1),
-    prev: nav.prevSlide,
+    prev: () => nav.goTo(slide - 1),
   };
 
   const { entry, step, total } = nav;
@@ -123,11 +124,6 @@ export function PresenterView({
           <span className="min-w-0 flex-1 truncate text-base font-medium text-white/85">
             {entry.title}
           </span>
-          {entry.steps > 0 && (
-            <span className="shrink-0 rounded-full bg-white/[0.07] px-3 py-1 font-mono text-xs tabular-nums text-white/55">
-              step {step} of {entry.steps}
-            </span>
-          )}
           {/* `icon` not `icon-sm`: 40×40 each, and gap-2 keeps the two targets
               clear of one another. The Button variant already carries the
               house press (scale 0.96 on named properties). */}

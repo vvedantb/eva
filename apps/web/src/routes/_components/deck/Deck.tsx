@@ -148,9 +148,13 @@ export function Deck({
     : presenterNav;
 
   // A timer is outside React, so this is an effect: one pending step at a time,
-  // only while moving forward, and never in a follower's window.
+  // only while moving forward (or from the start of a slide reached by going
+  // back), and never in a follower's window.
   const autoNext =
-    autoBuild && !share.isFollower && direction > 0 && step < entry.steps;
+    autoBuild &&
+    !share.isFollower &&
+    (direction > 0 || step === 0) &&
+    step < entry.steps;
   const advance = nav.next;
   useEffect(() => {
     if (!autoNext) return;
