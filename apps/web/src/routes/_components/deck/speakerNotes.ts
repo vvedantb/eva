@@ -295,7 +295,7 @@ So the problem isn't that the answer doesn't exist — it's finding it in those 
 And that's exactly what Bee's for.`,
 
   "bee-03-notch": `So this is where Bee lives — a small bar at the top centre of your screen, kinda like the notch on a phone.
-→ During the call it's just listening — the little bee flutters and the bars move, and that's it, it stays out of your way.
+→ During the call it's just listening.
 → Then when it hears something it can actually help with, the bar grows into a short answer, and it tells you which note it came from.
 It's only ever one or two short tips, never a wall of text, cos you're meant to be in the meeting, not reading.
 And if you want it gone, you just press Cmd or Ctrl, Shift, Space and it hides.
