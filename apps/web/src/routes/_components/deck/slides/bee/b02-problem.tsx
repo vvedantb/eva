@@ -127,7 +127,7 @@ export function BeeProblem() {
                 ease: EASE.out,
               })}
             >
-              …and the meeting moves on
+              …and everyone waits for you
             </m.span>
           </m.div>
 
