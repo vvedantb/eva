@@ -427,17 +427,15 @@ Next: those sixteen accounts did not arrive at once, and the timing matters.`,
 
   "a04-adoption": `Adoption was not announced; it followed the tool becoming easy enough to use.
 → Step 1: July onward lights and the earlier months dim. The step change is July, when work moved to the cloud.
-→ Step 2: the three figures count up. Read them as sentences: 13 people beyond the developer have raised work in Eva; 390 pieces of work were raised against CarePulse; 225 sessions ended in a bundle of changes ready to review. The tool left one person's hands.
 Detail: from July, monthly sessions roughly tripled and stayed there. June is genuinely zero, not missing data, and the footnote says so. Volunteer the gap, because that is what makes the rest credible.
-Figures: sessions per month in 2026: Jan 13, Feb 11, Mar 31, Apr 28, May 9, Jun 0, Jul 75, Aug 109, Sep 91. 13 people, 390 pieces of work and 225 sessions ready to review, to 16 September 2026.
+Figures: sessions per month in 2026: Jan 13, Feb 11, Mar 31, Apr 28, May 9, Jun 0, Jul 75, Aug 109, Sep 91. To 16 September 2026.
 Next: four of the people behind those numbers, and what they built.`,
 
   "a06-impact": `Three things changed, and none of them is typing speed.
 → Step 1: who can ask. A request, a queue and a developer became anyone describing what they need in their own words.
 → Step 2: where work runs. One laptop at a time became cloud workspaces running many jobs at once.
-→ Step 3: what a person does, and the two counts beside it. Writing every line became directing the work and guarding what is hard to undo.
+→ Step 3: what a person does. Writing every line became directing the work and guarding what is hard to undo.
 Detail: the rows carry no category label, so name each as it lands. Eva was built to remove the wait between someone needing something and it being built. Dwell on the third row: it is the change that makes the others safe.
-Figures: 13 people other than the developer have raised work in Eva; 390 pieces of that work were for CarePulse. Eva's own records to 16 September 2026.
 Next: what that looks like for the person using it.`,
 
   "a07-how": `The whole loop in one pass, so nobody has to guess what using the tool looks like.
@@ -506,7 +504,7 @@ Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
 
   "a15-framework": `This is the map an assessor reads: nine capabilities, each evidenced by a slide already shown.
-→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 27, with 25, 30 and 39. Debugging: slides 28 and 29. A skill beyond coding: slide 33, measurement, and slides 41 to 42, Jev. Improves the process: slides 34 to 37, and 47. Mentors and onboards: slide 40. Business and user empathy: slides 42 to 44. Identifies work to do: slides 32 and 48.
+→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 26, with 24, 29 and 38. Debugging: slides 27 and 28. A skill beyond coding: slide 32, measurement, and slides 40 to 41, Jev. Improves the process: slides 33 to 36, and 46. Mentors and onboards: slide 39. Business and user empathy: slides 41 to 43. Identifies work to do: slides 31 and 47.
 → Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
 Figures: 4,732 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.
@@ -547,10 +545,10 @@ Next: after the peak came the quietest quarter, and it was not a slow one.`,
 → Step 3: Testing Arena opened to everyone, so trying a change stopped being a developer-only act.
 Detail: 943 changes is the lowest quarter of the year, and that is the point: the months went on making existing work solid and shared. If asked whether momentum was lost, the next chapter was the biggest of the three.
 Figures: April 377, May 336, June 230, totalling 943 changes shipped. Documents with comments, suggestions and version history 10 June 2026; projects roadmap 17 June 2026; Testing Arena opened to everyone 17 June 2026.
-Next: a short pause, because at this point the project was not yet called Eva.`,
+Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 27 takes that apart phase by phase.
+→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 26 takes that apart phase by phase.
 → Step 2: August, 877 changes. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September, 102 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: September is a part month, so do not read the drop as a slowdown. Nothing here adds a new thing to do; it makes the existing things safe to depend on.
@@ -559,23 +557,17 @@ Next: the same quarter, seen from inside one session.`,
 
   "annual-b07-volume": `The year was not steady, and its shape is the map for the three chapters that follow.
 → Step 1: March and July stay lit; name them aloud. March was the surface being built; July was the cutover that moved every workspace to a new engine.
-→ Step 2: the total counts up. 4,732 changes across nine months, roughly nineteen a day including weekends.
+→ Step 2: the whole year relights.
 Detail: the troughs matter as much as the peaks. June is the low point of the consolidation quarter, and September only looks thin because it stops on the 16th. Say the part-month caveat aloud rather than leaving it to the footnote.
-Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 102. Total 4,732 changes shipped, September to the 16th.
+Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 102. September to the 16th.
 Next: the first peak, and what it built.`,
 
-  "annual-b08-rename": `A breath between chapters: the project people now call Eva spent its first five months as Conductor.
-→ Step 1: Conductor dissolves into Eva. Say only that the name changed when the repository moved.
-→ Step 2: the two dates. The rename on 3 June and the internal packages catching up on 24 July.
-Detail: keep this short; it is a pause, not an argument. If it earns a sentence, the six-week gap was deliberate: renaming every package is a wide, risky change, better done on its own than mixed into feature work.
-Figures: renamed from Conductor to Eva when the repository moved on 3 June 2026; internal packages renamed from @conductor/* to @eva/* on 24 July 2026.
-Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-d01-security": `Signing in was never the problem; knowing whose data you were seeing once inside was, so everything built was audited.
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 24 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 23 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -678,7 +670,7 @@ Next: letting other tools in is only safe if the locks are designed in.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 32 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 31 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 

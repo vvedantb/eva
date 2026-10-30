@@ -1,5 +1,4 @@
 import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
-import { CountRoll } from "../../_components/motion";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
 
@@ -19,15 +18,6 @@ export function AnnualQ3() {
             <Title size="md">Make it dependable</Title>
           </Reveal>
         </div>
-
-        <Reveal delay={0.3} className="text-right">
-          <div className="text-6xl leading-none font-semibold tabular-nums text-white">
-            <CountRoll value={2031} delay={0.35} duration={1.4} />
-          </div>
-          <div className="mt-4 text-base text-white/50">
-            changes shipped, July to September
-          </div>
-        </Reveal>
       </div>
 
       <AnnABeats beats={BEATS} firstStep={1} liveLast className="mt-40" />

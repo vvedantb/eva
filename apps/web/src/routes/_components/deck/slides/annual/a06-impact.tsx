@@ -1,7 +1,6 @@
 import { IconArrowRight } from "@tabler/icons-react";
 import { m } from "motion/react";
 import {
-  Accent,
   Card,
   Reveal,
   Shell,
@@ -9,7 +8,6 @@ import {
   useDeckStep,
 } from "../../_components/DeckPrimitives";
 import {
-  CountRoll,
   DUR,
   EASE,
   MaskedText,
@@ -52,7 +50,6 @@ const SHIFTS: Shift[] = [
  * step with the row's `w-[330px]` and `gap-8`.
  */
 const ARROW_W = 24;
-const AFTER_COLUMN_X = 330 + 32 + ARROW_W + 32;
 
 /** Row centres on the 1280×720 stage, under the after-column: a light per step. */
 const LIGHT = [
@@ -137,27 +134,6 @@ export function AnnualImpact() {
           <ShiftRow key={shift.after} shift={shift} />
         ))}
       </div>
-
-      {/* Same insets as a row: the 13 sits under the before-column, the 390
-          under the after-column, so both read as part of the grid above. */}
-      <Reveal step={3} delay={0.9} className="mt-8 w-[1040px]">
-        <div className="flex px-8">
-          <div style={{ width: AFTER_COLUMN_X }}>
-            <div className="text-6xl leading-none font-semibold tabular-nums">
-              <Accent>
-                <CountRoll value={13} step={3} duration={1.3} delay={1} />
-              </Accent>
-            </div>
-            <div className="mt-3 text-base text-white/50">colleagues</div>
-          </div>
-          <div>
-            <div className="text-6xl leading-none font-semibold tabular-nums text-white">
-              <CountRoll value={390} step={3} duration={1.3} delay={1.1} />
-            </div>
-            <div className="mt-3 text-base text-white/50">for CarePulse</div>
-          </div>
-        </div>
-      </Reveal>
     </Shell>
   );
 }

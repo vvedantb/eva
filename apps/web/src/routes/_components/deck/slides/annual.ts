@@ -27,7 +27,6 @@ import { AnnualLoad } from "./annual/b04-load";
 import { AnnualQ2 } from "./annual/b05-q2";
 import { AnnualQ3 } from "./annual/b06-q3";
 import { AnnualVolume } from "./annual/b07-volume";
-import { AnnualRename } from "./annual/b08-rename";
 import { AnnualProviders } from "./annual/c01-providers";
 import { AnnualSdks } from "./annual/c02-sdks";
 import { AnnualHandoff } from "./annual/c03-handoff";
@@ -101,12 +100,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 3,
   },
   {
-    id: "annual-b08-rename",
-    title: "Not always Eva",
-    Component: AnnualRename,
-    steps: 2,
-  },
-  {
     id: "annual-b06-q3",
     title: "Chapter three: make it dependable",
     Component: AnnualQ3,
@@ -135,7 +128,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "a04-adoption",
     title: "How it took hold",
     Component: AnnualAdoption,
-    steps: 2,
+    steps: 1,
   },
   {
     id: "09-team",
