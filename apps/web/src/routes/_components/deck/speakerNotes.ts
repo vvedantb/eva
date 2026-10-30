@@ -278,9 +278,6 @@ Next: two lessons from the year, in the project's own words.`,
   // ---------------------------------------------------------------------------
   // Bee deck
   // ---------------------------------------------------------------------------
-  "bee-00-blank": `Nothing to say on this one, it's just a blank stage while everyone settles in.
-When you're ready, press the right arrow and the title flies in.`,
-
   "bee-01-title": `So, this is Bee.
 → It's a small app I built that sits at the top of your screen during meetings.
 It's honestly just something I've been playing around with.
