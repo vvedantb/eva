@@ -386,7 +386,7 @@ You pick the model, how hard it should think, the skill, the MCP tools, you watc
 It only works while you're sat there watching it.
 → Now compare that to the Grok bot.
 You send it one message, and it just does the work in the background and sends you updates, like a co-worker would.
-No skills, no tools, no traces to read.
+No skills, no MCPs, no traces to read.
 → And Bee's that same idea, but for meetings — it listens, searches and reminds you, without you asking or steering it.
 → And we've taken the same lesson back into Eva.
 In Simple Mode you don't think about starting or stopping a sandbox any more — it wakes up when you send a message, and goes to sleep when it's idle.
