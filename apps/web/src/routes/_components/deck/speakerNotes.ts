@@ -389,7 +389,7 @@ You send it one message, and it just does the work in the background and sends y
 No skills, no MCPs, no traces to read.
 → And Bee's that same idea, but for meetings — it listens, searches and reminds you, without you asking or steering it.
 → And we've taken the same lesson back into Eva.
-In Simple Mode you don't think about starting or stopping a sandbox any more — it wakes up when you send a message, and goes to sleep when it's idle.
+In Simple Mode, which has been enabled by default for everyone for the past few months, you don't think about starting or stopping a sandbox any more — it wakes up when you send a message, and goes to sleep when it's idle.
 So yeah, the less a tool asks of you, the more you actually use it.
 So, one thing I'd ask.`,
 
