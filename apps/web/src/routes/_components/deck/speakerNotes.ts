@@ -394,7 +394,7 @@ So yeah, this has been one of our biggest product learnings: the less an agent a
 So, one thing I'd ask.`,
 
   "bee-10-close": `→ So the one thing I'd ask is, just try it in your next meeting.
-It runs on Windows and Mac, and if you want a hand setting it up, just grab me after.
+It runs on Windows and Mac, and if you want to help test it out, just message me after.
 Bee's still in progress, but what do we think — would you use Bee?
 → So yeah, that's pretty much it — any questions?`,
 
