@@ -318,7 +318,7 @@ Bee hears it, searches, and puts a short answer in the bar.
 → Then it just moves on to the next one, and the next.
 I'm not gonna read these out — honestly I don't know half of this stuff myself, which is kinda the point.
 You don't need to be the expert in the room — Bee looks it up and shows you where the answer came from.
-And having Bee would have been useful during a recent chat with Krzys.`,
+And having Bee would have been useful, and saved time, during a recent one-to-one with Krzys.`,
 
   "bee-11-real-meeting": `So this one's a real example — it was just a casual chat with Krzys.
 → I asked whether Convex can run more than one local deployment, so Eva could use it.
