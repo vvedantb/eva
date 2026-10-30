@@ -419,10 +419,9 @@ So, one thing I'd ask.
 
 If asked: the thread on screen is an example, shaped like a real Grok bot run on Eva — one message, then updates until the change is live.`,
 
-  "bee-10-close": `→ (Let the bee fly up into the bar.)
-→ And actually — Bee's just told me the session's finished, and I should ask if anyone's got questions.
-→ So the one thing I'd ask is, just try it in your next meeting.
+  "bee-10-close": `→ So the one thing I'd ask is, just try it in your next meeting.
 It runs on Windows and Mac, and if you want a hand setting it up, just grab me after.
+Bee's still in progress, but what do we think — would you use Bee?
 → So yeah, that's pretty much it — any questions?`,
 
   // ---------------------------------------------------------------------------
