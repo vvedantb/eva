@@ -379,7 +379,8 @@ So you don't have to tell it anything — it already knows the context.
 Now let me step back for a sec — why's Bee built this way?`,
 
   "bee-12-background": `So here's the bigger idea behind it.
-I think the AI tools that actually win are the ones with the least friction — they just work, and they do most of it in the background.
+Look at the Grok bot, Muse, Instinct and Dots — they've exploded in usage, and I think it's cos of how easy they are to use.
+They just work, and they do most of it in the background.
 → Think about an agent you have to steer.
 You pick the model, how hard it should think, the skill, the MCP tools, you watch the context window fill up and get compacted, you read the thinking, parse paragraphs of output, and then steer it again.
 It only works while you're sat there watching it.
