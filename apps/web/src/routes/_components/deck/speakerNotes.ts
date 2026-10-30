@@ -298,7 +298,6 @@ And that's exactly what Bee's for.`,
 → During the call it's just listening.
 → Then when it hears something it can actually help with, the bar grows into a short answer, and it tells you which note it came from.
 It's only ever one or two short tips, never a wall of text, cos you're meant to be in the meeting, not reading.
-And if you want it gone, you just press Cmd or Ctrl, Shift, Space and it hides.
 So how does it get from hearing something to showing you the answer?`,
 
   "bee-04-listens": `So it's three steps — it listens, it finds, it tips — and it all happens in about the time it takes someone to finish their sentence.

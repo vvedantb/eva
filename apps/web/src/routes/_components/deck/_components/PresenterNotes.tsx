@@ -13,7 +13,7 @@ export function PresenterNotes({ notes }: { notes: string }) {
   }
 
   return (
-    <div className="space-y-2 text-lg leading-relaxed whitespace-pre-line text-pretty text-white/85 select-text">
+    <div className="space-y-2 text-lg leading-relaxed whitespace-pre-line text-pretty text-white/85 select-text selection:bg-white/25 selection:text-white">
       {notes.split("\n").map((line, index) => {
         const id = `${index}-${line}`;
 
