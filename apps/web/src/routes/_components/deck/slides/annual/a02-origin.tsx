@@ -1,7 +1,6 @@
-import { CountRoll, MaskedText } from "../../_components/motion";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
-import { Accent, Reveal, Shell, Title } from "../../_components/DeckPrimitives";
+import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { AnnualOriginTimeline } from "../_parts/AnnualOriginTimeline";
 
 /**
@@ -30,20 +29,6 @@ export function AnnualOrigin() {
           <AnnualOriginTimeline />
         </Camera>
       </div>
-
-      <p className="mb-14 text-2xl text-pretty text-white/85">
-        <MaskedText step={3} delay={0.2} stagger={0.05}>
-          In all,{" "}
-          <Accent>
-            <CountRoll value={4732} step={3} delay={0.4} duration={1.4} />
-          </Accent>{" "}
-          changes shipped and{" "}
-          <Accent>
-            <CountRoll value={1348} step={3} delay={0.6} duration={1.4} />
-          </Accent>{" "}
-          sets of release notes written.
-        </MaskedText>
-      </p>
     </Shell>
   );
 }

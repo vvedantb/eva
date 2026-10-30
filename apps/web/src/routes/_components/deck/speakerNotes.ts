@@ -56,13 +56,15 @@ Detail: do not read the grid. Pick two the room will care about and move on. If 
 Figures: suggestion mode 10 June 2026; Claude's skills 22 August 2026; lasting previews 14 August 2026; shortcuts 6 August 2026. All eight shipped June to September 2026.
 Next: Which leaves the last step of the loop: checking the work, and that is where the bottleneck now sits.`,
 
-  "09-team": `People who do not write code raised the work themselves.
+  "09-team": `Colleagues raised the work themselves, not just the developer.
 → Step 1: Matt, referral portal, since May. The AQP list map, the referral dashboard, and referral tabs with cancellation reasons.
-→ Step 2: Zuza, design and admin, since March, the heaviest non-developer user. User management, admin KPI dashboards, and polish on cards, badges and tables.
+→ Step 2: Zuza, design and admin, since March, the heaviest user after the developer. User management, admin KPI dashboards, and polish on cards, badges and tables.
 → Step 3: Kezia, referral portal and domiciliary care, since May. Exports and audit trails, broker and borough filters, and automated decline and expiry emails.
-→ Step 4: Vedant, product, since January, and the total underneath. The domiciliary care and nursing home SUPA archives, and eProcurement fixes.
-Detail: say roles, months and projects aloud. The shape never changes: a colleague described the need, Eva built it, they reviewed it.
-Figures: Matt 27, Zuza 237, Kezia 39, Vedant 912; 303 pieces of work raised by colleagues. Items created in Eva, 11 January to 16 September 2026, including those later cancelled.
+→ Step 4: Krzys, since July. eProcurement evaluation and moderation, KPI fixes, and a planned move of the backend to Effect.
+→ Step 5: George, testing, since September. Checking assessment outcomes, auto-archiving and new emails in their own sandboxes, and speeding up Referral Portal loads.
+→ Step 6: Vedant, product, since January, and the total underneath. The domiciliary care and nursing home SUPA archives, and eProcurement fixes.
+Detail: say roles, months and projects aloud. The shape never changes: someone described the need, Eva built it, they reviewed it.
+Figures: Matt 27, Zuza 250, Kezia 68, Krzys 37, George 18, Vedant 1,182; 400 pieces of work raised by colleagues. Sessions and quick tasks created in Eva, 11 January to 30 October 2026, including those later cancelled.
 Next: what changed for the organisation as a whole.`,
 
   "10-code-reviews": `Reading every change by hand was the slowest step, so it moved to the model and people kept the part that matters.
@@ -396,22 +398,22 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 41.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 44.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
 
-  "a02-origin": `The recap: eight months as five moments, so the story is held in one picture before it is counted.
+  "a02-origin": `The recap: eight months as five moments, so the story is held in one picture.
 → Step 1: first use. The first session on 24 January and the first quick task on 1 February, two weeks from empty to usable.
 → Step 2: work moves to the cloud in July, and in August Eva starts opening its own work.
-→ Step 3: the totals land. This is the evidence base for everything that follows.
+→ Step 3: the line runs on to today.
 Detail: eight months took us from an empty repository to most of how we build software. These dates come from Eva's own records of the first session and quick task created; the week-one dates are when the code landed, which is why they differ.
-Figures: empty repository 11 January 2026; 4,732 changes shipped and 1,348 sets of release notes, from Eva's own records and the project's history to 16 September 2026.
-Next: the total is one number; here is what sits beside it.`,
+Figures: empty repository 11 January 2026; first session 24 January, first quick task 1 February, from Eva's own records.
+Next: what the year has produced so far.`,
 
   "a03-numbers": `The total is one number; the rest of the ledger shows the tool was used, not just built.
-→ Step 1: the secondary card. This answers whether anyone else uses it: sixteen accounts, nineteen automations and 504 automation runs.
-Detail: the headline row is output, the secondary card is use. Say the rate aloud, because it is no longer on the slide: about nineteen changes a day, every day, for eight months. It is deliberately unglamorous; a pace sustained that long matters more than any single peak.
-Figures: 4,732 changes, 887 quick tasks raised, 367 working sessions, 1,348 sets of release notes; 16 people with accounts, 19 automations, 504 automation runs, 107 documents. Eva's own records and project history, 11 January to 16 September 2026.
+→ Step 1: the secondary card. This answers whether anyone else uses it: sixteen accounts, nineteen automations and 613 automation runs.
+Detail: the headline row is output, the secondary card is use. Say the rate aloud, because it is no longer on the slide: about seventeen changes a day, every day, since January. It is deliberately unglamorous; a pace sustained that long matters more than any single peak.
+Figures: 4,989 changes on main, 981 quick tasks raised, 606 sessions, 1,542 sets of release notes; 16 people with accounts, 19 automations, 613 automation runs, 117 documents. Eva's own records and project history, 11 January to 30 October 2026.
 Next: those sixteen accounts did not arrive at once, and the timing matters.`,
 
   "a04-adoption": `Adoption was not announced; it followed the tool becoming easy enough to use.
@@ -493,7 +495,7 @@ Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
 
   "a15-framework": `This is the map an assessor reads: nine capabilities, each evidenced by a slide already shown.
-→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 23, with 21, 26 and 35. Debugging: slides 24 and 25. A skill beyond coding: slide 29, measurement, and slides 37 to 38, Jev. Improves the process: slides 30 to 33, and 43. Mentors and onboards: slide 36. Business and user empathy: slides 38 to 40. Identifies work to do: slides 28 and 44.
+→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 22, with 20, 25 and 34. Debugging: slides 23 and 24. A skill beyond coding: slide 28, measurement, and slides 36 to 37, Jev. Improves the process: slides 29 to 32, and 42. Mentors and onboards: slide 35. Business and user empathy: slides 37 to 39. Identifies work to do: slides 27 and 43.
 → Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
 Figures: 4,732 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.
@@ -513,13 +515,6 @@ Detail: projects and automations came later, but both are built out of quick tas
 Figures: quick tasks appear in the code on 12 January 2026 and sessions on 14 January 2026, within four days of the first commit on 11 January 2026.
 Next: before walking through the year, here is its shape.`,
 
-  "annual-b03-q1": `The first quarter put a usable surface in front of people, and it was the heaviest building of the year.
-→ Step 1: the quarter total counts up. 1,758 changes in three months, before anyone outside the project was using it.
-→ Step 2: the three months appear and March is picked out. 1,070 changes is the biggest month of the year, and most of the interface came from it.
-→ Step 3: the streaming figure. Live output was written to the database 60 to 120 times during a single run; moving it to its own small table cut that to two writes.
-Detail: the streaming change is the first fix in the deck that was measured rather than felt. It is also why long sessions stopped slowing the whole workspace down.
-Figures: January 280, February 408, March 1,070, totalling 1,758 changes shipped. Live streaming moved to its own table on 5 February 2026.
-Next: building the surface was half the job; it then had to load.`,
 
   "annual-b04-load": `Building the surface was half the job; it then had to arrive quickly on someone else's machine.
 → Step 1: both bars collapse and the figures count down. The main bundle fell from 1,355 kB to 273 kB, and the heaviest screen from 1,048 kB to 84 kB.
@@ -532,16 +527,15 @@ Next: after the peak came the quietest quarter, and it was not a slow one.`,
 → Step 1: documents. Comments anchored to a passage, suggestion mode and version history, all on the same day.
 → Step 2: the projects roadmap, where several pieces of work in order become one thing a person can see.
 → Step 3: Testing Arena opened to everyone, so trying a change stopped being a developer-only act.
-Detail: 943 changes is the lowest quarter of the year, and that is the point: the months went on making existing work solid and shared. If asked whether momentum was lost, the next chapter was the biggest of the three.
-Figures: April 377, May 336, June 230, totalling 943 changes shipped. Documents with comments, suggestions and version history 10 June 2026; projects roadmap 17 June 2026; Testing Arena opened to everyone 17 June 2026.
+Detail: the quieter months went on making existing work solid and shared. If asked whether momentum was lost, the next chapter was the busiest of the three.
+Figures: documents with comments, suggestions and version history 10 June 2026; projects roadmap 17 June 2026; Testing Arena opened to everyone 17 June 2026.
 Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 23 takes that apart phase by phase.
-→ Step 2: August, 877 changes. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
-→ Step 3: September, 102 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
-Detail: September is a part month, so do not read the drop as a slowdown. Nothing here adds a new thing to do; it makes the existing things safe to depend on.
-Figures: July 1,052, August 877, September 102, totalling 2,031 changes shipped, to 16 September 2026.
+→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 22 takes that apart phase by phase.
+→ Step 2: August. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
+→ Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
+Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
 Next: the same quarter, seen from inside one session.`,
 
   "annual-b07-volume": `The year was not steady, and its shape is the map for the three chapters that follow.
@@ -549,14 +543,14 @@ Next: the same quarter, seen from inside one session.`,
 → Step 2: the whole year relights.
 Detail: the troughs matter as much as the peaks. June is the low point of the consolidation quarter, and September only looks thin because it stops on the 16th. Say the part-month caveat aloud rather than leaving it to the footnote.
 Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 102. September to the 16th.
-Next: the first peak, and what it built.`,
+Next: the first quarter built the surface; it then had to load quickly.`,
 
 
   "annual-d01-security": `Signing in was never the problem; knowing whose data you were seeing once inside was, so everything built was audited.
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 20 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 19 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -653,7 +647,7 @@ Next: letting other tools in is only safe if the locks are designed in.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 28 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 27 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 

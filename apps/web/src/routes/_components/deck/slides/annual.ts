@@ -22,7 +22,6 @@ import { AnnualFramework } from "./annual/a15-framework";
 import { Slide15Closing } from "./15-closing";
 import { AnnualDayOne } from "./annual/b01-day-one";
 import { AnnualFirstWeek } from "./annual/b02-first-week";
-import { AnnualQ1 } from "./annual/b03-q1";
 import { AnnualLoad } from "./annual/b04-load";
 import { AnnualQ2 } from "./annual/b05-q2";
 import { AnnualQ3 } from "./annual/b06-q3";
@@ -79,12 +78,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
-    id: "annual-b03-q1",
-    title: "Chapter one: build the surface",
-    Component: AnnualQ1,
-    steps: 3,
-  },
-  {
     id: "annual-b04-load",
     title: "Then make it load",
     Component: AnnualLoad,
@@ -131,7 +124,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "09-team",
     title: "Built by the team",
     Component: Slide09Team,
-    steps: 4,
+    steps: 6,
   },
   {
     id: "a06-impact",

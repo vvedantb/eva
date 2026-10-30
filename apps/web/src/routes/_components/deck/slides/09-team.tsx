@@ -32,17 +32,19 @@ interface Person {
 /** Spotlight order, left to right. */
 const PEOPLE: Person[] = [
   { name: "Matt", count: 27, countLabel: "sessions and tasks" },
-  { name: "Zuza", count: 237, countLabel: "sessions and tasks" },
-  { name: "Kezia", count: 39, countLabel: "quick tasks" },
-  { name: "Vedant", count: 912, countLabel: "sessions and tasks" },
+  { name: "Zuza", count: 250, countLabel: "sessions and tasks" },
+  { name: "Kezia", count: 68, countLabel: "sessions and tasks" },
+  { name: "Krzys", count: 37, countLabel: "sessions and tasks" },
+  { name: "George", count: 18, countLabel: "sessions and tasks" },
+  { name: "Vedant", count: 1182, countLabel: "sessions and tasks" },
 ];
 
 /** The meter under each figure is its share of the largest count. */
 const MOST = Math.max(...PEOPLE.map((person) => person.count));
 
-const CARD_W = 250;
-const CARD_GAP = 24;
-/** Card centres on the 1280×720 stage: 96px gutter, then one card per 274px. */
+const CARD_W = 166;
+const CARD_GAP = 16;
+/** Card centres on the 1280×720 stage: 96px gutter, then one card per 182px. */
 const LIGHT = [
   null,
   ...PEOPLE.map((_, index) => ({
@@ -62,7 +64,7 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
 
   return (
     <m.div
-      className="w-[250px]"
+      className="w-[166px]"
       initial={{ opacity: 0.4, scale: 0.97, y: 0 }}
       animate={{
         opacity: lit ? 1 : 0.4,
@@ -72,9 +74,9 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
       transition={SETTLE}
     >
       <Sheen step={position} delay={0.2} className="rounded-[28px]">
-        {/* p-7 (28px) inside a 28px outer radius keeps the avatar concentric
-            with the card corner. */}
-        <Card className="relative flex h-[300px] flex-col rounded-[28px] p-7">
+        {/* p-5 (20px) inside a 28px outer radius: six cards share the row, so
+            the padding is tighter than the 28px a concentric avatar wants. */}
+        <Card className="relative flex h-[300px] flex-col rounded-[28px] p-5">
           <div
             className="flex size-12 items-center justify-center rounded-full text-xl font-semibold text-white"
             style={{ background: BRAND_FILL }}
@@ -92,7 +94,7 @@ function PersonCard({ person, index }: { person: Person; index: number }) {
               step={position}
               duration={1.3}
               delay={0.1}
-              className="text-6xl leading-none font-semibold text-white"
+              className="text-5xl leading-none font-semibold text-white"
             />
             {/* The label arrives with its figure, so a lit card never shows a
                 caption hanging under an empty space. */}
@@ -141,7 +143,7 @@ export function Slide09Team() {
       <Stagger
         delayChildren={0.3}
         staggerChildren={0.1}
-        className="mt-20 flex gap-6"
+        className="mt-20 flex gap-4"
       >
         {PEOPLE.map((person, index) => (
           <StaggerItem key={person.name}>
@@ -151,9 +153,9 @@ export function Slide09Team() {
       </Stagger>
 
       <p className="mt-16 text-3xl text-white/85">
-        <MaskedText step={4} delay={0.55}>
+        <MaskedText step={6} delay={0.55}>
           <Accent>
-            <CountRoll value={303} step={4} duration={1.2} delay={0.7} />
+            <CountRoll value={400} step={6} duration={1.2} delay={0.7} />
           </Accent>{" "}
           pieces of work, raised by colleagues.
         </MaskedText>

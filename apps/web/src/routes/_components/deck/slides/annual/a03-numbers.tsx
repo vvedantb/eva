@@ -26,17 +26,17 @@ interface Stat {
 
 /** Left to right; the lead figure rolls first and the rest trail it. */
 const HEADLINE: Stat[] = [
-  { value: 4732, label: "changes shipped", delay: 0.55, accent: true },
-  { value: 887, label: "quick tasks raised", delay: 0.75 },
-  { value: 367, label: "sessions", delay: 0.87 },
-  { value: 1348, label: "release notes written", delay: 0.99 },
+  { value: 4989, label: "changes shipped", delay: 0.55, accent: true },
+  { value: 981, label: "quick tasks raised", delay: 0.75 },
+  { value: 606, label: "sessions", delay: 0.87 },
+  { value: 1542, label: "release notes written", delay: 0.99 },
 ];
 
 const SECONDARY: Stat[] = [
   { value: 16, label: "people with accounts", delay: 0 },
   { value: 19, label: "automations running", delay: 0.08 },
-  { value: 504, label: "automation runs", delay: 0.16 },
-  { value: 107, label: "documents written", delay: 0.24 },
+  { value: 613, label: "automation runs", delay: 0.16 },
+  { value: 117, label: "documents written", delay: 0.24 },
 ];
 
 const NUMBER_CLASS =
@@ -57,7 +57,7 @@ export function AnnualNumbers() {
     <Shell className="isolate py-12">
       <Spotlight shots={LIGHT} />
       <Reveal>
-        <Title size="md">What eight months produced</Title>
+        <Title size="md">What the year has produced</Title>
       </Reveal>
 
       <m.div
