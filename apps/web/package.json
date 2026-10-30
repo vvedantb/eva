@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "doctor": "npx react-doctor@latest ."
+    "doctor": "npx react-doctor@latest .",
+    "redline:snapshot": "redline snapshot --root ../../packages/backend --out ../../apps/web/.redline/convex-snapshot.zip",
+    "redline:pr": "redline compare $(git merge-base origin/main HEAD) HEAD --affected --comment auto"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^4.0.85",
@@ -107,9 +109,10 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "^6.1.0",
-    "@vvedantb/redline": "0.1.1",
+    "@vvedantb/redline": "0.4.0",
     "agentation": "^3.0.2",
     "oxc-transform-react": "^0.145.0",
+    "playwright-core": "^1.64.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
