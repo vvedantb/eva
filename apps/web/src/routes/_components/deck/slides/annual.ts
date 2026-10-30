@@ -22,10 +22,8 @@ import { AnnualFramework } from "./annual/a15-framework";
 import { Slide15Closing } from "./15-closing";
 import { AnnualDayOne } from "./annual/b01-day-one";
 import { AnnualFirstWeek } from "./annual/b02-first-week";
-import { AnnualLoad } from "./annual/b04-load";
 import { AnnualQ2 } from "./annual/b05-q2";
 import { AnnualQ3 } from "./annual/b06-q3";
-import { AnnualVolume } from "./annual/b07-volume";
 import { AnnualProviders } from "./annual/c01-providers";
 import { AnnualHandoff } from "./annual/c03-handoff";
 import { AnnualAccounts } from "./annual/c04-accounts";
@@ -35,7 +33,6 @@ import { AnnualSandboxEconomics } from "./annual/c07-sandbox-economics";
 import { AnnualOcc } from "./annual/c08-occ";
 import { AnnualSecurity } from "./annual/d01-security";
 import { AnnualDesignSystem } from "./annual/d02-design-system";
-import { AnnualMotion } from "./annual/d03-motion";
 import { AnnualFrontendPerf } from "./annual/d04-frontend-perf";
 import { AnnualScale } from "./annual/d05-scale";
 import { AnnualAbandoned } from "./annual/d06-abandoned";
@@ -69,18 +66,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "annual-b02-first-week",
     title: "Week one",
     Component: AnnualFirstWeek,
-    steps: 2,
-  },
-  {
-    id: "annual-b07-volume",
-    title: "The shape of the year",
-    Component: AnnualVolume,
-    steps: 2,
-  },
-  {
-    id: "annual-b04-load",
-    title: "Then make it load",
-    Component: AnnualLoad,
     steps: 2,
   },
   {
@@ -233,12 +218,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
-    id: "annual-d03-motion",
-    title: "One set of rules for motion",
-    Component: AnnualMotion,
-    steps: 2,
-  },
-  {
     id: "a12-quality",
     title: "The bar is enforced",
     Component: AnnualQuality,
@@ -320,7 +299,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "a15-framework",
     title: "Senior engineer, mapped",
     Component: AnnualFramework,
-    steps: 3,
+    steps: 2,
   },
   {
     id: "15-closing",

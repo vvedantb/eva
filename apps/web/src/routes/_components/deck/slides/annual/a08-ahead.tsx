@@ -14,13 +14,10 @@ import {
   useDeckStep,
 } from "../../_components/DeckPrimitives";
 import {
-  CountRoll,
   DUR,
   EASE,
   Magnify,
   MaskedText,
-  Pulse,
-  Sheen,
   Spotlight,
 } from "../../_components/motion";
 
@@ -94,25 +91,6 @@ export function AnnualAhead() {
             </m.div>
           ))}
         </Magnify>
-      </div>
-
-      <div className="mt-12 flex items-baseline gap-5">
-        <Sheen hero step={1} delay={1.1} className="rounded-lg">
-          <CountRoll
-            value={176}
-            step={1}
-            delay={0.15}
-            duration={1.4}
-            className="text-6xl leading-none font-semibold tabular-nums text-white"
-          />
-        </Sheen>
-        <Reveal step={1} delay={0.55} from="left" distance={12}>
-          <div className="flex items-center gap-3 text-lg text-white/60">
-            {/* The queue is live: it is still growing. */}
-            <Pulse step={1} delay={1} rings={2} size={7} />
-            waiting to be checked in
-          </div>
-        </Reveal>
       </div>
 
       <p className="mt-12 max-w-5xl text-3xl leading-snug text-pretty text-white/85">

@@ -4,19 +4,12 @@ import { MoA4CapabilityCard } from "../_parts/MoA4CapabilityCard";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
-  Accent,
   Reveal,
   Shell,
   Title,
   useDeckStep,
 } from "../../_components/DeckPrimitives";
-import {
-  CountRoll,
-  DUR,
-  EASE,
-  MaskedText,
-  Sheen,
-} from "../../_components/motion";
+import { DUR, EASE, Sheen } from "../../_components/motion";
 
 /** Reading order: left to right, three per row. */
 const CAPABILITIES = [
@@ -48,8 +41,6 @@ const FRAMEWORK_SHOTS: readonly CameraShot[] = [
   {},
   {},
 ];
-
-const FIGURE_CLASS = "text-5xl leading-[1.3] font-semibold tracking-tight";
 
 export function AnnualFramework() {
   const step = useDeckStep();
@@ -128,25 +119,6 @@ export function AnnualFramework() {
           })}
         </div>
       </div>
-
-      {/* Words and figures rise on transform-only masks: an opacity fade on an
-          ancestor would fight the odometer columns mid-roll. */}
-      <p className="mt-12 text-center text-2xl text-white/85">
-        <MaskedText step={3} stagger={0.05}>
-          <span className={FIGURE_CLASS}>
-            <Accent>
-              <CountRoll value={4732} step={3} delay={0.1} />
-            </Accent>
-          </span>{" "}
-          changes.{" "}
-          <span className={FIGURE_CLASS}>
-            <Accent>
-              <CountRoll value={1348} step={3} delay={0.3} />
-            </Accent>
-          </span>{" "}
-          sets of release notes. All written down at the time.
-        </MaskedText>
-      </p>
     </Shell>
   );
 }

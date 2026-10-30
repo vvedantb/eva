@@ -398,7 +398,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 44.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 41.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
 
@@ -487,18 +487,15 @@ Framework: business and user empathy.
 Next: here is the slider those choices produced.`,
 
   "a08-ahead": `The constraint has moved from building to deciding, and the next year is about the steps either side of the build.
-→ Step 1: the first strand lights and the queue figure arrives: finished work waiting to be checked in. Marking work ready should be the last human step, as it already is for Eva itself.
+→ Step 1: the first strand lights: automate the release. Marking work ready should be the last human step, as it already is for Eva itself.
 → Step 2: the closing question. How fast can we build it becomes how fast can we decide.
 Detail: Eva now finishes work faster than we can check it in. The three strands are headings only. Automate the release. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us: tools shaped around how we work rather than the other way round. None of the three is a dated commitment.
-Figures: 176 pieces of finished work waiting to be checked in, against 455 already finished. Quick task status across all 887 raised in Eva, at 16 September 2026.
 Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
 
   "a15-framework": `This is the map an assessor reads: nine capabilities, each evidenced by a slide already shown.
-→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 22, with 20, 25 and 34. Debugging: slides 23 and 24. A skill beyond coding: slide 28, measurement, and slides 36 to 37, Jev. Improves the process: slides 29 to 32, and 42. Mentors and onboards: slide 35. Business and user empathy: slides 37 to 39. Identifies work to do: slides 27 and 43.
-→ Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
-→ Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
-Figures: 4,732 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.
+→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 20, with 18, 23 and 31. Debugging: slides 21 and 22. A skill beyond coding: slide 26, measurement, and slides 33 to 34, Jev. Improves the process: slides 27 to 29, and 39. Mentors and onboards: slide 32. Business and user empathy: slides 34 to 36. Identifies work to do: slides 25 and 40.
+→ Step 2: the thin evidence. Volunteer the gaps before they are asked for. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
@@ -513,15 +510,9 @@ Next: within four days, the two ideas the product still rests on were in place.`
 → Step 2: sessions land on 14 January, and the closing line follows. A session is a running conversation about one codebase, and everything since has built on those two shapes.
 Detail: projects and automations came later, but both are built out of quick tasks and sessions rather than alongside them. The point is stability of concept: eight months on, nobody has needed a third primitive.
 Figures: quick tasks appear in the code on 12 January 2026 and sessions on 14 January 2026, within four days of the first commit on 11 January 2026.
-Next: before walking through the year, here is its shape.`,
+Next: the quarter the tool stopped being single-player.`,
 
 
-  "annual-b04-load": `Building the surface was half the job; it then had to arrive quickly on someone else's machine.
-→ Step 1: both bars collapse and the figures count down. The main bundle fell from 1,355 kB to 273 kB, and the heaviest screen from 1,048 kB to 84 kB.
-→ Step 2: the closing line. Opening the app now downloads a fifth as much, which is all a non-technical room needs from the numbers.
-Detail: the work was automatic code splitting in the router, lazy-loaded code blocks, and removing a cyclic dependency. Nothing was taken out of the product: the same screens load when they are opened rather than all at once.
-Figures: main bundle 1,355 kB to 273 kB, a fall of 80%; heaviest screen 1,048 kB to 84 kB, a fall of 92%. Bundle optimisation, 31 March 2026.
-Next: after the peak came the quietest quarter, and it was not a slow one.`,
 
   "annual-b05-q2": `The quietest quarter was not a slow one; it was the quarter the tool stopped being single-player.
 → Step 1: documents. Comments anchored to a passage, suggestion mode and version history, all on the same day.
@@ -532,25 +523,19 @@ Figures: documents with comments, suggestions and version history 10 June 2026; 
 Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 22 takes that apart phase by phase.
+→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 20 takes that apart phase by phase.
 → Step 2: August. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
 Next: the same quarter, seen from inside one session.`,
 
-  "annual-b07-volume": `The year was not steady, and its shape is the map for the three chapters that follow.
-→ Step 1: March and July stay lit; name them aloud. March was the surface being built; July was the cutover that moved every workspace to a new engine.
-→ Step 2: the whole year relights.
-Detail: the troughs matter as much as the peaks. June is the low point of the consolidation quarter, and September only looks thin because it stops on the 16th. Say the part-month caveat aloud rather than leaving it to the footnote.
-Figures: Jan 280, Feb 408, Mar 1,070, Apr 377, May 336, Jun 230, Jul 1,052, Aug 877, Sep 102. September to the 16th.
-Next: the first quarter built the surface; it then had to load quickly.`,
 
 
   "annual-d01-security": `Signing in was never the problem; knowing whose data you were seeing once inside was, so everything built was audited.
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 19 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 17 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -561,15 +546,8 @@ Next: all of this rests on measurement, the skill built most this year outside p
 Detail: the conventions are written down, not folklore: surfaces separated by tone rather than decorative lines, one shadow system, and motion on shared tokens. Two moves made it possible: Tailwind v4 across the web app and the browser extension on 5 August 2026, and a single icon library on 2 August 2026. The tiles are the library in miniature: four colours, four surface tones and four of the shapes every screen uses.
 Figures: 110 files and 18,197 lines in the shared component library. Measured 23 September 2026.
 Framework: improves the development process.
-Next: the same discipline, applied to how things move.`,
-
-  "annual-d03-motion": `Ten motion changes landed on one day, and their point was to stop motion being a matter of taste.
-→ Step 1: all ten samples restart together on one duration, one curve and one rest. Let the grid run; the synchronisation is the argument, so stop talking while it happens.
-→ Step 2: the closing line. Motion is a house style now, not an opinion held per component.
-Detail: the ten changes were house transition defaults, tokenised durations, gesture physics, focus rings and drag sensors, all on 7 August 2026. Before that, every component picked its own timing, which is what the resting state shows. The slide is meant to be watched rather than read, so do not narrate the tiles.
-Figures: ten motion changes, 7 August 2026.
-Framework: improves the development process, with a standard others follow without asking.
 Next: a house style only lasts if a machine enforces it.`,
+
 
   "annual-d04-frontend-perf": `Waiting is the tax everyone pays on every change, so three separate waits were measured and cut.
 → Step 1: the local build falls from 28 to 2.6 seconds: the wait between making a change and seeing it.
@@ -647,7 +625,7 @@ Next: letting other tools in is only safe if the locks are designed in.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 27 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 25 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 
