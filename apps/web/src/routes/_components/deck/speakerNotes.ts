@@ -27,7 +27,8 @@ Next: the whole story on one line, before we look at who used it.`,
 → Step 1: the picker becomes the five-step slider. The trimmed list was still the advanced surface, which is why it became one control.
 Detail: the picker on the right is the real shipped component. Simple Mode is an optional setting, not a separate product; it hides files, consoles, settings and meters and leaves the conversation. Choosing a model went from a long list to one slider. On the slider, cheaper and faster models sit on the left and the strongest on the right; there is nothing to configure.
 Figures: Simple Mode landed 14 August 2026; the slider replaced the list on 24 August 2026.
-Next: And the slider is only the visible part of what Simple Mode hides.`,
+Framework: business and user empathy.
+Next: the models kept improving, but the problems stayed the same.`,
 
   "friday-b24-abstracted": `In Simple Mode, the only things that matter are what you ask for and what you get back. Everything in between is Eva's job.
 → Step 1: the machinery is tucked away. Which model to use, how hard it should think, its thinking, how much it can hold in memory at once, which connected tools it can reach, and which skills to load: all of it goes inside Eva.
@@ -47,7 +48,8 @@ Next: Those overnight routines are the next story: work that starts itself.`,
 → Step 1: both lanes race, then the closing line arrives after the slow lane finishes. Let the four seconds run in silence; the wait is the argument.
 Detail: every job gets its own cloud workspace. Nothing was given up in the move. The same workspace still has a terminal, live preview, desktop and snapshots.
 Figures: about 40 seconds before on Daytona against under one second now on Vercel Sandbox, more than 40 times faster. Timings are the product owner's own measurements before and after the move; the migration landed 6 to 8 July 2026.
-Next: So that is where the work happens. Now, how do you actually ask for some?`,
+Framework: understands trade-offs, measured before and after the move.
+Next: speed is half of it; the other half is cost.`,
 
   "08-more": `A deliberate flood: eight more things from the same three months, none with its own slide.
 Detail: do not read the grid. Pick two the room will care about and move on. If asked: suggested edits, where a document change waits for someone to accept it; Claude's built-in skills in the same slash picker; previews that stay put after you leave a session; rebindable keyboard shortcuts; rich link previews, where Figma, Linear, Sentry and PostHog links become chips; editing files in the browser; and reading sibling repos, so Eva can look across your other codebases. The 94% is the loading shimmer's main-thread cost after the September animation work; it has its own slide in the annual deck.
@@ -83,7 +85,8 @@ Next: Eva already has the answer to that queue; here is how it works, and the go
 → Step 3: the goal. Eva works like this today; next, the moment a CarePulse task moves to code review, it is on the CarePulse repository a few minutes later.
 Detail: you saw the short version of this on the auto-merge slide; this is the whole route. Under the hood a GitHub workflow sends the Grok bot a message when a pull request leaves draft or gets a new push. The order matters: backend and migrations go first, so merged code never runs against a database that is not ready. Be clear that CarePulse is a goal, not a date; it needs the model checks and the human sign-off for risky changes from the next slide first. The board, task and page are an illustration, not a recording.
 Figures: Eva auto-merge landed 3 September 2026. 43 CarePulse quick tasks in code review on 11 September 2026. "A few minutes" is the target, not a measured time.
-Next: The first step on that pipeline is letting the model do the first read.`,
+Framework: improves the process.
+Next: if the system is the hard part, here is where the system goes next.`,
 
   "12-future": `Three shifts to expect, each already true inside Eva rather than predicted.
 → Step 1: more automations. Routine work runs on a schedule or a trigger, and people set direction rather than tasks.
@@ -251,7 +254,8 @@ Next: Underneath much of this, one small model makes the small decisions.`,
 → Step 4: why it matters. Because Jev is so small, each check costs fractions of a penny and comes back in under a second. That is what lets Eva run it on every item, every time, rather than on a sample.
 Detail: Jev is TypeSafe's decision model, reached through Vercel's AI Gateway with zero data retention requested. It answers three kinds of question: yes or no, pick one from a list, or a score on a scale. Because the questions are fixed, the same item gets the same judgement every time, which is what makes it safe to automate. It is small and fast, so it can run on every item rather than a sample. The four items and their scores are an illustration, not a real call.
 Figures: "fractions of a penny" is the product owner's own estimate per check, not a billed figure from this deck. "Under a second" matches the note in Eva's Jev client that Jev answers in well under a second.
-Next: So where does Eva use it?`,
+Framework: a skill beyond coding.
+Next: here is what it does for CarePulse.`,
 
   "friday-b17-jev": `Ten small decisions inside Eva, all made by the same model.
 → Step 1: the three you will notice. Before a quick task runs, Jev checks the prompt says where the change goes, what should happen, and what is wrong today, and nudges you if not. As you type, it picks the skill that fits. And when an agent has a question for the team, Jev picks who should answer it, one yes or no per teammate.
@@ -265,7 +269,8 @@ Next: And it has started to appear in CarePulse too.`,
 → Step 2: the safeguards. It only warns and never blocks posting; zero data retention is requested; and if Jev is unavailable, fixed pattern rules for things like NHS numbers and phone numbers still run.
 Detail: the fields checked are the free-text ones a broker fills in: the unique ID, care needs, equipment, additional care, cultural and language notes, and the reasons for unselected homes or an area search. ICB contact fields are not sent. Abbreviations are spelled out first, the text is not logged or stored, and the check runs 1.5 seconds after typing stops. The 50% line is our own assumption and should be reviewed if brokers report false alarms or misses. Whether production calls Jev depends on the AI Gateway key being set there; without it only the pattern rules run. The example text is invented and identifies no one.
 Figures: merged to main 14 October 2026 (carepulse-ts pull request 2487); first built 6 October 2026. Flag line 50%; at most 120 checks an hour per user.
-Next: And you do not have to be at a desk to use any of it.`,
+Framework: business and user empathy.
+Next: most of those colleagues are not engineers, and that shaped the product.`,
 
   "friday-b18-limits": `This is my view, not a measured law: the models keep getting better, yet the problems we wrote about in February are still the ones we write about in September.
 → Step 1: the ladder climbs. Each step is a new model added to Eva, ten from April to September, from Anthropic, OpenAI and xAI.
@@ -482,7 +487,7 @@ Next: why enforcement matters: the size of what it now protects.`,
 Detail: the resting state is the August stall, two hours on Working with a colleague's messages unanswered: a zombie runner holding the spawn lock while the watchdog extended its own deadline. Standards are written for people and agents: repository rules, guides for the interface, data layer and security, ready-made commands, release notes on every change.
 Figures: release notes, August and September 2026.
 Framework: mentors and onboards, through written standards others can work to.
-Next: most of those colleagues are not engineers, and that shaped the product.`,
+Next: one tool that came out of that work, used in Eva and in CarePulse.`,
 
   "a14-users": `Most people opening Eva are not engineers, and almost every decision on this slide follows from that.
 → Step 1: the three chips. Every screen made usable on a phone across two audits; shortcuts made visible and rebindable; and pages saying pick something from the sidebar removed, because on a phone the sidebar is a closed drawer.
@@ -490,7 +495,7 @@ Next: most of those colleagues are not engineers, and that shaped the product.`,
 Detail: the rows in order. Simple Mode hid reviews, differences, token meters and consoles, leaving the conversation and a preview; the model list became a five-step slider because the trimmed list was still the advanced surface; PRD was renamed Plan because that is what people meant; the daily summary was rewritten for a non-technical reader, with a hard ban on file names and hashes.
 Figures: Simple Mode 14 August 2026, slider 24 August 2026, mobile audits August and September 2026.
 Framework: business and user empathy.
-Next: the models kept improving, but the problems stayed the same.`,
+Next: here is the slider those choices produced.`,
 
   "a08-ahead": `The constraint has moved from building to deciding, and the next year is about the steps either side of the build.
 → Step 1: the first strand lights and the queue figure arrives: finished work waiting to be checked in. Marking work ready should be the last human step, as it already is for Eva itself.
@@ -501,7 +506,7 @@ Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
 
   "a15-framework": `This is the map an assessor reads: nine capabilities, each evidenced by a slide already shown.
-→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 26, with 29 and 38. Debugging: slides 27 and 28. A skill beyond coding: slide 32, measurement. Improves the process: slides 33 to 36. Mentors and onboards: slide 39. Business and user empathy: slide 40. Identifies work to do: slides 31 and 43.
+→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 27, with 25, 30 and 39. Debugging: slides 28 and 29. A skill beyond coding: slide 33, measurement, and slides 41 to 42, Jev. Improves the process: slides 34 to 37, and 47. Mentors and onboards: slide 40. Business and user empathy: slides 42 to 44. Identifies work to do: slides 32 and 48.
 → Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
 Figures: 4,732 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.
@@ -545,7 +550,7 @@ Figures: April 377, May 336, June 230, totalling 943 changes shipped. Documents 
 Next: a short pause, because at this point the project was not yet called Eva.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 26 takes that apart phase by phase.
+→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 27 takes that apart phase by phase.
 → Step 2: August, 877 changes. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September, 102 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: September is a part month, so do not read the drop as a slowdown. Nothing here adds a new thing to do; it makes the existing things safe to depend on.
@@ -622,7 +627,7 @@ Next: many of the right calls came from listening to colleagues.`,
 → Step 2: both sit together and the closing line lands. Read them once, then stop talking.
 Detail: dwell on the first quote, because it is the opposite of the usual conversation. Much of this deck is evidence for it: durable turns, the security boundary, the enforced quality bar. None of those are about the model. Both lines are verbatim from notes written during the year, not composed for this deck.
 Figures: from the project's own written notes.
-Next: if the system is the hard part, here is where the system goes next.`,
+Next: part of that system already works: on Eva, marking work ready is the last human step.`,
 
   "annual-d08-durable": `Most reports of the tool being stuck were one structural fault, and it was fixed once rather than patched repeatedly.
 → Step 1: the same turn runs again, is interrupted at the same point, survives and finishes: the lifecycle is durable and fenced, not held in one process's memory.
@@ -673,9 +678,9 @@ Next: letting other tools in is only safe if the locks are designed in.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 31 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 32 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
-Next: the other thing that has to be controlled is cost.`,
+Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 
   "annual-c07-sandbox-economics": `Every piece of work gets its own cloud workspace, so they must not quietly pile up.
 → Step 1: while the work is alive its snapshot never expires, and only the most recent one is kept.

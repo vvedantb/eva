@@ -1,4 +1,9 @@
 import type { DeckSlide } from "./types";
+import { Slide05SimpleMode } from "./05-simple-mode";
+import { Slide07Sandbox } from "./07-sandbox";
+import { FridayPipeline } from "./friday/b19-pipeline";
+import { FridayJevWhat } from "./friday/b20-jev-what";
+import { FridayJevCarePulse } from "./friday/b21-jev-carepulse";
 import { AnnualTitle } from "./annual/a01-title";
 import { AnnualOrigin } from "./annual/a02-origin";
 import { AnnualNumbers } from "./annual/a03-numbers";
@@ -194,6 +199,13 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualMcpSecurity,
     steps: 2,
   },
+  // From the Friday deck: the measured result of the July sandbox move.
+  {
+    id: "07-sandbox",
+    title: "Workspaces in under a second",
+    Component: Slide07Sandbox,
+    steps: 1,
+  },
   {
     id: "annual-c07-sandbox-economics",
     title: "Workspaces clean up",
@@ -286,11 +298,31 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualPeople,
     steps: 3,
   },
+  // From the Friday deck: Jev, and what it does for CarePulse.
+  {
+    id: "friday-b20-jev-what",
+    title: "What Jev is",
+    Component: FridayJevWhat,
+    steps: 4,
+  },
+  {
+    id: "friday-b21-jev-carepulse",
+    title: "Jev inside CarePulse",
+    Component: FridayJevCarePulse,
+    steps: 2,
+  },
   {
     id: "a14-users",
     title: "Built for who uses it",
     Component: AnnualUsers,
     steps: 2,
+  },
+  // From the Friday deck: the real model slider behind Simple Mode.
+  {
+    id: "05-simple-mode",
+    title: "Simple Mode",
+    Component: Slide05SimpleMode,
+    steps: 1,
   },
   {
     id: "friday-b18-limits",
@@ -306,6 +338,13 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   // ── Close: the year ahead, the framework map, the last word ──
+  // From the Friday deck: marking work ready is already the last human step on Eva.
+  {
+    id: "friday-b19-pipeline",
+    title: "Code review to live",
+    Component: FridayPipeline,
+    steps: 3,
+  },
   {
     id: "a08-ahead",
     title: "The bottleneck has moved",
