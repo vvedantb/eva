@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v28";
+const SCRIPT_VERSION = "stream-v29";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -455,34 +455,40 @@ function authorize(clientReq, clientRes) {
 
   const cookies = parseCookies(clientReq.headers["cookie"]);
   const session = cookies[SESSION_COOKIE];
-  if (session && verifySession(session)) return true;
+  const hasSession = Boolean(session && verifySession(session));
 
+  // The grant is a five-minute bearer token, so it must never stay in the
+  // browser-facing URL. Eva mints a fresh one on every preview load, so a GET
+  // that already has a session still 302s to the clean URL; otherwise the
+  // iframe (and any link the app builds from location) keeps the token.
   const grant = parsed ? parsed.searchParams.get(GRANT_PARAM) : null;
-  if (grant) {
-    const claims = verifyGrant(grant);
-    if (claims && parsed) {
-      const now = Math.floor(Date.now() / 1000);
-      const token = signSession({
-        sandboxId: SANDBOX_ID,
-        sub: typeof claims.sub === "string" ? claims.sub : "",
-        exp: now + SESSION_TTL_SECONDS,
-      });
+  if (grant && parsed) {
+    const claims = hasSession ? null : verifyGrant(grant);
+    if (claims || (hasSession && isGet)) {
       parsed.searchParams.delete(GRANT_PARAM);
-      const cleanPath = parsed.pathname + parsed.search + parsed.hash;
-      const cookie =
-        SESSION_COOKIE + "=" + token +
-        "; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=" +
-        String(SESSION_TTL_SECONDS);
-      clientRes.writeHead(302, {
-        location: cleanPath,
-        "set-cookie": cookie,
+      const headers = {
+        location: parsed.pathname + parsed.search + parsed.hash,
         "referrer-policy": "no-referrer",
         "cache-control": "no-store",
-      });
+      };
+      if (claims) {
+        const now = Math.floor(Date.now() / 1000);
+        const token = signSession({
+          sandboxId: SANDBOX_ID,
+          sub: typeof claims.sub === "string" ? claims.sub : "",
+          exp: now + SESSION_TTL_SECONDS,
+        });
+        headers["set-cookie"] =
+          SESSION_COOKIE + "=" + token +
+          "; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=" +
+          String(SESSION_TTL_SECONDS);
+      }
+      clientRes.writeHead(302, headers);
       clientRes.end();
       return false;
     }
   }
+  if (hasSession) return true;
 
   const accept = String(clientReq.headers["accept"] || "");
   if (isGet && accept.indexOf("text/html") !== -1) {
