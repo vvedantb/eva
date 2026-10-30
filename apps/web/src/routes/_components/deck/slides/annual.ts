@@ -110,7 +110,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
   // ── Act two: in use. Scale, adoption, the team, impact, the loop ──
   {
     id: "a03-numbers",
-    title: "What eight months produced",
+    title: "What the year has produced",
     Component: AnnualNumbers,
     steps: 1,
   },
