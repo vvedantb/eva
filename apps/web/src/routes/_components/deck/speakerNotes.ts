@@ -295,18 +295,14 @@ And you know the answer's somewhere — it's in your notes, or in last meeting's
 → So you start searching by hand, typing "provider… onboarding… notes…", and your notes are all over the place.
 And meanwhile the clock's running, and the meeting just moves on without you.
 So the problem isn't that the answer doesn't exist — it's finding it in those ten seconds before the conversation's moved on.
-And that's exactly what Bee's for.
-
-If asked: the note names and the quote are just examples.`,
+And that's exactly what Bee's for.`,
 
   "bee-03-notch": `So this is where Bee lives — a small bar at the top centre of your screen, kinda like the notch on a phone.
 → During the call it's just listening — the little bee flutters and the bars move, and that's it, it stays out of your way.
 → Then when it hears something it can actually help with, the bar grows into a short answer, and it tells you which note it came from.
 It's only ever one or two short tips, never a wall of text, cos you're meant to be in the meeting, not reading.
 And if you want it gone, you just press Cmd or Ctrl, Shift, Space and it hides.
-So how does it get from hearing something to showing you the answer?
-
-If asked: the meeting and the tip shown are examples.`,
+So how does it get from hearing something to showing you the answer?`,
 
   "bee-04-listens": `So it's three steps — it listens, it finds, it tips — and it all happens in about the time it takes someone to finish their sentence.
 → First, it hears.
@@ -317,9 +313,7 @@ So here it's Provider call.md that lights up — not just any note with "provide
 → And then it tips.
 Another model turns that best match into one short line in the bar, and shows you the note it came from, so you can check it.
 So you didn't have to ask it anything — it heard the question and had the answer ready.
-But what if the answer's not in your notes at all?
-
-If asked: in the actual app, the words Bee hears are never shown on screen, only the tip — the phrase is on this slide just to explain it. Grok turns the speech into text, Jev does the ranking, and GPT-6 Luna writes the tip. The notes and the tip are examples.`,
+But what if the answer's not in your notes at all?`,
 
   "bee-05-web": `So when the answer's not in your notes, Bee just looks it up on the web.
 → Say someone in the meeting asks a question nobody knows off the top of their head.
@@ -328,9 +322,7 @@ Bee hears it, searches, and puts a short answer in the bar.
 → Then it just moves on to the next one, and the next.
 I'm not gonna read these out — honestly I don't know half of this stuff myself, which is kinda the point.
 You don't need to be the expert in the room — Bee looks it up and shows you where the answer came from.
-And having Bee would have been useful during a recent chat with Krzys.
-
-If asked: the questions are examples, but the answers on screen are real, checked in October 2026 — the sources are the chips under each one.`,
+And having Bee would have been useful during a recent chat with Krzys.`,
 
   "bee-11-real-meeting": `So this one's a real example — it was just a casual chat with Krzys.
 → I asked whether Convex can run more than one local deployment, so Eva could use it.
@@ -340,9 +332,7 @@ On the right is what Bee would have shown me: yes, each copy of the project gets
 Same thing again — more searching by hand, while Bee would've just said yes, through the mcpServers option.
 → So Bee would have answered before I'd even finished typing.
 Instead, I did it the old-fashioned way — typing, while Krzys sat there waiting.
-And then when the meeting ends, the summary just writes itself.
-
-If asked: both answers are checked against the Convex agent-mode docs and the Claude Agent SDK TypeScript reference, October 2026. The searches on screen are illustrations, not a log of what I actually typed. I didn't time it, so I won't put a number on it.`,
+And then when the meeting ends, the summary just writes itself.`,
 
   "bee-06-summary": `So normally, after a meeting, someone has to sit there and write up the notes.
 → With Bee, the summary just writes itself — the whole meeting folds down into one short summary, on its own.
@@ -350,9 +340,7 @@ If asked: both answers are checked against the Convex agent-mode docs and the Cl
 → The action items, each with an owner, so it's clear who's doing what.
 → And it's saved as a note — so next time someone says "last time we…", Bee can actually find it.
 → And if you missed the meeting, someone who was there just forwards you that file, and you're caught up on what was decided and who's doing what.
-So that works great for one person, but it's even better as a team.
-
-If asked: Bee doesn't send summaries out by itself — each person's Bee saves its own copy, and a summary only covers the people running Bee. If the AI call fails it still saves a plain version, so a meeting's never lost. The meeting shown is an example.`,
+So that works great for one person, but it's even better as a team.`,
 
   "bee-07-teams": `So this is Teams mode, where everyone's Bee works together.
 Picture the room from above — three people, each with Bee on their own laptop.
@@ -360,9 +348,7 @@ Picture the room from above — three people, each with Bee on their own laptop.
 → Then Jo, then Sam, and so on — and every line lands in that person's colour.
 That's why everyone in the meeting needs Bee running on their own laptop.
 → Cos each line comes from that person's own microphone, so the name's never a guess.
-So you might be thinking — Teams already does transcripts, so what's the difference?
-
-If asked: the catch is that people without Bee aren't in the transcript, and the summary says it's partial. There's no bot in the call, and nothing joins automatically. The names and lines are examples.`,
+So you might be thinking — Teams already does transcripts, so what's the difference?`,
 
   "bee-14-compare": `So Teams already makes a transcript, so it's fair to ask what Bee actually adds.
 This is just how each one works.
@@ -371,9 +357,7 @@ Bee takes each line from that person's own mic, up close, so it's working from c
 → During the meeting — Teams gives you a live transcript to read, Bee gives you one or two short tips from your notes and the web, only when they help.
 → And your notes — Teams keeps transcripts in Microsoft 365, Bee keeps your notes and summaries on your own computer.
 So Teams is fine as a record — Bee's more about helping you while you're actually in the conversation.
-Which brings up the obvious question — what about privacy?
-
-If asked: the misheard words bit is my own experience — I haven't measured Teams or Bee for accuracy, so I wouldn't claim Bee is more accurate, just that it's working from clearer audio. Copilot and some Teams Rooms setups add more, so I'd call it "the standard Teams transcript".`,
+Which brings up the obvious question — what about privacy?`,
 
   "bee-08-private": `So privacy — Bee was built to be safe to just leave on.
 → Say you start sharing your screen — the bar just disappears from what everyone else sees, so you're never accidentally showing a tip.
@@ -383,26 +367,20 @@ It hides when you share your screen.
 Your notes and summaries stay on your computer.
 And nothing joins a meeting unless you click.
 So you're always the one in control of what it does.
-And after "is it safe", the next question's always — what does it cost?
-
-If asked: be precise here. Notes and summaries are only saved on your computer, and keys never leave it. Speech does get sent to the AI models so it can be understood. In Teams mode, shared phrases go through a short-lived online room that's deleted when the meeting ends, or after four hours at most. Screen-share hiding is part of meeting mode. Before anyone uses it on calls with providers or anything with patient data, we'd want a proper consent and privacy check first.`,
+And after "is it safe", the next question's always — what does it cost?`,
 
   "bee-13-cost": `So what does it cost us? Basically nothing extra.
 → Our Teams plan comes with $500 of AI usage every month, included, at no extra cost.
 → And that's what Bee runs on — turning speech into text, finding the right note, and writing the tip.
 That allowance is meant for exactly this kind of project.
 So trying it doesn't cost us anything we're not already paying for.
-And it fits in with the tools you already use.
-
-If asked: I haven't measured what one meeting costs, so I wouldn't give a per-meeting number.`,
+And it fits in with the tools you already use.`,
 
   "bee-09-tools": `So Bee plugs into the tools you already use.
 → There's connectors — Eva for the team's work, vmem for your history, or basically any tool that speaks MCP, which is just a standard way for AI tools to plug into other apps.
 → And it reads the meeting details from Outlook and Teams on your own computer, so it knows which meeting you're in and who's in it.
 So you don't have to tell it anything — it already knows the context.
-Now let me step back for a sec — why's Bee built this way?
-
-If asked: connectors use a normal sign-in. Meeting details are read locally, and nothing gets sent to join the meeting. The Teams meeting detection is Windows-only right now, and I haven't tested it on a real Windows machine yet.`,
+Now let me step back for a sec — why's Bee built this way?`,
 
   "bee-12-background": `So here's the bigger idea behind it.
 I think the AI tools that actually win are the ones with the least friction — they just work, and they do most of it in the background.
@@ -416,9 +394,7 @@ No skills, no tools, no traces to read.
 → And we've taken the same lesson back into Eva.
 In Simple Mode you don't think about starting or stopping a sandbox any more — it wakes up when you send a message, and goes to sleep when it's idle.
 So yeah, the less a tool asks of you, the more you actually use it.
-So, one thing I'd ask.
-
-If asked: the thread on screen is an example, shaped like a real Grok bot run on Eva — one message, then updates until the change is live.`,
+So, one thing I'd ask.`,
 
   "bee-10-close": `→ So the one thing I'd ask is, just try it in your next meeting.
 It runs on Windows and Mac, and if you want a hand setting it up, just grab me after.
