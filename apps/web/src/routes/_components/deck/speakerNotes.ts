@@ -283,6 +283,7 @@ When you're ready, press the right arrow and the title flies in.`,
 
   "bee-01-title": `So, this is Bee.
 → It's a small app I built that sits at the top of your screen during meetings.
+It's honestly just something I've been playing around with.
 It listens to the conversation, and when something comes up that you've already got notes on, it finds them and shows you, right there.
 → So the short version — it listens to your meeting and finds what you already know.
 And it's not a meeting bot either — nobody else in the call can see it, it's just on your own laptop.

@@ -15,6 +15,7 @@ import {
   isTypingTarget,
   useDeckNavigation,
 } from "./deckNavigation";
+import type { DeckNavigation } from "./deckNavigation";
 import { deckSyncRef } from "./deckSyncRef";
 import { postDeckMessage } from "./presenterSync";
 import { PresenterClock } from "./PresenterClock";
@@ -48,6 +49,13 @@ export function PresenterView({
   const stage = useStageScale();
   const syncRef = deckSyncRef(basePath, nav.applyRemote);
 
+  // Next and back move whole slides, as on the stage: the build plays itself.
+  const slideNav: DeckNavigation = {
+    ...nav,
+    next: () => nav.goTo(slide + 1),
+    prev: nav.prevSlide,
+  };
+
   const { entry, step, total } = nav;
   const upcoming = slide < total ? slides[slide] : undefined;
   // The preview has to match the stage, including a light slide's surface.
@@ -55,7 +63,7 @@ export function PresenterView({
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (isTypingTarget(event.target)) return;
-    handleStepKey(event, nav);
+    handleStepKey(event, slideNav);
   }
 
   return (
@@ -129,7 +137,7 @@ export function PresenterView({
               variant="ghost"
               size="icon"
               aria-label="Previous"
-              onClick={nav.prev}
+              onClick={slideNav.prev}
               className="text-white/60 hover:bg-white/10 hover:text-white"
             >
               <IconChevronLeft />
@@ -139,7 +147,7 @@ export function PresenterView({
               variant="ghost"
               size="icon"
               aria-label="Next"
-              onClick={nav.next}
+              onClick={slideNav.next}
               className="text-white/60 hover:bg-white/10 hover:text-white"
             >
               <IconChevronRight />
