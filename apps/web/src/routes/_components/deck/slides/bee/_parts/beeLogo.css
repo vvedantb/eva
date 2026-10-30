@@ -1,0 +1,326 @@
+/* Bee's mark (BeeLogo.tsx), ported from the Bee app's styles.css. Transforms use view-box units, so origins are in the 64-unit art space. */
+.bee-logo {
+  flex: none;
+  overflow: visible;
+}
+
+.bee-logo-art,
+.bee-logo-eyes,
+.bee-logo-wing,
+.bee-logo-glow,
+.bee-flight,
+.bee-fx-ring,
+.bee-fx-honey,
+.bee-fx-glass,
+.bee-fx-trail circle,
+.bee-fx-orbit circle {
+  transform-box: view-box;
+}
+
+.bee-logo-art,
+.bee-logo-glow,
+.bee-flight,
+.bee-fx-ring,
+.bee-fx-trail circle,
+.bee-fx-orbit circle {
+  transform-origin: 32px 35px;
+}
+
+.bee-logo-eyes {
+  transform-origin: 32px 29px;
+}
+
+.bee-logo-wing.left {
+  --flap: -1;
+  transform-origin: 25px 19px;
+}
+
+.bee-logo-wing.right {
+  --flap: 1;
+  transform-origin: 39px 19px;
+}
+
+.bee-fx-honey {
+  transform-origin: 50px 55px;
+}
+
+.bee-fx-glass {
+  transform-origin: 50px 51px;
+}
+
+.bee-fx-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* States (data-state, BeeLogo.tsx). Base declarations are each state's still pose; animations layer on top. Path keyframes
+   (bee-eight, bee-orbit-*, bee-loop*) are generated in beeLogoMotion.ts. Amplitudes come from variables on the svg, sized per view. */
+
+/* Duration comes from the element style (3–5 s per instance); the blink is the last 5 %. */
+.bee-logo.animated .bee-logo-eyes {
+  animation: bee-blink 4s ease-in-out infinite;
+}
+
+/* Idle: slow hover, occasional flutter. */
+.bee-logo[data-state="idle"] .bee-flight {
+  animation: bee-hover 3s ease-in-out infinite;
+}
+
+.bee-logo[data-state="idle"] .bee-logo-wing {
+  animation: bee-flutter 7s ease-in-out var(--blink-delay) infinite;
+}
+
+/* Listening: soft flutter; the ring and glow follow --level (mic input, 0..1). */
+.bee-logo[data-state="listening"] .bee-logo-wing {
+  animation: bee-flutter-soft 420ms ease-in-out infinite alternate;
+}
+
+.bee-logo[data-state="listening"] .bee-logo-glow {
+  scale: calc(0.94 + var(--level) * 0.16);
+}
+
+.bee-fx-ring.level {
+  scale: calc(1 + var(--level) * var(--ring-gain));
+  opacity: calc(0.25 + var(--level) * 0.6);
+}
+
+.bee-fx-ring.echo {
+  opacity: 0;
+  animation: bee-echo 2.2s ease-out infinite;
+}
+
+/* Thinking: fast blurred flap, pulsing glow, three orbiting dots. */
+.bee-logo[data-state="thinking"] .bee-flight {
+  animation: bee-bob 1.4s ease-in-out infinite;
+}
+
+.bee-logo[data-state="thinking"] .bee-logo-wing {
+  animation: bee-blur-flap 90ms linear infinite alternate;
+  filter: var(--blur, none);
+}
+
+.bee-logo[data-state="thinking"] .bee-logo-glow {
+  animation: bee-glow 1.6s ease-in-out infinite;
+}
+
+.bee-fx-orbit.front circle {
+  animation: bee-orbit-front 1.8s linear infinite;
+}
+
+.bee-fx-orbit.back circle {
+  animation: bee-orbit-back 1.8s linear infinite;
+}
+
+/* Searching (web_search): a smaller bee on a figure-8, with a magnifier and a trail. */
+.bee-logo[data-state="searching"] .bee-flight {
+  scale: 0.78;
+  animation: bee-eight 3.2s linear infinite;
+}
+
+.bee-logo[data-state="searching"] .bee-logo-wing,
+.bee-logo[data-state="tool"] .bee-logo-wing,
+.bee-logo[data-state="flying"] .bee-logo-wing {
+  animation: bee-buzz 120ms ease-in-out infinite alternate;
+}
+
+.bee-fx-trail circle {
+  animation: bee-eight 3.2s linear infinite;
+}
+
+.bee-fx-glass {
+  animation: bee-glass 1.2s ease-in-out infinite alternate;
+}
+
+/* Tool (connector, MCP, notes): the bee hovers left of a honeycomb cell that fills from the bottom. */
+.bee-logo[data-state="tool"] .bee-flight {
+  translate: -9px 0;
+  scale: 0.74;
+  animation: bee-tool-hover 1.6s ease-in-out infinite;
+}
+
+.bee-fx-honey {
+  scale: 1 0.6;
+  animation: bee-honey 2.6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+/* Done: one loop-de-loop, settle and sparkle, then rest. Plays once, then holds the last pose. */
+.bee-logo[data-state="done"] .bee-flight {
+  animation: bee-loop 3s linear both;
+}
+
+.bee-logo[data-state="done"] .bee-logo-art {
+  animation: bee-loop-spin 3s linear both;
+}
+
+.bee-logo[data-state="done"] .bee-logo-wing {
+  animation: bee-done-wings 3s linear both;
+}
+
+.bee-fx-spark {
+  animation: bee-spark 3s ease-out both;
+}
+
+.bee-fx-spark.late {
+  animation-delay: 0.12s;
+}
+
+/* Error: drooped wings, muted body, slow sink, danger dot. */
+.bee-logo[data-state="error"] .bee-flight {
+  translate: 0 2px;
+  animation: bee-sink 3.6s ease-in-out infinite alternate;
+}
+
+.bee-logo[data-state="error"] .bee-logo-art {
+  filter: var(--mute);
+  rotate: -3deg;
+}
+
+.bee-logo[data-state="error"] .bee-logo-wing {
+  transform: rotate(calc(var(--flap) * 40deg));
+}
+
+.bee-logo[data-state="error"] .bee-logo-glow {
+  opacity: 0.2;
+}
+
+@keyframes bee-blink {
+  0%,
+  95%,
+  100% {
+    transform: scaleY(1);
+  }
+  97.5% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes bee-flutter {
+  0%,
+  8%,
+  100% {
+    transform: rotate(0deg);
+  }
+  2%,
+  6% {
+    transform: rotate(calc(var(--flap) * 14deg));
+  }
+  4% {
+    transform: rotate(calc(var(--flap) * -4deg));
+  }
+}
+
+@keyframes bee-buzz {
+  to {
+    transform: rotate(calc(var(--flap) * 16deg));
+  }
+}
+
+@keyframes bee-bob {
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+
+@keyframes bee-hover {
+  50% {
+    translate: 0 -2px;
+  }
+}
+
+@keyframes bee-flutter-soft {
+  from {
+    transform: rotate(calc(var(--flap) * -2deg));
+  }
+  to {
+    transform: rotate(calc(var(--flap) * 8deg));
+  }
+}
+
+@keyframes bee-echo {
+  from {
+    scale: 1;
+    opacity: 0.35;
+  }
+  to {
+    scale: var(--echo-scale);
+    opacity: 0;
+  }
+}
+
+@keyframes bee-blur-flap {
+  from {
+    transform: rotate(calc(var(--flap) * -6deg));
+    opacity: 1;
+  }
+  to {
+    transform: rotate(calc(var(--flap) * 20deg));
+    opacity: 0.55;
+  }
+}
+
+@keyframes bee-glow {
+  50% {
+    opacity: 0.55;
+    scale: 1.08;
+  }
+}
+
+@keyframes bee-glass {
+  from {
+    rotate: -10deg;
+  }
+  to {
+    rotate: 12deg;
+  }
+}
+
+@keyframes bee-tool-hover {
+  50% {
+    translate: -9px -2px;
+  }
+}
+
+@keyframes bee-honey {
+  0% {
+    scale: 1 0;
+    opacity: 1;
+  }
+  70%,
+  88% {
+    scale: 1 1;
+    opacity: 1;
+  }
+  100% {
+    scale: 1 1;
+    opacity: 0;
+  }
+}
+
+@keyframes bee-spark {
+  0%,
+  34% {
+    scale: 0;
+    rotate: 0deg;
+    opacity: 0;
+  }
+  44% {
+    scale: 1.15;
+    rotate: 20deg;
+    opacity: 1;
+  }
+  62%,
+  100% {
+    scale: 0;
+    rotate: 90deg;
+    opacity: 0;
+  }
+}
+
+@keyframes bee-sink {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 2.6px;
+  }
+}

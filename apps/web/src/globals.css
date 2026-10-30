@@ -509,7 +509,8 @@
 }
 
 @layer base {
-  :root {
+  :root,
+  .deck-app-light {
     color-scheme: light;
     /* Neutral/surface tokens follow the HeroUI palette (oklch→sRGB).
      * Accent tokens (--primary, --accent, --ring, --chart-1, sidebar
@@ -1213,9 +1214,9 @@ html[data-blur-pid] [data-pii] {
   --eva-purple: 139 63 184;
   --eva-blue: 59 125 216;
   --beam-stops:
-    transparent 0%,
-    rgb(var(--eva-purple) / 0.9) calc(var(--beam-spread) * 0.5),
-    color-mix(in oklab, rgb(var(--eva-purple)), rgb(var(--eva-blue))) var(--beam-spread),
+    transparent 0%, rgb(var(--eva-purple) / 0.9) calc(var(--beam-spread) * 0.5),
+    color-mix(in oklab, rgb(var(--eva-purple)), rgb(var(--eva-blue)))
+      var(--beam-spread),
     rgb(var(--eva-blue) / 0.95) calc(var(--beam-spread) * 1.5),
     transparent calc(var(--beam-spread) * 2);
 }
@@ -1862,4 +1863,125 @@ html[data-page-hidden] .ave-face *,
   .group-hover\:opacity-100 {
     opacity: 1;
   }
+}
+
+/* Presentation decks: on a light slide, Tailwind's white becomes dark ink, so
+   slides written for a dark stage (`text-white/70`, `bg-white/[0.05]`) read on
+   a light one. App windows inside a slide keep `.dark` and real white. See
+   `DeckThemeScope`. */
+.deck-ink-light {
+  --color-white: #18181b;
+}
+.deck-ink-light .dark {
+  --color-white: #fff;
+}
+/* App windows on a light slide: the app's own light tokens (the `:root`
+   block above also matches `.deck-app-light`), whatever the viewer's theme. */
+.deck-app-light {
+  color: rgb(var(--foreground));
+}
+/* Solid surfaces slides paint with `var(--deck-*, <dark>)`: the dark value is
+   the fallback, and a light slide supplies its own. */
+.deck-ink-light {
+  --deck-inset: #ffffff;
+  --deck-raised: #ffffff;
+  --deck-chip: #ffffff;
+  --deck-box: #faf9fc;
+  --deck-scrim: rgb(244 244 245 / 0.7);
+  /* Text on a solid ink fill (a `bg-white/70` bar reads as dark here). */
+  --deck-on-ink: rgb(255 255 255 / 0.92);
+}
+
+/* Card and chip fills on a light slide are solid: the same tint mixed into
+   white, so a glow behind a card stays behind it rather than showing through.
+   JS fills use `useSurface()`. */
+.deck-ink-light .bg-white\/\[0\.02\] {
+  background-color: color-mix(in srgb, #18181b 2%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.03\] {
+  background-color: color-mix(in srgb, #18181b 3%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.035\] {
+  background-color: color-mix(in srgb, #18181b 3.5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.04\] {
+  background-color: color-mix(in srgb, #18181b 4%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.045\] {
+  background-color: color-mix(in srgb, #18181b 4.5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.05\] {
+  background-color: color-mix(in srgb, #18181b 5%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.06\] {
+  background-color: color-mix(in srgb, #18181b 6%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.07\] {
+  background-color: color-mix(in srgb, #18181b 7%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.08\] {
+  background-color: color-mix(in srgb, #18181b 8%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.09\] {
+  background-color: color-mix(in srgb, #18181b 9%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.1\] {
+  background-color: color-mix(in srgb, #18181b 10%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.12\] {
+  background-color: color-mix(in srgb, #18181b 12%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.13\] {
+  background-color: color-mix(in srgb, #18181b 13%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.14\] {
+  background-color: color-mix(in srgb, #18181b 14%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.16\] {
+  background-color: color-mix(in srgb, #18181b 16%, #fff);
+}
+.deck-ink-light .bg-white\/\[0\.18\] {
+  background-color: color-mix(in srgb, #18181b 18%, #fff);
+}
+
+/* Bee's deck (see `BRAND_CLASS` in deckTone.ts): honey accents and Bee's own
+   typeface, Instrument Sans (SIL OFL 1.1, public/fonts/instrument-sans). */
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/instrument-sans/instrument-sans-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/instrument-sans/instrument-sans-latin-ext.woff2")
+    format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+.deck-brand-bee {
+  /* Honey from Bee's logo, deep enough to read as text on cream. */
+  --deck-brand-a: #f2a516;
+  --deck-brand-b: #c27406;
+  --deck-brand-c: #ffd75e;
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+}
+/* Warm cream instead of zinc, and Bee's dark ink. */
+.deck-stage-bee {
+  background-color: #fbf6ec;
+  color: #2a1e0c;
+}
+.deck-stage-bee .deck-ink-light {
+  --color-white: #2a1e0c;
+  --deck-box: #fffaf0;
 }

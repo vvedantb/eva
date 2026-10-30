@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+// Dev overlays are commented out for now; restore with the blocks below.
+// import { lazy, Suspense } from "react";
 import {
   createRootRouteWithContext,
   Outlet,
@@ -26,23 +27,23 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
 });
 
-/** Lazy so the agentation package stays out of the production bundle. */
-const DevAgentation = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/lib/components/DevAgentation").then((m) => ({
-        default: m.DevAgentation,
-      })),
-    )
-  : null;
-
-/** Lazy so @vvedantb/redline stays out of the production bundle. */
-const DevRedline = import.meta.env.DEV
-  ? lazy(() =>
-      import("@/lib/components/DevRedline").then((m) => ({
-        default: m.DevRedline,
-      })),
-    )
-  : null;
+// /** Lazy so the agentation package stays out of the production bundle. */
+// const DevAgentation = import.meta.env.DEV
+//   ? lazy(() =>
+//       import("@/lib/components/DevAgentation").then((m) => ({
+//         default: m.DevAgentation,
+//       })),
+//     )
+//   : null;
+//
+// /** Lazy so @vvedantb/redline stays out of the production bundle. */
+// const DevRedline = import.meta.env.DEV
+//   ? lazy(() =>
+//       import("@/lib/components/DevRedline").then((m) => ({
+//         default: m.DevRedline,
+//       })),
+//     )
+//   : null;
 
 function RootComponent() {
   useDocumentTitle();
@@ -75,6 +76,7 @@ function RootComponent() {
       <AppToaster />
       {/* No analytics from embedded documents: the host page already counts. */}
       {IS_EMBEDDED ? null : <Analytics />}
+      {/* Dev overlays, commented out for now.
       {DevAgentation ? (
         <Suspense fallback={null}>
           <DevAgentation />
@@ -84,7 +86,7 @@ function RootComponent() {
         <Suspense fallback={null}>
           <DevRedline />
         </Suspense>
-      ) : null}
+      ) : null} */}
     </>
   );
 
