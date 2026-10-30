@@ -28,7 +28,6 @@ import { AnnualQ2 } from "./annual/b05-q2";
 import { AnnualQ3 } from "./annual/b06-q3";
 import { AnnualVolume } from "./annual/b07-volume";
 import { AnnualProviders } from "./annual/c01-providers";
-import { AnnualSdks } from "./annual/c02-sdks";
 import { AnnualHandoff } from "./annual/c03-handoff";
 import { AnnualAccounts } from "./annual/c04-accounts";
 import { AnnualMcp } from "./annual/c05-mcp";
@@ -45,8 +44,6 @@ import { AnnualLessons } from "./annual/d07-lessons";
 import { AnnualDurable } from "./annual/d08-durable";
 
 import { Slide04Sessions } from "./04-sessions";
-import { FridayPlan } from "./friday/b05-plan";
-import { FridayReviews } from "./friday/b08-reviews";
 import { FridayReliability } from "./friday/b13-reliability";
 import { FridayLimits } from "./friday/b18-limits";
 /**
@@ -151,28 +148,10 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 2,
   },
   {
-    id: "annual-c02-sdks",
-    title: "Proper connections",
-    Component: AnnualSdks,
-    steps: 2,
-  },
-  {
     id: "annual-c03-handoff",
     title: "Change your mind mid-job",
     Component: AnnualHandoff,
     steps: 1,
-  },
-  {
-    id: "friday-b05-plan",
-    title: "Ask for a plan",
-    Component: FridayPlan,
-    steps: 1,
-  },
-  {
-    id: "friday-b08-reviews",
-    title: "Reviewing",
-    Component: FridayReviews,
-    steps: 2,
   },
   {
     id: "annual-c04-accounts",

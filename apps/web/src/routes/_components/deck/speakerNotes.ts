@@ -150,11 +150,6 @@ Detail: the resting state is two people typing in one paragraph at once. Suggest
 Figures: collaborative editing, anchored comments, suggestion mode and version history all landed 10 June 2026.
 Next: When the work is several jobs, it becomes a project.`,
 
-  "friday-b05-plan": `The fastest way to make a big job safe is to ask for the plan first, and asking is now all it takes.
-→ Step 1: the control disappears and a sentence takes its place. The plan tab appears on its own once a plan exists; nothing to switch on or off.
-Detail: the resting state is the old mode dropdown above the prompt box, which people had to find and remember to turn off. Removing it is the pattern behind most of this deck: fewer controls, more plain English. It is far cheaper to argue with a paragraph than with a finished feature.
-Figures: the plan mode dropdown was removed on 23 August 2026 and replaced by simply asking.
-Next: when the work is done, it is checked without leaving Eva.`,
 
   "friday-b06-projects": `When a job is really several jobs, you need to see its shape, and the roadmap shows it.
 → Step 1: the bars fill. Each bar is one job, and how far it has filled is how far along it is, so the whole piece of work reads at a glance.
@@ -170,12 +165,6 @@ Next: With several jobs running, you need one place where the finished ones come
 Detail: the resting state is a quick task: one job, start to finish, no conversation expected. Describe it once and the finished work comes back for review. If asked which to use: start with a quick task and move up only when the job is bigger than one ask.
 Next: Bigger jobs start with writing things down, so documents now live inside Eva.`,
 
-  "friday-b08-reviews": `Checking the work no longer means leaving for another tool.
-→ Step 1: a comment lands on the change. A bundle of changes can be read, commented on and acted on here, laid out the way the room knows from GitHub.
-→ Step 2: the search overlay. One search reaches every codebase, team, project, task, session, document and artifact.
-Detail: keyboard shortcuts are rebindable, so heavy users can set it up the way their hands expect. The whole loop (ask, build, preview, review, merge) now happens in one browser tab.
-Figures: reviewing and answering bundles inside Eva, 3 August 2026; search across everything, 24 July 2026; rebindable shortcuts, 6 August 2026.
-Next: every supplier needs an account behind it, and accounts cost money.`,
 
   "friday-b09-automations": `Some work does not need a person to start it, so it now starts itself overnight.
 → Step 1: the dial sweeps from three to five in the morning and the five routines light up in order. They are ready-made; installing one takes a click, not retyping instructions.
@@ -407,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 44.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 41.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
 
@@ -504,7 +493,7 @@ Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
 
   "a15-framework": `This is the map an assessor reads: nine capabilities, each evidenced by a slide already shown.
-→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 26, with 24, 29 and 38. Debugging: slides 27 and 28. A skill beyond coding: slide 32, measurement, and slides 40 to 41, Jev. Improves the process: slides 33 to 36, and 46. Mentors and onboards: slide 39. Business and user empathy: slides 41 to 43. Identifies work to do: slides 31 and 47.
+→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 23, with 21, 26 and 35. Debugging: slides 24 and 25. A skill beyond coding: slide 29, measurement, and slides 37 to 38, Jev. Improves the process: slides 30 to 33, and 43. Mentors and onboards: slide 36. Business and user empathy: slides 38 to 40. Identifies work to do: slides 28 and 44.
 → Step 2: the thin evidence. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
 → Step 3: the totals. Volunteer the gaps before they are asked for, then close on the record.
 Figures: 4,732 changes and 1,348 sets of release notes, all written at the time. Repository and Eva's own records, 11 January to 16 September 2026.
@@ -548,7 +537,7 @@ Figures: April 377, May 336, June 230, totalling 943 changes shipped. Documents 
 Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 26 takes that apart phase by phase.
+→ Step 1: July, 1,052 changes, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 23 takes that apart phase by phase.
 → Step 2: August, 877 changes. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September, 102 changes to the 16th. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: September is a part month, so do not read the drop as a slowdown. Nothing here adds a new thing to do; it makes the existing things safe to depend on.
@@ -567,7 +556,7 @@ Next: the first peak, and what it built.`,
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 23 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 20 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -637,20 +626,14 @@ Next: when something still goes wrong, you are told within minutes.`,
 → Step 2: the point. If a supplier raises its prices, falls behind or goes down, the work moves to another without anyone changing how they work.
 Detail: the columns are the shipped catalogue, not a wish list; legacy entries kept only so old sessions still load are excluded. Each provider needs an account behind it, which comes three slides on. A session remembers its last model, so nobody chooses every time.
 Figures: Claude 7, Codex 4, OpenCode 4, Cursor 6, 21 models in all. Repository catalogue at 16 September 2026.
-Next: several suppliers only help if each connection is dependable.`,
+Next: a choice of supplier is only worth having if you can change your mind mid-job.`,
 
-  "annual-c02-sdks": `Every provider was moved off reading text out of a terminal and onto its own official connection.
-→ Step 1: the three connections convert, one at a time: Cursor on 5 August, Codex on 12 August, OpenCode on 14 August.
-→ Step 2: the old command-line runner is struck out, removed on 18 August, so no half-abandoned path is left to rot.
-Detail: the old method started each provider as a command-line program and read its printed output, so any change to that output broke Eva silently. The official connections report events, errors and completion directly, so failures now surface as failures instead of silence. The switch also made replies faster. The line to quote: the last command-line subprocess is gone.
-Figures: Cursor 5 August 2026, Codex 12 August 2026, OpenCode 14 August 2026; the old runner deleted 18 August 2026.
-Next: with dependable connections, a job can switch supplier part-way through.`,
 
   "annual-c03-handoff": `A choice of supplier is worth little if changing your mind means starting again.
 → Step 1: the conversation card lifts off Claude and lands on Cursor, word for word, and a handed-over badge appears on it.
 Detail: each provider keeps its own private record of the conversation inside the workspace, so before this a mid-conversation switch started the new provider blind. Replies are now stamped with the model that produced them, and on a switch only the turns the incoming provider has not seen are passed across, capped in size and clearly marked. The badge on the handover turn keeps the transcript honest about who wrote what.
 Figures: cross-provider handoffs landed 24 August 2026.
-Next: the cheapest time to change your mind is before the work starts, so ask for the plan.`,
+Next: suppliers are paid per person, so the next question is whether that capacity can be shared.`,
 
   "annual-c04-accounts": `Provider capacity is bought per person, so the useful question is whether it can be shared.
 → Step 1: each colleague attaches their own provider account, so their work spends their own allowance.
@@ -670,7 +653,7 @@ Next: letting other tools in is only safe if the locks are designed in.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 31 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 28 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 
