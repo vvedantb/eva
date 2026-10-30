@@ -1,5 +1,6 @@
 import { AnimatePresence, m } from "motion/react";
-import { cn, motionFast, motionSpring } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition, springTransition } from "@vvedantb/ui";
 import type { DeckSlide } from "../slides/types";
 
 interface DeckOutlineProps {
@@ -27,8 +28,8 @@ export function DeckOutline({
           animate={{ x: 0, opacity: 1 }}
           // The drawer travels its full width in, but only a token distance
           // out: a long exit holds the stage hostage after the choice is made.
-          exit={{ x: -24, opacity: 0, transition: motionFast }}
-          transition={motionSpring}
+          exit={{ x: -24, opacity: 0, transition: tokenTransition.fast }}
+          transition={springTransition}
           // Concentric: 24px outer corner = 8px row corner + the 16px of
           // padding between the two. Explicit pixels, because the `rounded-*`
           // scale is derived from a user-settable `--radius`.

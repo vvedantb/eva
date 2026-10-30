@@ -19,14 +19,15 @@ import { AveHeaderButton } from "@/lib/components/ave/AveHeaderButton";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
-  motionBase,
-  motionSpring,
+  tokenTransition,
+  springTransition,
   projectVelocity,
   Spinner,
-} from "@eva/ui";
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
@@ -45,7 +46,6 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { usePageTitle } from "@/lib/contexts/PageTitleContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 
@@ -425,7 +425,7 @@ export function Sidebar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionBase}
+            transition={tokenTransition.base}
           />
         )}
       </AnimatePresence>
@@ -449,7 +449,7 @@ export function Sidebar() {
         )}
         initial={false}
         animate={{ x: isDesktop || mobileOpen ? 0 : "-100%" }}
-        transition={motionSpring}
+        transition={springTransition}
         drag={!isDesktop && mobileOpen ? "x" : false}
         dragDirectionLock
         dragConstraints={{ left: 0, right: 0 }}
@@ -515,7 +515,7 @@ export function Sidebar() {
                       )}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={motionBase}
+                      transition={tokenTransition.base}
                     >
                       {isFlatPanel ? (
                         <>
@@ -653,7 +653,7 @@ export function Sidebar() {
                         key={`${panelKey}-nav`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={motionBase}
+                        transition={tokenTransition.base}
                       >
                         <Suspense fallback={sidebarPanelFallback}>
                           {showGlobalSessionsPanel ? (

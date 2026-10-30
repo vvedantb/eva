@@ -7,13 +7,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+} from "@vvedantb/ui";
 import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
-import type { Id } from "@eva/backend";
+import type { Doc, Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
 import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import {
   SandboxErrorNotice,
@@ -23,7 +26,6 @@ import { SessionSwitcher } from "./SessionSwitcher";
 import { SessionGroupBadge } from "./SessionGroupBadge";
 import { SessionRepoBadges } from "./SessionRepoBadges";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
@@ -38,6 +40,8 @@ interface SessionChatHeaderArgs {
   messageCount: number;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
+  /** Work on the sandbox branch not on GitHub yet; drives Commit & push. */
+  sandboxGitSync: Doc<"sessions">["sandboxGitSync"];
   /** True while the assistant holds the turn — hides the sleep button. */
   isAssistantResponding: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
@@ -72,6 +76,7 @@ export function useSessionChatHeader({
   messageCount,
   isSandboxActive,
   isSandboxToggling,
+  sandboxGitSync,
   isAssistantResponding,
   deploymentStatus,
   simpleView,
@@ -117,6 +122,11 @@ export function useSessionChatHeader({
         model={model}
         providerAccountId={providerAccountId}
         accountLabel={usageAccountLabel}
+      />
+      <SandboxCommitPushButton
+        gitSync={sandboxGitSync}
+        isSandboxActive={isSandboxActive}
+        target={{ kind: "session", sessionId }}
       />
       <SandboxStartStopButton
         isActive={isSandboxActive}

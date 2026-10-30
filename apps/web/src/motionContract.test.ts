@@ -1,15 +1,15 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 import { fileURLToPath } from "node:url";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
+/** The `@vvedantb/ui` sources: the markup and inline styles behind eva's bars. */
+const vvedantbSrc = join(webSrc, "..", "node_modules", "@vvedantb", "ui", "src");
 
-const css = readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll(
-  "\r\n",
-  "\n",
-);
+const css = readAppStylesheet();
 /** Comments name the very classes these rules ban, so they have to go first. */
 const cssRules = stripComments(css);
 const tailwindConfig = stripComments(
@@ -254,12 +254,31 @@ describe("hover-only controls are reachable without hover", () => {
  * than an eye.
  */
 describe("bars animate transform, not geometry", () => {
-  const bars = [
-    { file: "ui/progress.tsx", root: uiSrc, transform: "translateX(" },
-    { file: "ai-elements/test-results.tsx", root: uiSrc, transform: "scaleX(" },
+  /**
+   * `eva` names the config entry whose classes replace the bar's built-in ones;
+   * without it eva's config does not touch the bar, so vvedantb's classes are
+   * what eva renders.
+   */
+  const bars: Array<{
+    file: string;
+    root: string;
+    transform: string;
+    eva?: { file: string; entry: string };
+  }> = [
+    {
+      file: "ui/progress.tsx",
+      root: vvedantbSrc,
+      transform: "translateX(",
+      eva: { file: "foundations.ts", entry: "Progress" },
+    },
+    {
+      file: "ai-elements/test-results.tsx",
+      root: vvedantbSrc,
+      transform: "scaleX(",
+    },
     {
       file: "ai-elements/model-picker-content.tsx",
-      root: uiSrc,
+      root: vvedantbSrc,
       transform: "translateY(",
     },
     {
@@ -269,14 +288,23 @@ describe("bars animate transform, not geometry", () => {
     },
   ];
 
-  it.each(bars)("$file moves with $transform", ({ file, root, transform }) => {
+  it.each(bars)("$file moves with $transform", ({ file, root, transform, eva }) => {
     const source = stripComments(readFileSync(join(root, file), "utf8"));
+    const classes =
+      eva === undefined
+        ? source
+        : configEntry(
+            stripComments(readFileSync(join(uiSrc, "config", eva.file), "utf8")),
+            eva.entry,
+          );
     expect(source).toContain(transform);
-    expect(source).toContain("transition-transform");
-    expect(
-      source,
-      "transitioning a geometry property relayouts every frame",
-    ).not.toMatch(/transition-\[[^\]]*\b(?:width|height|top|left)\b/);
+    expect(classes).toContain("transition-transform");
+    for (const rendered of [source, classes]) {
+      expect(
+        rendered,
+        "transitioning a geometry property relayouts every frame",
+      ).not.toMatch(/transition-\[[^\]]*\b(?:width|height|top|left)\b/);
+    }
     expect(
       source,
       "size or offset it once in CSS, then move it with transform",
@@ -311,6 +339,13 @@ describe("bars animate transform, not geometry", () => {
     expect(source).not.toMatch(/style=\{\{[^}]*\bwidth\s*:/);
   });
 });
+
+/** eva's `entry: { … }` config block; entries close on `\n  },`. */
+function configEntry(config: string, entry: string): string {
+  const startAt = config.indexOf(`\n  ${entry}: {`);
+  expect(startAt, `eva's config has no ${entry} entry`).toBeGreaterThan(-1);
+  return config.slice(startAt, config.indexOf("\n  },", startAt));
+}
 
 /** The preludes of the blocks open at `index`, outermost first. */
 function enclosingBlocks(source: string, index: number): string[] {

@@ -2,13 +2,12 @@
 
 import { IconStar, IconUser } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { motionBase, motionStagger } from "@eva/ui";
+import { tokenTransition, staggerDelay, MarqueeOnHover } from "@vvedantb/ui";
 import { Widget } from "@/lib/components/Widget";
 import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { ScoreBar } from "./ScoreBar";
 import { StatusChip } from "./StatusChip";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 
 type LeaderboardEntry = FunctionReturnType<
   typeof api.analytics.getLeaderboard
@@ -48,7 +47,10 @@ export function Leaderboard({ entries }: LeaderboardProps) {
                 className="space-y-2"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...motionBase, delay: motionStagger(index) }}
+                transition={{
+                  ...tokenTransition.base,
+                  delay: staggerDelay(index),
+                }}
               >
                 <div className="group flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">

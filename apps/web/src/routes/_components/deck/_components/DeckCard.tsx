@@ -1,7 +1,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
-import { cn, motionSpring } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { springTransition } from "@vvedantb/ui";
 import { EASE_OUT } from "./DeckPrimitives";
 import { BRAND_CLASS } from "./deckTone";
 import type { DeckBrand } from "./deckTone";
@@ -58,8 +59,8 @@ export function DeckCard({ deck, index }: DeckCardProps) {
         filter: "blur(0px)",
         transition: { duration: 0.5, ease: EASE_OUT, delay: index * 0.08 },
       }}
-      whileHover={{ y: -4, transition: motionSpring }}
-      whileTap={{ scale: 0.96, transition: motionSpring }}
+      whileHover={{ y: -4, transition: springTransition }}
+      whileTap={{ scale: 0.96, transition: springTransition }}
       // Concentric: 28px outer corner = the 12px thumbnail corner plus the 16px
       // of card padding around it. Explicit pixels on both sides of the pair,
       // because the `rounded-*` scale is derived from a user-settable

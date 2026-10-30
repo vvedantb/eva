@@ -5,11 +5,12 @@ import {
   HoverCardTrigger,
   HoverCardContent,
   Badge,
-  motionFast,
-  CircleSpinner,
-} from "@eva/ui";
+  tokenTransition,
+  Spinner,
+  CountPop,
+  countLabel,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { IconFolder } from "@tabler/icons-react";
@@ -54,7 +55,7 @@ export function BuildingProjectsBadge({
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.85 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <HoverCard>
             <HoverCardTrigger asChild>
@@ -66,7 +67,7 @@ export function BuildingProjectsBadge({
                   label={countLabel(buildingProjects.length)}
                   className="flex items-center gap-1.5"
                 >
-                  <CircleSpinner size="sm" className="size-[11px]" />
+                  <Spinner variant="circle" size="sm" className="size-[11px]" />
                   <span className="text-2xs font-medium text-muted-foreground tabular-nums">
                     {buildingProjects.length}
                   </span>
@@ -115,7 +116,11 @@ export function BuildingProjectsBadge({
                       label="Building"
                       count={buildingProjects.length}
                       glyph={
-                        <CircleSpinner size="sm" className="size-[11px]" />
+                        <Spinner
+                          variant="circle"
+                          size="sm"
+                          className="size-[11px]"
+                        />
                       }
                     >
                       {buildingProjects.map((project) => (

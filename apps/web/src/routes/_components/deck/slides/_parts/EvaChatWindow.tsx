@@ -1,5 +1,6 @@
 import { IconArrowUp, IconChevronDown } from "@tabler/icons-react";
-import { Message, MessageContent, ProviderIcon, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Message, MessageContent, ProviderIcon } from "@vvedantb/ui";
 import { useAppScheme, Reveal } from "../../_components/DeckPrimitives";
 
 /** What the one person types. Short enough to sit on a single line. */

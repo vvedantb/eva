@@ -6,6 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Link } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import {
   Button,
   Dialog,
@@ -14,14 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
   Spinner,
-  cn,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+  ListEnter,
+  MarqueeOnHover,
+} from "@vvedantb/ui";
 import { IconAlertTriangle, IconFileText } from "@tabler/icons-react";
 import { compactRelativeTime } from "@eva/shared/dates";
 import { useQueryState } from "nuqs";
 import { branchParser } from "@/lib/search-params";
 import { ContextSidebarHeaderIconButton } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 import {
   SharedLayoutNav,
   SharedLayoutNavSurface,
@@ -29,8 +32,6 @@ import {
 } from "@/lib/components/sidebar/SharedLayoutNav";
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment } from "@/lib/numId";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 interface TestingArenaSidebarProps {
@@ -53,7 +54,7 @@ export function TestingArenaSidebar({
 
   const [branch] = useQueryState("branch", branchParser);
   const [showTestAllModal, setShowTestAllModal] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isTestingAll, setIsTestingAll] = useState(false);
   const lastCreateRequestIdRef = useRef(createRequestId ?? 0);
 
@@ -103,7 +104,6 @@ export function TestingArenaSidebar({
         className="text-warning"
         onClick={() =>
           requestConfirm(
-            altHeld,
             () => setShowTestAllModal(true),
             () => {
               void handleTestAll();

@@ -1,10 +1,10 @@
 "use client";
 
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
 import { IconArrowRight } from "@tabler/icons-react";
+import { RelativeDateTime } from "@vvedantb/ui";
 
 type TaskActivityEvent = NonNullable<
   FunctionReturnType<typeof api.taskActivity.listByTask>

@@ -1,5 +1,6 @@
 import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
-import { getProviderLabel, type ActivityStep } from "@eva/ui";
+import { getProviderLabel } from "@vvedantb/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { isSandboxPausedAlert } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -542,33 +543,4 @@ export function isAssistantTurnInProgress(
     );
   }
   return false;
-}
-
-/** One tick per user turn for the jump rail. */
-export function buildJumpRailTicks(
-  messages: ChatBodyMessage[],
-): Array<{ id: string; content: string; reply?: string }> {
-  const ticks: Array<{ id: string; content: string; reply?: string }> = [];
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    if (!message || message.role !== "user" || message.isSystemAlert) {
-      continue;
-    }
-    let reply: string | undefined;
-    for (let j = i + 1; j < messages.length; j++) {
-      const next = messages[j];
-      if (!next || next.isSystemAlert) continue;
-      if (next.role === "user") break;
-      if (next.role === "assistant") {
-        reply = next.content;
-        break;
-      }
-    }
-    ticks.push({
-      id: message._id,
-      content: message.content,
-      ...(reply !== undefined && reply.length > 0 ? { reply } : {}),
-    });
-  }
-  return ticks;
 }

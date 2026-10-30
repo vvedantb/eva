@@ -7,7 +7,8 @@ import {
   IconMessages,
 } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Message, MessageContent, ProviderIcon, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Message, MessageContent, ProviderIcon } from "@vvedantb/ui";
 import {
   useAppScheme,
   Accent,

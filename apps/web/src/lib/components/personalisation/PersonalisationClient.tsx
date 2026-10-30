@@ -3,7 +3,6 @@
 import { useQuery, useMutation } from "convex/react";
 import { api, PERSONALISATION_PRESETS } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import {
   Textarea,
   Button,
@@ -11,7 +10,8 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@eva/ui";
+  SettingsSection,
+} from "@vvedantb/ui";
 import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { RolePresetPicker } from "./RolePresetPicker";

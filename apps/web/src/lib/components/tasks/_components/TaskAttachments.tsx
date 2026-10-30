@@ -4,14 +4,12 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { motionFast } from "@eva/ui";
+import { tokenTransition, useRequestConfirm, ListEnter } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { labelForAttachment } from "@/lib/components/attachments/attachmentMeta";
-import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 /**
  * "Files" section for a task's attachments. Each card opens the stored blob in a
@@ -28,7 +26,7 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
     label: string;
   } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   async function removeStored(file: {
     storageId: Id<"_storage">;
@@ -69,7 +67,7 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <span className="text-xs font-medium text-muted-foreground">
               Files
@@ -95,9 +93,12 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
                               attachment.contentType,
                             ),
                           };
-                          requestConfirm(altHeld, () => setPending(next), () => {
-                            void removeStored(next);
-                          });
+                          requestConfirm(
+                            () => setPending(next),
+                            () => {
+                              void removeStored(next);
+                            },
+                          );
                         }}
                       />
                     </a>

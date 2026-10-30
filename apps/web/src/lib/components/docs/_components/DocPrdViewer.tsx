@@ -26,8 +26,12 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -41,7 +45,6 @@ import {
   IconHistory,
   IconPencilCheck,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocInterviewDialog } from "../DocInterviewDialog";
 import { DocContentTab } from "./DocContentTab";
 import { HtmlPreviewFrame } from "./HtmlPreviewFrame";
@@ -51,12 +54,6 @@ import { DocTestGenDialog } from "./DocTestGenDialog";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -97,7 +94,7 @@ export function DocPrdViewer({
   const [interviewOpen, setInterviewOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [testGenConfirmOpen, setTestGenConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isTriggeringTestGen, setIsTriggeringTestGen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -270,7 +267,6 @@ export function DocPrdViewer({
                   title={skipConfirmTitle("Generate Tests")}
                   onClick={() =>
                     requestConfirm(
-                      altHeld,
                       () => setTestGenConfirmOpen(true),
                       () => {
                         void handleGenerateTests();
@@ -322,7 +318,7 @@ export function DocPrdViewer({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Surface density="tight" className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -417,7 +413,7 @@ export function DocPrdViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="content"
@@ -442,7 +438,7 @@ export function DocPrdViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="html"

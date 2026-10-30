@@ -10,14 +10,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  CircleSpinner,
   Spinner,
   toast,
-} from "@eva/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+  useRequestConfirm,
+  ListEnter,
+} from "@vvedantb/ui";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import type { Id } from "@eva/backend";
 import { CreatedTimelineItem } from "./CreatedTimelineItem";
 import { TaskActivityItem } from "./TaskActivityItem";
@@ -100,7 +99,7 @@ export function ActivityTimeline({
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const removeComment = useMutation(
     api.taskComments.remove,
@@ -279,7 +278,6 @@ export function ActivityTimeline({
                     repliesByParentId={repliesByParentId}
                     onDeleteRequest={(commentId) =>
                       requestConfirm(
-                        altHeld,
                         () => setDeletingCommentId(commentId),
                         () => {
                           void deleteComment(commentId);
@@ -345,7 +343,7 @@ export function ActivityTimeline({
               onClick={handleDeleteComment}
               disabled={isDeletingComment}
             >
-              {isDeletingComment && <CircleSpinner size="sm" />}
+              {isDeletingComment && <Spinner variant="circle" size="sm" />}
               Delete
             </Button>
           </DialogFooter>

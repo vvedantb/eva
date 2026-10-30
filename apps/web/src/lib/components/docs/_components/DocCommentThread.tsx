@@ -6,17 +6,17 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   LIST_ROW_CONTROL_CLASS,
   Textarea,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  RelativeDateTime,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconCheck, IconArrowBackUp } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { useState, useEffect, useRef } from "react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
@@ -192,7 +192,7 @@ export function DocCommentThread({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Textarea
               value={replyContent}

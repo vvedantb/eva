@@ -1,6 +1,6 @@
 import { IconCheck } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { motionSpring } from "@eva/ui";
+import { springTransition } from "@vvedantb/ui";
 import { Card } from "../../_components/DeckPrimitives";
 import { BRAND, BRAND_GRADIENT, DUR, EASE } from "../../_components/motion";
 
@@ -41,7 +41,7 @@ export function MoA4CapabilityCard({
       <m.div
         style={{ transformPerspective: 900, transformStyle: "preserve-3d" }}
         whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
-        transition={motionSpring}
+        transition={springTransition}
       >
         <Card className="relative flex h-[68px] items-center p-5">
           <span className="text-base leading-snug font-medium text-white">

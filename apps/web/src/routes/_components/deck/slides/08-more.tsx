@@ -11,7 +11,7 @@ import {
 } from "@tabler/icons-react";
 import { m } from "motion/react";
 import type { TargetAndTransition } from "motion/react";
-import { motionSpring } from "@eva/ui";
+import { springTransition } from "@vvedantb/ui";
 import { Card, Reveal, Shell, Title } from "../_components/DeckPrimitives";
 import { CountRoll, EASE, GridBackdrop } from "../_components/motion";
 
@@ -124,7 +124,7 @@ export function Slide08More() {
                   transformStyle: "preserve-3d",
                 }}
                 whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
-                transition={motionSpring}
+                transition={springTransition}
               >
                 <Card className="flex h-[176px] flex-col justify-between rounded-[24px]">
                   <m.div

@@ -1,4 +1,9 @@
 import { httpRouter } from "convex/server";
+import {
+  registerMcpRoutes,
+  sha256Hex,
+  timingSafeEqual,
+} from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -21,21 +26,14 @@ import {
   changelogVoteHmacMessage,
 } from "./_changelog/entry";
 import { buildChangelogVotePageHtml } from "./emailTemplates";
+import {
+  health,
+  mcpHandler,
+  oauthMetadata,
+  protectedResourceMetadata,
+} from "./mcp/native";
 
 const http = httpRouter();
-
-/** Compares two strings in constant time to prevent timing attacks. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const bufA = encoder.encode(a);
-  const bufB = encoder.encode(b);
-  if (bufA.byteLength !== bufB.byteLength) return false;
-  let mismatch = 0;
-  for (let i = 0; i < bufA.byteLength; i++) {
-    mismatch |= (bufA[i] ?? 0) ^ (bufB[i] ?? 0);
-  }
-  return mismatch === 0;
-}
 
 /** Verifies the MCP bootstrap authorization token from the request header. */
 function verifyMcpBootstrapToken(request: Request): boolean {
@@ -63,14 +61,6 @@ async function computeScopedHmac(message: string): Promise<string | null> {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
   return hmacSha256Hex(secret, message);
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 /** Reads a required form field from an x-www-form-urlencoded request body. */
@@ -494,10 +484,7 @@ const prWebhookSchema = z.object({
         ref: nullableString,
         sha: nullableString,
         // Fork PRs carry the fork here; their branch is not in the base repo.
-        repo: z
-          .object({ full_name: nullableString })
-          .nullable()
-          .catch(null),
+        repo: z.object({ full_name: nullableString }).nullable().catch(null),
       })
       .nullable()
       .catch(null),
@@ -561,44 +548,13 @@ function pushTouchesSkills(
   return !sawAnyPath;
 }
 
-// Boundary schemas for the deploy-key-protected MCP OAuth endpoints. These are
-// internal, so they are strict: any missing/mistyped field yields a 400.
-const oauthClientSchema = z.object({
-  clientId: z.string().min(1),
-  clientSecret: z.string().optional(),
-  redirectUris: z.array(z.string()).catch([]),
-});
-
-const oauthAuthCodeSchema = z.object({
-  code: z.string().min(1),
-  clerkUserId: z.string().min(1),
-  codeChallenge: z.string().min(1),
-  codeChallengeMethod: z.string().min(1),
-  redirectUri: z.string().min(1),
-  clientId: z.string().min(1),
-  expiresAt: z.number(),
-});
-
 /** Verifies a GitHub webhook HMAC-SHA256 signature against the shared secret. */
 async function verifyWebhookSignature(
   body: string,
   signature: string,
   secret: string,
 ): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  const computed =
-    "sha256=" +
-    Array.from(new Uint8Array(sig))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+  const computed = `sha256=${await hmacSha256Hex(secret, body)}`;
   return timingSafeEqual(computed, signature);
 }
 
@@ -907,171 +863,14 @@ http.route({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MCP OAuth State Endpoints
+// MCP (Clerk OAuth). Well-known routes, /mcp and /health.
 // ─────────────────────────────────────────────────────────────────────────────
 
-http.route({
-  path: "/api/mcp/oauth/clients",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const parsed = oauthClientSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return new Response("Invalid request body", { status: 400 });
-    }
-
-    await ctx.runMutation(internal.mcp.oauth.registerClient, {
-      clientId: parsed.data.clientId,
-      clientSecret: parsed.data.clientSecret,
-      redirectUris: parsed.data.redirectUris,
-    });
-
-    return new Response("OK", { status: 200 });
-  }),
-});
-
-http.route({
-  path: "/api/mcp/oauth/clients/:clientId",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    const clientId = pathParts[pathParts.length - 1];
-
-    if (!clientId) {
-      return new Response("clientId required", { status: 400 });
-    }
-
-    const client = await ctx.runQuery(internal.mcp.oauth.getClient, {
-      clientId,
-      now: Date.now(),
-    });
-
-    if (!client) {
-      return Response.json({ found: false }, { status: 404 });
-    }
-
-    return Response.json({ found: true, client });
-  }),
-});
-
-http.route({
-  path: "/api/mcp/oauth/auth-codes",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const parsed = oauthAuthCodeSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return new Response("Missing required fields", { status: 400 });
-    }
-
-    await ctx.runMutation(internal.mcp.oauth.storeAuthCode, parsed.data);
-
-    return new Response("OK", { status: 200 });
-  }),
-});
-
-http.route({
-  path: "/api/mcp/oauth/auth-codes/:code",
-  method: "DELETE",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    const code = pathParts[pathParts.length - 1];
-
-    if (!code) {
-      return new Response("code required", { status: 400 });
-    }
-
-    const entry = await ctx.runMutation(internal.mcp.oauth.consumeAuthCode, {
-      code,
-    });
-
-    if (!entry) {
-      return Response.json({ found: false }, { status: 404 });
-    }
-
-    return Response.json({ found: true, entry });
-  }),
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Convex-Native MCP Server (Node.js runtime)
-// ─────────────────────────────────────────────────────────────────────────────
-
-import {
-  oauthMetadata,
+registerMcpRoutes(http, {
+  authorizationServerMetadata: oauthMetadata,
   protectedResourceMetadata,
-  register,
-  authorizeGet,
-  token,
-  mcpHandler,
-  health,
-} from "./mcp/native";
-
-// OAuth metadata endpoints
-http.route({
-  path: "/.well-known/oauth-authorization-server",
-  method: "GET",
-  handler: oauthMetadata,
-});
-
-http.route({
-  path: "/.well-known/oauth-protected-resource",
-  method: "GET",
-  handler: protectedResourceMetadata,
-});
-
-// OAuth flow endpoints
-http.route({
-  path: "/mcp/oauth/register",
-  method: "POST",
-  handler: register,
-});
-
-http.route({
-  path: "/mcp/oauth/authorize",
-  method: "GET",
-  handler: authorizeGet,
-});
-
-http.route({
-  path: "/mcp/oauth/token",
-  method: "POST",
-  handler: token,
-});
-
-// MCP endpoint
-http.route({
-  path: "/mcp",
-  method: "GET",
-  handler: mcpHandler,
-});
-
-http.route({
-  path: "/mcp",
-  method: "POST",
-  handler: mcpHandler,
-});
-
-http.route({
-  path: "/mcp",
-  method: "DELETE",
-  handler: mcpHandler,
+  endpoints: [{ handler: mcpHandler }],
+  health: { handler: health },
 });
 
 const changelogLinkFields = {
@@ -1134,13 +933,6 @@ http.route({
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   }),
-});
-
-// Health check
-http.route({
-  path: "/health",
-  method: "GET",
-  handler: health,
 });
 
 export default http;

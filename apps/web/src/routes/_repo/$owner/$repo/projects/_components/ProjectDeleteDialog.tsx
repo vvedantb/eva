@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 /**
  * What is about to be deleted. One project names itself; a bulk selection can
@@ -59,9 +59,7 @@ export function ProjectDeleteDialog({
             ) : (
               <>
                 Are you sure you want to delete{" "}
-                <strong>
-                  {target?.kind === "single" ? target.title : ""}
-                </strong>
+                <strong>{target?.kind === "single" ? target.title : ""}</strong>
                 ?
               </>
             )}

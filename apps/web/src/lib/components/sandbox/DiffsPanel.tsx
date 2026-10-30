@@ -7,10 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, SearchInput, Spinner, toast } from "@eva/ui";
+import {
+  Accordion,
+  SearchInput,
+  Spinner,
+  toast,
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { commitDiffQuery } from "@/lib/prReviewQueries";
@@ -26,7 +31,11 @@ import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
 import { useDiffIgnoreWhitespace } from "./useDiffIgnoreWhitespace";
-import { applyIgnoreWhitespace, type DiffFileEntry } from "./diffFiles";
+import {
+  applyIgnoreWhitespace,
+  summarizeDiffSize,
+  type DiffFileEntry,
+} from "./diffFiles";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
@@ -367,6 +376,11 @@ export function DiffsPanel({
         ? null
         : createPortal(
             <DiffsToolbar
+              size={
+                source.status === "ready"
+                  ? summarizeDiffSize(fileEntries)
+                  : null
+              }
               scopedCommit={
                 scopedCommit === undefined
                   ? null

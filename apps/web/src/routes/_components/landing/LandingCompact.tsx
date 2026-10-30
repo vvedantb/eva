@@ -2,7 +2,8 @@
 
 import { SignInButton } from "@clerk/clerk-react";
 import { IconArrowRight } from "@tabler/icons-react";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { BrandMark } from "./BrandMark";
 import { LandingBrand } from "./LandingBrand";
 import {

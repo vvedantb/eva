@@ -4,11 +4,17 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { Button, Checkbox, RefreshSpinIcon, Spinner, toast } from "@eva/ui";
+import {
+  Button,
+  Checkbox,
+  RefreshSpinIcon,
+  Spinner,
+  toast,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconGitBranch } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type RepoEntry = {

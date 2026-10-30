@@ -8,7 +8,7 @@ import {
 import { useAuth } from "@clerk/clerk-react";
 import { NuqsAdapter } from "@/lib/nuqsTanstackAdapter";
 import { Analytics } from "@vercel/analytics/react";
-import { TooltipProvider } from "@eva/ui";
+import { TooltipProvider } from "@vvedantb/ui";
 import { ClientProvider } from "@/lib/components/ClientProvider";
 import { AppToaster } from "@/lib/components/AppToaster";
 import { AppShell } from "@/lib/components/AppShell";
@@ -54,7 +54,7 @@ function RootComponent() {
   // provider there keeps marketing visitors from opening a WebSocket to the
   // production deployment (ClientProvider's presence/user bootstrapping and
   // ChangelogDialogGate each subscribe immediately on mount). Every other
-  // public route (preview-auth, mcp/oauth/authorize) calls Convex hooks
+  // public route (preview-auth) calls Convex hooks
   // unconditionally, so they keep the provider even when signed out.
   const anonymousLanding = pathname === "/" && isSignedIn !== true;
 
@@ -92,7 +92,7 @@ function RootComponent() {
 
   // One provider above everything, including the layers outside the app shell:
   // the preview mini player, the What's New dialog and the routes without
-  // chrome (preview-auth, mcp/oauth) all render tooltips, and Radix throws
+  // chrome (preview-auth) all render tooltips, and Radix throws
   // outright when a Tooltip has no Provider above it. Context only — no DOM,
   // so the anonymous landing pays nothing for it.
   return (

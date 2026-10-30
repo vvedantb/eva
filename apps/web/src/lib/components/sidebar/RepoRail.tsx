@@ -5,16 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
-} from "@eva/ui";
+import { cn } from "@eva/ui";
 import { IconPencil } from "@tabler/icons-react";
 import {
   AutomationIcon,
@@ -22,6 +13,16 @@ import {
   SearchIcon,
   SidebarToggleIcon,
   TerminalIcon,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  ErrorBoundary,
+  CountPop,
+  countLabel,
 } from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
@@ -29,14 +30,11 @@ import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
 import { RailAppHotkeys } from "@/lib/components/sidebar/RailAppHotkeys";
 import { RailSettingsMenu } from "@/lib/components/sidebar/RailSettingsMenu";
 import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 import {
   CORNER_BADGE_CLASS,
-  CountPop,
   UnreadCornerBadge,
-  countLabel,
-} from "@/lib/components/ui/CountPop";
+} from "@/lib/components/ui/CornerBadge";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
@@ -133,7 +131,7 @@ function RepoRailLiveData(props: RepoRailProps) {
  * first Settings route (Theme).
  * App tiles are real Links (not buttons) so middle-click / cmd-click open a new tab.
  *
- * Live session/sandbox indicators sit behind QueryErrorBoundary so a missing
+ * Live session/sandbox indicators sit behind ErrorBoundary so a missing
  * Convex function cannot swap the whole shell. Simple view wakes sandboxes from
  * the Preview tab, so it shows no awake counts and skips both queries.
  */
@@ -148,9 +146,9 @@ export function RepoRail(props: RepoRailProps) {
   );
   if (simpleView) return withoutCounts;
   return (
-    <QueryErrorBoundary fallback={withoutCounts}>
+    <ErrorBoundary fallback={withoutCounts}>
       <RepoRailLiveData {...props} />
-    </QueryErrorBoundary>
+    </ErrorBoundary>
   );
 }
 
@@ -244,9 +242,9 @@ function RepoRailView({
                 cutoutColor={CUTOUT_COLOR}
                 className="shrink-0"
               />
-              <QueryErrorBoundary>
+              <ErrorBoundary>
                 <InboxUnreadBadge />
-              </QueryErrorBoundary>
+              </ErrorBoundary>
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">Inbox</TooltipContent>
@@ -406,9 +404,9 @@ function RepoRailView({
                   cutoutColor={CUTOUT_COLOR}
                   className="shrink-0"
                 />
-                <QueryErrorBoundary>
+                <ErrorBoundary>
                   <AutomationsUnreadBadge />
-                </QueryErrorBoundary>
+                </ErrorBoundary>
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">Automations</TooltipContent>

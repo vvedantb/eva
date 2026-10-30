@@ -11,7 +11,7 @@ import {
   DialogTitle,
   Input,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useSetRepoLabel } from "@/lib/hooks/useSetRepoLabel";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 

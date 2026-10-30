@@ -1,3 +1,5 @@
+import { base64ToBytes, bytesToBase64 } from "@vvedantb/server";
+
 function concatBytes(chunks: Uint8Array[]): Uint8Array {
   const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
   const out = new Uint8Array(total);
@@ -39,12 +41,7 @@ function pemToDer(pem: string): Uint8Array {
     .replace(/-----BEGIN [^-]+-----/g, "")
     .replace(/-----END [^-]+-----/g, "")
     .replace(/\s/g, "");
-  const binary = atob(base64);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    out[i] = binary.charCodeAt(i);
-  }
-  return out;
+  return base64ToBytes(base64);
 }
 
 function wrapBase64Lines(base64: string): string[] {
@@ -56,14 +53,7 @@ function wrapBase64Lines(base64: string): string[] {
 }
 
 function derToPem(der: Uint8Array, label: string): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < der.length; i += chunkSize) {
-    const chunk = der.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  const base64 = btoa(binary);
-  const lines = wrapBase64Lines(base64);
+  const lines = wrapBase64Lines(bytesToBase64(der));
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----`;
 }
 

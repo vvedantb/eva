@@ -1,7 +1,7 @@
 "use client";
 
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { SettingsStack } from "@/lib/components/settings/SettingsStack";
+import { SettingsStack } from "@vvedantb/ui";
 
 interface SettingsPageProps {
   title: React.ReactNode;

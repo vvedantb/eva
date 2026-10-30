@@ -2,9 +2,14 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Input, Spinner, Textarea } from "@eva/ui";
+import {
+  Button,
+  Input,
+  Spinner,
+  Textarea,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { useState } from "react";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 interface WorkProfileDraft {
@@ -88,7 +93,11 @@ export function WorkProfileSection() {
               Unsaved changes
             </span>
           ) : null}
-          <Button size="sm" onClick={handleSave} disabled={isSaving || !isDirty}>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving || !isDirty}
+          >
             {isSaving ? <Spinner size="sm" /> : null}
             Save profile
           </Button>

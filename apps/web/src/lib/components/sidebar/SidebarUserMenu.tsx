@@ -14,8 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
 import {
@@ -28,12 +31,6 @@ import {
 } from "@tabler/icons-react";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 interface SidebarUserMenuProps {
   name: string;
@@ -54,7 +51,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
   const { openSearch } = useSearch();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -132,7 +129,6 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
           <DropdownMenuItem
             onSelect={() =>
               requestConfirm(
-                altHeld,
                 () => setConfirmOpen(true),
                 () => {
                   void handleSignOut();
@@ -176,7 +172,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
               onClick={() => void handleSignOut()}
               disabled={isSigningOut}
             >
-              {isSigningOut && <CircleSpinner size="sm" />}
+              {isSigningOut && <Spinner variant="circle" size="sm" />}
               Sign out
             </Button>
           </DialogFooter>

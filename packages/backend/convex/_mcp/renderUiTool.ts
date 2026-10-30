@@ -9,8 +9,8 @@
  * Convex types out of this module and lets tests pass a fake.
  */
 
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { defineTool, type EvaTool } from "../mcp/registry";
-import { errorResult, textResult } from "../mcp/toolShared";
 import {
   MAX_BLOCKS,
   renderUiInput,
@@ -66,17 +66,19 @@ export function renderUiTool(
     handler: async (args) => {
       const parsed = renderUiInput.safeParse(args);
       if (!parsed.success) {
-        return errorResult(
+        return toolErrorResult(
           `Invalid render_ui input: ${parsed.error.issues
             .map(
-              (issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`,
+              (issue) =>
+                `${issue.path.join(".") || "(root)"}: ${issue.message}`,
             )
             .join("; ")}`,
         );
       }
       const result = await run(parsed.data);
-      if (!result.ok) return errorResult(renderUiErrorMessage(result.outcome));
-      return textResult({
+      if (!result.ok)
+        return toolErrorResult(renderUiErrorMessage(result.outcome));
+      return toolJsonResult({
         panelId: result.panelId,
         elementCount: result.elementCount,
         elapsedMs: result.elapsedMs,

@@ -4,7 +4,8 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { mutationError } from "@/lib/utils/mutationToast";
 import {
   SessionSourceDetail,

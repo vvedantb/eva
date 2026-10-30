@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { buildSubagentThread, isEmptySubagentThread } from "./subagentThread";
 
 const agentRow: ActivityStep = {

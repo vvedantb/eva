@@ -6,7 +6,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import { decodeRepoParam, toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { FunctionReturnType } from "convex/server";
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { RepoNotFound } from "@/lib/components/RepoNotFound";
 
 type Repo = NonNullable<
@@ -162,9 +162,7 @@ export function RepoGate({ children }: { children: React.ReactNode }) {
   // page's own shape is a better answer to "what am I waiting for", and it
   // does not re-centre as the real content lands.
   if (loadState.status === "pending") {
-    return (
-      <CenteredSpinner label="Loading codebase" />
-    );
+    return <CenteredSpinner label="Loading codebase" />;
   }
 
   return (

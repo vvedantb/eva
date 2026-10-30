@@ -24,6 +24,7 @@ import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settin
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
+import { Route as DevUiGalleryRouteImport } from './routes/dev/ui-gallery'
 import { Route as SlidesIndexRouteImport } from './routes/slides/index'
 import { Route as SlidesAnnualCdmRouteImport } from './routes/slides/annual-cdm'
 import { Route as SlidesBeeRouteImport } from './routes/slides/bee'
@@ -47,7 +48,6 @@ import { Route as GlobalSetupIdRouteImport } from './routes/_global/setup/$id'
 import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/index'
 import { Route as GlobalTeamsTeamIdRouteRouteImport } from './routes/_global/teams/$teamId/route'
 import { Route as RepoOwnerRepoRouteImport } from './routes/_repo/$owner/$repo'
-import { Route as McpOauthAuthorizeRouteImport } from './routes/mcp/oauth/authorize'
 import { Route as PKindIdRouteImport } from './routes/p.$kind.$id'
 import { Route as GlobalTeamsTeamIdIndexRouteImport } from './routes/_global/teams/$teamId/index'
 import { Route as GlobalTeamsTeamIdTeamTabRouteImport } from './routes/_global/teams/$teamId/$teamTab'
@@ -226,6 +226,11 @@ const DevFeaturePreviewsRoute = DevFeaturePreviewsRouteImport.update({
   path: '/dev/feature-previews',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevUiGalleryRoute = DevUiGalleryRouteImport.update({
+  id: '/dev/ui-gallery',
+  path: '/dev/ui-gallery',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SlidesIndexRoute = SlidesIndexRouteImport.update({
   id: '/slides/',
   path: '/slides/',
@@ -346,11 +351,6 @@ const RepoOwnerRepoRoute = RepoOwnerRepoRouteImport.update({
   id: '/$owner/$repo',
   path: '/$owner/$repo',
   getParentRoute: () => RepoRoute,
-} as any)
-const McpOauthAuthorizeRoute = McpOauthAuthorizeRouteImport.update({
-  id: '/mcp/oauth/authorize',
-  path: '/mcp/oauth/authorize',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const PKindIdRoute = PKindIdRouteImport.update({
   id: '/p/$kind/$id',
@@ -988,6 +988,7 @@ export interface FileRoutesByFullPath {
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
   '/slides/friday-session': typeof SlidesFridaySessionRoute
@@ -1008,7 +1009,6 @@ export interface FileRoutesByFullPath {
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
-  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
   '/settings/': typeof GlobalSettingsIndexRoute
@@ -1130,6 +1130,7 @@ export interface FileRoutesByTo {
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
   '/slides/friday-session': typeof SlidesFridaySessionRoute
@@ -1148,7 +1149,6 @@ export interface FileRoutesByTo {
   '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
-  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
   '/settings': typeof GlobalSettingsIndexRoute
@@ -1252,6 +1252,7 @@ export interface FileRoutesById {
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/slides/annual-cdm': typeof SlidesAnnualCdmRoute
   '/slides/bee': typeof SlidesBeeRoute
   '/slides/friday-session': typeof SlidesFridaySessionRoute
@@ -1272,7 +1273,6 @@ export interface FileRoutesById {
   '/_global/settings/theme': typeof GlobalSettingsThemeRoute
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
-  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
   '/_global/settings/': typeof GlobalSettingsIndexRoute
@@ -1397,6 +1397,7 @@ export interface FileRouteTypes {
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
     | '/slides/friday-session'
@@ -1417,7 +1418,6 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/setup/$id'
     | '/$owner/$repo'
-    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/artifacts/'
     | '/settings/'
@@ -1539,6 +1539,7 @@ export interface FileRouteTypes {
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
     | '/slides/friday-session'
@@ -1557,7 +1558,6 @@ export interface FileRouteTypes {
     | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
-    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/artifacts'
     | '/settings'
@@ -1660,6 +1660,7 @@ export interface FileRouteTypes {
     | '/_global/testing'
     | '/_global/whats-new'
     | '/dev/feature-previews'
+    | '/dev/ui-gallery'
     | '/slides/annual-cdm'
     | '/slides/bee'
     | '/slides/friday-session'
@@ -1680,7 +1681,6 @@ export interface FileRouteTypes {
     | '/_global/settings/theme'
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
-    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/_global/artifacts/'
     | '/_global/settings/'
@@ -1797,12 +1797,12 @@ export interface RootRouteChildren {
   AgentCallbackRoute: typeof AgentCallbackRoute
   PreviewAuthRoute: typeof PreviewAuthRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
+  DevUiGalleryRoute: typeof DevUiGalleryRoute
   SlidesAnnualCdmRoute: typeof SlidesAnnualCdmRoute
   SlidesBeeRoute: typeof SlidesBeeRoute
   SlidesFridaySessionRoute: typeof SlidesFridaySessionRoute
   SlidesIntroToEvaRoute: typeof SlidesIntroToEvaRoute
   SlidesIndexRoute: typeof SlidesIndexRoute
-  McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
   PKindIdRoute: typeof PKindIdRoute
 }
 
@@ -1911,6 +1911,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/feature-previews'
       fullPath: '/dev/feature-previews'
       preLoaderRoute: typeof DevFeaturePreviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/ui-gallery': {
+      id: '/dev/ui-gallery'
+      path: '/dev/ui-gallery'
+      fullPath: '/dev/ui-gallery'
+      preLoaderRoute: typeof DevUiGalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/slides/': {
@@ -2073,13 +2080,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/$owner/$repo'
       preLoaderRoute: typeof RepoOwnerRepoRouteImport
       parentRoute: typeof RepoRoute
-    }
-    '/mcp/oauth/authorize': {
-      id: '/mcp/oauth/authorize'
-      path: '/mcp/oauth/authorize'
-      fullPath: '/mcp/oauth/authorize'
-      preLoaderRoute: typeof McpOauthAuthorizeRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/p/$kind/$id': {
       id: '/p/$kind/$id'
@@ -3476,12 +3476,12 @@ const rootRouteChildren: RootRouteChildren = {
   AgentCallbackRoute: AgentCallbackRoute,
   PreviewAuthRoute: PreviewAuthRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
+  DevUiGalleryRoute: DevUiGalleryRoute,
   SlidesAnnualCdmRoute: SlidesAnnualCdmRoute,
   SlidesBeeRoute: SlidesBeeRoute,
   SlidesFridaySessionRoute: SlidesFridaySessionRoute,
   SlidesIntroToEvaRoute: SlidesIntroToEvaRoute,
   SlidesIndexRoute: SlidesIndexRoute,
-  McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
   PKindIdRoute: PKindIdRoute,
 }
 export const routeTree = rootRouteImport

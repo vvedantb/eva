@@ -17,11 +17,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconPlus, IconFolder } from "@tabler/icons-react";
 import { TeamRepoCard } from "./TeamRepoCard";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.listByTeam>[number];

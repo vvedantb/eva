@@ -42,8 +42,7 @@ import {
 } from "@/lib/hooks/useAvailableAiModels";
 import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { PendingReviewCommentChips } from "@/lib/components/chat/PendingReviewCommentChips";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
-import { toast } from "@eva/ui";
+import { toast, useRequestConfirm } from "@vvedantb/ui";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { getSessionReadOnlyMessage } from "./_utils/sessionReadOnly";
 import { ProposedPlanCard } from "./_components/ProposedPlanCard";
@@ -74,6 +73,7 @@ interface ChatPanelProps {
   branchName?: string;
   /** Branch the sandbox worktree is on right now, reported by its daemon. */
   sandboxBranch?: string;
+  sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
@@ -124,6 +124,7 @@ export function ChatPanel({
   title,
   branchName,
   sandboxBranch,
+  sandboxGitSync,
   prUrl,
   prState,
   summary,
@@ -154,7 +155,7 @@ export function ChatPanel({
   const simpleView = useSimpleView();
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(sessionId);
   const { startSummary } = useStartSessionSummary(sessionId);
 
@@ -265,13 +266,14 @@ export function ChatPanel({
     api.proposedPlans.listBySession,
     isRouteActive ? { sessionId } : "skip",
   );
-  const { implementPlan, implementInNewSession } =
-    useSessionPlanImplementation({
+  const { implementPlan, implementInNewSession } = useSessionPlanImplementation(
+    {
       sessionId,
       chatId,
       handleSend,
       isRouteActive,
-    });
+    },
+  );
   const {
     savePlan,
     saveAsDocument,
@@ -371,6 +373,7 @@ export function ChatPanel({
     messageCount: messages.length,
     isSandboxActive,
     isSandboxToggling,
+    sandboxGitSync,
     isAssistantResponding: isExecuting,
     deploymentStatus,
     simpleView,
@@ -380,7 +383,6 @@ export function ChatPanel({
     onSandboxToggle,
     onOpenSummaryModal: () =>
       requestConfirm(
-        altHeld,
         () => setShowSummaryModal(true),
         () => {
           void startSummary();
@@ -388,7 +390,6 @@ export function ChatPanel({
       ),
     onOpenReviewModal: () =>
       requestConfirm(
-        altHeld,
         () => setShowReviewModal(true),
         () => {
           void sendForReview().then((ok) => {

@@ -2,8 +2,8 @@ import { useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import type { api, Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
-  cn,
   Card,
   CardHeader,
   CardTitle,
@@ -13,7 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconDots, IconUsers } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useTeamLogoUpload } from "@/lib/hooks/useTeamLogoUpload";

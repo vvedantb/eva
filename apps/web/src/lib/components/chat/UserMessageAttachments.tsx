@@ -1,13 +1,11 @@
 import { useState } from "react";
-import { toast } from "@eva/ui";
+import { toast, ImageLightbox, ListEnter } from "@vvedantb/ui";
 import {
   iconForAttachment,
   isImageContentType,
   labelForAttachment,
 } from "@/lib/components/attachments/attachmentMeta";
 import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachmentModal";
-import { ImageLightbox } from "@/lib/components/ImageLightbox";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 export type ChatAttachmentMeta = {
   url: string | null;

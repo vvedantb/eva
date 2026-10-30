@@ -20,7 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 interface AssignTasksModalProps {

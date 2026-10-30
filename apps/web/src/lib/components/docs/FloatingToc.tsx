@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition, ListEnter, useFirstPaintGate } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 import {
   assignHeadingIds,
   getHeadingElements,
@@ -142,7 +142,7 @@ export function FloatingToc({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <p className="mb-2 px-3 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             On this page

@@ -28,7 +28,7 @@ const desktopPanel = read(
  * They did drift when Editor and Computer were promoted out of the `+`
  * dropdown into first-class rail tabs (4b948b101): that one change had to touch
  * every one of the four. Read as source text rather than imported because these
- * modules pull `@tabler/icons-react` and `@eva/ui`, and only the tab ids matter.
+ * modules pull `@tabler/icons-react` and `@vvedantb/ui`, and only the tab ids matter.
  */
 
 /** Tab ids the descriptor builder appends, in strip order. */

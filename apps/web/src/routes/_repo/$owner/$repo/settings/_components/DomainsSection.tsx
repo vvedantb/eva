@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Button, motionFast } from "@eva/ui";
+import { Input, Button, tokenTransition, SettingsField } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { Id } from "@eva/backend";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { extractHostname } from "../_utils";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 
 type UpdateRepoConfig = (args: {
   repoId: Id<"githubRepos">;
@@ -53,7 +52,7 @@ export function DomainsSection({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={motionFast}
+                  transition={tokenTransition.fast}
                 >
                   {domain}
                   <button

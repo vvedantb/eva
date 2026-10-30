@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { IconPaperclip } from "@tabler/icons-react";
-import { toast } from "@eva/ui";
+import { toast, useRequestConfirm } from "@vvedantb/ui";
 import { api, type Id } from "@eva/backend";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import {
@@ -13,9 +13,8 @@ import {
 } from "@/lib/components/attachments/attachmentMeta";
 import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachmentModal";
 import type { TaskAttachment } from "../useTaskAttachments";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface TaskFilesSectionProps {
   attachments: TaskAttachment[];
@@ -60,7 +59,7 @@ export function TaskFilesSection({
     label: string;
   } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [open, setOpen] = useState<OpenTextAttachment | null>(null);
 
   const requestRemove = (attachment: TaskAttachment) => {
@@ -75,9 +74,12 @@ export function TaskFilesSection({
       storageId: attachment.storageId,
       label: labelForAttachment(attachment.name, attachment.contentType),
     };
-    requestConfirm(altHeld, () => setPending(next), () => {
-      void removeStored(next);
-    });
+    requestConfirm(
+      () => setPending(next),
+      () => {
+        void removeStored(next);
+      },
+    );
   };
 
   const removeStored = async (file: {
@@ -120,7 +122,8 @@ export function TaskFilesSection({
       const mediaType = attachment.contentType || "text/plain";
       // Hydrated drafts have storageId + no local File — open read-only so
       // editing would not orphan the stored blob.
-      const readOnly = attachment.file === null && attachment.storageId !== null;
+      const readOnly =
+        attachment.file === null && attachment.storageId !== null;
 
       try {
         if (attachment.file) {

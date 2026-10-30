@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
@@ -11,10 +12,8 @@ import {
 } from "./entityRef";
 import {
   confirmedDeleteArg,
-  errorResult,
   mcpCallAsUser,
   mcpGetContext,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -65,9 +64,9 @@ export function workTools(
     kind: EntityKind,
     directId: string | undefined,
     ref: EntityRef,
-  ): Promise<{ target: EntityTarget } | ReturnType<typeof errorResult>> {
+  ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
     if (ref.kind !== undefined && ref.kind !== kind) {
-      return errorResult(`This tool acts on a ${kind}, not a ${ref.kind}.`);
+      return toolErrorResult(`This tool acts on a ${kind}, not a ${ref.kind}.`);
     }
     const { userId } = await mcpGetContext(ctx, clerkUserId);
     const resolved = await resolveEntityTarget(
@@ -76,9 +75,9 @@ export function workTools(
         : { ...ref, kind },
       userId,
     );
-    if ("isError" in resolved) return resolved;
+    if ("content" in resolved) return resolved;
     if (resolved.target.kind !== kind) {
-      return errorResult(
+      return toolErrorResult(
         `That reference is a ${resolved.target.kind}, not a ${kind}.`,
       );
     }
@@ -95,10 +94,14 @@ export function workTools(
   }
 
   /** Parses an ISO time to epoch ms, rejecting the past before the backend does. */
-  function futureTime(iso: string): number | ReturnType<typeof errorResult> {
+  function futureTime(
+    iso: string,
+  ): number | ReturnType<typeof toolErrorResult> {
     const at = Date.parse(iso);
     if (at <= Date.now()) {
-      return errorResult(`"${iso}" is not in the future. Pick a later time.`);
+      return toolErrorResult(
+        `"${iso}" is not in the future. Pick a later time.`,
+      );
     }
     return at;
   }
@@ -120,12 +123,12 @@ Rejected when a build is already running. The reply only means the build workflo
       input: projectInput,
       handler: async ({ projectId, ...ref }) => {
         const resolved = await resolveKind("project", projectId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("buildWorkflow:startBuild", {
           projectId: target.targetId,
         });
-        return textResult({ ...entitySummary(target), build: "started" });
+        return toolJsonResult({ ...entitySummary(target), build: "started" });
       },
     }),
   );
@@ -142,13 +145,13 @@ Rejected when a build is already running, when one is already scheduled, or when
         const at = futureTime(scheduledAt);
         if (typeof at !== "number") return at;
         const resolved = await resolveKind("project", projectId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("buildWorkflow:scheduleBuild", {
           projectId: target.targetId,
           scheduledAt: at,
         });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           build: "scheduled",
           scheduledAt: new Date(at).toISOString(),
@@ -167,13 +170,13 @@ Rejected when a build is already running, when one is already scheduled, or when
         const at = futureTime(scheduledAt);
         if (typeof at !== "number") return at;
         const resolved = await resolveKind("project", projectId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("buildWorkflow:updateScheduledBuild", {
           projectId: target.targetId,
           scheduledAt: at,
         });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           build: "rescheduled",
           scheduledAt: new Date(at).toISOString(),
@@ -190,12 +193,12 @@ Rejected when a build is already running, when one is already scheduled, or when
       input: projectInput,
       handler: async ({ projectId, ...ref }) => {
         const resolved = await resolveKind("project", projectId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("buildWorkflow:cancelScheduledBuild", {
           projectId: target.targetId,
         });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           build: "schedule_cancelled",
         });
@@ -213,12 +216,12 @@ Rejected when no build is running. This does not stop the project's sandbox chat
       input: projectInput,
       handler: async ({ projectId, ...ref }) => {
         const resolved = await resolveKind("project", projectId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("buildWorkflow:cancelBuild", {
           projectId: target.targetId,
         });
-        return textResult({ ...entitySummary(target), build: "cancelled" });
+        return toolJsonResult({ ...entitySummary(target), build: "cancelled" });
       },
     }),
   );
@@ -241,10 +244,7 @@ Status and review state cannot be changed here; those stay a person's call. "tag
           .string()
           .optional()
           .describe("New description (the task's prompt), as markdown."),
-        tags: z
-          .array(z.string())
-          .optional()
-          .describe("Replacement tag list."),
+        tags: z.array(z.string()).optional().describe("Replacement tag list."),
         priority: z
           .enum(["urgent", "high", "medium", "low"])
           .nullable()
@@ -271,18 +271,18 @@ Status and review state cannot be changed here; those stay a person's call. "tag
         if (priority !== undefined) updates.priority = priority;
         if (baseBranch !== undefined) updates.baseBranch = baseBranch;
         if (Object.keys(updates).length === 0) {
-          return errorResult(
+          return toolErrorResult(
             'Nothing to change: pass at least one of "title", "description", "tags", "priority" or "baseBranch".',
           );
         }
         const resolved = await resolveKind("task", taskId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("agentTasks:update", {
           id: target.targetId,
           ...updates,
         });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           updated: Object.keys(updates),
         });
@@ -302,13 +302,13 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
         const at = futureTime(scheduledAt);
         if (typeof at !== "number") return at;
         const resolved = await resolveKind("task", taskId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("agentTasks:scheduleExecution", {
           id: target.targetId,
           scheduledAt: at,
         });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           run: "scheduled",
           scheduledAt: new Date(at).toISOString(),
@@ -327,13 +327,13 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
         const at = futureTime(scheduledAt);
         if (typeof at !== "number") return at;
         const resolved = await resolveKind("task", taskId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("agentTasks:updateScheduledExecution", {
           id: target.targetId,
           scheduledAt: at,
         });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           run: "rescheduled",
           scheduledAt: new Date(at).toISOString(),
@@ -350,12 +350,15 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
       input: taskInput,
       handler: async ({ taskId, ...ref }) => {
         const resolved = await resolveKind("task", taskId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("agentTasks:cancelScheduledExecution", {
           id: target.targetId,
         });
-        return textResult({ ...entitySummary(target), run: "schedule_cancelled" });
+        return toolJsonResult({
+          ...entitySummary(target),
+          run: "schedule_cancelled",
+        });
       },
     }),
   );
@@ -371,10 +374,10 @@ Deleting also cancels its scheduled run, drops its run summary and queues its sa
       // `confirmed` rides along in `ref`; the schema already required it.
       handler: async ({ taskId, ...ref }) => {
         const resolved = await resolveKind("task", taskId, ref);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("agentTasks:remove", { id: target.targetId });
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           deleted: true,
           note: `Restore with restore_task and taskId "${target.targetId}".`,
@@ -396,7 +399,7 @@ Deleting also cancels its scheduled run, drops its run summary and queues its sa
       handler: async ({ taskId }) => {
         await mcpGetContext(ctx, clerkUserId);
         await runMutation("agentTasks:restore", { id: taskId });
-        return textResult({ kind: "task", id: taskId, restored: true });
+        return toolJsonResult({ kind: "task", id: taskId, restored: true });
       },
     }),
   );

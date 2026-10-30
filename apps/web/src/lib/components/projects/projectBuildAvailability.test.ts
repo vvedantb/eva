@@ -16,7 +16,7 @@ const detailSource = readFileSync(
 
 /**
  * Phase lists are plain data in a component module, so they are read as text
- * rather than imported — the module pulls in @eva/ui and icon packages that the
+ * rather than imported — the module pulls in @vvedantb/ui and icon packages that the
  * node test environment has no reason to load.
  */
 function phaseList(name: string): string[] {

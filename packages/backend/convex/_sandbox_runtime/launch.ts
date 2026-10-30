@@ -1,11 +1,12 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
 import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
-import { execHandle, requireEnv } from "./helpers";
+import { execHandle } from "./helpers";
 import {
   resolvePublicConvexCloudUrl,
   resolvePublicConvexSiteUrl,
@@ -127,7 +128,7 @@ function computeScopedHmac(message: string): string | null {
  */
 function publicConvexUrl(): string {
   return (
-    resolvePublicConvexCloudUrl(process.env) ?? requireEnv("CONVEX_CLOUD_URL")
+    resolvePublicConvexCloudUrl(process.env) ?? requiredEnv("CONVEX_CLOUD_URL")
   );
 }
 

@@ -534,16 +534,15 @@ const schema = defineSchema({
   githubUserTokens: defineTable(githubUserTokenFields).index("by_user", [
     "userId",
   ]),
-  githubOauthStates: defineTable(githubOauthStateFields).index("by_nonce", [
-    "nonce",
-  ]),
+  githubOauthStates: defineTable(githubOauthStateFields)
+    .index("by_nonce", ["nonce"])
+    .index("by_expires_at", ["expiresAt"]),
   connectedAccounts: defineTable(connectedAccountFields)
     .index("by_user", ["userId"])
     .index("by_user_and_provider", ["userId", "provider"]),
-  connectorOauthStates: defineTable(connectorOauthStateFields).index(
-    "by_nonce",
-    ["nonce"],
-  ),
+  connectorOauthStates: defineTable(connectorOauthStateFields)
+    .index("by_nonce", ["nonce"])
+    .index("by_expires_at", ["expiresAt"]),
   teamEnvVars: defineTable({
     teamId: v.id("teams"),
     vars: v.array(
@@ -589,6 +588,7 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
+  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
   mcpAuthCodes: defineTable({
     code: v.string(),
     clerkUserId: v.string(),
@@ -599,12 +599,16 @@ const schema = defineSchema({
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
 
+  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
   mcpClientRegistrations: defineTable({
     clientId: v.string(),
     clientSecret: v.optional(v.string()),
     redirectUris: v.array(v.string()),
     registeredAt: v.number(),
   }).index("by_clientId", ["clientId"]),
+
+  // MCP bearer token-cache table removed after the drain migration emptied it.
+  // schema-narrowing-ok: drainMcpTokenCache
 
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])

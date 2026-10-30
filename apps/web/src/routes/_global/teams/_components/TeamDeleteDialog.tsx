@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 interface TeamDeleteDialogProps {
   team: { id: Id<"teams">; name: string } | null;

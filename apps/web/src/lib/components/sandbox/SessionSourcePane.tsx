@@ -1,7 +1,8 @@
 "use client";
 
 import { Slot } from "@radix-ui/react-slot";
-import { CenteredSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { CenteredSpinner, MarqueeOnHover } from "@vvedantb/ui";
 import { Link } from "@tanstack/react-router";
 import { useQueryState } from "nuqs";
 import {
@@ -15,7 +16,6 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { sourcePanelItemParser } from "@/lib/search-params";
 
 /**

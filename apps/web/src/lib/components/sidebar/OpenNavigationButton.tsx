@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconMenu2 } from "@tabler/icons-react";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 

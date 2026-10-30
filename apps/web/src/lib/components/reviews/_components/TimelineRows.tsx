@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { cn } from "@eva/ui";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  cn,
-} from "@eva/ui";
+  Markdown,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import {
   IconChevronDown,
   IconGitCommit,
@@ -15,8 +17,6 @@ import {
   IconGitPullRequestClosed,
   IconMessage,
 } from "@tabler/icons-react";
-import { Markdown } from "@eva/ui/markdown";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { PrCommentCard } from "./PrCommentCard";
 import {
   MARKDOWN_CLASS,
@@ -66,7 +66,9 @@ function IconMarker({
 }) {
   return (
     <Marker className={className}>
-      <span className={cn("flex size-7 items-center justify-center", toneClassName)}>
+      <span
+        className={cn("flex size-7 items-center justify-center", toneClassName)}
+      >
         {icon}
       </span>
     </Marker>
@@ -119,7 +121,9 @@ export function TimelineCommit({
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 text-2xs text-muted-foreground">
           <code className="font-mono">{shortSha(commit.sha)}</code>
-          {commit.authorLogin === null ? null : <span>{commit.authorLogin}</span>}
+          {commit.authorLogin === null ? null : (
+            <span>{commit.authorLogin}</span>
+          )}
           <When at={commit.committedAt} />
         </div>
       </div>
@@ -142,8 +146,14 @@ export function TimelineConversation({
       events.map((event) => {
         const author =
           event.kind === "comment"
-            ? { login: event.comment.authorLogin, avatarUrl: event.comment.authorAvatarUrl }
-            : { login: event.review.authorLogin, avatarUrl: event.review.authorAvatarUrl };
+            ? {
+                login: event.comment.authorLogin,
+                avatarUrl: event.comment.authorAvatarUrl,
+              }
+            : {
+                login: event.review.authorLogin,
+                avatarUrl: event.review.authorAvatarUrl,
+              };
         return [author.login, author];
       }),
     ).values(),
@@ -152,13 +162,19 @@ export function TimelineConversation({
   return (
     <div className={ROW_CLASS}>
       {first === undefined ? (
-        <IconMarker icon={<IconMessage size={14} aria-hidden />} className="top-6" />
+        <IconMarker
+          icon={<IconMessage size={14} aria-hidden />}
+          className="top-6"
+        />
       ) : (
         <Marker className="top-6">
           <PrAvatar
             login={first.login}
             avatarUrl={first.avatarUrl}
-            className={cn("size-7 transition-opacity", !open && "opacity-45 grayscale")}
+            className={cn(
+              "size-7 transition-opacity",
+              !open && "opacity-45 grayscale",
+            )}
           />
         </Marker>
       )}
@@ -268,7 +284,9 @@ export function TimelineVerdict({
           >
             {review.authorLogin}
           </a>
-          <span className="text-muted-foreground">{verdictAction(review.state)}</span>
+          <span className="text-muted-foreground">
+            {verdictAction(review.state)}
+          </span>
           <span className="sr-only">{reviewStateMeta(review.state).label}</span>
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-2xs text-muted-foreground">
@@ -276,7 +294,9 @@ export function TimelineVerdict({
           {stale ? <span>· before the latest push</span> : null}
         </div>
         {review.body.trim().length > 0 ? (
-          <Markdown className={cn(MARKDOWN_CLASS, "mt-2")}>{review.body}</Markdown>
+          <Markdown className={cn(MARKDOWN_CLASS, "mt-2")}>
+            {review.body}
+          </Markdown>
         ) : null}
       </div>
     </div>
@@ -314,7 +334,9 @@ export function TimelineLifecycle({
       />
       <div className="py-1.5 text-xs">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-semibold text-foreground">{actor ?? "Someone"}</span>
+          <span className="font-semibold text-foreground">
+            {actor ?? "Someone"}
+          </span>
           <span className="text-muted-foreground">{LIFECYCLE[kind].label}</span>
         </div>
         <div className="mt-0.5 text-2xs text-muted-foreground">

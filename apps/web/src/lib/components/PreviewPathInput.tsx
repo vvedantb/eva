@@ -2,12 +2,7 @@
 
 import { useState, useId, type KeyboardEvent } from "react";
 import { useLocalStorage } from "usehooks-ts";
-import {
-  Input,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "@eva/ui";
+import { Input, Popover, PopoverAnchor, PopoverContent } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PreviewPathHistoryList } from "./PreviewPathHistoryList";
 import {
@@ -48,7 +43,9 @@ export function PreviewPathInput({
   const open = focused && !listDismissed && matches.length > 0;
   const optionIdPrefix = `${listId}-option-`;
   const activeOptionId =
-    open && selectedIndex >= 0 ? `${optionIdPrefix}${selectedIndex}` : undefined;
+    open && selectedIndex >= 0
+      ? `${optionIdPrefix}${selectedIndex}`
+      : undefined;
 
   function commitDraft() {
     const nextPath = normalizePreviewPath(value);

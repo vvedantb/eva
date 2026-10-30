@@ -7,10 +7,10 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
 import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 import {
   AvatarStack,
   Badge,
-  cn,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
@@ -32,7 +32,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
@@ -43,8 +45,6 @@ import {
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";

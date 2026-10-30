@@ -4,17 +4,17 @@ import type { FunctionReturnType } from "convex/server";
 import {
   ActivityTasks,
   Spinner,
-  TestError,
-  TestErrorMessage,
-} from "@eva/ui";
+  TestResultError,
+  TestResultErrorMessage,
+  RelativeDateTime,
+  ListEnter,
+} from "@vvedantb/ui";
 import {
   IconAlertTriangle,
   IconCheck,
   IconListCheck,
   IconX,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { ScenariosPanel } from "./ScenariosPanel";
 import {
@@ -64,9 +64,11 @@ function BrowserReportCard({
 
   if (report.status === "error") {
     return (
-      <TestError>
-        <TestErrorMessage>{report.error ?? "The run failed"}</TestErrorMessage>
-      </TestError>
+      <TestResultError>
+        <TestResultErrorMessage>
+          {report.error ?? "The run failed"}
+        </TestResultErrorMessage>
+      </TestResultError>
     );
   }
 

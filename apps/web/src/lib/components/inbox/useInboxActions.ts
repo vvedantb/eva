@@ -3,7 +3,7 @@
 import { useMutation } from "convex/react";
 import type { OptimisticLocalStore } from "convex/browser";
 import { api, type Id } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { Notification } from "@/lib/components/notifications/notification-config";
 

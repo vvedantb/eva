@@ -4,8 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { AnimatePresence, m } from "motion/react";
-import { cn, motionSpring } from "@eva/ui";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { cn } from "@eva/ui";
+import { springTransition, useMediaQuery } from "@vvedantb/ui";
 import { PreviewMiniPlayerChrome } from "./_components/PreviewMiniPlayerChrome";
 import { dropPreviewGroup, PreviewAnchor } from "./previewIframeHost";
 import { DEFAULT_MINI_PLAYER_LOGICAL_SIZE } from "./previewContain";
@@ -73,7 +73,7 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={motionSpring}
+      transition={springTransition}
       style={style}
       className={cn(
         "fixed z-40 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-xl origin-bottom-right",

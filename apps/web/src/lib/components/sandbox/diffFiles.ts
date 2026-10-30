@@ -128,6 +128,111 @@ export function buildDiffFileEntries(diff: string): DiffFileEntry[] {
   });
 }
 
+/** What a changed file is, for splitting a PR's size the way t3code does. */
+export type DiffFileKind = "code" | "tests" | "mocks" | "generated";
+
+export const DIFF_FILE_KINDS: readonly DiffFileKind[] = [
+  "code",
+  "tests",
+  "mocks",
+  "generated",
+];
+
+const LOCKFILES = new Set([
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+  "Cargo.lock",
+  "go.sum",
+  "poetry.lock",
+  "uv.lock",
+  "Gemfile.lock",
+  "composer.lock",
+  "Podfile.lock",
+  "flake.lock",
+]);
+
+/**
+ * Classifies a file by its path alone. Order matters: a fixture under `tests/`
+ * is a mock, and a snapshot under `__tests__/` is generated.
+ */
+export function diffFileKind(path: string): DiffFileKind {
+  const segments = path.split("/");
+  const fileName = segments.at(-1) ?? path;
+  const dirs = segments.slice(0, -1);
+  if (
+    LOCKFILES.has(fileName) ||
+    /\.(gen|generated|min)\.[^.]+$/.test(fileName) ||
+    /\.(snap|map)$/.test(fileName) ||
+    dirs.some((dir) =>
+      ["_generated", "__generated__", "__snapshots__", "generated"].includes(
+        dir,
+      ),
+    )
+  ) {
+    return "generated";
+  }
+  if (
+    /[.-](mock|mocks|fixture|fixtures|stub|stubs)\.[^.]+$/.test(fileName) ||
+    /(Mock|Mocks|Fixture|Fixtures)\.[^.]+$/.test(fileName) ||
+    dirs.some((dir) =>
+      ["__mocks__", "mocks", "fixtures", "__fixtures__", "stubs"].includes(dir),
+    )
+  ) {
+    return "mocks";
+  }
+  if (
+    /\.(test|spec|e2e)\.[^.]+$/.test(fileName) ||
+    /_test\.[^.]+$/.test(fileName) ||
+    /^test_.+\.py$/.test(fileName) ||
+    dirs.some((dir) =>
+      ["__tests__", "test", "tests", "e2e", "spec"].includes(dir),
+    )
+  ) {
+    return "tests";
+  }
+  return "code";
+}
+
+export interface DiffSizeTotals {
+  readonly files: number;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+/** A diff's line totals, overall and per {@link DiffFileKind}. */
+export interface DiffSize {
+  readonly total: DiffSizeTotals;
+  readonly byKind: Record<DiffFileKind, DiffSizeTotals>;
+}
+
+export function summarizeDiffSize(
+  entries: ReadonlyArray<DiffFileEntry>,
+): DiffSize {
+  const empty: DiffSizeTotals = { files: 0, additions: 0, deletions: 0 };
+  const add = (sum: DiffSizeTotals, entry: DiffFileEntry): DiffSizeTotals => ({
+    files: sum.files + 1,
+    additions: sum.additions + entry.additions,
+    deletions: sum.deletions + entry.deletions,
+  });
+  const byKind: Record<DiffFileKind, DiffSizeTotals> = {
+    code: empty,
+    tests: empty,
+    mocks: empty,
+    generated: empty,
+  };
+  let total = empty;
+  for (const entry of entries) {
+    const kind = diffFileKind(entry.path);
+    byKind[kind] = add(byKind[kind], entry);
+    total = add(total, entry);
+  }
+  return { total, byKind };
+}
+
 /** Collapse whitespace so `foo  bar` and `foo bar` compare equal. */
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, "");

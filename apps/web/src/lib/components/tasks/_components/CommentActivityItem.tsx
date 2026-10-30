@@ -7,18 +7,19 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { cn } from "@eva/ui";
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  cn,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";

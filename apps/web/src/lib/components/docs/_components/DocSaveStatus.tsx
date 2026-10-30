@@ -1,7 +1,6 @@
 "use client";
 
-import { Button } from "@eva/ui";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { Button, RelativeDateTime } from "@vvedantb/ui";
 
 /**
  * Where the doc's *version snapshot* has got to. Deliberately not "saving the

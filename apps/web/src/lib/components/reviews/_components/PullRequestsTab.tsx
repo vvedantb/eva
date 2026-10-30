@@ -3,13 +3,19 @@
 import type { FunctionReturnType } from "convex/server";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
-import { Badge, LIST_ROW_CONTROL_CLASS, ListRow, cn, toast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import {
+  Badge,
+  LIST_ROW_CONTROL_CLASS,
+  ListRow,
+  toast,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import {
   IconExternalLink,
   IconEye,
   IconGitPullRequest,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
   pullRequestContextFromRow,

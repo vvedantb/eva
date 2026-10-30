@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import type { ModelAccount } from "@eva/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 import {
   api,
   getSimpleViewModelOptions,

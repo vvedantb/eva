@@ -1,11 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Card, CardContent, CenteredSpinner } from "@eva/ui";
+import { Card, CardContent, CenteredSpinner, ListEnter } from "@vvedantb/ui";
 import { IconBrandGithub, IconTerminal2 } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { EmptyState } from "@/lib/components/ui/EmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { repoSessionsIndexPath } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 

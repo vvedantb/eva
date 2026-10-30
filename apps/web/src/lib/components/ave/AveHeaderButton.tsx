@@ -1,11 +1,10 @@
 "use client";
 
-import { Button } from "@eva/ui";
+import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
 import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { useAveLauncher } from "@/lib/components/ave/AveLauncherContext";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 
 /**
  * The mobile summon button for Manager Ave, in the fixed header next to the
@@ -35,10 +34,10 @@ export function AveHeaderButton() {
       className="relative shrink-0 [&_svg]:size-5"
     >
       <AveMark size={20} />
-      <QueryErrorBoundary>
+      <ErrorBoundary>
         <AveActiveDot />
         <AveQuestionsBadge />
-      </QueryErrorBoundary>
+      </ErrorBoundary>
     </Button>
   );
 }

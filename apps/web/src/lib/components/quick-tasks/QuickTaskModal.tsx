@@ -7,7 +7,6 @@ import {
   DialogFooter,
   Button,
   Input,
-  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -22,7 +21,9 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import {
@@ -89,7 +90,6 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -146,7 +146,7 @@ export function QuickTaskModal({
   );
   const [confirmDeleteId, setConfirmDeleteId] =
     useState<Id<"agentTasks"> | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [selectedProjectId, setSelectedProjectId] = useState<
     Id<"projects"> | undefined
   >(initialDraft?.projectId ?? projectId);
@@ -535,7 +535,11 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (
@@ -802,7 +806,6 @@ export function QuickTaskModal({
                                 className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() =>
                                   requestConfirm(
-                                    altHeld,
                                     () => setConfirmDeleteId(draft._id),
                                     () => {
                                       void handleDeleteDraft(draft._id);

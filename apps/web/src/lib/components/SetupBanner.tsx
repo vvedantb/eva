@@ -12,7 +12,7 @@ import {
   DialogFooter,
   Button,
   Surface,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 

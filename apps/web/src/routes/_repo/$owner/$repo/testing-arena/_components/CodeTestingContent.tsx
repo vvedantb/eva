@@ -7,18 +7,18 @@ import {
   ActivityTasks,
   Button,
   Spinner,
-  TestError,
-  TestErrorMessage,
-  motionFast,
-} from "@eva/ui";
+  TestResultError,
+  TestResultErrorMessage,
+  tokenTransition,
+  RelativeDateTime,
+  ListEnter,
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconAlertTriangle,
   IconGitPullRequest,
   IconTool,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { IssuesList } from "./IssuesList";
 import {
@@ -73,9 +73,9 @@ function ReportCard({
 
   if (report.status === "error" && report.error) {
     return (
-      <TestError>
-        <TestErrorMessage>{report.error}</TestErrorMessage>
-      </TestError>
+      <TestResultError>
+        <TestResultErrorMessage>{report.error}</TestResultErrorMessage>
+      </TestResultError>
     );
   }
 
@@ -113,7 +113,7 @@ function ReportCard({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
               >
                 {toolbarKey === "fix" ? (
                   <Button
@@ -174,7 +174,7 @@ function ReportCard({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {fixSteps ? (
               <div className="rounded-surface border border-primary/20 bg-primary/5 px-4 py-3">

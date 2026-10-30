@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import {
   downloadPreviewScreenshot,
   parseScreenshotInbound,

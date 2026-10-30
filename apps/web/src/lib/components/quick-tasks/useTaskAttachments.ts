@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import {
   MAX_CHAT_ATTACHMENTS,

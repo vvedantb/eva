@@ -16,7 +16,7 @@ import {
   Input,
   CenteredSpinner,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { GlobalAutomationGroup } from "@/lib/components/sidebar/_components/GlobalAutomationGroup";
 import { repoBasePaths } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { sortAppsForSidebar } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
@@ -48,11 +48,12 @@ export function GlobalAutomationsSidebar({
   const navigate = useNavigate();
   const convex = useConvex();
   const { settings } = useAutomationsSidebarSettings();
+  const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: AUTOMATIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/automations",
+    repos,
   });
-  const repos = useQuery(api.githubRepos.list, {});
   const createAutomation = useMutation(api.automations.create);
 
   const [createTarget, setCreateTarget] = useState<RepoRow | null>(null);

@@ -33,5 +33,7 @@ export function resolveExperimentalFlags(
     claudeStyleActivity: flags?.claudeStyleActivity ?? false,
     openPrsOnGithub: flags?.openPrsOnGithub ?? false,
     scopeCheck: flags?.scopeCheck ?? false,
+    manualSideBranchPublish: flags?.manualSideBranchPublish ?? false,
+    prWatch: flags?.prWatch ?? false,
   };
 }

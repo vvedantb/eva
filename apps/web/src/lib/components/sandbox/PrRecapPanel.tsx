@@ -24,13 +24,13 @@ import {
   TabsBar,
   TabsList,
   TabsTrigger,
-} from "@eva/ui";
+  Markdown,
+} from "@vvedantb/ui";
 import {
   IconAlertTriangle,
   IconExternalLink,
   IconGitPullRequest,
 } from "@tabler/icons-react";
-import { Markdown } from "@eva/ui/markdown";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { RecapGenerateControls } from "@/lib/components/sandbox/_components/RecapGenerateControls";
 import { RecapRunBadge } from "@/lib/components/sandbox/_components/RecapRunBadge";

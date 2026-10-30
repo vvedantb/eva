@@ -8,13 +8,13 @@ import {
   type Id,
 } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { getProviderLabel, motionFast } from "@eva/ui";
+import { getProviderLabel, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
-import { useMinuteNow } from "@/lib/components/usage-limits/_useMinuteNow";
+import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import {
   usageLimitResetClock,
   usageLimitResetText,
@@ -52,7 +52,7 @@ export function UsageLimitRecoveryBanner({
   const recovery = surface.usageLimitRecovery;
   const [inFlightKey, setInFlightKey] = useState<string | null>(null);
   const retryLastTurn = useRetryLastTurnWithAccount(surface.entity);
-  const now = useMinuteNow();
+  const now = useQuantizedNow(60_000);
   const newest = recovery?.messages.at(-1);
   // Its own const so the narrowing below survives: `undefined` here is either
   // "no recovery" or "entity still loading", and `showsCard` rules out both.
@@ -143,7 +143,7 @@ export function UsageLimitRecoveryBanner({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 8 }}
-        transition={motionFast}
+        transition={tokenTransition.fast}
       >
         <div className="flex items-start gap-2.5">
           <IconAlertTriangle
@@ -178,7 +178,9 @@ export function UsageLimitRecoveryBanner({
                 entry={entryFor(candidate.accountId)}
                 now={now}
                 disabled={
-                  !isSandboxActive || surface.isExecuting || inFlightKey !== null
+                  !isSandboxActive ||
+                  surface.isExecuting ||
+                  inFlightKey !== null
                 }
                 inFlight={inFlightKey === candidate.key}
                 onSelect={() => handleRetry(candidate)}

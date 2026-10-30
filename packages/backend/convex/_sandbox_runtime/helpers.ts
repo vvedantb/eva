@@ -1,5 +1,6 @@
 "use node";
-import { createHash, randomBytes } from "crypto";
+import { randomToken, sha256Hex } from "@vvedantb/server";
+import { createHash } from "crypto";
 import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
@@ -458,12 +459,6 @@ export async function restartUnresponsiveSandbox(
 }
 
 /** Returns the value of a required environment variable, throwing if missing. */
-export function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
-}
-
 /** Returns a promise that resolves after the specified milliseconds. */
 export async function sleep(ms: number): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -743,9 +738,9 @@ export async function signAndLaunchScript(
   const provider = getAIModelProvider(normalizeAIModel(opts.model));
   let harnessCatalogToken: string | undefined;
   if (provider === "claude") {
-    harnessCatalogToken = randomBytes(32).toString("hex");
+    harnessCatalogToken = randomToken(32, "hex");
     await ctx.runMutation(internal.harnessSkills.issueReportToken, {
-      tokenHash: createHash("sha256").update(harnessCatalogToken).digest("hex"),
+      tokenHash: await sha256Hex(harnessCatalogToken),
       provider,
       sandboxId: sandbox.id,
       repoId,

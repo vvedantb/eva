@@ -9,14 +9,14 @@ import {
   type AIModel,
   type StoredModelTraits,
 } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
-  cn,
   findModelOption,
   ModelPickerContent,
   PromptInputSubmit,
   ProviderIcon,
-  SimpleModelLadder,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import { SimpleModelLadder } from "./SimpleModelLadder";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
 import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
 import {

@@ -5,7 +5,8 @@ import {
   IconNotes,
   IconShare,
 } from "@tabler/icons-react";
-import { cn, motionFast, motionSlow } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import type { DeckTheme } from "./DeckPrimitives";
 import { DECK_TONES } from "./deckTone";
 import { ACCENT_GRADIENT, EASE } from "./motion/tokens";
@@ -52,7 +53,7 @@ export function DeckChrome({
           className="relative h-full overflow-hidden"
           style={{ backgroundImage: ACCENT_GRADIENT }}
           animate={{ width: pct }}
-          transition={motionSlow}
+          transition={tokenTransition.slow}
         >
           {/* One glint along the filled bar per slide change, keyed to remount. */}
           <m.span
@@ -118,8 +119,8 @@ export function DeckChrome({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             // Leaving is quieter than arriving: half the travel, half the time.
-            exit={{ opacity: 0, y: 4, transition: motionFast }}
-            transition={motionSlow}
+            exit={{ opacity: 0, y: 4, transition: tokenTransition.fast }}
+            transition={tokenTransition.slow}
             className={cn(
               "absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs",
               tone.surface,

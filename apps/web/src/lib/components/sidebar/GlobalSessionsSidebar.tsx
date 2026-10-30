@@ -14,8 +14,9 @@ import {
   DialogTitle,
   Input,
   CenteredSpinner,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
@@ -24,19 +25,19 @@ import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/Sessi
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
   filterSessionsStartedBy,
+  LINKED_SESSION_GROUPS_OPEN_KEY,
   sessionActivityAt,
   sortAppsForSidebar,
   SESSIONS_APP_GROUPS_OPEN_KEY,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
-import { useSidebarAppGroupOpen } from "@/lib/components/sidebar/useSidebarAppGroupOpen";
-import { entityPathSegment } from "@/lib/numId";
 import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+  useSidebarAppGroupOpen,
+  useStoredGroupOpen,
+} from "@/lib/components/sidebar/useSidebarAppGroupOpen";
+import { entityPathSegment } from "@/lib/numId";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -106,13 +107,18 @@ export function GlobalSessionsSidebar({
 }: GlobalSessionsSidebarProps) {
   const { settings, setListMode } = useSessionsSidebarSettings();
   const { listMode } = settings;
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { archive, isArchiving } = useArchiveSession();
+  const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
     sectionSegment: "/sessions",
+    repos,
   });
-  const repos = useQuery(api.githubRepos.list, {});
+  const linkedGroupOpen = useStoredGroupOpen(
+    LINKED_SESSION_GROUPS_OPEN_KEY,
+    true,
+  );
   const [sessionToRename, setSessionToRename] = useState<{
     session: SessionListItem;
     repo: RepoRow;
@@ -196,7 +202,6 @@ export function GlobalSessionsSidebar({
     if (!pathSegment) return;
     const target = { session, repo: groupRepo, pathSegment };
     requestConfirm(
-      altHeld,
       () => setSessionToArchive(target),
       () => {
         void archive(target, pathname, () => {
@@ -223,7 +228,7 @@ export function GlobalSessionsSidebar({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {orderedRepos === undefined ? (
                 <CenteredSpinner
@@ -245,6 +250,11 @@ export function GlobalSessionsSidebar({
                     <LinkedSessionGroupSection
                       key={group.groupId}
                       group={group}
+                      // Linked groups start open; a toggle is remembered.
+                      open={linkedGroupOpen.storedOpen(group.groupId) ?? true}
+                      onOpenChange={(open) => {
+                        linkedGroupOpen.setGroupOpen(group.groupId, open);
+                      }}
                       pathname={pathname}
                       listMode={settings.listMode}
                       onNavigate={onNavigate}

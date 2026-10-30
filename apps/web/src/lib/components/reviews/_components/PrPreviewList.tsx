@@ -1,7 +1,5 @@
-import { CrossfadeIconSlot } from "@eva/ui";
+import { CrossfadeIconSlot, ListEnter, RelativeDateTime } from "@vvedantb/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { ToneIcon, type PrOverview, type StatusTone } from "./prOverviewMeta";
 
 type PrPreview = PrOverview["previews"][number];

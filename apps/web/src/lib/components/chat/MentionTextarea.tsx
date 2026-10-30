@@ -3,7 +3,11 @@
 import { forwardRef, useRef } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { usePromptInputController, usePromptInputAttachments } from "@eva/ui";
+import {
+  usePromptInputController,
+  usePromptInputAttachments,
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import { attachPastedTextIfLarge } from "@/lib/components/attachments/attachmentMeta";
@@ -25,7 +29,6 @@ import {
   useComposerPrediction,
   type ComposerPredictionTarget,
 } from "@/lib/hooks/useComposerPrediction";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export type MentionTextareaHandle = MentionEditorHandle;

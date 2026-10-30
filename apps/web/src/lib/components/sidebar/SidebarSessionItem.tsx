@@ -1,15 +1,17 @@
 ﻿"use client";
 
 import { DynamicLink } from "@/lib/components/DynamicLink";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
-  cn,
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
   LoadingState,
-} from "@eva/ui";
+  RelativeDateTime,
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
@@ -21,16 +23,11 @@ import {
   SessionFolderAuthor,
   SessionHoverCardBody,
 } from "@/lib/components/sidebar/SidebarListHoverCard";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-import {
-  RepoAppMark,
-  type RepoAppMarkRepo,
-} from "@/lib/components/RepoLogo";
+import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */

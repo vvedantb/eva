@@ -192,9 +192,13 @@ describe("backend authorization boundaries", () => {
     expect(callback).toContain("userId: claim.userId");
   });
 
-  it("OAuth token exchange binds authorization codes to clients and S256", () => {
+  it("Eva hosts no MCP OAuth server: Clerk issues and checks the tokens", () => {
     const native = convexSource("mcp/native.ts");
-    expect(native).toContain("entry.clientId !== params.client_id");
-    expect(native).toContain('entry.codeChallengeMethod !== "S256"');
+    const http = convexSource("http.ts");
+    for (const source of [native, http]) {
+      expect(source).not.toContain("/mcp/oauth/");
+      expect(source).not.toContain("mcp-oauth");
+    }
+    expect(native).toContain("createAuthorizationServerMetadataProxy");
   });
 });

@@ -1,5 +1,5 @@
 import { m } from "motion/react";
-import { Button, Card, CardContent, motionBase } from "@eva/ui";
+import { Button, Card, CardContent, tokenTransition } from "@vvedantb/ui";
 import { IconBrandGithub } from "@tabler/icons-react";
 import { PLATFORM_SECTIONS } from "@/lib/content/platformSections";
 
@@ -14,7 +14,7 @@ export function EmptyOnboarding({ connectUrl }: { connectUrl: string }) {
     <m.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionBase}
+      transition={tokenTransition.base}
       className="flex flex-col items-center px-4 py-12"
     >
       <div className="mb-12 flex flex-wrap items-center justify-center gap-2">
@@ -87,7 +87,10 @@ export function EmptyOnboarding({ connectUrl }: { connectUrl: string }) {
               key={section.label}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...motionBase, delay: 0.15 + index * 0.06 }}
+              transition={{
+                ...tokenTransition.base,
+                delay: 0.15 + index * 0.06,
+              }}
             >
               <Card className="ui-surface-strong h-full overflow-hidden">
                 <div className="h-px bg-linear-to-r from-primary/50 via-primary/20 to-transparent" />

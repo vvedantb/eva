@@ -6,7 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { IconX } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { useFollow } from "@/lib/contexts/FollowContext";
 
 export function FollowOverlay() {

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Id } from "@eva/backend";
-import { cn, Spinner, Button, WebPreview } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner, Button, WebPreview, useMediaQuery } from "@vvedantb/ui";
 import { useSessionStorage } from "usehooks-ts";
 import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
 import { IconRefresh, IconWorld } from "@tabler/icons-react";
@@ -24,7 +25,6 @@ import {
   openPreviewMiniPlayer,
   usePreviewMiniPlayer,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
 import { PreviewFloatingPlaceholder } from "./_components/PreviewFloatingPlaceholder";

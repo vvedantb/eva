@@ -2391,6 +2391,25 @@ function startDaemonDepositionFence(params) {
   };
 }
 
+// ../shared/src/gitDefaults.ts
+var AUTO_PUBLISH_BRANCH_GIT_CONFIG = "eva.autoPublishBranch";
+var COMMIT_EXCLUDE_PATHSPECS = [
+  ":!*.png",
+  ":!*.jpg",
+  ":!*.jpeg",
+  ":!*.gif",
+  ":!*.webp",
+  ":!*.webm",
+  ":!*.mp4",
+  ":!*.mov",
+  ":!screenshots/",
+  ":!recordings/",
+  ":!plan.md"
+];
+
+// callback-src/runtime/branchWatcher.ts
+import { statSync as statSync2, watch } from "fs";
+
 // callback-src/runtime/gitExec.ts
 import { spawnSync as spawnSync3 } from "child_process";
 var GIT_STEP_TIMEOUT_MS = 2e4;
@@ -2404,24 +2423,168 @@ function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
   return { ok: result.status === 0, out };
 }
 
+// callback-src/runtime/branchWatcher.ts
+var GIT_TIMEOUT_MS = 5e3;
+var POLL_INTERVAL_MS = 15e3;
+var DEBOUNCE_MS = 300;
+function resolveBranchTarget(field, id) {
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "chatId") return { kind: "sessionChat", chatId: id };
+  if (field === "taskId") return { kind: "task", taskId: id };
+  if (field === "projectId") return { kind: "project", projectId: id };
+  return null;
+}
+function formatBranch(abbrevRef, shortSha) {
+  const ref = abbrevRef.trim();
+  if (ref.length === 0) return null;
+  if (ref !== "HEAD") return ref;
+  const sha = shortSha.trim();
+  return sha.length > 0 ? sha : null;
+}
+function sameState(a, b) {
+  return a.branch === b.branch && a.sync?.uncommittedFiles === b.sync?.uncommittedFiles && a.sync?.unpushedCommits === b.sync?.unpushedCommits;
+}
+function decideGitStateReport(input) {
+  if (input.current === null) return null;
+  if (input.lastReported !== null && sameState(input.current, input.lastReported)) {
+    return null;
+  }
+  return input.current;
+}
+function readCurrentBranch() {
+  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
+  if (!abbrev.ok) return null;
+  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
+  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
+  return formatBranch(abbrev.out, short.ok ? short.out : "");
+}
+function readGitSync() {
+  const status = git(
+    ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
+    GIT_TIMEOUT_MS
+  );
+  const ahead = git(
+    ["rev-list", "--count", "HEAD", "--not", "--remotes=origin"],
+    GIT_TIMEOUT_MS
+  );
+  const unpushedCommits = Number(ahead.out);
+  if (!status.ok || !ahead.ok || !Number.isSafeInteger(unpushedCommits)) {
+    return null;
+  }
+  const uncommittedFiles = status.out.length === 0 ? 0 : status.out.split("\\n").length;
+  return { uncommittedFiles, unpushedCommits };
+}
+function readGitState() {
+  const branch = readCurrentBranch();
+  if (branch === null) return null;
+  return { branch, sync: readGitSync() };
+}
+var target = null;
+var lastReported = null;
+var pollInterval = null;
+var debounceTimer = null;
+var headWatcher = null;
+var checkInFlight = false;
+var recheckQueued = false;
+var started = false;
+async function runCheckLoop() {
+  const activeTarget = target;
+  if (activeTarget === null) return;
+  if (checkInFlight) {
+    recheckQueued = true;
+    return;
+  }
+  checkInFlight = true;
+  recheckQueued = false;
+  try {
+    let again = true;
+    while (again) {
+      again = false;
+      const state = decideGitStateReport({
+        current: readGitState(),
+        lastReported
+      });
+      if (state !== null) {
+        try {
+          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
+            target: activeTarget,
+            branch: state.branch,
+            ...state.sync ? { sync: state.sync } : {}
+          });
+          lastReported = state;
+        } catch (error) {
+          log(
+            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
+          );
+        }
+      }
+      if (recheckQueued) {
+        recheckQueued = false;
+        again = true;
+      }
+    }
+  } finally {
+    checkInFlight = false;
+  }
+}
+function scheduleCheck() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    void runCheckLoop();
+  }, DEBOUNCE_MS);
+  debounceTimer.unref();
+}
+function watchHeadIn(gitDir) {
+  try {
+    headWatcher = watch(gitDir, (_event, filename) => {
+      if (filename !== "HEAD") return;
+      scheduleCheck();
+    });
+    headWatcher.unref();
+  } catch (error) {
+    log(
+      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
+    );
+  }
+}
+function requestGitStateCheck() {
+  if (!started) return;
+  scheduleCheck();
+}
+function startBranchWatcher() {
+  if (started) return;
+  started = true;
+  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
+  if (target === null) {
+    log(
+      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
+    );
+    return;
+  }
+  const gitDir = WORK_DIR + "/.git";
+  let gitDirIsDirectory = false;
+  try {
+    gitDirIsDirectory = statSync2(gitDir).isDirectory();
+  } catch {
+    gitDirIsDirectory = false;
+  }
+  if (gitDirIsDirectory) {
+    watchHeadIn(gitDir);
+  } else {
+    log("branchWatcher: " + gitDir + " is not a directory; polling only");
+  }
+  pollInterval = setInterval(() => {
+    void runCheckLoop();
+  }, POLL_INTERVAL_MS);
+  pollInterval.unref();
+  void runCheckLoop();
+}
+
 // callback-src/runtime/turnPersist.ts
 var PUSH_TIMEOUT_MS = 6e4;
-var COMMIT_ADD_ARGS = [
-  "add",
-  "-A",
-  "--",
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md"
-];
+var COMMIT_ADD_ARGS = ["add", "-A", "--", ...COMMIT_EXCLUDE_PATHSPECS];
 function localBranchRewroteOwnHistory(branch, remoteRef) {
   const remoteTip = git(["rev-parse", "--verify", remoteRef]);
   const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
@@ -2504,12 +2667,26 @@ function tipAlreadyPublished(exclusion) {
 }
 function persistTurnWork() {
   if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  try {
+    commitAndPushTurnWork();
+  } finally {
+    requestGitStateCheck();
+  }
+}
+function commitAndPushTurnWork() {
   const startedAt = Date.now();
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
   if (!branch.ok || !branch.out.startsWith("eva/")) {
     if (branch.ok && branch.out) {
       log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
     }
+    return;
+  }
+  const pinned = git(["config", "--get", AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
+  if (pinned.ok && pinned.out.length > 0 && pinned.out !== branch.out) {
+    log(
+      \`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not the chat branch "\${pinned.out}"\`
+    );
     return;
   }
   const dirty = git(["status", "--porcelain"]);
@@ -5508,7 +5685,7 @@ import { existsSync as existsSync6, readFileSync as readFileSync6 } from "fs";
 import { dirname } from "path";
 
 // callback-src/runtime/pendingQuestion.ts
-var POLL_INTERVAL_MS = 300;
+var POLL_INTERVAL_MS2 = 300;
 function readClaimedAnswer(result) {
   const payload = unwrapConvexMutationPayload(result);
   if (!payload) return null;
@@ -5531,7 +5708,7 @@ async function pollForAnswer(toolUseId, signal) {
     );
     const answer = readClaimedAnswer(result);
     if (answer !== null) return answer;
-    await sleep(POLL_INTERVAL_MS);
+    await sleep(POLL_INTERVAL_MS2);
   }
   return null;
 }
@@ -7432,7 +7609,7 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { spawn } from "child_process";
-import { statSync as statSync2 } from "fs";
+import { statSync as statSync3 } from "fs";
 import path2 from "path";
 import readline from "readline";
 import { createRequire } from "module";
@@ -7917,14 +8094,14 @@ function pathEnvKey(env, platform) {
 }
 function isFile(filePath) {
   try {
-    return statSync2(filePath).isFile();
+    return statSync3(filePath).isFile();
   } catch {
     return false;
   }
 }
 function isDirectory(filePath) {
   try {
-    return statSync2(filePath).isDirectory();
+    return statSync3(filePath).isDirectory();
   } catch {
     return false;
   }
@@ -8217,7 +8394,7 @@ var CodexAppServerClient = class {
 
 // callback-src/providers/codexAppServerDaemon.ts
 var IDLE_EXIT_MS2 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-var POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
+var POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 var FENCE_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var NO_EVENT_TIMEOUT_MS = 5 * 60 * 1e3;
 var paths = resolveDaemonPaths();
@@ -8568,7 +8745,7 @@ async function runCodexAppServerDaemon() {
       } else if (!supervisor2.hasWork && now - lastIdleActivityAt > IDLE_EXIT_MS2) {
         break;
       }
-      await sleep(POLL_INTERVAL_MS2);
+      await sleep(POLL_INTERVAL_MS3);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -8618,7 +8795,7 @@ import {
   mkdirSync as mkdirSync7,
   readFileSync as readFileSync8,
   renameSync as renameSync2,
-  statSync as statSync3,
+  statSync as statSync4,
   writeFileSync as writeFileSync10
 } from "fs";
 import * as nodeModule from "node:module";
@@ -8788,7 +8965,7 @@ function cursorModelResolutionKey() {
 }
 function readCachedCursorModelResolution() {
   try {
-    const ageMs = Date.now() - statSync3(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
+    const ageMs = Date.now() - statSync4(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
     if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
     const cached = JSON.parse(
       readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
@@ -9999,135 +10176,6 @@ function materializeSystemSkills() {
   } catch (err) {
     log(\`[system-skills] materialize failed: \${String(err)}\`);
   }
-}
-
-// callback-src/runtime/branchWatcher.ts
-import { statSync as statSync4, watch } from "fs";
-var GIT_TIMEOUT_MS = 5e3;
-var POLL_INTERVAL_MS3 = 15e3;
-var DEBOUNCE_MS = 300;
-function resolveBranchTarget(field, id) {
-  if (typeof id !== "string" || id.length === 0) return null;
-  if (field === "sessionId") return { kind: "session", sessionId: id };
-  if (field === "chatId") return { kind: "sessionChat", chatId: id };
-  if (field === "taskId") return { kind: "task", taskId: id };
-  if (field === "projectId") return { kind: "project", projectId: id };
-  return null;
-}
-function formatBranch(abbrevRef, shortSha) {
-  const ref = abbrevRef.trim();
-  if (ref.length === 0) return null;
-  if (ref !== "HEAD") return ref;
-  const sha = shortSha.trim();
-  return sha.length > 0 ? sha : null;
-}
-function decideBranchReport(input) {
-  if (input.current === null) return null;
-  if (input.current === input.lastReported) return null;
-  return input.current;
-}
-function readCurrentBranch() {
-  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
-  if (!abbrev.ok) return null;
-  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
-  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
-  return formatBranch(abbrev.out, short.ok ? short.out : "");
-}
-var target = null;
-var lastReported = null;
-var pollInterval = null;
-var debounceTimer = null;
-var headWatcher = null;
-var checkInFlight = false;
-var recheckQueued = false;
-var started = false;
-async function runCheckLoop() {
-  const activeTarget = target;
-  if (activeTarget === null) return;
-  if (checkInFlight) {
-    recheckQueued = true;
-    return;
-  }
-  checkInFlight = true;
-  recheckQueued = false;
-  try {
-    let again = true;
-    while (again) {
-      again = false;
-      const branch = decideBranchReport({
-        current: readCurrentBranch(),
-        lastReported
-      });
-      if (branch !== null) {
-        try {
-          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
-            target: activeTarget,
-            branch
-          });
-          lastReported = branch;
-        } catch (error) {
-          log(
-            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
-          );
-        }
-      }
-      if (recheckQueued) {
-        recheckQueued = false;
-        again = true;
-      }
-    }
-  } finally {
-    checkInFlight = false;
-  }
-}
-function scheduleCheck() {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    debounceTimer = null;
-    void runCheckLoop();
-  }, DEBOUNCE_MS);
-  debounceTimer.unref();
-}
-function watchHeadIn(gitDir) {
-  try {
-    headWatcher = watch(gitDir, (_event, filename) => {
-      if (filename !== "HEAD") return;
-      scheduleCheck();
-    });
-    headWatcher.unref();
-  } catch (error) {
-    log(
-      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
-    );
-  }
-}
-function startBranchWatcher() {
-  if (started) return;
-  started = true;
-  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
-  if (target === null) {
-    log(
-      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
-    );
-    return;
-  }
-  const gitDir = WORK_DIR + "/.git";
-  let gitDirIsDirectory = false;
-  try {
-    gitDirIsDirectory = statSync4(gitDir).isDirectory();
-  } catch {
-    gitDirIsDirectory = false;
-  }
-  if (gitDirIsDirectory) {
-    watchHeadIn(gitDir);
-  } else {
-    log("branchWatcher: " + gitDir + " is not a directory; polling only");
-  }
-  pollInterval = setInterval(() => {
-    void runCheckLoop();
-  }, POLL_INTERVAL_MS3);
-  pollInterval.unref();
-  void runCheckLoop();
 }
 
 // callback-src/providers/opencodeSdk.ts

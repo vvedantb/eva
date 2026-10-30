@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import type { DeckSlide } from "../slides/types";
 import { getSpeakerNotes } from "../speakerNotes";
 import { DeckStepContext } from "./DeckPrimitives";

@@ -13,9 +13,6 @@ const POPUP_GAP = 6;
 const POPUP_ESTIMATED_HEIGHT = 272;
 const VIEWPORT_PADDING = 8;
 const LINE_HEIGHT_FALLBACK = 18;
-const PANEL_MAX_HEIGHT = 340;
-/** Below this the panel would show ~2 rows, so it flips under the composer. */
-const PANEL_MIN_ABOVE = 200;
 
 /** Caret rect inside a contentEditable, or a sensible fallback at the editor end. */
 export function getSelectionAnchorRect(editor: HTMLElement): DOMRect {
@@ -77,31 +74,4 @@ export function computeMentionPopupPlacement(
     placement === "above" ? anchor.top - POPUP_GAP : anchor.bottom + POPUP_GAP;
 
   return { top, left, width, placement, maxHeight };
-}
-
-/**
- * Panel layout: a sheet the exact width of the composer, sitting just above it.
- * Anchored to the composer rather than the caret so the list does not jump
- * around mid-word.
- */
-export function computePanelPopupPlacement(
-  anchor: DOMRect,
-): MentionPopupPlacement {
-  const visual = window.visualViewport;
-  const viewportHeight = visual?.height ?? window.innerHeight;
-
-  const spaceAbove = anchor.top - VIEWPORT_PADDING - POPUP_GAP;
-  const spaceBelow =
-    viewportHeight - anchor.bottom - VIEWPORT_PADDING - POPUP_GAP;
-  const placeAbove = spaceAbove >= PANEL_MIN_ABOVE || spaceAbove >= spaceBelow;
-  const placement = placeAbove ? "above" : "below";
-  const available = placeAbove ? spaceAbove : spaceBelow;
-
-  return {
-    top: placeAbove ? anchor.top - POPUP_GAP : anchor.bottom + POPUP_GAP,
-    left: anchor.left,
-    width: anchor.width,
-    placement,
-    maxHeight: Math.max(160, Math.min(PANEL_MAX_HEIGHT, available)),
-  };
 }

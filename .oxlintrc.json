@@ -96,6 +96,7 @@
                   "react-dom",
                   "@eva/ui",
                   "@eva/ui/*",
+                  "@vvedantb/ui",
                   "facehash",
                   "convex-helpers/react",
                   "convex-helpers/react/*",

@@ -6,7 +6,8 @@ import {
   IconPlayerStop,
   IconUsers,
 } from "@tabler/icons-react";
-import { cn, motionFast, motionSpring } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition, springTransition } from "@vvedantb/ui";
 import type { DeckTheme } from "./DeckPrimitives";
 import { DECK_TONES } from "./deckTone";
 import type { LiveShare } from "./useLiveShare";
@@ -78,8 +79,8 @@ function SharePanel({
       animate={{ opacity: 1, y: 0 }}
       // A smaller, faster departure than the arrival — the bar should not draw
       // the room's eye on its way out.
-      exit={{ opacity: 0, y: 4, transition: motionFast }}
-      transition={motionSpring}
+      exit={{ opacity: 0, y: 4, transition: tokenTransition.fast }}
+      transition={springTransition}
       className={cn(
         // Concentric: the bar and its buttons are both pills, so the outer
         // radius is the inner radius plus the 8px of padding by construction.

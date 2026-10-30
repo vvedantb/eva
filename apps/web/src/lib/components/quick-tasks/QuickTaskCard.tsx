@@ -1,10 +1,10 @@
 ﻿"use client";
 
+import { cn } from "@eva/ui";
 import {
   Badge,
   BorderBeam,
   Checkbox,
-  cn,
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
@@ -18,7 +18,10 @@ import {
   TooltipContent,
   TooltipTrigger,
   toast,
-} from "@eva/ui";
+  useRequestConfirm,
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -34,8 +37,6 @@ import {
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { PriorityIcon } from "@/lib/components/priority/PriorityIcon";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import {
   PRIORITY_LABELS,
@@ -51,7 +52,6 @@ import {
   useDeleteAgentTask,
 } from "./_components/DeleteTaskDialog";
 import { MoveTaskDialog, useMoveAgentTask } from "./_components/MoveTaskDialog";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
@@ -161,7 +161,7 @@ export function QuickTaskCard({
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const deleteTask = useDeleteAgentTask();
   const moveTask = useMoveAgentTask();
 
@@ -197,7 +197,6 @@ export function QuickTaskCard({
     projects,
     onDelete: () =>
       requestConfirm(
-        altHeld,
         () => setShowDeleteConfirm(true),
         () => {
           void deleteTask({ id }).catch((err) => {
@@ -208,7 +207,6 @@ export function QuickTaskCard({
       ),
     onMove: (targetId: Id<"githubRepos">) =>
       requestConfirm(
-        altHeld,
         () => setMoveTarget(targetId),
         () => {
           void moveTask({ id, repoId: targetId }).catch((err) => {

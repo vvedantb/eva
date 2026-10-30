@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button, Popover, PopoverContent, PopoverTrigger } from "@eva/ui";
+import { Button, Popover, PopoverContent, PopoverTrigger } from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   chipSummaryForActive,
@@ -14,7 +14,7 @@ import {
 import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 import { UsageBar } from "./UsageBar";
 import { UsageLimitsDetails } from "./UsageLimitsDetails";
-import { useMinuteNow } from "./_useMinuteNow";
+import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 
 interface UsageLimitsIndicatorProps {
   repoId: Id<"githubRepos">;
@@ -45,7 +45,7 @@ export function UsageLimitsIndicator({
   accountLabel,
 }: UsageLimitsIndicatorProps) {
   const simpleView = useSimpleView();
-  const now = useMinuteNow();
+  const now = useQuantizedNow(60_000);
   const entries = useQuery(
     api.usageLimits.getForViewer,
     simpleView ? "skip" : { repoId, now },

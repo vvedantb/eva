@@ -13,11 +13,14 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
-import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import {
+  openChatTurnOptimistically,
+  useChatTurnOpen,
+} from "@/lib/components/chat/useChatTurnOpen";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
@@ -136,7 +139,11 @@ export function TaskSandboxChatPanel({
       : [];
 
   const addMessage = useMutation(api.agentTaskChatWorkflow.addMessage);
-  const startExecute = useMutation(api.agentTaskChatWorkflow.startExecute);
+  const startExecute = useMutation(
+    api.agentTaskChatWorkflow.startExecute,
+  ).withOptimisticUpdate((localStore, args) =>
+    openChatTurnOptimistically(localStore, args.taskId),
+  );
   const enqueueMessage = useMutation(api.agentTaskChatWorkflow.enqueueMessage);
   const cancelExecution = useMutation(
     api.agentTaskChatWorkflow.cancelExecution,
@@ -322,21 +329,27 @@ export function TaskSandboxChatPanel({
     }
     const accountId = resolveAccountId(providerAccountId);
     try {
-      await addMessage({
-        taskId,
-        content,
-        attachmentStorageIds,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel: displayTraits.effortLevel,
-      });
-      await startExecute({
-        taskId,
-        message: content,
-        model,
-        ...executionTraits,
-        providerAccountId: accountId,
-      });
+      // Fired together, not one after the other: `startExecute`'s optimistic
+      // status must apply at once, so a second send before the server answers
+      // queues. Convex runs one client's mutations in order, so the user row
+      // still lands first.
+      await Promise.all([
+        addMessage({
+          taskId,
+          content,
+          attachmentStorageIds,
+          providerAccountId: accountId,
+          model,
+          reasoningLevel: displayTraits.effortLevel,
+        }),
+        startExecute({
+          taskId,
+          message: content,
+          model,
+          ...executionTraits,
+          providerAccountId: accountId,
+        }),
+      ]);
     } catch (error) {
       raiseSendFailure(
         error instanceof Error ? error.message : "",

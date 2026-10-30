@@ -11,7 +11,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 // "compact" is the always-visible logs/toolbar field. "large" is the icon
 // button + popover used on quick-tasks and projects so the toolbar stays short.

@@ -5,11 +5,17 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent } from "@eva/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  motionEase,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { playNotificationBell } from "@/lib/utils/notificationChime";
+import { playNotificationBell } from "@/lib/utils/notificationBell";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 import {
   NotificationIcon,
@@ -183,8 +189,7 @@ export function NotificationToastStream() {
   }, [toasts]);
 
   // Keep the fixed host mounted so AnimatePresence can play exit animations.
-  const toastEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
-  const toastTransition = { duration: TOAST_DURATION_S, ease: toastEase };
+  const toastTransition = { duration: TOAST_DURATION_S, ease: motionEase };
   const toastEnter = { opacity: 0, y: -8 };
   const toastRest = { opacity: 1, y: 0 };
   const toastExit = { opacity: 0, y: -8 };

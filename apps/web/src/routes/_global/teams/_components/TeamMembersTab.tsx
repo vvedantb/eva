@@ -13,16 +13,17 @@ import {
   SelectContent,
   SelectItem,
   SelectValue,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconTrash, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 import { AddTeamMemberDialog } from "./AddTeamMemberDialog";
 import {
   RemoveMemberDialog,
@@ -87,7 +88,7 @@ export function TeamMembersTab({
     (RemoveMemberTarget & { userId: Member["userId"] }) | null
   >(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const runRemove = (userId: Member["userId"]) => {
     setIsRemoving(true);
@@ -180,7 +181,6 @@ export function TeamMembersTab({
                         title={skipConfirmTitle("Remove member")}
                         onClick={(event) =>
                           requestConfirm(
-                            altHeld,
                             () =>
                               setRemoveTarget({
                                 userId: member.userId,

@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
+import { CountPop, countLabel } from "@vvedantb/ui";
 
 interface DraftsCountBadgeProps {
   repoId: Id<"githubRepos">;

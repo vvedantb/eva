@@ -30,17 +30,20 @@ import {
   MentionPickerPopup,
   type MentionPopupLayout,
 } from "./MentionPickerPopup";
-import { optionId } from "./mentionOptionId";
 import { MentionRow, type MentionKind } from "./MentionRow";
 import {
   computeMentionPopupPlacement,
-  computePanelPopupPlacement,
   getSelectionAnchorRect,
   type MentionPopupPlacement,
 } from "./mentionPopupPosition";
 import { cn } from "@eva/ui";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
+import {
+  composerSlashOptionId as optionId,
+  computePanelPopupPlacement,
+  viewportSize,
+} from "@vvedantb/ui";
 
 // The inline AI suggestion renders as an `::after` pseudo-element fed by
 // `data-suggestion`, mirroring how the placeholder uses `::before`. A pseudo-
@@ -657,7 +660,10 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
           : null;
         setPopupPlacement(
           panelAnchor
-            ? computePanelPopupPlacement(panelAnchor.getBoundingClientRect())
+            ? computePanelPopupPlacement(
+                panelAnchor.getBoundingClientRect(),
+                viewportSize(),
+              )
             : computeMentionPopupPlacement(getSelectionAnchorRect(el)),
         );
       });

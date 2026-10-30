@@ -1,13 +1,13 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPlus } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { repoSessionsIndexPath } from "@/lib/components/sidebar/_utils/repoSessionPaths";

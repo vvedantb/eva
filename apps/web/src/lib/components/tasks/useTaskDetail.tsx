@@ -1,13 +1,16 @@
 "use client";
 
-import { toast, useElapsedSeconds } from "@eva/ui";
+import {
+  toast,
+  useActivityElapsedSeconds,
+  convexErrorMessage,
+} from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { useState } from "react";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { taskPrUrl } from "@/lib/githubPr";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -65,7 +68,7 @@ export function useTaskDetail(
   const hasRuns = (runs?.length ?? 0) > 0;
   const isProjectTask = task?.projectId !== undefined;
   const activeRun = runs?.find((run) => run.status === "running");
-  const activeRunElapsed = useElapsedSeconds(
+  const activeRunElapsed = useActivityElapsedSeconds(
     activeRun?.startedAt,
     Boolean(activeRun),
   );

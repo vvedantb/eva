@@ -14,10 +14,10 @@ import {
   Input,
   RefreshSpinIcon,
   Spinner,
-} from "@eva/ui";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import {
   IconFolders,
   IconPlus,

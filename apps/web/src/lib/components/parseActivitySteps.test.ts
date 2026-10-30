@@ -4,7 +4,7 @@ import {
   isSandboxStartupActivity,
   parseActivitySteps,
 } from "@eva/shared/parseActivitySteps";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 /**
  * Regression guard for the streaming-renderer parse cache (commit 7f38b7770)

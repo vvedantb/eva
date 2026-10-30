@@ -1,15 +1,14 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
 import {
-  errorResult,
   matchRepoByName,
   mcpGetContext,
   mcpListUserRepos,
   repoRefLabel,
   resolveAveThreadId,
-  textResult,
   MCP_CLAUDE_MODELS,
   type McpCredentials,
   type RepoInfo,
@@ -47,11 +46,11 @@ function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
     repoName: string | undefined,
     app: string | undefined,
     userId: string,
-  ): Promise<{ repos: RepoInfo[] } | ReturnType<typeof errorResult>> {
+  ): Promise<{ repos: RepoInfo[] } | ReturnType<typeof toolErrorResult>> {
     const repos = await mcpListUserRepos(ctx, userId);
     if (!repoName) return { repos };
     const matched = matchRepoByName(repos, repoName, app);
-    if ("isError" in matched) return matched;
+    if ("content" in matched) return matched;
     return { repos: [matched.repo] };
   }
 
@@ -61,11 +60,11 @@ function fleetHelpers(credentials: McpCredentials, ctx: ActionCtx) {
    * is no way to wake an OAuth MCP client itself.
    */
   async function resolveWatchThreadId(): Promise<
-    string | ReturnType<typeof errorResult>
+    string | ReturnType<typeof toolErrorResult>
   > {
     const threadId = await resolveAveThreadId(ctx, credentials);
     if (threadId === undefined) {
-      return errorResult(
+      return toolErrorResult(
         "No Manager Ave chat to wake when this agent finishes. Send Manager Ave a message in Eva first, then retry — or poll get_agent_state. An MCP client cannot be woken itself.",
       );
     }
@@ -127,7 +126,7 @@ export function fleetTools(
       handler: async ({ repoName, app, includeIdle }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const scope = await resolveRepoScope(repoName, app, userId);
-        if ("isError" in scope) return scope;
+        if ("content" in scope) return scope;
 
         const agents = await ctx.runAction(
           internal.mcp.nodeActions.orchestratorListAgents,
@@ -144,7 +143,7 @@ export function fleetTools(
           },
         );
 
-        return textResult({ agents, count: agents.length });
+        return toolJsonResult({ agents, count: agents.length });
       },
     }),
   );
@@ -175,7 +174,7 @@ export function fleetTools(
           internal.mcp.nodeActions.orchestratorGetAgentState,
           { clerkUserId, kind, id, transcriptTail },
         );
-        return textResult({ agent: state });
+        return toolJsonResult({ agent: state });
       },
     }),
   );
@@ -200,7 +199,7 @@ export function fleetTools(
           internal.mcp.nodeActions.orchestratorStopAgent,
           { clerkUserId, kind, id },
         );
-        return textResult({
+        return toolJsonResult({
           kind,
           id,
           status: "cancel_requested",
@@ -283,11 +282,11 @@ export function fleetTools(
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repos = await mcpListUserRepos(ctx, userId);
         const matched = matchRepoByName(repos, repoName, app);
-        if ("isError" in matched) return matched;
+        if ("content" in matched) return matched;
         const { repo } = matched;
 
         if (linkedRepos && linkedRepos.length > 0 && group) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "linkedRepos" or "group", not both — they are two ways to pick the same session\'s extra repos.',
           );
         }
@@ -297,7 +296,7 @@ export function fleetTools(
           linkedRepoIds = [];
           for (const linkedName of linkedRepos) {
             const matchedLinked = matchRepoByName(repos, linkedName, undefined);
-            if ("isError" in matchedLinked) return matchedLinked;
+            if ("content" in matchedLinked) return matchedLinked;
             linkedRepoIds.push(matchedLinked.repo.id);
           }
         }
@@ -314,12 +313,12 @@ export function fleetTools(
           );
           if (matches.length === 0) {
             const available = groups.map((g) => g.name).join(", ") || "(none)";
-            return errorResult(
+            return toolErrorResult(
               `Codebase group "${group}" not found. Your groups: ${available}`,
             );
           }
           if (matches.length > 1) {
-            return errorResult(
+            return toolErrorResult(
               `Multiple codebase groups are named "${group}". Rename one in Eva to disambiguate.`,
             );
           }
@@ -328,7 +327,7 @@ export function fleetTools(
             const primaryLabel = found.primaryRepo
               ? `${found.primaryRepo.owner}/${found.primaryRepo.name}`
               : "a repo you can no longer reach";
-            return errorResult(
+            return toolErrorResult(
               `Codebase group "${group}" is saved for ${primaryLabel}, not ${repoRefLabel(repo)}. Pass repoName="${primaryLabel}", or drop "group".`,
             );
           }
@@ -360,7 +359,7 @@ export function fleetTools(
           rootDirectory: repo.rootDirectory ?? undefined,
         });
 
-        return textResult({
+        return toolJsonResult({
           sessionId: created.sessionId,
           numId: created.numId,
           repo: repoRefLabel(repo),
@@ -385,8 +384,7 @@ export function fleetTools(
 
   /** The session a group tool acts on: the given id, or the caller's own. */
   const groupTargetSessionId = (sessionId: string | undefined) =>
-    sessionId ??
-    (credentials.entityKind === "session" ? entityId : undefined);
+    sessionId ?? (credentials.entityKind === "session" ? entityId : undefined);
 
   tools.push(
     defineTool({
@@ -402,7 +400,7 @@ export function fleetTools(
         await mcpGetContext(ctx, clerkUserId);
         const target = groupTargetSessionId(groupSessionId);
         if (!target) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "groupSessionId": you are not running in a session.',
           );
         }
@@ -414,7 +412,7 @@ export function fleetTools(
             change: { kind: "add", groupSessionId: target },
           },
         );
-        return textResult({ sessionId, ...result });
+        return toolJsonResult({ sessionId, ...result });
       },
     }),
   );
@@ -423,7 +421,7 @@ export function fleetTools(
     defineTool({
       name: "rename_session_group",
       description:
-        'Name the linked-session group a session belongs to (sessions spun up from one another with create_session). The name shows in the Eva sidebar and session header. Pass an empty name to clear it; the group then shows its oldest session\'s title. get_agent_state returns a session\'s group as "sessionGroup".',
+        "Name the linked-session group a session belongs to (sessions spun up from one another with create_session). The name shows in the Eva sidebar and session header. Pass an empty name to clear it; the group then shows its oldest session's title. get_agent_state returns a session's group as \"sessionGroup\".",
       mutating: true,
       input: {
         sessionId: sessionGroupTargetArg,
@@ -433,7 +431,7 @@ export function fleetTools(
         await mcpGetContext(ctx, clerkUserId);
         const target = groupTargetSessionId(sessionId);
         if (!target) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "sessionId": you are not running in a session.',
           );
         }
@@ -445,7 +443,7 @@ export function fleetTools(
             change: { kind: "rename", name },
           },
         );
-        return textResult({ sessionId: target, ...result });
+        return toolJsonResult({ sessionId: target, ...result });
       },
     }),
   );
@@ -463,7 +461,7 @@ export function fleetTools(
         await mcpGetContext(ctx, clerkUserId);
         const target = groupTargetSessionId(sessionId);
         if (!target) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "sessionId": you are not running in a session.',
           );
         }
@@ -471,7 +469,7 @@ export function fleetTools(
           internal.mcp.nodeActions.orchestratorUpdateSessionGroup,
           { clerkUserId, sessionId: target, change: { kind: "remove" } },
         );
-        return textResult({ sessionId: target, status: "removed" });
+        return toolJsonResult({ sessionId: target, status: "removed" });
       },
     }),
   );
@@ -484,7 +482,7 @@ export function fleetTools(
     defineTool({
       name: "watch_agent",
       description:
-        'Subscribe to an agent so Manager Ave is woken once, when it next finishes its work; the watch then clears. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From any other MCP client this registers against your Manager Ave chat, not the client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.',
+        "Subscribe to an agent so Manager Ave is woken once, when it next finishes its work; the watch then clears. create_session, send_agent_message, and cross-repo task creation already do this for you — use this for agents you did not start. From any other MCP client this registers against your Manager Ave chat, not the client (which cannot be woken). For a project, you are woken when its sandbox chat finishes a turn, not when a build finishes.",
       mutating: true,
       input: {
         kind: agentKindArg,
@@ -500,7 +498,7 @@ export function fleetTools(
           id,
           aveThreadId: threadId,
         });
-        return textResult({ kind, id, watched: true });
+        return toolJsonResult({ kind, id, watched: true });
       },
     }),
   );
@@ -522,7 +520,7 @@ export function fleetTools(
           id,
           aveThreadId: undefined,
         });
-        return textResult({ kind, id, watched: false });
+        return toolJsonResult({ kind, id, watched: false });
       },
     }),
   );
@@ -572,7 +570,7 @@ The message is marked as sent via MCP. When Manager Ave sends it, the agent is r
             sentViaOrchestrator: true,
           },
         );
-        return textResult({ kind, id, ...result });
+        return toolJsonResult({ kind, id, ...result });
       },
     }),
   );

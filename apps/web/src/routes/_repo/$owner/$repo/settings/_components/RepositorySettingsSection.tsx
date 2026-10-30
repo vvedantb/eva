@@ -8,12 +8,14 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { Switch } from "@eva/ui";
+import {
+  Switch,
+  SettingsField,
+  SettingsToggleRow,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { ConfigModelField } from "./ConfigModelField";
 
 type RepoConfigFields = {

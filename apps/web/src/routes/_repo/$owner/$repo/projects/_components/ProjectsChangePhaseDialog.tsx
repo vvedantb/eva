@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   PROJECT_PHASES,
   phaseConfig,

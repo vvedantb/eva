@@ -14,14 +14,14 @@ import {
   QueueSectionLabel,
   QueueSectionTrigger,
   toast,
-  motionBase,
-  CircleSpinner,
-} from "@eva/ui";
+  tokenTransition,
+  Spinner,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconPlayerStop, IconTerminal2 } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 function formatElapsed(startedAt: number, now: number): string {
   const sec = Math.max(0, Math.floor((now - startedAt) / 1000));
@@ -117,7 +117,7 @@ export function BackgroundProcessesPanel({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionBase}
+          transition={tokenTransition.base}
         >
           <Queue className="mb-2">
             <QueueSection defaultOpen>
@@ -178,7 +178,8 @@ export function BackgroundProcessesPanel({
                                 }}
                               >
                                 {isKilling ? (
-                                  <CircleSpinner
+                                  <Spinner
+                                    variant="circle"
                                     size="sm"
                                     className="size-3.5"
                                   />

@@ -26,6 +26,8 @@ export {
 
 export { listPullRequests, getPullRequestHeader } from "./_github/pullRequests";
 
+export { getEvaMergeShare } from "./_github/mergeShare";
+
 export {
   getPullRequestOverview,
   getPullRequestCommits,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs, TabsList, TabsTrigger, motionFast } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { EnvVarScope } from "@/lib/search-params";
 import { useNavigate } from "@tanstack/react-router";
@@ -44,7 +44,7 @@ export function EnvVariablesPageClient({ scope }: { scope: EnvVarScope }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           {scope === "repo" ? <EnvVariablesClient /> : null}
           {scope === "team" ? <TeamEnvVarsClient /> : null}

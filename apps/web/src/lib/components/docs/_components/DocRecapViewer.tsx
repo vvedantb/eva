@@ -32,9 +32,10 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  motionFast,
+  tokenTransition,
   CrossfadeIcon,
-} from "@eva/ui";
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -45,7 +46,6 @@ import {
   IconHistory,
   IconPencilCheck,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocContentTab } from "./DocContentTab";
 import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBody";
 import { RecapStaleBanner } from "@/lib/components/sandbox/_components/RecapStaleBanner";
@@ -312,7 +312,7 @@ export function DocRecapViewer({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Surface density="tight" className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -389,7 +389,7 @@ export function DocRecapViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="recap"
@@ -405,7 +405,7 @@ export function DocRecapViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="summary"

@@ -2,12 +2,13 @@ import { useQueryState } from "nuqs";
 import { timeRangeParser } from "@/lib/search-params";
 import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { CenteredSpinner, motionBase } from "@eva/ui";
+import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { Kpi, KpiGroup } from "@/lib/components/analytics/Kpi";
 import { PRsOverTimeChart } from "@/lib/components/analytics/PRsOverTimeChart";
+import { EvaMergeShareChart } from "@/lib/components/analytics/EvaMergeShareChart";
 import { SessionFunnel } from "@/lib/components/analytics/SessionFunnel";
 import { ActivityTimelineChart } from "@/lib/components/analytics/ActivityTimelineChart";
 import { Leaderboard } from "@/lib/components/analytics/Leaderboard";
@@ -172,7 +173,7 @@ export function StatsClient() {
           <m.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={motionBase}
+            transition={tokenTransition.base}
           >
             <Kpi
               icon={IconClockHour4}
@@ -192,6 +193,13 @@ export function StatsClient() {
               sessionsWithPr={impactStats.sessionsWithPr}
             />
           </div>
+
+          <EvaMergeShareChart
+            repoId={repo._id}
+            startTime={timelineStart}
+            endTime={today}
+            bucketSizeMs={bucketSize}
+          />
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2">

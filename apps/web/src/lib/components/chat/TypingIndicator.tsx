@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition, ListEnter } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { TypingUser } from "@/lib/hooks/useTypingPresence";
 
 function typingLabel(users: TypingUser[]): ReactNode {
@@ -83,7 +83,7 @@ export function TypingIndicator({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <span className="flex -space-x-1.5">
             {users.slice(0, 3).map((user, index) => (

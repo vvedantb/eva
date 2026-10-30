@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { m } from "motion/react";
 import type { Doc } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,14 +12,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
   LoadingState,
-  cn,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  MarqueeOnHover,
+} from "@vvedantb/ui";
 import { IconLink, IconPencil, IconX } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
 import { SharedLayoutNavSurface } from "@/lib/components/sidebar/SharedLayoutNav";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 
 interface SidebarChatRowProps {
   chat: Doc<"sessionChats">;
@@ -65,7 +65,7 @@ export function SidebarChatRow({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <SharedLayoutNavSurface
               itemId={chat._id}
@@ -79,7 +79,10 @@ export function SidebarChatRow({
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {isRunning ? (
-                    <span className="flex shrink-0 items-center" title="Working">
+                    <span
+                      className="flex shrink-0 items-center"
+                      title="Working"
+                    >
                       <LoadingState
                         label="Working"
                         variant="Drive"

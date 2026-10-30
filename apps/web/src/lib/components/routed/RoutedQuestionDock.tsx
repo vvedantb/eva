@@ -5,13 +5,15 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
+import { cn } from "@eva/ui";
 import {
   CenteredSpinner,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  cn,
-} from "@eva/ui";
+  RelativeDateTime,
+  useMediaQuery,
+} from "@vvedantb/ui";
 import {
   IconArrowUp,
   IconArrowUpRight,
@@ -20,8 +22,6 @@ import {
   IconChevronRight,
   IconInfoCircle,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { participantNames, sourceLabel } from "@/lib/components/routed/status";
 import {
   catchMutationError,
@@ -238,10 +238,7 @@ function QuestionCard({
           <CenteredSpinner label="Loading question" />
         ) : (
           replies.map((message) => (
-            <div
-              key={message._id}
-              className="border-l-2 border-border pl-2.5"
-            >
+            <div key={message._id} className="border-l-2 border-border pl-2.5">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-xs font-medium">
                   {message.authorKind === "eva"

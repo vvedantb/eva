@@ -2,7 +2,7 @@ import {
   isEmptyActivityPayload,
   parseActivitySteps,
 } from "@eva/shared/parseActivitySteps";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 /** How often the simple-view thinking heartbeat reprints. */
 export const THINKING_HEARTBEAT_INTERVAL_SECONDS = 30;

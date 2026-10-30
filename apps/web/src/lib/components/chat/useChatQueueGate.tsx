@@ -13,14 +13,11 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
-import {
-  formatModelDisplayLabel,
-  getProviderLabel,
-  type ModelAccount,
-} from "@eva/ui";
-import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
+import { formatModelDisplayLabel, getProviderLabel } from "@vvedantb/ui";
+import type { ModelAccount } from "@vvedantb/ui";
+import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
-import { useMinuteNow } from "@/lib/components/usage-limits/_useMinuteNow";
+import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { ChatBodyMessage, ChatBodyQueuedMessage } from "./chatBodyUtils";
@@ -77,7 +74,7 @@ export function useChatQueueGate({
   /** Persists the pick; resolves once the replacement daemon is warm. */
   setAccount: (accountId: string | null) => Promise<void>;
 }) {
-  const now = useMinuteNow();
+  const now = useQuantizedNow(60_000);
   const switchQueuedCredential = useMutation(
     api.queuedMessages.switchCredential,
   );

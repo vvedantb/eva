@@ -1,6 +1,7 @@
 import { IconCircleCheckFilled, IconDownload } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { LoadingState, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { LoadingState } from "@vvedantb/ui";
 import { GrokMark } from "@/lib/components/grokBot/GrokMark";
 import { useAppScheme, useDeckStep } from "../../_components/DeckPrimitives";
 import { DUR, EASE, Pulse, cueTransition } from "../../_components/motion";

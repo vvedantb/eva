@@ -1,6 +1,7 @@
 import { IconLayoutKanban, IconPointerFilled } from "@tabler/icons-react";
 import { m } from "motion/react";
-import { Badge, BorderBeam, ListRow, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Badge, BorderBeam, ListRow } from "@vvedantb/ui";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import {
   statusConfig,

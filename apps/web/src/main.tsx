@@ -12,6 +12,7 @@ import { convex } from "./lib/convex";
 import { DeploymentErrorFallback } from "./lib/components/DeploymentErrorFallback";
 import { RouteNotFound } from "./lib/components/RouteNotFound";
 import { MotionProvider } from "./lib/components/MotionProvider";
+import { EvaUiProvider } from "@eva/ui";
 import { isChunkLoadError } from "./lib/utils/isChunkLoadError";
 import {
   claimStaleDeployReload,
@@ -19,17 +20,12 @@ import {
   stripStaleDeployReloadParam,
 } from "./lib/utils/staleDeployReload";
 import { readSignedInHint } from "./lib/authHint";
-import { saveMcpOauthParamsFromUrl } from "./lib/mcpOauthStorage";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
 
-// Persist any in-flight MCP OAuth params before Clerk's session handshake
-// gets a chance to redirect us off `/mcp/oauth/authorize`. See
-// `mcpOauthStorage.ts` for the full flow.
 stripStaleDeployReloadParam();
-saveMcpOauthParamsFromUrl();
 
 // Moves persisted sandbox UI state off the legacy `conductor:` key prefix. Must
 // run before React mounts so the hooks reading these keys see migrated values on
@@ -186,13 +182,15 @@ if (rootElement) {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <MotionProvider>
-          <ClerkProvider
-            publishableKey={clientEnv.VITE_CLERK_PUBLISHABLE_KEY}
-            signInFallbackRedirectUrl="/home"
-            signUpFallbackRedirectUrl="/home"
-          >
-            <InnerApp hadSession={hadSession} router={router} />
-          </ClerkProvider>
+          <EvaUiProvider>
+            <ClerkProvider
+              publishableKey={clientEnv.VITE_CLERK_PUBLISHABLE_KEY}
+              signInFallbackRedirectUrl="/home"
+              signUpFallbackRedirectUrl="/home"
+            >
+              <InnerApp hadSession={hadSession} router={router} />
+            </ClerkProvider>
+          </EvaUiProvider>
         </MotionProvider>
       </QueryClientProvider>
     </StrictMode>,

@@ -13,7 +13,7 @@ import {
   DialogFooter,
   Button,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import dayjs from "@eva/shared/dates";
 import {
   ScheduleDateTimePicker,

@@ -1,5 +1,6 @@
 import { IconCheck, IconGitBranch } from "@tabler/icons-react";
-import { CircleSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { BrandMark, type BrandName } from "../BrandMark";
 import {
   MockChip,
@@ -122,7 +123,8 @@ export function QuickTasksPreview() {
               className="flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-2"
             >
               {task.state === "running" ? (
-                <CircleSpinner
+                <Spinner
+                  variant="circle"
                   size="sm"
                   className="size-[13px] shrink-0"
                   aria-hidden

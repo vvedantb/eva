@@ -27,6 +27,7 @@ import {
 import { finalizeCancelledAssistantMessage } from "./streaming";
 import {
   drainChatQueueQuietly,
+  dropComposerUserRow,
   startNextQueuedProjectChatMessage,
 } from "./_queues/helpers";
 import {
@@ -161,6 +162,7 @@ async function buildProjectChatTurnPrompt(
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
       askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
+      prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
   });
   if (prefixBlock) {
@@ -428,6 +430,26 @@ export const startExecute = authMutation({
       surface: { kind: "project", project },
     });
 
+    // A send that lands behind a running turn queues: a burst of sends can all
+    // reach here before the composer sees the first turn, and starting each
+    // one ran two turns at once. Same busy rule as the queue's own drain.
+    if (
+      project.activeChatWorkflowId !== undefined ||
+      project.pendingTurn !== undefined
+    ) {
+      await enqueueProjectChatMessage(ctx, project, {
+        ...args,
+        userId: ctx.userId,
+        attachmentStorageIds: await dropComposerUserRow(
+          ctx,
+          args.projectId,
+          args.message,
+        ),
+        resolvedProviderAccountId: providerAccountId,
+      });
+      return null;
+    }
+
     // The user row for this turn is already stored (the client sends addMessage
     // first), so the alert lands above the new placeholder, not below the reply.
     await maybeInsertModelHandoffAlert(
@@ -629,36 +651,61 @@ export const enqueueMessage = authMutation({
       surface: { kind: "project", project },
     });
 
-    await ctx.db.insert("queuedMessages", {
-      parentId: args.projectId,
-      content,
-      createdAt: Date.now(),
-      order: Date.now(),
+    await enqueueProjectChatMessage(ctx, project, {
+      ...args,
+      message: content,
       userId: ctx.userId,
-      model: args.model,
-      reasoningLevel: args.reasoningLevel,
-      thinkingEnabled: args.thinkingEnabled,
-      use1mContext: args.use1mContext,
-      fastMode: args.fastMode,
-      // The sender's raw pick, re-resolved against the owner's accounts at
-      // dequeue: the model and the owner's accounts can both move while the
-      // message waits.
-      providerAccountId: args.providerAccountId,
-      attachmentStorageIds: args.attachmentStorageIds,
+      resolvedProviderAccountId: providerAccountId,
     });
-    await ctx.db.patch(args.projectId, {
-      lastChatModel: normalizedModel,
-      providerAccountId,
-      ...composerTraitFields(args),
-      updatedAt: Date.now(),
-    });
-    // Sends at once when the chat is idle. Otherwise the queue waits: behind
-    // the running turn, for a usage-limit reset, or for Eva to wake — a
-    // sleeping sandbox is woken here and its ready drain sends the message.
-    await drainChatQueueQuietly(ctx, args.projectId);
     return null;
   },
 });
+
+/** Parks a message on the project's chat queue; shared by enqueue and a busy send. */
+async function enqueueProjectChatMessage(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+  args: {
+    message: string;
+    userId: Id<"users">;
+    model: Infer<typeof aiModelValidator>;
+    reasoningLevel?: Doc<"queuedMessages">["reasoningLevel"];
+    thinkingEnabled?: boolean;
+    use1mContext?: boolean;
+    fastMode?: boolean;
+    providerAccountId?: Id<"userProviderAccounts">;
+    resolvedProviderAccountId: Id<"userProviderAccounts"> | undefined;
+    attachmentStorageIds?: Id<"_storage">[];
+  },
+): Promise<void> {
+  await ctx.db.insert("queuedMessages", {
+    parentId: project._id,
+    content: args.message,
+    createdAt: Date.now(),
+    order: Date.now(),
+    userId: args.userId,
+    model: args.model,
+    reasoningLevel: args.reasoningLevel,
+    thinkingEnabled: args.thinkingEnabled,
+    use1mContext: args.use1mContext,
+    fastMode: args.fastMode,
+    // The sender's raw pick, re-resolved against the owner's accounts at
+    // dequeue: the model and the owner's accounts can both move while the
+    // message waits.
+    providerAccountId: args.providerAccountId,
+    attachmentStorageIds: args.attachmentStorageIds,
+  });
+  await ctx.db.patch(project._id, {
+    lastChatModel: normalizeAIModel(args.model),
+    providerAccountId: args.resolvedProviderAccountId,
+    ...composerTraitFields(args),
+    updatedAt: Date.now(),
+  });
+  // Sends at once when the chat is idle. Otherwise the queue waits: behind
+  // the running turn, for a usage-limit reset, or for Eva to wake — a
+  // sleeping sandbox is woken here and its ready drain sends the message.
+  await drainChatQueueQuietly(ctx, project._id);
+}
 
 /**
  * Cancels the active project chat workflow and starts any queued message. For
@@ -889,6 +936,14 @@ export const projectChatExecuteWorkflow = workflow.define({
       turnId: args.turnId,
       sandboxId: activeSandboxId,
     });
+    if (data.branchName) {
+      await step.runAction(internal.sandbox.applyBranchPublishPolicy, {
+        sandboxId: activeSandboxId,
+        repoId: data.repoId,
+        userId: args.userId,
+        branchName: data.branchName,
+      });
+    }
 
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.projectChatWorkflow.ensurePendingTurn, {

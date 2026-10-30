@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { useHotkeyRecorder, type Hotkey } from "@tanstack/react-hotkeys";
 import { Kbd } from "@/lib/components/ui/Kbd";
 import { slotDigitOf, type ShortcutDef } from "@/lib/hotkeys/registry";
@@ -75,7 +76,10 @@ export function ShortcutRecorder({
         {recorder.isRecording ? (
           "Press keys…"
         ) : (
-          <Kbd hotkey={binding} className="border-0 bg-transparent p-0 text-current" />
+          <Kbd
+            hotkey={binding}
+            className="border-0 bg-transparent p-0 text-current"
+          />
         )}
       </Button>
       {recorder.isRecording ? (
