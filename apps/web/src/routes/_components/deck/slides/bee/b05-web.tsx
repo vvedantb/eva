@@ -14,7 +14,15 @@ interface Round {
   links: readonly string[];
 }
 
-/** Three questions from an AQP call; answers checked against the sources in the speaker note. */
+/**
+ * Example questions; the answers are real, checked October 2026:
+ * - DSPT: Digital Care Hub (Better Security, Better Care). A contract
+ *   requirement for NHS-funded services; whether it binds every care provider
+ *   is disputed, so claim no more.
+ * - CHC in any setting: National Framework for NHS Continuing Healthcare, GOV.UK.
+ * - FNC: GOV.UK, "Better community care thanks to nursing funding boost",
+ *   March 2026 (higher rate £368.24 a week).
+ */
 const ROUNDS: readonly Round[] = [
   {
     asked: "Do they need to complete the Data Security and Protection Toolkit?",

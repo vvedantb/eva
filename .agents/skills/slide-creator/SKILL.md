@@ -23,13 +23,19 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
   Less machinery", "Merged. It is live"). This also covers cover slides and
   text inside `<Accent>`.
 - A title is optional. Drop it when the visual makes the point; then centre
-  the content and open the speaker note with `Say the headline (no title on
-  screen): "…"`.
+  the content and say the headline in the first line of the speaker note.
 - **No footers, footnotes or source lines on the slide.** Put sources, dates
-  and caveats in the speaker note (`Detail:` or `Figures:`).
+  and caveats in a code comment beside the data in the slide file (script
+  decks such as Bee), or in `Detail:` / `Figures:` lines in the older Friday
+  and Annual notes.
 - No subtext paragraphs under the title. If a line needs more than about 12
   words, it belongs in the speaker note.
 - State ideas plainly. Do not dress a statement up as a quote.
+- A heard question shown as context (above Bee's bar, above a race) is plain
+  quoted text, not a chat bubble.
+- Humour is dry and understated ("Instead, I did it the old-fashioned way:
+  typing"), never cheesy ("like it was 2015"). For a joke line, offer two or
+  three options and let the presenter pick.
 - Write for the room. Most audiences are not technical: show the benefit, not
   internal counts (commits, lines of code, bundles).
 - One slide per idea across the deck. Before you add a slide, check that no
@@ -46,14 +52,36 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
   invented.
 - If something did not happen, say so on the slide: "would have answered", not
   "answered".
-- Real facts on a slide need a source in the speaker note: name and date, or
-  the URL that was checked.
+- Real facts on a slide need a source: name and date, or the URL that was
+  checked, in a code comment beside the data.
+- **No unmeasured claims.** No times ("5+ minutes", "minutes per search"),
+  accuracy wins or per-meeting costs unless they were measured. Say what the
+  animation shows instead ("Bee would have answered before I finished
+  typing").
+- Comparisons with another product must be fair and checked with the
+  presenter. Example: Teams labels speakers correctly; its weakness is
+  misheard words, not names.
+- Describe today's behaviour without promising it forever. If a feature may
+  change (for example, Bee hearing only your own mic), keep it out of
+  absolute claims in the notes.
 
 - **A redesign or draft keeps every piece of content from the original slide:**
   titles, labels, captions, list items, answers and steps. Change the motion,
   not the message. Before you finish, diff the on-screen text of the original
   against the new version and add back anything missing.
 - Keep "would have" wording wherever the original uses it.
+
+### Drafts
+
+- To try a new take, add it as a draft slide straight after the original
+  (`bee-draft-*` id, file in `slides/<deck>/drafts/`), so the presenter can
+  compare the two in place.
+- When the presenter keeps a draft: move the file over the original, reuse
+  the original slide id, merge the original speaker note into it, update its
+  step lines, and delete the draft entry and note.
+- When asked which of two to keep, start from the point the slide must make,
+  check what each version loses, and recommend one. Offer to fold the best
+  idea from the other into it.
 
 ## 3. Real assets, real UI
 
@@ -84,9 +112,22 @@ order file (`slides/<deck>.ts`), one or two neighbouring slides, and
 - **Builds play on their own.** The deck auto-plays each step (1.1 s first,
   then 1.5 s apart). When a step needs reading or talking time, set `autoMs`
   on the slide, one value per step. Do not add manual slides.
-- Next and back move whole slides. In the presenter window both start the slide from step 0 and the build replays; on the stage, back lands on the finished slide.
+- Next and back move whole slides. In the presenter window both start the
+  slide from step 0 and the build replays; it shows no step counter. On the
+  stage, back lands on the finished slide.
 - Use a `Camera` shot per step. Zoom in on small UI (a notch, a chip, a
-  button) when it is the point of the step, then pull back.
+  button) when it is the point of the step, then pull back. The last shot
+  shows every key element; never end zoomed in with content cut off.
+- Check that no element covers another at any step (a search window over
+  the question, a bubble under a card).
+- Show a flow with connecting lines (`DrawPath`, `dot`) or drawn arrows
+  (a chevron in the path) between the pieces, in reading order.
+- Typing animations: show results only after the query is fully typed, and
+  give each search time to read (about 2.6 s each).
+- A slide that cycles examples can loop after its last step (see
+  `useLoopedStep` in `bee/b05-web.tsx`) so it never sits still.
+- A panel that grows under a moving `Camera` uses a grid-rows transition, not
+  Motion's `height: "auto"`, which mis-measures and overshoots.
 - Use `layoutId` morphs (`SHARED` ids, `morph: true` on the second slide) for
   four or five key pairs per deck, not more.
 - Keep effects light:
@@ -126,8 +167,15 @@ deck is the model):
 - start the line where a build step lands with `→ `, so the presenter can keep
   in time with the auto-build;
 - end with the spoken hand-off to the next slide;
-- after a blank line, `If asked:` for sources, caveats and the "example is
-  invented" line, still in the presenter's voice.
+- no `If asked:`, `Detail:` or `Next:` sections: the note is only what the
+  presenter says;
+- a blank opening slide has no note.
+
+**Write as the presenter, in their role.** The presenter is a developer, not a
+commissioner or account manager. Never script them as having provider calls,
+or explaining DSPT, CHC or FNC rules. Keep domain examples on the slide and
+the spoken line generic ("say someone asks a question nobody knows off the
+top of their head"). When unsure what they would say, ask.
 
 When slides move, are added or are removed:
 

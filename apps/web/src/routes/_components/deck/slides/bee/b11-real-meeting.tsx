@@ -24,7 +24,11 @@ interface Round {
   source: string;
 }
 
-/** The two questions from a chat with Krzys; answers checked as in the speaker note. */
+/**
+ * The two questions from a real chat with Krzys. Answers checked against the
+ * Convex agent-mode docs and the Claude Agent SDK TypeScript reference,
+ * October 2026. The searches are illustrations, and nothing was timed.
+ */
 const ROUNDS: readonly Round[] = [
   {
     asked: "Can Convex run more than one local deployment, so Eva can use it?",
