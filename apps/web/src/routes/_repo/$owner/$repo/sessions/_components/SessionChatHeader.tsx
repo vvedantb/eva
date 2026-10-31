@@ -9,12 +9,12 @@ import {
   DropdownMenuTrigger,
   ConfirmSkipHint,
   skipConfirmTitle,
+  CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
 import type { Doc, Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
