@@ -26,8 +26,8 @@ import {
   TooltipContent,
   TooltipTrigger,
   EmptyState,
+  ToggleSearch,
 } from "@vvedantb/ui";
-import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
 import {
   IconLayoutKanban,

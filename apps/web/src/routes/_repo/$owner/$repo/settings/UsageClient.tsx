@@ -9,6 +9,7 @@ import {
   SettingsSection,
   SettingsEmptyState,
   ListEnter,
+  ToggleSearch,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -27,7 +28,6 @@ import { TimeRangeFilter } from "@/lib/components/analytics/TimeRangeFilter";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { IconFileOff } from "@tabler/icons-react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
 import { groupLogsByType, logTotals, parseResultEvent } from "./logs/_utils";
 import { LogsPeriodSummary } from "./logs/_components/LogsPeriodSummary";
 import { LogsViewTabs } from "./logs/_components/LogsViewTabs";
