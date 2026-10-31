@@ -66,7 +66,7 @@ const SEVERITY: Record<
 /** The gaps as the list shows them: most severe first. */
 const GAPS = REQUIREMENTS.flatMap((req, index) =>
   req.gap ? [{ ...req.gap, id: req.id, index }] : [],
-).sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+).toSorted((a, b) => RANK[a.severity] - RANK[b.severity]);
 
 /**
  * The phone column has room for two gaps: it keeps the two most severe, and

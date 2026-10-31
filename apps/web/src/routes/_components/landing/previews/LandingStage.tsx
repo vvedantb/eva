@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import {
   Stage,
   type Act,
@@ -6,7 +6,6 @@ import {
   type Rect,
   type Target,
 } from "@/lib/stageshow";
-import { useThemeMode } from "@/lib/hooks/useThemeMode";
 import "./landingStage.css";
 
 /**
@@ -20,6 +19,39 @@ const COMPACT = { below: 560, width: 358, height: 440 } as const;
 
 /** How long the loop seam's fade takes each way; matches `landingStage.css`. */
 const VEIL_MS = 280;
+
+/**
+ * The page's light or dark appearance, read from the `dark` class on `<html>`.
+ *
+ * Not `useThemeMode()`: the signed-out landing skips `ClientProvider`, so there
+ * is no `ThemeModeProvider` and the context default is always "light", while
+ * the boot script in `index.html` has already set the class from the visitor's
+ * stored preference or OS setting. The class is the one source both pages share.
+ */
+function subscribeToAppearance(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+  return () => observer.disconnect();
+}
+
+function readAppearance(): "light" | "dark" {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function readServerAppearance(): "light" | "dark" {
+  return "light";
+}
+
+function useDocumentAppearance(): "light" | "dark" {
+  return useSyncExternalStore(
+    subscribeToAppearance,
+    readAppearance,
+    readServerAppearance,
+  );
+}
 
 /** Props every landing demo takes from the showcase. */
 export interface LandingDemoProps {
@@ -41,7 +73,11 @@ interface LandingStageProps<S extends object> extends LandingDemoProps {
   story: (a: Act<S>) => Promise<void>;
   /** Cursor rest point. Leave out for a demo with no pointer. */
   cursor?: { wide: Target; compact: Target };
-  children: (state: S, rect: (name: string) => Rect, layout: Layout) => ReactNode;
+  children: (
+    state: S,
+    rect: (name: string) => Rect,
+    layout: Layout,
+  ) => ReactNode;
 }
 
 /**
@@ -63,10 +99,10 @@ export function LandingStage<S extends object>({
   onEnd,
   children,
 }: LandingStageProps<S>) {
-  const { resolvedTheme } = useThemeMode();
+  const theme = useDocumentAppearance();
 
   // The stage restarts whenever `script` changes identity; the compiler keeps
-  // this stable for as long as `story`, `reset` and `onEnd` are.
+  // this stable for as long as `story` and `onEnd` are.
   const script = async (a: Act<S>) => {
     await story(a);
     onEnd?.();
@@ -87,11 +123,13 @@ export function LandingStage<S extends object>({
       poster={poster}
       script={script}
       cursor={cursor ? { at: cursor, ripple: true } : undefined}
-      theme={resolvedTheme}
+      theme={theme}
       className={`landing-stage ${className}`}
     >
       {(state, rect, layout) => (
-        <div className="landing-stage__scene">{children(state, rect, layout)}</div>
+        <div className="landing-stage__scene">
+          {children(state, rect, layout)}
+        </div>
       )}
     </Stage>
   );

@@ -96,6 +96,7 @@
 }
 
 .ag .ag-start {
+  will-change: transform;
   display: inline-flex;
   align-items: center;
   height: 28px;

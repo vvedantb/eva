@@ -165,7 +165,7 @@ export function StatsDemo({ onEnd }: LandingDemoProps) {
         const top = Math.max(...series);
         const plot = PLOT[layout];
         const hovered = s.week !== null && s.range === QUARTER;
-        const ranked = [...PEOPLE].sort((x, y) =>
+        const ranked = PEOPLE.toSorted((x, y) =>
           s.range === QUARTER ? y.quarter - x.quarter : y.month - x.month,
         );
         return (
