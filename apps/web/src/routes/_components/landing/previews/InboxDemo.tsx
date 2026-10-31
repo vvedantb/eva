@@ -66,7 +66,7 @@ const poster: S = {
 };
 
 async function story(a: Act<S>) {
-  await a.wait(1100);
+  await a.wait(1300);
 
   a.mark("run");
   await a.set({ run: true, unread: 2 });
@@ -74,7 +74,7 @@ async function story(a: Act<S>) {
 
   a.mark("pr");
   await a.set({ pr: true, unread: 3 });
-  await a.wait(1500);
+  await a.wait(1700);
 
   a.mark("open");
   await a.move({ at: "row-pr", x: 0.93, y: 0.72 });
@@ -83,7 +83,7 @@ async function story(a: Act<S>) {
   await a.set({ open: "pr", prRead: true, unread: 2 });
 
   a.mark("payoff");
-  await a.wait(2400);
+  await a.wait(2500);
 }
 
 function Lead({ kind }: { kind: Kind }) {

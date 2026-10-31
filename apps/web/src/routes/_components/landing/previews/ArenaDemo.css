@@ -27,11 +27,13 @@
 
 .ar .ar-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   height: 28px;
-  padding: 0 8px;
+  margin-bottom: 4px;
+  /* The rows' and cards' own inset, so the heading lines up with them. */
+  padding: 0 12px;
   color: var(--ss-text);
   font-size: 12px;
   font-weight: 500;
@@ -59,6 +61,9 @@
 }
 
 .ar .ar-fail {
+  /* Tabler's filled circle is drawn inside a 2px margin: at 20px its disc
+     matches the 16px check beside it. */
+  margin: -2px;
   color: var(--ss-danger);
 }
 
@@ -171,8 +176,13 @@
 
 .ar .ss-stage[data-layout="compact"] .ar-body {
   grid-template-columns: 310px;
+  align-content: start;
   gap: 8px;
   padding: 10px 16px 0;
+}
+
+.ar .ss-stage[data-layout="compact"] .ar-reqs .ar-head {
+  padding: 0 5px;
 }
 
 .ar .ss-stage[data-layout="compact"] .ar-gap-ref {

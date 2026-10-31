@@ -68,6 +68,12 @@ const GAPS = REQUIREMENTS.flatMap((req, index) =>
   req.gap ? [{ ...req.gap, id: req.id, index }] : [],
 ).sort((a, b) => RANK[a.severity] - RANK[b.severity]);
 
+/**
+ * The phone column has room for two gaps: it keeps the two most severe, and
+ * the minor one is only in the wide design.
+ */
+const COMPACT_GAPS = GAPS.slice(0, 2);
+
 type Task = "idle" | "busy" | "done";
 
 type S = {
@@ -126,7 +132,7 @@ function Status({ index, s }: { index: number; s: S }) {
             size={16}
           />
         ),
-        fail: <IconCircleXFilled size={16} className="ar-fail" aria-hidden />,
+        fail: <IconCircleXFilled size={20} className="ar-fail" aria-hidden />,
       }}
     />
   );
@@ -142,85 +148,98 @@ export function ArenaDemo({ onEnd }: LandingDemoProps) {
       onEnd={onEnd}
       cursor={{ wide: { x: 560, y: 330 }, compact: { x: 280, y: 410 } }}
     >
-      {(s, _rect, layout) => (
-        <Window title="checkout-rework.md" lights="grey" className="ar-win">
-          <div className="ar-body">
-            <div className="ar-reqs">
-              <div className="ar-head">
-                <span>Requirements</span>
-                <span className="ar-score">
-                  <Count value={met(s.checked)} />
-                  <span>of {REQUIREMENTS.length} met</span>
-                </span>
+      {(s, _rect, layout) => {
+        const shown = layout === "compact" ? COMPACT_GAPS : GAPS;
+        return (
+          <Window title="checkout-rework.md" lights="grey" className="ar-win">
+            <div className="ar-body">
+              <div className="ar-reqs">
+                <div className="ar-head">
+                  <span>Requirements</span>
+                  <span className="ar-score">
+                    <Count value={met(s.checked)} />
+                    <span>of {REQUIREMENTS.length} met</span>
+                  </span>
+                </div>
+                {REQUIREMENTS.map((req, i) => (
+                  <Row
+                    key={req.id}
+                    className="ar-req"
+                    pad={layout === "compact" ? 5 : 12}
+                    data-on={i < s.checked || undefined}
+                    lead={
+                      <span className="ar-status">
+                        <Status index={i} s={s} />
+                      </span>
+                    }
+                    title={<span className="ar-req-text">{req.text}</span>}
+                  >
+                    <span className="ar-id">{req.id}</span>
+                  </Row>
+                ))}
               </div>
-              {REQUIREMENTS.map((req, i) => (
-                <Row
-                  key={req.id}
-                  className="ar-req"
-                  pad={layout === "compact" ? 7 : 10}
-                  data-on={i < s.checked || undefined}
-                  lead={
-                    <span className="ar-status">
-                      <Status index={i} s={s} />
-                    </span>
-                  }
-                  title={<span className="ar-req-text">{req.text}</span>}
-                >
-                  <span className="ar-id">{req.id}</span>
-                </Row>
-              ))}
-            </div>
 
-            <div className="ar-gaps">
-              <div className="ar-head">
-                <span>Gaps</span>
-              </div>
-              <Collapse open={s.checked < GAPS[GAPS.length - 1].index + 1}>
-                <div className="ar-empty">No gaps found yet</div>
-              </Collapse>
-              {GAPS.map((gap, rank) => {
-                const severity = SEVERITY[gap.severity];
-                const top = rank === 0;
-                return (
-                  <Collapse key={gap.id} open={gap.index < s.checked} reveal="drop">
-                    <div className="ar-gap" data-top={top || undefined}>
-                      <div className="ar-gap-main">
-                        <div className="ar-gap-text">
-                          <span className="ar-gap-title">{gap.title}</span>
-                          <span className="ar-gap-ref">Requirement {gap.id}</span>
+              <div className="ar-gaps">
+                <div className="ar-head">
+                  <span>Gaps</span>
+                </div>
+                <Collapse open={shown.every((gap) => gap.index >= s.checked)}>
+                  <div className="ar-empty">No gaps found yet</div>
+                </Collapse>
+                {shown.map((gap, rank) => {
+                  const severity = SEVERITY[gap.severity];
+                  const top = rank === 0;
+                  return (
+                    <Collapse
+                      key={gap.id}
+                      open={gap.index < s.checked}
+                      reveal="drop"
+                    >
+                      <div className="ar-gap" data-top={top || undefined}>
+                        <div className="ar-gap-main">
+                          <div className="ar-gap-text">
+                            <span className="ar-gap-title">{gap.title}</span>
+                            <span className="ar-gap-ref">
+                              Requirement {gap.id}
+                            </span>
+                          </div>
+                          <Badge tone={severity.tone}>{severity.label}</Badge>
                         </div>
-                        <Badge tone={severity.tone}>{severity.label}</Badge>
+                        {top && (
+                          <span
+                            className="ar-create"
+                            data-target="create-task"
+                            data-cursor="pointer"
+                            data-state={s.task}
+                          >
+                            <States
+                              value={s.task}
+                              states={{
+                                idle: <span>Create task</span>,
+                                busy: <Spinner size={13} />,
+                                done: (
+                                  <span className="ar-created">
+                                    <IconCheck
+                                      size={14}
+                                      stroke={2.25}
+                                      aria-hidden
+                                    />
+                                    Task created
+                                  </span>
+                                ),
+                              }}
+                            />
+                          </span>
+                        )}
                       </div>
-                      {top && (
-                        <span
-                          className="ar-create"
-                          data-target="create-task"
-                          data-cursor="pointer"
-                          data-state={s.task}
-                        >
-                          <States
-                            value={s.task}
-                            states={{
-                              idle: <span>Create task</span>,
-                              busy: <Spinner size={13} />,
-                              done: (
-                                <span className="ar-created">
-                                  <IconCheck size={14} stroke={2.25} aria-hidden />
-                                  Task created
-                                </span>
-                              ),
-                            }}
-                          />
-                        </span>
-                      )}
-                    </div>
-                  </Collapse>
-                );
-              })}
+                    </Collapse>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </Window>
-      )}
+          </Window>
+        );
+      }}
     </LandingStage>
   );
 }
