@@ -4,7 +4,6 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import {
   Button,
   Input,
@@ -17,6 +16,7 @@ import {
   useRequestConfirm,
   ListEnter,
   userFacingErrorMessage,
+  EmptyState,
 } from "@vvedantb/ui";
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
@@ -129,13 +129,19 @@ export function TeamsClient() {
       {teams === undefined ? (
         <CenteredSpinner label="Loading teams" />
       ) : teams.length === 0 ? (
-        <EmptyState
-          icon={<IconUsers size={24} />}
-          title="No teams yet"
-          description="Create a team to collaborate on codebases."
-          actionLabel="Create Team"
-          onAction={openCreate}
-        />
+        <EmptyState.Root>
+          <EmptyState.Icon icon={IconUsers} size={24} />
+          <EmptyState.Title>No teams yet</EmptyState.Title>
+          <EmptyState.Description>
+            Create a team to collaborate on codebases.
+          </EmptyState.Description>
+          <EmptyState.Actions>
+            <Button size="sm" onClick={openCreate} className="mt-6">
+              <IconPlus size={16} />
+              Create Team
+            </Button>
+          </EmptyState.Actions>
+        </EmptyState.Root>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {teams.map((team, index) => (

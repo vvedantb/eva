@@ -1,6 +1,6 @@
 "use client";
 
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
+import { ConfirmDialog } from "@vvedantb/ui";
 
 type TaskConfirmDialogProps = {
   open: boolean;
@@ -23,11 +23,14 @@ function closeThen(
 export function StopConfirmDialog({
   onOpenChange,
   onConfirm,
+  isLoading,
   ...props
 }: TaskConfirmDialogProps) {
   return (
     <ConfirmDialog
       {...props}
+      size="md"
+      pending={isLoading}
       onOpenChange={onOpenChange}
       onConfirm={closeThen(onOpenChange, onConfirm)}
       title="Stop Execution"
@@ -41,11 +44,14 @@ export function StopConfirmDialog({
 export function ResolveConfirmDialog({
   onOpenChange,
   onConfirm,
+  isLoading,
   ...props
 }: TaskConfirmDialogProps) {
   return (
     <ConfirmDialog
       {...props}
+      size="md"
+      pending={isLoading}
       onOpenChange={onOpenChange}
       onConfirm={closeThen(onOpenChange, onConfirm)}
       title="Resolve Conflicts"
@@ -58,11 +64,14 @@ export function ResolveConfirmDialog({
 export function StartupCommandsConfirmDialog({
   onOpenChange,
   onConfirm,
+  isLoading,
   ...props
 }: TaskConfirmDialogProps) {
   return (
     <ConfirmDialog
       {...props}
+      size="md"
+      pending={isLoading}
       onOpenChange={onOpenChange}
       onConfirm={closeThen(onOpenChange, onConfirm)}
       title="Run Startup Commands"
@@ -75,33 +84,41 @@ export function StartupCommandsConfirmDialog({
 export function RunDevServerConfirmDialog({
   onOpenChange,
   onConfirm,
+  isLoading,
   devCommandLabel,
   ...props
 }: TaskConfirmDialogProps & { devCommandLabel: string }) {
   return (
     <ConfirmDialog
       {...props}
+      size="md"
+      pending={isLoading}
       onOpenChange={onOpenChange}
       onConfirm={closeThen(onOpenChange, onConfirm)}
       title="Run dev server"
       confirmLabel="Run dev server"
-    >
-      <div className="space-y-3 text-sm text-muted-foreground">
-        <p>
-          This will start the dev server again in your active sandbox. Only use
-          this if you are sure the dev server is not already running—for
-          example, the preview tab stays on a loading spinner indefinitely.
-        </p>
-        <p>Running it twice can cause port conflicts or duplicate processes.</p>
-        <div className="rounded-surface bg-muted/50 px-3 py-2">
-          <p className="text-xs font-medium text-foreground">Command</p>
-          <p className="mt-1 font-mono text-xs break-all">{devCommandLabel}</p>
-          <p className="mt-2 text-2xs">
-            From App settings (Dev server). Empty override uses auto-detection
-            from package.json.
+      body={
+        <div className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            This will start the dev server again in your active sandbox. Only
+            use this if you are sure the dev server is not already running—for
+            example, the preview tab stays on a loading spinner indefinitely.
           </p>
+          <p>
+            Running it twice can cause port conflicts or duplicate processes.
+          </p>
+          <div className="rounded-surface bg-muted/50 px-3 py-2">
+            <p className="text-xs font-medium text-foreground">Command</p>
+            <p className="mt-1 font-mono text-xs break-all">
+              {devCommandLabel}
+            </p>
+            <p className="mt-2 text-2xs">
+              From App settings (Dev server). Empty override uses auto-detection
+              from package.json.
+            </p>
+          </div>
         </div>
-      </div>
-    </ConfirmDialog>
+      }
+    />
   );
 }
