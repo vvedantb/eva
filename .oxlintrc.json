@@ -130,6 +130,7 @@
     "**/.vite/**",
     "**/.wxt/**",
     "video/**",
+    ".claude/skills/stageshow/**",
     "scripts/oxlint-plugin-anti-slop/**"
   ]
 }
