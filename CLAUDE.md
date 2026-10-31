@@ -5,7 +5,7 @@ FOLLOW ALL OF THESE RULES
 - NEVER create a new branch, push, or open a PR unless the user asks.
 - If already on main and the user asks to ship: commit and push directly to main.
 - Prefer `/preflight` occasionally over husky commit/push gates (hooks under `.husky/` are commented out).
-- Before reporting no GitHub access, try `$GH_TOKEN` directly (API, then push via `http.extraheader`); the credential helper can fail when the token works.
+- Before reporting no GitHub access, push via `http.extraheader` with `$GH_TOKEN`; if it 401s, `git credential fill` for vvedantb/eva gives a fresh token for every installed repo.
 - Plans: final step is `/ship` unless the user says not to.
 
 ## Always
