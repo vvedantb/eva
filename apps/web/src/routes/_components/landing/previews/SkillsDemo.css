@@ -1,0 +1,247 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.skl .skl-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.skl .skl-body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ss-surface);
+}
+
+.skl .skl-pane {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+/* Skills */
+.skl .skl-skills {
+  border-right: 1px solid var(--ss-line);
+}
+
+.skl .skl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 24px;
+}
+
+.skl .skl-folder {
+  color: var(--ss-text-strong);
+  font-family: var(--ss-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.skl .skl-sync {
+  color: var(--ss-text);
+  font-size: 12px;
+}
+
+.skl .skl-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 16px;
+  line-height: 16px;
+}
+
+.skl .skl-synced {
+  color: var(--ss-success-text);
+  font-weight: 500;
+}
+
+/* The push: one commit line on the well, under the folder it changed. */
+.skl .skl-push {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-well);
+  font-size: 12.5px;
+  line-height: 16px;
+}
+
+.skl .skl-commit-icon {
+  display: block;
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.skl .skl-commit {
+  color: var(--ss-text-strong);
+}
+
+.skl .skl-sha {
+  margin-left: auto;
+  color: var(--ss-text);
+  font-family: var(--ss-mono);
+  font-size: 11.5px;
+}
+
+.skl .skl-list {
+  display: grid;
+  margin: 6px -4px 0;
+}
+
+.skl .skl-row {
+  --ss-row-title: 13px;
+  --ss-row-subtitle: 12px;
+  --ss-row-line: 17px;
+  --ss-row-line-2: 17px;
+  padding: 10px;
+}
+
+.skl .skl-file {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.skl .skl-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ss-text-strong);
+  font-family: var(--ss-mono);
+  font-weight: 500;
+}
+
+.skl .skl-row--new .ss-row__subtitle {
+  color: var(--ss-text);
+}
+
+/* Task */
+.skl .skl-task {
+  gap: 14px;
+  padding-right: 116px;
+  background: var(--ss-canvas);
+}
+
+.skl .skl-task-title {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  color: var(--ss-text-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.skl .skl-thread {
+  display: grid;
+  gap: 12px;
+}
+
+.skl .skl-ask {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--ss-radius-lg);
+  background: var(--ss-surface);
+  box-shadow: 0 0 0 1px var(--ss-line);
+}
+
+.skl .skl-ask-lines {
+  display: grid;
+  gap: 7px;
+}
+
+.skl .skl-answer {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.skl .skl-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--ss-radius-pill);
+  background: var(--ss-surface);
+  box-shadow: 0 0 0 1px var(--ss-line);
+  color: var(--ss-text);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.skl .skl-skill-chip .skl-name {
+  font-size: 12.5px;
+}
+
+.skl .skl-reply {
+  color: var(--ss-text-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The composer sits at the foot, clear of the 48px the stage cuts off. */
+.skl .skl-composer {
+  margin-top: auto;
+  margin-bottom: 64px;
+  padding: 10px 12px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-surface);
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+  color: var(--ss-text-faint);
+  font-size: 12.5px;
+}
+
+/* Text that moves with a collapsing row keeps one layer, so it never steps. */
+.skl .ss-row,
+.skl .skl-reply {
+  will-change: transform;
+}
+
+/* Compact: the window spans the phone column, skills above the task. */
+.skl .ss-stage[data-layout="compact"] .skl-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.skl .ss-stage[data-layout="compact"] .skl-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The window runs 58px off the stage: words stop as far short of its right
+   edge as they start from its left. */
+.skl .ss-stage[data-layout="compact"] .skl-pane {
+  padding: 12px 88px 12px 12px;
+}
+
+/* The task leads in compact: its answer opens above the skills, and the
+   skills list runs off the window's foot instead of the answer. */
+.skl .ss-stage[data-layout="compact"] .skl-skills {
+  border-right: 0;
+}
+
+.skl .ss-stage[data-layout="compact"] .skl-task {
+  order: -1;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+/* Two older skills are enough at this width. */
+.skl .ss-stage[data-layout="compact"] .skl-task {
+  gap: 10px;
+}
+
+.skl .ss-stage[data-layout="compact"] .skl-composer {
+  display: none;
+}

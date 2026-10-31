@@ -120,9 +120,14 @@ export function SessionsDemo({ onEnd }: LandingDemoProps) {
         >
           <div className="sd-body">
             <div className="sd-chat">
-              <div className="sd-ask">Postcodes with a space fail validation.</div>
+              <div className="sd-ask">
+                Postcodes with a space fail validation.
+              </div>
               <Stream className="sd-reply" text={REPLY} count={s.words} />
-              <div className="sd-status" data-on={s.status !== "idle" || undefined}>
+              <div
+                className="sd-status"
+                data-on={s.status !== "idle" || undefined}
+              >
                 <States
                   align="start"
                   value={s.status}
@@ -130,7 +135,9 @@ export function SessionsDemo({ onEnd }: LandingDemoProps) {
                     idle: <span />,
                     editing: <span>Editing validate.ts</span>,
                     testing: <span>Running tests</span>,
-                    done: <span className="sd-pr">Opened pull request #142</span>,
+                    done: (
+                      <span className="sd-pr">Opened pull request #142</span>
+                    ),
                   }}
                 />
               </div>
@@ -146,7 +153,10 @@ export function SessionsDemo({ onEnd }: LandingDemoProps) {
                 data-cursor="pointer"
               />
               <div className="sd-panes">
-                <div className="sd-pane sd-preview" data-on={s.tab === 0 || undefined}>
+                <div
+                  className="sd-pane sd-preview"
+                  data-on={s.tab === 0 || undefined}
+                >
                   <div className="sd-page">
                     <div className="sd-page-title">Delivery address</div>
                     <div className="sd-filler">
@@ -169,19 +179,31 @@ export function SessionsDemo({ onEnd }: LandingDemoProps) {
                   </div>
                 </div>
 
-                <div className="sd-pane sd-terminal" data-on={s.tab === 1 || undefined}>
+                <div
+                  className="sd-pane sd-terminal"
+                  data-on={s.tab === 1 || undefined}
+                >
                   <div className="sd-line">
                     <span className="sd-sigil">$</span> pnpm test validate
                   </div>
-                  <div className="sd-line sd-ok" data-on={s.tests >= 1 || undefined}>
+                  <div
+                    className="sd-line sd-ok"
+                    data-on={s.tests >= 1 || undefined}
+                  >
                     ✓ validate.spec.ts (12)
                   </div>
-                  <div className="sd-line sd-pass" data-on={s.tests >= 2 || undefined}>
+                  <div
+                    className="sd-line sd-pass"
+                    data-on={s.tests >= 2 || undefined}
+                  >
                     12 passed in 1.8s
                   </div>
                 </div>
 
-                <div className="sd-pane sd-diff" data-on={s.tab === 2 || undefined}>
+                <div
+                  className="sd-pane sd-diff"
+                  data-on={s.tab === 2 || undefined}
+                >
                   <div className="sd-file">src/checkout/validate.ts</div>
                   <Code lines={DIFF} start={14} count={s.diff} />
                 </div>

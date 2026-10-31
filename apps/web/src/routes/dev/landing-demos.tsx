@@ -45,7 +45,7 @@ function LandingDemosPage() {
   const { demo, width } = Route.useSearch();
   const { Demo } = LANDING_PREVIEWS[demo];
   return (
-    <div className="min-h-dvh bg-background p-10">
+    <div className="min-h-dvh bg-background p-4 sm:p-10">
       <div className="landing-demo" style={{ width }}>
         <Demo key={`${demo}-${width}`} />
       </div>

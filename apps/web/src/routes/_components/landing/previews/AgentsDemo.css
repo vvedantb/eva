@@ -1,0 +1,211 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.ag .ag-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.ag .ag-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 20px 0;
+  background: var(--ss-surface);
+}
+
+/* Everything in the column stops a gutter short of the stage's right edge. */
+.ag .ag-composer,
+.ag .ag-key,
+.ag .ag-list {
+  width: 556px;
+}
+
+/* Composer: the task, then the agent picker and Start. */
+.ag .ag-composer {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+  border-radius: var(--ss-radius-lg);
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+}
+
+.ag .ag-prompt {
+  display: grid;
+  padding: 2px 2px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ag .ag-text,
+.ag .ag-placeholder {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.ag .ag-text {
+  color: var(--ss-text-strong);
+}
+
+.ag .ag-placeholder {
+  color: var(--ss-text-faint);
+}
+
+.ag .ag-text[data-on],
+.ag .ag-placeholder[data-on] {
+  opacity: 1;
+}
+
+.ag .ag-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ag .ag-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-fill);
+  color: var(--ss-text-strong);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.ag .ag-picker svg {
+  color: var(--ss-icon);
+}
+
+.ag .ag-picker[data-hover],
+.ag .ag-picker[data-open] {
+  background: var(--ss-ink-3);
+}
+
+.ag .ag-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.ag .ag-start {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ag .ag-start[data-pressed] {
+  background: color-mix(in srgb, var(--ss-accent) 88%, black);
+}
+
+/* The agent menu, under the picker. */
+.ag .ag-menu {
+  top: 92px;
+  left: 8px;
+  width: 196px;
+}
+
+.ag .ag-menu .ss-menu__item {
+  gap: 6px;
+  height: 32px;
+}
+
+.ag .ag-menu-name {
+  flex: 1;
+}
+
+.ag .ag-menu-check {
+  color: var(--ss-text-strong);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.ag .ag-menu-check[data-on] {
+  opacity: 1;
+}
+
+/* The key the chosen agent signs in with. */
+.ag .ag-key {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 12px;
+  padding: 0 10px;
+  color: var(--ss-text);
+  font-size: 12px;
+}
+
+.ag .ag-key svg {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.ag .ag-env {
+  color: var(--ss-text-strong);
+  font-family: var(--ss-mono);
+  font-size: 11.5px;
+}
+
+/* Tasks: one row each, its agent's mark in the lead. */
+.ag .ag-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ss-line-faint);
+}
+
+.ag .ag-row {
+  border-radius: 0;
+  box-shadow: 0 1px 0 var(--ss-line-faint);
+}
+
+.ag .ag-title {
+  color: var(--ss-text-strong);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ag .ag-sub {
+  color: var(--ss-text);
+  font-size: 11.5px;
+}
+
+/* Compact: the window spans the phone column. */
+.ag .ss-stage[data-layout="compact"] .ag-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.ag .ss-stage[data-layout="compact"] .ag-body {
+  padding: 16px 16px 0;
+}
+
+.ag .ss-stage[data-layout="compact"] .ag-composer,
+.ag .ss-stage[data-layout="compact"] .ag-key,
+.ag .ss-stage[data-layout="compact"] .ag-list {
+  width: 310px;
+}
+
+.ag .ss-stage[data-layout="compact"] .ag-key > span:last-child {
+  display: none;
+}
+
+/* The new task's title wraps rather than cutting in the narrow column. */
+.ag .ss-stage[data-layout="compact"] .ag-title {
+  display: block;
+  white-space: normal;
+}

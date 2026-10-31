@@ -1,0 +1,253 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.snap .snap-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.snap .snap-body {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ss-surface);
+}
+
+/* Boot checklist */
+.snap .snap-boot {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px;
+  border-right: 1px solid var(--ss-line);
+}
+
+.snap .snap-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.snap .snap-title {
+  color: var(--ss-text-strong);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* The one big number: the boot time. */
+.snap .snap-timer {
+  color: var(--ss-text-strong);
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  --ss-count-unit-gap: 1px;
+  transition: color 0.3s ease;
+}
+
+.snap .snap-timer[data-ready] {
+  color: var(--ss-success-text);
+}
+
+.snap .snap-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--ss-text);
+  font-size: 12px;
+}
+
+.snap .snap-source svg {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.snap .snap-steps {
+  display: grid;
+  margin-top: 18px;
+  border-top: 1px solid var(--ss-line);
+}
+
+.snap .snap-step {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ss-line-faint);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.snap .snap-note {
+  margin-top: 12px;
+  white-space: nowrap;
+  color: var(--ss-text-faint);
+  font-size: 12px;
+}
+
+.snap .snap-step .ss-check {
+  flex: none;
+}
+
+.snap .snap-label {
+  color: var(--ss-text);
+  transition: color 0.3s ease;
+}
+
+.snap .snap-step[data-on] .snap-label {
+  color: var(--ss-text-strong);
+}
+
+.snap .snap-detail {
+  justify-self: end;
+  color: var(--ss-text-faint);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.snap .snap-step[data-on] .snap-detail {
+  opacity: 1;
+}
+
+/* Preview: the app coming up beside the list */
+.snap .snap-preview {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--ss-canvas);
+}
+
+.snap .snap-bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ss-line);
+  background: var(--ss-surface);
+}
+
+.snap .snap-url {
+  padding: 4px 10px;
+  border-radius: var(--ss-radius-pill);
+  background: var(--ss-well);
+  color: var(--ss-text);
+  font-family: var(--ss-mono);
+  font-size: 11.5px;
+}
+
+.snap .snap-view {
+  position: relative;
+}
+
+.snap .snap-wait,
+.snap .snap-app {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s ease, translate 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.snap .snap-wait[data-on],
+.snap .snap-app[data-on] {
+  opacity: 1;
+}
+
+/* The wait sits on the visible part of the pane, not the bled middle. */
+.snap .snap-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  right: 88px;
+  color: var(--ss-icon-faint);
+}
+
+.snap .snap-app {
+  translate: 0 6px;
+  padding: 16px;
+}
+
+.snap .snap-app[data-on] {
+  translate: 0 0;
+}
+
+.snap .snap-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 4px 14px;
+}
+
+.snap .snap-page {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--ss-radius-lg);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow-card), 0 0 0 1px var(--ss-line);
+}
+
+.snap .snap-table {
+  display: grid;
+}
+
+.snap .snap-trow {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  align-items: center;
+  height: 38px;
+  border-top: 1px solid var(--ss-line-faint);
+}
+
+/* Compact: the window spans the phone column, the list above the preview. */
+.snap .ss-stage[data-layout="compact"] .snap-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.snap .ss-stage[data-layout="compact"] .snap-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The window runs 58px off the stage: words stop as far short of its right
+   edge as they start from its left. */
+.snap .ss-stage[data-layout="compact"] .snap-boot {
+  padding: 14px 88px 6px 16px;
+  border-right: 0;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+.snap .ss-stage[data-layout="compact"] .snap-steps {
+  margin-top: 12px;
+}
+
+.snap .ss-stage[data-layout="compact"] .snap-step {
+  padding: 10px 0;
+}
+
+.snap .ss-stage[data-layout="compact"] .snap-step:last-child {
+  border-bottom: 0;
+}
+
+/* No room for the address bar: the preview is the strip under the list. */
+.snap .ss-stage[data-layout="compact"] .snap-preview {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.snap .ss-stage[data-layout="compact"] .snap-bar {
+  display: none;
+}
+
+/* Centered on the strip the stage shows, not the window's bled corner. */
+.snap .ss-stage[data-layout="compact"] .snap-wait {
+  right: 58px;
+  bottom: 56px;
+}
