@@ -6,6 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import { useRepo } from "@/lib/contexts/RepoContext";

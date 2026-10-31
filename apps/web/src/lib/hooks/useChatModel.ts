@@ -7,6 +7,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";

@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, ReasoningLevel, StoredModelTraits } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   composerTraitFields,
   storedComposerTraits,
@@ -28,15 +29,11 @@ export function projectStoredTraits(
 export function useSetProjectTraits(projectId: Id<"projects">) {
   const setTraits = useMutation(api.projects.setTraits).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.projects.get, { id: projectId });
-      if (current === undefined || current === null) return;
-      localStore.setQuery(
+      patchLoadedQuery(
+        localStore,
         api.projects.get,
         { id: projectId },
-        {
-          ...current,
-          ...composerTraitFields(args),
-        },
+        (current) => current && { ...current, ...composerTraitFields(args) },
       );
     },
   );

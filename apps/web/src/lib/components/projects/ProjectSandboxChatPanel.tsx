@@ -12,6 +12,7 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { toast } from "@vvedantb/ui";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
@@ -99,12 +100,11 @@ export function ProjectSandboxChatPanel({
   const setChatModelMutation = useMutation(
     api.projects.setChatModel,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.projects.get, { id: args.id });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.projects.get,
       { id: args.id },
-      { ...current, lastChatModel: args.model },
+      (current) => current && { ...current, lastChatModel: args.model },
     );
   });
   const setTraits = useSetProjectTraits(projectId);

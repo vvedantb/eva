@@ -3,6 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   Spinner,
   Switch,

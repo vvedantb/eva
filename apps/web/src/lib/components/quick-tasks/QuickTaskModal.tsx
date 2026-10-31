@@ -35,6 +35,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {

@@ -12,6 +12,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";

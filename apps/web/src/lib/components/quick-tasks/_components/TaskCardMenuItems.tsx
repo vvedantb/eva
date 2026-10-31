@@ -23,6 +23,7 @@ import {
   skipConfirmTitle,
 } from "@vvedantb/ui";
 import { normalizeAIModel, type Id, api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
   IconArrowMoveRight,
