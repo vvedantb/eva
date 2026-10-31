@@ -148,19 +148,6 @@ export function SlideTitle({ children, size = "2xl" }: SlideTitleProps) {
   );
 }
 
-interface SlideBodyProps {
-  children: ReactNode;
-  className?: string;
-}
-
-export function SlideBody({ children, className = "" }: SlideBodyProps) {
-  return (
-    <p className={`text-lg leading-relaxed text-foreground/70 ${className}`}>
-      {children}
-    </p>
-  );
-}
-
 interface SlideBulletsProps {
   items: string[];
 }
@@ -178,14 +165,6 @@ export function SlideBullets({ items }: SlideBulletsProps) {
       ))}
     </ul>
   );
-}
-
-interface SlideDividerProps {
-  className?: string;
-}
-
-export function SlideDivider({ className = "" }: SlideDividerProps) {
-  return <div className={`mt-8 ${className}`} />;
 }
 
 interface SlideTagProps {

@@ -105,7 +105,7 @@ export function sessionActivityAt(session: {
 }
 
 /** The user who started a session; older rows have no `createdBy`. */
-export function sessionStartedBy<T extends string>(session: {
+function sessionStartedBy<T extends string>(session: {
   userId: T;
   createdBy?: T;
 }): T {

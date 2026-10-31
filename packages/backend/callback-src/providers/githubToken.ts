@@ -30,7 +30,7 @@ export function tokenFromActionResponse(data: JsonValue | null): string | null {
  * or parse failures return `{ token: null }` so git can keep using whatever
  * is already in the environment.
  */
-export async function fetchInstallationToken(params: {
+async function fetchInstallationToken(params: {
   convexUrl: string;
   convexToken: string;
   repoId: string;

@@ -105,7 +105,7 @@ export function addPullRequestContext(
     : [...current, pr];
 }
 
-export function pullRequestStateLabel(pr: PullRequestContext): string {
+function pullRequestStateLabel(pr: PullRequestContext): string {
   return pr.isDraft ? "draft" : pr.state;
 }
 

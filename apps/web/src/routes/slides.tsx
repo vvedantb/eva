@@ -1,10 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { SlideDeck } from "./_components/slides/SlideDeck";
 import { usePresentationSync } from "./_components/slides/usePresentationSync";
 import { PresentationControls } from "./_components/slides/_components/PresentationControls";
-import { PresentationDeckProvider } from "./_components/slides/_components/PresentationDeckContext";
 import { PresenterView } from "./_components/slides/PresenterView";
 import {
   openPresenterWindow,
@@ -75,15 +74,6 @@ function StageView({ slide, session, updateSearch }: StageViewProps) {
     updateSearch,
   });
 
-  const deckContext = useMemo(
-    () => ({
-      sessionCode: session,
-      participantKey: sync.participantKey,
-      hostKey: sync.hostKey,
-    }),
-    [session, sync.participantKey, sync.hostKey],
-  );
-
   const isFollower =
     session !== undefined &&
     sync.sessionState !== "none" &&
@@ -95,14 +85,12 @@ function StageView({ slide, session, updateSearch }: StageViewProps) {
 
   return (
     <>
-      <PresentationDeckProvider value={deckContext}>
-        <SlideDeck
-          slide={sync.effectiveSlide}
-          onNavigate={sync.onNavigate}
-          allowNavigation={stageNavigation}
-          showOutline={!presenterDetached}
-        />
-      </PresentationDeckProvider>
+      <SlideDeck
+        slide={sync.effectiveSlide}
+        onNavigate={sync.onNavigate}
+        allowNavigation={stageNavigation}
+        showOutline={!presenterDetached}
+      />
       <PresentationControls
         sync={sync}
         canOpenPresenter={canOpenPresenter}

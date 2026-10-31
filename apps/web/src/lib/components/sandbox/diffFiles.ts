@@ -197,7 +197,7 @@ export function diffFileKind(path: string): DiffFileKind {
   return "code";
 }
 
-export interface DiffSizeTotals {
+interface DiffSizeTotals {
   readonly files: number;
   readonly additions: number;
   readonly deletions: number;
