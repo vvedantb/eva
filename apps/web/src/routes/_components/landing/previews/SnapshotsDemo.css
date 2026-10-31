@@ -67,7 +67,7 @@
 
 .snap .snap-steps {
   display: grid;
-  margin-top: 18px;
+  margin-top: 16px;
   border-top: 1px solid var(--ss-line);
 }
 
@@ -76,7 +76,7 @@
   grid-template-columns: 16px auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  padding: 12px 0;
+  padding: 11px 0;
   border-bottom: 1px solid var(--ss-line-faint);
   font-size: 13px;
   line-height: 1.3;

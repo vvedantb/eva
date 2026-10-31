@@ -270,3 +270,7 @@
 .tm .ss-stage[data-layout="compact"] .tm-new[data-saved] .tm-field .ss-field__box {
   height: 16px;
 }
+
+.tm .ss-stage[data-layout="compact"] .tm-row--head + .tm-row {
+  border-top: 0;
+}

@@ -108,7 +108,7 @@ async function story(a: Act<S>) {
 
   a.mark("payoff");
   await a.set({ task: "done" });
-  await a.move({ at: "create-task", x: 0.8, y: 2.6 });
+  await a.move({ at: "create-task", x: 2.2, y: 0.5 });
   await a.wait(2000);
 }
 
@@ -142,7 +142,7 @@ export function ArenaDemo({ onEnd }: LandingDemoProps) {
       onEnd={onEnd}
       cursor={{ wide: { x: 560, y: 330 }, compact: { x: 280, y: 410 } }}
     >
-      {(s) => (
+      {(s, _rect, layout) => (
         <Window title="checkout-rework.md" lights="grey" className="ar-win">
           <div className="ar-body">
             <div className="ar-reqs">
@@ -157,7 +157,7 @@ export function ArenaDemo({ onEnd }: LandingDemoProps) {
                 <Row
                   key={req.id}
                   className="ar-req"
-                  pad={8}
+                  pad={layout === "compact" ? 7 : 10}
                   data-on={i < s.checked || undefined}
                   lead={
                     <span className="ar-status">
@@ -175,6 +175,9 @@ export function ArenaDemo({ onEnd }: LandingDemoProps) {
               <div className="ar-head">
                 <span>Gaps</span>
               </div>
+              <Collapse open={s.checked < GAPS[GAPS.length - 1].index + 1}>
+                <div className="ar-empty">No gaps found yet</div>
+              </Collapse>
               {GAPS.map((gap, rank) => {
                 const severity = SEVERITY[gap.severity];
                 const top = rank === 0;
