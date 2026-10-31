@@ -73,8 +73,13 @@ function agentLoginPlugin(): Plugin {
   };
 }
 
-/** Everything in node_modules except @vvedantb/ui (also under pnpm's `.pnpm` store). */
-const COMPILER_EXCLUDE = /\/node_modules\/(?!\.pnpm\/@vvedantb\+ui@|@vvedantb\/ui\/)/;
+/** Everything in node_modules except @vvedantb/ui (also under pnpm's `.pnpm` store), plus vendored code. */
+const COMPILER_EXCLUDE = [
+  /\/node_modules\/(?!\.pnpm\/@vvedantb\+ui@|@vvedantb\/ui\/)/,
+  // Vendored Stageshow kit: written for plain React (refs read in render,
+  // hand-tuned effects), so the compiler must not rewrite it.
+  /\/src\/lib\/stageshow\//,
+];
 
 export default defineConfig({
   plugins: [

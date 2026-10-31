@@ -25,6 +25,7 @@ import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settin
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
+import { Route as DevLandingDemosRouteImport } from './routes/dev/landing-demos'
 import { Route as DevUiGalleryRouteImport } from './routes/dev/ui-gallery'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
@@ -225,6 +226,11 @@ const GlobalWhatsNewRoute = GlobalWhatsNewRouteImport.update({
 const DevFeaturePreviewsRoute = DevFeaturePreviewsRouteImport.update({
   id: '/dev/feature-previews',
   path: '/dev/feature-previews',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevLandingDemosRoute = DevLandingDemosRouteImport.update({
+  id: '/dev/landing-demos',
+  path: '/dev/landing-demos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevUiGalleryRoute = DevUiGalleryRouteImport.update({
@@ -965,6 +971,7 @@ export interface FileRoutesByFullPath {
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
@@ -1103,6 +1110,7 @@ export interface FileRoutesByTo {
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -1221,6 +1229,7 @@ export interface FileRoutesById {
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
   '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/_global/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/_global/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
@@ -1362,6 +1371,7 @@ export interface FileRouteTypes {
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
     | '/dev/ui-gallery'
     | '/teams/$teamId'
     | '/artifacts/$artifactId'
@@ -1500,6 +1510,7 @@ export interface FileRouteTypes {
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
     | '/dev/ui-gallery'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
@@ -1617,6 +1628,7 @@ export interface FileRouteTypes {
     | '/_global/testing'
     | '/_global/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
     | '/dev/ui-gallery'
     | '/_global/teams/$teamId'
     | '/_global/artifacts/$artifactId'
@@ -1750,6 +1762,7 @@ export interface RootRouteChildren {
   PreviewAuthRoute: typeof PreviewAuthRoute
   SlidesRoute: typeof SlidesRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
+  DevLandingDemosRoute: typeof DevLandingDemosRoute
   DevUiGalleryRoute: typeof DevUiGalleryRoute
   PKindIdRoute: typeof PKindIdRoute
 }
@@ -1866,6 +1879,13 @@ declare module '@tanstack/react-router' {
       path: '/dev/feature-previews'
       fullPath: '/dev/feature-previews'
       preLoaderRoute: typeof DevFeaturePreviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/landing-demos': {
+      id: '/dev/landing-demos'
+      path: '/dev/landing-demos'
+      fullPath: '/dev/landing-demos'
+      preLoaderRoute: typeof DevLandingDemosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/ui-gallery': {
@@ -3397,6 +3417,7 @@ const rootRouteChildren: RootRouteChildren = {
   PreviewAuthRoute: PreviewAuthRoute,
   SlidesRoute: SlidesRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
+  DevLandingDemosRoute: DevLandingDemosRoute,
   DevUiGalleryRoute: DevUiGalleryRoute,
   PKindIdRoute: PKindIdRoute,
 }
