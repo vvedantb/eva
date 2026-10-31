@@ -104,24 +104,17 @@ export function ActivityTimeline({
   const removeComment = useMutation(
     api.taskComments.remove,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.taskComments.listByTask, {
-      taskId,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.taskComments.listByTask,
-        { taskId },
-        current.map((entry) =>
-          entry._id === args.id
-            ? {
-                ...entry,
-                deletedAt: Date.now(),
-                content: DELETED_COMMENT_PLACEHOLDER,
-              }
-            : entry,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.taskComments.listByTask, { taskId }, (cur) =>
+      cur.map((entry) =>
+        entry._id === args.id
+          ? {
+              ...entry,
+              deletedAt: Date.now(),
+              content: DELETED_COMMENT_PLACEHOLDER,
+            }
+          : entry,
+      ),
+    );
   });
   const deleteComment = async (commentId: Id<"taskComments">) => {
     setIsDeletingComment(true);

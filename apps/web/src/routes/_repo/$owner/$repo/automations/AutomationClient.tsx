@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -219,26 +220,20 @@ function SettingsForm({
   ).withOptimisticUpdate((localStore, args) => {
     if (automation.numId === undefined) return;
     const q = { repoId, numId: automation.numId };
-    const current = localStore.getQuery(api.automations.getByNumId, q);
-    if (current) {
-      const { id: _id, contextRepoId: _contextRepoId, ...fields } = args;
-      localStore.setQuery(api.automations.getByNumId, q, {
-        ...current,
-        ...fields,
-      });
-    }
+    const { id: _id, contextRepoId: _contextRepoId, ...fields } = args;
+    patchLoadedQuery(
+      localStore,
+      api.automations.getByNumId,
+      q,
+      (current) => current && { ...current, ...fields },
+    );
   });
   const removeAutomation = useMutation(
     api.automations.remove,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.automations.list, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.automations.list,
-        { repoId },
-        current.filter((a) => a._id !== args.id),
-      );
-    }
+    patchLoadedQuery(localStore, api.automations.list, { repoId }, (list) =>
+      list.filter((a) => a._id !== args.id),
+    );
   });
   // The cron input is a controlled field doing local↔UTC conversion with a
   // live preview, so it needs an editing buffer to save on blur rather than on

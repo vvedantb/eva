@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { OptimisticLocalStore } from "convex/browser";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -28,16 +29,14 @@ export function SkillsClient() {
   const systemSkills = useQuery(api.repoSystemSkills.listForRepo, { repoId });
   const setInstalled = (name: string, installed: boolean) => {
     return (localStore: OptimisticLocalStore) => {
-      const current = localStore.getQuery(api.repoSystemSkills.listForRepo, {
-        repoId,
-      });
-      if (current === undefined) return;
-      localStore.setQuery(
+      patchLoadedQuery(
+        localStore,
         api.repoSystemSkills.listForRepo,
         { repoId },
-        current.map((skill) =>
-          skill.name === name ? { ...skill, installed } : skill,
-        ),
+        (skills) =>
+          skills.map((skill) =>
+            skill.name === name ? { ...skill, installed } : skill,
+          ),
       );
     };
   };

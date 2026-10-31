@@ -52,31 +52,26 @@ export function useChatModel(
   const setModelMutation = useMutation(
     api.sessionChats.setModel,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.sessionChats.get,
       { chatId: args.chatId },
-      { ...current, lastModel: args.model },
+      (cur) => cur && { ...cur, lastModel: args.model },
     );
   });
   const setProviderAccountIdMutation = useMutation(
     api.sessionChats.setProviderAccountId,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.sessionChats.get,
       { chatId: args.chatId },
-      {
-        ...current,
-        providerAccountId:
-          args.providerAccountId === null ? undefined : args.providerAccountId,
-      },
+      (cur) =>
+        cur && {
+          ...cur,
+          providerAccountId:
+            args.providerAccountId === null ? undefined : args.providerAccountId,
+        },
     );
   });
   const { isSwitchingAccount, switchProviderAccount } =
@@ -88,17 +83,11 @@ export function useChatModel(
   const setTraitsMutation = useMutation(
     api.sessionChats.setTraits,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.sessionChats.get, {
-      chatId: args.chatId,
-    });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.sessionChats.get,
       { chatId: args.chatId },
-      {
-        ...current,
-        ...composerTraitFields(args),
-      },
+      (cur) => cur && { ...cur, ...composerTraitFields(args) },
     );
   });
 

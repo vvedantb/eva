@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Button, Input, SettingsField, SettingsSection } from "@vvedantb/ui";
@@ -26,19 +27,13 @@ export function LogoSettingsSection({ repoId }: { repoId: Id<"githubRepos"> }) {
     api.githubRepos.updateConfig,
   ).withOptimisticUpdate((localStore, args) => {
     if (args.label === undefined) return;
-    const queryArgs = { owner, name, appName };
-    const current = localStore.getQuery(
+    const label = args.label.trim() || undefined;
+    patchLoadedQuery(
+      localStore,
       api.githubRepos.getByOwnerAndName,
-      queryArgs,
+      { owner, name, appName },
+      (current) => current && { ...current, label },
     );
-    if (current !== undefined && current !== null) {
-      const nextLabel =
-        args.label.trim().length > 0 ? args.label.trim() : undefined;
-      localStore.setQuery(api.githubRepos.getByOwnerAndName, queryArgs, {
-        ...current,
-        label: nextLabel,
-      });
-    }
   });
 
   const handleLogoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {

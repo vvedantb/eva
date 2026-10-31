@@ -165,15 +165,11 @@ export function TaskSandboxChatPanel({
   const setTraitsMutation = useMutation(
     api.agentTasks.setTraits,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.get, { id: args.id });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.agentTasks.get,
       { id: args.id },
-      {
-        ...current,
-        ...composerTraitFields(args),
-      },
+      (cur) => cur && { ...cur, ...composerTraitFields(args) },
     );
   });
 

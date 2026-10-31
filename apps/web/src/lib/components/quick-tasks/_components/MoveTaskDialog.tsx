@@ -15,16 +15,12 @@ export function useMoveAgentTask() {
     (localStore, args) => {
       // Moving to a different repo — remove from the current repo's list
       if (args.repoId) {
-        const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-          repoId,
-        });
-        if (current !== undefined) {
-          localStore.setQuery(
-            api.agentTasks.getAllTasks,
-            { repoId },
-            current.filter((task) => task._id !== args.id),
-          );
-        }
+        patchLoadedQuery(
+          localStore,
+          api.agentTasks.getAllTasks,
+          { repoId },
+          (cur) => cur.filter((task) => task._id !== args.id),
+        );
       }
     },
   );

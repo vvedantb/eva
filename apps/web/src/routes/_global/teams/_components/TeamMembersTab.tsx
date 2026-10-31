@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -53,35 +54,28 @@ export function TeamMembersTab({
   const currentUserId = useQuery(api.auth.me);
   const removeMember = useMutation(api.teamMembers.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.teamMembers.list, {
-        teamId: args.teamId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.teamMembers.list,
-          { teamId: args.teamId },
-          current.filter((member) => member.userId !== args.userId),
-        );
-      }
+      patchLoadedQuery(
+        localStore,
+        api.teamMembers.list,
+        { teamId: args.teamId },
+        (members) => members.filter((member) => member.userId !== args.userId),
+      );
     },
   );
   const updateRole = useMutation(
     api.teamMembers.updateRole,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.teamMembers.list, {
-      teamId: args.teamId,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.teamMembers.list,
-        { teamId: args.teamId },
-        current.map((member) =>
+    patchLoadedQuery(
+      localStore,
+      api.teamMembers.list,
+      { teamId: args.teamId },
+      (members) =>
+        members.map((member) =>
           member.userId === args.userId
             ? { ...member, role: args.role }
             : member,
         ),
-      );
-    }
+    );
   });
 
   const [removeTarget, setRemoveTarget] = useState<

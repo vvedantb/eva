@@ -186,26 +186,16 @@ export function QuickTaskModal({
   const activateDraft = useMutation(api.agentTasks.activateDraft);
   const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.listDrafts, {
-        repoId: repo._id,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.listDrafts,
-          { repoId: repo._id },
-          draftsAfterRemove(current, args.id),
-        );
-      }
-      const count = localStore.getQuery(api.agentTasks.countDrafts, {
-        repoId: repo._id,
-      });
-      if (count !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.countDrafts,
-          { repoId: repo._id },
-          draftCountAfterRemove(count),
-        );
-      }
+      const draftArgs = { repoId: repo._id };
+      patchLoadedQuery(localStore, api.agentTasks.listDrafts, draftArgs, (cur) =>
+        draftsAfterRemove(cur, args.id),
+      );
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.countDrafts,
+        draftArgs,
+        draftCountAfterRemove,
+      );
     },
   );
   const draftRows = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });

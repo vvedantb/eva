@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
@@ -28,14 +29,9 @@ export function TeamsClient() {
   const createTeam = useMutation(api.teams.create);
   const deleteTeam = useMutation(api.teams.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.teams.list, {});
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.teams.list,
-          {},
-          current.filter((team) => team._id !== args.id),
-        );
-      }
+      patchLoadedQuery(localStore, api.teams.list, {}, (teams) =>
+        teams.filter((team) => team._id !== args.id),
+      );
     },
   );
 

@@ -55,15 +55,15 @@ export function ShortcutsSettingsClient() {
   const setOverride = useMutation(
     api.auth.setShortcutOverride,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getShortcutOverrides, {});
-    if (current === undefined) return;
-    const next = { ...current };
-    if (args.hotkey === null) {
-      delete next[args.id];
-    } else {
-      next[args.id] = args.hotkey;
-    }
-    localStore.setQuery(api.auth.getShortcutOverrides, {}, next);
+    patchLoadedQuery(localStore, api.auth.getShortcutOverrides, {}, (cur) => {
+      const next = { ...cur };
+      if (args.hotkey === null) {
+        delete next[args.id];
+      } else {
+        next[args.id] = args.hotkey;
+      }
+      return next;
+    });
   });
 
   const resetAll = useMutation(

@@ -13,16 +13,9 @@ export function useDeleteAgentTask() {
   const { repoId } = useRepo();
   return useMutation(api.agentTasks.deleteCascade).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.filter((task) => task._id !== args.id),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+        cur.filter((task) => task._id !== args.id),
+      );
     },
   );
 }

@@ -108,14 +108,8 @@ export function CommentActivityItem({
   const updateComment = useMutation(
     api.taskComments.update,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.taskComments.listByTask, {
-      taskId,
-    });
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.taskComments.listByTask,
-      { taskId },
-      current.map((entry) =>
+    patchLoadedQuery(localStore, api.taskComments.listByTask, { taskId }, (cur) =>
+      cur.map((entry) =>
         entry._id === args.id ? { ...entry, content: args.content } : entry,
       ),
     );

@@ -53,18 +53,13 @@ export function QuickTasksKanbanBoard({
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id
-            ? { ...task, status: args.status, updatedAt: Date.now() }
-            : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+      cur.map((task) =>
+        task._id === args.id
+          ? { ...task, status: args.status, updatedAt: Date.now() }
+          : task,
+      ),
+    );
   });
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [{ statuses }] = useQuickTaskFilters();
