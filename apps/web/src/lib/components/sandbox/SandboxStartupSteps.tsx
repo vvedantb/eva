@@ -14,6 +14,7 @@ import type { ActivityStep, AgentTraceStatus } from "@vvedantb/ui";
 import { IconCheck, IconCircle, IconX } from "@tabler/icons-react";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
+import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 /** "Fetching base branch..." → "Fetching base branch": the row icon carries the progress. */
 function stageLabel(label: string): string {
@@ -74,9 +75,10 @@ export function SandboxStartupSteps({
           {title}
         </Shimmer>
         {startedAt ? (
-          <span className="ml-auto shrink-0 text-xs">
-            {formatActivityElapsed(elapsed)}
-          </span>
+          <RollingNumber
+            value={formatActivityElapsed(elapsed)}
+            className="ml-auto shrink-0 text-xs"
+          />
         ) : null}
       </div>
       {steps.length > 0 ? (

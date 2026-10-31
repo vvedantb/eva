@@ -26,6 +26,7 @@ import { SessionSwitcher } from "./SessionSwitcher";
 import { SessionGroupBadge } from "./SessionGroupBadge";
 import { SessionRepoBadges } from "./SessionRepoBadges";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 
 interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
@@ -110,6 +111,7 @@ export function useSessionChatHeader({
 
   const headerRight = (
     <>
+      <PrMergeConfetti owner={{ kind: "session", sessionId }} />
       {sandboxError !== undefined ? (
         <SandboxErrorNotice
           sandboxError={sandboxError}

@@ -37,6 +37,7 @@ import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitP
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -228,6 +229,7 @@ export function TaskFooter({
               : "flex flex-wrap items-center gap-1.5 sm:gap-2"
           }
         >
+          {isHeader ? <PrMergeConfetti owner={{ kind: "task", taskId }} /> : null}
           {showMoreMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

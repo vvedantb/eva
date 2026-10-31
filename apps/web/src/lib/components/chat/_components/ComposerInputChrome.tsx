@@ -2,11 +2,13 @@ import { cn } from "@eva/ui";
 import {
   BorderBeam,
   Button,
+  CrossfadeIconSlot,
   InputGroupAddon,
   PromptInput,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTools,
+  Spinner,
   toast,
   Tooltip,
   TooltipContent,
@@ -18,6 +20,7 @@ import {
 import type { PromptInputMessage } from "@vvedantb/ui";
 import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
+import { SendQueueIcon } from "@/lib/components/chat/_components/SendQueueIcon";
 import {
   MAX_CHAT_ATTACHMENTS,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -334,9 +337,6 @@ function ChatBodySubmit({
         isUploading ||
         (isEmpty && !hasPendingContext && !allowEmptySubmit)
       }
-      // "submitted" is the button's own spinner state. Fetch uploads report no
-      // bytes, so a spinner is the honest signal — a percentage would be made up.
-      {...(isUploading ? { status: "submitted" as const } : {})}
       className="size-9"
       title={
         isUploading
@@ -345,6 +345,12 @@ function ChatBodySubmit({
             ? "Queue message"
             : "Send message"
       }
-    />
+    >
+      {/* Fetch uploads report no bytes, so a spinner is the honest signal — a
+          percentage would be made up. */}
+      <CrossfadeIconSlot iconKey={isUploading ? "uploading" : "send"}>
+        {isUploading ? <Spinner /> : <SendQueueIcon queued={isExecuting} />}
+      </CrossfadeIconSlot>
+    </PromptInputSubmit>
   );
 }

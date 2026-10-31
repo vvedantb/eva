@@ -57,6 +57,7 @@ import type {
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
+import { PendingSketchDrain } from "@/lib/components/chat/_components/PendingSketchDrain";
 
 /** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
 export type LocalChatDraft = {
@@ -386,6 +387,7 @@ export function ChatComposer({
             userId={currentUserId}
           />
           <ChatTypeToFocus mentionRef={mentionRef} />
+          <PendingSketchDrain />
           {draft && (
             <ChatDraftSync
               target={draft.target}
