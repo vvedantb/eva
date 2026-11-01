@@ -29,6 +29,7 @@ import {
   Sheen,
   cueTransition,
 } from "../../_components/motion";
+import { ProblemFix } from "../_parts/ProblemFix";
 
 /** Every surface the August audit read, in the order it read them. */
 const SURFACES: readonly { name: string; icon: Icon }[] = [
@@ -158,6 +159,10 @@ export function AnnualSecurity() {
       <Reveal>
         <Title size="md">One guard on every door</Title>
       </Reveal>
+      <ProblemFix
+        problem="Some screens never checked whose data it was"
+        fix="One shared check on every screen"
+      />
 
       <m.div
         className="relative mt-14 overflow-hidden rounded-[14px]"

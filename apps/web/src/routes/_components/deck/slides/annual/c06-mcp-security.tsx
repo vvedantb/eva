@@ -16,6 +16,7 @@ import {
 } from "../../_components/motion";
 import { AnnBExpiryDial } from "../_parts/AnnBDials";
 import { MOA3_GATES_SHUT, MoA3Gates } from "../_parts/MoA3Gates";
+import { ProblemFix } from "../_parts/ProblemFix";
 
 /** Shortest first: nothing on this slide lives longer than it needs to. */
 const LIFETIMES: readonly { value: number; unit: string; label: string }[] = [
@@ -73,6 +74,10 @@ export function AnnualMcpSecurity() {
       <Reveal>
         <Title size="md">Locked down by design</Title>
       </Reveal>
+      <ProblemFix
+        problem="Other tools could act as you"
+        fix="Short-lived passes, checked twice"
+      />
 
       <div className="relative isolate mt-12">
         <div

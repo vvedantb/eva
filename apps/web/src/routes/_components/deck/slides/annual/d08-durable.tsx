@@ -7,6 +7,7 @@ import {
 } from "../../_components/DeckPrimitives";
 import { MaskedText } from "../../_components/motion";
 import { MoA3DurableTrack } from "../_parts/MoA3DurableTrack";
+import { ProblemFix } from "../_parts/ProblemFix";
 
 export function AnnualDurable() {
   const step = useDeckStep();
@@ -17,8 +18,12 @@ export function AnnualDurable() {
       <Reveal>
         <Title size="md">Finishing what it starts</Title>
       </Reveal>
+      <ProblemFix
+        problem="Interrupted runs sat on Working forever"
+        fix="Every run saves its place and finishes"
+      />
 
-      <div className="mt-36 h-[72px]">
+      <div className="mt-28 h-[72px]">
         <MoA3DurableTrack durable={durable} closing={step >= 2} />
       </div>
 
