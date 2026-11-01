@@ -6,7 +6,6 @@ import {
   IconNotes,
 } from "@tabler/icons-react";
 import { usePresentationSync } from "./usePresentationSync";
-import { PresentationDeckProvider } from "./_components/PresentationDeckContext";
 import { SlideMiniPreview } from "./_components/SlideMiniPreview";
 import { getSpeakerNotes } from "./speakerNotes";
 import { SLIDES } from "./slides/index";
@@ -106,78 +105,70 @@ export function PresenterView({
     () => current,
   );
 
-  const deckContext = {
-    sessionCode: session,
-    participantKey: sync.participantKey,
-    hostKey: sync.hostKey,
-  };
-
   return (
-    <PresentationDeckProvider value={deckContext}>
-      <div className="flex h-dvh flex-col bg-background text-foreground">
-        <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
-          <IconNotes size={18} className="shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Presenter view
-            </p>
-            <p className="truncate text-sm font-medium text-foreground">
-              {current}. {slideTitle}
-            </p>
-          </div>
-          <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
-            {current}/{TOTAL}
-          </span>
-        </header>
+    <div className="flex h-dvh flex-col bg-background text-foreground">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
+        <IconNotes size={18} className="shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Presenter view
+          </p>
+          <p className="truncate text-sm font-medium text-foreground">
+            {current}. {slideTitle}
+          </p>
+        </div>
+        <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+          {current}/{TOTAL}
+        </span>
+      </header>
 
-        <div className="flex min-h-0 flex-1">
-          <div className="flex w-1/2 min-w-0 flex-col justify-center p-4">
-            <SlideMiniPreview slideNumber={current} />
-          </div>
-
-          <div className="flex w-1/2 min-w-0 flex-col border-l border-border bg-muted/30">
-            <p className="shrink-0 px-4 pb-2 pt-4 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Script
-            </p>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-              {hasNotes ? (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                  {notes}
-                </p>
-              ) : (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  No script for this slide — edit{" "}
-                  <span className="font-mono text-xs">speakerNotes.ts</span>.
-                </p>
-              )}
-            </div>
-          </div>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex w-1/2 min-w-0 flex-col justify-center p-4">
+          <SlideMiniPreview slideNumber={current} />
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-muted/50 px-4 py-3">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={current <= 1}
-            onClick={() => navigate(current - 1)}
-          >
-            <IconChevronLeft size={16} />
-            Back
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Arrow keys · Space to advance
+        <div className="flex w-1/2 min-w-0 flex-col border-l border-border bg-muted/30">
+          <p className="shrink-0 px-4 pb-2 pt-4 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Script
           </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={current >= TOTAL}
-            onClick={() => navigate(current + 1)}
-          >
-            Next
-            <IconChevronRight size={16} />
-          </Button>
-        </footer>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+            {hasNotes ? (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                {notes}
+              </p>
+            ) : (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                No script for this slide — edit{" "}
+                <span className="font-mono text-xs">speakerNotes.ts</span>.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
-    </PresentationDeckProvider>
+
+      <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-muted/50 px-4 py-3">
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={current <= 1}
+          onClick={() => navigate(current - 1)}
+        >
+          <IconChevronLeft size={16} />
+          Back
+        </Button>
+        <p className="text-center text-xs text-muted-foreground">
+          Arrow keys · Space to advance
+        </p>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={current >= TOTAL}
+          onClick={() => navigate(current + 1)}
+        >
+          Next
+          <IconChevronRight size={16} />
+        </Button>
+      </footer>
+    </div>
   );
 }

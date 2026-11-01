@@ -1,6 +1,6 @@
 import { asRecord } from "@/lib/utils/looseRecord";
 
-export interface PreviewSnapshotElement {
+interface PreviewSnapshotElement {
   readonly role: string;
   readonly name: string;
   readonly selector: string;
@@ -12,19 +12,19 @@ export interface PreviewSnapshotElement {
   };
 }
 
-export interface PreviewSnapshotConsoleEntry {
+interface PreviewSnapshotConsoleEntry {
   readonly level: string;
   readonly text: string;
   readonly at: number;
 }
 
-export interface PreviewSnapshotNetworkEntry {
+interface PreviewSnapshotNetworkEntry {
   readonly url: string;
   readonly status: number;
   readonly at: number;
 }
 
-export interface PreviewSnapshotA11yNode {
+interface PreviewSnapshotA11yNode {
   readonly role: string;
   readonly name: string;
 }

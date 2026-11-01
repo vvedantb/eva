@@ -27,7 +27,6 @@ export type PrReviewEvent = PrOverview["reviewEvents"][number];
 export type PrCommit = PrOverview["commits"][number];
 export type PrComment = PrOverview["comments"][number];
 export type PrLabel = PrOverview["labels"][number];
-export type PrActor = PrOverview["assignees"][number];
 
 export type StatusTone = "success" | "failure" | "pending" | "neutral";
 

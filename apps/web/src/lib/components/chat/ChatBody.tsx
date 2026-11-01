@@ -112,8 +112,6 @@ import {
   useLinkedMessageId,
 } from "@/lib/components/chat/messageLink";
 
-export type { ChatBodyMessage };
-
 /**
  * Extra context ChatBody hands its surface's send handler. The prompt the
  * handler receives has the pending citation / preview-snapshot / WebMCP blocks

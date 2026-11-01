@@ -3,7 +3,7 @@ import type { SlashItem } from "@/lib/components/mentions";
 /** How long the draft must sit still before Eva asks Jev about it. */
 export const SUGGEST_IDLE_MS = 700;
 /** Below this a draft is a greeting, not a request worth ranking skills for. */
-export const SUGGEST_MIN_CHARS = 16;
+const SUGGEST_MIN_CHARS = 16;
 /** Jev spreads probability across every option; a long list dilutes each one. */
 export const SUGGEST_MIN_PROBABILITY = 0.15;
 export const SUGGEST_MIN_NEEDS_SKILL = 0.5;
