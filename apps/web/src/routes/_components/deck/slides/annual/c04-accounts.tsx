@@ -184,7 +184,7 @@ export function AnnualAccounts() {
 
         <p className="mt-10 text-center text-4xl text-balance text-white/85">
           <MaskedText step={2} delay={1.15}>
-            Capacity is <Accent>pooled</Accent>, not bought twice.
+            Capacity is <Accent>pooled</Accent>, not bought twice
           </MaskedText>
         </p>
       </div>

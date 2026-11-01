@@ -143,7 +143,7 @@ export function AnnualScale() {
       />
       <p className="mt-8 text-center text-3xl text-white/85">
         <MaskedText step={2} delay={0.55}>
-          Eight months, one codebase, <Accent>one person directing</Accent>.
+          Eight months, one codebase, <Accent>one person directing</Accent>
         </MaskedText>
       </p>
     </Shell>

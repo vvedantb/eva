@@ -200,7 +200,7 @@ export function AnnualProviders() {
 
       <p className="mt-8 text-center text-3xl text-white/85">
         <MaskedText step={2}>
-          If one supplier stalls, <Accent>the work moves</Accent>.
+          If one supplier stalls, <Accent>the work moves</Accent>
         </MaskedText>
       </p>
     </Shell>

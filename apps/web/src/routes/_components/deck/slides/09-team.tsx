@@ -157,7 +157,7 @@ export function Slide09Team() {
           <Accent>
             <CountRoll value={400} step={6} duration={1.2} delay={0.7} />
           </Accent>{" "}
-          pieces of work, raised by colleagues.
+          pieces of work, raised by colleagues
         </MaskedText>
       </p>
     </Shell>

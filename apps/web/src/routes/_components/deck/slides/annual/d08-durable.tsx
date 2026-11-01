@@ -29,7 +29,7 @@ export function AnnualDurable() {
 
       <div className="mt-32 text-center">
         <MaskedText step={2} className="text-3xl text-white/85">
-          Interrupted is no longer the same as <Accent>lost</Accent>.
+          Interrupted is no longer the same as <Accent>lost</Accent>
         </MaskedText>
       </div>
     </Shell>

@@ -184,7 +184,7 @@ export function AnnualUsers() {
           Not cleverer.
         </MaskedText>{" "}
         <MaskedText step={2} delay={0.55} duration={1.1}>
-          <Accent>Usable.</Accent>
+          <Accent>Usable</Accent>
         </MaskedText>
       </p>
     </Shell>

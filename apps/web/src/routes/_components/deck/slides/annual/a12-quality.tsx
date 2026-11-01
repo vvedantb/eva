@@ -180,7 +180,7 @@ export function AnnualQuality() {
 
       <p className="mt-16 text-center text-3xl text-white/85">
         <MaskedText step={2} delay={0.1}>
-          A permanently red test is <Accent>a broken test</Accent>.
+          A permanently red test is <Accent>a broken test</Accent>
         </MaskedText>
       </p>
     </Shell>

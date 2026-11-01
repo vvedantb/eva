@@ -202,7 +202,7 @@ function Writer() {
           duration: DUR.base,
         })}
       >
-        Output: new text, worded differently each time.
+        Output: new text, worded differently each time
       </m.div>
     </Panel>
   );
@@ -307,7 +307,7 @@ function Judge() {
         animate={{ opacity: scored ? 1 : 0 }}
         transition={cueTransition(scored, at + 1.9, { duration: DUR.base })}
       >
-        Output: a score per item, the same every time.
+        Output: a score per item, the same every time
       </m.div>
     </Panel>
   );

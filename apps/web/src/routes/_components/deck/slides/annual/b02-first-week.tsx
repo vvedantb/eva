@@ -35,7 +35,7 @@ export function AnnualFirstWeek() {
 
       <p className="mt-12 text-3xl leading-snug text-balance text-white/85">
         <MaskedText step={2} delay={0.7}>
-          The product still rests on <Accent>these two ideas</Accent>.
+          The product still rests on <Accent>these two ideas</Accent>
         </MaskedText>
       </p>
     </Shell>

@@ -232,7 +232,7 @@ export function AnnualSecurity() {
 
       <div className="mt-16 text-center">
         <MaskedText step={3} className="text-3xl text-white/85">
-          Checked against <Accent>production</Accent>, not only against tests.
+          Checked against <Accent>production</Accent>, not only against tests
         </MaskedText>
       </div>
     </Shell>

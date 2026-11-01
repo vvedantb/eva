@@ -106,7 +106,7 @@ export function AnnualLessons() {
         <div className="absolute inset-x-0 top-1/2 mt-[52px] text-center">
           <p className="text-3xl text-white/85">
             <MaskedText step={2} delay={0.75}>
-              Both point the same way: <Accent>build the system</Accent>.
+              Both point the same way: <Accent>build the system</Accent>
             </MaskedText>
           </p>
         </div>

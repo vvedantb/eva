@@ -111,7 +111,7 @@ export function AnnualDesignSystem() {
 
       <div className="mt-14 text-center">
         <MaskedText step={2} className="text-3xl text-white/85">
-          Every new screen <Accent>starts consistent</Accent>.
+          Every new screen <Accent>starts consistent</Accent>
         </MaskedText>
       </div>
     </Shell>

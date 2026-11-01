@@ -117,7 +117,7 @@ export function FridayLimits() {
 
         <p className="mt-9 text-3xl text-white/90">
           <MaskedText step={CLOSING} delay={0.2}>
-            The work left is <Accent>judgement, review and systems</Accent>.
+            The work left is <Accent>judgement, review and systems</Accent>
           </MaskedText>
         </p>
       </div>

@@ -96,7 +96,7 @@ export function AnnualAhead() {
       <p className="mt-12 max-w-5xl text-3xl leading-snug text-pretty text-white/85">
         <MaskedText step={2} delay={0.1} stagger={0.05}>
           The question stops being <Accent>how fast can we build it</Accent> and
-          becomes <Accent>how fast can we decide</Accent>.
+          becomes <Accent>how fast can we decide</Accent>
         </MaskedText>
       </p>
     </Shell>

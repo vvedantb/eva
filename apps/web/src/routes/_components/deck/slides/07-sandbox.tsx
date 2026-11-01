@@ -100,7 +100,7 @@ export function Slide07Sandbox() {
 
         <p className="mt-10 max-w-4xl text-2xl leading-snug text-white/85">
           <MaskedText step={1} delay={4.2} stagger={0.035}>
-            More than <Accent>40×</Accent> faster.
+            More than <Accent>40×</Accent> faster
           </MaskedText>
         </p>
       </div>

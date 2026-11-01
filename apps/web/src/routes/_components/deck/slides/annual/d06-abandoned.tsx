@@ -209,7 +209,7 @@ export function AnnualAbandoned() {
 
       <p className="mt-16 text-center text-3xl text-white/85">
         <MaskedText step={3} delay={0.1}>
-          Written down, so nobody <Accent>re-argues it from memory</Accent>.
+          Written down, so nobody <Accent>re-argues it from memory</Accent>
         </MaskedText>
       </p>
     </Shell>

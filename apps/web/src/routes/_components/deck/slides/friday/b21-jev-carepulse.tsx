@@ -296,7 +296,7 @@ function Question() {
           “Could this text identify a specific person?”
         </div>
         <div className="mt-3 text-sm text-white/50">
-          Flags the field the moment you stop typing.
+          Flags the field the moment you stop typing
         </div>
       </m.div>
 

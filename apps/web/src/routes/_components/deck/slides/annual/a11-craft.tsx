@@ -221,7 +221,7 @@ export function AnnualCraft() {
 
       <div className="mt-14 text-center">
         <MaskedText step={2} className="text-3xl text-white/85">
-          Page scores: set up, <Accent>not yet a habit</Accent>.
+          Page scores: set up, <Accent>not yet a habit</Accent>
         </MaskedText>
       </div>
     </Shell>

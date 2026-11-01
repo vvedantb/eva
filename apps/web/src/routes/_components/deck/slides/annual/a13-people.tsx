@@ -83,7 +83,7 @@ export function AnnualPeople() {
         <p className="text-3xl text-white/90">
           <MaskedText step={3} delay={0.2}>
             Every one of these came from <Accent>a colleague</Accent>, not a
-            test.
+            test
           </MaskedText>
         </p>
       </div>
