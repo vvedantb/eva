@@ -1,6 +1,6 @@
+import { EmptyState } from "@vvedantb/ui";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { IconPlayerPlay } from "@tabler/icons-react";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { OpenNavigationButton } from "@/lib/components/sidebar/OpenNavigationButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
@@ -18,14 +18,16 @@ function AutomationsGlobalPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-      <EmptyState
-        icon={<IconPlayerPlay size={28} />}
-        title="Select an automation"
-        description="Choose one from the sidebar, or use + on an app to create one."
-        action={
-          <OpenNavigationButton label="Browse automations" className="mt-6" />
-        }
-      />
+      <EmptyState.Root>
+        <EmptyState.Icon icon={IconPlayerPlay} size={28} />
+        <EmptyState.Title>Select an automation</EmptyState.Title>
+        <EmptyState.Description>
+          Choose one from the sidebar, or use + on an app to create one.
+        </EmptyState.Description>
+        <EmptyState.Actions>
+          {<OpenNavigationButton label="Browse automations" className="mt-6" />}
+        </EmptyState.Actions>
+      </EmptyState.Root>
     </div>
   );
 }

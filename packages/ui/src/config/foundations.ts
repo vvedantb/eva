@@ -172,4 +172,20 @@ export const foundationsConfig = {
   SettingsEmptyState: {
     classes: { icon: "mb-5 text-muted-foreground" },
   },
+  // Eva's empty state: icon in a muted circle, tighter type, and a staggered
+  // entrance. Actions carry their own top margin, so the part adds none.
+  EmptyState: {
+    enter: true,
+    classes: {
+      // The part keeps its own `py-20`: config defaults stay free of
+      // responsive padding (designTokens.test.ts).
+      root: "mx-auto w-full max-w-xl",
+      iconWrap:
+        "mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground",
+      title: "mb-0 text-balance tracking-[-0.01em]",
+      description:
+        "mt-2 max-w-sm text-pretty text-xs leading-relaxed text-muted-foreground",
+      actions: "mt-0",
+    },
+  },
 } satisfies UiConfig;

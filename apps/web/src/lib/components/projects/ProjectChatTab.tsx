@@ -10,12 +10,12 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  ConfirmDialog,
 } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { MultipleChoiceQuestion } from "@/lib/components/plan/MultipleChoiceQuestion";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { IconTrash, IconPlayerPlay } from "@tabler/icons-react";
 import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectChatMessageList } from "./ProjectChatMessageList";
@@ -311,17 +311,22 @@ export function ProjectChatTab({
         )}
       </div>
       <ConfirmDialog
+        size="md"
         open={confirmClearOpen}
         onOpenChange={setConfirmClearOpen}
         title="Clear interview transcript?"
         description="This deletes the Q&A history for this project so you can restart the interview from scratch."
-        detail="The sandbox, generated spec, and any tasks are not affected."
+        body={
+          <p className="text-sm text-muted-foreground">
+            The sandbox, generated spec, and any tasks are not affected.
+          </p>
+        }
         confirmLabel="Clear transcript"
         variant="destructive"
         onConfirm={() => {
           void handleClearChat();
         }}
-        isLoading={isClearing}
+        pending={isClearing}
       />
     </div>
   );
