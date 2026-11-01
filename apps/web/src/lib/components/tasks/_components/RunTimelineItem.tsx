@@ -27,6 +27,7 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   RelativeDateTime,
+  RollingNumber,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconBrain, IconPlayerStop } from "@tabler/icons-react";
@@ -44,7 +45,6 @@ import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { RunActivityLog } from "../RunActivityLog";
 import { RunMedia } from "../RunMedia";
-import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 /** Matches scroll cap used for run logs inside the same accordion. */
 const RUN_ACCORDION_SCROLL_CLASS =

@@ -2,7 +2,13 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button, Popover, PopoverContent, PopoverTrigger } from "@vvedantb/ui";
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  useCountUpDisplay,
+} from "@vvedantb/ui";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   chipSummaryForActive,
@@ -11,7 +17,6 @@ import {
   usageRowsForAccount,
   USAGE_TONE_TEXT_CLASS,
 } from "./_utils";
-import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
 import { UsageBar } from "./UsageBar";
 import { UsageLimitsDetails } from "./UsageLimitsDetails";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";

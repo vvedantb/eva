@@ -16,6 +16,7 @@ import {
   Spinner,
   formatActivityElapsed,
   useActivityElapsedSeconds,
+  RollingNumber,
 } from "@vvedantb/ui";
 import {
   isEmptyActivityPayload,
@@ -33,7 +34,6 @@ import {
   thinkingHeartbeatSeconds,
   visibleActivityKey,
 } from "@/lib/components/streamingActivityHeartbeat";
-import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 /**
  * How long an empty-but-live activity payload is treated as ordinary startup

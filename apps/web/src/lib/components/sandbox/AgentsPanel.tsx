@@ -17,13 +17,13 @@ import {
   formatActivityElapsed,
   useActivityElapsedSeconds,
   ListEnter,
+  RollingNumber,
 } from "@vvedantb/ui";
 import {
   subagentTone,
   type SubagentTone,
   type SubagentView,
 } from "./agentActivity";
-import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 const DOT_CLASS: Record<SubagentTone, string> = {
   active: "bg-primary animate-pulse ring-2 ring-primary/30",

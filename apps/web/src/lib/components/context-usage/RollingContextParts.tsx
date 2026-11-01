@@ -1,7 +1,11 @@
-import { Button, Progress, springTransition } from "@vvedantb/ui";
+import {
+  Button,
+  Progress,
+  RollingNumber,
+  springTransition,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
 import type { ComponentProps } from "react";
-import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 // Eva's versions of the `@vvedantb/ui` ContextUsage parts that show numbers.
 // The library prints plain text, so each figure here goes through

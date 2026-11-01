@@ -8,6 +8,7 @@ import {
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTools,
+  SendQueueIcon,
   Spinner,
   toast,
   Tooltip,
@@ -20,7 +21,6 @@ import {
 import type { PromptInputMessage } from "@vvedantb/ui";
 import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
-import { SendQueueIcon } from "@/lib/components/chat/_components/SendQueueIcon";
 import {
   MAX_CHAT_ATTACHMENTS,
   MAX_CHAT_ATTACHMENT_BYTES,
