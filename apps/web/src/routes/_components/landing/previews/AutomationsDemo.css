@@ -1,0 +1,177 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.aut .aut-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.aut .aut-body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ss-surface);
+}
+
+.aut .aut-pane {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.aut .aut-automations {
+  border-right: 1px solid var(--ss-line);
+}
+
+/* The window runs 88px off the stage: the inbox's words stop a full 28px
+   gutter short of the stage's right edge. */
+.aut .aut-inbox {
+  padding-right: 116px;
+  background: var(--ss-canvas);
+}
+
+.aut .aut-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 24px;
+  padding: 0 4px;
+}
+
+.aut .aut-title {
+  color: var(--ss-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.aut .aut-clock {
+  color: var(--ss-text);
+  font-family: var(--ss-mono);
+  font-size: 11.5px;
+}
+
+.aut .aut-unread {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--ss-radius-pill);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.aut .aut-list {
+  display: grid;
+  margin: 0 -4px;
+}
+
+/* The unread dot hangs in the feed's left padding. */
+.aut .aut-feed {
+  padding-left: 4px;
+}
+
+.aut .aut-row {
+  --ss-row-title: 13px;
+  --ss-row-subtitle: 12px;
+  --ss-row-meta: 12px;
+  --ss-row-line: 17px;
+  --ss-row-line-2: 17px;
+  padding: 12px 10px;
+}
+
+.aut .aut-row .ss-row__title {
+  color: var(--ss-text-strong);
+  font-weight: 500;
+}
+
+.aut .aut-tile {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-fill);
+  color: var(--ss-icon);
+}
+
+.aut .aut-tile--blank {
+  background: var(--ss-ink-1, var(--ss-fill));
+}
+
+.aut .aut-tile--result {
+  background: var(--ss-success-soft);
+  color: var(--ss-success-text);
+}
+
+.aut .aut-status {
+  color: var(--ss-text);
+}
+
+.aut .aut-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 16px;
+  line-height: 16px;
+}
+
+.aut .aut-done {
+  color: var(--ss-success-text);
+  font-weight: 500;
+}
+
+/* The live line sits under the running automation, on its title's edge. */
+.aut .aut-live {
+  padding: 0 10px 8px 50px;
+  color: var(--ss-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Text that moves with a collapsing row keeps one layer, so it never steps. */
+.aut .ss-row__body,
+.aut .ss-row__meta,
+.aut .aut-tile,
+.aut .aut-unread {
+  will-change: transform;
+}
+
+/* Compact: the window spans the phone column, automations above the inbox. */
+.aut .ss-stage[data-layout="compact"] .aut-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.aut .ss-stage[data-layout="compact"] .aut-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The window runs 58px off the stage: words stop as far short of its right
+   edge as they start from its left. */
+.aut .ss-stage[data-layout="compact"] .aut-pane {
+  padding: 12px 88px 10px 12px;
+}
+
+.aut .ss-stage[data-layout="compact"] .aut-automations {
+  border-right: 0;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+/* Two automations are enough at this width; the filler goes. */
+.aut .ss-stage[data-layout="compact"] .aut-automations .aut-row--filler {
+  display: none;
+}

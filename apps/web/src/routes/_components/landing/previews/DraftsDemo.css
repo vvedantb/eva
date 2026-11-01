@@ -1,0 +1,210 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.dr .dr-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+/* Sidebar */
+.dr .dr-nav {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+}
+
+.dr .dr-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--ss-radius-sm);
+  color: var(--ss-icon);
+  font-size: 12.5px;
+}
+
+.dr .dr-nav-item svg {
+  flex: none;
+}
+
+.dr .dr-nav-item[data-selected] {
+  background: var(--ss-fill);
+}
+
+.dr .dr-nav-label {
+  color: var(--ss-text-strong);
+  font-weight: 500;
+}
+
+.dr .dr-nav-count {
+  margin-left: auto;
+  color: var(--ss-text);
+}
+
+/* Content: the field, then the drafts. Its width ends a gutter inside the
+   stage, so the actions on the right stay whole. */
+.dr .dr-body {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  width: 444px;
+  height: 100%;
+  padding: 16px 16px 0;
+  background: var(--ss-surface);
+}
+
+.dr .dr-field .ss-field__box {
+  padding-right: 5px;
+  font-size: 13px;
+}
+
+.dr .dr-add {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.dr .dr-list {
+  display: grid;
+}
+
+.dr .dr-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--ss-radius-md);
+  transition: background 0.2s ease;
+}
+
+.dr .dr-row[data-hover] {
+  background: var(--ss-well);
+}
+
+.dr .dr-lead {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--ss-icon);
+}
+
+.dr .dr-row[data-task] .dr-lead {
+  color: var(--ss-text-strong);
+}
+
+.dr .dr-text {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dr .dr-title {
+  overflow: hidden;
+  color: var(--ss-text-strong);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.dr .dr-meta {
+  display: flex;
+  align-items: center;
+  height: 15px;
+  color: var(--ss-text);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+/* Bars keep the real rows' air between title and meta. */
+.dr .dr-filler .dr-text {
+  gap: 12px;
+}
+
+/* The action slot: Promote while it is a draft, the agent once it is a task. */
+.dr .dr-end {
+  display: grid;
+  justify-items: end;
+}
+
+.dr .dr-end > * {
+  grid-area: 1 / 1;
+}
+
+.dr .dr-promote {
+  display: inline-grid;
+  place-items: center;
+  min-width: 72px;
+  padding: 5px 12px;
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-surface);
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+  color: var(--ss-text-strong);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.dr .dr-promote[data-on] {
+  opacity: 1;
+}
+
+/* Promote hands its slot to the task's status: the agent at work. */
+.dr .dr-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-well);
+  color: var(--ss-text-strong);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  opacity: 0;
+  scale: 0.96;
+  transition: opacity 0.3s ease 0.1s, scale 0.3s ease 0.1s;
+}
+
+.dr .dr-running[data-on] {
+  opacity: 1;
+  scale: 1;
+}
+
+/* Rows that move with the new one, and the scaling status, keep one layer,
+   so their text never steps. */
+.dr .dr-row,
+.dr .dr-running {
+  will-change: transform;
+}
+
+/* Compact: no sidebar, the window spanning the phone column. */
+.dr .ss-stage[data-layout="compact"] .dr-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+/* The plain window's body runs past the stage; the page stays white to it. */
+.dr .ss-stage[data-layout="compact"] .dr-body {
+  width: auto;
+  grid-template-columns: 310px;
+  padding: 16px 16px 0;
+}
+
+.dr .ss-stage[data-layout="compact"] .dr-row {
+  padding: 12px 8px;
+}
