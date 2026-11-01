@@ -9,11 +9,9 @@ import {
   IconCalendarClock,
 } from "@tabler/icons-react";
 import {
+  useRequestConfirm,
   BulkActionBar,
   type BulkBarAction,
-} from "@/lib/components/ui/BulkActionBar";
-import {
-  useRequestConfirm,
 } from "@vvedantb/ui";
 
 export type BulkAction =

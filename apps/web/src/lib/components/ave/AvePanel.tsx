@@ -1,7 +1,6 @@
 "use client";
 
 import { lazy } from "react";
-import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { IconArrowsDiagonal, IconMinus } from "@tabler/icons-react";
@@ -12,6 +11,7 @@ import {
   TooltipTrigger,
   springTransition,
   useMediaQuery,
+  ViewTransitionSuspense,
 } from "@vvedantb/ui";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { AVE_HEADER_BUTTON_CLASS } from "@/lib/components/ave/aveHeaderButton";

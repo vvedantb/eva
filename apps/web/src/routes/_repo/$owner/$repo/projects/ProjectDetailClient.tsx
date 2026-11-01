@@ -30,6 +30,7 @@ import {
   skipConfirmTitle,
   useRequestConfirm,
   convexErrorMessage,
+  CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -64,7 +65,6 @@ import {
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
