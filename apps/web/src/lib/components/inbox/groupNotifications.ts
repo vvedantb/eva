@@ -15,7 +15,7 @@ export const OTHER_REPO_GROUP_LABEL = "Other";
  * routing has not landed yet) and every notification created before urgency
  * existed sort as `normal` — the same place the backend treats them.
  */
-export const URGENCY_RANK = { high: 0, normal: 1, low: 2 } as const;
+const URGENCY_RANK = { high: 0, normal: 1, low: 2 } as const;
 
 type Urgency = keyof typeof URGENCY_RANK;
 

@@ -1,5 +1,5 @@
-export const PRESENTER_CHANNEL = "eva-slides-presenter";
-export const PRESENTER_WINDOW_NAME = "eva-presenter";
+const PRESENTER_CHANNEL = "eva-slides-presenter";
+const PRESENTER_WINDOW_NAME = "eva-presenter";
 
 export type PresenterChannelMessage =
   | { type: "slide"; slide: number }

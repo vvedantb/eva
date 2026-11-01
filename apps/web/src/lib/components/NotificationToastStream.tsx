@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Badge,
@@ -62,22 +63,12 @@ export function NotificationToastStream() {
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.notifications.list, {});
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.notifications.list,
-        {},
-        current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
-      );
-    }
-    const count = localStore.getQuery(api.notifications.countUnread, {});
-    if (count !== undefined) {
-      localStore.setQuery(
-        api.notifications.countUnread,
-        {},
-        Math.max(0, count - 1),
-      );
-    }
+    patchLoadedQuery(localStore, api.notifications.list, {}, (current) =>
+      current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
+    );
+    patchLoadedQuery(localStore, api.notifications.countUnread, {}, (count) =>
+      Math.max(0, count - 1),
+    );
   });
   const navigate = useNavigate();
   const seenNotificationIdsRef = useRef<Set<Id<"notifications">> | null>(null);

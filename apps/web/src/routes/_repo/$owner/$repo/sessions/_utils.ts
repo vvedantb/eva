@@ -1,5 +1,6 @@
 import type { Terminal } from "@xterm/xterm";
 import type { FunctionReturnType } from "convex/server";
+import { isJsonObject, type JsonObject, type JsonValue } from "@vvedantb/server";
 import type { api, Id } from "@eva/backend";
 import type { PreviewPortOption } from "@/lib/components/PreviewNavBar";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -10,18 +11,6 @@ const IMMEDIATE_FLUSH_CHARS = 4096;
 /** Lines kept when syncing session console history to Convex. */
 const TERMINAL_HISTORY_TAIL_LINES = 500;
 const TERMINAL_HISTORY_TAIL_MAX_CHARS = 100_000;
-
-type JsonValue =
-  | null
-  | string
-  | number
-  | boolean
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-interface JsonObject {
-  [key: string]: JsonValue;
-}
 
 type TerminalHistoryOwner =
   | { kind: "session"; sessionId: string }
@@ -43,10 +32,6 @@ export interface TerminalHistoryWriter {
 type TerminalHistorySetter = (
   value: string | ((current: string) => string),
 ) => void;
-
-function isJsonObject(value: JsonValue): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function parseJsonObject(raw: string): JsonObject | null {
   try {

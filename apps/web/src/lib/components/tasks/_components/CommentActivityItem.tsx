@@ -6,6 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { UserInitials } from "@eva/shared/user-initials";
 import { cn } from "@eva/ui";
 import {
@@ -108,14 +109,8 @@ export function CommentActivityItem({
   const updateComment = useMutation(
     api.taskComments.update,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.taskComments.listByTask, {
-      taskId,
-    });
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.taskComments.listByTask,
-      { taskId },
-      current.map((entry) =>
+    patchLoadedQuery(localStore, api.taskComments.listByTask, { taskId }, (cur) =>
+      cur.map((entry) =>
         entry._id === args.id ? { ...entry, content: args.content } : entry,
       ),
     );

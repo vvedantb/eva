@@ -7,7 +7,7 @@
  */
 
 /** Signal -> the short phrase the banner asks the user to add. */
-export const READINESS_HINTS = {
+const READINESS_HINTS = {
   target: "where the change goes",
   expected: "what should happen",
   current: "what is wrong today",

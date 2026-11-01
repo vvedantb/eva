@@ -97,7 +97,7 @@ const QUEUE_ITEMS = [
   { id: "q3", text: "Update the changelog for the release", done: false },
 ];
 
-export function QueueSample() {
+function QueueSample() {
   return (
     <Queue className="w-96">
       <QueueSection>

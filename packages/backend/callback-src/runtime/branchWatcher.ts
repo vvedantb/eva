@@ -58,7 +58,7 @@ export function formatBranch(
 }
 
 /** Work on the checked-out branch that origin does not have yet. */
-export type GitSync = { uncommittedFiles: number; unpushedCommits: number };
+type GitSync = { uncommittedFiles: number; unpushedCommits: number };
 export type GitState = { branch: string; sync: GitSync | null };
 
 function sameState(a: GitState, b: GitState): boolean {

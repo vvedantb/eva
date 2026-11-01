@@ -47,7 +47,7 @@ const floatingMotionClass =
  * `origin` must be the Radix transform-origin var class for the specific
  * primitive — pass it literally so Tailwind can see it.
  */
-export function menuContentClass(origin: string): string {
+function menuContentClass(origin: string): string {
   return [
     // Height cap + internal scroll (`dvh`, never `vh`) so a long menu stays on
     // screen on a phone, and a width cap so `min-w-48` cannot widen the page at

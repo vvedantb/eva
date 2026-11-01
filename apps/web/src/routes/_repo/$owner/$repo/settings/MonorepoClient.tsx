@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -43,18 +44,15 @@ export function MonorepoClient() {
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.githubRepos.list, {
-      includeHidden: true,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.githubRepos.list,
-        { includeHidden: true },
-        current.map((r) =>
+    patchLoadedQuery(
+      localStore,
+      api.githubRepos.list,
+      { includeHidden: true },
+      (repos) =>
+        repos.map((r) =>
           r._id === args.repoId ? { ...r, hidden: args.hidden } : r,
         ),
-      );
-    }
+    );
   });
   const allRepos = useQuery(api.githubRepos.list, { includeHidden: true });
 

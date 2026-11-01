@@ -5,6 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Button,
@@ -77,17 +78,12 @@ export function DocsSidebar({
   const createDoc = useCreateDoc();
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.docs.list, {
-        repoId,
-        excludeEvaRecaps: true,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.docs.list,
-          { repoId, excludeEvaRecaps: true },
-          current.filter((d) => d._id !== args.id),
-        );
-      }
+      patchLoadedQuery(
+        localStore,
+        api.docs.list,
+        { repoId, excludeEvaRecaps: true },
+        (cur) => cur.filter((d) => d._id !== args.id),
+      );
     },
   );
   const [docToDelete, setDocToDelete] = useState<{

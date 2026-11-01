@@ -31,7 +31,7 @@ import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
-export type SessionLinkedFrom = RepoPathParts;
+type SessionLinkedFrom = RepoPathParts;
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,
@@ -166,7 +166,7 @@ function SessionPrIcon({
  * already implies an active sandbox). Otherwise the sandbox status color dot
  * (simple view: error only).
  */
-export function SessionStatusLeading({
+function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
