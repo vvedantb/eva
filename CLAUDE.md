@@ -5,6 +5,7 @@ FOLLOW ALL OF THESE RULES
 - NEVER create a new branch, push, or open a PR unless the user asks.
 - If already on main and the user asks to ship: commit and push directly to main.
 - Prefer `/preflight` occasionally over husky commit/push gates (hooks under `.husky/` are commented out).
+- Before reporting no GitHub access, push via `http.extraheader` with `$GH_TOKEN`; if it 401s, `git credential fill` for vvedantb/eva gives a fresh token for every installed repo.
 - Plans: final step is `/ship` unless the user says not to.
 
 ## Always
@@ -16,6 +17,7 @@ FOLLOW ALL OF THESE RULES
 - Explain changes when done. Check web/docs when needed.
 - Communicate in ASD-STE100 Simplified Technical English, about 80%: short one-idea sentences, active voice, literal words; keep technical terms and reasons.
 - Only edit this file when the user explicitly asks. Entries: 1 sentence (~20 words max), not changelog paragraphs.
+- When you learn something is possible, or the user corrects a wrong "can't", propose a one-line rule here and ask before adding.
 - No `any`, `unknown`, `as`, or non-null `!`. No `isRecord(object: unknown)` — parse at the boundary (Zod). Hard types → rethink design.
 - Prefer simplicity, small diffs, co-location, explicit behavior, long-term maintainability. No premature abstractions. No new deps unless necessary.
 - Do not default to `useState`/`useRef` — pick the right state ownership first.

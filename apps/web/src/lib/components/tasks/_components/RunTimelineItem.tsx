@@ -44,6 +44,7 @@ import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { RunActivityLog } from "../RunActivityLog";
 import { RunMedia } from "../RunMedia";
+import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 /** Matches scroll cap used for run logs inside the same accordion. */
 const RUN_ACCORDION_SCROLL_CLASS =
@@ -115,9 +116,10 @@ export function RunTimelineItem({
 
   const runDuration =
     isActiveRun && run.startedAt ? (
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {formatActivityElapsed(activeRunElapsed)}
-      </span>
+      <RollingNumber
+        value={formatActivityElapsed(activeRunElapsed)}
+        className="text-xs text-muted-foreground"
+      />
     ) : run.startedAt && run.finishedAt ? (
       <Tooltip>
         <TooltipTrigger asChild>

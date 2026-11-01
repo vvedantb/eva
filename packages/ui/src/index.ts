@@ -2,6 +2,7 @@
 // components eva's look, the provider that applies it, eva's class merger and
 // the delay constants a few call sites time against.
 export { EvaUiProvider } from "./EvaUiProvider";
+export { SmoothMarkdown, useSmoothText } from "./SmoothMarkdown";
 export { evaUiConfig } from "./config";
 export { evaCn as cn } from "./config/cn";
 export {
