@@ -4,9 +4,8 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { toast } from "@vvedantb/ui";
+import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 
 /** Moves a quick task to another app. Shared by the confirm dialog and Alt-click bypass. */
 export function useMoveAgentTask() {
@@ -63,6 +62,7 @@ export function MoveTaskDialog({
 
   return (
     <ConfirmDialog
+      size="md"
       open={targetId !== null}
       onOpenChange={(v) => {
         if (!v) onClose();
@@ -73,10 +73,14 @@ export function MoveTaskDialog({
           Move <strong>{taskTitle}</strong> to <strong>{targetAppName}</strong>?
         </>
       }
-      detail="The task will appear in the other app's quick tasks."
+      body={
+        <p className="text-sm text-muted-foreground">
+          The task will appear in the other app's quick tasks.
+        </p>
+      }
       confirmLabel="Move"
       onConfirm={handleMove}
-      isLoading={isMoving}
+      pending={isMoving}
     />
   );
 }

@@ -3,7 +3,12 @@ import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  EmptyState,
+  Button,
+} from "@vvedantb/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -13,7 +18,6 @@ import {
 } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import {
   QuickTaskModal,
@@ -24,7 +28,7 @@ import { QuickTasksListSplit } from "./_components/QuickTasksListSplit";
 import { QuickTaskDetailShell } from "./_components/QuickTaskDetailShell";
 import { QuickTaskTaskPageContent } from "./_components/QuickTaskTaskPageContent";
 import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
-import { IconChecklist } from "@tabler/icons-react";
+import { IconChecklist, IconPlus } from "@tabler/icons-react";
 import { TASK_STATUSES } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
@@ -467,29 +471,31 @@ export function QuickTasksClient() {
                 exit={{ opacity: 0, y: 8 }}
                 transition={tokenTransition.base}
               >
-                <EmptyState
-                  icon={
-                    <IconChecklist
-                      size={24}
-                      className="text-muted-foreground"
-                    />
-                  }
-                  title={
-                    hasAnyTasks ? "No matching quick tasks" : "No quick tasks"
-                  }
-                  description={
-                    hasAnyTasks
+                <EmptyState.Root enter={!hasAnyTasks}>
+                  <EmptyState.Icon icon={IconChecklist} size={24} />
+                  <EmptyState.Title>
+                    {hasAnyTasks ? "No matching quick tasks" : "No quick tasks"}
+                  </EmptyState.Title>
+                  <EmptyState.Description>
+                    {hasAnyTasks
                       ? "Try clearing filters to see all tasks."
-                      : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."
-                  }
-                  actionLabel={
-                    hasAnyTasks ? "Clear filters" : "Create Quick Task"
-                  }
-                  onAction={
-                    hasAnyTasks ? clearAllFilters : () => setIsCreating(true)
-                  }
-                  animate={!hasAnyTasks}
-                />
+                      : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."}
+                  </EmptyState.Description>
+                  <EmptyState.Actions>
+                    <Button
+                      size="sm"
+                      onClick={
+                        hasAnyTasks
+                          ? clearAllFilters
+                          : () => setIsCreating(true)
+                      }
+                      className="mt-6"
+                    >
+                      <IconPlus size={16} />
+                      {hasAnyTasks ? "Clear filters" : "Create Quick Task"}
+                    </Button>
+                  </EmptyState.Actions>
+                </EmptyState.Root>
               </m.div>
             ) : view === "kanban" ? (
               <m.div

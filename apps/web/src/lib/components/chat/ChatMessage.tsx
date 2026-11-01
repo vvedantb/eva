@@ -1,4 +1,4 @@
-import { cn } from "@eva/ui";
+import { cn, SmoothMarkdown } from "@eva/ui";
 import {
   formatModelDisplayLabel,
   Message as AIMessage,
@@ -464,9 +464,9 @@ export const ChatMessage = memo(function ChatMessage({
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent && !streamingTextIsInline ? (
                         <div data-assistant-cite-source={message._id}>
-                          <Markdown className="mt-2">
+                          <SmoothMarkdown className="mt-2" mode="streaming">
                             {streamingContent}
-                          </Markdown>
+                          </SmoothMarkdown>
                         </div>
                       ) : null}
                     </>

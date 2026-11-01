@@ -1,3 +1,4 @@
+import { MotionProvider } from "@vvedantb/ui";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -11,7 +12,6 @@ import { clientEnv } from "./env/client";
 import { convex } from "./lib/convex";
 import { DeploymentErrorFallback } from "./lib/components/DeploymentErrorFallback";
 import { RouteNotFound } from "./lib/components/RouteNotFound";
-import { MotionProvider } from "./lib/components/MotionProvider";
 import { EvaUiProvider } from "@eva/ui";
 import { isChunkLoadError } from "./lib/utils/isChunkLoadError";
 import {
@@ -181,7 +181,10 @@ if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <MotionProvider>
+        {/* Eva always animates: the animation contract forbids following the
+            OS reduced-motion setting. Signed-in users turn page motion off
+            with the `disablePageMotion` flag (PageMotionProvider). */}
+        <MotionProvider reducedMotion="never">
           <EvaUiProvider>
             <ClerkProvider
               publishableKey={clientEnv.VITE_CLERK_PUBLISHABLE_KEY}

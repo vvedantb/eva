@@ -13,9 +13,12 @@ import {
   type AIModel,
   type Id,
 } from "@eva/backend";
-import { formatModelDisplayLabel, getProviderLabel } from "@vvedantb/ui";
+import {
+  formatModelDisplayLabel,
+  getProviderLabel,
+  ConfirmDialog,
+} from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
@@ -165,6 +168,7 @@ export function useChatQueueGate({
           );
   const switchDialog = (
     <ConfirmDialog
+      size="md"
       open={pending !== null}
       onOpenChange={(open) => {
         if (!open) setPending(null);
@@ -175,7 +179,7 @@ export function useChatQueueGate({
       onConfirm={() => {
         if (pending !== null) confirmSwitch(pending);
       }}
-      isLoading={isSwitching}
+      pending={isSwitching}
     />
   );
 
