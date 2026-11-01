@@ -2,8 +2,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { IconLockOff } from "@tabler/icons-react";
-import { Button } from "@vvedantb/ui";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { Button, EmptyState } from "@vvedantb/ui";
 
 /**
  * Shown when `/$owner/$repo/…` resolves to no repo the viewer can read.
@@ -16,16 +15,21 @@ import { EmptyState } from "@/lib/components/ui/EmptyState";
 export function RepoNotFound({ owner, name }: { owner: string; name: string }) {
   return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center p-4">
-      <EmptyState
-        icon={<IconLockOff size={28} />}
-        title={`Can't open ${owner}/${name}`}
-        description="It isn't connected to Eva, or you don't have access. Ask a team owner to add you, or pick another codebase."
-        action={
-          <Button asChild size="sm" variant="outline" className="mt-5">
-            <Link to="/home">Go to codebases</Link>
-          </Button>
-        }
-      />
+      <EmptyState.Root>
+        <EmptyState.Icon icon={IconLockOff} size={28} />
+        <EmptyState.Title>{`Can't open ${owner}/${name}`}</EmptyState.Title>
+        <EmptyState.Description>
+          It isn't connected to Eva, or you don't have access. Ask a team owner
+          to add you, or pick another codebase.
+        </EmptyState.Description>
+        <EmptyState.Actions>
+          {
+            <Button asChild size="sm" variant="outline" className="mt-5">
+              <Link to="/home">Go to codebases</Link>
+            </Button>
+          }
+        </EmptyState.Actions>
+      </EmptyState.Root>
     </div>
   );
 }

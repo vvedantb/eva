@@ -30,6 +30,7 @@ import {
   skipConfirmTitle,
   useRequestConfirm,
   convexErrorMessage,
+  CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -64,7 +65,6 @@ import {
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
@@ -95,6 +95,7 @@ import type { EntityResolveStatus } from "@/lib/numId";
 import { parseSpec } from "@/lib/utils/parseSpec";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 
 export function ProjectDetailClient({
   projectId,
@@ -481,6 +482,7 @@ export function ProjectDetailClient({
           <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
             {prError && <p className="text-xs text-destructive">{prError}</p>}
             <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
+              <PrMergeConfetti owner={{ kind: "project", projectId }} />
               <ProjectContextUsage repoId={repo._id} projectId={projectId} />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

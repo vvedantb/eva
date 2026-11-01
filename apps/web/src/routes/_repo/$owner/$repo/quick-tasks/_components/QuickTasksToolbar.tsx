@@ -19,8 +19,8 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  ToggleSearch,
 } from "@vvedantb/ui";
-import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
 import {
   IconPlus,
   IconCheckbox,

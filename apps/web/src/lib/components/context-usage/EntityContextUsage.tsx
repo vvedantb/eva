@@ -11,11 +11,13 @@ import {
   ContextUsageContentHeader,
   ContextUsageContentBody,
   ContextUsageContentFooter,
-  ContextUsageInput,
-  ContextUsageOutput,
-  ContextUsageCacheRead,
-  ContextUsageCacheWrite,
 } from "@vvedantb/ui";
+import {
+  ContextCostFooter,
+  ContextMeterButton,
+  ContextMeterHeader,
+  ContextUsageRows,
+} from "@/lib/components/context-usage/RollingContextParts";
 import { parseResultEvent } from "@/lib/utils/logs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
@@ -139,10 +141,12 @@ export function ContextUsageDisplay({
           </Button>
         </ContextUsageTrigger>
       ) : (
-        <ContextUsageTrigger
-          data-testid="context-meter"
-          className={overloaded ? "text-destructive" : undefined}
-        />
+        <ContextUsageTrigger>
+          <ContextMeterButton
+            ratio={contextUsedRatio(aggregated.usedTokens, maxTokens)}
+            className={overloaded ? "text-destructive" : undefined}
+          />
+        </ContextUsageTrigger>
       )}
       <ContextUsageContent data-testid="context-meter-popover">
         {maxTokens === null ? (
@@ -158,13 +162,15 @@ export function ContextUsageDisplay({
             </p>
           </ContextUsageContentHeader>
         ) : (
-          <ContextUsageContentHeader />
+          <ContextUsageContentHeader>
+            <ContextMeterHeader
+              usedTokens={aggregated.usedTokens}
+              maxTokens={maxTokens}
+            />
+          </ContextUsageContentHeader>
         )}
         <ContextUsageContentBody className="space-y-1">
-          <ContextUsageInput />
-          <ContextUsageOutput />
-          <ContextUsageCacheRead />
-          <ContextUsageCacheWrite />
+          <ContextUsageRows usage={aggregated.usage} />
         </ContextUsageContentBody>
         <div className="space-y-2 px-3 pb-3 text-2xs leading-4 text-muted-foreground">
           {remainingLabel === null ? null : (
@@ -187,7 +193,9 @@ export function ContextUsageDisplay({
             </button>
           ) : null}
         </div>
-        <ContextUsageContentFooter />
+        <ContextUsageContentFooter>
+          <ContextCostFooter totalUSD={aggregated.costs.totalUSD} />
+        </ContextUsageContentFooter>
       </ContextUsageContent>
     </ContextUsage>
   );

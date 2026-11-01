@@ -4,11 +4,15 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { tokenTransition, useRequestConfirm, ListEnter } from "@vvedantb/ui";
+import {
+  tokenTransition,
+  useRequestConfirm,
+  ListEnter,
+  ConfirmDialog,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import { labelForAttachment } from "@/lib/components/attachments/attachmentMeta";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 /**
@@ -110,6 +114,7 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
         ) : null}
       </AnimatePresence>
       <ConfirmDialog
+        size="md"
         open={pending !== null}
         onOpenChange={(open) => {
           if (!open && !isRemoving) setPending(null);
@@ -121,11 +126,15 @@ export function TaskAttachments({ taskId }: { taskId: Id<"agentTasks"> }) {
             from this task?
           </>
         }
-        detail="The file is deleted from storage. This action cannot be undone."
+        body={
+          <p className="text-sm text-muted-foreground">
+            The file is deleted from storage. This action cannot be undone.
+          </p>
+        }
         confirmLabel="Remove"
         variant="destructive"
         onConfirm={handleConfirm}
-        isLoading={isRemoving}
+        pending={isRemoving}
       />
     </>
   );
