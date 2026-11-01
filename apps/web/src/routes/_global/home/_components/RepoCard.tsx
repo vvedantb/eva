@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { m } from "motion/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -46,14 +47,10 @@ export function RepoCard({
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
-    const visible = localStore.getQuery(api.githubRepos.list, {});
-    if (visible !== undefined && args.hidden) {
-      localStore.setQuery(
-        api.githubRepos.list,
-        {},
-        visible.filter((r) => r._id !== args.repoId),
-      );
-    }
+    if (!args.hidden) return;
+    patchLoadedQuery(localStore, api.githubRepos.list, {}, (repos) =>
+      repos.filter((r) => r._id !== args.repoId),
+    );
   });
   const { uploadLogo, removeLogo } = useRepoLogoUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);

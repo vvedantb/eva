@@ -7,6 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useNavigate } from "@tanstack/react-router";
 import {
   GanttProvider,
@@ -119,22 +120,20 @@ export function ProjectsTimeline({
   });
   const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
     (localStore, args) => {
-      const currentList = localStore.getQuery(api.projects.list, {
-        repoId: repo._id,
-      });
-      if (currentList !== undefined) {
-        const {
-          id: _id,
-          priority,
-          projectLead,
-          codeReviewer,
-          model,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.projects.list,
-          { repoId: repo._id },
+      const {
+        id: _id,
+        priority,
+        projectLead,
+        codeReviewer,
+        model,
+        providerAccountId,
+        ...safeFields
+      } = args;
+      patchLoadedQuery(
+        localStore,
+        api.projects.list,
+        { repoId: repo._id },
+        (currentList) =>
           currentList.map((p) =>
             p._id === args.id
               ? {
@@ -156,8 +155,7 @@ export function ProjectsTimeline({
                 }
               : p,
           ),
-        );
-      }
+      );
     },
   );
 

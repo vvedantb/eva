@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { withMutationToast } from "@/lib/utils/mutationToast";
@@ -37,14 +38,9 @@ export function useProjectDelete(
   const deleteProject = useMutation(
     api.projects.deleteCascade,
   ).withOptimisticUpdate((localStore, args) => {
-    const currentList = localStore.getQuery(api.projects.list, { repoId });
-    if (currentList !== undefined) {
-      localStore.setQuery(
-        api.projects.list,
-        { repoId },
-        currentList.filter((p) => p._id !== args.id),
-      );
-    }
+    patchLoadedQuery(localStore, api.projects.list, { repoId }, (list) =>
+      list.filter((p) => p._id !== args.id),
+    );
   });
   const [pending, setPending] = useState<PendingDelete | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);

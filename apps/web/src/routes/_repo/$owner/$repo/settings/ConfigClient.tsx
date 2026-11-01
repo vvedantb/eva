@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
@@ -19,19 +20,18 @@ export function ConfigClient() {
   const updateConfig = useMutation(
     api.githubRepos.updateConfig,
   ).withOptimisticUpdate((localStore, args) => {
-    const queryArgs = { owner, name, appName };
-    const current = localStore.getQuery(
+    const { repoId: _id, devPort, ...safeFields } = args;
+    patchLoadedQuery(
+      localStore,
       api.githubRepos.getByOwnerAndName,
-      queryArgs,
+      { owner, name, appName },
+      (current) =>
+        current && {
+          ...current,
+          ...safeFields,
+          ...(devPort !== undefined ? { devPort: devPort ?? undefined } : {}),
+        },
     );
-    if (current !== undefined && current !== null) {
-      const { repoId: _id, devPort, ...safeFields } = args;
-      localStore.setQuery(api.githubRepos.getByOwnerAndName, queryArgs, {
-        ...current,
-        ...safeFields,
-        ...(devPort !== undefined ? { devPort: devPort ?? undefined } : {}),
-      });
-    }
   });
 
   return (

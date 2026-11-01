@@ -3,6 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   Spinner,
   Switch,
@@ -178,13 +179,10 @@ export function ExperimentalSettingsClient() {
   const setFlag = useMutation(
     api.auth.setExperimentalFlag,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getExperimentalFlags, {});
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.auth.getExperimentalFlags,
-      {},
-      { ...current, [args.key]: args.enabled },
-    );
+    patchLoadedQuery(localStore, api.auth.getExperimentalFlags, {}, (cur) => ({
+      ...cur,
+      [args.key]: args.enabled,
+    }));
   });
 
   const toggle = (key: ExperimentalFlagKey, enabled: boolean) => {

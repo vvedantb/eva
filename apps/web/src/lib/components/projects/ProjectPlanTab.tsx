@@ -17,6 +17,7 @@ import {
 import { entityPathSegment } from "@/lib/numId";
 import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { useUpdateProject } from "@/lib/components/projects/useUpdateProject";
 
 interface ProjectPlanTabProps {
   projectId: Id<"projects">;
@@ -37,43 +38,7 @@ export function ProjectPlanTab({
   const navigate = useNavigate();
   const project = useQuery(api.projects.get, { id: projectId });
   const startDevelopment = useMutation(api.projects.startDevelopment);
-  const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.projects.get, { id: projectId });
-      if (current !== undefined && current !== null) {
-        const {
-          id: _id,
-          priority,
-          projectLead,
-          codeReviewer,
-          model,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.projects.get,
-          { id: projectId },
-          {
-            ...current,
-            ...safeFields,
-            ...(priority !== undefined
-              ? { priority: priority ?? undefined }
-              : {}),
-            ...(projectLead !== undefined
-              ? { projectLead: projectLead ?? undefined }
-              : {}),
-            ...(codeReviewer !== undefined
-              ? { codeReviewer: codeReviewer ?? undefined }
-              : {}),
-            ...(model !== undefined ? { model: model ?? undefined } : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
-              : {}),
-          },
-        );
-      }
-    },
-  );
+  const updateProject = useUpdateProject(projectId);
   const [isLoading, setIsLoading] = useState(false);
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState("");

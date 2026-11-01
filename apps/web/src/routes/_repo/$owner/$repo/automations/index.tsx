@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
@@ -25,25 +26,21 @@ function patchInstalled(installed: boolean) {
     localStore: OptimisticLocalStore,
     args: { repoId: Id<"githubRepos">; key: string },
   ) => {
-    const queryArgs = { repoId: args.repoId };
-    const current = localStore.getQuery(
+    patchLoadedQuery(
+      localStore,
       api.automations.listSystemAutomations,
-      queryArgs,
-    );
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.automations.listSystemAutomations,
-      queryArgs,
-      current.map((entry) =>
-        entry.key === args.key
-          ? {
-              ...entry,
-              installed,
-              enabled: installed,
-              numId: installed ? entry.numId : null,
-            }
-          : entry,
-      ),
+      { repoId: args.repoId },
+      (current) =>
+        current.map((entry) =>
+          entry.key === args.key
+            ? {
+                ...entry,
+                installed,
+                enabled: installed,
+                numId: installed ? entry.numId : null,
+              }
+            : entry,
+        ),
     );
   };
 }

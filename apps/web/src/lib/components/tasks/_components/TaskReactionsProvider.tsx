@@ -5,6 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import { getUserDisplayName } from "./task-detail-constants";
 
@@ -74,22 +75,18 @@ export function TaskReactionsProvider({
     api.taskReactions.toggle,
   ).withOptimisticUpdate((localStore, args) => {
     if (!currentUserId) return;
-    const current = localStore.getQuery(api.taskReactions.listByTask, {
-      taskId,
-    });
-    if (current === undefined) return;
-    const existingIndex = current.findIndex(
-      (reaction) =>
-        reaction.targetType === args.targetType &&
-        reaction.targetId === args.targetId &&
-        reaction.userId === currentUserId &&
-        reaction.emoji === args.emoji,
-    );
-    const next =
-      existingIndex >= 0
-        ? current.filter((_, index) => index !== existingIndex)
+    patchLoadedQuery(localStore, api.taskReactions.listByTask, { taskId }, (cur) => {
+      const existingIndex = cur.findIndex(
+        (reaction) =>
+          reaction.targetType === args.targetType &&
+          reaction.targetId === args.targetId &&
+          reaction.userId === currentUserId &&
+          reaction.emoji === args.emoji,
+      );
+      return existingIndex >= 0
+        ? cur.filter((_, index) => index !== existingIndex)
         : [
-            ...current,
+            ...cur,
             {
               targetType: args.targetType,
               targetId: args.targetId,
@@ -97,7 +94,7 @@ export function TaskReactionsProvider({
               emoji: args.emoji,
             },
           ];
-    localStore.setQuery(api.taskReactions.listByTask, { taskId }, next);
+    });
   });
 
   const groupsByTarget = (() => {

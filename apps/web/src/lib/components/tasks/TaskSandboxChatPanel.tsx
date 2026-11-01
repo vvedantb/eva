@@ -12,6 +12,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
@@ -165,15 +166,11 @@ export function TaskSandboxChatPanel({
   const setTraitsMutation = useMutation(
     api.agentTasks.setTraits,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.get, { id: args.id });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.agentTasks.get,
       { id: args.id },
-      {
-        ...current,
-        ...composerTraitFields(args),
-      },
+      (cur) => cur && { ...cur, ...composerTraitFields(args) },
     );
   });
 

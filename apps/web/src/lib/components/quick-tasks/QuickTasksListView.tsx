@@ -6,6 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -95,16 +96,11 @@ export function QuickTasksListView({
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id ? { ...task, status: args.status } : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+      cur.map((task) =>
+        task._id === args.id ? { ...task, status: args.status } : task,
+      ),
+    );
   });
   const startExecution = useMutation(api.agentTasks.startExecution);
 

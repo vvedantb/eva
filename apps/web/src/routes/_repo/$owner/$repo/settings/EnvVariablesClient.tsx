@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation, useAction } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { EnvVarsTable } from "@/lib/components/EnvVarsTable";
@@ -13,31 +14,19 @@ export function EnvVariablesClient() {
   const revealValue = useAction(api.repoEnvVarsActions.revealValue);
   const removeVar = useMutation(api.repoEnvVars.removeVar).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.repoEnvVars.list, { repoId });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.repoEnvVars.list,
-          { repoId },
-          current.filter((v) => v.key !== args.key),
-        );
-      }
+      patchLoadedQuery(localStore, api.repoEnvVars.list, { repoId }, (vars) =>
+        vars.filter((v) => v.key !== args.key),
+      );
     },
   );
   const toggleSandboxExclude = useMutation(
     api.repoEnvVars.toggleSandboxExclude,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.repoEnvVars.list, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.repoEnvVars.list,
-        { repoId },
-        current.map((v) =>
-          v.key === args.key
-            ? { ...v, sandboxExclude: args.sandboxExclude }
-            : v,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.repoEnvVars.list, { repoId }, (vars) =>
+      vars.map((v) =>
+        v.key === args.key ? { ...v, sandboxExclude: args.sandboxExclude } : v,
+      ),
+    );
   });
 
   return (

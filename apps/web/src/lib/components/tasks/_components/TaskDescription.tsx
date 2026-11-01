@@ -7,6 +7,7 @@ import { IconPencil } from "@tabler/icons-react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import {
@@ -54,20 +55,20 @@ export function TaskDescription({
 
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
-      const cached = localStore.getQuery(api.agentTasks.get, { id: taskId });
-      if (cached) {
-        const {
-          id: _id,
-          priority,
-          projectId,
-          assignedTo,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.agentTasks.get,
-          { id: taskId },
-          {
+      const {
+        id: _id,
+        priority,
+        projectId,
+        assignedTo,
+        providerAccountId,
+        ...safeFields
+      } = args;
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.get,
+        { id: taskId },
+        (cached) =>
+          cached && {
             ...cached,
             ...safeFields,
             ...(priority !== undefined
@@ -83,8 +84,7 @@ export function TaskDescription({
               ? { providerAccountId: providerAccountId ?? undefined }
               : {}),
           },
-        );
-      }
+      );
     },
   );
 

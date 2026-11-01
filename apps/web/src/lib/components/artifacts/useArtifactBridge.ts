@@ -4,6 +4,7 @@ import { useAction, useMutation } from "convex/react";
 import type { OptimisticLocalStore } from "convex/browser";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { z } from "zod";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 
@@ -44,17 +45,14 @@ function patchStateSnapshot(
   key: string,
   value: string | null,
 ) {
-  const current = localStore.getQuery(api.artifactState.list, { artifactId });
-  if (!current) return;
-  const rest = current[scope].filter((entry) => entry.key !== key);
-  localStore.setQuery(
-    api.artifactState.list,
-    { artifactId },
-    {
+  patchLoadedQuery(localStore, api.artifactState.list, { artifactId }, (current) => {
+    if (!current) return current;
+    const rest = current[scope].filter((entry) => entry.key !== key);
+    return {
       ...current,
       [scope]: value === null ? rest : [...rest, { key, value }],
-    },
-  );
+    };
+  });
 }
 
 /**

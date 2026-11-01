@@ -7,6 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { isDocViewerTab, type DocViewerTab } from "@/lib/search-params";
@@ -61,18 +62,12 @@ function applyDocUpdateOptimistically(
   localStore: OptimisticLocalStore,
   args: FunctionArgs<typeof api.docs.update>,
 ) {
-  const current = localStore.getQuery(api.docs.get, { id: args.id });
-  if (current) {
-    localStore.setQuery(
-      api.docs.get,
-      { id: args.id },
-      {
-        ...current,
-        ...args,
-        updatedAt: Date.now(),
-      },
-    );
-  }
+  patchLoadedQuery(
+    localStore,
+    api.docs.get,
+    { id: args.id },
+    (current) => current && { ...current, ...args, updatedAt: Date.now() },
+  );
 }
 
 export function DocPrdViewer({

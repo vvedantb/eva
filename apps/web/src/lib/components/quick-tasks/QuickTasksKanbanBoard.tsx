@@ -4,6 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { KanbanBoard } from "@/lib/components/kanban/KanbanBoard";
@@ -53,18 +54,13 @@ export function QuickTasksKanbanBoard({
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id
-            ? { ...task, status: args.status, updatedAt: Date.now() }
-            : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+      cur.map((task) =>
+        task._id === args.id
+          ? { ...task, status: args.status, updatedAt: Date.now() }
+          : task,
+      ),
+    );
   });
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [{ statuses }] = useQuickTaskFilters();
