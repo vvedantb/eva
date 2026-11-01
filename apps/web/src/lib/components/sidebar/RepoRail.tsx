@@ -23,6 +23,8 @@ import {
   ErrorBoundary,
   CountPop,
   countLabel,
+  CORNER_BADGE_CLASS,
+  UnreadCornerBadge,
 } from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
@@ -31,10 +33,6 @@ import { RailAppHotkeys } from "@/lib/components/sidebar/RailAppHotkeys";
 import { RailSettingsMenu } from "@/lib/components/sidebar/RailSettingsMenu";
 import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import {
-  CORNER_BADGE_CLASS,
-  UnreadCornerBadge,
-} from "@/lib/components/ui/CornerBadge";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
