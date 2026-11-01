@@ -25,6 +25,17 @@
 @source "../node_modules/@vvedantb/ui/shell/src";
 @source "../node_modules/@vvedantb/ui/app/src";
 
+/* The package `filled24` toast icons set `fill="none"` on the SVG and rely on
+ * `fill-current` to paint it. If that utility loses, the 24px slot is blank.
+ * Unlayered, so it beats layered utilities and the attribute. Remove once
+ * `sonner-icons.tsx` in @vvedantb/ui uses `fill="currentColor"`. */
+[data-sonner-toast][data-type="success"] [data-icon] svg,
+[data-sonner-toast][data-type="error"] [data-icon] svg,
+[data-sonner-toast][data-type="warning"] [data-icon] svg,
+[data-sonner-toast][data-type="info"] [data-icon] svg {
+  fill: currentColor;
+}
+
 /* v4 changed the default border colour to `currentcolor`. The upgrade codemod
  * adds a gray-200 compatibility shim here; it is not needed, because the base
  * layer below already pins every element to `border-border`. */
