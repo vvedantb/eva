@@ -968,7 +968,7 @@
 
   /*
    * View transitions: React `<ViewTransition>` classes
-   * (`lib/components/viewTransitions.tsx`) and the router's `page` type
+   * (`ViewTransitionSuspense` from `@vvedantb/ui`) and the router's `page` type
    * (`main.tsx`, on the `.vt-page` content column of `_global` / `$repo`).
    * The root never takes part: only named elements are snapshotted, so the
    * sidebar, preview iframes and toasts stay live, and the overlay lets

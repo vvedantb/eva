@@ -18,6 +18,7 @@ import {
   Spinner,
   ConfirmSkipHint,
   skipConfirmTitle,
+  CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
@@ -30,13 +31,13 @@ import {
   IconServerBolt,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -228,6 +229,9 @@ export function TaskFooter({
               : "flex flex-wrap items-center gap-1.5 sm:gap-2"
           }
         >
+          {isHeader ? (
+            <PrMergeConfetti owner={{ kind: "task", taskId }} />
+          ) : null}
           {showMoreMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

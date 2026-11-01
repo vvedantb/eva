@@ -25,9 +25,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  EmptyState,
+  ToggleSearch,
 } from "@vvedantb/ui";
-import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
 import {
   IconLayoutKanban,
@@ -373,34 +373,40 @@ export function ProjectsClient() {
             <CenteredSpinner label="Loading projects" />
           ) : projects.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
-              <EmptyState
-                icon={
-                  <IconLayoutKanban
-                    size={24}
-                    className="text-muted-foreground"
-                  />
-                }
-                title="No projects yet"
-                description="Create a project to describe a feature and let AI help you break it down into tasks"
-                actionLabel="Create Project"
-                onAction={() => setIsCreating(true)}
-              />
+              <EmptyState.Root>
+                <EmptyState.Icon icon={IconLayoutKanban} size={24} />
+                <EmptyState.Title>No projects yet</EmptyState.Title>
+                <EmptyState.Description>
+                  Create a project to describe a feature and let AI help you
+                  break it down into tasks
+                </EmptyState.Description>
+                <EmptyState.Actions>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsCreating(true)}
+                    className="mt-6"
+                  >
+                    <IconPlus size={16} />
+                    Create Project
+                  </Button>
+                </EmptyState.Actions>
+              </EmptyState.Root>
             </div>
           ) : filteredSorted.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
-              <EmptyState
-                icon={
-                  <IconLayoutKanban
-                    size={24}
-                    className="text-muted-foreground"
-                  />
-                }
-                title="No matching projects"
-                description="Try clearing filters to see all projects."
-                actionLabel="Clear filters"
-                onAction={clearAllFilters}
-                animate={false}
-              />
+              <EmptyState.Root enter={false}>
+                <EmptyState.Icon icon={IconLayoutKanban} size={24} />
+                <EmptyState.Title>No matching projects</EmptyState.Title>
+                <EmptyState.Description>
+                  Try clearing filters to see all projects.
+                </EmptyState.Description>
+                <EmptyState.Actions>
+                  <Button size="sm" onClick={clearAllFilters} className="mt-6">
+                    <IconPlus size={16} />
+                    Clear filters
+                  </Button>
+                </EmptyState.Actions>
+              </EmptyState.Root>
             </div>
           ) : (
             <AnimatePresence initial={false} mode="wait">

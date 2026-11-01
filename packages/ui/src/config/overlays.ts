@@ -115,6 +115,18 @@ export const overlaysConfig = {
       description: "text-sm text-muted-foreground",
     },
   },
+  // Eva's confirm dialog before the library swap: 448px wide, the question
+  // right under the title, the detail line 12px below it, and no extra
+  // padding around the footer.
+  ConfirmDialog: {
+    classes: {
+      content: "sm:max-w-md",
+      header: "pb-0",
+      description: "py-0 text-base",
+      body: "-mt-1",
+      footer: "pt-0",
+    },
+  },
   Popover: {
     sideOffset: 4,
     collisionPadding: 8,

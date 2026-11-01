@@ -2,12 +2,16 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { CenteredSpinner, tokenTransition, staggerDelay } from "@vvedantb/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  staggerDelay,
+  EmptyState,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconFileText } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { DraftCard } from "./_components/DraftCard";
 import { mergeDrafts } from "./_utils";
 
@@ -31,11 +35,14 @@ export function DraftsClient() {
     <PageWrapper title="Drafts" comfortable fillHeight={drafts.length === 0}>
       {drafts.length === 0 ? (
         <div className="flex min-h-0 flex-1 items-center justify-center">
-          <EmptyState
-            icon={<IconFileText size={24} className="text-muted-foreground" />}
-            title="No drafts"
-            description="Drafts save automatically as you type comments, prompts, or compose quick tasks."
-          />
+          <EmptyState.Root>
+            <EmptyState.Icon icon={IconFileText} size={24} />
+            <EmptyState.Title>No drafts</EmptyState.Title>
+            <EmptyState.Description>
+              Drafts save automatically as you type comments, prompts, or
+              compose quick tasks.
+            </EmptyState.Description>
+          </EmptyState.Root>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

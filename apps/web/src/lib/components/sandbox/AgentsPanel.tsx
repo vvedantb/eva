@@ -23,6 +23,7 @@ import {
   type SubagentTone,
   type SubagentView,
 } from "./agentActivity";
+import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 const DOT_CLASS: Record<SubagentTone, string> = {
   active: "bg-primary animate-pulse ring-2 ring-primary/30",
@@ -40,7 +41,7 @@ function AgentDuration({ agent }: { agent: SubagentView }) {
       ? liveElapsed
       : Math.max(0, Math.floor((agent.settledAt - agent.startedAt) / 1000));
   if (!running && agent.settledAt === undefined) return null;
-  return <span className="tabular-nums">{formatActivityElapsed(seconds)}</span>;
+  return <RollingNumber value={formatActivityElapsed(seconds)} />;
 }
 
 export function AgentStopButton({

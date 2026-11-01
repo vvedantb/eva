@@ -372,6 +372,7 @@ function evaPreviewAnnotationScript(): void {
           } | null;
         }
       | { type: "eva-preview-annotate-dismissed" }
+      | { type: "eva-preview-annotate-frozen"; frozen: boolean }
       | {
           type: "eva-preview-screenshot";
           requestId: string;
@@ -863,7 +864,71 @@ function evaPreviewAnnotationScript(): void {
       event.preventDefault();
       clearAll();
       post({ type: "eva-preview-annotate-dismissed" });
+      return;
     }
+    // F freezes motion mid-transition, so the user can then click the state
+    // they want to comment on. A key, because reaching for a menu takes longer
+    // than most transitions last.
+    const typing =
+      event.target instanceof HTMLElement &&
+      (event.target.isContentEditable ||
+        event.target.tagName === "INPUT" ||
+        event.target.tagName === "TEXTAREA");
+    if (
+      (event.key === "f" || event.key === "F") &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !typing
+    ) {
+      event.preventDefault();
+      setFrozen(!frozen);
+    }
+  }
+
+  let frozen = false;
+  let frozenAnimations: Animation[] = [];
+  let frozenMedia: HTMLMediaElement[] = [];
+  let freezeStyle: HTMLStyleElement | null = null;
+
+  /**
+   * Pauses every running animation, transition and playing media element in
+   * place, and holds CSS animations that start later. JS loops that draw each
+   * frame themselves (canvas, requestAnimationFrame) cannot be paused here.
+   */
+  function setFrozen(next: boolean): void {
+    if (next === frozen) return;
+    frozen = next;
+    if (next) {
+      frozenAnimations = document
+        .getAnimations()
+        .filter((animation) => animation.playState === "running");
+      for (const animation of frozenAnimations) animation.pause();
+      frozenMedia = Array.from(
+        document.querySelectorAll<HTMLMediaElement>("video, audio"),
+      ).filter((media) => !media.paused);
+      for (const media of frozenMedia) media.pause();
+      freezeStyle = document.createElement("style");
+      freezeStyle.setAttribute("data-eva-annotate", "freeze");
+      freezeStyle.textContent =
+        "*, *::before, *::after { animation-play-state: paused !important; }";
+      document.head.appendChild(freezeStyle);
+    } else {
+      freezeStyle?.remove();
+      freezeStyle = null;
+      for (const animation of frozenAnimations) {
+        // A node removed while frozen leaves an animation that cannot play.
+        try {
+          animation.play();
+        } catch {
+          // Nothing to resume.
+        }
+      }
+      for (const media of frozenMedia) void media.play().catch(() => {});
+      frozenAnimations = [];
+      frozenMedia = [];
+    }
+    post({ type: "eva-preview-annotate-frozen", frozen });
   }
 
   function onScrollOrResize(): void {
@@ -1482,6 +1547,10 @@ function evaPreviewAnnotationScript(): void {
     if (type === "eva-preview-annotate-mode") {
       const active = Reflect.get(data, "active") === true;
       setMode(active);
+      return;
+    }
+    if (type === "eva-preview-annotate-freeze") {
+      setFrozen(Reflect.get(data, "active") === true);
       return;
     }
     if (type === "eva-preview-annotate-clear") {

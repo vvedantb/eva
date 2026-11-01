@@ -104,6 +104,7 @@ import type * as _github_authErrors from "../_github/authErrors.js";
 import type * as _github_deploymentSnapshot from "../_github/deploymentSnapshot.js";
 import type * as _github_evaPrOwnership from "../_github/evaPrOwnership.js";
 import type * as _github_helpers from "../_github/helpers.js";
+import type * as _github_mergeShare from "../_github/mergeShare.js";
 import type * as _github_prBodyBlocks from "../_github/prBodyBlocks.js";
 import type * as _github_prComments from "../_github/prComments.js";
 import type * as _github_prDescription from "../_github/prDescription.js";
@@ -652,6 +653,7 @@ declare const fullApi: ApiFromModules<{
   "_github/deploymentSnapshot": typeof _github_deploymentSnapshot;
   "_github/evaPrOwnership": typeof _github_evaPrOwnership;
   "_github/helpers": typeof _github_helpers;
+  "_github/mergeShare": typeof _github_mergeShare;
   "_github/prBodyBlocks": typeof _github_prBodyBlocks;
   "_github/prComments": typeof _github_prComments;
   "_github/prDescription": typeof _github_prDescription;

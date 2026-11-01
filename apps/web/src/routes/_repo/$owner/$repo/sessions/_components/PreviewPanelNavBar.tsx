@@ -20,6 +20,8 @@ import {
   IconDevices,
   IconDotsVertical,
   IconListTree,
+  IconPencil,
+  IconPlayerPause,
   IconPictureInPicture,
   IconPlug,
 } from "@tabler/icons-react";
@@ -29,6 +31,7 @@ import {
   type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
 import { usePreviewScreenshot } from "./usePreviewScreenshot";
+import { usePreviewFreeze } from "./usePreviewFreeze";
 import { usePreviewSnapshot } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { usePreviewWebMcp } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import type { PreviewViewport } from "../_utils/previewViewport";
@@ -57,6 +60,7 @@ export function PreviewPanelNavBar({
   annotationMode,
   onAnnotationModeChange,
   showAnnotationToggle,
+  sketch,
   popOut,
   externalHrefForPath,
 }: {
@@ -80,6 +84,8 @@ export function PreviewPanelNavBar({
   annotationMode: boolean;
   onAnnotationModeChange: (active: boolean) => void;
   showAnnotationToggle: boolean;
+  /** Set where a composer can take the sketch image; omit to hide Sketch. */
+  sketch?: { active: boolean; onToggle: () => void };
   /** Sessions on desktop only: toggles the floating mini-player. */
   popOut?: { active: boolean; onToggle: () => void };
   /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
@@ -90,12 +96,18 @@ export function PreviewPanelNavBar({
   const screenshot = usePreviewScreenshot(frame);
   const snapshot = usePreviewSnapshot({ iframeElement: frame });
   const webMcp = usePreviewWebMcp({ iframeElement: frame });
+  const freeze = usePreviewFreeze(frame);
   const deviceActive = viewport.mode !== "fill";
   const containActive = contain || deviceActive;
   const busy = screenshot.capturing || snapshot.capturing || webMcp.discovering;
   // The menu hides these modes, so the trigger carries their "on" state.
   const anyModeActive =
-    deviceActive || containActive || annotationMode || popOut?.active === true;
+    deviceActive ||
+    containActive ||
+    annotationMode ||
+    freeze.frozen ||
+    sketch?.active === true ||
+    popOut?.active === true;
 
   const toolsMenu = (
     <DropdownMenu>
@@ -162,6 +174,24 @@ export function PreviewPanelNavBar({
             label="Select element"
             active={annotationMode}
             onSelect={() => onAnnotationModeChange(!annotationMode)}
+          />
+        ) : null}
+        {showAnnotationToggle ? (
+          <PreviewToolItem
+            icon={<IconPlayerPause className="size-3.5" />}
+            label="Freeze animations"
+            active={freeze.frozen}
+            disabled={frame === null}
+            onSelect={freeze.toggle}
+          />
+        ) : null}
+        {sketch ? (
+          <PreviewToolItem
+            icon={<IconPencil className="size-3.5" />}
+            label="Sketch"
+            active={sketch.active}
+            disabled={frame === null}
+            onSelect={sketch.onToggle}
           />
         ) : null}
       </DropdownMenuContent>

@@ -33,6 +33,7 @@ import {
   thinkingHeartbeatSeconds,
   visibleActivityKey,
 } from "@/lib/components/streamingActivityHeartbeat";
+import { RollingNumber } from "@/lib/components/ui/RollingNumber";
 
 /**
  * How long an empty-but-live activity payload is treated as ordinary startup
@@ -51,7 +52,7 @@ function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
         <Shimmer as="span" duration={2.5} spread={1.5}>
           Working for
         </Shimmer>{" "}
-        <span className="tabular-nums">{formatActivityElapsed(elapsed)}</span>
+        <RollingNumber value={formatActivityElapsed(elapsed)} />
       </span>
     </div>
   );

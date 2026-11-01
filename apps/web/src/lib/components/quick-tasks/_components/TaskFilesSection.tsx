@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { IconPaperclip } from "@tabler/icons-react";
-import { toast, useRequestConfirm } from "@vvedantb/ui";
+import { toast, useRequestConfirm, ConfirmDialog } from "@vvedantb/ui";
 import { api, type Id } from "@eva/backend";
 import { AttachmentCard } from "@/lib/components/attachments/AttachmentCard";
 import {
@@ -13,7 +13,6 @@ import {
 } from "@/lib/components/attachments/attachmentMeta";
 import { TextAttachmentModal } from "@/lib/components/attachments/TextAttachmentModal";
 import type { TaskAttachment } from "../useTaskAttachments";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 interface TaskFilesSectionProps {
@@ -212,6 +211,7 @@ export function TaskFilesSection({
       </div>
 
       <ConfirmDialog
+        size="md"
         open={pending !== null}
         onOpenChange={(open) => {
           if (!open && !isRemoving) setPending(null);
@@ -223,11 +223,15 @@ export function TaskFilesSection({
             from this draft?
           </>
         }
-        detail="The file is deleted from storage. This action cannot be undone."
+        body={
+          <p className="text-sm text-muted-foreground">
+            The file is deleted from storage. This action cannot be undone.
+          </p>
+        }
         confirmLabel="Remove"
         variant="destructive"
         onConfirm={handleConfirm}
-        isLoading={isRemoving}
+        pending={isRemoving}
       />
 
       {open ? (

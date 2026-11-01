@@ -5,11 +5,10 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner } from "@vvedantb/ui";
+import { Spinner, ViewTransitionSuspense } from "@vvedantb/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
 import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import {
   chatSourceLabel,
   chatSourceRoute,

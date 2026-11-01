@@ -4,9 +4,8 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { toast } from "@vvedantb/ui";
+import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { ConfirmDialog } from "@/lib/components/ui/ConfirmDialog";
 
 /** Deletes a quick task. Shared by the confirm dialog and Alt-click bypass. */
 export function useDeleteAgentTask() {
@@ -57,6 +56,7 @@ export function DeleteTaskDialog({
 
   return (
     <ConfirmDialog
+      size="md"
       open={open}
       onOpenChange={(v) => {
         if (!v) onClose();
@@ -67,11 +67,15 @@ export function DeleteTaskDialog({
           Are you sure you want to delete <strong>{taskTitle}</strong>?
         </>
       }
-      detail="This action cannot be undone."
+      body={
+        <p className="text-sm text-muted-foreground">
+          This action cannot be undone.
+        </p>
+      }
       confirmLabel="Delete"
       variant="destructive"
       onConfirm={handleDelete}
-      isLoading={isDeleting}
+      pending={isDeleting}
     />
   );
 }

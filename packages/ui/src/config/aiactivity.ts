@@ -2,12 +2,13 @@
 // timeline, its question card and the model picker. Each value is what the
 // legacy @eva/ui component rendered, so the swap changes no DOM.
 import type { UiConfig } from "@vvedantb/ui";
-import { Markdown } from "@vvedantb/ui";
+import { SmoothMarkdown } from "../SmoothMarkdown";
 
 export const aiactivityConfig = {
   ActivityTasks: {
     name: "Eva",
-    markdown: Markdown,
+    // Live reply text eases in rather than landing in bursts.
+    markdown: SmoothMarkdown,
     thinkingIcon: { src: "/icon.svg", alt: "Eva" },
   },
   ActivityQuestionCard: {
