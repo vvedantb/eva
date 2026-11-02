@@ -180,7 +180,8 @@ async function gatherLinkedSessions(
     seen.add(sessionKey);
     sessionIds.push(link.sessionId);
   }
-  const sessions = (await Promise.all(sessionIds.map((id) => db.get(id)))).filter(
+  const fetched = await Promise.all(sessionIds.map((id) => db.get(id)));
+  const sessions = fetched.filter(
     (session): session is Doc<"sessions"> =>
       session !== null &&
       session.deletedAt === undefined &&

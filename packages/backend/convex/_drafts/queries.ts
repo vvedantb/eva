@@ -48,7 +48,7 @@ export const listForRepo = authQuery({
       contextTitle: string;
       taskProjectId: Id<"projects"> | undefined;
     };
-    // Surfaces are independent reads; a gone surface yields null and is skipped.
+    // Surfaces are independent reads; a gone surface yields null (skipped).
     const items = await Promise.all(
       rows.map(async (draft): Promise<DraftListItem | null> => {
         if (
@@ -84,7 +84,9 @@ export const listForRepo = authQuery({
         return { ...draft, contextTitle: "Untitled", taskProjectId: undefined };
       }),
     );
-    const results = items.filter((item): item is DraftListItem => item !== null);
+    const results = items.filter(
+      (item): item is DraftListItem => item !== null,
+    );
 
     // Sort newest draft first.
     return results.sort((a, b) => b.updatedAt - a.updatedAt);

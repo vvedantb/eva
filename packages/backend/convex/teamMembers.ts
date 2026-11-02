@@ -127,7 +127,9 @@ export const listForRepo = authQuery({
       members.map((member) => ctx.db.get(member.userId)),
     );
     return users.flatMap((user) =>
-      user ? [{ _id: user._id, fullName: user.fullName, email: user.email }] : [],
+      user
+        ? [{ _id: user._id, fullName: user.fullName, email: user.email }]
+        : [],
     );
   },
 });
