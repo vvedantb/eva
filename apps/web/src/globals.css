@@ -6,6 +6,8 @@
 @import "@vvedantb/ui/tokens/css/utilities.css";
 @import "@vvedantb/ui/tokens/css/border-beam.css";
 @import "@vvedantb/ui/tokens/css/marquee.css";
+/* The `text-*` scale: each tier has its own line height and tracking. */
+@import "@vvedantb/ui/tokens/css/type-scale.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
  * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
  * shadcn `R G B` variables below; it never redefines them. */
@@ -789,7 +791,7 @@
 
   /*
    * Optical sizing for the arbitrary px sizes still in the codebase. The named
-   * tiers get their tracking from `theme.fontSize` (tailwind.config.js), but
+   * tiers get their tracking from `@vvedantb/ui/tokens/css/type-scale.css`, but
    * `text-[10px]`-style utilities bypass the theme, so the smallest text in the
    * app would otherwise inherit `--tracking-normal` — a *negative* value, which
    * is backwards for glyphs this size.
