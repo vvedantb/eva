@@ -15,7 +15,9 @@ import {
 } from "@vvedantb/ui";
 import { IconChevronDown, IconLink, IconPencil } from "@tabler/icons-react";
 import { AnimatePresence } from "motion/react";
+import { cn } from "@eva/ui";
 import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";
+import { SESSIONS_ROW_X } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 import { SessionGroupRenameDialog } from "@/lib/components/sidebar/_components/SessionGroupRenameDialog";
 import { SidebarSessionListRow } from "@/lib/components/sidebar/_components/SidebarSessionListRow";
 import { repoBasePaths } from "@/lib/components/sidebar/_utils/repoSessionPaths";
@@ -66,7 +68,10 @@ export function LinkedSessionGroupSection({
               <button
                 type="button"
                 title={`${group.members.length} linked sessions`}
-                className="motion-press group/trigger flex w-full min-w-0 items-center gap-2 rounded-menu-item px-4 py-1.5 text-left hover:bg-sidebar-accent/50 active:scale-[0.99]"
+                className={cn(
+                  "motion-press group/trigger flex w-full min-w-0 items-center gap-2 rounded-menu-item py-1.5 text-left hover:bg-sidebar-accent/50 active:scale-[0.99]",
+                  SESSIONS_ROW_X,
+                )}
               >
                 <span className="flex size-[18px] shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground">
                   <IconLink size={12} />
@@ -97,7 +102,7 @@ export function LinkedSessionGroupSection({
       <CollapsibleContent>
         <SharedLayoutNav
           layoutId={`linked-sessions-${group.groupId}-${listMode}`}
-          className="space-y-1 pb-1"
+          className="space-y-0.5 pb-1"
         >
           <AnimatePresence initial={false}>
             {group.members.map(({ session, repo }) => (

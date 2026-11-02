@@ -123,7 +123,7 @@ export function SidebarSessionRow<T extends SessionItem>({
             <SharedLayoutNavSurface
               itemId={session._id}
               isActive={isSelected}
-              className="group mx-1 rounded-menu-item"
+              className="group rounded-menu-item"
             >
               <SidebarSessionItem
                 href={href}

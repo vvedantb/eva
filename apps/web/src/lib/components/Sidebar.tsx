@@ -521,8 +521,14 @@ export function Sidebar() {
                     >
                       {isFlatPanel ? (
                         <>
-                          {/* pl-2 lines the title up with nav row icons (nav px-2 + row px-4). */}
-                          <span className="min-w-0 flex-1 truncate pl-2 text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
+                          {/* Lines the title up with nav row icons: nav px-2 + row
+                              px-4, or the Sessions grid's tighter px-2.5. */}
+                          <span
+                            className={cn(
+                              "min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary",
+                              showGlobalSessionsPanel ? "pl-0.5" : "pl-2",
+                            )}
+                          >
                             {flatPanelTitle}
                           </span>
                           <div className="flex shrink-0 items-center gap-0.5">

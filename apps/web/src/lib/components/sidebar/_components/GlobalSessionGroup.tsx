@@ -31,6 +31,7 @@ import {
   type SessionSortOrder,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { SESSIONS_ROW_X } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { isSessionSidebarActive } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
 
@@ -116,7 +117,10 @@ export function GlobalSessionGroup({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="motion-press flex min-w-0 flex-1 items-center gap-2 rounded-menu-item px-4 py-1.5 text-left hover:bg-sidebar-accent/50 active:scale-[0.99]"
+            className={cn(
+              "motion-press flex min-w-0 flex-1 items-center gap-2 rounded-menu-item py-1.5 text-left hover:bg-sidebar-accent/50 active:scale-[0.99]",
+              SESSIONS_ROW_X,
+            )}
           >
             <RepoLogo
               logoUrl={repo.logoUrl}
@@ -179,7 +183,7 @@ export function GlobalSessionGroup({
               <Spinner size="sm" />
             </div>
           ) : hasNoResults ? (
-            <div className="px-3 py-3 text-center">
+            <div className="px-2.5 py-3 text-center">
               <p className="text-xs font-medium text-foreground">
                 {listMode === "archived"
                   ? "No archived sessions"
@@ -194,7 +198,7 @@ export function GlobalSessionGroup({
           ) : (
             <SharedLayoutNav
               layoutId={`global-sessions-${repo._id}-${listMode}`}
-              className="space-y-1"
+              className="space-y-0.5"
             >
               <AnimatePresence initial={false}>
                 {visibleSessions.map((session) => (

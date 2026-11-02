@@ -115,7 +115,7 @@ export function SidebarSessionListRow({
         {...groupProps}
       />
       {sessionChats.length > 0 ? (
-        <div className="mt-1 space-y-1">
+        <div className="mt-0.5 space-y-0.5">
           {sessionChats.map((chat) => (
             <SidebarChatRow
               key={chat._id}

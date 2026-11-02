@@ -216,13 +216,10 @@ export function GlobalSessionsSidebar({
   return (
     <>
       <div className="flex-1 px-0 pb-1">
-        <div className="flex h-11 w-full items-center">
-          <SessionsListModeTabs
-            mode={listMode}
-            onChange={setListMode}
-          />
+        <div className="flex w-full items-center pb-2 pt-1">
+          <SessionsListModeTabs mode={listMode} onChange={setListMode} />
         </div>
-        <div className="pt-1.5">
+        <div>
           <AnimatePresence mode="wait" initial={false}>
             <m.div
               key={listMode}
@@ -246,7 +243,7 @@ export function GlobalSessionsSidebar({
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {linkedGroups.map((group) => (
                     <LinkedSessionGroupSection
                       key={group.groupId}
