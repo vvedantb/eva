@@ -19,6 +19,7 @@ import { IconLink, IconPencil, IconX } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
 import { SharedLayoutNavSurface } from "@/lib/components/sidebar/SharedLayoutNav";
+import { SESSIONS_CHAT_ROW_X } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
 interface SidebarChatRowProps {
   chat: Doc<"sessionChats">;
@@ -70,12 +71,15 @@ export function SidebarChatRow({
             <SharedLayoutNavSurface
               itemId={chat._id}
               isActive={isSelected}
-              className="group mx-1 rounded-menu-item"
+              className="group rounded-menu-item"
             >
               <a
                 href={href}
                 onClick={openChat}
-                className="block rounded-menu-item py-1.5 pl-8 pr-4 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+                className={cn(
+                  "block rounded-menu-item py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
+                  SESSIONS_CHAT_ROW_X,
+                )}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {isRunning ? (

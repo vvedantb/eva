@@ -29,6 +29,11 @@ import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionP
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SESSIONS_LEADING_SLOT,
+  SESSIONS_ROW_X,
+  SESSIONS_TEXT_INDENT,
+} from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
 type SessionLinkedFrom = RepoPathParts;
@@ -179,23 +184,20 @@ function SessionStatusLeading({
 }) {
   if (isAwaitingAnswer) {
     return (
-      <span
-        className="flex shrink-0 items-center"
-        title="Waiting for your answer"
-      >
+      <span className={SESSIONS_LEADING_SLOT} title="Waiting for your answer">
         <AwaitingAnswerMark />
       </span>
     );
   }
   if (isExecuting) {
     return (
-      <span className="flex shrink-0 items-center" title="Working">
+      <span className={SESSIONS_LEADING_SLOT} title="Working">
         <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
       </span>
     );
   }
   return (
-    <span className="flex shrink-0 items-center" title={label}>
+    <span className={SESSIONS_LEADING_SLOT} title={label}>
       <span className={cn("size-2 shrink-0 rounded-full", dotClassName)} />
     </span>
   );
@@ -285,10 +287,13 @@ export function SidebarSessionItem({
     <DynamicLink
       to={href}
       onClick={onNavigate}
-      className="block rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+      className={cn(
+        "block rounded-menu-item py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
+        SESSIONS_ROW_X,
+      )}
     >
       {isFolder ? (
-        <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
             {statusLeading}
             {appMark}
@@ -301,7 +306,7 @@ export function SidebarSessionItem({
           <div
             className={cn(
               "flex min-w-0 items-center gap-2 opacity-60",
-              showLeading && "pl-4",
+              showLeading && SESSIONS_TEXT_INDENT,
             )}
           >
             <div className="min-w-0 flex-1">

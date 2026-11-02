@@ -36,8 +36,10 @@ import { SandboxTabBarTools } from "./SandboxTabBarTools";
    and the bar sits on `--background`, so the tone step separates them.
    `md:z-20` stacks the rail above the splitter's overlapping hit target so the
    collapse button still receives clicks when the panel is snapped to 44px. */
+/* `md:pt-3` centres the panel toggle on the chat header's 32px actions (12px
+   from the top), so the rail's first icon lines up with the header row. */
 const TAB_BAR_CLASS =
-  "flex shrink-0 items-center gap-1 px-1.5 py-1 md:relative md:z-20 md:h-full md:w-11 md:flex-col md:items-center md:overflow-hidden md:px-1 md:py-1.5";
+  "flex shrink-0 items-center gap-1 px-1.5 py-1 md:relative md:z-20 md:h-full md:w-11 md:flex-col md:items-center md:overflow-hidden md:px-1 md:pb-1.5 md:pt-3";
 
 /* `SANDBOX_RAIL_LABELLED_WIDTH_PX` as a class — Tailwind needs the literal, and
    the panel this bar sits in collapses to that same number. The list goes
