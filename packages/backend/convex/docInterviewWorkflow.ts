@@ -5,8 +5,8 @@ import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
-import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { isTrackedWorkflowRunning, workflow } from "./workflowManager";
+import { authMutation, getDocWithAccess } from "./functions";
 import {
   turnCheckpointArgs,
   turnLeaseFenceArgs,
@@ -341,8 +341,10 @@ export const startInterview = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
+    // The interview dialog re-fires this from an effect; while a doc workflow
+    // is still running, a second start would only race it for the one slot.
+    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) return null;
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -570,8 +572,10 @@ export const startGenerate = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
+    // The interview dialog re-fires this from an effect; while a doc workflow
+    // is still running, a second start would only race it for the one slot.
+    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) return null;
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");

@@ -287,6 +287,20 @@ export async function recomputeProjectPhase(
   }
 }
 
+/** Fetches a doc by ID, throwing if not found or the user lacks repo access. */
+export async function getDocWithAccess(
+  db: GenericDatabaseReader<DataModel>,
+  docId: Id<"docs">,
+  userId: Id<"users">,
+): Promise<Doc<"docs">> {
+  const doc = await db.get(docId);
+  if (!doc) throw new Error("Doc not found");
+  if (!(await hasRepoAccess(db, doc.repoId, userId))) {
+    throw new Error("Not authorized");
+  }
+  return doc;
+}
+
 /** Fetches a project by ID, throwing if not found or the user lacks access. */
 export async function getProjectWithAccess(
   db: GenericDatabaseReader<DataModel>,

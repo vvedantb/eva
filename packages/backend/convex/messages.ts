@@ -162,9 +162,18 @@ export const updateLastInternal = internalMutation({
     imageStorageId: v.optional(v.id("_storage")),
     videoStorageId: v.optional(v.id("_storage")),
     mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+    /** Set by public entry points (`screenshots:attachMedia`) to enforce access. */
+    requesterUserId: v.optional(v.id("users")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (args.requesterUserId !== undefined) {
+      await assertMessageParentAccess(
+        ctx.db,
+        args.parentId,
+        args.requesterUserId,
+      );
+    }
     const target = args.messageId
       ? await ctx.db.get(args.messageId)
       : await ctx.db
