@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -102,7 +102,10 @@ describe("recomputeProjectPhase", () => {
   );
 });
 
-async function sessionWithStatus(status: SandboxStatus) {
+async function sessionWithStatus(
+  status: SandboxStatus,
+  sandboxStartAttempt?: number,
+) {
   const t = convexTest(schema, modules);
   const sessionId = await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", { clerkId: "clerk|ada" });
@@ -118,14 +121,30 @@ async function sessionWithStatus(status: SandboxStatus) {
       title: "Fix the login bug",
       status,
       sandboxId: "sbx_1",
+      sandboxStartAttempt,
     });
   });
   const readStatus = () =>
     t.run(async (ctx) => (await ctx.db.get(sessionId))?.status);
-  return { t, sessionId, status: readStatus };
+  const scheduledNames = () =>
+    t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).map(
+        (job) => job.name,
+      ),
+    );
+  return { t, sessionId, status: readStatus, scheduledNames };
 }
 
 describe("sandbox lifecycle guards", () => {
+  // Ready and start schedule follow-up jobs; fake timers keep them from
+  // running after the test's transaction has closed.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test(
     "start does not override a stop in flight",
     async () => {
@@ -161,6 +180,79 @@ describe("sandbox lifecycle guards", () => {
       await s.t.mutation(internal.sessions.sandboxError, {
         sessionId: s.sessionId,
         error: "boom",
+      });
+      expect(await s.status()).toBe("closed");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "each start request takes a new attempt number",
+    async () => {
+      const s = await sessionWithStatus("closed");
+      const attempts = await s.t.run(async (ctx) => {
+        const seen: (number | undefined)[] = [];
+        for (let i = 0; i < 2; i++) {
+          const session = await ctx.db.get(s.sessionId);
+          if (session) await requestSessionSandboxStart(ctx, session);
+          seen.push((await ctx.db.get(s.sessionId))?.sandboxStartAttempt);
+        }
+        return seen;
+      });
+      expect(attempts).toEqual([1, 2]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "an older attempt cannot fail or ready a newer start",
+    async () => {
+      const s = await sessionWithStatus("starting", 2);
+      await s.t.mutation(internal.sessions.sandboxError, {
+        sessionId: s.sessionId,
+        error: "boom",
+        startAttempt: 1,
+      });
+      expect(await s.status()).toBe("starting");
+
+      await s.t.mutation(internal.sessions.sandboxReady, {
+        sessionId: s.sessionId,
+        sandboxId: "sbx_stale",
+        branchName: "eva/session",
+        isNew: true,
+        startAttempt: 1,
+      });
+      expect(await s.status()).toBe("starting");
+      // The stale attempt's own VM is not tracked by the row, so it is deleted.
+      expect(await s.scheduledNames()).toContain("sandbox:deleteSandbox");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a stale ready on the shared VM does not delete it",
+    async () => {
+      const s = await sessionWithStatus("starting", 2);
+      await s.t.mutation(internal.sessions.sandboxReady, {
+        sessionId: s.sessionId,
+        sandboxId: "sbx_1",
+        branchName: "eva/session",
+        isNew: false,
+        startAttempt: 1,
+      });
+      expect(await s.scheduledNames()).not.toContain("sandbox:deleteSandbox");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the current attempt still settles the sandbox",
+    async () => {
+      const s = await sessionWithStatus("starting", 2);
+      await s.t.mutation(internal.sessions.sandboxError, {
+        sessionId: s.sessionId,
+        error: "boom",
+        startAttempt: 2,
       });
       expect(await s.status()).toBe("closed");
     },

@@ -34,6 +34,9 @@ import {
 import { touchUserActivity } from "../_sandbox/activity";
 import {
   canRequestSandboxStart,
+  discardStaleAttemptSandbox,
+  isCurrentSandboxStartAttempt,
+  nextSandboxStartAttempt,
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
@@ -96,8 +99,10 @@ export async function requestSessionSandboxStart(
   if (!repo) throw new Error("Repository not found");
   const branchName = session.branchName || `eva/session-${session._id}`;
   const baseBranch = resolveSessionBaseBranch(session, repo);
+  const startAttempt = nextSandboxStartAttempt(session.sandboxStartAttempt);
   await ctx.db.patch(session._id, {
     status: "starting",
+    sandboxStartAttempt: startAttempt,
     // A new attempt owns the outcome: drop the previous failure so the dot
     // leaves "Couldn't wake up" the moment Try again is pressed.
     sandboxError: undefined,
@@ -120,6 +125,7 @@ export async function requestSessionSandboxStart(
     baseBranch,
     repoId: session.repoId,
     hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
+    startAttempt,
   };
   // Vercel: schedule the start action directly. Workflow step scheduling was
   // measured at ~6s before the first action ran.
@@ -482,11 +488,28 @@ export const sandboxReady = internalMutation({
     markServicesPending: v.optional(v.boolean()),
     /** Existing sandbox id was unresumable; we created a fresh one. */
     resumeFellBack: v.optional(v.boolean()),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        session.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[sessions] sandboxReady ignored stale attempt ${args.startAttempt} (current ${session.sandboxStartAttempt}) sessionId=${args.sessionId}`,
+      );
+      await discardStaleAttemptSandbox(ctx, {
+        sandboxId: args.sandboxId,
+        trackedSandboxId: session.sandboxId,
+        repoId: session.repoId,
+      });
+      return null;
+    }
     // User may have clicked Stop while start/resume was still running. Never
     // flip closed/stopping back to active — that left Vercel running with UI
     // showing stopped, or re-activated after stop confirmation.
@@ -608,11 +631,23 @@ export const sandboxError = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     error: v.string(),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        session.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[sessions] sandboxError ignored stale attempt ${args.startAttempt} (current ${session.sandboxStartAttempt}) sessionId=${args.sessionId}`,
+      );
+      return null;
+    }
     if (!shouldApplySandboxStartFailure(session.status)) {
       console.log(
         `[sessions] sandboxError ignored sessionId=${args.sessionId} status=${session.status}: ${args.error}`,

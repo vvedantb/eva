@@ -650,6 +650,7 @@ function tryReuseSandboxHandle(
 }
 
 type SessionSandboxPreparationArgs = {
+  startAttempt?: number;
   sessionId: Id<"sessions">;
   existingSandboxId: string | undefined;
   installationId: number;
@@ -880,6 +881,7 @@ async function prepareSessionSandboxInternal(
                 onEarlyReady: async () => {
                   await ctx.runMutation(internal.sessions.sandboxReady, {
                     sessionId: args.sessionId,
+                    startAttempt: args.startAttempt,
                     sandboxId: handle.id,
                     branchName: args.branchName,
                     isNew: false,
@@ -1129,6 +1131,7 @@ async function prepareSessionSandboxInternal(
           const configured = repo ? devOverrides(repo) : undefined;
           await ctx.runMutation(internal.sessions.sandboxReady, {
             sessionId: args.sessionId,
+            startAttempt: args.startAttempt,
             sandboxId: sandbox.id,
             branchName: args.branchName,
             isNew: true,
@@ -1655,6 +1658,8 @@ export const startSessionSandbox = internalAction({
      * and clear the gate once every row has been attempted.
      */
     hasLinkedRepos: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -1682,6 +1687,7 @@ export const startSessionSandbox = internalAction({
       }
       const prepared = await prepareSessionSandboxInternal(ctx, {
         sessionId: args.sessionId,
+        startAttempt: args.startAttempt,
         existingSandboxId: args.existingSandboxId,
         installationId: args.installationId,
         repoOwner: args.repoOwner,
@@ -1700,6 +1706,7 @@ export const startSessionSandbox = internalAction({
         () =>
           ctx.runMutation(internal.sessions.sandboxReady, {
             sessionId: args.sessionId,
+            startAttempt: args.startAttempt,
             sandboxId: prepared.sandbox.id,
             branchName: prepared.branchName,
             isNew: prepared.isNew,
@@ -1784,6 +1791,7 @@ export const startSessionSandbox = internalAction({
       }
       await ctx.runMutation(internal.sessions.sandboxError, {
         sessionId: args.sessionId,
+        startAttempt: args.startAttempt,
         error: failMessage,
       });
     }
@@ -1826,6 +1834,7 @@ export const prepareSessionSandbox = internalAction({
 });
 
 type TaskPreviewSandboxPreparationArgs = {
+  startAttempt?: number;
   taskId: Id<"agentTasks">;
   existingSandboxId: string | undefined;
   installationId: number;
@@ -1918,6 +1927,7 @@ async function prepareTaskPreviewSandboxInternal(
         onEarlyReady: async () => {
           await ctx.runMutation(internal.agentTasks.taskSandboxReady, {
             taskId: args.taskId,
+            startAttempt: args.startAttempt,
             sandboxId: handle.id,
             isNew: false,
           });
@@ -2292,6 +2302,7 @@ async function prepareTaskPreviewSandboxInternal(
 }
 
 type ProjectPreviewSandboxPreparationArgs = {
+  startAttempt?: number;
   projectId: Id<"projects">;
   existingSandboxId: string | undefined;
   installationId: number;
@@ -2392,6 +2403,7 @@ async function prepareProjectPreviewSandboxInternal(
           onEarlyReady: async () => {
             await ctx.runMutation(internal.projects.projectSandboxReady, {
               projectId: args.projectId,
+              startAttempt: args.startAttempt,
               sandboxId: handle.id,
               isNew: false,
             });
@@ -2585,6 +2597,7 @@ async function prepareProjectPreviewSandboxInternal(
   const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}, usedSnapshot=${prepared.usedSnapshot ? "true" : "false"}`;
   await ctx.runMutation(internal.projects.projectSandboxAllocated, {
     projectId: args.projectId,
+    startAttempt: args.startAttempt,
     sandboxId: handle.id,
   });
   completedSteps.push({
@@ -2781,6 +2794,8 @@ export const startProjectPreviewSandbox = internalAction({
     repoId: v.id("githubRepos"),
     forceStartupCommands: v.optional(v.boolean()),
     skipStartupCommands: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   returns: v.object({ sandboxId: v.string() }),
   handler: async (ctx, args) => {
@@ -2790,9 +2805,11 @@ export const startProjectPreviewSandbox = internalAction({
     try {
       await ctx.runMutation(internal.projects.projectSandboxStarting, {
         projectId: args.projectId,
+        startAttempt: args.startAttempt,
       });
       const prepared = await prepareProjectPreviewSandboxInternal(ctx, {
         projectId: args.projectId,
+        startAttempt: args.startAttempt,
         existingSandboxId: args.existingSandboxId,
         installationId: args.installationId,
         repoOwner: args.repoOwner,
@@ -2811,6 +2828,7 @@ export const startProjectPreviewSandbox = internalAction({
         () =>
           ctx.runMutation(internal.projects.projectSandboxReady, {
             projectId: args.projectId,
+            startAttempt: args.startAttempt,
             sandboxId: prepared.sandbox.id,
             isNew: prepared.isNew,
             devPort: prepared.devPort,
@@ -2845,6 +2863,7 @@ export const startProjectPreviewSandbox = internalAction({
       await completeProjectProgress(ctx, args.projectId);
       await ctx.runMutation(internal.projects.projectSandboxError, {
         projectId: args.projectId,
+        startAttempt: args.startAttempt,
         error: errorMessage(e, "Unknown error"),
       });
       throw e;
@@ -2864,6 +2883,8 @@ export const startTaskPreviewSandbox = internalAction({
     baseBranch: v.string(),
     repoId: v.id("githubRepos"),
     forceStartupCommands: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -2873,6 +2894,7 @@ export const startTaskPreviewSandbox = internalAction({
     try {
       const prepared = await prepareTaskPreviewSandboxInternal(ctx, {
         taskId: args.taskId,
+        startAttempt: args.startAttempt,
         existingSandboxId: args.existingSandboxId,
         installationId: args.installationId,
         repoOwner: args.repoOwner,
@@ -2890,6 +2912,7 @@ export const startTaskPreviewSandbox = internalAction({
         () =>
           ctx.runMutation(internal.agentTasks.taskSandboxReady, {
             taskId: args.taskId,
+            startAttempt: args.startAttempt,
             sandboxId: prepared.sandbox.id,
             isNew: prepared.isNew,
             devPort: prepared.devPort,
@@ -2923,6 +2946,7 @@ export const startTaskPreviewSandbox = internalAction({
       await completeTaskProgress(ctx, args.taskId);
       await ctx.runMutation(internal.agentTasks.taskSandboxError, {
         taskId: args.taskId,
+        startAttempt: args.startAttempt,
         error: errorMessage(e, "Unknown error"),
       });
     }
