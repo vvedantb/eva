@@ -35,7 +35,10 @@ export const syncRepos = action({
     let totalAdded = 0;
     const seenCodebases = new Set<string>();
     // One installation token serves every repo in that installation.
-    const octokits = new Map<number, ReturnType<typeof getInstallationOctokit>>();
+    const octokits = new Map<
+      number,
+      ReturnType<typeof getInstallationOctokit>
+    >();
     for (const existingRepo of accessibleRepos) {
       const codebaseKey = `${existingRepo.owner}/${existingRepo.name}`;
       if (seenCodebases.has(codebaseKey) || disabledRepos.has(codebaseKey)) {
@@ -63,21 +66,21 @@ export const syncRepos = action({
         }),
         detectAppsForRepo(octokit, repo.owner.login, repo.name),
       ]);
-      // Each app is its own row, so the upserts do not contend.
-      await Promise.all(
-        apps.map((app) =>
-          ctx.runMutation(internal.githubRepos.upsert, {
-            owner: repo.owner.login,
-            name: repo.name,
-            installationId: existingRepo.installationId,
-            githubId: repo.id,
-            teamId: existingRepo.teamId,
-            rootDirectory: app.path,
-            parentRepoId: id,
-          }),
-        ),
-      );
-      const appPaths = apps.map((app) => app.path);
+      const appPaths: string[] = [];
+      // Sequential on purpose: every app upsert reads and inserts into the same
+      // `by_github_id` range, so parallel ones would only conflict and retry.
+      for (const app of apps) {
+        await ctx.runMutation(internal.githubRepos.upsert, {
+          owner: repo.owner.login,
+          name: repo.name,
+          installationId: existingRepo.installationId,
+          githubId: repo.id,
+          teamId: existingRepo.teamId,
+          rootDirectory: app.path,
+          parentRepoId: id,
+        });
+        appPaths.push(app.path);
+      }
       detectedApps.push({
         owner: repo.owner.login,
         name: repo.name,

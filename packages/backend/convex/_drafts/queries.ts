@@ -48,36 +48,43 @@ export const listForRepo = authQuery({
       contextTitle: string;
       taskProjectId: Id<"projects"> | undefined;
     };
-    const results: DraftListItem[] = [];
-
-    for (const draft of rows) {
-      let contextTitle = "Untitled";
-      let taskProjectId: Id<"projects"> | undefined = undefined;
-
-      if (
-        (draft.kind === "taskComment" || draft.kind === "taskChat") &&
-        draft.taskId
-      ) {
-        const task = await ctx.db.get(draft.taskId);
-        if (!task) continue; // surface gone — skip
-        contextTitle = task.title || "Untitled";
-        taskProjectId = task.projectId;
-      } else if (draft.kind === "projectChat" && draft.projectId) {
-        const project = await ctx.db.get(draft.projectId);
-        if (!project) continue;
-        contextTitle = project.title || "Untitled";
-      } else if (draft.kind === "sessionChat" && draft.sessionId) {
-        const session = await ctx.db.get(draft.sessionId);
-        if (!session) continue;
-        contextTitle = session.title || "Untitled";
-      }
-
-      results.push({
-        ...draft,
-        contextTitle,
-        taskProjectId,
-      });
-    }
+    // Surfaces are independent reads; a gone surface yields null and is skipped.
+    const items = await Promise.all(
+      rows.map(async (draft): Promise<DraftListItem | null> => {
+        if (
+          (draft.kind === "taskComment" || draft.kind === "taskChat") &&
+          draft.taskId
+        ) {
+          const task = await ctx.db.get(draft.taskId);
+          if (!task) return null;
+          return {
+            ...draft,
+            contextTitle: task.title || "Untitled",
+            taskProjectId: task.projectId,
+          };
+        }
+        if (draft.kind === "projectChat" && draft.projectId) {
+          const project = await ctx.db.get(draft.projectId);
+          if (!project) return null;
+          return {
+            ...draft,
+            contextTitle: project.title || "Untitled",
+            taskProjectId: undefined,
+          };
+        }
+        if (draft.kind === "sessionChat" && draft.sessionId) {
+          const session = await ctx.db.get(draft.sessionId);
+          if (!session) return null;
+          return {
+            ...draft,
+            contextTitle: session.title || "Untitled",
+            taskProjectId: undefined,
+          };
+        }
+        return { ...draft, contextTitle: "Untitled", taskProjectId: undefined };
+      }),
+    );
+    const results = items.filter((item): item is DraftListItem => item !== null);
 
     // Sort newest draft first.
     return results.sort((a, b) => b.updatedAt - a.updatedAt);

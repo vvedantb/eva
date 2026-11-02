@@ -94,12 +94,15 @@ async function stageAndStartChatTurn(
 ): Promise<void> {
   const { chat, session } = params.context;
   const { settings } = params;
-  const stickyProviderAccountId = await resolveTurnProviderAccountId(ctx.db, {
-    requestedAccountId: settings.providerAccountId,
-    ownerUserId: session.createdBy ?? session.userId,
-    model: settings.model,
-    changePolicy: "owner-pool",
-  });
+  const [stickyProviderAccountId, user] = await Promise.all([
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId: settings.providerAccountId,
+      ownerUserId: session.createdBy ?? session.userId,
+      model: settings.model,
+      changePolicy: "owner-pool",
+    }),
+    ctx.db.get(params.actingUserId),
+  ]);
   const credentialOwnerUserId = session.createdBy ?? session.userId;
   const streamingEntityId = sessionChatStreamingEntityId(chat._id);
 
@@ -113,7 +116,6 @@ async function stageAndStartChatTurn(
     activityLog: "",
   });
 
-  const user = await ctx.db.get(params.actingUserId);
   const { prompt } = await buildSessionPrompt(ctx, {
     session,
     chat,

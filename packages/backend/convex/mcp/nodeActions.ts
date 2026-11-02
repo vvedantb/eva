@@ -2183,13 +2183,16 @@ export const orchestratorCreateSession = internalAction({
         createArgs,
       ),
     );
-    // Typed so `internal` does not depend on this handler's inferred result.
-    const [, linkedRepos]: [void, McpLinkedRepo[]] = await Promise.all([
-      registerWatchIfAve(clerkUserId, "session", created.sessionId, aveThreadId),
-      ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
-        sessionId: created.sessionId,
-      }),
-    ]);
+    await registerWatchIfAve(
+      clerkUserId,
+      "session",
+      created.sessionId,
+      aveThreadId,
+    );
+    const linkedRepos: McpLinkedRepo[] = await ctx.runQuery(
+      internal.mcp.queries.sessionLinkedRepos,
+      { sessionId: created.sessionId },
+    );
     return {
       ...created,
       linkedRepos: linkedRepos.map((link) => ({

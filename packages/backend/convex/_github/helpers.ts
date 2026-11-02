@@ -27,26 +27,31 @@ export async function detectAppsForRepo(
 
     if (!Array.isArray(entries)) return [];
 
-    for (const entry of entries) {
-      if (entry.type !== "dir") continue;
-      const appPath = `apps/${entry.name}`;
-      let hasDevScript = false;
-      try {
-        const { data: appPkg } = await octokit.rest.repos.getContent({
-          owner,
-          repo: name,
-          path: `${appPath}/package.json`,
-        });
-        if ("content" in appPkg) {
-          const decoded = decodeGitHubContent(appPkg.content);
-          const parsed = packageJsonSchema.safeParse(JSON.parse(decoded));
-          hasDevScript = typeof parsed.data?.scripts?.dev === "string";
-        }
-      } catch {
-        // no package.json in this app dir
-      }
-      apps.push({ name: entry.name, path: appPath, hasDevScript });
-    }
+    // Each app's package.json is read side by side; order follows `entries`.
+    const detected = await Promise.all(
+      entries
+        .filter((entry) => entry.type === "dir")
+        .map(async (entry) => {
+          const appPath = `apps/${entry.name}`;
+          let hasDevScript = false;
+          try {
+            const { data: appPkg } = await octokit.rest.repos.getContent({
+              owner,
+              repo: name,
+              path: `${appPath}/package.json`,
+            });
+            if ("content" in appPkg) {
+              const decoded = decodeGitHubContent(appPkg.content);
+              const parsed = packageJsonSchema.safeParse(JSON.parse(decoded));
+              hasDevScript = typeof parsed.data?.scripts?.dev === "string";
+            }
+          } catch {
+            // no package.json in this app dir
+          }
+          return { name: entry.name, path: appPath, hasDevScript };
+        }),
+    );
+    apps.push(...detected);
   } catch {
     // apps/ directory doesn't exist — not a monorepo with apps
   }
