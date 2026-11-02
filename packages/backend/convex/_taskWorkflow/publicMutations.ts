@@ -217,7 +217,8 @@ export const cancelExecution = authMutation({
     await clearStreamingActivity(ctx, String(args.taskId));
 
     await ctx.db.patch(args.taskId, {
-      status: "todo",
+      // Same rule as run completion: only the run's own `in_progress` resets.
+      ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
       activeWorkflowId: undefined,
       updatedAt: Date.now(),
     });
