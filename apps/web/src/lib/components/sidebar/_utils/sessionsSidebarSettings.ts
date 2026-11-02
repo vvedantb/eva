@@ -45,7 +45,6 @@ export interface SessionsSidebarSettings {
   appSortOrder: AppSortOrder;
   sessionSortOrder: SessionSortOrder;
   sessionPreviewCount: number;
-  listMode: SessionListMode;
   layout: SessionLayout;
   /** Hide sessions another teammate started. */
   onlyMine: boolean;
@@ -55,7 +54,6 @@ export const DEFAULT_SESSIONS_SIDEBAR_SETTINGS: SessionsSidebarSettings = {
   appSortOrder: "updated_at",
   sessionSortOrder: "updated_at",
   sessionPreviewCount: DEFAULT_SESSION_PREVIEW_COUNT,
-  listMode: "active",
   layout: "list",
   onlyMine: false,
 };
