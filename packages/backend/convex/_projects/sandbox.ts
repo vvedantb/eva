@@ -29,6 +29,11 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import {
+  canRequestSandboxStart,
+  canStartActionMarkStarting,
+  shouldApplySandboxStartFailure,
+} from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 
 const PREVIEW_ALLOWED_PHASES = [
@@ -74,6 +79,12 @@ async function requestProjectSandboxStart(
   ctx: MutationCtx,
   project: Doc<"projects">,
 ): Promise<void> {
+  if (!canRequestSandboxStart(project.reviewProjectSandboxStatus)) {
+    console.log(
+      `[projects] startProjectSandbox skipped projectId=${project._id} status=${project.reviewProjectSandboxStatus}`,
+    );
+    return;
+  }
   const repo = await ctx.db.get(project.repoId);
   if (!repo) throw new Error("Repository not found");
 
@@ -649,6 +660,9 @@ export const projectSandboxStarting = internalMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
+    if (!canStartActionMarkStarting(project.reviewProjectSandboxStatus)) {
+      return null;
+    }
 
     await ctx.db.patch(args.projectId, {
       reviewProjectSandboxStatus: "starting",
@@ -670,10 +684,14 @@ export const projectSandboxAllocated = internalMutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
 
+    // Always record the VM so a stop or the idle sweep can still find it;
+    // only the status respects a stop that landed while it was being created.
     await ctx.db.patch(args.projectId, {
       sandboxId: args.sandboxId,
-      reviewProjectSandboxStatus: "starting",
       lastSandboxActivity: Date.now(),
+      ...(canStartActionMarkStarting(project.reviewProjectSandboxStatus)
+        ? { reviewProjectSandboxStatus: "starting" as const }
+        : {}),
     });
 
     return null;
@@ -690,6 +708,12 @@ export const projectSandboxError = internalMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
+    if (!shouldApplySandboxStartFailure(project.reviewProjectSandboxStatus)) {
+      console.log(
+        `[projects] projectSandboxError ignored projectId=${args.projectId} status=${project.reviewProjectSandboxStatus}: ${args.error}`,
+      );
+      return null;
+    }
 
     await ctx.db.insert("messages", {
       parentId: args.projectId,

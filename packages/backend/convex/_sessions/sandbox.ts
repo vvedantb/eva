@@ -32,6 +32,10 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import {
+  canRequestSandboxStart,
+  shouldApplySandboxStartFailure,
+} from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
@@ -56,49 +60,6 @@ export function toUserFacingSandboxError(raw: string): string {
     ? `${cleaned.slice(0, SANDBOX_ERROR_MAX_LENGTH - 1).trimEnd()}…`
     : cleaned;
 }
-
-/** Updates sandbox-related fields (sandbox ID, branch, PR URL) on a session. */
-export const updateSandbox = authMutation({
-  args: {
-    id: v.id("sessions"),
-    sandboxId: v.optional(v.string()),
-    branchName: v.optional(v.string()),
-    prUrl: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    const updates: {
-      sandboxId?: string;
-      branchName?: string;
-      prUrl?: string;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-    if (args.sandboxId !== undefined) updates.sandboxId = args.sandboxId;
-    if (args.branchName !== undefined) updates.branchName = args.branchName;
-    if (args.prUrl !== undefined) updates.prUrl = args.prUrl;
-    await ctx.db.patch(args.id, updates);
-    return null;
-  },
-});
-
-/** Clears the sandbox association and marks the session as closed. */
-export const clearSandbox = authMutation({
-  args: { id: v.id("sessions") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await markAllRunningExited(ctx.db, args.id);
-    await ctx.db.patch(args.id, {
-      sandboxId: undefined,
-      // The association is being reset, so a previous wake failure no longer
-      // describes anything the user can act on.
-      sandboxError: undefined,
-      status: "closed",
-    });
-    return null;
-  },
-});
 
 /** Starts or restarts a sandbox for a session by launching the startup workflow. */
 export const startSandbox = authMutation({
@@ -125,6 +86,12 @@ export async function requestSessionSandboxStart(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
+  if (!canRequestSandboxStart(session.status)) {
+    console.log(
+      `[sessions] startSandbox skipped sessionId=${session._id} status=${session.status}`,
+    );
+    return;
+  }
   const repo = await ctx.db.get(session.repoId);
   if (!repo) throw new Error("Repository not found");
   const branchName = session.branchName || `eva/session-${session._id}`;
@@ -646,6 +613,12 @@ export const sandboxError = internalMutation({
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
+    if (!shouldApplySandboxStartFailure(session.status)) {
+      console.log(
+        `[sessions] sandboxError ignored sessionId=${args.sessionId} status=${session.status}: ${args.error}`,
+      );
+      return null;
+    }
     await markAllRunningExited(ctx.db, args.sessionId);
     const mainChat = await ensureMainChat(ctx, session);
     await ctx.db.insert("messages", {

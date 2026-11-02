@@ -13,7 +13,6 @@ import {
   getAIModelProvider,
   reasoningLevelValidator,
   roleValidator,
-  sessionStatusValidator,
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -380,20 +379,6 @@ export const addMessage = authMutation({
         { source: "chat", userId: ctx.userId },
       );
     }
-    return null;
-  },
-});
-
-/** Updates the status of a session. */
-export const updateStatus = authMutation({
-  args: {
-    id: v.id("sessions"),
-    status: sessionStatusValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { status: args.status });
     return null;
   },
 });

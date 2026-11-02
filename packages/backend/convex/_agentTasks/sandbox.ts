@@ -23,6 +23,10 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import {
+  canRequestSandboxStart,
+  shouldApplySandboxStartFailure,
+} from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 
 const PREVIEW_ALLOWED_STATUSES = [
@@ -100,6 +104,12 @@ export async function requestTaskSandboxStart(
   task: Doc<"agentTasks">,
   repo: Doc<"githubRepos">,
 ): Promise<void> {
+  if (!canRequestSandboxStart(task.reviewTaskSandboxStatus)) {
+    console.log(
+      `[tasks] startTaskSandbox skipped taskId=${task._id} status=${task.reviewTaskSandboxStatus}`,
+    );
+    return;
+  }
   const branchName = `eva/task-${task._id}`;
   const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
     ctx.db,
@@ -661,6 +671,12 @@ export const taskSandboxError = internalMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
+    if (!shouldApplySandboxStartFailure(task.reviewTaskSandboxStatus)) {
+      console.log(
+        `[tasks] taskSandboxError ignored taskId=${args.taskId} status=${task.reviewTaskSandboxStatus}: ${args.error}`,
+      );
+      return null;
+    }
 
     await ctx.db.insert("taskSandboxEvents", {
       taskId: args.taskId,

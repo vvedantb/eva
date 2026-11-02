@@ -1,0 +1,169 @@
+import { convexTest } from "convex-test";
+import { describe, expect, test } from "vitest";
+import { internal } from "../convex/_generated/api";
+import type { Doc } from "../convex/_generated/dataModel";
+import schema from "../convex/schema";
+import { recomputeProjectPhase } from "../convex/functions";
+import { requestSessionSandboxStart } from "../convex/_sessions/sandbox";
+
+/**
+ * Behaviour of the implicit lifecycles that were tightened together:
+ * - a project is only `completed` when every task is done, and task edits
+ *   never reopen a project the PR webhook already settled;
+ * - a sandbox start never overrides a stop in flight, and a start failure
+ *   only closes a sandbox that is still `starting`.
+ */
+
+const modules = import.meta.glob("../convex/**/*.ts");
+const TIMEOUT_MS = 30_000;
+
+type TaskStatus = Doc<"agentTasks">["status"];
+type ProjectPhase = Doc<"projects">["phase"];
+type SandboxStatus = Doc<"sessions">["status"];
+
+async function projectWithTasks(phase: ProjectPhase, statuses: TaskStatus[]) {
+  const t = convexTest(schema, modules);
+  const projectId = await t.run(async (ctx) => {
+    const userId = await ctx.db.insert("users", { clerkId: "clerk|ada" });
+    const repoId = await ctx.db.insert("githubRepos", {
+      owner: "vvedantb",
+      name: "eva",
+      installationId: 1,
+      connectedBy: userId,
+    });
+    const projectId = await ctx.db.insert("projects", {
+      repoId,
+      userId,
+      title: "Billing rewrite",
+      rawInput: "rewrite billing",
+      phase,
+      numId: 1,
+    });
+    for (const [i, status] of statuses.entries()) {
+      await ctx.db.insert("agentTasks", {
+        title: `Task ${i}`,
+        status,
+        numId: i + 1,
+        repoId,
+        projectId,
+        createdAt: 0,
+        updatedAt: 0,
+        createdBy: userId,
+      });
+    }
+    return projectId;
+  });
+  const recompute = () =>
+    t.run(async (ctx) => {
+      await recomputeProjectPhase(ctx, projectId);
+      return (await ctx.db.get(projectId))?.phase;
+    });
+  return { recompute };
+}
+
+describe("recomputeProjectPhase", () => {
+  test(
+    "unstarted or running tasks block completion",
+    async () => {
+      for (const blocker of ["todo", "in_progress"] as const) {
+        const { recompute } = await projectWithTasks("business_review", [
+          "done",
+          blocker,
+        ]);
+        expect(await recompute()).toBe("business_review");
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "every task done completes the project",
+    async () => {
+      const { recompute } = await projectWithTasks("business_review", [
+        "done",
+        "done",
+      ]);
+      expect(await recompute()).toBe("completed");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "task edits do not reopen a merged or closed project",
+    async () => {
+      for (const phase of ["completed", "cancelled"] as const) {
+        const { recompute } = await projectWithTasks(phase, [
+          "business_review",
+        ]);
+        expect(await recompute()).toBe(phase);
+      }
+    },
+    TIMEOUT_MS,
+  );
+});
+
+async function sessionWithStatus(status: SandboxStatus) {
+  const t = convexTest(schema, modules);
+  const sessionId = await t.run(async (ctx) => {
+    const userId = await ctx.db.insert("users", { clerkId: "clerk|ada" });
+    const repoId = await ctx.db.insert("githubRepos", {
+      owner: "vvedantb",
+      name: "eva",
+      installationId: 1,
+      connectedBy: userId,
+    });
+    return ctx.db.insert("sessions", {
+      repoId,
+      userId,
+      title: "Fix the login bug",
+      status,
+      sandboxId: "sbx_1",
+    });
+  });
+  const readStatus = () =>
+    t.run(async (ctx) => (await ctx.db.get(sessionId))?.status);
+  return { t, sessionId, status: readStatus };
+}
+
+describe("sandbox lifecycle guards", () => {
+  test(
+    "start does not override a stop in flight",
+    async () => {
+      const s = await sessionWithStatus("stopping");
+      await s.t.run(async (ctx) => {
+        const session = await ctx.db.get(s.sessionId);
+        if (session) await requestSessionSandboxStart(ctx, session);
+      });
+      expect(await s.status()).toBe("stopping");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a late start failure leaves active and stopping sandboxes alone",
+    async () => {
+      for (const status of ["active", "stopping", "closed"] as const) {
+        const s = await sessionWithStatus(status);
+        await s.t.mutation(internal.sessions.sandboxError, {
+          sessionId: s.sessionId,
+          error: "boom",
+        });
+        expect(await s.status()).toBe(status);
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a start failure closes a sandbox that is still starting",
+    async () => {
+      const s = await sessionWithStatus("starting");
+      await s.t.mutation(internal.sessions.sandboxError, {
+        sessionId: s.sessionId,
+        error: "boom",
+      });
+      expect(await s.status()).toBe("closed");
+    },
+    TIMEOUT_MS,
+  );
+});

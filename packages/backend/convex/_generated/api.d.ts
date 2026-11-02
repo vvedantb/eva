@@ -235,6 +235,7 @@ import type * as _sandbox_stickyPreview from "../_sandbox/stickyPreview.js";
 import type * as _sandbox_stopReason from "../_sandbox/stopReason.js";
 import type * as _sandbox_stopRecovery from "../_sandbox/stopRecovery.js";
 import type * as _sandbox_tags from "../_sandbox/tags.js";
+import type * as _sandbox_transitions from "../_sandbox/transitions.js";
 import type * as _sandbox_vercelEnvFile from "../_sandbox/vercelEnvFile.js";
 import type * as _sandbox_vercelProvider from "../_sandbox/vercelProvider.js";
 import type * as _sandbox_vercelRegion from "../_sandbox/vercelRegion.js";
@@ -784,6 +785,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/stopReason": typeof _sandbox_stopReason;
   "_sandbox/stopRecovery": typeof _sandbox_stopRecovery;
   "_sandbox/tags": typeof _sandbox_tags;
+  "_sandbox/transitions": typeof _sandbox_transitions;
   "_sandbox/vercelEnvFile": typeof _sandbox_vercelEnvFile;
   "_sandbox/vercelProvider": typeof _sandbox_vercelProvider;
   "_sandbox/vercelRegion": typeof _sandbox_vercelRegion;
