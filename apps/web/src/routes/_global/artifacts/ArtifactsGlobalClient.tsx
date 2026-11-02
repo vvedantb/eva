@@ -2,10 +2,13 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Skeleton } from "skullet/react";
 import { PageWrapper } from "@/lib/components/PageWrapper";
+import { LoadingSkeleton } from "@/lib/components/LoadingSkeleton";
 import { ArtifactList } from "@/lib/components/artifacts/ArtifactList";
 import { ArtifactUploadDialog } from "@/lib/components/artifacts/ArtifactUploadDialog";
+
+const EMPTY_DESCRIPTION =
+  "Upload a Cowork artifact HTML file to host it here. It runs live against the Eva MCP read-only tools.";
 
 /** Global Artifacts page: every artifact across the teams the user belongs to. */
 export function ArtifactsGlobalClient() {
@@ -24,15 +27,19 @@ export function ArtifactsGlobalClient() {
         </p>
         <ArtifactUploadDialog />
       </div>
-      {/* Trial of skullet: `id` saves the last list's shape, so a revisit draws it while loading. */}
-      <Skeleton id="artifacts-global" data={artifacts} label="Loading artifacts">
+      <LoadingSkeleton
+        id="artifacts-global"
+        data={artifacts}
+        label="Loading artifacts"
+        spinnerClassName="min-h-80"
+        empty={
+          <ArtifactList artifacts={[]} emptyDescription={EMPTY_DESCRIPTION} />
+        }
+      >
         {(rows) => (
-          <ArtifactList
-            artifacts={rows}
-            emptyDescription="Upload a Cowork artifact HTML file to host it here. It runs live against the Eva MCP read-only tools."
-          />
+          <ArtifactList artifacts={rows} emptyDescription={EMPTY_DESCRIPTION} />
         )}
-      </Skeleton>
+      </LoadingSkeleton>
     </PageWrapper>
   );
 }
