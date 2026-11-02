@@ -1635,11 +1635,12 @@ export const applyBranchPublishPolicy = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const flags = await ctx.runQuery(
-        internal.auth.getExperimentalFlagsInternal,
-        { userId: args.userId },
-      );
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      const [flags, sandbox] = await Promise.all([
+        ctx.runQuery(internal.auth.getExperimentalFlagsInternal, {
+          userId: args.userId,
+        }),
+        getSandboxHandle(ctx, args.repoId, args.sandboxId),
+      ]);
       await writeAutoPublishPolicy(
         sandbox,
         flags.manualSideBranchPublish ? args.branchName : null,
