@@ -189,7 +189,6 @@ export function PreviewSketchLayer({
         <Button
           size="icon-sm"
           variant="ghost"
-          className="rounded-full"
           aria-label="Undo stroke"
           disabled={strokes.length === 0}
           onClick={() => setStrokes((current) => current.slice(0, -1))}
@@ -199,7 +198,6 @@ export function PreviewSketchLayer({
         <Button
           size="icon-sm"
           variant="ghost"
-          className="rounded-full"
           aria-label="Clear sketch"
           disabled={strokes.length === 0}
           onClick={() => setStrokes([])}
@@ -209,7 +207,6 @@ export function PreviewSketchLayer({
         <Button
           size="icon-sm"
           variant="ghost"
-          className="rounded-full"
           aria-label="Close sketch"
           onClick={onClose}
         >
@@ -217,7 +214,6 @@ export function PreviewSketchLayer({
         </Button>
         <Button
           size="sm"
-          className="rounded-full"
           disabled={strokes.length === 0 || attaching}
           onClick={attach}
         >

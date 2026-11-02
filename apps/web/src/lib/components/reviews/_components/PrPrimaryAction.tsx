@@ -124,6 +124,7 @@ function MergeAction({
     <>
       <ButtonGroup>
         <Button
+          shape="rounded"
           size="xs"
           disabled={!canMerge}
           onClick={(event) =>
@@ -144,6 +145,7 @@ function MergeAction({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
+              shape="rounded"
               size="xs"
               disabled={!canMerge}
               className="px-1.5"

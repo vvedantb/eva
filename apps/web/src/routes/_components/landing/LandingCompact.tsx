@@ -46,7 +46,7 @@ export function LandingCompact() {
           <nav className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 rounded-full bg-background/70 pl-4 pr-2 ring-1 ring-border/70 backdrop-blur-md sm:pl-5">
             <LandingBrand />
             <SignInButton mode="modal">
-              <Button size="sm" className="rounded-full px-4">
+              <Button size="sm" className="px-4">
                 Sign in
               </Button>
             </SignInButton>
@@ -61,10 +61,7 @@ export function LandingCompact() {
             </p>
             <div className="mt-10">
               <SignInButton mode="modal">
-                <Button
-                  size="lg"
-                  className="group w-full rounded-full px-7 sm:w-auto"
-                >
+                <Button size="lg" className="group w-full px-7 sm:w-auto">
                   Sign in
                   <IconArrowRight
                     size={16}

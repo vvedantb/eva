@@ -96,10 +96,7 @@ export function LandingHero() {
             className="mt-10 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center"
           >
             <SignUpButton mode="modal">
-              <Button
-                size="lg"
-                className="group w-full rounded-full px-6 sm:w-auto"
-              >
+              <Button size="lg" className="group w-full px-6 sm:w-auto">
                 Get started
                 <IconArrowRight
                   size={16}
@@ -112,7 +109,7 @@ export function LandingHero() {
               asChild
               size="lg"
               variant="ghost"
-              className="w-full rounded-full px-5 sm:w-auto"
+              className="w-full px-5 sm:w-auto"
             >
               <a href={EVA_GITHUB_URL} target="_blank" rel="noreferrer">
                 <IconBrandGithub size={16} aria-hidden />

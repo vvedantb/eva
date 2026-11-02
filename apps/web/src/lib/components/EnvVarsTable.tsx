@@ -313,6 +313,7 @@ export function EnvVarsTable({
         {editingKey === v.key ? (
           <div className="flex items-center justify-end gap-1">
             <Button
+              shape="rounded"
               size="icon-sm"
               variant="ghost"
               onClick={saveEdit}
@@ -323,6 +324,7 @@ export function EnvVarsTable({
               <IconCheck size={14} />
             </Button>
             <Button
+              shape="rounded"
               size="icon-sm"
               variant="ghost"
               onClick={cancelEdit}
@@ -335,6 +337,7 @@ export function EnvVarsTable({
         ) : (
           <div className="flex items-center justify-end gap-1">
             <Button
+              shape="rounded"
               size="icon-sm"
               variant="ghost"
               className="hit-target"
@@ -356,6 +359,7 @@ export function EnvVarsTable({
               />
             </Button>
             <Button
+              shape="rounded"
               size="icon-sm"
               variant="ghost"
               className="hit-target"
@@ -375,6 +379,7 @@ export function EnvVarsTable({
               <>
                 {onToggleSandboxExclude && (
                   <Button
+                    shape="rounded"
                     size="icon-sm"
                     variant="ghost"
                     className="max-sm:hit-target"
@@ -399,6 +404,7 @@ export function EnvVarsTable({
                   </Button>
                 )}
                 <Button
+                  shape="rounded"
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => startEdit(v.key)}
@@ -408,6 +414,7 @@ export function EnvVarsTable({
                   <IconPencil size={14} />
                 </Button>
                 <Button
+                  shape="rounded"
                   size="icon-sm"
                   variant="ghost"
                   onClick={(event) =>
@@ -472,6 +479,7 @@ export function EnvVarsTable({
       <TableCell className="px-2.5 py-2.5 text-right sm:px-4">
         <div className="flex items-center justify-end gap-1">
           <Button
+            shape="rounded"
             size="icon-sm"
             variant="ghost"
             onClick={handleAdd}
@@ -482,6 +490,7 @@ export function EnvVarsTable({
             <IconCheck size={14} />
           </Button>
           <Button
+            shape="rounded"
             size="icon-sm"
             variant="ghost"
             onClick={cancelAdd}

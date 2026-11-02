@@ -402,6 +402,7 @@ function SplitRunButton({
         <TooltipTrigger asChild>
           <div>
             <Button
+              shape="rounded"
               size={size}
               onClick={
                 isScheduled
@@ -444,6 +445,7 @@ function SplitRunButton({
         scheduledAt={scheduledAt}
         trigger={
           <Button
+            shape="rounded"
             ref={chevronRef}
             size={size}
             aria-label="Schedule options"

@@ -60,6 +60,7 @@ export function SessionsSidebarOptionsMenu() {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
+              shape="rounded"
               size="icon-sm"
               variant="ghost"
               className="h-8 w-8 shrink-0 text-muted-foreground"
@@ -148,6 +149,7 @@ export function SessionsSidebarOptionsMenu() {
         <DropdownMenuLabel>Visible threads</DropdownMenuLabel>
         <div className="flex items-center gap-1 px-2.5 pb-2">
           <Button
+            shape="rounded"
             type="button"
             size="icon-sm"
             variant="ghost"
@@ -166,6 +168,7 @@ export function SessionsSidebarOptionsMenu() {
             {settings.sessionPreviewCount}
           </span>
           <Button
+            shape="rounded"
             type="button"
             size="icon-sm"
             variant="ghost"

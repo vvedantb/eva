@@ -362,6 +362,7 @@ export function DocPrdViewer({
               {activeTab === "content" && (
                 <>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={suggestionsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -376,6 +377,7 @@ export function DocPrdViewer({
                     )}
                   </Button>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={commentsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"

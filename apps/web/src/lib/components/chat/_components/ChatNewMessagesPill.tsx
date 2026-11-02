@@ -52,10 +52,7 @@ export function ChatNewMessagesPill({
               type="button"
               size="sm"
               onClick={onJump}
-              className={cn(
-                PILL_HALF,
-                "gap-1.5 rounded-l-full rounded-r-none pr-1.5 pl-3",
-              )}
+              className={cn(PILL_HALF, "gap-1.5 rounded-r-none pr-1.5 pl-3")}
             >
               <IconArrowUp />
               {label}
@@ -66,10 +63,7 @@ export function ChatNewMessagesPill({
               aria-label="Dismiss"
               title="Dismiss"
               onClick={() => setDismissed(true)}
-              className={cn(
-                PILL_HALF,
-                "rounded-l-none rounded-r-full pr-2.5 pl-1.5",
-              )}
+              className={cn(PILL_HALF, "rounded-l-none pr-2.5 pl-1.5")}
             >
               <IconX />
             </Button>

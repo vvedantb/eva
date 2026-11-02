@@ -887,6 +887,7 @@ function SplitBuildButton({
         <TooltipTrigger asChild>
           <div>
             <Button
+              shape="rounded"
               size="sm"
               aria-label={buildLabel}
               onClick={
@@ -913,6 +914,7 @@ function SplitBuildButton({
         disabled={hasActiveBuild}
         trigger={
           <Button
+            shape="rounded"
             ref={chevronRef}
             size="sm"
             aria-label="Schedule build"
