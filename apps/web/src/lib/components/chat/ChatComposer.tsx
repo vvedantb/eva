@@ -369,7 +369,9 @@ export function ChatComposer({
   );
 
   return (
-    <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
+    // `relative` anchors the absolutely positioned typing indicator to the
+    // composer, so it floats just above it instead of a distant ancestor.
+    <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
       {preInputContent}
       {isDraftLoading ? (
         <>
