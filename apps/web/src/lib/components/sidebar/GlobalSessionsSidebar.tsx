@@ -105,8 +105,9 @@ export function GlobalSessionsSidebar({
   pathname,
   onNavigate,
 }: GlobalSessionsSidebarProps) {
-  const { settings, setListMode } = useSessionsSidebarSettings();
-  const { listMode } = settings;
+  const { settings } = useSessionsSidebarSettings();
+  // Not persisted: the list opens on Active each time.
+  const [listMode, setListMode] = useState<SessionListMode>("active");
   const { request: requestConfirm } = useRequestConfirm();
   const { archive, isArchiving } = useArchiveSession();
   const repos = useQuery(api.githubRepos.list, {});
@@ -217,14 +218,14 @@ export function GlobalSessionsSidebar({
       <div className="flex-1 px-0 pb-1">
         <div className="flex h-11 w-full items-center">
           <SessionsListModeTabs
-            mode={settings.listMode}
+            mode={listMode}
             onChange={setListMode}
           />
         </div>
         <div className="pt-1.5">
           <AnimatePresence mode="wait" initial={false}>
             <m.div
-              key={settings.listMode}
+              key={listMode}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -256,7 +257,7 @@ export function GlobalSessionsSidebar({
                         linkedGroupOpen.setGroupOpen(group.groupId, open);
                       }}
                       pathname={pathname}
-                      listMode={settings.listMode}
+                      listMode={listMode}
                       onNavigate={onNavigate}
                       onRenameRequest={onRenameRequest}
                       onArchiveRequest={onArchiveRequest}
@@ -277,7 +278,7 @@ export function GlobalSessionsSidebar({
                       onNavigate={onNavigate}
                       sessionSortOrder={settings.sessionSortOrder}
                       sessionPreviewCount={settings.sessionPreviewCount}
-                      listMode={settings.listMode}
+                      listMode={listMode}
                       onRenameRequest={onRenameRequest}
                       onArchiveRequest={onArchiveRequest}
                     />
