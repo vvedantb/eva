@@ -126,10 +126,8 @@
   animation: t-anchor-flash 2.4s var(--motion-ease-out);
 }
 
-@utility rounded-surface {
-  border-radius: clamp(0.75rem, var(--radius), 1rem);
-}
-
+/* `rounded-surface`, `rounded-control` and `rounded-menu-item` come from
+ * `@vvedantb/ui/tokens/css/compat-shadcn-rgb.css`. */
 @utility rounded-b-surface {
   border-radius: 0 0 clamp(0.75rem, var(--radius), 1rem)
     clamp(0.75rem, var(--radius), 1rem);
@@ -138,14 +136,6 @@
 @utility rounded-t-surface {
   border-radius: clamp(0.75rem, var(--radius), 1rem)
     clamp(0.75rem, var(--radius), 1rem) 0 0;
-}
-
-@utility rounded-menu-item {
-  border-radius: min(var(--radius), 0.5rem);
-}
-
-@utility rounded-control {
-  border-radius: min(var(--radius), 0.625rem);
 }
 
 @utility bg-app-shell {
