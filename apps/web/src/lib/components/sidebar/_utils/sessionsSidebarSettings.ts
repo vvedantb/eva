@@ -94,6 +94,29 @@ export function clampSessionPreviewCount(value: number): number {
   );
 }
 
+/**
+ * Normalises stored prefs. Builds a fresh object so stale keys from older
+ * versions (for example `listMode`, which is no longer persisted) drop out.
+ */
+export function parseSessionsSidebarSettings(
+  raw: SessionsSidebarSettings,
+): SessionsSidebarSettings {
+  return {
+    appSortOrder: isAppSortOrder(raw.appSortOrder)
+      ? raw.appSortOrder
+      : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.appSortOrder,
+    sessionSortOrder: isSessionSortOrder(raw.sessionSortOrder)
+      ? raw.sessionSortOrder
+      : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.sessionSortOrder,
+    sessionPreviewCount: clampSessionPreviewCount(raw.sessionPreviewCount),
+    layout:
+      typeof raw.layout === "string" && isSessionLayout(raw.layout)
+        ? raw.layout
+        : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.layout,
+    onlyMine: raw.onlyMine === true,
+  };
+}
+
 /** Activity timestamp for sidebar session rows. */
 export function sessionActivityAt(session: {
   updatedAt?: number;
