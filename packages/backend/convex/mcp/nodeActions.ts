@@ -42,7 +42,7 @@ import {
   TASK_CHAT_STREAM_PREFIX,
 } from "../_chat/surfaceAdapters";
 import { prStateValidator } from "../validators";
-import { mcpPullRequestValidator } from "./queries";
+import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 import { getEvaBaseUrl } from "../_taskWorkflow/urls";
@@ -2183,7 +2183,8 @@ export const orchestratorCreateSession = internalAction({
         createArgs,
       ),
     );
-    const [, linkedRepos] = await Promise.all([
+    // Typed so `internal` does not depend on this handler's inferred result.
+    const [, linkedRepos]: [void, McpLinkedRepo[]] = await Promise.all([
       registerWatchIfAve(clerkUserId, "session", created.sessionId, aveThreadId),
       ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
         sessionId: created.sessionId,

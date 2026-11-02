@@ -173,23 +173,31 @@ async function gatherLinkedSessions(
     .withIndex("by_repo", (q) => q.eq("repoId", repoId))
     .collect();
   const seen = new Set<string>(alreadyListed);
-  const primaryRepos = new Map<string, Doc<"githubRepos"> | null>();
-  const rows: LinkedSession[] = [];
-
+  const sessionIds: Array<Id<"sessions">> = [];
   for (const link of links) {
     const sessionKey = String(link.sessionId);
     if (seen.has(sessionKey)) continue;
     seen.add(sessionKey);
-    const session = await db.get(link.sessionId);
-    if (!session) continue;
-    if (session.deletedAt !== undefined) continue;
-    if ((session.archived === true) !== archived) continue;
+    sessionIds.push(link.sessionId);
+  }
+  const sessions = (await Promise.all(sessionIds.map((id) => db.get(id)))).filter(
+    (session): session is Doc<"sessions"> =>
+      session !== null &&
+      session.deletedAt === undefined &&
+      (session.archived === true) === archived,
+  );
+  const primaryRepoIds = [...new Set(sessions.map((s) => s.repoId))];
+  const primaryRepoDocs = await Promise.all(
+    primaryRepoIds.map((id) => db.get(id)),
+  );
+  const primaryRepos = new Map<string, Doc<"githubRepos"> | null>();
+  primaryRepoIds.forEach((id, i) => {
+    primaryRepos.set(String(id), primaryRepoDocs[i]);
+  });
+  const rows: LinkedSession[] = [];
 
-    const repoKey = String(session.repoId);
-    if (!primaryRepos.has(repoKey)) {
-      primaryRepos.set(repoKey, await db.get(session.repoId));
-    }
-    const primaryRepo = primaryRepos.get(repoKey);
+  for (const session of sessions) {
+    const primaryRepo = primaryRepos.get(String(session.repoId));
     if (!primaryRepo) continue;
     rows.push({
       session,
@@ -260,22 +268,24 @@ async function toSessionListItems(
   sessions: Doc<"sessions">[],
   archived: boolean,
 ) {
-  const linked = await gatherLinkedSessions(
-    db,
-    repoId,
-    archived,
-    new Set(sessions.map((session) => String(session._id))),
-  );
-  const [openSessionIds, awaitingAnswerIds] = await Promise.all([
+  const [linked, hasUnread] = await Promise.all([
+    gatherLinkedSessions(
+      db,
+      repoId,
+      archived,
+      new Set(sessions.map((session) => String(session._id))),
+    ),
+    unreadLookupForRepo(db, userId, repoId),
+  ]);
+  const rows = [...sessions, ...linked.map((row) => row.session)];
+  const [openSessionIds, awaitingAnswerIds, groupNames] = await Promise.all([
     turnIdsIncludingLinked(db, repoId, linked, openChatEntityIdsForRepo),
     turnIdsIncludingLinked(db, repoId, linked, awaitingAnswerEntityIdsForRepo),
+    sessionGroupNames(db, rows),
   ]);
   const linkedFromBySession = new Map(
     linked.map((row) => [String(row.session._id), row.linkedFrom]),
   );
-  const hasUnread = await unreadLookupForRepo(db, userId, repoId);
-  const rows = [...sessions, ...linked.map((row) => row.session)];
-  const groupNames = await sessionGroupNames(db, rows);
   return Promise.all(
     rows
       .sort(byMostRecentlyUpdated)

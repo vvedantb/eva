@@ -16,10 +16,10 @@ export const syncRepos = action({
       throw new Error("Not authenticated");
     }
 
-    const accessibleRepos = await ctx.runQuery(api.githubRepos.list, {
-      includeHidden: true,
-    });
-    const syncSettings = await ctx.runQuery(api.syncSettings.list, {});
+    const [accessibleRepos, syncSettings] = await Promise.all([
+      ctx.runQuery(api.githubRepos.list, { includeHidden: true }),
+      ctx.runQuery(api.syncSettings.list, {}),
+    ]);
     const disabledRepos = new Set(
       syncSettings
         .filter((s: { enabled: boolean }) => !s.enabled)
@@ -34,6 +34,8 @@ export const syncRepos = action({
     const monorepos: Array<{ owner: string; name: string }> = [];
     let totalAdded = 0;
     const seenCodebases = new Set<string>();
+    // One installation token serves every repo in that installation.
+    const octokits = new Map<number, ReturnType<typeof getInstallationOctokit>>();
     for (const existingRepo of accessibleRepos) {
       const codebaseKey = `${existingRepo.owner}/${existingRepo.name}`;
       if (seenCodebases.has(codebaseKey) || disabledRepos.has(codebaseKey)) {
@@ -41,33 +43,41 @@ export const syncRepos = action({
       }
       seenCodebases.add(codebaseKey);
 
-      const octokit = await getInstallationOctokit(existingRepo.installationId);
+      let octokitPromise = octokits.get(existingRepo.installationId);
+      if (!octokitPromise) {
+        octokitPromise = getInstallationOctokit(existingRepo.installationId);
+        octokits.set(existingRepo.installationId, octokitPromise);
+      }
+      const octokit = await octokitPromise;
       const { data: repo } = await octokit.rest.repos.get({
         owner: existingRepo.owner,
         repo: existingRepo.name,
       });
-      const id = await ctx.runMutation(internal.githubRepos.upsert, {
-        owner: repo.owner.login,
-        name: repo.name,
-        installationId: existingRepo.installationId,
-        githubId: repo.id,
-        teamId: existingRepo.teamId,
-      });
-
-      const apps = await detectAppsForRepo(octokit, repo.owner.login, repo.name);
-      const appPaths: string[] = [];
-      for (const app of apps) {
-        await ctx.runMutation(internal.githubRepos.upsert, {
+      const [id, apps] = await Promise.all([
+        ctx.runMutation(internal.githubRepos.upsert, {
           owner: repo.owner.login,
           name: repo.name,
           installationId: existingRepo.installationId,
           githubId: repo.id,
           teamId: existingRepo.teamId,
-          rootDirectory: app.path,
-          parentRepoId: id,
-        });
-        appPaths.push(app.path);
-      }
+        }),
+        detectAppsForRepo(octokit, repo.owner.login, repo.name),
+      ]);
+      // Each app is its own row, so the upserts do not contend.
+      await Promise.all(
+        apps.map((app) =>
+          ctx.runMutation(internal.githubRepos.upsert, {
+            owner: repo.owner.login,
+            name: repo.name,
+            installationId: existingRepo.installationId,
+            githubId: repo.id,
+            teamId: existingRepo.teamId,
+            rootDirectory: app.path,
+            parentRepoId: id,
+          }),
+        ),
+      );
+      const appPaths = apps.map((app) => app.path);
       detectedApps.push({
         owner: repo.owner.login,
         name: repo.name,

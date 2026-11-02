@@ -13,12 +13,16 @@ export async function listTeammateUserIds(
     .query("teamMembers")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
+  const teams = await Promise.all(
+    memberships.map((membership) =>
+      db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
+        .collect(),
+    ),
+  );
   const teammates = new Set<Id<"users">>();
-  for (const membership of memberships) {
-    const members = await db
-      .query("teamMembers")
-      .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-      .collect();
+  for (const members of teams) {
     for (const member of members) {
       if (member.userId !== userId) teammates.add(member.userId);
     }
@@ -37,16 +41,17 @@ export async function usersShareTeam(
     .query("teamMembers")
     .withIndex("by_user", (q) => q.eq("userId", a))
     .collect();
-  for (const membership of memberships) {
-    const other = await db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", membership.teamId).eq("userId", b),
-      )
-      .first();
-    if (other) return true;
-  }
-  return false;
+  const others = await Promise.all(
+    memberships.map((membership) =>
+      db
+        .query("teamMembers")
+        .withIndex("by_team_and_user", (q) =>
+          q.eq("teamId", membership.teamId).eq("userId", b),
+        )
+        .first(),
+    ),
+  );
+  return others.some((other) => other !== null);
 }
 
 /**

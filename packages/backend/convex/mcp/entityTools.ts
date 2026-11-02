@@ -286,16 +286,14 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           ),
       },
       handler: async ({ path, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const [{ userId }, idlePause] = await Promise.all([
+          mcpGetContext(ctx, clerkUserId),
+          ctx.runQuery(internal.sandboxIdlePause.getSettingsInternal, {}),
+        ]);
         const chatRef = withSelfDefault(ref, credentials);
         const resolved = await resolveEntityTarget(chatRef, userId);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
-
-        const idlePause = await ctx.runQuery(
-          internal.sandboxIdlePause.getSettingsInternal,
-          {},
-        );
         const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);
         const summary = {
           ...entitySummary(target),

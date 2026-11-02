@@ -285,13 +285,11 @@ async function ownedNotifications(
       `Too many notifications: ${ids.length} (max ${BULK_ID_LIMIT})`,
     );
   }
-  const owned = [];
-  for (const id of ids) {
-    const notification = await ctx.db.get(id);
-    if (!notification || notification.userId !== userId) continue;
-    owned.push(notification);
-  }
-  return owned;
+  const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
+  return rows.filter(
+    (notification): notification is Doc<"notifications"> =>
+      notification !== null && notification.userId === userId,
+  );
 }
 
 /**

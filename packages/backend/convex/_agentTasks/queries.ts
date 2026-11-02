@@ -76,9 +76,13 @@ async function enrichTasksWithLastRun(
         ),
       ),
     ]);
-  const unreadLookups = new Map(
-    repoIds.map((repoId, i) => [String(repoId), unreadByRepo[i]]),
-  );
+  const unreadLookups = new Map<
+    string,
+    (task: Doc<"agentTasks">) => Promise<boolean>
+  >();
+  repoIds.forEach((repoId, i) => {
+    unreadLookups.set(String(repoId), unreadByRepo[i]);
+  });
   const summariesByTask = new Map(
     summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
   );

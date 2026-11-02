@@ -237,23 +237,24 @@ export const getImageFingerprint = internalAction({
     const manifestShas: string[] = [];
     try {
       const token = await getInstallationToken(repo.installationId);
-      for (const manifest of FINGERPRINT_MANIFEST_FILES) {
-        const resp = await fetch(
-          `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github+json",
+      // Fixed, small manifest list: fetch in parallel, keep the list order.
+      const shas = await Promise.all(
+        FINGERPRINT_MANIFEST_FILES.map(async (manifest) => {
+          const resp = await fetch(
+            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github+json",
+              },
             },
-          },
-        );
-        if (resp.ok) {
+          );
+          if (!resp.ok) return null;
           const parsed = shaResponseSchema.safeParse(await resp.json());
-          if (parsed.success) {
-            manifestShas.push(`${manifest}:${parsed.data.sha}`);
-          }
-        }
-      }
+          return parsed.success ? `${manifest}:${parsed.data.sha}` : null;
+        }),
+      );
+      for (const sha of shas) if (sha !== null) manifestShas.push(sha);
     } catch (e) {
       console.error(
         `[snapshot] image fingerprint: manifest lookup failed: ${
@@ -312,26 +313,31 @@ export const launchSeedRun = internalAction({
   handler: async (ctx, args): Promise<null> => {
     // Validates Vercel credentials are configured for this repo; the sandbox
     // handle itself is resolved separately below via getSandboxHandle.
-    await resolveSandboxCredentials(ctx, args.repoId);
     // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
     // the compiled floor made every launch npm-install the latest Claude CLI
     // before its daemon could start: ~5-7s on half of all first turns.
-    const [claudeCliVersion, codexCliVersion] = await Promise.all([
+    // All reads are independent, so they run together.
+    const [
+      ,
+      claudeCliVersion,
+      codexCliVersion,
+      startupCommands,
+      backgroundCommands,
+      stopCommands,
+    ] = await Promise.all([
+      resolveSandboxCredentials(ctx, args.repoId),
       resolveClaudeCliVersion(),
       resolveCodexCliVersion(),
+      ctx.runQuery(internal.repoSnapshots.getStartupCommands, {
+        repoId: args.repoId,
+      }),
+      ctx.runQuery(internal.repoSnapshots.getBackgroundCommands, {
+        repoId: args.repoId,
+      }),
+      ctx.runQuery(internal.repoSnapshots.getStopCommands, {
+        repoId: args.repoId,
+      }),
     ]);
-    const startupCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStartupCommands,
-      { repoId: args.repoId },
-    );
-    const backgroundCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getBackgroundCommands,
-      { repoId: args.repoId },
-    );
-    const stopCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStopCommands,
-      { repoId: args.repoId },
-    );
     const requireSupabaseDump = shouldCaptureSupabaseState([
       ...(startupCommands ?? []),
       ...(backgroundCommands ?? []),
@@ -792,7 +798,10 @@ export const createSeedPrepSandbox = internalAction({
   ): Promise<
     { ok: true; sandboxId: string } | { ok: false; error: string }
   > => {
-    const resolved = await tryResolveSandboxCredentials(ctx, args.repoId);
+    const [resolved, repo] = await Promise.all([
+      tryResolveSandboxCredentials(ctx, args.repoId),
+      ctx.runQuery(internal.repoSnapshots.getRepo, { repoId: args.repoId }),
+    ]);
     if (!resolved.ok) {
       console.warn(`[snapshot] createSeedPrepSandbox: ${resolved.error}`);
       return { ok: false, error: resolved.error };
@@ -805,9 +814,6 @@ export const createSeedPrepSandbox = internalAction({
     const effectiveImageSnapshot = !args.imageSnapshot.startsWith("snap_")
       ? undefined
       : args.imageSnapshot;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: args.repoId,
-    });
     if (!repo) throw new Error("Repo not found");
     const seedPrepLifecycle = {
       ...SESSION_LIFECYCLE,

@@ -44,10 +44,7 @@ import {
   materializeAttachmentsToSandbox,
   buildAttachmentPromptNote,
 } from "./attachments";
-import {
-  resolveProviderAccountCredentialRevision,
-  resolveSandboxCredentials,
-} from "../envVarResolver";
+import { resolveProviderAccountCredentialRevision } from "../envVarResolver";
 import {
   buildConvexBackgroundScriptBody,
   isConvexBackendCommand,
@@ -942,9 +939,8 @@ async function buildPreviewUrl(
   }
   const responsePort = customTabPort ?? args.port;
 
-  // Validates that the repo has Vercel sandbox credentials configured;
-  // throws before touching the sandbox if it does not.
-  await resolveSandboxCredentials(ctx, args.repoId);
+  // getSandboxHandle resolves (and validates) the repo's Vercel credentials,
+  // throwing before it touches the sandbox if they are missing.
   const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
   // Services listen on internal ports and the auth proxy owns the exposed

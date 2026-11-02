@@ -421,11 +421,10 @@ async function finishCandidate(
   fallbacks: Array<number | undefined>,
   creationTime: number,
 ): Promise<Candidate> {
-  const activity = await getSandboxActivity(ctx.db, ref);
-  const presentUser = await firstPresentUserInRoom(
-    ctx,
-    sandboxPresenceRoomId(ref.entityId),
-  );
+  const [activity, presentUser] = await Promise.all([
+    getSandboxActivity(ctx.db, ref),
+    firstPresentUserInRoom(ctx, sandboxPresenceRoomId(ref.entityId)),
+  ]);
   return {
     status,
     busy,
@@ -639,11 +638,15 @@ export const run = internalAction({
     let busy = 0;
     let present = 0;
     let paused = 0;
-    for (const ref of refs) {
-      const candidate = await ctx.runQuery(
-        internal.sandboxIdlePause.inspectCandidate,
-        ref,
-      );
+    // Read-only inspections are independent: one round trip for all of them.
+    // Writes below stay sequential so MAX_PAUSES_PER_RUN still caps the run.
+    const candidates = await Promise.all(
+      refs.map((ref) =>
+        ctx.runQuery(internal.sandboxIdlePause.inspectCandidate, ref),
+      ),
+    );
+    for (const [index, ref] of refs.entries()) {
+      const candidate = candidates[index];
       if (!candidate) continue;
       if (candidate.present) {
         present += 1;

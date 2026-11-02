@@ -270,16 +270,19 @@ async function hasSharedClaudeCredential(
   teamId: Id<"teams">,
 ): Promise<boolean> {
   const key = PROVIDER_PRIMARY_AUTH_KEY[USAGE_LIMIT_PROVIDER];
-  const teamVars = await db
-    .query("teamEnvVars")
-    .withIndex("by_team", (q) => q.eq("teamId", teamId))
-    .first();
-  if (teamVars?.vars.some((entry) => entry.key === key) === true) return true;
-  const repoVars = await db
-    .query("repoEnvVars")
-    .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-    .first();
-  return repoVars?.vars.some((entry) => entry.key === key) === true;
+  const [teamVars, repoVars] = await Promise.all([
+    db
+      .query("teamEnvVars")
+      .withIndex("by_team", (q) => q.eq("teamId", teamId))
+      .first(),
+    db
+      .query("repoEnvVars")
+      .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+      .first(),
+  ]);
+  return [teamVars, repoVars].some(
+    (row) => row?.vars.some((entry) => entry.key === key) === true,
+  );
 }
 
 /**
@@ -297,14 +300,16 @@ async function listUsageLimitCredentials(
   userId: Id<"users">,
   repoId: Id<"githubRepos">,
 ): Promise<UsageLimitCredential[]> {
-  const accounts = await listSelectableAccountsFor(ctx, userId);
+  const [accounts, repo] = await Promise.all([
+    listSelectableAccountsFor(ctx, userId),
+    ctx.db.get(repoId),
+  ]);
   const credentials: UsageLimitCredential[] = accounts
     .filter((account) => account.provider === USAGE_LIMIT_PROVIDER)
     .map((account) => ({
       providerAccountId: account._id,
       accountLabel: account.label,
     }));
-  const repo = await ctx.db.get(repoId);
   const teamId = repo?.teamId;
   // The team row is keyed by team, so a repo outside one has nowhere to file a
   // reading and nothing to show for it.
@@ -349,25 +354,25 @@ export const getForViewer = authQuery({
       ctx.userId,
       args.repoId,
     );
-    const entries = [];
-    for (const credential of credentials) {
-      const row = await findUsageLimitRow(
-        ctx.db,
-        parseUsageLimitRowKey({
-          provider: USAGE_LIMIT_PROVIDER,
-          providerAccountId: credential.providerAccountId,
-          teamId: credential.teamId,
-        }),
-      );
-      entries.push({
-        ...(credential.providerAccountId === undefined
-          ? {}
-          : { providerAccountId: credential.providerAccountId }),
-        accountLabel: credential.accountLabel,
-        reading: presentReading(row, args.now),
-      });
-    }
-    return entries;
+    return await Promise.all(
+      credentials.map(async (credential) => {
+        const row = await findUsageLimitRow(
+          ctx.db,
+          parseUsageLimitRowKey({
+            provider: USAGE_LIMIT_PROVIDER,
+            providerAccountId: credential.providerAccountId,
+            teamId: credential.teamId,
+          }),
+        );
+        return {
+          ...(credential.providerAccountId === undefined
+            ? {}
+            : { providerAccountId: credential.providerAccountId }),
+          accountLabel: credential.accountLabel,
+          reading: presentReading(row, args.now),
+        };
+      }),
+    );
   },
 });
 

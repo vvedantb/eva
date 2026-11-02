@@ -2,7 +2,6 @@
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 import { invalidatePrOverviewCache } from "./prOverview";
@@ -55,12 +54,7 @@ export const listPullRequestCandidates = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const [collaborators, labels] = await Promise.all([
@@ -109,12 +103,7 @@ export const setPullRequestReviewers = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const target = { owner: repo.owner, repo: repo.name, pull_number: args.prNumber };
@@ -158,12 +147,7 @@ export const setPullRequestAssignees = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
     // `issues.update` takes the whole set, unlike the reviewer endpoints.
@@ -193,12 +177,7 @@ export const setPullRequestLabels = action({
   handler: async (ctx, args): Promise<null> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
     await octokit.rest.issues.setLabels({

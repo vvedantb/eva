@@ -60,45 +60,39 @@ export const list = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const currentUserMembership = await getTeamMembership(
-      ctx.db,
-      args.teamId,
-      ctx.userId,
-    );
+    // The members list is discarded when the caller is not a member.
+    const [currentUserMembership, members] = await Promise.all([
+      getTeamMembership(ctx.db, args.teamId, ctx.userId),
+      ctx.db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+        .collect(),
+    ]);
 
     if (!currentUserMembership) return [];
 
-    const members = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .collect();
-
-    const membersWithUsers = [];
-    for (const member of members) {
-      const user = await ctx.db.get(member.userId);
-      if (!user) {
-        membersWithUsers.push({ ...member, user: null });
-        continue;
-      }
-      const seen = mergeLastSeen(
-        await getUserPresenceRow(ctx.db, member.userId),
-        user,
-      );
-      membersWithUsers.push({
-        ...member,
-        user: {
-          _id: user._id,
-          email: user.email,
-          fullName: user.fullName,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          lastSeenAt: seen.lastSeenAt,
-          lastSeenPath: seen.lastSeenPath,
-        },
-      });
-    }
-
-    return membersWithUsers;
+    return await Promise.all(
+      members.map(async (member) => {
+        const [user, presence] = await Promise.all([
+          ctx.db.get(member.userId),
+          getUserPresenceRow(ctx.db, member.userId),
+        ]);
+        if (!user) return { ...member, user: null };
+        const seen = mergeLastSeen(presence, user);
+        return {
+          ...member,
+          user: {
+            _id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            lastSeenAt: seen.lastSeenAt,
+            lastSeenPath: seen.lastSeenPath,
+          },
+        };
+      }),
+    );
   },
 });
 
@@ -129,17 +123,12 @@ export const listForRepo = authQuery({
       .withIndex("by_team", (q) => q.eq("teamId", teamId))
       .collect();
 
-    const users = [];
-    for (const member of members) {
-      const user = await ctx.db.get(member.userId);
-      if (!user) continue;
-      users.push({
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-      });
-    }
-    return users;
+    const users = await Promise.all(
+      members.map((member) => ctx.db.get(member.userId)),
+    );
+    return users.flatMap((user) =>
+      user ? [{ _id: user._id, fullName: user.fullName, email: user.email }] : [],
+    );
   },
 });
 

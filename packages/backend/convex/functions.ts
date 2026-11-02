@@ -263,9 +263,10 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  const nonDoneStatuses = ["draft", "cancelled"] as const;
-  const nonDoneChecks = await Promise.all(
-    nonDoneStatuses.map((status) =>
+  const [hasDone, ...nonDoneChecks] = await Promise.all(
+    (["done", "draft", "cancelled"] satisfies ReadonlyArray<
+      Doc<"agentTasks">["status"]
+    >).map((status) =>
       db
         .query("agentTasks")
         .withIndex("by_project_and_status", (q) =>
@@ -275,13 +276,6 @@ export async function recomputeProjectPhase(
     ),
   );
   const hasNonDone = nonDoneChecks.some((t) => t !== null);
-
-  const hasDone = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "done"),
-    )
-    .first();
 
   if (!hasDone && !hasNonDone) {
     // Build-only phase: demote stale in_progress when no active build remains.
@@ -316,20 +310,21 @@ export async function hasActiveRun(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
 ): Promise<boolean> {
-  const queued = await db
-    .query("agentRuns")
-    .withIndex("by_task_and_status", (q) =>
-      q.eq("taskId", taskId).eq("status", "queued"),
-    )
-    .first();
-  if (queued) return true;
-  const running = await db
-    .query("agentRuns")
-    .withIndex("by_task_and_status", (q) =>
-      q.eq("taskId", taskId).eq("status", "running"),
-    )
-    .first();
-  return running !== null;
+  const [queued, running] = await Promise.all([
+    db
+      .query("agentRuns")
+      .withIndex("by_task_and_status", (q) =>
+        q.eq("taskId", taskId).eq("status", "queued"),
+      )
+      .first(),
+    db
+      .query("agentRuns")
+      .withIndex("by_task_and_status", (q) =>
+        q.eq("taskId", taskId).eq("status", "running"),
+      )
+      .first(),
+  ]);
+  return queued !== null || running !== null;
 }
 
 /** True when a later-started run exists on the same task (stale workflow completion). */
