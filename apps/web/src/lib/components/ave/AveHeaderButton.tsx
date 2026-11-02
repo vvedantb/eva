@@ -22,6 +22,7 @@ export function AveHeaderButton() {
 
   return (
     <Button
+      shape="rounded"
       size="icon"
       variant="ghost"
       onClick={toggle}

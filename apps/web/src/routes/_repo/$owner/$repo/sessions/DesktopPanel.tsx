@@ -192,7 +192,6 @@ export function DesktopPanel({
                 <Button
                   size="xs"
                   variant="secondary"
-                  className="rounded-full"
                   onClick={handleTakeControl}
                 >
                   Take control

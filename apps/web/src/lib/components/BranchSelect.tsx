@@ -83,6 +83,7 @@ export function BranchSelect({
     >
       <PopoverTrigger asChild>
         <Button
+          shape="rounded"
           variant="outline"
           role="combobox"
           aria-expanded={open}

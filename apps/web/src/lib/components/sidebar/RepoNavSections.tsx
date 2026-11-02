@@ -192,6 +192,7 @@ export function RepoNavSections({
             <span className="truncate">{item.name}</span>
           </button>
           <Button
+            shape="rounded"
             size="icon-sm"
             variant="ghost"
             // `reveal-on-hover` rather than a hand-rolled

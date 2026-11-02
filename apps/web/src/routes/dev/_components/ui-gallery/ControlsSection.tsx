@@ -168,18 +168,31 @@ function GroupedInputs() {
       <GalleryItem label="ButtonGroup horizontal + text + separator">
         <ButtonGroup>
           <ButtonGroupText>Branch</ButtonGroupText>
-          <Button variant="outline">main</Button>
+          <Button shape="rounded" variant="outline">
+            main
+          </Button>
           <ButtonGroupSeparator />
-          <Button variant="outline" size="icon" aria-label="More">
+          <Button
+            shape="rounded"
+            variant="outline"
+            size="icon"
+            aria-label="More"
+          >
             <IconChevronDown />
           </Button>
         </ButtonGroup>
       </GalleryItem>
       <GalleryItem label="ButtonGroup vertical">
         <ButtonGroup orientation="vertical">
-          <Button variant="outline">Top</Button>
-          <Button variant="outline">Middle</Button>
-          <Button variant="outline">Bottom</Button>
+          <Button shape="rounded" variant="outline">
+            Top
+          </Button>
+          <Button shape="rounded" variant="outline">
+            Middle
+          </Button>
+          <Button shape="rounded" variant="outline">
+            Bottom
+          </Button>
         </ButtonGroup>
       </GalleryItem>
       <GalleryItem label="InputGroup addons start / end" className="w-80">

@@ -371,6 +371,7 @@ export function Sidebar() {
         className="fixed inset-x-0 top-0 z-30 flex h-(--eva-mobile-header-height) items-center gap-2 bg-background/80 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:px-4 lg:hidden"
       >
         <Button
+          shape="rounded"
           size="icon"
           variant="ghost"
           onClick={() => setMobileOpen(true)}
@@ -399,6 +400,7 @@ export function Sidebar() {
             button on a phone. */}
         <AveHeaderButton />
         <Button
+          shape="rounded"
           size="icon"
           variant="ghost"
           onClick={toggleTheme}
@@ -531,6 +533,7 @@ export function Sidebar() {
                               <AutomationsSidebarOptionsMenu />
                             ) : null}
                             <Button
+                              shape="rounded"
                               size="icon-sm"
                               variant="ghost"
                               className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -567,6 +570,7 @@ export function Sidebar() {
                           <div className="relative z-10 ml-auto flex shrink-0 items-center">
                             {headerAction}
                             <Button
+                              shape="rounded"
                               size="icon-sm"
                               variant="ghost"
                               className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -619,6 +623,7 @@ export function Sidebar() {
                           ) : null}
 
                           <Button
+                            shape="rounded"
                             size="icon"
                             variant="ghost"
                             className="motion-press shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"

@@ -202,7 +202,6 @@ export function ComposerInputChrome({
                   size="icon-sm"
                   type="button"
                   variant="destructive"
-                  className="rounded-full"
                   onClick={onCancel}
                   aria-label="Stop Eva"
                 >

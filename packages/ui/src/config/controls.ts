@@ -8,7 +8,7 @@ import { CalendarDayButton, type UiConfig } from "@vvedantb/ui";
 import { evaCn as cn } from "./cn";
 
 const buttonBase =
-  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold tracking-[-0.01em] motion-press focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 active:scale-[0.96] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
+  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap text-sm font-semibold tracking-[-0.01em] motion-press focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 active:scale-[0.96] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
 
 const buttonVariant = {
   default: "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -21,18 +21,29 @@ const buttonVariant = {
 
 // Sizes under the 40px tap floor carry `hit-target` (an 8px pseudo-element
 // bleed). `sm`/`icon-sm` gate it to `max-sm` so desktop targets stay 32px.
+// No radius here: `buttonShape` sets it.
 const buttonSize = {
   default: "h-10 px-4 py-2",
-  xs: "h-7 rounded-md px-2 text-2xs hit-target [&_svg]:size-3.5",
-  sm: "h-8 rounded-lg px-3 text-xs max-sm:hit-target",
-  lg: "h-11 rounded-lg px-6",
+  xs: "h-7 px-2 text-2xs hit-target [&_svg]:size-3.5",
+  sm: "h-8 px-3 text-xs max-sm:hit-target",
+  lg: "h-11 px-6",
   icon: "h-10 w-10",
   "icon-sm": "h-8 w-8 max-sm:hit-target",
   "icon-xs": "h-7 w-7 hit-target [&_svg]:size-3.5",
 };
 
+// `pill` (the 0.31 default) is fully round, so icon sizes are circles.
+// `rounded` is the old radius, for buttons that join other edges. One string
+// covers every size, so `xs` gets `rounded-lg`, not its old `rounded-md`.
+const buttonShape = { pill: "rounded-full", rounded: "rounded-lg" };
+
 /** `buttonVariants({ variant: "ghost" })` of the legacy Button, for the calendar. */
-const ghostButton = cn(buttonBase, buttonVariant.ghost, buttonSize.default);
+const ghostButton = cn(
+  buttonBase,
+  buttonVariant.ghost,
+  buttonSize.default,
+  buttonShape.rounded,
+);
 
 // 16px below `sm`: iOS Safari zooms the page when a focused field's computed
 // font-size is under 16px.
@@ -48,7 +59,12 @@ const rdp = getDefaultClassNames();
 
 export const controlsConfig = {
   Button: {
-    classes: { base: buttonBase, variant: buttonVariant, size: buttonSize },
+    classes: {
+      base: buttonBase,
+      variant: buttonVariant,
+      size: buttonSize,
+      shape: buttonShape,
+    },
   },
   Badge: {
     classes: {

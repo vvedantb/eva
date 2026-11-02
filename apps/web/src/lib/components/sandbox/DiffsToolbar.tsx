@@ -97,7 +97,7 @@ export function DiffsToolbar({
           <Button
             size="icon-xs"
             variant="ghost"
-            className="size-5 rounded-full"
+            className="size-5"
             aria-label="Show all commits"
             onClick={onClearScope}
           >
@@ -128,7 +128,12 @@ export function DiffsToolbar({
       </IconToggle>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="More diff options">
+          <Button
+            shape="rounded"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="More diff options"
+          >
             <IconDots />
           </Button>
         </DropdownMenuTrigger>
@@ -245,6 +250,7 @@ function IconToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          shape="rounded"
           variant="ghost"
           size="icon-sm"
           aria-pressed={pressed}

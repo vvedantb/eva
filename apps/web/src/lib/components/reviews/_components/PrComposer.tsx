@@ -62,7 +62,7 @@ export function PrComposer({
         <Button
           size="icon"
           variant="secondary"
-          className="relative rounded-full bg-popover/95 backdrop-blur-md smooth-shadow-ring-md"
+          className="relative bg-popover/95 backdrop-blur-md smooth-shadow-ring-md"
           aria-label={
             pending > 0
               ? `Review pull request, ${pending} ${pending === 1 ? "comment" : "comments"} pending`

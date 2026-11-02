@@ -37,7 +37,7 @@ export function LandingNav() {
             asChild
             variant="ghost"
             size="icon-sm"
-            className="hidden rounded-full sm:inline-flex"
+            className="hidden sm:inline-flex"
           >
             <a
               href={EVA_GITHUB_URL}
@@ -54,13 +54,13 @@ export function LandingNav() {
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-full text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground"
             >
               Sign in
             </Button>
           </SignInButton>
           <SignUpButton mode="modal">
-            <Button size="sm" className="rounded-full px-4">
+            <Button size="sm" className="px-4">
               Get started
             </Button>
           </SignUpButton>

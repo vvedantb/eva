@@ -17,14 +17,13 @@ export const aichatConfig = {
     classes: {
       content: "flex flex-col gap-8 p-4",
       scroll: "scrollbar scroll-fade",
-      download:
-        "absolute top-4 right-4 rounded-full bg-background hover:bg-muted",
+      download: "absolute top-4 right-4 bg-background hover:bg-muted",
       // The pill sits in a static frame; the animated wrapper has no class.
       scrollButtonFrame:
         "pointer-events-none absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 justify-center",
       scrollButtonMotion: "",
       scrollButton:
-        "pointer-events-auto h-7 gap-1.5 rounded-full border border-border/60 bg-card px-3 text-xs font-normal text-muted-foreground hover:border-border hover:bg-card hover:text-foreground",
+        "pointer-events-auto h-7 gap-1.5 border border-border/60 bg-card px-3 text-xs font-normal text-muted-foreground hover:border-border hover:bg-card hover:text-foreground",
     },
     scrollButton: {
       label: "Scroll to end",

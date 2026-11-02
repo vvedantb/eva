@@ -239,6 +239,7 @@ export function EnvVarProviderSlots({
                       )}
                     </div>
                     <Button
+                      shape="rounded"
                       size="icon-sm"
                       variant="ghost"
                       className="max-sm:hit-target text-primary hover:text-primary"
@@ -250,6 +251,7 @@ export function EnvVarProviderSlots({
                       <IconCheck size={14} />
                     </Button>
                     <Button
+                      shape="rounded"
                       size="icon-sm"
                       variant="ghost"
                       className="max-sm:hit-target"
@@ -281,6 +283,7 @@ export function EnvVarProviderSlots({
               {configured && matched && !isEditing && (
                 <div className="flex shrink-0 items-center gap-0.5">
                   <Button
+                    shape="rounded"
                     size="icon-sm"
                     variant="ghost"
                     className="max-sm:hit-target"
@@ -302,6 +305,7 @@ export function EnvVarProviderSlots({
                     />
                   </Button>
                   <Button
+                    shape="rounded"
                     size="icon-sm"
                     variant="ghost"
                     className="max-sm:hit-target"
@@ -322,6 +326,7 @@ export function EnvVarProviderSlots({
                   {!readOnly && (
                     <>
                       <Button
+                        shape="rounded"
                         size="icon-sm"
                         variant="ghost"
                         className="max-sm:hit-target"
@@ -334,6 +339,7 @@ export function EnvVarProviderSlots({
                         <IconPencil size={14} />
                       </Button>
                       <Button
+                        shape="rounded"
                         size="icon-sm"
                         variant="ghost"
                         title={skipConfirmTitle("Remove")}
