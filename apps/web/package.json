@@ -89,6 +89,7 @@
     "remark-breaks": "^4.0.0",
     "shadow-plugin": "^1.2.4",
     "shiki": "^3.22.0",
+    "skullet": "0.0.3",
     "sonner": "^2.0.7",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^2.6.0",

@@ -45,3 +45,5 @@ minimumReleaseAgeExclude:
   # typecheck script, ~1.5x faster than Go tsc here. Drop after 2026-10-14.
   - tsc-rs
   - "@tsc-rs/*"
+  # skullet 0.0.3 (2026-10-31) is on trial on the Artifacts page. Drop after 2026-11-07.
+  - skullet
