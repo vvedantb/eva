@@ -163,6 +163,8 @@ export const themeExtend = {
   // definitions from the sheet while still emitting the 29 `var()` references to
   // them, so every bare `transition-*` falls back to `0s` and stops animating.
   // The house defaults live in the `@theme` block in `globals.css` instead.
+  // The `text-*` scale (size-specific tracking, `3xs`/`2xs`/`2sm` tiers) comes
+  // from `@vvedantb/ui/tokens/css/type-scale.css`, imported in `globals.css`.
   // Tailwind Typography ships an unthemed grey palette, which fights the design
   // tokens wherever rendered markdown sits next to normal UI text. Both the base
   // and `prose-invert` variable sets point at the same tokens, because the tokens

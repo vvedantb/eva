@@ -7,6 +7,8 @@
 @import "@vvedantb/ui/tokens/css/utilities.css";
 @import "@vvedantb/ui/tokens/css/border-beam.css";
 @import "@vvedantb/ui/tokens/css/marquee.css";
+/* The `text-*` scale: each tier has its own line height and tracking. */
+@import "@vvedantb/ui/tokens/css/type-scale.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
  * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
  * shadcn `R G B` variables below; it never redefines them. */
@@ -125,17 +127,15 @@
   animation: t-anchor-flash 2.4s var(--motion-ease-out);
 }
 
-@utility rounded-menu-item {
-  border-radius: min(var(--radius), 0.5rem);
-}
-
-@utility rounded-control {
-  border-radius: min(var(--radius), 0.625rem);
-}
-
+/* `rounded-surface`, `rounded-t-surface`, `rounded-b-surface`, `rounded-control`
+ * and `rounded-menu-item` come from `@vvedantb/ui/tokens/css/compat-shadcn-rgb.css`. */
 @utility bg-app-shell {
   background-color: rgb(var(--app-shell));
 }
+
+/* `motion-press`, `motion-base` and `motion-emphasized` come from
+ * `@vvedantb/ui/tokens/css/utilities.css`. They read the `--motion-*` values set
+ * on :root below. */
 
 @utility t-slider {
   /* Radix positions the thumb with an inline `transform: translateX(-50%)` on
@@ -718,7 +718,7 @@
 
   /*
    * Optical sizing for the arbitrary px sizes still in the codebase. The named
-   * tiers get their tracking from `theme.fontSize` (tailwind.config.js), but
+   * tiers get their tracking from `@vvedantb/ui/tokens/css/type-scale.css`, but
    * `text-[10px]`-style utilities bypass the theme, so the smallest text in the
    * app would otherwise inherit `--tracking-normal` — a *negative* value, which
    * is backwards for glyphs this size.
