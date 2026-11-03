@@ -1,5 +1,9 @@
 import { v } from "convex/values";
-import { settleAgentTurnCompletion } from "../_chat/turnStore";
+import {
+  closeTurn,
+  findOpenTurn,
+  settleAgentTurnCompletion,
+} from "../_chat/turnStore";
 import type { GenericDatabaseReader } from "convex/server";
 import {
   internalMutation,
@@ -17,6 +21,7 @@ import {
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { cancelTrackedWorkflow } from "../workflowManager";
+import { isTerminalRunStatus } from "./runStatus";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   gatherAccessibleRepos,
@@ -211,6 +216,16 @@ export const updateRunStatus = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const current = await ctx.db.get(args.runId);
+    if (!current) return null;
+    // Terminal is final. A workflow finishing after the user cancelled must
+    // not flip the run to success (and send its email) or error.
+    if (isTerminalRunStatus(current.status)) {
+      console.log(
+        `[automations] updateRunStatus ignored runId=${args.runId} ${current.status} -> ${args.status}`,
+      );
+      return null;
+    }
     const patch: Partial<Doc<"automationRuns">> = { status: args.status };
     if (args.sandboxId !== undefined) patch.sandboxId = args.sandboxId;
     if (args.error !== undefined) patch.error = args.error;
@@ -219,11 +234,7 @@ export const updateRunStatus = internalMutation({
     if (args.prUrl !== undefined) patch.prUrl = args.prUrl;
     if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
     if (args.findings !== undefined) patch.findings = args.findings;
-    if (
-      args.status === "success" ||
-      args.status === "error" ||
-      args.status === "cancelled"
-    ) {
+    if (isTerminalRunStatus(args.status)) {
       patch.finishedAt = Date.now();
     }
     await ctx.db.patch(args.runId, patch);
@@ -323,6 +334,7 @@ export const cancelRun = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { run } = await loadRunWithAccess(ctx.db, ctx.userId, args.runId);
+    if (isTerminalRunStatus(run.status)) return null;
 
     await cancelTrackedWorkflow(ctx, run.activeWorkflowId);
 
@@ -331,6 +343,18 @@ export const cancelRun = authMutation({
       finishedAt: Date.now(),
       activeWorkflowId: undefined,
     });
+
+    // Cancelling skips the workflow's `finally`, which is what deletes the
+    // ephemeral sandbox, so delete it and close the agent turn here instead.
+    const turn = await findOpenTurn(ctx, args.runId);
+    if (turn) await closeTurn(ctx, turn, "cancelled");
+    const sandboxId = turn?.sandboxId ?? run.sandboxId;
+    if (sandboxId !== undefined) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+        sandboxId,
+        repoId: turn?.repoId ?? (await resolveSandboxRepoId(ctx.db, run.repoId)),
+      });
+    }
 
     const streamingEntityId = automationRunStreamingEntityId(args.runId);
     const streaming = await ctx.db

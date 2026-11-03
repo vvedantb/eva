@@ -44,6 +44,7 @@ import type * as _automations_prompts_generateDocs from "../_automations/prompts
 import type * as _automations_prompts_improveCodeStructure from "../_automations/prompts/improveCodeStructure.js";
 import type * as _automations_prompts_memoryDreaming from "../_automations/prompts/memoryDreaming.js";
 import type * as _automations_prompts_thermoNuclearCodeReview from "../_automations/prompts/thermoNuclearCodeReview.js";
+import type * as _automations_runStatus from "../_automations/runStatus.js";
 import type * as _automations_runs from "../_automations/runs.js";
 import type * as _automations_systemAutomations from "../_automations/systemAutomations.js";
 import type * as _automations_systemInstall from "../_automations/systemInstall.js";
@@ -594,6 +595,7 @@ declare const fullApi: ApiFromModules<{
   "_automations/prompts/improveCodeStructure": typeof _automations_prompts_improveCodeStructure;
   "_automations/prompts/memoryDreaming": typeof _automations_prompts_memoryDreaming;
   "_automations/prompts/thermoNuclearCodeReview": typeof _automations_prompts_thermoNuclearCodeReview;
+  "_automations/runStatus": typeof _automations_runStatus;
   "_automations/runs": typeof _automations_runs;
   "_automations/systemAutomations": typeof _automations_systemAutomations;
   "_automations/systemInstall": typeof _automations_systemInstall;
