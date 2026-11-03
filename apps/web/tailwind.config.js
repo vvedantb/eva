@@ -163,32 +163,6 @@ export const themeExtend = {
   // definitions from the sheet while still emitting the 29 `var()` references to
   // them, so every bare `transition-*` falls back to `0s` and stops animating.
   // The house defaults live in the `@theme` block in `globals.css` instead.
-  // Optical sizing: tracking is size-specific, never one global value. Small UI
-  // text needs *more* letter-spacing to stay legible; display text needs less,
-  // because letters read as drifting apart the larger they get. `body` still
-  // carries `--tracking-normal` for text with no `text-*` class.
-  // Line heights repeat the Tailwind defaults so only tracking changes here.
-  // An explicit `tracking-*`/`leading-*` utility still wins — both are emitted
-  // after `font-size` in the core plugin order.
-  // `3xs`/`2xs`/`2sm` fill the gap below `text-sm` so call sites stop reaching
-  // for arbitrary `text-[11px]`-style classes. Tracking matches the 10–13px
-  // optical-sizing block in globals.css.
-  fontSize: {
-    "3xs": ["0.625rem", { lineHeight: "0.875rem", letterSpacing: "0.01em" }],
-    "2xs": ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.01em" }],
-    "2sm": ["0.8125rem", { lineHeight: "1.125rem", letterSpacing: "0.005em" }],
-    xs: ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.005em" }],
-    sm: ["0.875rem", { lineHeight: "1.25rem", letterSpacing: "0em" }],
-    base: ["1rem", { lineHeight: "1.5rem", letterSpacing: "-0.006em" }],
-    lg: ["1.125rem", { lineHeight: "1.75rem", letterSpacing: "-0.01em" }],
-    xl: ["1.25rem", { lineHeight: "1.75rem", letterSpacing: "-0.012em" }],
-    "2xl": ["1.5rem", { lineHeight: "2rem", letterSpacing: "-0.015em" }],
-    "3xl": ["1.875rem", { lineHeight: "2.25rem", letterSpacing: "-0.018em" }],
-    "4xl": ["2.25rem", { lineHeight: "2.5rem", letterSpacing: "-0.022em" }],
-    "5xl": ["3rem", { lineHeight: "1", letterSpacing: "-0.025em" }],
-    "6xl": ["3.75rem", { lineHeight: "1", letterSpacing: "-0.028em" }],
-    "7xl": ["4.5rem", { lineHeight: "1", letterSpacing: "-0.03em" }],
-  },
   // Tailwind Typography ships an unthemed grey palette, which fights the design
   // tokens wherever rendered markdown sits next to normal UI text. Both the base
   // and `prose-invert` variable sets point at the same tokens, because the tokens
