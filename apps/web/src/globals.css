@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@vvedantb/ui/tokens/css/type-scale.css";
 @import "shadow-plugin";
 @import "@vvedantb/ui/tokens/css/markdown.css";
 @import "@vvedantb/ui/tokens/css/nav-icons.css";
