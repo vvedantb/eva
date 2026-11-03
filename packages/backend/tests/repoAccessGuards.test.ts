@@ -232,3 +232,39 @@ describe("the doc workflow slot", () => {
     TIMEOUT_MS,
   );
 });
+
+describe("pending questions", () => {
+  test(
+    "a stranger cannot read, replace or answer another team's question",
+    async () => {
+      const f = await fixture();
+      const entityId = String(f.taskId);
+      await f.owner.mutation(api.pendingQuestions.post, {
+        entityId,
+        toolUseId: "tool_1",
+        payload: "{}",
+      });
+      await expect(
+        f.stranger.mutation(api.pendingQuestions.post, {
+          entityId,
+          toolUseId: "tool_2",
+          payload: "{}",
+        }),
+      ).rejects.toThrow("Not authorized");
+      await expect(
+        f.stranger.mutation(api.pendingQuestions.answer, {
+          entityId,
+          toolUseId: "tool_1",
+          answer: "{}",
+        }),
+      ).rejects.toThrow("Not authorized");
+      expect(
+        await f.stranger.query(api.pendingQuestions.getActive, { entityId }),
+      ).toBeNull();
+      expect(
+        await f.owner.query(api.pendingQuestions.getActive, { entityId }),
+      ).toEqual({ toolUseId: "tool_1", payload: "{}" });
+    },
+    TIMEOUT_MS,
+  );
+});

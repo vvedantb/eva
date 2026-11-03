@@ -208,6 +208,7 @@ import type * as _pullRequests_store from "../_pullRequests/store.js";
 import type * as _pullRequests_watch from "../_pullRequests/watch.js";
 import type * as _pullRequests_watchCheck from "../_pullRequests/watchCheck.js";
 import type * as _pullRequests_watchEvaluate from "../_pullRequests/watchEvaluate.js";
+import type * as _queues_attachments from "../_queues/attachments.js";
 import type * as _queues_helpers from "../_queues/helpers.js";
 import type * as _repoGroups_snapshot from "../_repoGroups/snapshot.js";
 import type * as _repoGroups_snapshotBuild from "../_repoGroups/snapshotBuild.js";
@@ -760,6 +761,7 @@ declare const fullApi: ApiFromModules<{
   "_pullRequests/watch": typeof _pullRequests_watch;
   "_pullRequests/watchCheck": typeof _pullRequests_watchCheck;
   "_pullRequests/watchEvaluate": typeof _pullRequests_watchEvaluate;
+  "_queues/attachments": typeof _queues_attachments;
   "_queues/helpers": typeof _queues_helpers;
   "_repoGroups/snapshot": typeof _repoGroups_snapshot;
   "_repoGroups/snapshotBuild": typeof _repoGroups_snapshotBuild;

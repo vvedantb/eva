@@ -14,6 +14,7 @@ import {
 } from "../validators";
 import type { AIProvider } from "../validators";
 import { queuedMessageFields } from "../_validators/tableFields";
+import { reclaimQueuedAttachments } from "./attachments";
 import {
   backgroundAgentsExpireAt,
   runningBackgroundAgents,
@@ -407,6 +408,8 @@ async function startNextQueuedChatMessage<
     providerAccountId = await config.turnAccountId(ctx, entity, nextMessage);
   } catch (error) {
     await ctx.db.delete(nextMessage._id);
+    // No user message will own the uploads: reclaim them with the row.
+    await reclaimQueuedAttachments(ctx, nextMessage);
     const reason =
       error instanceof Error ? error.message : config.defaultStartErrorMessage;
     await config.recordError(ctx, id, `Error: ${reason}`);
@@ -445,6 +448,8 @@ async function startNextQueuedChatMessage<
     providerAccountId,
   );
   if (!guard.ok) {
+    // The row is gone and no user message was inserted to take the uploads.
+    await reclaimQueuedAttachments(ctx, nextMessage);
     await config.recordError(ctx, id, guard.error);
     // The queued turn is consumed and cannot run, so the child is idle again —
     // without this the master would wait forever on a turn that never starts.
