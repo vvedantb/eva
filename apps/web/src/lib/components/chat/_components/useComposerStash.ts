@@ -81,18 +81,19 @@ export function useComposerStash({
     },
   );
 
-  const isStashingRef = useRef(false);
-  const isRestoringRef = useRef(false);
+  // One lock for both: a restore landing mid-stash used to be wiped by the
+  // stash's clear after it had already deleted the entry server-side.
+  const busyRef = useRef(false);
 
   const stash = async (): Promise<boolean> => {
-    if (isStashingRef.current) return false;
-    isStashingRef.current = true;
+    if (busyRef.current) return false;
+    busyRef.current = true;
 
     const visible = textInput.value;
     const files = attachments.files;
     const trimmed = visible.trim();
     if (trimmed.length === 0 && files.length === 0) {
-      isStashingRef.current = false;
+      busyRef.current = false;
       return false;
     }
 
@@ -105,6 +106,13 @@ export function useComposerStash({
       ? editor.tokenize(visibleSnapshot.trim())
       : visibleSnapshot.trim();
 
+    // Text clears now, not after the upload: anything typed while the upload
+    // and add run lands in an empty composer and survives. Failure paths put
+    // the stashed text back. (`textInput.value` is a render snapshot, so the
+    // live text cannot be read after an await to merge it instead.)
+    textInput.clear();
+    const putTextBack = () => textInput.setInput(visibleSnapshot);
+
     let attachmentStorageIds: Id<"_storage">[] = [];
     try {
       if (filesSnapshot.length > 0) {
@@ -114,13 +122,15 @@ export function useComposerStash({
         // must abort and leave the draft untouched.
         if (attachmentStorageIds.length !== filesSnapshot.length) {
           toast.error("Could not upload attachments to stash.");
-          isStashingRef.current = false;
+          putTextBack();
+          busyRef.current = false;
           return false;
         }
       }
     } catch {
       toast.error("Could not upload attachments to stash.");
-      isStashingRef.current = false;
+      putTextBack();
+      busyRef.current = false;
       return false;
     }
 
@@ -135,32 +145,33 @@ export function useComposerStash({
         attachmentStorageIds: storageIdsArg,
       });
 
-      textInput.clear();
-      attachments.clear();
+      // Only the stashed files: ones added during the upload stay attached.
+      for (const file of filesSnapshot) attachments.remove(file.id);
 
       if (result.evicted) {
         toast.message("Oldest stash removed (limit 20 per app).");
       }
 
-      isStashingRef.current = false;
+      busyRef.current = false;
       return true;
     } catch {
       toast.error("Could not stash prompt.");
-      isStashingRef.current = false;
+      putTextBack();
+      busyRef.current = false;
       return false;
     }
   };
 
   const restore = async (entry: PromptStashEntry): Promise<boolean> => {
-    if (isRestoringRef.current) return false;
-    isRestoringRef.current = true;
+    if (busyRef.current) return false;
+    busyRef.current = true;
 
     for (const attachment of entry.attachments) {
       const mediaType =
         attachment.contentType === null ? undefined : attachment.contentType;
       if (!isAllowedAttachmentFile({ mediaType })) {
         toast.error("This stash has attachments this composer cannot accept.");
-        isRestoringRef.current = false;
+        busyRef.current = false;
         return false;
       }
     }
@@ -170,14 +181,14 @@ export function useComposerStash({
       MAX_CHAT_ATTACHMENTS
     ) {
       toast.error(`You can attach up to ${MAX_CHAT_ATTACHMENTS} files.`);
-      isRestoringRef.current = false;
+      busyRef.current = false;
       return false;
     }
 
     const restoredFiles = await filesFromStashAttachments(entry.attachments);
     if (restoredFiles === null) {
       toast.error("Could not load stashed attachments.");
-      isRestoringRef.current = false;
+      busyRef.current = false;
       return false;
     }
 
@@ -203,7 +214,7 @@ export function useComposerStash({
       toast.error("Restored, but could not remove stash entry.");
     }
 
-    isRestoringRef.current = false;
+    busyRef.current = false;
     return true;
   };
 
