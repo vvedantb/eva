@@ -19,6 +19,7 @@ import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
+import { submitFeedbackTool } from "../_mcp/submitFeedbackTool";
 import {
   entityAccess,
   entityRefArgs,
@@ -589,6 +590,26 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
           ...input,
         }),
       ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // submit_feedback — frustration or praise, shown under the current reply
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the feedback has to land in *this* chat.
+  if (entityKind !== undefined && chatContentId !== undefined) {
+    tools.push(
+      submitFeedbackTool(async (input) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        return ctx.runMutation(internal.feedback.createFromAgent, {
+          entityKind,
+          entityId: chatContentId,
+          userId,
+          sentiment: input.sentiment,
+          comment: input.summary,
+        });
+      }),
     );
   }
 
