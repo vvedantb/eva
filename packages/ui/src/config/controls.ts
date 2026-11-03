@@ -2,7 +2,7 @@
 // toggles, tabs, accordion and friends. Each string is the exact class list the
 // legacy @eva/ui component rendered, so the swap changes no DOM.
 import { createElement } from "react";
-import { IconCheck, IconChevronDown } from "@tabler/icons-react";
+import { IconChevronDown } from "@tabler/icons-react";
 import { getDefaultClassNames } from "react-day-picker";
 import { CalendarDayButton, type UiConfig } from "@vvedantb/ui";
 import { evaCn as cn } from "./cn";
@@ -19,29 +19,22 @@ const buttonVariant = {
   link: "text-primary underline-offset-4 hover:underline",
 };
 
-// Sizes under the 40px tap floor carry `hit-target` (an 8px pseudo-element
-// bleed). `sm`/`icon-sm` gate it to `max-sm` so desktop targets stay 32px.
-// No radius here: `buttonShape` sets it.
+// Only the sizes that differ from the package: `xs` is 11px text and both
+// 28px sizes force a 14px icon. The other sizes use the package classes.
 const buttonSize = {
-  default: "h-10 px-4 py-2",
   xs: "h-7 px-2 text-2xs hit-target [&_svg]:size-3.5",
-  sm: "h-8 px-3 text-xs max-sm:hit-target",
-  lg: "h-11 px-6",
-  icon: "h-10 w-10",
-  "icon-sm": "h-8 w-8 max-sm:hit-target",
   "icon-xs": "h-7 w-7 hit-target [&_svg]:size-3.5",
 };
 
-// `pill` (the 0.31 default) is fully round, so icon sizes are circles.
-// `rounded` is the old radius, for buttons that join other edges. One string
-// covers every size, so `xs` gets `rounded-lg`, not its old `rounded-md`.
-const buttonShape = { pill: "rounded-full", rounded: "rounded-lg" };
+// `rounded` is one string for every size, so `xs` gets `rounded-lg`, not the
+// package's `rounded-md`. `pill` uses the package default (`rounded-full`).
+const buttonShape = { rounded: "rounded-lg" };
 
 /** `buttonVariants({ variant: "ghost" })` of the legacy Button, for the calendar. */
 const ghostButton = cn(
   buttonBase,
   buttonVariant.ghost,
-  buttonSize.default,
+  "h-10 px-4 py-2",
   buttonShape.rounded,
 );
 
@@ -91,14 +84,14 @@ export const controlsConfig = {
   },
   Checkbox: {
     classes: {
-      root: "peer size-4 shrink-0 cursor-pointer rounded-[6px] border border-input bg-card motion-press active:scale-[0.9] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
-      indicator: "flex items-center justify-center text-current",
+      // `before:` is the package's 40px tap area around the 16px box.
+      root: "peer relative size-4 shrink-0 cursor-pointer rounded-[6px] border border-input bg-card motion-press active:scale-[0.9] before:absolute before:inset-[-12px] before:content-[''] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
     },
-    icon: createElement(IconCheck, { size: 14 }),
   },
   Switch: {
     classes: {
-      root: "peer inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent motion-press active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted",
+      // `before:` is the package's tap area around the 24px track.
+      root: "peer relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent motion-press before:absolute before:inset-[-8px] before:content-[''] active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted",
       // Checked: primary-foreground, so a near-white primary keeps a visible knob.
       thumb:
         "pointer-events-none block size-5 rounded-full bg-white shadow-sm t-switch-thumb data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-primary-foreground data-[state=unchecked]:translate-x-0.5",
@@ -136,17 +129,12 @@ export const controlsConfig = {
       ].join(" "),
       addon: {
         base: "text-muted-foreground flex h-auto cursor-text select-none items-center justify-center gap-2 py-1.5 text-sm font-medium group-data-[disabled=true]/input-group:opacity-50 [&>kbd]:rounded-[calc(var(--radius)-4px)] [&>svg:not([class*='size-'])]:size-4",
+        // The other alignments use the package classes.
         align: {
-          "inline-start": "order-first pl-3 has-[>button]:ml-[-0.45rem] has-[>kbd]:ml-[-0.35rem]",
           "inline-end": "order-last pr-3 has-[>button]:mr-[-0.4rem] has-[>kbd]:mr-[-0.35rem]",
-          "block-start":
-            "[.border-b]:pb-3 order-first w-full justify-start px-3 pt-3 group-has-[>input]/input-group:pt-2.5",
-          "block-end":
-            "[.border-t]:pt-3 order-last w-full justify-start px-3 pb-3 group-has-[>input]/input-group:pb-2.5",
         },
       },
       button: {
-        base: "flex items-center gap-2 text-sm shadow-none",
         size: {
           xs: "max-sm:hit-target h-6 gap-1 rounded-[calc(var(--radius)-4px)] px-2 has-[>svg]:px-2 [&>svg:not([class*='size-'])]:size-3.5",
           sm: "max-sm:hit-target h-8 gap-1.5 rounded-lg px-2.5 has-[>svg]:px-2.5",
@@ -154,7 +142,6 @@ export const controlsConfig = {
           "icon-sm": "max-sm:hit-target size-8 p-0 has-[>svg]:p-0",
         },
       },
-      text: "text-muted-foreground flex items-center gap-2 text-sm [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none",
       input: "flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent",
       textarea:
         "flex-1 resize-none rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 dark:bg-transparent",
@@ -163,7 +150,6 @@ export const controlsConfig = {
   ClearInput: {
     animation: "none",
     classes: {
-      wrapper: "relative",
       input: fieldClasses,
       // The scale composes with the centring `-translate-y-1/2`, so the button
       // presses in place.
@@ -173,7 +159,8 @@ export const controlsConfig = {
   },
   SearchInput: {
     classNameTarget: "wrapper",
-    label: false,
+    // No `label` here: the package default ("Search") is the field's
+    // accessible name. A call site can still pass its own.
     placeholder: "Search...",
     clearLabel: "Clear",
     enterKeyHint: false,
@@ -187,10 +174,7 @@ export const controlsConfig = {
   Calendar: {
     classes: {
       base: "border border-border bg-card p-3 rounded-surface",
-      root: cn("w-fit", rdp.root),
-      months: cn("flex gap-4 flex-col md:flex-row relative", rdp.months),
       month: cn("flex flex-col w-full gap-4", rdp.month),
-      nav: cn("flex items-center gap-1 w-full absolute top-0 inset-x-0 justify-between", rdp.nav),
       button_previous: cn(calendarNavButton, rdp.button_previous),
       button_next: cn(calendarNavButton, rdp.button_next),
       month_caption: cn("flex items-center justify-center h-8 w-full px-8", rdp.month_caption),
@@ -199,7 +183,6 @@ export const controlsConfig = {
       dropdown: rdp.dropdown,
       caption_label: cn("select-none font-medium text-sm", rdp.caption_label),
       month_grid: rdp.month_grid,
-      weekdays: cn("flex", rdp.weekdays),
       weekday: cn(
         // design-check-ignore-next-line — legacy @eva/ui Calendar string, kept byte-for-byte
         "text-muted-foreground flex-1 font-medium text-[0.76rem] uppercase tracking-[0.08em] select-none",
@@ -225,18 +208,14 @@ export const controlsConfig = {
       today: cn("border border-primary/25 bg-primary/10 text-primary", "rounded-lg", rdp.today),
       outside: cn("text-muted-foreground aria-selected:text-muted-foreground", rdp.outside),
       disabled: cn("text-muted-foreground opacity-50", rdp.disabled),
-      hidden: cn("invisible", rdp.hidden),
     },
     components: { DayButton: CalendarDayButton },
   },
   Carousel: {
     classes: {
-      dots: "flex justify-center gap-1.5 pt-2",
       // The 10px width step is not animated: below the threshold where it reads
       // as motion, and width would relayout the dot row every frame.
       dot: "h-1.5 cursor-pointer rounded-full motion-press active:scale-90",
-      dotActive: "w-4 bg-primary",
-      dotInactive: "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50",
     },
   },
   Tabs: {

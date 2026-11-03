@@ -1,15 +1,14 @@
 import type { UiConfig } from "@vvedantb/ui";
 
-// Eva's look for the kibo blocks on @vvedantb/ui. Only the parts that use
-// eva-only utilities are here (`motion-press`, `scrollbar-none`, `text-3xs`,
-// `smooth-shadow-ring-*` and the `--motion-*` duration tokens); every other
-// class is the vvedantb default, which is eva's markup. Markdown needs no
-// entry: its look is `markdown.css`.
+// Eva's look for the kibo blocks on @vvedantb/ui. The parts here differ from
+// the package: they use `text-3xs`, `smooth-shadow-ring-*`, `motion-press`, or
+// tie a duration to Eva's `--motion-*` tokens (equal to the package's fixed
+// values today, but they follow the token if Eva changes it). Markdown needs
+// no entry: its look is `markdown.css`.
 
 export const kiboMarkdownConfig = {
   Gantt: {
     classes: {
-      root: "gantt relative isolate grid h-full w-full flex-none select-none overflow-auto scrollbar-none rounded-surface bg-card",
       today:
         "group pointer-events-auto sticky top-0 z-1 flex select-auto flex-col flex-nowrap items-center justify-center whitespace-nowrap rounded-b-md bg-primary px-2 py-0.5 text-3xs font-medium text-primary-foreground",
       todayDate:
