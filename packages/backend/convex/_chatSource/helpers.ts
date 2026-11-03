@@ -81,6 +81,24 @@ export async function chatSourceFieldsForEntityId(
   return null;
 }
 
+/** The chat's repo; a quick task without one falls back to its project's. */
+export async function repoIdForSource(
+  db: GenericDatabaseReader<DataModel>,
+  source: ChatSourceStoredFields,
+): Promise<Id<"githubRepos"> | undefined> {
+  if (source.sourceSessionId) {
+    return (await db.get(source.sourceSessionId))?.repoId;
+  }
+  if (source.sourceProjectId) {
+    return (await db.get(source.sourceProjectId))?.repoId;
+  }
+  if (!source.sourceTaskId) return undefined;
+  const task = await db.get(source.sourceTaskId);
+  if (!task) return undefined;
+  if (task.repoId) return task.repoId;
+  return task.projectId ? (await db.get(task.projectId))?.repoId : undefined;
+}
+
 /** Inverse of the stored fields: the chat arg a row belongs to. */
 export function chatSourceArgFromFields(
   row: ChatSourceStoredFields,

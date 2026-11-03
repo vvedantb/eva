@@ -18,6 +18,7 @@ import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
+import { Route as GlobalFeedbackRouteImport } from './routes/_global/feedback'
 import { Route as GlobalHomeRouteImport } from './routes/_global/home'
 import { Route as GlobalInboxRouteImport } from './routes/_global/inbox'
 import { Route as GlobalSessionsRouteImport } from './routes/_global/sessions'
@@ -191,6 +192,11 @@ const GlobalAveRoute = GlobalAveRouteImport.update({
 const GlobalChangelogRoute = GlobalChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
+  getParentRoute: () => GlobalRoute,
+} as any)
+const GlobalFeedbackRoute = GlobalFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
   getParentRoute: () => GlobalRoute,
 } as any)
 const GlobalHomeRoute = GlobalHomeRouteImport.update({
@@ -965,6 +971,7 @@ export interface FileRoutesByFullPath {
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
+  '/feedback': typeof GlobalFeedbackRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
   '/sessions': typeof GlobalSessionsRoute
@@ -1104,6 +1111,7 @@ export interface FileRoutesByTo {
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
+  '/feedback': typeof GlobalFeedbackRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
   '/sessions': typeof GlobalSessionsRoute
@@ -1223,6 +1231,7 @@ export interface FileRoutesById {
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
   '/_global/changelog': typeof GlobalChangelogRoute
+  '/_global/feedback': typeof GlobalFeedbackRoute
   '/_global/home': typeof GlobalHomeRoute
   '/_global/inbox': typeof GlobalInboxRoute
   '/_global/sessions': typeof GlobalSessionsRoute
@@ -1365,6 +1374,7 @@ export interface FileRouteTypes {
     | '/automations'
     | '/ave'
     | '/changelog'
+    | '/feedback'
     | '/home'
     | '/inbox'
     | '/sessions'
@@ -1504,6 +1514,7 @@ export interface FileRouteTypes {
     | '/automations'
     | '/ave'
     | '/changelog'
+    | '/feedback'
     | '/home'
     | '/inbox'
     | '/sessions'
@@ -1622,6 +1633,7 @@ export interface FileRouteTypes {
     | '/_global/automations'
     | '/_global/ave'
     | '/_global/changelog'
+    | '/_global/feedback'
     | '/_global/home'
     | '/_global/inbox'
     | '/_global/sessions'
@@ -1830,6 +1842,13 @@ declare module '@tanstack/react-router' {
       path: '/changelog'
       fullPath: '/changelog'
       preLoaderRoute: typeof GlobalChangelogRouteImport
+      parentRoute: typeof GlobalRoute
+    }
+    '/_global/feedback': {
+      id: '/_global/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof GlobalFeedbackRouteImport
       parentRoute: typeof GlobalRoute
     }
     '/_global/home': {
@@ -2806,6 +2825,7 @@ interface GlobalRouteChildren {
   GlobalAutomationsRoute: typeof GlobalAutomationsRoute
   GlobalAveRoute: typeof GlobalAveRoute
   GlobalChangelogRoute: typeof GlobalChangelogRoute
+  GlobalFeedbackRoute: typeof GlobalFeedbackRoute
   GlobalHomeRoute: typeof GlobalHomeRoute
   GlobalInboxRoute: typeof GlobalInboxRoute
   GlobalSessionsRoute: typeof GlobalSessionsRoute
@@ -2823,6 +2843,7 @@ const GlobalRouteChildren: GlobalRouteChildren = {
   GlobalAutomationsRoute: GlobalAutomationsRoute,
   GlobalAveRoute: GlobalAveRoute,
   GlobalChangelogRoute: GlobalChangelogRoute,
+  GlobalFeedbackRoute: GlobalFeedbackRoute,
   GlobalHomeRoute: GlobalHomeRoute,
   GlobalInboxRoute: GlobalInboxRoute,
   GlobalSessionsRoute: GlobalSessionsRoute,

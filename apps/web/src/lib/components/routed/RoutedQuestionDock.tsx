@@ -141,13 +141,13 @@ function TeammateChips({
   return (
     <div className="flex flex-wrap gap-1.5">
       {replied.length > 0 ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-success">
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-2xs text-success">
           <IconCheck size={12} />
           {participantNames(replied)} replied
         </span>
       ) : null}
       {pending.length > 0 ? (
-        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+        <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
           {replied.length > 0 ? "Waiting on" : "Also asked"}{" "}
           {participantNames(pending)}
         </span>
@@ -247,7 +247,7 @@ function QuestionCard({
                 </span>
                 <RelativeDateTime
                   at={message.createdAt}
-                  className="text-[11px] text-muted-foreground"
+                  className="text-2xs text-muted-foreground"
                 />
               </div>
               <p className="whitespace-pre-wrap text-sm leading-relaxed">
