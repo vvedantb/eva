@@ -34,7 +34,11 @@ import {
 import { MultipleChoiceQuestion } from "@/lib/components/plan/MultipleChoiceQuestion";
 import { ChatMessage } from "@/lib/components/plan/ChatMessage";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  mutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -106,6 +110,10 @@ export function DocInterviewDialog({
   const { request: requestConfirm } = useRequestConfirm();
   const [dictation, setDictation] = useState("");
   const hasTriggeredRef = useRef(false);
+  // The `ready` message that already started generation. The effect below
+  // re-runs on every new parent callback / answers array; without this it
+  // started generation again for the same ready message.
+  const generateRequestedForRef = useRef<number | null>(null);
   const hasSpeech = !!getSpeechRecognition();
   const { isListening, toggle: toggleSpeech } =
     useSpeechRecognition(setDictation);
@@ -147,12 +155,24 @@ export function DocInterviewDialog({
       if (parsed !== null) {
         if (parsed.description && parsed.requirements) {
           onOpenChange(false);
-        } else if (parsed.ready === true) {
+        } else if (
+          parsed.ready === true &&
+          generateRequestedForRef.current !== messages.length
+        ) {
+          generateRequestedForRef.current = messages.length;
           setIsLoading(true);
-          startDocGenerate({
-            docId: doc._id,
-            docTitle: doc.title,
-            previousAnswers: answers,
+          void catchMutationError(
+            startDocGenerate({
+              docId: doc._id,
+              docTitle: doc.title,
+              previousAnswers: answers,
+            }),
+            "Couldn't generate the document",
+            "doc-interview-generate",
+          ).catch(() => {
+            // Let the user retry from the same ready message.
+            generateRequestedForRef.current = null;
+            setIsLoading(false);
           });
         }
       }
@@ -166,11 +186,16 @@ export function DocInterviewDialog({
 
   const askQuestion = async (currentAnswers: AnswerRecord[]) => {
     setIsLoading(true);
-    await startDocInterview({
-      docId: doc._id,
-      docTitle: doc.title,
-      previousAnswers: currentAnswers,
-    });
+    // A failed start used to leave the dialog on its loading state for good.
+    await catchMutationError(
+      startDocInterview({
+        docId: doc._id,
+        docTitle: doc.title,
+        previousAnswers: currentAnswers,
+      }),
+      "Couldn't ask the next question",
+      "doc-interview-ask",
+    ).catch(() => setIsLoading(false));
   };
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-derived-state --
@@ -178,7 +203,12 @@ export function DocInterviewDialog({
      "ask the first question" kick-off belongs to the open transition, not to any
      one trigger's click handler. */
   useEffect(() => {
-    if (!open || readOnly || hasTriggeredRef.current) return;
+    if (!open) {
+      // Reopening an empty interview asks the first question again.
+      hasTriggeredRef.current = false;
+      return;
+    }
+    if (readOnly || hasTriggeredRef.current) return;
     if (messages.length === 0) {
       hasTriggeredRef.current = true;
       askQuestion([]);
@@ -203,8 +233,13 @@ export function DocInterviewDialog({
     setDictation("");
     if (isListening) toggleSpeech("");
     const updatedAnswers = [...answers, { question: currentQuestion, answer }];
-    await addMessage({ id: doc._id, role: "user", content: answer });
-    askQuestion(updatedAnswers);
+    try {
+      await addMessage({ id: doc._id, role: "user", content: answer });
+    } catch {
+      mutationError("Couldn't send your answer", "doc-interview-answer");
+      return;
+    }
+    await askQuestion(updatedAnswers);
   };
 
   const handleDictationSubmit = () => {

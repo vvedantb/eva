@@ -22,6 +22,13 @@ import {
   type TerminalHistoryWriter,
 } from "./_utils";
 import { TerminalKeyRow } from "./_components/TerminalKeyRow";
+import {
+  MAX_RECONNECT_ATTEMPTS,
+  isTerminalLoading,
+  reduceTerminalConnection,
+  type TerminalConnection,
+  type TerminalConnectionEvent,
+} from "./_utils/terminalConnection";
 
 interface TerminalPanelProps {
   owner: SandboxOwner;
@@ -39,8 +46,26 @@ interface TerminalPanelProps {
   onStickyHistoryTailChange?: (tail: string) => void;
 }
 
-const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY_MS = 1000;
+
+/** One WebSocket. `close` marks it intentional so its onclose never reconnects. */
+interface PtySocket {
+  ws: WebSocket;
+  close: () => void;
+}
+
+/**
+ * Owned by one run of the connect effect. `state` is the source of truth that
+ * socket callbacks read synchronously; React state mirrors it for render.
+ */
+interface ConnectionMount {
+  active: boolean;
+  state: TerminalConnection;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
+  dispatch: (event: TerminalConnectionEvent) => TerminalConnection;
+}
+
+const CONNECT_FAILED_MESSAGE = "Failed to initialize terminal";
 
 /**
  * xterm takes the font size at construction, so this is read once per init
@@ -86,17 +111,14 @@ export function TerminalPanel({
   onStickyHistoryTailChange,
 }: TerminalPanelProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [connection, setConnection] = useState<TerminalConnection>({
+    status: "initialising",
+  });
   const [retryCount, setRetryCount] = useState(0);
   const terminalInstanceRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<PtySocket | null>(null);
   const ptyProtocolRef = useRef<PtyProtocol>("vercel");
-  const intentionalCloseRef = useRef(false);
-  /** Set when the Vercel interactive shell sends an exit frame — do not reconnect. */
-  const shellExitedRef = useRef(false);
-  const reconnectAttemptsRef = useRef(0);
   const terminalHistoryKey = buildTerminalHistoryKey(
     owner,
     sandboxId ?? "no-sandbox",
@@ -185,7 +207,7 @@ export function TerminalPanel({
   const connectWebSocketRef = useRef<
     (
       terminal: Terminal,
-      mounted: { current: boolean },
+      mount: ConnectionMount,
       historyWriter: TerminalHistoryWriter,
     ) => Promise<void>
   >(async () => {});
@@ -195,7 +217,7 @@ export function TerminalPanel({
   useEffect(() => {
     connectWebSocketRef.current = async (
       terminal: Terminal,
-      mounted: { current: boolean },
+      mount: ConnectionMount,
       historyWriter: TerminalHistoryWriter,
     ) => {
       const {
@@ -211,7 +233,7 @@ export function TerminalPanel({
         ptyInstanceId,
       });
 
-      if (!mounted.current) return;
+      if (!mount.active) return;
 
       ptyProtocolRef.current = ptyProtocol;
       if (ptyProtocol === "vercel") {
@@ -220,7 +242,17 @@ export function TerminalPanel({
       }
       const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
-      wsRef.current = ws;
+      // Socket-scoped: closing this socket on purpose must not touch the
+      // reconnect decision of any later socket.
+      let closedIntentionally = false;
+      socketRef.current = {
+        ws,
+        close: () => {
+          closedIntentionally = true;
+          ws.close();
+        },
+      };
+      mount.dispatch({ type: "ptyReady" });
       if (initialOutput && initialOutput.length > 0) {
         terminal.write(initialOutput.replace(/\n/g, "\r\n"));
       }
@@ -235,7 +267,7 @@ export function TerminalPanel({
         }
         // Only clear reconnect budget after a real handshake — not on bare
         // ws.onopen (shell can exit immediately and was resetting the counter).
-        reconnectAttemptsRef.current = 0;
+        mount.dispatch({ type: "handshake" });
         terminalInstanceRef.current.writeln(
           "\x1b[32m* Connected to sandbox\x1b[0m\r\n",
         );
@@ -276,7 +308,7 @@ export function TerminalPanel({
           // Wait for the interactive "connected" frame before clearing
           // reconnect budget — open alone can precede an immediate shell exit.
         } else {
-          reconnectAttemptsRef.current = 0;
+          mount.dispatch({ type: "handshake" });
         }
       };
 
@@ -300,10 +332,11 @@ export function TerminalPanel({
           }
           const exitFrame = parseVercelExitMessage(event.data);
           if (exitFrame) {
-            shellExitedRef.current = true;
+            const code = exitFrame.code ?? 0;
             terminalInstanceRef.current.writeln(
-              `\r\n\x1b[33m* Shell exited (${exitFrame.code ?? 0})\x1b[0m\r\n`,
+              `\r\n\x1b[33m* Shell exited (${code})\x1b[0m\r\n`,
             );
+            mount.dispatch({ type: "shellExited", code });
             return;
           }
           terminalInstanceRef.current.write(event.data);
@@ -320,33 +353,31 @@ export function TerminalPanel({
       };
 
       ws.onclose = () => {
-        if (
-          !mounted.current ||
-          intentionalCloseRef.current ||
-          shellExitedRef.current ||
-          reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS
-        ) {
-          return;
-        }
+        if (closedIntentionally || !mount.active) return;
+        // Exited and exhausted are final states: the reducer keeps them, and
+        // exhaustion becomes `failed` so the UI shows Retry.
+        const next = mount.dispatch({ type: "socketLost" });
+        if (next.status !== "reconnecting") return;
 
-        reconnectAttemptsRef.current++;
         if (terminalInstanceRef.current) {
           terminalInstanceRef.current.writeln(
-            `\r\n\x1b[33m* Reconnecting (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})...\x1b[0m`,
+            `\r\n\x1b[33m* Reconnecting (${next.attempt}/${MAX_RECONNECT_ATTEMPTS})...\x1b[0m`,
           );
         }
 
-        setTimeout(() => {
-          if (
-            mounted.current &&
-            terminalInstanceRef.current &&
-            !shellExitedRef.current &&
-            !intentionalCloseRef.current
-          ) {
-            connectWebSocketRef
-              .current(terminalInstanceRef.current, mounted, historyWriter)
-              .catch(() => {});
-          }
+        mount.reconnectTimer = setTimeout(() => {
+          mount.reconnectTimer = null;
+          const currentTerminal = terminalInstanceRef.current;
+          if (!mount.active || !currentTerminal) return;
+          connectWebSocketRef
+            .current(currentTerminal, mount, historyWriter)
+            .catch((err) => {
+              mount.dispatch({
+                type: "failed",
+                message:
+                  err instanceof Error ? err.message : CONNECT_FAILED_MESSAGE,
+              });
+            });
         }, RECONNECT_DELAY_MS);
       };
     };
@@ -357,7 +388,17 @@ export function TerminalPanel({
       return;
     }
 
-    const mounted = { current: true };
+    const mount: ConnectionMount = {
+      active: true,
+      state: { status: "initialising" },
+      reconnectTimer: null,
+      dispatch: (event) => {
+        if (!mount.active) return mount.state;
+        mount.state = reduceTerminalConnection(mount.state, event);
+        setConnection(mount.state);
+        return mount.state;
+      },
+    };
     const containerEl = terminalRef.current;
     const historyWriter = createTerminalHistoryWriter(
       setTerminalHistoryWithSticky,
@@ -365,17 +406,12 @@ export function TerminalPanel({
     let detachWheelScroll = () => {};
 
     const initTerminal = async () => {
-      setIsLoading(true);
-      setError(null);
-      intentionalCloseRef.current = false;
-      shellExitedRef.current = false;
-      reconnectAttemptsRef.current = 0;
+      mount.dispatch({ type: "init" });
 
       try {
-        if (wsRef.current) {
-          intentionalCloseRef.current = true;
-          wsRef.current.close();
-          wsRef.current = null;
+        if (socketRef.current) {
+          socketRef.current.close();
+          socketRef.current = null;
         }
         if (terminalInstanceRef.current) {
           terminalInstanceRef.current.dispose();
@@ -419,8 +455,9 @@ export function TerminalPanel({
           // Early returns rather than `?.`: this callback is created inside the
           // try below, and React Compiler bails on the whole file when an
           // optional-chaining expression sits inside a try/catch.
-          const currentWs = wsRef.current;
-          if (!currentWs) return;
+          const socket = socketRef.current;
+          if (!socket) return;
+          const currentWs = socket.ws;
           if (currentWs.readyState !== WebSocket.OPEN) return;
           if (ptyProtocolRef.current === "vercel") {
             currentWs.send(new TextEncoder().encode(data));
@@ -450,31 +487,27 @@ export function TerminalPanel({
         }
         terminal.writeln("\x1b[33m* Connecting to sandbox...\x1b[0m");
 
-        await connectWebSocketRef.current(terminal, mounted, historyWriter);
+        await connectWebSocketRef.current(terminal, mount, historyWriter);
       } catch (err) {
-        if (mounted.current) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to initialize terminal",
-          );
-          setIsLoading(false);
-        }
-      }
-      if (mounted.current) {
-        setIsLoading(false);
+        mount.dispatch({
+          type: "failed",
+          message: err instanceof Error ? err.message : CONNECT_FAILED_MESSAGE,
+        });
       }
     };
 
     void initTerminal();
 
     return () => {
-      mounted.current = false;
-      intentionalCloseRef.current = true;
+      mount.active = false;
+      if (mount.reconnectTimer !== null) {
+        clearTimeout(mount.reconnectTimer);
+        mount.reconnectTimer = null;
+      }
       detachWheelScroll();
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
       }
       if (terminalInstanceRef.current) {
         terminalInstanceRef.current.dispose();
@@ -496,11 +529,12 @@ export function TerminalPanel({
     }
     fitAddonRef.current.fit();
     const { cols, rows } = terminalInstanceRef.current;
+    const ws = socketRef.current?.ws;
     if (
       ptyProtocolRef.current === "vercel" &&
-      wsRef.current?.readyState === WebSocket.OPEN
+      ws?.readyState === WebSocket.OPEN
     ) {
-      sendVercelPtyControl(wsRef.current, { type: "resize", cols, rows });
+      sendVercelPtyControl(ws, { type: "resize", cols, rows });
     } else {
       resizePtyRef
         .current({ owner, cols, rows, ptyInstanceId })
@@ -528,11 +562,12 @@ export function TerminalPanel({
       if (fitAddonRef.current && terminalInstanceRef.current) {
         fitAddonRef.current.fit();
         const { cols, rows } = terminalInstanceRef.current;
+        const ws = socketRef.current?.ws;
         if (
           ptyProtocolRef.current === "vercel" &&
-          wsRef.current?.readyState === WebSocket.OPEN
+          ws?.readyState === WebSocket.OPEN
         ) {
-          sendVercelPtyControl(wsRef.current, { type: "resize", cols, rows });
+          sendVercelPtyControl(ws, { type: "resize", cols, rows });
         } else {
           resizePtyRef
             .current({ owner, cols, rows, ptyInstanceId })
@@ -542,7 +577,9 @@ export function TerminalPanel({
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ownerKey, owner, ptyInstanceId, isForeground]);
+    // retryCount: Retry remounts the terminal container (the error view
+    // replaces it), so observe the new element.
+  }, [ownerKey, owner, ptyInstanceId, isForeground, retryCount]);
 
   if (!isActive || !sandboxId) {
     return (
@@ -557,14 +594,23 @@ export function TerminalPanel({
     );
   }
 
-  if (error) {
+  if (connection.status === "failed" || connection.status === "exited") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-sm text-destructive">
+          {connection.status === "failed"
+            ? connection.message
+            : `Shell exited (${connection.code})`}
+        </p>
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => setRetryCount((c) => c + 1)}
+          onClick={() => {
+            // Leave the error view now so the terminal container is mounted
+            // when the connect effect re-runs for the new retryCount.
+            setConnection({ status: "initialising" });
+            setRetryCount((c) => c + 1);
+          }}
         >
           <IconRefresh className="h-4 w-4" />
           Retry
@@ -575,7 +621,7 @@ export function TerminalPanel({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-card">
-      {isLoading && (
+      {isTerminalLoading(connection) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-card">
           <Spinner size="lg" />
         </div>
