@@ -144,7 +144,9 @@ describe("motion utilities transition the properties Tailwind actually sets", ()
       );
       const durations = /transition-duration:([^;]+);/.exec(body);
       if (!durations) return;
-      const count = (list: string) => list.split(",").length;
+      /** Top-level commas only: `var(--motion-base, 220ms)` is one entry. */
+      const count = (list: string) =>
+        list.replace(/\([^()]*\)/g, "").split(",").length;
       if (count(durations[1]) === 1) return;
       expect(count(durations[1]), "positional list is out of step").toBe(
         count(properties),
