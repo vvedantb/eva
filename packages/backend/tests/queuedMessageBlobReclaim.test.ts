@@ -40,20 +40,26 @@ test("queuedMessages.remove deletes the row's attachment blobs", () => {
 /**
  * The other half of the invariant: dequeuing deletes the queued row too, but it
  * hands the same storage ids to the `messages` row, so it must NOT delete the
- * blobs. The row-delete now lives once in the shared dequeue
- * (`startNextQueuedChatMessage`) that all three surfaces call through, so a
- * regression back to a per-surface copy (or a dropped delete) would move this
- * count away from exactly one.
+ * blobs. The row-delete lives only in the shared dequeue
+ * (`startNextQueuedChatMessage`) that all three surfaces call through: once on
+ * the start path, and once where an unresolvable provider account consumes the
+ * message with an error bubble (264df6080). A regression back to a per-surface
+ * copy (or a dropped delete) would move these counts.
  */
-test("the shared dequeue deletes the queued row exactly once, and never a blob", () => {
-  const rowDeletes = countOccurrences(
+test("the shared dequeue deletes the queued row exactly once per path, and never a blob", () => {
+  const rowDelete = "await ctx.db.delete(nextMessage._id);";
+  const dequeue = functionBody(
     queueHelpersSource,
-    "await ctx.db.delete(nextMessage._id);",
+    "async function startNextQueuedChatMessage<",
   );
   expect(
-    rowDeletes,
+    countOccurrences(dequeue, rowDelete),
     "the queued-row delete moved, was duplicated, or was dropped",
-  ).toBe(1);
+  ).toBe(2);
+  expect(
+    countOccurrences(queueHelpersSource, rowDelete),
+    "the queued-row delete was copied out of the shared dequeue",
+  ).toBe(2);
   expect(
     queueHelpersSource,
     "dequeue must not delete blobs the messages row now owns",
@@ -90,6 +96,14 @@ function countOccurrences(source: string, needle: string): number {
     from = at + needle.length;
   }
   return count;
+}
+
+/** A top-level function, ending on the `\n}\n` that closes it. */
+function functionBody(source: string, declaration: string): string {
+  const startAt = source.indexOf(declaration);
+  expect(startAt, `${declaration} moved or was renamed`).toBeGreaterThan(-1);
+  const end = source.indexOf("\n}\n", startAt);
+  return source.slice(startAt, end < 0 ? undefined : end);
 }
 
 /** One `const name: SomeConfig<...> = {...}` object literal, ending on the `\n};` that closes it. */

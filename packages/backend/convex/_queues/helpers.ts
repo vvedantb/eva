@@ -41,7 +41,7 @@ import {
   type UsageLimitHold,
 } from "../_taskWorkflow/usageLimitReset";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
-import { buildSessionPrompt } from "../_sessions/workflow";
+import { buildSessionPrompt } from "../_sessions/sessionPrompt";
 import {
   buildDaemonPendingTurn,
   scheduleChatDaemonPrewarm,
