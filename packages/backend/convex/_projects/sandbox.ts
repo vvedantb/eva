@@ -32,9 +32,10 @@ import { touchUserActivity } from "../_sandbox/activity";
 import {
   canRequestSandboxStart,
   canStartActionMarkStarting,
-  discardStaleAttemptSandbox,
+  discardUntrackedSandbox,
   isCurrentSandboxStartAttempt,
   nextSandboxStartAttempt,
+  scheduleStuckStartExpiry,
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
@@ -124,6 +125,11 @@ async function requestProjectSandboxStart(
     repoId: project.repoId,
     startAttempt,
   };
+  await scheduleStuckStartExpiry(
+    ctx,
+    { kind: "project", id: project._id },
+    startAttempt,
+  );
   // Vercel: schedule start action directly (skip ~6s workflow scheduling).
   if (reusableSandboxId) {
     await ctx.scheduler.runAfter(
@@ -216,6 +222,11 @@ export const retryProjectStartupCommands = authMutation({
         forceStartupCommands: true,
         startAttempt,
       },
+    );
+    await scheduleStuckStartExpiry(
+      ctx,
+      { kind: "project", id: args.projectId },
+      startAttempt,
     );
 
     return null;
@@ -608,7 +619,7 @@ export const projectSandboxReady = internalMutation({
       console.log(
         `[projects] projectSandboxReady ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
       );
-      await discardStaleAttemptSandbox(ctx, {
+      await discardUntrackedSandbox(ctx, {
         sandboxId: args.sandboxId,
         trackedSandboxId: project.sandboxId,
         repoId: project.repoId,
@@ -623,6 +634,16 @@ export const projectSandboxReady = internalMutation({
       console.log(
         `[projects] projectSandboxReady ignored projectId=${args.projectId} status=${project.reviewProjectSandboxStatus} sandboxId=${args.sandboxId}`,
       );
+      // Only a start request's own attempt (it carries a number) made this
+      // VM for nobody else. Untokened callers such as sessionExecuteWorkflow
+      // go on to use the VM they prepared, so it must not be deleted here.
+      if (args.startAttempt !== undefined) {
+        await discardUntrackedSandbox(ctx, {
+          sandboxId: args.sandboxId,
+          trackedSandboxId: project.sandboxId,
+          repoId: project.repoId,
+        });
+      }
       return null;
     }
 
@@ -700,9 +721,15 @@ export const projectSandboxStarting = internalMutation({
       );
       return null;
     }
-    if (!canStartActionMarkStarting(project.reviewProjectSandboxStatus)) {
-      return null;
-    }
+    // Tokened: the request already marked `starting`; this is a re-mark and
+    // must not revive a sandbox stopped since. Untokened (the project
+    // interview): this call *is* the start request, so the request rule
+    // applies and a stopped sandbox may start again.
+    const mayMarkStarting =
+      args.startAttempt === undefined
+        ? canRequestSandboxStart(project.reviewProjectSandboxStatus)
+        : canStartActionMarkStarting(project.reviewProjectSandboxStatus);
+    if (!mayMarkStarting) return null;
 
     await ctx.db.patch(args.projectId, {
       reviewProjectSandboxStatus: "starting",
@@ -733,7 +760,7 @@ export const projectSandboxAllocated = internalMutation({
       console.log(
         `[projects] projectSandboxAllocated ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
       );
-      await discardStaleAttemptSandbox(ctx, {
+      await discardUntrackedSandbox(ctx, {
         sandboxId: args.sandboxId,
         trackedSandboxId: project.sandboxId,
         repoId: project.repoId,

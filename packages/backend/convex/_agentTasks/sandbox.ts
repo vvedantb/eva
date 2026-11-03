@@ -25,9 +25,10 @@ import {
 import { touchUserActivity } from "../_sandbox/activity";
 import {
   canRequestSandboxStart,
-  discardStaleAttemptSandbox,
+  discardUntrackedSandbox,
   isCurrentSandboxStartAttempt,
   nextSandboxStartAttempt,
+  scheduleStuckStartExpiry,
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
@@ -145,6 +146,11 @@ export async function requestTaskSandboxStart(
     repoId: repo._id,
     startAttempt,
   };
+  await scheduleStuckStartExpiry(
+    ctx,
+    { kind: "task", id: task._id },
+    startAttempt,
+  );
   // Vercel: schedule start action directly (skip ~6s workflow scheduling).
   if (reusableSandboxId) {
     await ctx.scheduler.runAfter(
@@ -244,6 +250,11 @@ export const retryStartupCommands = authMutation({
         forceStartupCommands: true,
         startAttempt,
       },
+    );
+    await scheduleStuckStartExpiry(
+      ctx,
+      { kind: "task", id: args.taskId },
+      startAttempt,
     );
 
     return null;
@@ -604,7 +615,7 @@ export const taskSandboxReady = internalMutation({
       console.log(
         `[tasks] taskSandboxReady ignored stale attempt ${args.startAttempt} (current ${task.sandboxStartAttempt}) taskId=${args.taskId}`,
       );
-      await discardStaleAttemptSandbox(ctx, {
+      await discardUntrackedSandbox(ctx, {
         sandboxId: args.sandboxId,
         trackedSandboxId: task.sandboxId,
         repoId: task.repoId,
@@ -619,6 +630,16 @@ export const taskSandboxReady = internalMutation({
       console.log(
         `[tasks] taskSandboxReady ignored taskId=${args.taskId} status=${task.reviewTaskSandboxStatus} sandboxId=${args.sandboxId}`,
       );
+      // Only a start request's own attempt (it carries a number) made this
+      // VM for nobody else. Untokened callers such as sessionExecuteWorkflow
+      // go on to use the VM they prepared, so it must not be deleted here.
+      if (args.startAttempt !== undefined) {
+        await discardUntrackedSandbox(ctx, {
+          sandboxId: args.sandboxId,
+          trackedSandboxId: task.sandboxId,
+          repoId: task.repoId,
+        });
+      }
       return null;
     }
 

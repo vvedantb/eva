@@ -73,12 +73,13 @@ export function isCurrentSandboxStartAttempt(
 }
 
 /**
- * A stale attempt's ready / allocated write is ignored, so a VM that only that
- * attempt created would keep running with nothing tracking it. Delete it when
- * the row tracks a different VM. A shared id (both attempts resuming the same
- * VM) or an untracked row is left alone.
+ * A ready / allocated write that is ignored — a stale attempt, or a start that
+ * finished after Stop or archive — would leave a VM nothing tracks. Delete it
+ * unless the row tracks that same VM: a resume of the tracked VM is left to
+ * the stop / archive path that already owns it. A fresh VM never ran user
+ * work, so deleting it loses nothing.
  */
-export async function discardStaleAttemptSandbox(
+export async function discardUntrackedSandbox(
   ctx: MutationCtx,
   args: {
     sandboxId: string;
@@ -86,18 +87,61 @@ export async function discardStaleAttemptSandbox(
     repoId: Id<"githubRepos"> | undefined;
   },
 ): Promise<void> {
-  if (
-    args.repoId === undefined ||
-    args.trackedSandboxId === undefined ||
-    args.sandboxId === args.trackedSandboxId
-  ) {
+  if (args.repoId === undefined || args.sandboxId === args.trackedSandboxId) {
     return;
   }
   console.log(
-    `[sandbox] deleting stale-attempt sandbox ${args.sandboxId} (tracked ${args.trackedSandboxId})`,
+    `[sandbox] deleting untracked sandbox ${args.sandboxId} (tracked ${args.trackedSandboxId ?? "none"})`,
   );
   await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
     sandboxId: args.sandboxId,
     repoId: args.repoId,
   });
+}
+
+/**
+ * A start whose action died (Convex does not retry actions) stays `starting`
+ * with nothing left to settle it. Past this, the attempt's own failure path
+ * closes it so Start works again; normal starts finish well inside it.
+ */
+export const STUCK_STARTING_EXPIRE_MS = 20 * 60_000;
+
+const STUCK_STARTING_ERROR = "Sandbox start timed out. Press Start to retry.";
+
+/**
+ * Schedules the attempt's failure write. It is fenced like any other: a no-op
+ * once the attempt went `active`, was stopped, or a newer attempt took over.
+ */
+export async function scheduleStuckStartExpiry(
+  ctx: MutationCtx,
+  target:
+    | { kind: "session"; id: Id<"sessions"> }
+    | { kind: "task"; id: Id<"agentTasks"> }
+    | { kind: "project"; id: Id<"projects"> },
+  startAttempt: number,
+): Promise<void> {
+  const error = STUCK_STARTING_ERROR;
+  switch (target.kind) {
+    case "session":
+      await ctx.scheduler.runAfter(
+        STUCK_STARTING_EXPIRE_MS,
+        internal.sessions.sandboxError,
+        { sessionId: target.id, error, startAttempt },
+      );
+      return;
+    case "task":
+      await ctx.scheduler.runAfter(
+        STUCK_STARTING_EXPIRE_MS,
+        internal.agentTasks.taskSandboxError,
+        { taskId: target.id, error, startAttempt },
+      );
+      return;
+    case "project":
+      await ctx.scheduler.runAfter(
+        STUCK_STARTING_EXPIRE_MS,
+        internal.projects.projectSandboxError,
+        { projectId: target.id, error, startAttempt },
+      );
+      return;
+  }
 }

@@ -258,4 +258,82 @@ describe("sandbox lifecycle guards", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "a start that lands after archive or stop deletes its own fresh VM",
+    async () => {
+      const s = await sessionWithStatus("closed", 3);
+      await s.t.mutation(internal.sessions.sandboxReady, {
+        sessionId: s.sessionId,
+        sandboxId: "sbx_fresh",
+        branchName: "eva/session",
+        isNew: true,
+        startAttempt: 3,
+      });
+      expect(await s.status()).toBe("closed");
+      expect(await s.scheduledNames()).toContain("sandbox:deleteSandbox");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "an untokened prepare keeps its VM, since its caller goes on to use it",
+    async () => {
+      const s = await sessionWithStatus("closed", 3);
+      await s.t.mutation(internal.sessions.sandboxReady, {
+        sessionId: s.sessionId,
+        sandboxId: "sbx_execute",
+        branchName: "eva/session",
+        isNew: true,
+      });
+      expect(await s.scheduledNames()).not.toContain("sandbox:deleteSandbox");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "every start request schedules its own stuck-start expiry",
+    async () => {
+      const s = await sessionWithStatus("closed");
+      await s.t.run(async (ctx) => {
+        const session = await ctx.db.get(s.sessionId);
+        if (session) await requestSessionSandboxStart(ctx, session);
+      });
+      expect(await s.scheduledNames()).toContain("sessions:sandboxError");
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("project interview start", () => {
+  test(
+    "an untokened start may restart a stopped project sandbox",
+    async () => {
+      const t = convexTest(schema, modules);
+      const projectId = await t.run(async (ctx) => {
+        const userId = await ctx.db.insert("users", { clerkId: "clerk|ada" });
+        const repoId = await ctx.db.insert("githubRepos", {
+          owner: "vvedantb",
+          name: "eva",
+          installationId: 1,
+          connectedBy: userId,
+        });
+        return ctx.db.insert("projects", {
+          repoId,
+          userId,
+          title: "Billing",
+          rawInput: "billing",
+          phase: "draft",
+          numId: 1,
+          reviewProjectSandboxStatus: "closed",
+        });
+      });
+      await t.mutation(internal.projects.projectSandboxStarting, { projectId });
+      const status = await t.run(
+        async (ctx) => (await ctx.db.get(projectId))?.reviewProjectSandboxStatus,
+      );
+      expect(status).toBe("starting");
+    },
+    TIMEOUT_MS,
+  );
 });

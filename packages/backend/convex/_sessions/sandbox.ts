@@ -34,9 +34,10 @@ import {
 import { touchUserActivity } from "../_sandbox/activity";
 import {
   canRequestSandboxStart,
-  discardStaleAttemptSandbox,
+  discardUntrackedSandbox,
   isCurrentSandboxStartAttempt,
   nextSandboxStartAttempt,
+  scheduleStuckStartExpiry,
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
@@ -127,6 +128,11 @@ export async function requestSessionSandboxStart(
     hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
     startAttempt,
   };
+  await scheduleStuckStartExpiry(
+    ctx,
+    { kind: "session", id: session._id },
+    startAttempt,
+  );
   // Vercel: schedule the start action directly. Workflow step scheduling was
   // measured at ~6s before the first action ran.
   // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
@@ -503,7 +509,7 @@ export const sandboxReady = internalMutation({
       console.log(
         `[sessions] sandboxReady ignored stale attempt ${args.startAttempt} (current ${session.sandboxStartAttempt}) sessionId=${args.sessionId}`,
       );
-      await discardStaleAttemptSandbox(ctx, {
+      await discardUntrackedSandbox(ctx, {
         sandboxId: args.sandboxId,
         trackedSandboxId: session.sandboxId,
         repoId: session.repoId,
@@ -517,6 +523,16 @@ export const sandboxReady = internalMutation({
       console.log(
         `[sessions] sandboxReady ignored sessionId=${args.sessionId} status=${session.status} sandboxId=${args.sandboxId}`,
       );
+      // Only a start request's own attempt (it carries a number) made this
+      // VM for nobody else. Untokened callers such as sessionExecuteWorkflow
+      // go on to use the VM they prepared, so it must not be deleted here.
+      if (args.startAttempt !== undefined) {
+        await discardUntrackedSandbox(ctx, {
+          sandboxId: args.sandboxId,
+          trackedSandboxId: session.sandboxId,
+          repoId: session.repoId,
+        });
+      }
       return null;
     }
     // Early-ready (right after Sandbox.create) + final-ready (after services)

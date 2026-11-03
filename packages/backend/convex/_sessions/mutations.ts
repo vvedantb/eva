@@ -16,6 +16,7 @@ import {
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
+import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
@@ -185,6 +186,9 @@ export async function createSession(
     userId: ctx.userId,
     title,
     status: "starting",
+    // The first boot is a start request like any other; see
+    // `_sandbox/transitions.ts`.
+    sandboxStartAttempt: 1,
     createdBy: ctx.userId,
     updatedAt: Date.now(),
     numId,
@@ -263,8 +267,10 @@ export async function createSession(
       baseBranch,
       repoId: args.repoId,
       hasLinkedRepos: linkedRepos.length > 0,
+      startAttempt: 1,
     },
   );
+  await scheduleStuckStartExpiry(ctx, { kind: "session", id: sessionId }, 1);
 
   const content = args.message?.trim() ?? "";
   if (content) {
