@@ -126,70 +126,15 @@
   animation: t-anchor-flash 2.4s var(--motion-ease-out);
 }
 
-/* `rounded-surface`, `rounded-control` and `rounded-menu-item` come from
- * `@vvedantb/ui/tokens/css/compat-shadcn-rgb.css`. */
-@utility rounded-b-surface {
-  border-radius: 0 0 clamp(0.75rem, var(--radius), 1rem)
-    clamp(0.75rem, var(--radius), 1rem);
-}
-
-@utility rounded-t-surface {
-  border-radius: clamp(0.75rem, var(--radius), 1rem)
-    clamp(0.75rem, var(--radius), 1rem) 0 0;
-}
-
+/* `rounded-surface`, `rounded-t-surface`, `rounded-b-surface`, `rounded-control`
+ * and `rounded-menu-item` come from `@vvedantb/ui/tokens/css/compat-shadcn-rgb.css`. */
 @utility bg-app-shell {
   background-color: rgb(var(--app-shell));
 }
 
-/* `scale` / `translate` / `rotate` sit alongside `transform` in all three motion
- * utilities for the reason spelled out on `motion-press` below: Tailwind v4's
- * scale/translate/rotate utilities set the individual transform properties, and
- * `transition-property: transform` does not match them. */
-@utility motion-base {
-  transition-property:
-    color, background-color, border-color, box-shadow, transform, scale,
-    translate, rotate, opacity;
-  transition-duration: var(--motion-base);
-  transition-timing-function: var(--motion-ease-out);
-}
-
-@utility motion-emphasized {
-  transition-property: transform, scale, translate, rotate, opacity, box-shadow;
-  transition-duration: var(--motion-base);
-  transition-timing-function: var(--motion-ease-emphasized);
-}
-
-@utility motion-press {
-  /* Covers colour as well as the transform properties, because Tailwind's own
-   * `transition-colors` sits later in the generated sheet at the same
-   * specificity — pairing the two silently replaced this whole declaration and
-   * left `active:scale-*` snapping with no transition at all. A control that
-   * presses almost always shifts colour on hover too, so one utility owns both
-   * and call sites carry no separate `transition-*`.
-   *
-   * `scale`, `translate` and `rotate` are listed as well as `transform`, and
-   * they are the ones that actually do the work: Tailwind v4 compiles
-   * `scale-[0.98]` to `scale: 0.98` and `translate-x-*` to `translate: …`, the
-   * individual transform properties from Transforms Level 2 — not to a
-   * `transform: scale(…)` shorthand. `transition-property: transform` matches
-   * the shorthand by name and nothing else, so on its own it animated a
-   * property every one of these call sites leaves at `none` while the press
-   * itself changed an untransitioned one. The whole house press was inert.
-   *
-   * Per-property durations keep the house rule that colour trails the press:
-   * the transform group on `--motion-fast`, everything else on
-   * `--motion-base`. */
-  transition-property:
-    transform, scale, translate, rotate, color, background-color, border-color,
-    box-shadow, opacity, fill, stroke;
-  transition-duration:
-    var(--motion-fast), var(--motion-fast), var(--motion-fast),
-    var(--motion-fast), var(--motion-base), var(--motion-base),
-    var(--motion-base), var(--motion-base), var(--motion-base),
-    var(--motion-base), var(--motion-base);
-  transition-timing-function: var(--motion-ease-out);
-}
+/* `motion-press`, `motion-base` and `motion-emphasized` come from
+ * `@vvedantb/ui/tokens/css/utilities.css`. They read the `--motion-*` values set
+ * on :root below. */
 
 @utility t-slider {
   /* Radix positions the thumb with an inline `transform: translateX(-50%)` on
@@ -401,15 +346,6 @@
 
 @utility scrollbar-thin {
   @apply scrollbar;
-}
-
-@utility scrollbar-none {
-  /* Fully hides the scrollbar while keeping the element scrollable (wheel,
-     drag-to-pan, programmatic). Used by the canvas-style projects timeline. */
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
 }
 
 @layer utilities {

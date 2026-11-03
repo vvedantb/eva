@@ -126,8 +126,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.32.0
-        version: 0.32.0(36487707c2061b7a3e0e6ef7889f8ab5)
+        specifier: ^0.34.0
+        version: 0.34.0(36487707c2061b7a3e0e6ef7889f8ab5)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -346,8 +346,8 @@ importers:
         specifier: ^0.10.0
         version: 0.10.0(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       '@vvedantb/ui':
-        specifier: ^0.32.0
-        version: 0.32.0(f2c527651c7dfecf4f41509266afaca3)
+        specifier: ^0.34.0
+        version: 0.34.0(f2c527651c7dfecf4f41509266afaca3)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -679,8 +679,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: ^0.32.0
-        version: 0.32.0(f30f5641747bd60fda58ecea4a682941)
+        specifier: ^0.34.0
+        version: 0.34.0(f30f5641747bd60fda58ecea4a682941)
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
@@ -694,8 +694,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.32.0
-        version: 0.32.0(5534608dcb4b19e4f87f403087783f35)
+        specifier: ^0.34.0
+        version: 0.34.0(5534608dcb4b19e4f87f403087783f35)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6031,8 +6031,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.32.0':
-    resolution: {integrity: sha512-hGxfSPs0BVzVKzJc1T0jzwVLdqVN3Oiky2b1Cx4U5PrJgZGrP1c2Wu3qNdLhZ99ktCnwX3BG4Qeo6WkZHR2QgA==}
+  '@vvedantb/ui@0.34.0':
+    resolution: {integrity: sha512-AWfygAMnEyLDPANQg2Tt26EJqrFVl65KfSTNpXq61FqcpVjWB62St7ecEY3VL8dBHIJXDHLyjrFEx8WVvz6hKA==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -6118,6 +6118,14 @@ packages:
   '@wallet-standard/wallet@1.1.0':
     resolution: {integrity: sha512-Gt8TnSlDZpAl+RWOOAB/kuvC7RpcdWAlFbHNoi4gsXsfaWa1QCT6LBcfIYTPdOZC9OVZUDwqGuGAcqZejDmHjg==}
     engines: {node: '>=16'}
+
+  '@web-kits/motion-blur@0.1.0':
+    resolution: {integrity: sha512-lAOkIj7KOeMgCWDIjgRjZV4sbLpcGuiwHp8r4h6Z4MsJF+D8/b+j35rRddZJsZ9GY84wQTrMlmIwiDE/o8Kt0g==}
+    peerDependencies:
+      react: 19.3.0
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
@@ -15545,7 +15553,7 @@ snapshots:
       zod: 4.4.3
     optional: true
 
-  '@vvedantb/ui@0.32.0(36487707c2061b7a3e0e6ef7889f8ab5)':
+  '@vvedantb/ui@0.34.0(36487707c2061b7a3e0e6ef7889f8ab5)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15576,6 +15584,7 @@ snapshots:
       '@streamdown/math': 1.0.2(react@19.3.0)
       '@streamdown/mermaid': 1.0.2(react@19.3.0)
       '@tabler/icons-react': 3.41.1(react@19.3.0)
+      '@web-kits/motion-blur': 0.1.0(react@19.3.0)
       ai: 6.0.164(zod@4.4.3)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -15603,7 +15612,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.32.0(5534608dcb4b19e4f87f403087783f35)':
+  '@vvedantb/ui@0.34.0(5534608dcb4b19e4f87f403087783f35)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15634,6 +15643,7 @@ snapshots:
       '@streamdown/math': 1.0.2(react@19.3.0)
       '@streamdown/mermaid': 1.0.2(react@19.3.0)
       '@tabler/icons-react': 3.41.1(react@19.3.0)
+      '@web-kits/motion-blur': 0.1.0(react@19.3.0)
       ai: 7.0.105(zod@4.4.3)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -15661,7 +15671,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.32.0(f2c527651c7dfecf4f41509266afaca3)':
+  '@vvedantb/ui@0.34.0(f2c527651c7dfecf4f41509266afaca3)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15692,6 +15702,7 @@ snapshots:
       '@streamdown/math': 1.0.2(react@19.3.0)
       '@streamdown/mermaid': 1.0.2(react@19.3.0)
       '@tabler/icons-react': 3.41.1(react@19.3.0)
+      '@web-kits/motion-blur': 0.1.0(react@19.3.0)
       ai: 7.0.105(zod@3.25.76)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -15719,7 +15730,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@0.32.0(f30f5641747bd60fda58ecea4a682941)':
+  '@vvedantb/ui@0.34.0(f30f5641747bd60fda58ecea4a682941)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -15750,6 +15761,7 @@ snapshots:
       '@streamdown/math': 1.0.2(react@19.3.0)
       '@streamdown/mermaid': 1.0.2(react@19.3.0)
       '@tabler/icons-react': 3.41.1(react@19.3.0)
+      '@web-kits/motion-blur': 0.1.0(react@19.3.0)
       ai: 7.0.105(zod@3.25.76)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
@@ -15803,6 +15815,10 @@ snapshots:
   '@wallet-standard/wallet@1.1.0':
     dependencies:
       '@wallet-standard/base': 1.1.0
+
+  '@web-kits/motion-blur@0.1.0(react@19.3.0)':
+    optionalDependencies:
+      react: 19.3.0
 
   '@workflow/serde@4.1.0': {}
 
