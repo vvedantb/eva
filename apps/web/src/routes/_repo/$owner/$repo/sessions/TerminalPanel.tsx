@@ -594,27 +594,26 @@ export function TerminalPanel({
     );
   }
 
-  if (connection.status === "failed" || connection.status === "exited") {
+  const retry = () => {
+    // Back to `initialising` first so the terminal container is mounted when
+    // the connect effect re-runs for the new retryCount.
+    setConnection({ status: "initialising" });
+    setRetryCount((c) => c + 1);
+  };
+  const retryButton = (
+    <Button size="sm" variant="secondary" onClick={retry}>
+      <IconRefresh className="h-4 w-4" />
+      Retry
+    </Button>
+  );
+
+  // A failure has no useful output to keep. An exited shell does — its last
+  // lines (and the "* Shell exited" line) stay visible, with Retry below.
+  if (connection.status === "failed") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        <p className="text-sm text-destructive">
-          {connection.status === "failed"
-            ? connection.message
-            : `Shell exited (${connection.code})`}
-        </p>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => {
-            // Leave the error view now so the terminal container is mounted
-            // when the connect effect re-runs for the new retryCount.
-            setConnection({ status: "initialising" });
-            setRetryCount((c) => c + 1);
-          }}
-        >
-          <IconRefresh className="h-4 w-4" />
-          Retry
-        </Button>
+        <p className="text-sm text-destructive">{connection.message}</p>
+        {retryButton}
       </div>
     );
   }
@@ -627,6 +626,14 @@ export function TerminalPanel({
         </div>
       )}
       <div ref={terminalRef} className="min-h-0 flex-1 overflow-hidden" />
+      {connection.status === "exited" ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 px-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Shell exited ({connection.code})
+          </p>
+          {retryButton}
+        </div>
+      ) : null}
       <TerminalKeyRow
         onKey={(data) => {
           const terminal = terminalInstanceRef.current;
