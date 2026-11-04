@@ -14,6 +14,8 @@ export const taskPreviewSandboxStartupWorkflow = workflow.define({
     baseBranch: v.string(),
     repoId: v.id("githubRepos"),
     forceStartupCommands: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   handler: async (step, args): Promise<void> => {
     await step.runAction(internal.sandbox.startTaskPreviewSandbox, {
@@ -26,6 +28,7 @@ export const taskPreviewSandboxStartupWorkflow = workflow.define({
       baseBranch: args.baseBranch,
       repoId: args.repoId,
       forceStartupCommands: args.forceStartupCommands,
+      startAttempt: args.startAttempt,
     });
   },
 });

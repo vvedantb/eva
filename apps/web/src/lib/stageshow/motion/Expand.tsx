@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import type { Rect } from '../measure'
 import './Expand.css'
 
@@ -39,7 +39,7 @@ export function Expand({ open, from, radius = 16, duration, face, children, clas
     const r = parseFloat(getComputedStyle(p).getPropertyValue('--ss-screen-r')) || 0
     setBox({ w: p.clientWidth, h: p.clientHeight, x: (pr.left - sr.left) / s + (p.clientLeft * k) / s, y: (pr.top - sr.top) / s + (p.clientTop * k) / s, k: k / s, r })
   }, [from.x, from.y, from.width, from.height])
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   // Only opening and closing animate. A new `from` while the state holds (the
   // first measure, a re-measure) is applied at once: animating it would sweep
   // the clip in from wherever the unmeasured rect put it, the stage's top left.

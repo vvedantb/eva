@@ -523,15 +523,47 @@ export function findTurnWindowStart(
   return 0;
 }
 
+type TurnShapeMessage = Pick<
+  ChatBodyMessage,
+  "role" | "content" | "isSystemAlert" | "finishedAt"
+>;
+
 /**
- * Whether a session/task chat still has an unfinished Working bubble.
- * System alerts (`isSystemAlert`) are skipped — they can append mid-turn and
- * must not make the composer think the reply finished.
+ * Whether an assistant turn is executing for one chat. One rule for every
+ * surface (session, quick task, project) and every reader of it (composer,
+ * queue, subagent thread, Agents roster, design panel), so they cannot
+ * disagree on the same chat:
+ * - a run the surface renders as a turn (a quick task's first run) counts
+ *   while it runs;
+ * - otherwise the chat's durable turn is canonical, synthetic turns included;
+ * - message shape only covers the first render while that status loads, so a
+ *   stale empty bubble cannot keep a settled turn "executing".
+ * Streaming rows are not an input: they can outlive their turn, so callers
+ * gate them on this result instead.
  */
-export function isAssistantTurnInProgress(
-  messages: ReadonlyArray<
-    Pick<ChatBodyMessage, "role" | "content" | "isSystemAlert" | "finishedAt">
-  >,
+export function isChatTurnExecuting({
+  turnOpen,
+  messages,
+  isFirstRunInProgress = false,
+}: {
+  /** The chat's durable turn is open; `undefined` while its status loads. */
+  turnOpen: boolean | undefined;
+  /** The chat transcript; `undefined` while it loads. */
+  messages: ReadonlyArray<TurnShapeMessage> | undefined;
+  /** A quick task's first run, rendered as this chat's first turn. */
+  isFirstRunInProgress?: boolean;
+}): boolean {
+  if (isFirstRunInProgress) return true;
+  return turnOpen ?? isAssistantTurnInProgress(messages ?? []);
+}
+
+/**
+ * Whether a chat still has an unfinished Working bubble: the load-time
+ * fallback of `isChatTurnExecuting`. System alerts (`isSystemAlert`) are
+ * skipped — they can append mid-turn and must not read as a finished reply.
+ */
+function isAssistantTurnInProgress(
+  messages: ReadonlyArray<TurnShapeMessage>,
 ): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];

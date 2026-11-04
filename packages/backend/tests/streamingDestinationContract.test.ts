@@ -51,7 +51,7 @@ describe("warm daemons stream to the UI's entity key", () => {
 test("complete provider events request an immediate activity drain", () => {
   const processChunk = functionBody(
     streamRouterSource,
-    "export function processRealtimeStdoutChunk(",
+    "function processRealtimeStdoutChunk(",
   );
   const handleAt = processChunk.indexOf("handleRealtimeStreamLine(line)");
   const flushAt = processChunk.indexOf("void flushStreaming()");

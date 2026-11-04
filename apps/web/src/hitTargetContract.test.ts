@@ -121,6 +121,40 @@ describe("the utility is what every call site uses", () => {
   });
 });
 
+/**
+ * eva's `root` for Checkbox and Switch replaces the package's whole class
+ * list, so the package's `before:` tap area went with it and both controls
+ * shipped at their drawn size: a 16px box and a 24px track (fix 407b74ffc).
+ * The pseudo-element has to come back in eva's string and reach the floor.
+ */
+describe("Checkbox and Switch keep a 40px tap area", () => {
+  const controls = stripComments(
+    readFileSync(join(uiSrc, "config", "controls.ts"), "utf8"),
+  );
+
+  it.each([
+    { entry: "Checkbox", size: "size-4", px: 16 },
+    { entry: "Switch", size: "h-6", px: 24 },
+  ])("$entry grows its $px px box to the floor", ({ entry, size, px }) => {
+    const startAt = controls.indexOf(`\n  ${entry}: {`);
+    expect(startAt, `eva's config has no ${entry} entry`).toBeGreaterThan(-1);
+    const block = controls.slice(startAt, controls.indexOf("\n  },", startAt));
+    const root = /root:\s*"([^"]*)"/.exec(block)?.[1] ?? "";
+    const classes = root.split(/\s+/);
+
+    // The drawn size this floor is computed from; a resize must revisit it.
+    expect(classes, `${entry} is no longer ${px}px`).toContain(size);
+    expect(classes, "the pseudo-element needs a positioned parent").toContain(
+      "relative",
+    );
+    expect(classes).toContain("before:absolute");
+    expect(classes).toContain("before:content-['']");
+    const inset = /\bbefore:inset-\[-(\d+)px\]/.exec(root);
+    expect(inset, `${entry} lost its before: tap area`).not.toBeNull();
+    expect(px + 2 * Number(inset?.[1])).toBeGreaterThanOrEqual(40);
+  });
+});
+
 /** Every hand-written component source that can carry a class name. */
 function sourceFiles(): string[] {
   return [webSrc, uiSrc].flatMap((root) =>

@@ -256,16 +256,36 @@ class SandboxStartAbortedError extends Error {
   }
 }
 
-/** True once the user has requested this session stop/close (Stop clicked). */
+/**
+ * True once a newer start request owns the sandbox. This start's writes are
+ * already ignored (see `_sandbox/transitions.ts`), but its remaining steps
+ * would still run against the live VM — relaunching the dev server under the
+ * newer start dropped every attached terminal. Untokened starts never are.
+ */
+function isSupersededStart(
+  currentAttempt: number | undefined,
+  startAttempt: number | undefined,
+): boolean {
+  return startAttempt !== undefined && currentAttempt !== startAttempt;
+}
+
+/**
+ * True once this start should give up: Stop was clicked, the session is
+ * gone, or a newer start superseded it.
+ */
 async function sessionStopRequested(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
+  startAttempt?: number,
 ): Promise<boolean> {
   const session = await ctx.runQuery(internal.sessions.getInternal, {
     id: sessionId,
   });
   return (
-    !session || session.status === "stopping" || session.status === "closed"
+    !session ||
+    session.status === "stopping" ||
+    session.status === "closed" ||
+    isSupersededStart(session.sandboxStartAttempt, startAttempt)
   );
 }
 
@@ -278,18 +298,20 @@ async function abortReuseIfSessionStopped(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
   sandboxId: string,
+  startAttempt?: number,
 ): Promise<void> {
-  if (await sessionStopRequested(ctx, sessionId)) {
+  if (await sessionStopRequested(ctx, sessionId, startAttempt)) {
     throw new SandboxStartAbortedError(
-      `reuse aborted: stop requested for sandbox ${sandboxId}`,
+      `reuse aborted: stop requested or start superseded for sandbox ${sandboxId}`,
     );
   }
 }
 
-/** True once the user has requested this task's sandbox stop/close. */
+/** True once this task start should give up (stop, gone, or superseded). */
 async function taskStopRequested(
   ctx: GenericActionCtx<DataModel>,
   taskId: Id<"agentTasks">,
+  startAttempt?: number,
 ): Promise<boolean> {
   const task = await ctx.runQuery(internal.agentTasks.getInternal, {
     id: taskId,
@@ -297,14 +319,16 @@ async function taskStopRequested(
   return (
     !task ||
     task.reviewTaskSandboxStatus === "stopping" ||
-    task.reviewTaskSandboxStatus === "closed"
+    task.reviewTaskSandboxStatus === "closed" ||
+    isSupersededStart(task.sandboxStartAttempt, startAttempt)
   );
 }
 
-/** True once the user has requested this project's sandbox stop/close. */
+/** True once this project start should give up (stop, gone, or superseded). */
 async function projectStopRequested(
   ctx: GenericActionCtx<DataModel>,
   projectId: Id<"projects">,
+  startAttempt?: number,
 ): Promise<boolean> {
   const project = await ctx.runQuery(internal.projects.getInternal, {
     id: projectId,
@@ -312,7 +336,8 @@ async function projectStopRequested(
   return (
     !project ||
     project.reviewProjectSandboxStatus === "stopping" ||
-    project.reviewProjectSandboxStatus === "closed"
+    project.reviewProjectSandboxStatus === "closed" ||
+    isSupersededStart(project.sandboxStartAttempt, startAttempt)
   );
 }
 
@@ -652,6 +677,7 @@ function tryReuseSandboxHandle(
 }
 
 type SessionSandboxPreparationArgs = {
+  startAttempt?: number;
   sessionId: Id<"sessions">;
   existingSandboxId: string | undefined;
   installationId: number;
@@ -882,6 +908,7 @@ async function prepareSessionSandboxInternal(
                 onEarlyReady: async () => {
                   await ctx.runMutation(internal.sessions.sandboxReady, {
                     sessionId: args.sessionId,
+                    startAttempt: args.startAttempt,
                     sandboxId: handle.id,
                     branchName: args.branchName,
                     isNew: false,
@@ -891,7 +918,8 @@ async function prepareSessionSandboxInternal(
                     markServicesPending: true,
                   });
                 },
-                shouldAbort: () => sessionStopRequested(ctx, args.sessionId),
+                shouldAbort: () =>
+                  sessionStopRequested(ctx, args.sessionId, args.startAttempt),
               }),
           );
           // No setupBranch here: resumeReusedSandbox already owns the branch
@@ -922,7 +950,12 @@ async function prepareSessionSandboxInternal(
               () => startDesktopWithChrome(handle),
             );
           }
-          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
+          await abortReuseIfSessionStopped(
+            ctx,
+            args.sessionId,
+            handle.id,
+            args.startAttempt,
+          );
           await emitSessionProgress(
             ctx,
             args.sessionId,
@@ -972,7 +1005,12 @@ async function prepareSessionSandboxInternal(
               }
             },
           );
-          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
+          await abortReuseIfSessionStopped(
+            ctx,
+            args.sessionId,
+            handle.id,
+            args.startAttempt,
+          );
           await runLoggedSessionStep(
             "reuseSessionSandbox.launchDevServer",
             sandboxDetails,
@@ -1131,6 +1169,7 @@ async function prepareSessionSandboxInternal(
           const configured = repo ? devOverrides(repo) : undefined;
           await ctx.runMutation(internal.sessions.sandboxReady, {
             sessionId: args.sessionId,
+            startAttempt: args.startAttempt,
             sandboxId: sandbox.id,
             branchName: args.branchName,
             isNew: true,
@@ -1657,6 +1696,8 @@ export const startSessionSandbox = internalAction({
      * and clear the gate once every row has been attempted.
      */
     hasLinkedRepos: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -1684,6 +1725,7 @@ export const startSessionSandbox = internalAction({
       }
       const prepared = await prepareSessionSandboxInternal(ctx, {
         sessionId: args.sessionId,
+        startAttempt: args.startAttempt,
         existingSandboxId: args.existingSandboxId,
         installationId: args.installationId,
         repoOwner: args.repoOwner,
@@ -1702,6 +1744,7 @@ export const startSessionSandbox = internalAction({
         () =>
           ctx.runMutation(internal.sessions.sandboxReady, {
             sessionId: args.sessionId,
+            startAttempt: args.startAttempt,
             sandboxId: prepared.sandbox.id,
             branchName: prepared.branchName,
             isNew: prepared.isNew,
@@ -1725,7 +1768,16 @@ export const startSessionSandbox = internalAction({
         console.log(
           `[sandbox][sessions] startSessionSandbox aborted by stop sessionId=${args.sessionId}: ${e.message}`,
         );
-        if (args.repoId && stopId) {
+        // Superseded, not stopped: the newer start is using this VM.
+        const superseded = isSupersededStart(
+          (
+            await ctx.runQuery(internal.sessions.getInternal, {
+              id: args.sessionId,
+            })
+          )?.sandboxStartAttempt,
+          args.startAttempt,
+        );
+        if (args.repoId && stopId && !superseded) {
           try {
             await ctx.runAction(internal.sandbox.stopSandbox, {
               sandboxId: stopId,
@@ -1768,8 +1820,14 @@ export const startSessionSandbox = internalAction({
         });
         return null;
       }
+      // A newer start took over (Start pressed again) and may be resuming
+      // this same VM: stopping it here would kill that start mid-resume.
+      // `sandboxError` below ignores this stale attempt anyway.
+      const superseded =
+        args.startAttempt !== undefined &&
+        sessionAfter?.sandboxStartAttempt !== args.startAttempt;
       // No early-ready — stop any id we were asked to reuse and mark closed.
-      if (args.repoId && stopId) {
+      if (args.repoId && stopId && !superseded) {
         try {
           await ctx.runAction(internal.sandbox.stopSandbox, {
             sandboxId: stopId,
@@ -1786,6 +1844,7 @@ export const startSessionSandbox = internalAction({
       }
       await ctx.runMutation(internal.sessions.sandboxError, {
         sessionId: args.sessionId,
+        startAttempt: args.startAttempt,
         error: failMessage,
       });
     }
@@ -1828,6 +1887,7 @@ export const prepareSessionSandbox = internalAction({
 });
 
 type TaskPreviewSandboxPreparationArgs = {
+  startAttempt?: number;
   taskId: Id<"agentTasks">;
   existingSandboxId: string | undefined;
   installationId: number;
@@ -1920,11 +1980,13 @@ async function prepareTaskPreviewSandboxInternal(
         onEarlyReady: async () => {
           await ctx.runMutation(internal.agentTasks.taskSandboxReady, {
             taskId: args.taskId,
+            startAttempt: args.startAttempt,
             sandboxId: handle.id,
             isNew: false,
           });
         },
-        shouldAbort: () => taskStopRequested(ctx, args.taskId),
+        shouldAbort: () =>
+          taskStopRequested(ctx, args.taskId, args.startAttempt),
       }),
     );
     completedSteps.push({
@@ -2294,6 +2356,7 @@ async function prepareTaskPreviewSandboxInternal(
 }
 
 type ProjectPreviewSandboxPreparationArgs = {
+  startAttempt?: number;
   projectId: Id<"projects">;
   existingSandboxId: string | undefined;
   installationId: number;
@@ -2394,11 +2457,13 @@ async function prepareProjectPreviewSandboxInternal(
           onEarlyReady: async () => {
             await ctx.runMutation(internal.projects.projectSandboxReady, {
               projectId: args.projectId,
+              startAttempt: args.startAttempt,
               sandboxId: handle.id,
               isNew: false,
             });
           },
-          shouldAbort: () => projectStopRequested(ctx, args.projectId),
+          shouldAbort: () =>
+            projectStopRequested(ctx, args.projectId, args.startAttempt),
         }),
     );
     completedSteps.push({
@@ -2587,6 +2652,7 @@ async function prepareProjectPreviewSandboxInternal(
   const sandboxDetails = `${actionDetails}, sandboxId=${handle.id}, usedSnapshot=${prepared.usedSnapshot ? "true" : "false"}`;
   await ctx.runMutation(internal.projects.projectSandboxAllocated, {
     projectId: args.projectId,
+    startAttempt: args.startAttempt,
     sandboxId: handle.id,
   });
   completedSteps.push({
@@ -2783,6 +2849,8 @@ export const startProjectPreviewSandbox = internalAction({
     repoId: v.id("githubRepos"),
     forceStartupCommands: v.optional(v.boolean()),
     skipStartupCommands: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   returns: v.object({ sandboxId: v.string() }),
   handler: async (ctx, args) => {
@@ -2790,11 +2858,27 @@ export const startProjectPreviewSandbox = internalAction({
     const actionDetails = `projectId=${args.projectId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
     logSession(`startProjectPreviewSandbox invoked (${actionDetails})`);
     try {
-      await ctx.runMutation(internal.projects.projectSandboxStarting, {
-        projectId: args.projectId,
-      });
+      const ownsStart = await ctx.runMutation(
+        internal.projects.projectSandboxStarting,
+        { projectId: args.projectId, startAttempt: args.startAttempt },
+      );
+      if (!ownsStart) {
+        // A failed earlier try already closed this attempt, a stop landed, or
+        // a newer attempt took over. Creating a VM now would leave it running
+        // behind a closed project, so give up before touching anything.
+        logSession(
+          `startProjectPreviewSandbox skipped: start no longer owned (${actionDetails})`,
+        );
+        await completeProjectProgress(ctx, args.projectId);
+        if (args.startAttempt === undefined) {
+          // Untokened callers (the interview) need a sandbox to continue.
+          throw new Error("The project sandbox is stopping. Try again.");
+        }
+        return { sandboxId: "" };
+      }
       const prepared = await prepareProjectPreviewSandboxInternal(ctx, {
         projectId: args.projectId,
+        startAttempt: args.startAttempt,
         existingSandboxId: args.existingSandboxId,
         installationId: args.installationId,
         repoOwner: args.repoOwner,
@@ -2813,6 +2897,7 @@ export const startProjectPreviewSandbox = internalAction({
         () =>
           ctx.runMutation(internal.projects.projectSandboxReady, {
             projectId: args.projectId,
+            startAttempt: args.startAttempt,
             sandboxId: prepared.sandbox.id,
             isNew: prepared.isNew,
             devPort: prepared.devPort,
@@ -2829,8 +2914,18 @@ export const startProjectPreviewSandbox = internalAction({
         console.log(
           `[sandbox][sessions] startProjectPreviewSandbox aborted by stop projectId=${args.projectId}: ${e.message}`,
         );
-        await completeProjectProgress(ctx, args.projectId);
+        // Superseded, not stopped: the newer start owns the VM and progress.
+        const superseded = isSupersededStart(
+          (
+            await ctx.runQuery(internal.projects.getInternal, {
+              id: args.projectId,
+            })
+          )?.sandboxStartAttempt,
+          args.startAttempt,
+        );
         const stopId = args.existingSandboxId;
+        if (superseded) return { sandboxId: stopId ?? "" };
+        await completeProjectProgress(ctx, args.projectId);
         if (stopId) {
           try {
             await ctx.runAction(internal.sandbox.stopSandbox, {
@@ -2847,6 +2942,7 @@ export const startProjectPreviewSandbox = internalAction({
       await completeProjectProgress(ctx, args.projectId);
       await ctx.runMutation(internal.projects.projectSandboxError, {
         projectId: args.projectId,
+        startAttempt: args.startAttempt,
         error: errorMessage(e, "Unknown error"),
       });
       throw e;
@@ -2866,6 +2962,8 @@ export const startTaskPreviewSandbox = internalAction({
     baseBranch: v.string(),
     repoId: v.id("githubRepos"),
     forceStartupCommands: v.optional(v.boolean()),
+    /** Fences ready / failure writes to this start; see `_sandbox/transitions.ts`. */
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -2875,6 +2973,7 @@ export const startTaskPreviewSandbox = internalAction({
     try {
       const prepared = await prepareTaskPreviewSandboxInternal(ctx, {
         taskId: args.taskId,
+        startAttempt: args.startAttempt,
         existingSandboxId: args.existingSandboxId,
         installationId: args.installationId,
         repoOwner: args.repoOwner,
@@ -2892,6 +2991,7 @@ export const startTaskPreviewSandbox = internalAction({
         () =>
           ctx.runMutation(internal.agentTasks.taskSandboxReady, {
             taskId: args.taskId,
+            startAttempt: args.startAttempt,
             sandboxId: prepared.sandbox.id,
             isNew: prepared.isNew,
             devPort: prepared.devPort,
@@ -2907,6 +3007,16 @@ export const startTaskPreviewSandbox = internalAction({
         console.log(
           `[sandbox][sessions] startTaskPreviewSandbox aborted by stop taskId=${args.taskId}: ${e.message}`,
         );
+        // Superseded, not stopped: the newer start owns the VM and progress.
+        const superseded = isSupersededStart(
+          (
+            await ctx.runQuery(internal.agentTasks.getInternal, {
+              id: args.taskId,
+            })
+          )?.sandboxStartAttempt,
+          args.startAttempt,
+        );
+        if (superseded) return null;
         await completeTaskProgress(ctx, args.taskId);
         const stopId = args.existingSandboxId;
         if (stopId) {
@@ -2925,6 +3035,7 @@ export const startTaskPreviewSandbox = internalAction({
       await completeTaskProgress(ctx, args.taskId);
       await ctx.runMutation(internal.agentTasks.taskSandboxError, {
         taskId: args.taskId,
+        startAttempt: args.startAttempt,
         error: errorMessage(e, "Unknown error"),
       });
     }

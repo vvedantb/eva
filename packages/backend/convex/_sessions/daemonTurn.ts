@@ -3,7 +3,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { AIModel, ModelTraitsExecutionArgs } from "../validators";
 import { sessionChatPersistenceId } from "../_sessionChats/helpers";
-import { SESSION_TOOLS } from "./workflow";
+import { SESSION_TOOLS } from "./sessionPrompt";
 
 /** The `pendingTurn` a chat's warm daemon claims through claimPendingTurn. */
 export function buildDaemonPendingTurn(turn: {
