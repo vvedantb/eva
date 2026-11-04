@@ -3,6 +3,7 @@ import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { cancelTrackedWorkflow } from "../convex/workflowManager";
 
 /**
  * `authMutation` / `authQuery` only authenticate. Each public function below
@@ -230,6 +231,53 @@ describe("the doc workflow slot", () => {
         docId: f.docId,
       });
       expect(await slot()).toBe(interviewId);
+    },
+    TIMEOUT_MS,
+  );
+
+  /**
+   * The busy guard asks the workflow component, not the slot field. A slot
+   * left behind by a workflow that ended without clearing it (crash, cancel,
+   * component cleanup) must read as free, or the user is locked out of every
+   * doc task until the 2h watchdog runs.
+   */
+  test(
+    "a slot left by an ended or unknown workflow does not block a new start",
+    async () => {
+      const f = await fixture();
+      await f.owner.mutation(api.docInterviewWorkflow.startInterview, {
+        docId: f.docId,
+        docTitle: "Spec",
+        previousAnswers: [],
+      });
+      const slot = () =>
+        f.t.run(async (ctx) => (await ctx.db.get(f.docId))?.activeWorkflowId);
+      const interviewId = await slot();
+      expect(interviewId).toBeDefined();
+
+      // The workflow ends, but its id stays in the slot.
+      await f.t.run(async (ctx) => {
+        await cancelTrackedWorkflow(ctx, interviewId);
+        await ctx.db.patch(f.docId, { activeWorkflowId: interviewId });
+      });
+      await f.owner.mutation(api.testGenWorkflow.startTestGen, {
+        docId: f.docId,
+      });
+      const testGenId = await slot();
+      expect(testGenId).toBeDefined();
+      expect(testGenId).not.toBe(interviewId);
+
+      // An id the component no longer knows also reads as free.
+      await f.t.run(async (ctx) => {
+        await cancelTrackedWorkflow(ctx, testGenId);
+        await ctx.db.patch(f.docId, { activeWorkflowId: "wf_gone" });
+      });
+      await f.owner.mutation(api.docInterviewWorkflow.startGenerate, {
+        docId: f.docId,
+        docTitle: "Spec",
+        previousAnswers: [],
+      });
+      expect(await slot()).not.toBe("wf_gone");
     },
     TIMEOUT_MS,
   );
