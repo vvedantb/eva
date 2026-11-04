@@ -26,13 +26,15 @@ export type SandboxIframeServiceState =
   | "error";
 
 /**
- * Result shape the start callback must return. Mirrors `toggleCodeServer` —
- * desktop's toggle has no useful return so its wrapper returns `{ success: true }`.
+ * Result shape the start callback must return. Mirrors `toggleCodeServer`.
+ * `transformUrl` overrides the prop for this start, for services whose viewer
+ * depends on what the start found (desktop: noVNC vs voxl).
  */
 export interface StartResult {
   success: boolean;
   message?: string;
   logs?: string;
+  transformUrl?: (url: string) => string;
 }
 
 /**
@@ -48,6 +50,17 @@ function startErrorMessage(
   const message = result.message ?? fallback;
   if (!result.logs) return message;
   return `${message}\n\nLogs:\n${result.logs}`;
+}
+
+/**
+ * The URL transform for this start: the result's override, else the prop. A
+ * helper for the same React Compiler reason as `startErrorMessage`.
+ */
+function viewerTransform(
+  result: StartResult,
+  fallback: ((url: string) => string) | undefined,
+): ((url: string) => string) | undefined {
+  return result.transformUrl ?? fallback;
 }
 
 interface SandboxIframeServiceProps {
@@ -170,8 +183,11 @@ export function SandboxIframeService({
     pollTimer.current = undefined;
   };
 
-  const acceptReady = (rawUrl: string) => {
-    const finalUrl = transformUrl ? transformUrl(rawUrl) : rawUrl;
+  const acceptReady = (
+    rawUrl: string,
+    transform: ((url: string) => string) | undefined,
+  ) => {
+    const finalUrl = transform ? transform(rawUrl) : rawUrl;
     setUrl(finalUrl);
     setState("running");
     // Cache the grant-free URL; the iframe still loads `finalUrl` (with grant)
@@ -180,7 +196,10 @@ export function SandboxIframeService({
     onReady?.(finalUrl);
   };
 
-  const pollForReady = async (gen: number) => {
+  const pollForReady = async (
+    gen: number,
+    transform: ((url: string) => string) | undefined,
+  ) => {
     if (!sandboxId || !isActive) return;
     attempts.current = 0;
 
@@ -194,7 +213,7 @@ export function SandboxIframeService({
         });
         if (generation.current !== gen) return;
         if (data.ready) {
-          acceptReady(data.url);
+          acceptReady(data.url, transform);
           return;
         }
         attempts.current += 1;
@@ -231,7 +250,7 @@ export function SandboxIframeService({
           setState("error");
           return;
         }
-        await pollForReady(gen);
+        await pollForReady(gen, viewerTransform(result, transformUrl));
         return;
       }
 
@@ -243,7 +262,7 @@ export function SandboxIframeService({
       });
       if (generation.current !== gen) return;
       if (existing.ready) {
-        acceptReady(existing.url);
+        acceptReady(existing.url, transformUrl);
         return;
       }
       const result = await startAction();
@@ -253,7 +272,7 @@ export function SandboxIframeService({
         setState("error");
         return;
       }
-      await pollForReady(gen);
+      await pollForReady(gen, viewerTransform(result, transformUrl));
     } catch (err) {
       if (generation.current !== gen) return;
       setError(err instanceof Error ? err.message : startFailedError);

@@ -6,6 +6,7 @@ import type { GenericActionCtx } from "convex/server";
 import { action, internalAction } from "../_generated/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
+import { desktopStreamerValidator } from "../_sandbox/desktopStreamer";
 import { internal } from "../_generated/api";
 import { execHandle, getSandboxHandle, workspaceDirShell } from "./helpers";
 import { WORKSPACE_ROOT } from "./workspaceLayout";
@@ -151,7 +152,9 @@ export const toggleDesktopServer = action({
     repoId: v.id("githubRepos"),
     action: v.union(v.literal("start"), v.literal("stop")),
   },
-  returns: v.null(),
+  // `start` resolves to the streamer serving the desktop, so the panel loads
+  // the matching viewer; `stop` resolves to null.
+  returns: v.union(desktopStreamerValidator, v.null()),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
@@ -170,11 +173,9 @@ export const toggleDesktopServer = action({
     if (args.action === "start") {
       // Resolution comes from the VNC_RESOLUTION env var set at sandbox creation
       // (see createSandbox in git.ts) — Xvfb starts at 1920x1080 natively.
-      await handle.desktop.start();
-    } else {
-      await handle.desktop.stop();
+      return await handle.desktop.start();
     }
-
+    await handle.desktop.stop();
     return null;
   },
 });

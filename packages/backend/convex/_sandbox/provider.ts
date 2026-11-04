@@ -16,6 +16,8 @@
  * separate follow-up, not part of the provider removal.
  */
 
+import type { DesktopStreamer } from "./desktopStreamer";
+
 /** Which backend fulfils sandbox operations. Vercel is the only implementation. */
 export type SandboxProviderKind = "vercel";
 
@@ -156,7 +158,8 @@ export interface SandboxGit {
 
 /** Desktop / ComputerUse capability (Xvfb + browser for vision tasks). */
 export interface SandboxDesktop {
-  start(): Promise<void>;
+  /** Resolves to the streamer actually serving the desktop. */
+  start(): Promise<DesktopStreamer>;
   stop(): Promise<void>;
 }
 
