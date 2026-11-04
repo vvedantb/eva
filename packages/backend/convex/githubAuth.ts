@@ -44,13 +44,23 @@ export function getGitHubCredentials() {
   };
 }
 
-/** Generates a short-lived access token for a GitHub App installation. */
+let sharedAppAuth: ReturnType<typeof createAppAuth> | null = null;
+
+/**
+ * One `createAppAuth` per process. It caches installation tokens (keyed by
+ * installation, permissions and repositories) until shortly before expiry,
+ * so repeated calls in a warm action reuse the token instead of minting one.
+ */
+function appAuth(): ReturnType<typeof createAppAuth> {
+  sharedAppAuth ??= createAppAuth(getGitHubCredentials());
+  return sharedAppAuth;
+}
+
+/** Short-lived access token for a GitHub App installation (cached per process). */
 export async function getInstallationToken(
   installationId: number,
 ): Promise<string> {
-  const creds = getGitHubCredentials();
-  const auth = createAppAuth(creds);
-  const installationAuth = await auth({
+  const installationAuth = await appAuth()({
     type: "installation",
     installationId,
   });
@@ -69,9 +79,7 @@ export async function getSiblingRepoInstallationToken(
   installationId: number,
   repo: { githubId: number | undefined; name: string },
 ): Promise<string> {
-  const creds = getGitHubCredentials();
-  const auth = createAppAuth(creds);
-  const installationAuth = await auth({
+  const installationAuth = await appAuth()({
     type: "installation",
     installationId,
     permissions: { contents: "write", metadata: "read" },

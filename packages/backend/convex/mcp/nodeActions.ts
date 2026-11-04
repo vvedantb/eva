@@ -1520,10 +1520,15 @@ export const orchestratorGetAgentState = internalAction({
 
     // A session's transcript is its Main chat's (parallel chats keep their
     // own); the streaming row is that chat's too.
-    const sessionChats =
+    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
+    // never sets `activeWorkflowId`, so that field alone is not "is executing".
+    const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
-        ? await loadSessionChatsAsUser(convexUrl, clerkUserId, id)
-        : [];
+        ? loadSessionChatsAsUser(convexUrl, clerkUserId, id)
+        : [],
+      ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
+      ctx.runQuery(internal.mcp.queries.chatPullRequests, { kind, id }),
+    ]);
     const mainChat =
       sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
     const transcriptParentId = kind === "session" ? (mainChat?._id ?? id) : id;
@@ -1531,13 +1536,6 @@ export const orchestratorGetAgentState = internalAction({
       kind === "session"
         ? transcriptParentId
         : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
-
-    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
-    // never sets `activeWorkflowId`, so that field alone is not "is executing".
-    const isExecuting: boolean = await ctx.runQuery(
-      internal.mcp.queries.entityIsExecuting,
-      { kind, id },
-    );
 
     const [rawStreaming, rawMessages, rawQueued] = await Promise.all([
       runQueryAsUser(convexUrl, clerkUserId, "streaming:get", {
@@ -1562,10 +1560,6 @@ export const orchestratorGetAgentState = internalAction({
       truncated: message.content.length > TRANSCRIPT_CHAR_LIMIT,
     }));
 
-    const pullRequests = await ctx.runQuery(
-      internal.mcp.queries.chatPullRequests,
-      { kind, id },
-    );
     const common = {
       kind,
       id,
@@ -1580,13 +1574,14 @@ export const orchestratorGetAgentState = internalAction({
 
     if (kind === "session") {
       const session = sessionDocSchema.parse(rawDoc);
-      const linkedRepos: McpLinkedRepo[] | undefined =
+      const [linkedRepos, sessionGroup] = await Promise.all([
         session.linkedRepoCount !== undefined && session.linkedRepoCount > 0
-          ? await ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
+          ? ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
               sessionId: id,
             })
-          : undefined;
-      const sessionGroup = await readSessionGroup(convexUrl, clerkUserId, id);
+          : undefined,
+        readSessionGroup(convexUrl, clerkUserId, id),
+      ]);
       return {
         ...common,
         numId: session.numId,

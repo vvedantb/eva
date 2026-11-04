@@ -3,7 +3,6 @@
 import { v } from "convex/values";
 import { Effect } from "effect";
 import { action } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 import { runActionEffect } from "../_effect/action";
@@ -66,12 +65,7 @@ export const submitPrReview = action({
       Effect.promise(async () => {
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) throw new Error("Not authenticated");
-        await getActionRepoWithAccess(ctx, args.repoId);
-
-        const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-          id: args.repoId,
-        });
-        if (!repo) throw new Error("Repo not found");
+        const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
         return {
           repo,
@@ -131,15 +125,10 @@ export const addPrComment = action({
   handler: async (ctx, args): Promise<{ id: number; htmlUrl: string }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const body = args.body.trim();
     if (body.length === 0) throw new Error("Comment cannot be empty");
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const { data } = await octokit.rest.issues.createComment({

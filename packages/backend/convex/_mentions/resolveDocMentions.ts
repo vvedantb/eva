@@ -47,58 +47,18 @@ export async function resolveDocMentions(
   const docs = new Map<string, ResolvedDocMention>();
   const mcpRefs = new Map<string, ResolvedMcpMention>();
 
-  for (const rawId of uniqueIds) {
-    const docId = ctx.db.normalizeId("docs", rawId);
-    if (docId) {
-      const doc = await ctx.db.get(docId);
-      if (doc && doc.repoId === repoId) {
-        docs.set(rawId, {
-          kind: "document",
-          title: doc.title,
-          content: doc.content,
-        });
-        continue;
-      }
-    }
-
-    const sessionId = ctx.db.normalizeId("sessions", rawId);
-    if (sessionId) {
-      const session = await ctx.db.get(sessionId);
-      if (session && session.repoId === repoId) {
-        mcpRefs.set(rawId, {
-          kind: "session",
-          title: session.title,
-          id: session._id,
-        });
-        continue;
-      }
-    }
-
-    const projectId = ctx.db.normalizeId("projects", rawId);
-    if (projectId) {
-      const project = await ctx.db.get(projectId);
-      if (project && project.repoId === repoId) {
-        mcpRefs.set(rawId, {
-          kind: "project",
-          title: project.title,
-          id: project._id,
-        });
-        continue;
-      }
-    }
-
-    const taskId = ctx.db.normalizeId("agentTasks", rawId);
-    if (taskId) {
-      const task = await ctx.db.get(taskId);
-      if (task && task.repoId === repoId) {
-        mcpRefs.set(rawId, {
-          kind: "quickTask",
-          title: task.title,
-          id: task._id,
-        });
-      }
-    }
-  }
+  // Ids resolve independently: look them up together, then fill the maps in
+  // message order so the prefix block order does not change.
+  const ids = [...uniqueIds];
+  const resolved = await Promise.all(
+    ids.map((rawId) => resolveMention(ctx, rawId, repoId)),
+  );
+  ids.forEach((rawId, i) => {
+    const mention = resolved[i];
+    if (mention === null) return;
+    if (mention.kind === "document") docs.set(rawId, mention);
+    else mcpRefs.set(rawId, mention);
+  });
 
   const resolvedMessage = stripMentionTokens(message);
 
@@ -141,6 +101,46 @@ export async function resolveDocMentions(
 
   const prefixBlock = `${sections.join("\n\n---\n\n")}\n\n---`;
   return { resolvedMessage, prefixBlock };
+}
+
+/** One mention id, tried against docs, sessions, projects, then tasks. */
+async function resolveMention(
+  ctx: QueryCtx,
+  rawId: string,
+  repoId: Id<"githubRepos">,
+): Promise<ResolvedDocMention | ResolvedMcpMention | null> {
+  const docId = ctx.db.normalizeId("docs", rawId);
+  if (docId) {
+    const doc = await ctx.db.get(docId);
+    if (doc && doc.repoId === repoId) {
+      return { kind: "document", title: doc.title, content: doc.content };
+    }
+  }
+
+  const sessionId = ctx.db.normalizeId("sessions", rawId);
+  if (sessionId) {
+    const session = await ctx.db.get(sessionId);
+    if (session && session.repoId === repoId) {
+      return { kind: "session", title: session.title, id: session._id };
+    }
+  }
+
+  const projectId = ctx.db.normalizeId("projects", rawId);
+  if (projectId) {
+    const project = await ctx.db.get(projectId);
+    if (project && project.repoId === repoId) {
+      return { kind: "project", title: project.title, id: project._id };
+    }
+  }
+
+  const taskId = ctx.db.normalizeId("agentTasks", rawId);
+  if (taskId) {
+    const task = await ctx.db.get(taskId);
+    if (task && task.repoId === repoId) {
+      return { kind: "quickTask", title: task.title, id: task._id };
+    }
+  }
+  return null;
 }
 
 /**
