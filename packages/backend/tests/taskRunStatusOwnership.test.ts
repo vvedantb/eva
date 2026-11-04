@@ -1,13 +1,13 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { internal } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 
 /**
  * A run owns its task's `in_progress` status and nothing else. A user who
  * moves the task mid-run (to done, cancelled or a review column) keeps that
- * choice: run completion and the 2h watchdog only reset `in_progress`, and the
+ * choice: run completion, user cancel and the 2h watchdog only reset `in_progress`, and the
  * watchdog still times out the run instead of skipping the moved task.
  */
 
@@ -89,6 +89,34 @@ describe("task status during a run", () => {
         ...completion,
       });
       expect((await f.readTask())?.status).toBe("business_review");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "user cancel keeps a status the user picked mid-run",
+    async () => {
+      const f = await taskWithRun("code_review");
+      await f.t
+        .withIdentity({ subject: "clerk|ada" })
+        .mutation(api.taskWorkflow.cancelExecution, { taskId: f.taskId });
+      const task = await f.readTask();
+      expect(task?.status).toBe("code_review");
+      expect(task?.activeWorkflowId).toBeUndefined();
+      const run = await f.t.run(async (ctx) => ctx.db.get(f.runId));
+      expect(run?.status).toBe("cancelled");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "user cancel still moves an in-progress task back to todo",
+    async () => {
+      const f = await taskWithRun("in_progress");
+      await f.t
+        .withIdentity({ subject: "clerk|ada" })
+        .mutation(api.taskWorkflow.cancelExecution, { taskId: f.taskId });
+      expect((await f.readTask())?.status).toBe("todo");
     },
     TIMEOUT_MS,
   );
