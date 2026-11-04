@@ -1613,6 +1613,28 @@ html[data-page-hidden] .ave-face *,
     opacity: 0;
   }
 }
+/* Unread reply: a ring pulses off the corner dot three times, then the dot
+ * rests. Transform and opacity only, so it never repaints; finite, so an
+ * unread dot left for hours costs nothing. */
+.ave-unread-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px rgb(var(--primary));
+  opacity: 0;
+  animation: ave-unread-pulse 1.2s ease-out 0.3s 3;
+}
+@keyframes ave-unread-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  to {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
 @keyframes ave-mark-pop {
   0% {
     transform: scale(1);
