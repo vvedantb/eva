@@ -1,9 +1,17 @@
+import { Option, Schema } from "effect";
+import { NonEmptyText } from "../parse/schemaHelpers.js";
 import {
   codexItemToStep,
   getCodexAgentMessageText,
   getCodexThreadId,
 } from "../parse/toolSteps.js";
-import { probeCodexItemResult } from "../parse/toolResultCapture.js";
+import {
+  probeCodexItemResult,
+  readNonBlankString,
+  readNonEmptyString,
+  readObject,
+  readString,
+} from "../parse/toolResultCapture.js";
 import {
   syncCodexStateToPersist,
   writeCodexSessionState,
@@ -11,6 +19,41 @@ import {
 import { callbackState as S } from "../runtime/state.js";
 import type { CanonicalEvent, JsonObject, StreamLineResult } from "../types.js";
 import type { ProviderAdapter } from "./types.js";
+
+/** Streaming frames: the delta is appended as written and must carry text. */
+const AgentMessageDeltaFrame = Schema.Struct({
+  type: Schema.Literal("item.agent_message.delta"),
+  delta: NonEmptyText,
+});
+const ReasoningDeltaFrame = Schema.Struct({
+  type: Schema.Literal("item.reasoning.delta"),
+  delta: NonEmptyText,
+});
+
+/** An `agent_message` item (`agentMessage` in the App Server casing). */
+const AgentMessageItem = Schema.Struct({
+  type: Schema.Literal("agent_message", "agentMessage"),
+});
+
+/** A `reasoning` item — it carries thinking text rather than a tool step. */
+const ReasoningItem = Schema.Struct({ type: Schema.Literal("reasoning") });
+
+/** Any other typed item; these map to tool steps. */
+const ToolItem = Schema.Struct({
+  type: Schema.String.pipe(
+    Schema.filter(
+      (type) => type !== "agent_message" && type !== "agentMessage",
+    ),
+  ),
+});
+
+const decodeAgentMessageDelta = Schema.decodeUnknownOption(
+  AgentMessageDeltaFrame,
+);
+const decodeReasoningDelta = Schema.decodeUnknownOption(ReasoningDeltaFrame);
+const decodeAgentMessageItem = Schema.decodeUnknownOption(AgentMessageItem);
+const decodeReasoningItem = Schema.decodeUnknownOption(ReasoningItem);
+const decodeToolItem = Schema.decodeUnknownOption(ToolItem);
 
 export function codexParseLine(event: JsonObject): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
@@ -32,28 +75,24 @@ export function codexParseLine(event: JsonObject): CanonicalEvent[] {
     });
     return events;
   }
-  if (
-    event.type === "item.agent_message.delta" &&
-    typeof event.delta === "string" &&
-    event.delta
-  ) {
-    events.push({ kind: "stream_text_delta", text: event.delta });
+  const agentDelta = decodeAgentMessageDelta(event);
+  if (Option.isSome(agentDelta)) {
+    events.push({ kind: "stream_text_delta", text: agentDelta.value.delta });
     return events;
   }
-  if (
-    event.type === "item.reasoning.delta" &&
-    typeof event.delta === "string" &&
-    event.delta
-  ) {
-    events.push({ kind: "update_reasoning", text: event.delta });
+  const reasoningDelta = decodeReasoningDelta(event);
+  if (Option.isSome(reasoningDelta)) {
+    events.push({
+      kind: "update_reasoning",
+      text: reasoningDelta.value.delta,
+    });
     return events;
   }
+  const item = readObject(event, ["item"]);
   if (
     event.type === "item.started" &&
-    event.item &&
-    typeof event.item === "object" &&
-    !Array.isArray(event.item) &&
-    (event.item.type === "agent_message" || event.item.type === "agentMessage")
+    item &&
+    Option.isSome(decodeAgentMessageItem(item))
   ) {
     events.push({ kind: "mark_message_start" });
     return events;
@@ -65,30 +104,23 @@ export function codexParseLine(event: JsonObject): CanonicalEvent[] {
     (event.type === "item.started" ||
       event.type === "item.updated" ||
       event.type === "item.completed") &&
-    event.item &&
-    typeof event.item === "object" &&
-    !Array.isArray(event.item) &&
-    event.item.type === "reasoning"
+    item &&
+    Option.isSome(decodeReasoningItem(item))
   ) {
-    if (typeof event.item.text === "string" && event.item.text.trim()) {
-      events.push({ kind: "update_reasoning", text: event.item.text });
+    const text = readNonBlankString(item, ["text"]);
+    if (text !== undefined) {
+      events.push({ kind: "update_reasoning", text });
     }
     return events;
   }
   if (
     event.type === "item.started" &&
-    event.item &&
-    typeof event.item === "object" &&
-    !Array.isArray(event.item) &&
-    typeof event.item.type === "string" &&
-    event.item.type !== "agent_message" &&
-    event.item.type !== "agentMessage"
+    item &&
+    Option.isSome(decodeToolItem(item))
   ) {
-    const step = codexItemToStep(event.item);
+    const step = codexItemToStep(item);
     const trackingId =
-      step.type !== "thinking" && typeof event.item.id === "string"
-        ? event.item.id
-        : undefined;
+      step.type !== "thinking" ? readNonEmptyString(item, ["id"]) : undefined;
     events.push(
       trackingId
         ? { kind: "push_step", step, trackingId }
@@ -98,12 +130,10 @@ export function codexParseLine(event: JsonObject): CanonicalEvent[] {
   }
   if (
     event.type === "item.completed" &&
-    event.item &&
-    typeof event.item === "object" &&
-    !Array.isArray(event.item) &&
-    (event.item.type === "agent_message" || event.item.type === "agentMessage")
+    item &&
+    Option.isSome(decodeAgentMessageItem(item))
   ) {
-    const messageText = getCodexAgentMessageText(event.item);
+    const messageText = getCodexAgentMessageText(item);
     if (messageText && !S.streamedAssistantTextThisMessage) {
       events.push({ kind: "append_text", text: messageText });
     }
@@ -111,26 +141,18 @@ export function codexParseLine(event: JsonObject): CanonicalEvent[] {
   }
   if (
     (event.type === "item.completed" || event.type === "item.failed") &&
-    event.item &&
-    typeof event.item === "object" &&
-    !Array.isArray(event.item) &&
-    typeof event.item.type === "string" &&
-    event.item.type !== "agent_message" &&
-    event.item.type !== "agentMessage"
+    item &&
+    Option.isSome(decodeToolItem(item))
   ) {
-    const result = probeCodexItemResult(
-      event.item,
-      event.type === "item.failed",
-    );
-    if (typeof event.item.id === "string") {
+    const result = probeCodexItemResult(item, event.type === "item.failed");
+    // An id of any length identifies the step here (even an empty one), unlike
+    // the push path above where a blank id leaves the step untracked.
+    const trackingId = readString(item, ["id"]);
+    if (trackingId !== undefined) {
       events.push(
         result
-          ? {
-              kind: "complete_tool",
-              trackingId: event.item.id,
-              result,
-            }
-          : { kind: "complete_tool", trackingId: event.item.id },
+          ? { kind: "complete_tool", trackingId, result }
+          : { kind: "complete_tool", trackingId },
       );
     } else if (result) {
       events.push({ kind: "complete_tool", result });

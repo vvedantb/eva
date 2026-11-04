@@ -29,13 +29,17 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
-  convexErrorMessage,
   CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import {
+  convexErrorPresentation,
+  errorToneClassName,
+  type ConvexErrorPresentation,
+} from "@/lib/utils/convexErrorMessage";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
@@ -132,7 +136,7 @@ export function ProjectDetailClient({
   const { request: requestConfirm } = useRequestConfirm();
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
-  const [prError, setPrError] = useState<string | null>(null);
+  const [prError, setPrError] = useState<ConvexErrorPresentation | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const startBuild = useMutation(api.buildWorkflow.startBuild);
@@ -269,7 +273,7 @@ export function ProjectDetailClient({
     try {
       await createProjectPrAction({ projectId: projectId });
     } catch (err) {
-      setPrError(convexErrorMessage(err, "Failed to create PR"));
+      setPrError(convexErrorPresentation(err, "Failed to create PR"));
     }
     setIsCreatingPr(false);
   };
@@ -303,7 +307,7 @@ export function ProjectDetailClient({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to resolve conflicts";
-      setPrError(message);
+      setPrError({ message, tone: "error" });
     }
     setIsResolvingConflicts(false);
   };
@@ -480,7 +484,11 @@ export function ProjectDetailClient({
       headerRight={
         !isDraftOrFinalized ? (
           <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
-            {prError && <p className="text-xs text-destructive">{prError}</p>}
+            {prError && (
+              <p className={`text-xs ${errorToneClassName(prError.tone)}`}>
+                {prError.message}
+              </p>
+            )}
             <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
               <PrMergeConfetti owner={{ kind: "project", projectId }} />
               <ProjectContextUsage repoId={repo._id} projectId={projectId} />

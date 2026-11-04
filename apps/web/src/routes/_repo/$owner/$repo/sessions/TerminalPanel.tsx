@@ -9,6 +9,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import {
   attachNormalBufferWheelScroll,
   buildTerminalHistoryKey,
@@ -387,11 +388,10 @@ export function TerminalPanel({
           if (!mount.active || !currentTerminal) return;
           connectWebSocketRef
             .current(currentTerminal, mount, historyWriter)
-            .catch((err) => {
+            .catch((err: unknown) => {
               mount.dispatch({
                 type: "failed",
-                message:
-                  err instanceof Error ? err.message : CONNECT_FAILED_MESSAGE,
+                message: convexErrorMessage(err, CONNECT_FAILED_MESSAGE),
               });
             });
         }, RECONNECT_DELAY_MS);
@@ -508,7 +508,7 @@ export function TerminalPanel({
       } catch (err) {
         mount.dispatch({
           type: "failed",
-          message: err instanceof Error ? err.message : CONNECT_FAILED_MESSAGE,
+          message: convexErrorMessage(err, CONNECT_FAILED_MESSAGE),
         });
       }
     };

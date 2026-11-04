@@ -14,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { ensureHttps } from "@/lib/utils/ensureHttps";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import {
   SandboxAsleepState,
   type SandboxWake,
@@ -206,7 +207,7 @@ export function SandboxIframeService({
         pollTimer.current = setTimeout(check, 3000);
       } catch (err) {
         if (generation.current !== gen) return;
-        setError(err instanceof Error ? err.message : loadFailedError);
+        setError(convexErrorMessage(err, loadFailedError));
         setState("error");
       }
     };
@@ -256,7 +257,7 @@ export function SandboxIframeService({
       await pollForReady(gen);
     } catch (err) {
       if (generation.current !== gen) return;
-      setError(err instanceof Error ? err.message : startFailedError);
+      setError(convexErrorMessage(err, startFailedError));
       setState("error");
     }
   };

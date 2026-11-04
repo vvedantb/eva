@@ -147,12 +147,14 @@ describe("a tool in flight exempts the turn from the silence kill", () => {
    * reaches the bundle is not shipped.
    */
   test("the deployed callback bundle carries both SDK exemptions", () => {
+    // esbuild may suffix locals to dodge cross-module collisions (`now2`);
+    // the exemption's shape is the contract, not the mangled identifier.
     const flat = bundledScript.replace(/\s+/g, " ");
-    expect(flat).toContain(
-      "if (callbackState.inFlightToolUses > 0) { lastMessageAt = now; }",
+    expect(flat).toMatch(
+      /if \(callbackState\.inFlightToolUses > 0\) \{ lastMessageAt = now\d*; \}/,
     );
-    expect(flat).toContain(
-      "if (callbackState.inFlightToolUses > 0) { lastMessageAtMs = now; }",
+    expect(flat).toMatch(
+      /if \(callbackState\.inFlightToolUses > 0\) \{ lastMessageAtMs = now\d*; \}/,
     );
   });
 });

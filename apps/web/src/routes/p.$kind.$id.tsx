@@ -10,6 +10,7 @@ import {
   type PreviewWakeKind,
 } from "@eva/shared";
 import { buildUrlWithPath } from "@/lib/components/PreviewNavBar";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 const DEFAULT_PREVIEW_PORT = 3000;
 /** Same cadence as the Preview pane's readiness poll (useSandboxPreview). */
@@ -142,11 +143,11 @@ function PreviewWake() {
         if (cancelled) return;
         await waitForDevServer();
       })
-      .catch((err: Error) => {
+      .catch((err: unknown) => {
         if (cancelled) return;
         setPhase({
           kind: "error",
-          message: err.message || "Eva could not wake this sandbox.",
+          message: convexErrorMessage(err, "Eva could not wake this sandbox."),
         });
       });
     return () => {

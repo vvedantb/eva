@@ -9,7 +9,6 @@ import {
   toast,
   ConfirmSkipHint,
   skipConfirmTitle,
-  convexErrorMessage,
 } from "@vvedantb/ui";
 import {
   IconArchive,
@@ -28,6 +27,7 @@ import { useAction } from "convex/react";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { withMutationToast } from "@/lib/utils/mutationToast";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 export interface SessionMenuSession {
   _id: Id<"sessions">;

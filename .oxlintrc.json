@@ -27,6 +27,10 @@
     "react/static-components": "warn",
     "react/purity": "warn",
     "import/no-duplicates": "error",
+    "no-underscore-dangle": [
+      "warn",
+      { "allow": ["_tag", "_id", "_creationTime"] }
+    ],
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "off",
     "anti-slop/no-known-value-widening": "off",
@@ -72,6 +76,11 @@
             "name": "react",
             "importNames": ["useEffect"],
             "message": "Avoid useEffect: derive state inline, use event handlers, or rely on Convex live queries. Justify unavoidable effects with a comment. See CLAUDE.md."
+          },
+          {
+            "name": "@vvedantb/ui",
+            "importNames": ["convexErrorMessage"],
+            "message": "Import convexErrorMessage from @/lib/utils/convexErrorMessage: the package reads string ConvexError data only, so eva's { tag, message } payloads would render as JSON."
           }
         ]
       }
@@ -82,6 +91,10 @@
     {
       "files": ["apps/web/src/**"],
       "rules": { "eva/no-value-block-in-try": "error" }
+    },
+    {
+      "files": ["apps/web/src/lib/utils/convexErrorMessage.ts"],
+      "rules": { "no-restricted-imports": "off" }
     },
     {
       "files": ["packages/shared/src/index.ts"],

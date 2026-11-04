@@ -32,8 +32,10 @@ const execution = readSource("_sandbox_runtime/execution.ts");
 describe("fetchOrigin treats a missing remote ref as fetched=false", () => {
   const body = functionBody(git, "export async function fetchOrigin(");
 
-  test("catches the missing-ref helper inside the logged fetch step", () => {
-    expect(body).toContain("isMissingRemoteRefFetchFailure(error)");
+  test("catches the missing-ref classification inside the logged fetch step", () => {
+    expect(body).toContain(
+      'classifyGitFailure(error)._tag === "GitMissingRemoteRefError"',
+    );
     expect(body).toContain("return { fetched: false }");
     expect(body).toContain("return { fetched: true }");
   });

@@ -88,9 +88,11 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
    * reaches the bundle is not shipped.
    */
   test("the deployed callback bundle carries the backoff", () => {
+    // esbuild suffixes locals that collide across modules (`now` -> `now2`),
+    // so match the shape of the comparison, not the mangled identifier.
     const flat = withoutWhitespace(bundledScript);
-    expect(flat).toContain(
-      "now-params.lastIdleActivityAtMs<DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs",
+    expect(flat).toMatch(
+      /now\d*-params\.lastIdleActivityAtMs<DAEMON_CLAIM_POLL_TIMING\.fastPollWindowMs/,
     );
     expect(flat).toContain(
       "if(params.busy)returnDAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;",
@@ -103,8 +105,8 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
         functionBody(bundledScript, "function startClaimWatcher("),
       ),
       "the shipped watcher no longer picks its sleep through the selector",
-    ).toContain(
-      "awaitsleep(selectClaimPollIntervalMs({busy:turnInFlight,lastIdleActivityAtMs}))",
+    ).toMatch(
+      /awaitsleep\d*\(selectClaimPollIntervalMs\(\{busy:turnInFlight,lastIdleActivityAtMs\}\)\)/,
     );
     expect(
       timing("idlePollIntervalMs", bundledScript),

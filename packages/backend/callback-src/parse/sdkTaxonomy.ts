@@ -1,26 +1,101 @@
+import { Option, Schema } from "effect";
 import { callbackState as S } from "../runtime/state.js";
 import { mergeClaudeRateLimitEvent } from "../runtime/usageLimits.js";
-import type { CanonicalEvent, JsonObject, JsonValue } from "../types.js";
+import type { CanonicalEvent, JsonObject } from "../types.js";
 import { log } from "../utils.js";
+import { lenient, OptionalText, Text, TextArray } from "./schemaHelpers.js";
 
 const loggedUnknownKinds = new Set<string>();
 
 /** Task ids seen in prior `background_tasks_changed` payloads (daemon session). */
 const knownBackgroundTaskIds = new Set<string>();
 
-function readString(value: JsonValue): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
+/** The `type`/`subtype` pair every SDK message is dispatched on. */
+const SdkEnvelope = Schema.Struct({
+  type: Text,
+  subtype: OptionalText,
+});
 
-function readStringArray(value: JsonValue): string[] {
-  if (!Array.isArray(value)) return [];
-  const out: string[] = [];
-  for (const item of value) {
-    const s = readString(item);
-    if (s) out.push(s);
-  }
-  return out;
-}
+/** A `system:status` message, which keeps an active status row alive. */
+const StatusMessage = Schema.Struct({
+  type: Text.pipe(Schema.filter((value) => value === "system")),
+  subtype: Schema.Literal("status"),
+});
+
+/** `status` is matched untrimmed — the SDK sends this field verbatim. */
+const CompactingStatus = Schema.Struct({
+  status: Schema.Literal("compacting"),
+});
+
+const ToolProgress = Schema.Struct({
+  tool_use_id: Text,
+  elapsed_time_seconds: Schema.Number.pipe(Schema.finite()),
+});
+
+/** A summary is only usable when it names at least one step to patch. */
+const ToolUseSummary = Schema.Struct({
+  summary: Text,
+  preceding_tool_use_ids: TextArray.pipe(Schema.minItems(1)),
+});
+
+const FilesPersisted = Schema.Struct({
+  files: Schema.optional(
+    lenient(Schema.Array(lenient(Schema.Struct({ filename: OptionalText })))),
+  ),
+});
+
+const HookStarted = Schema.Struct({
+  hook_id: Text,
+  hook_name: OptionalText,
+});
+
+const HookProgress = Schema.Struct({
+  hook_id: Text,
+  output: OptionalText,
+  stdout: OptionalText,
+  stderr: OptionalText,
+});
+
+const HookResponse = Schema.Struct({
+  hook_id: Text,
+});
+
+const BackgroundTasksChanged = Schema.Struct({
+  tasks: Schema.optional(
+    lenient(
+      Schema.Array(
+        lenient(
+          Schema.Struct({ task_id: OptionalText, description: OptionalText }),
+        ),
+      ),
+    ),
+  ),
+});
+
+const ModelReroute = Schema.Struct({
+  reason: OptionalText,
+  message: OptionalText,
+  content: OptionalText,
+});
+
+const decodeEnvelope = Schema.decodeUnknownOption(SdkEnvelope);
+const decodeStatusMessage = Schema.decodeUnknownOption(StatusMessage);
+const decodeCompactingStatus = Schema.decodeUnknownOption(CompactingStatus);
+const decodeToolProgress = Schema.decodeUnknownOption(ToolProgress);
+const decodeToolUseSummary = Schema.decodeUnknownOption(ToolUseSummary);
+const decodeFilesPersisted = Schema.decodeUnknownOption(FilesPersisted);
+const decodeHookStarted = Schema.decodeUnknownOption(HookStarted);
+const decodeHookProgress = Schema.decodeUnknownOption(HookProgress);
+const decodeHookResponse = Schema.decodeUnknownOption(HookResponse);
+const decodeBackgroundTasks = Schema.decodeUnknownOption(
+  BackgroundTasksChanged,
+);
+const decodeModelReroute = Schema.decodeUnknownOption(ModelReroute);
+
+/** Shapes whose every field is optional, so an object payload always decodes. */
+type FilesPersistedFields = Schema.Schema.Type<typeof FilesPersisted>;
+type BackgroundTasksFields = Schema.Schema.Type<typeof BackgroundTasksChanged>;
+type ModelRerouteFields = Schema.Schema.Type<typeof ModelReroute>;
 
 function pushNoticeStep(label: string, detail?: string): CanonicalEvent[] {
   return [
@@ -60,7 +135,10 @@ function patchStepDetailByToolUseId(toolUseId: string, detail: string): void {
   }
 }
 
-function patchStepsWithSummary(toolUseIds: string[], summary: string): void {
+function patchStepsWithSummary(
+  toolUseIds: readonly string[],
+  summary: string,
+): void {
   const idSet = new Set(toolUseIds);
   for (const step of S.accumulatedSteps) {
     if (step.toolUseId && idSet.has(step.toolUseId)) {
@@ -82,50 +160,32 @@ function appendHookDetail(hookId: string, detail: string): void {
 }
 
 function readFileNamesFromPersisted(event: JsonObject): string {
-  const filesField = event.files;
-  if (!Array.isArray(filesField)) return "";
+  const fields = Option.getOrElse(
+    decodeFilesPersisted(event),
+    (): FilesPersistedFields => ({}),
+  );
   const names: string[] = [];
-  for (const entry of filesField) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      continue;
-    }
-    const filename = readString(entry.filename);
-    if (filename) names.push(filename);
+  for (const entry of fields.files ?? []) {
+    if (entry?.filename) names.push(entry.filename);
   }
   return names.join(", ");
 }
 
-function readBackgroundTaskIds(event: JsonObject): string[] {
-  const tasksField = event.tasks;
-  if (!Array.isArray(tasksField)) return [];
-  const ids: string[] = [];
-  for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
-      continue;
-    }
-    const taskId = readString(task.task_id);
-    if (taskId) ids.push(taskId);
-  }
-  return ids;
-}
-
-function readBackgroundTaskDescriptions(
+/** Background tasks carrying an id, in payload order (duplicates included). */
+function readBackgroundTasks(
   event: JsonObject,
-): Map<string, string> {
-  const tasksField = event.tasks;
-  const descriptions = new Map<string, string>();
-  if (!Array.isArray(tasksField)) return descriptions;
-  for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
-      continue;
-    }
-    const taskId = readString(task.task_id);
-    const description = readString(task.description);
-    if (taskId && description) {
-      descriptions.set(taskId, description);
+): { id: string; description?: string }[] {
+  const fields = Option.getOrElse(
+    decodeBackgroundTasks(event),
+    (): BackgroundTasksFields => ({}),
+  );
+  const tasks: { id: string; description?: string }[] = [];
+  for (const task of fields.tasks ?? []) {
+    if (task?.task_id) {
+      tasks.push({ id: task.task_id, description: task.description });
     }
   }
-  return descriptions;
+  return tasks;
 }
 
 /** Returns newly seen background task ids from a `background_tasks_changed` payload. */
@@ -148,17 +208,23 @@ function logUnknownSdkKind(kind: string): void {
   log("unhandled sdk kind: " + kind);
 }
 
-function parseModelReroute(event: JsonObject): CanonicalEvent[] | null {
-  const subtype = readString(event.subtype);
-  if (subtype === "model_reroute" || subtype === "model_fallback") {
-    const reason =
-      readString(event.reason) ??
-      readString(event.message) ??
-      readString(event.content);
-    return pushNoticeStep("Model rerouted", reason);
+function parseModelReroute(
+  event: JsonObject,
+  subtype: string,
+): CanonicalEvent[] | null {
+  if (
+    subtype !== "model_reroute" &&
+    subtype !== "model_fallback" &&
+    subtype !== "informational"
+  ) {
+    return null;
   }
+  const fields = Option.getOrElse(
+    decodeModelReroute(event),
+    (): ModelRerouteFields => ({}),
+  );
   if (subtype === "informational") {
-    const content = readString(event.content);
+    const content = fields.content;
     if (
       content &&
       (content.toLowerCase().includes("rerouted") ||
@@ -166,8 +232,12 @@ function parseModelReroute(event: JsonObject): CanonicalEvent[] | null {
     ) {
       return pushNoticeStep("Model rerouted", content);
     }
+    return null;
   }
-  return null;
+  return pushNoticeStep(
+    "Model rerouted",
+    fields.reason ?? fields.message ?? fields.content,
+  );
 }
 
 function isTaskSystemSubtype(subtype: string): boolean {
@@ -181,9 +251,9 @@ function isTaskSystemSubtype(subtype: string): boolean {
 
 /** True when this SDK message is owned by the taxonomy parser (not assistant/tool). */
 export function consumesClaudeSdkTaxonomyMessage(event: JsonObject): boolean {
-  const messageType =
-    typeof event.type === "string" ? event.type.trim() : undefined;
-  if (!messageType) return false;
+  const envelope = decodeEnvelope(event);
+  if (Option.isNone(envelope)) return false;
+  const { type: messageType, subtype } = envelope.value;
   if (
     messageType === "tool_progress" ||
     messageType === "tool_use_summary" ||
@@ -193,8 +263,6 @@ export function consumesClaudeSdkTaxonomyMessage(event: JsonObject): boolean {
     return true;
   }
   if (messageType !== "system") return false;
-  const subtype =
-    typeof event.subtype === "string" ? event.subtype.trim() : undefined;
   if (!subtype || subtype === "init" || isTaskSystemSubtype(subtype)) {
     return false;
   }
@@ -206,8 +274,9 @@ export function consumesClaudeSdkTaxonomyMessage(event: JsonObject): boolean {
  * Called from `claudeParseLine` before assistant/tool parsing.
  */
 export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
-  const messageType = readString(event.type);
-  if (!messageType) return [];
+  const envelope = decodeEnvelope(event);
+  if (Option.isNone(envelope)) return [];
+  const { type: messageType, subtype } = envelope.value;
 
   if (
     messageType !== "system" &&
@@ -233,26 +302,32 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
 
   if (messageType === "tool_progress") {
     completeActiveStatusStep();
-    const toolUseId = readString(event.tool_use_id);
-    const elapsed = event.elapsed_time_seconds;
-    if (toolUseId && typeof elapsed === "number" && Number.isFinite(elapsed)) {
-      const seconds = Math.max(0, Math.floor(elapsed));
-      patchStepDetailByToolUseId(toolUseId, `${seconds}s elapsed`);
+    const progress = decodeToolProgress(event);
+    if (Option.isSome(progress)) {
+      const seconds = Math.max(
+        0,
+        Math.floor(progress.value.elapsed_time_seconds),
+      );
+      patchStepDetailByToolUseId(
+        progress.value.tool_use_id,
+        `${seconds}s elapsed`,
+      );
     }
     return [];
   }
 
   if (messageType === "tool_use_summary") {
     completeActiveStatusStep();
-    const summary = readString(event.summary);
-    const ids = readStringArray(event.preceding_tool_use_ids);
-    if (summary && ids.length > 0) {
-      patchStepsWithSummary(ids, summary);
+    const summary = decodeToolUseSummary(event);
+    if (Option.isSome(summary)) {
+      patchStepsWithSummary(
+        summary.value.preceding_tool_use_ids,
+        summary.value.summary,
+      );
     }
     return [];
   }
 
-  const subtype = readString(event.subtype);
   if (!subtype) {
     logUnknownSdkKind(`${messageType}:?`);
     return [];
@@ -263,7 +338,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
   }
 
   if (subtype === "status") {
-    if (event.status === "compacting") {
+    if (Option.isSome(decodeCompactingStatus(event))) {
       return [
         { kind: "mark_last_complete" },
         {
@@ -295,16 +370,16 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
   }
 
   if (subtype === "hook_started") {
-    const hookId = readString(event.hook_id);
-    const hookName = readString(event.hook_name) ?? "Hook";
-    if (!hookId) return [];
+    const hook = decodeHookStarted(event);
+    if (Option.isNone(hook)) return [];
+    const hookId = hook.value.hook_id;
     return [
       { kind: "mark_last_complete" },
       {
         kind: "push_step",
         step: {
           type: "hook",
-          label: hookName,
+          label: hook.value.hook_name ?? "Hook",
           toolUseId: hookId,
           status: "active",
         },
@@ -314,38 +389,45 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
   }
 
   if (subtype === "hook_progress") {
-    const hookId = readString(event.hook_id);
-    const output =
-      readString(event.output) ??
-      readString(event.stdout) ??
-      readString(event.stderr);
-    if (hookId && output) {
-      appendHookDetail(hookId, output);
+    const hook = decodeHookProgress(event);
+    if (Option.isSome(hook)) {
+      const output =
+        hook.value.output ?? hook.value.stdout ?? hook.value.stderr;
+      if (output) {
+        appendHookDetail(hook.value.hook_id, output);
+      }
     }
     return [];
   }
 
   if (subtype === "hook_response") {
-    const hookId = readString(event.hook_id);
-    if (!hookId) return [];
-    return [{ kind: "complete_tool", trackingId: hookId }];
+    const hook = decodeHookResponse(event);
+    if (Option.isNone(hook)) return [];
+    return [{ kind: "complete_tool", trackingId: hook.value.hook_id }];
   }
 
   if (subtype === "background_tasks_changed") {
-    const taskIds = readBackgroundTaskIds(event);
-    const descriptions = readBackgroundTaskDescriptions(event);
-    const newly = diffNewBackgroundTaskIds(taskIds);
+    const tasks = readBackgroundTasks(event);
+    const descriptions = new Map<string, string>();
+    for (const task of tasks) {
+      if (task.description) {
+        descriptions.set(task.id, task.description);
+      }
+    }
+    const newly = diffNewBackgroundTaskIds(tasks.map((task) => task.id));
     const events: CanonicalEvent[] = [];
     for (const taskId of newly) {
-      const description = descriptions.get(taskId);
       events.push(
-        ...pushNoticeStep("Agent moved to background", description ?? taskId),
+        ...pushNoticeStep(
+          "Agent moved to background",
+          descriptions.get(taskId) ?? taskId,
+        ),
       );
     }
     return events;
   }
 
-  const reroute = parseModelReroute(event);
+  const reroute = parseModelReroute(event, subtype);
   if (reroute) {
     return reroute;
   }
@@ -365,8 +447,7 @@ export function parseClaudeSdkTaxonomy(event: JsonObject): CanonicalEvent[] {
 
 /** Completes any active status step when a non-status SDK message arrives. */
 export function completeStatusOnNonStatusMessage(event: JsonObject): void {
-  const messageType = readString(event.type);
-  if (messageType === "system" && event.subtype === "status") {
+  if (Option.isSome(decodeStatusMessage(event))) {
     return;
   }
   completeActiveStatusStep();

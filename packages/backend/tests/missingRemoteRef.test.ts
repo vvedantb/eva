@@ -1,9 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { classifyGitFailure } from "../convex/_git/gitErrors";
 import { SandboxCommandFailedError } from "../convex/_sandbox_runtime/sandboxErrors";
-import {
-  isMissingRemoteRefError,
-  isMissingRemoteRefFetchFailure,
-} from "../convex/_git/remoteRef";
 
 /**
  * Prod (2026-09-01): sandbox:fetchBaseBranch threw Uncaught
@@ -15,31 +12,36 @@ describe("missing remote ref is a handled git outcome", () => {
     "Uncaught SandboxCommandFailedError: Sandbox command failed (exit 128): fatal: couldn't find remote ref eva/automation-ts7a18s257e0ktzfcvj416b0ts8b3jsw-tn71c3mydagm4hfstgd8sxrxy58dj636";
 
   test("matches the prod fingerprint and British/American git wording", () => {
-    expect(isMissingRemoteRefError(axiomFingerprint)).toBe(true);
-    expect(isMissingRemoteRefError("fatal: could not find remote ref main")).toBe(
-      true,
+    expect(classifyGitFailure(new Error(axiomFingerprint))._tag).toBe(
+      "GitMissingRemoteRefError",
     );
-    expect(isMissingRemoteRefError("Sandbox command failed (exit 1): boom")).toBe(
-      false,
-    );
+    expect(
+      classifyGitFailure(new Error("fatal: could not find remote ref main"))
+        ._tag,
+    ).toBe("GitMissingRemoteRefError");
+    expect(
+      classifyGitFailure(new Error("Sandbox command failed (exit 1): boom"))
+        ._tag,
+    ).toBe("GitCommandError");
   });
 
   test("recognises the typed sandbox command error, not a network failure", () => {
-    const missing = new SandboxCommandFailedError(
-      "Sandbox command failed (exit 128): fatal: couldn't find remote ref eva/automation-dead",
-      {
-        exitCode: 128,
-        output: "fatal: couldn't find remote ref eva/automation-dead",
-      },
-    );
-    expect(isMissingRemoteRefFetchFailure(missing)).toBe(true);
+    const missing = new SandboxCommandFailedError({
+      message:
+        "Sandbox command failed (exit 128): fatal: couldn't find remote ref eva/automation-dead",
+      exitCode: 128,
+      output: "fatal: couldn't find remote ref eva/automation-dead",
+    });
+    expect(classifyGitFailure(missing)._tag).toBe("GitMissingRemoteRefError");
     expect(
-      isMissingRemoteRefFetchFailure(
-        new SandboxCommandFailedError(
-          "Sandbox command failed (exit 128): fatal: Authentication failed",
-          { exitCode: 128, output: "fatal: Authentication failed" },
-        ),
-      ),
-    ).toBe(false);
+      classifyGitFailure(
+        new SandboxCommandFailedError({
+          message:
+            "Sandbox command failed (exit 128): fatal: Authentication failed",
+          exitCode: 128,
+          output: "fatal: Authentication failed",
+        }),
+      )._tag,
+    ).toBe("GitNetworkError");
   });
 });

@@ -8,7 +8,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { getInstallationOctokit, getInstallationToken } from "../githubAuth";
 import { detectAppsForRepo } from "./helpers";
 import { authAction, getActionRepoWithAccess } from "../functions";
-import { assertUserCanUseRepo, listInstallationReposForUser } from "./userAuth";
+import {
+  assertUserCanUseRepo,
+  INSTALLATION_NOT_AUTHORIZED,
+  listInstallationReposForUser,
+} from "./userAuth";
 
 const listAccessibleReposRef = makeFunctionReference<
   "query",
@@ -80,7 +84,7 @@ export const listRepos = authAction({
       installationId: args.installationId,
     });
     if (accessState === "denied") {
-      throw new Error("Not authorized to inspect this installation");
+      throw new Error(INSTALLATION_NOT_AUTHORIZED);
     }
     // No Eva row for this installation yet, so there is nothing on our side that
     // could have authorized the caller. `installationId` arrives from the
@@ -127,7 +131,7 @@ export const detectMonorepoApps = authAction({
       installationId: args.installationId,
     });
     if (accessState === "denied") {
-      throw new Error("Not authorized to inspect this installation");
+      throw new Error(INSTALLATION_NOT_AUTHORIZED);
     }
     // Same reasoning as listRepos: with no Eva row backing the installation, the
     // caller's own GitHub token is the only thing that can vouch for them.

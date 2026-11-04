@@ -7,6 +7,7 @@ import { cn } from "@eva/ui";
 import { Button, Spinner, Textarea, toast } from "@vvedantb/ui";
 import { IconCheck, IconX } from "@tabler/icons-react";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { verdictSuccessTitle } from "./prVerdict";
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
@@ -100,8 +101,8 @@ export function PrReviewForm({
         });
         onSubmitted();
       })
-      .catch((cause: Error) => {
-        setError(cause.message || "GitHub rejected the review.");
+      .catch((cause: unknown) => {
+        setError(convexErrorMessage(cause, "GitHub rejected the review."));
       })
       .finally(() => setSubmitting(false));
   };

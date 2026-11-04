@@ -9,10 +9,10 @@ import {
   Spinner,
   SettingsField,
   SettingsSection,
-  convexErrorMessage,
 } from "@vvedantb/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
+import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 
 export function GrokBotSettingsClient() {
   const settings = useQuery(api.grokBot.getSettings);
