@@ -192,13 +192,26 @@ describe("backend authorization boundaries", () => {
     expect(callback).toContain("userId: claim.userId");
   });
 
-  it("Eva hosts no MCP OAuth server: Clerk issues and checks the tokens", () => {
+  // Prod MCP clients (Bee, Claude, Cursor) are registered against Eva's own
+  // OAuth server, so it must not be swapped for a Clerk proxy again.
+  it("Eva hosts its own MCP OAuth server on the Convex site", () => {
     const native = convexSource("mcp/native.ts");
     const http = convexSource("http.ts");
-    for (const source of [native, http]) {
-      expect(source).not.toContain("/mcp/oauth/");
-      expect(source).not.toContain("mcp-oauth");
+    for (const path of ["register", "authorize", "token"]) {
+      expect(http).toContain(`path: "/mcp/oauth/${path}"`);
+      expect(native).toContain(`/mcp/oauth/${path}`);
     }
-    expect(native).toContain("createAuthorizationServerMetadataProxy");
+    expect(native).not.toContain("createAuthorizationServerMetadataProxy");
+    expect(native).toContain("authorization_servers: [baseUrl]");
+    expect(convexSource("mcp/nodeActions.ts")).toContain(
+      'MCP_OAUTH_AUDIENCE = "mcp-oauth"',
+    );
+  });
+
+  it("OAuth token exchange binds authorization codes to clients and S256", () => {
+    const native = convexSource("mcp/native.ts");
+    expect(native).toContain("entry.clientId !== params.client_id");
+    expect(native).toContain('entry.codeChallengeMethod !== "S256"');
+    expect(native).toContain("entry.redirectUri !== params.redirect_uri");
   });
 });

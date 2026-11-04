@@ -595,7 +595,8 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
+  // Eva MCP OAuth: one-time authorization codes (5 min TTL), consumed by
+  // the /mcp/oauth/token exchange.
   mcpAuthCodes: defineTable({
     code: v.string(),
     clerkUserId: v.string(),
@@ -606,7 +607,8 @@ const schema = defineSchema({
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
+  // Eva MCP OAuth: dynamic client registrations (24h TTL) from
+  // /mcp/oauth/register.
   mcpClientRegistrations: defineTable({
     clientId: v.string(),
     clientSecret: v.optional(v.string()),

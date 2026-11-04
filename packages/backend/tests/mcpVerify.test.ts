@@ -13,7 +13,7 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
   authenticateMcpToken,
-  isInternalToken,
+  isEvaSignedToken,
   type McpPrincipal,
 } from "../convex/mcp/authenticate";
 
@@ -30,10 +30,11 @@ type FakeState =
 const clerk = vi.hoisted(() => {
   const created: Array<{ secretKey: string; publishableKey: string }> = [];
   const acceptsToken: string[][] = [];
+  const knownUsers = new Set<string>();
   const state: { next: () => Promise<FakeState> } = {
     next: () => Promise.reject(new Error("no fake state set")),
   };
-  return { created, acceptsToken, state };
+  return { created, acceptsToken, knownUsers, state };
 });
 
 vi.mock("@clerk/backend", () => ({
@@ -50,6 +51,12 @@ vi.mock("@clerk/backend", () => ({
         clerk.acceptsToken.push(opts.acceptsToken);
         return clerk.state.next();
       },
+      users: {
+        getUser: (userId: string) =>
+          clerk.knownUsers.has(userId)
+            ? Promise.resolve({ id: userId })
+            : Promise.reject(new Error("user not found")),
+      },
     };
   },
 }));
@@ -57,6 +64,7 @@ vi.mock("@clerk/backend", () => ({
 const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const INTERNAL_SECRET = "internal-test-secret-0123456789abcdef";
+const OAUTH_SECRET = "oauth-test-secret-0123456789abcdef";
 
 function signedIn(auth: FakeAuth): () => Promise<FakeState> {
   return () => Promise.resolve({ isAuthenticated: true, toAuth: () => auth });
@@ -77,15 +85,25 @@ function signToken(audience: string, claims: Record<string, string>) {
     .sign(new TextEncoder().encode(INTERNAL_SECRET));
 }
 
+function issueOauthTokens(clerkUserId: string) {
+  const t = convexTest(schema, modules);
+  return t.action(internal.mcp.nodeActions.issueTokens, {
+    clerkUserId,
+    clientId: "client_1",
+  });
+}
+
 let errors: MockInstance<typeof console.error>;
 
 beforeEach(() => {
   clerk.created.length = 0;
   clerk.acceptsToken.length = 0;
+  clerk.knownUsers.clear();
   vi.stubEnv("CLERK_SECRET_KEY", "sk_test_fake");
   vi.stubEnv("CLERK_PUBLISHABLE_KEY", "pk_test_fake");
   vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.test");
   vi.stubEnv("MCP_INTERNAL_SECRET", INTERNAL_SECRET);
+  vi.stubEnv("MCP_JWT_SECRET", OAUTH_SECRET);
   errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
@@ -201,20 +219,6 @@ describe("verifyAccessToken: mcp-internal tokens", () => {
   );
 
   test(
-    "rejects the removed mcp-oauth audience",
-    async () => {
-      clerk.state.next = () =>
-        Promise.resolve({
-          isAuthenticated: false,
-          reason: "token-invalid",
-          message: null,
-        });
-      expect(await verify(await signToken("mcp-oauth", {}))).toBeNull();
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
     "rejects a sandbox token signed with another secret",
     async () => {
       vi.stubEnv("MCP_INTERNAL_SECRET", "a-different-secret-0123456789abcdef");
@@ -225,6 +229,82 @@ describe("verifyAccessToken: mcp-internal tokens", () => {
           message: null,
         });
       expect(await verify(await signToken("mcp-internal", {}))).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("verifyAccessToken: Eva mcp-oauth tokens", () => {
+  const rejectedByClerk = () =>
+    Promise.resolve<FakeState>({
+      isAuthenticated: false,
+      reason: "token-invalid",
+      message: null,
+    });
+
+  test(
+    "accepts an Eva access token for a known Clerk user",
+    async () => {
+      clerk.knownUsers.add("user_oauth");
+      const tokens = await issueOauthTokens("user_oauth");
+      expect(await verify(tokens.access_token)).toEqual({
+        clerkUserId: "user_oauth",
+      });
+      expect(clerk.acceptsToken).toEqual([]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "rejects an Eva access token for a deleted Clerk user",
+    async () => {
+      const tokens = await issueOauthTokens("user_gone");
+      expect(await verify(tokens.access_token)).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "never accepts a refresh token as an access token",
+    async () => {
+      clerk.knownUsers.add("user_oauth");
+      const tokens = await issueOauthTokens("user_oauth");
+      expect(await verify(tokens.refresh_token)).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "rejects an mcp-oauth token signed with another secret",
+    async () => {
+      clerk.knownUsers.add("user_sandbox");
+      clerk.state.next = rejectedByClerk;
+      expect(await verify(await signToken("mcp-oauth", {}))).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "refreshes only for the client the token was issued to",
+    async () => {
+      clerk.knownUsers.add("user_oauth");
+      const tokens = await issueOauthTokens("user_oauth");
+      const t = convexTest(schema, modules);
+      const wrongClient = await t.action(
+        internal.mcp.nodeActions.refreshToken,
+        { refreshToken: tokens.refresh_token, clientId: "client_2" },
+      );
+      expect(wrongClient.success).toBe(false);
+      const refreshed = await t.action(internal.mcp.nodeActions.refreshToken, {
+        refreshToken: tokens.refresh_token,
+        clientId: "client_1",
+      });
+      expect(refreshed.success).toBe(true);
+      const accessAsRefresh = await t.action(
+        internal.mcp.nodeActions.refreshToken,
+        { refreshToken: tokens.access_token, clientId: "client_1" },
+      );
+      expect(accessAsRefresh.success).toBe(false);
     },
     TIMEOUT_MS,
   );
@@ -244,6 +324,18 @@ describe("authenticateMcpToken", () => {
       sandboxPrincipal,
     );
     expect(runAction).toHaveBeenCalledTimes(1);
+    expect(runAction).toHaveBeenCalledWith(
+      internal.mcp.nodeActions.verifyAccessToken,
+      { token },
+    );
+  });
+
+  test("Eva mcp-oauth tokens go straight to verifyAccessToken", async () => {
+    const token = await signToken("mcp-oauth", {});
+    const runAction = vi.fn(() => Promise.resolve({ clerkUserId: "user_x" }));
+    expect(await authenticateMcpToken({ runAction }, token)).toEqual({
+      clerkUserId: "user_x",
+    });
     expect(runAction).toHaveBeenCalledWith(
       internal.mcp.nodeActions.verifyAccessToken,
       { token },
@@ -283,11 +375,14 @@ describe("authenticateMcpToken", () => {
   });
 });
 
-describe("isInternalToken", () => {
-  test("is true only for the mcp-internal audience", async () => {
-    expect(isInternalToken(await signToken("mcp-internal", {}))).toBe(true);
-    expect(isInternalToken(await signToken("mcp-oauth", {}))).toBe(false);
-    expect(isInternalToken("opaque_token")).toBe(false);
-    expect(isInternalToken("a.not-base64!.c")).toBe(false);
+describe("isEvaSignedToken", () => {
+  test("is true only for Eva's own audiences", async () => {
+    expect(isEvaSignedToken(await signToken("mcp-internal", {}))).toBe(true);
+    expect(isEvaSignedToken(await signToken("mcp-oauth", {}))).toBe(true);
+    expect(isEvaSignedToken(await signToken("https://clerk.test", {}))).toBe(
+      false,
+    );
+    expect(isEvaSignedToken("opaque_token")).toBe(false);
+    expect(isEvaSignedToken("a.not-base64!.c")).toBe(false);
   });
 });

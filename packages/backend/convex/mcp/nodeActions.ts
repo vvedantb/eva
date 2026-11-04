@@ -51,6 +51,16 @@ import { getEvaBaseUrl } from "../_taskWorkflow/urls";
 // JWT Claim Schemas (boundary parsing for verified payloads)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MCP_OAUTH_AUDIENCE = "mcp-oauth";
+
+const oauthTokenClaims = z.object({
+  sub: z.string(),
+  clientId: z.string(),
+  iss: z.literal("eva"),
+  aud: z.literal(MCP_OAUTH_AUDIENCE),
+  type: z.literal("refresh").optional(),
+});
+
 const internalTokenClaims = z.object({
   sub: z.string(),
   iss: z.literal("eva"),
@@ -68,7 +78,122 @@ const mcpEntityKindValidator = v.union(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Internal Actions
+// Eva MCP OAuth tokens (`aud: "mcp-oauth"`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const oauthTokensValidator = v.object({
+  access_token: v.string(),
+  token_type: v.literal("Bearer"),
+  expires_in: v.number(),
+  scope: v.string(),
+  refresh_token: v.string(),
+});
+
+type OauthTokens = Infer<typeof oauthTokensValidator>;
+
+const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
+
+function oauthSecret(): Uint8Array {
+  return new TextEncoder().encode(requiredEnv("MCP_JWT_SECRET"));
+}
+
+function signOauthJwt(
+  claims: { sub: string; clientId: string; type?: "refresh" },
+  expiresIn: string,
+  secret: Uint8Array,
+): Promise<string> {
+  return new SignJWT(claims)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuer("eva")
+    .setAudience(MCP_OAUTH_AUDIENCE)
+    .setExpirationTime(expiresIn)
+    .setIssuedAt()
+    .sign(secret);
+}
+
+/** HS256 access (1h) and refresh (30d) tokens signed with `MCP_JWT_SECRET`. */
+async function createOauthTokens(
+  clerkUserId: string,
+  clientId: string,
+): Promise<OauthTokens> {
+  const secret = oauthSecret();
+  const sub = clerkUserId;
+  return {
+    access_token: await signOauthJwt({ sub, clientId }, "1h", secret),
+    token_type: "Bearer",
+    expires_in: ACCESS_TOKEN_TTL_SECONDS,
+    scope: "claudeai",
+    refresh_token: await signOauthJwt(
+      { sub, clientId, type: "refresh" },
+      "30d",
+      secret,
+    ),
+  };
+}
+
+/** Verified `mcp-oauth` claims, or null for any other token. */
+async function verifyOauthJwt(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, oauthSecret(), {
+      issuer: "eva",
+      audience: MCP_OAUTH_AUDIENCE,
+    });
+    const claims = oauthTokenClaims.safeParse(payload);
+    return claims.success ? claims.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Revocation check: a deleted Clerk user loses MCP access at the next call. */
+async function clerkUserExists(clerkUserId: string): Promise<boolean> {
+  try {
+    await getClerkClient(createClerkClient).users.getUser(clerkUserId);
+    return true;
+  } catch (err) {
+    console.error(
+      "[MCP][oauth] Clerk getUser failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  }
+}
+
+/** Called by the token endpoint after the code, client and PKCE checks pass. */
+export const issueTokens = internalAction({
+  args: { clerkUserId: v.string(), clientId: v.string() },
+  returns: oauthTokensValidator,
+  handler: async (_ctx, { clerkUserId, clientId }) =>
+    createOauthTokens(clerkUserId, clientId),
+});
+
+const refreshResultValidator = v.union(
+  v.object({ success: v.literal(true), tokens: oauthTokensValidator }),
+  v.object({ success: v.literal(false), error: v.string() }),
+);
+
+type RefreshResult = Infer<typeof refreshResultValidator>;
+
+export const refreshToken = internalAction({
+  args: { refreshToken: v.string(), clientId: v.string() },
+  returns: refreshResultValidator,
+  handler: async (_ctx, { refreshToken, clientId }): Promise<RefreshResult> => {
+    const claims = await verifyOauthJwt(refreshToken);
+    if (claims?.type !== "refresh" || claims.clientId !== clientId) {
+      return { success: false, error: "Expired or invalid refresh token" };
+    }
+    if (!(await clerkUserExists(claims.sub))) {
+      return { success: false, error: "Unknown user" };
+    }
+    return {
+      success: true,
+      tokens: await createOauthTokens(claims.sub, clientId),
+    };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Access token verification
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -100,11 +225,15 @@ async function verifyInternalToken(token: string) {
         : {}),
     };
   } catch {
-    // Not a valid sandbox token. The caller tries Clerk next.
+    // Not a valid sandbox token. The caller tries the next kind.
     return null;
   }
 }
 
+/**
+ * Order: sandbox `mcp-internal` → Eva `mcp-oauth` → Clerk. A refresh token
+ * is never accepted as an access token.
+ */
 export const verifyAccessToken = internalAction({
   args: { token: v.string() },
   returns: v.union(
@@ -120,6 +249,16 @@ export const verifyAccessToken = internalAction({
   handler: async (_ctx, { token }) => {
     const sandbox = await verifyInternalToken(token);
     if (sandbox) return sandbox;
+
+    // A missing MCP_JWT_SECRET throws in `oauthSecret`, which
+    // `verifyOauthJwt` turns into null, so Clerk still gets a chance.
+    const oauth = await verifyOauthJwt(token);
+    if (oauth && oauth.type === undefined) {
+      return (await clerkUserExists(oauth.sub))
+        ? { clerkUserId: oauth.sub }
+        : null;
+    }
+    if (oauth) return null;
 
     // Clerk OAuth access token (or session token). `getClerkClient` reads
     // CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY. `authenticateRequest` needs

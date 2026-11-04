@@ -46,6 +46,7 @@ import { Route as GlobalSetupIdRouteImport } from './routes/_global/setup/$id'
 import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/index'
 import { Route as GlobalTeamsTeamIdRouteRouteImport } from './routes/_global/teams/$teamId/route'
 import { Route as RepoOwnerRepoRouteImport } from './routes/_repo/$owner/$repo'
+import { Route as McpOauthAuthorizeRouteImport } from './routes/mcp/oauth/authorize'
 import { Route as PKindIdRouteImport } from './routes/p.$kind.$id'
 import { Route as GlobalTeamsTeamIdIndexRouteImport } from './routes/_global/teams/$teamId/index'
 import { Route as GlobalTeamsTeamIdTeamTabRouteImport } from './routes/_global/teams/$teamId/$teamTab'
@@ -339,6 +340,11 @@ const RepoOwnerRepoRoute = RepoOwnerRepoRouteImport.update({
   id: '/$owner/$repo',
   path: '/$owner/$repo',
   getParentRoute: () => RepoRoute,
+} as any)
+const McpOauthAuthorizeRoute = McpOauthAuthorizeRouteImport.update({
+  id: '/mcp/oauth/authorize',
+  path: '/mcp/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PKindIdRoute = PKindIdRouteImport.update({
   id: '/p/$kind/$id',
@@ -995,6 +1001,7 @@ export interface FileRoutesByFullPath {
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
+  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
   '/settings/': typeof GlobalSettingsIndexRoute
@@ -1133,6 +1140,7 @@ export interface FileRoutesByTo {
   '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
+  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
   '/settings': typeof GlobalSettingsIndexRoute
@@ -1255,6 +1263,7 @@ export interface FileRoutesById {
   '/_global/settings/theme': typeof GlobalSettingsThemeRoute
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
+  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
   '/_global/settings/': typeof GlobalSettingsIndexRoute
@@ -1398,6 +1407,7 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/setup/$id'
     | '/$owner/$repo'
+    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/artifacts/'
     | '/settings/'
@@ -1536,6 +1546,7 @@ export interface FileRouteTypes {
     | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
+    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/artifacts'
     | '/settings'
@@ -1657,6 +1668,7 @@ export interface FileRouteTypes {
     | '/_global/settings/theme'
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
+    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/_global/artifacts/'
     | '/_global/settings/'
@@ -1776,6 +1788,7 @@ export interface RootRouteChildren {
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
   DevLandingDemosRoute: typeof DevLandingDemosRoute
   DevUiGalleryRoute: typeof DevUiGalleryRoute
+  McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
   PKindIdRoute: typeof PKindIdRoute
 }
 
@@ -2039,6 +2052,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$owner/$repo'
       preLoaderRoute: typeof RepoOwnerRepoRouteImport
       parentRoute: typeof RepoRoute
+    }
+    '/mcp/oauth/authorize': {
+      id: '/mcp/oauth/authorize'
+      path: '/mcp/oauth/authorize'
+      fullPath: '/mcp/oauth/authorize'
+      preLoaderRoute: typeof McpOauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/p/$kind/$id': {
       id: '/p/$kind/$id'
@@ -3440,6 +3460,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
   DevLandingDemosRoute: DevLandingDemosRoute,
   DevUiGalleryRoute: DevUiGalleryRoute,
+  McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
   PKindIdRoute: PKindIdRoute,
 }
 export const routeTree = rootRouteImport

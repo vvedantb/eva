@@ -8,8 +8,8 @@ const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 /**
  * Convex caches query results and invalidates them on data dependencies, never on
  * wall-clock time. A query that reads the clock therefore keeps serving whatever
- * the clock said when the result was first computed: an old MCP OAuth client
- * lookup kept an expired registration alive past its 24h TTL that way (found by
+ * the clock said when the result was first computed: `mcp.oauth.getClient` kept
+ * an expired OAuth registration alive past its 24h TTL that way (found by
  * convex-doctor). The fix is always the same — take `now` as an arg, so
  * the clock is read in the mutation or action that can safely read it.
  *

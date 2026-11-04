@@ -27,10 +27,13 @@ import {
 } from "./_changelog/entry";
 import { buildChangelogVotePageHtml } from "./emailTemplates";
 import {
+  authorizeGet,
   health,
   mcpHandler,
   oauthMetadata,
   protectedResourceMetadata,
+  register,
+  token,
 } from "./mcp/native";
 
 const http = httpRouter();
@@ -863,7 +866,8 @@ http.route({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MCP (Clerk OAuth). Well-known routes, /mcp and /health.
+// MCP. Eva is its own OAuth authorization server: self-hosted well-known
+// metadata plus register / authorize / token, then /mcp and /health.
 // ─────────────────────────────────────────────────────────────────────────────
 
 registerMcpRoutes(http, {
@@ -872,6 +876,14 @@ registerMcpRoutes(http, {
   endpoints: [{ handler: mcpHandler }],
   health: { handler: health },
 });
+
+http.route({ path: "/mcp/oauth/register", method: "POST", handler: register });
+http.route({
+  path: "/mcp/oauth/authorize",
+  method: "GET",
+  handler: authorizeGet,
+});
+http.route({ path: "/mcp/oauth/token", method: "POST", handler: token });
 
 const changelogLinkFields = {
   run: z.string().min(1),
