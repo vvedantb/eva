@@ -73,6 +73,19 @@ export function isCurrentSandboxStartAttempt(
 }
 
 /**
+ * True once a newer start request owns the sandbox. This start's writes are
+ * already ignored (see above), but its remaining steps would still run against
+ * the live VM — relaunching the dev server under the newer start dropped every
+ * attached terminal. Untokened starts never are.
+ */
+export function isSupersededStart(
+  current: number | undefined,
+  attempt: number | undefined,
+): boolean {
+  return !isCurrentSandboxStartAttempt(current, attempt);
+}
+
+/**
  * A ready / allocated write that is ignored — a stale attempt, or a start that
  * finished after Stop or archive — would leave a VM nothing tracks. Delete it
  * unless the row tracks that same VM: a resume of the tracked VM is left to
