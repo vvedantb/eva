@@ -1,5 +1,6 @@
 "use node";
-import { createHash, randomBytes } from "crypto";
+import { randomToken, sha256Hex } from "@vvedantb/server";
+import { createHash } from "crypto";
 import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
@@ -16,6 +17,7 @@ import {
 } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
 import {
+  buildDockerBootstrapLock,
   buildDockerdBackgroundStart,
   buildDockerdProcessCleanup,
   buildDockerdStaleRuntimeCleanup,
@@ -215,6 +217,7 @@ export async function ensureDockerDaemon(
         PACKAGE_HELPER_SCRIPT,
         `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")} || true`,
         "command -v docker >/dev/null 2>&1 || exit 1",
+        ...buildDockerBootstrapLock(60),
         ...buildDockerdProcessCleanup(),
         "sleep 1",
         buildDockerdStaleRuntimeCleanup(),
@@ -264,6 +267,7 @@ export async function bootstrapVercelDocker(
     PACKAGE_HELPER_SCRIPT,
     `command -v docker >/dev/null 2>&1 || ${pkgInstall("docker")}`,
     'command -v docker >/dev/null 2>&1 || { echo "bootstrap-docker:no-binary"; exit 1; }',
+    ...buildDockerBootstrapLock(150),
     ...buildDockerdProcessCleanup(true),
     buildDockerdStaleRuntimeCleanup(true),
     "sudo systemctl start docker 2>/dev/null || true",
@@ -336,9 +340,8 @@ export async function ensureSandboxRunning(
     options.timeoutSeconds ?? DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS;
   const startedAt = Date.now();
 
-  // Refresh first. On a stopped Vercel sandbox, probing with exec waits ~20s for
-  // the SDK's auto-resume path to time out before we ever call start() — skip
-  // that probe when state already says we need a resume.
+  // Refresh first and skip the exec probe when state already says we need a
+  // resume: lazy resume is off, so the probe would only fail on a stopped VM.
   let knownState: string | null = null;
   try {
     await sandbox.refresh();
@@ -393,7 +396,7 @@ export async function ensureSandboxRunning(
     options.onRestoring
   ) {
     // Vercel maps stopped→stopped (not archived). Surface progress while
-    // start() waits on the first exec that resumes the snapshot.
+    // start() resumes the snapshot.
     console.log(
       `[sandbox] ensureSandboxRunning: sandbox ${sandbox.id} is ${state}, waiting for resume`,
     );
@@ -458,7 +461,17 @@ export async function restartUnresponsiveSandbox(
   });
 }
 
+<<<<<<< HEAD
 export { sleep } from "../_shared/async";
+=======
+/** Returns the value of a required environment variable, throwing if missing. */
+/** Returns a promise that resolves after the specified milliseconds. */
+export async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+>>>>>>> origin/main
 
 export const WARMING_SANDBOX_READY_TIMEOUT_SECONDS = 60;
 
@@ -573,6 +586,21 @@ export async function getSandboxHandle(
   return getSandboxClient(credentials).get(sandboxId);
 }
 
+/**
+ * Handle for a best-effort job (kill, diagnostics, deadline extension) that
+ * must never wake a stopped VM: `null` unless the provider reports it running.
+ * Lazy resume is off (`withoutLazyResume`), so an exec here would only throw;
+ * this skips the job cleanly instead of logging a failure.
+ */
+export async function getRunningSandboxHandle(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  sandboxId: string,
+): Promise<SandboxHandle | null> {
+  const sandbox = await getSandboxHandle(ctx, repoId, sandboxId);
+  return sandbox.state === "running" ? sandbox : null;
+}
+
 /** Signs sandbox and MCP tokens, then launches the AI agent script on the sandbox. */
 export async function signAndLaunchScript(
   ctx: GenericActionCtx<DataModel>,
@@ -602,6 +630,7 @@ export async function signAndLaunchScript(
     openSyntheticTurnMutation?: string;
     completeSyntheticTurnMutation?: string;
     updateBackgroundAgentsMutation?: string;
+    updateGoalMutation?: string;
   } = {},
 ): Promise<void> {
   const launchStartedAt = Date.now();
@@ -707,9 +736,9 @@ export async function signAndLaunchScript(
   const provider = getAIModelProvider(normalizeAIModel(opts.model));
   let harnessCatalogToken: string | undefined;
   if (provider === "claude") {
-    harnessCatalogToken = randomBytes(32).toString("hex");
+    harnessCatalogToken = randomToken(32, "hex");
     await ctx.runMutation(internal.harnessSkills.issueReportToken, {
-      tokenHash: createHash("sha256").update(harnessCatalogToken).digest("hex"),
+      tokenHash: await sha256Hex(harnessCatalogToken),
       provider,
       sandboxId: sandbox.id,
       repoId,

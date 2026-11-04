@@ -1,15 +1,17 @@
 ﻿"use client";
 
 import { DynamicLink } from "@/lib/components/DynamicLink";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
-  cn,
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
   LoadingState,
-} from "@eva/ui";
+  RelativeDateTime,
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
@@ -21,15 +23,20 @@ import {
   SessionFolderAuthor,
   SessionHoverCardBody,
 } from "@/lib/components/sidebar/SidebarListHoverCard";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
+import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SESSIONS_LEADING_SLOT,
+  SESSIONS_ROW_X,
+  SESSIONS_TEXT_INDENT,
+} from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
-export type SessionLinkedFrom = RepoPathParts;
+type SessionLinkedFrom = RepoPathParts;
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,
@@ -78,6 +85,8 @@ interface SidebarSessionItemProps {
   sandboxError?: string;
   /** When true, Drive grid replaces the sandbox status dot (agent turn in flight). */
   isExecuting?: boolean;
+  /** The open turn waits on a blocking question; the "?" mark replaces the grid. */
+  isAwaitingAnswer?: boolean;
   /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
   hasUnread?: boolean;
   isSelected: boolean;
@@ -96,6 +105,11 @@ interface SidebarSessionItemProps {
   linkedFrom?: SessionLinkedFrom;
   /** Set on sessions made by "Fork session"; shows the fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
+  /**
+   * The session's own app on rows in a cross-repo linked group: its mark sits
+   * left of the title, and the hover card names it.
+   */
+  app?: RepoAppMarkRepo;
 }
 
 /** Fork glyph on rows made by "Fork session"; the hover card names the source. */
@@ -152,28 +166,38 @@ function SessionPrIcon({
 }
 
 /**
- * Leading mark: Drive pixel grid while the assistant turn is in flight
- * (replaces sandbox status — awaiting a reply already implies sandbox active).
- * Otherwise the sandbox status color dot (simple view: error only).
+ * Leading mark: the "?" mark while the turn waits on the user's answer, the
+ * Drive pixel grid while it runs (both replace sandbox status — an open turn
+ * already implies an active sandbox). Otherwise the sandbox status color dot
+ * (simple view: error only).
  */
-export function SessionStatusLeading({
+function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
+  isAwaitingAnswer,
 }: {
   label: string;
   dotClassName: string;
   isExecuting: boolean;
+  isAwaitingAnswer: boolean;
 }) {
+  if (isAwaitingAnswer) {
+    return (
+      <span className={SESSIONS_LEADING_SLOT} title="Waiting for your answer">
+        <AwaitingAnswerMark />
+      </span>
+    );
+  }
   if (isExecuting) {
     return (
-      <span className="flex shrink-0 items-center" title="Working">
+      <span className={SESSIONS_LEADING_SLOT} title="Working">
         <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
       </span>
     );
   }
   return (
-    <span className="flex shrink-0 items-center" title={label}>
+    <span className={SESSIONS_LEADING_SLOT} title={label}>
       <span className={cn("size-2 shrink-0 rounded-full", dotClassName)} />
     </span>
   );
@@ -189,9 +213,7 @@ export function TitleRegeneratingHint({
 }) {
   if (!show) return null;
   return (
-    <span
-      className={cn("shrink-0 text-2xs text-muted-foreground", className)}
-    >
+    <span className={cn("shrink-0 text-2xs text-muted-foreground", className)}>
       Regenerating…
     </span>
   );
@@ -208,6 +230,7 @@ export function SidebarSessionItem({
   status,
   sandboxError,
   isExecuting = false,
+  isAwaitingAnswer = false,
   hasUnread = false,
   isSelected,
   onNavigate,
@@ -217,6 +240,7 @@ export function SidebarSessionItem({
   linkedRepoCount,
   linkedFrom,
   forkedFromSessionId,
+  app,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
   const simpleView = useSimpleView();
@@ -239,7 +263,9 @@ export function SidebarSessionItem({
   );
 
   const showLeading =
-    isExecuting || showsSandboxStatusDot(displayStatus, simpleView);
+    isAwaitingAnswer ||
+    isExecuting ||
+    showsSandboxStatusDot(displayStatus, simpleView);
   // Executing wins: the leading "Working" grid says more than the dot would.
   const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
   const statusLeading = showLeading ? (
@@ -247,19 +273,30 @@ export function SidebarSessionItem({
       label={statusLabel}
       dotClassName={statusStyle.dot}
       isExecuting={isExecuting}
+      isAwaitingAnswer={isAwaitingAnswer}
     />
+  ) : null;
+
+  const appMark = app ? (
+    <span className="flex shrink-0" title={repoDisplayLabel(app)}>
+      <RepoAppMark repo={app} />
+    </span>
   ) : null;
 
   const link = (
     <DynamicLink
       to={href}
       onClick={onNavigate}
-      className="block rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+      className={cn(
+        "block rounded-menu-item py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
+        SESSIONS_ROW_X,
+      )}
     >
       {isFolder ? (
-        <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
             {statusLeading}
+            {appMark}
             <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
@@ -269,7 +306,7 @@ export function SidebarSessionItem({
           <div
             className={cn(
               "flex min-w-0 items-center gap-2 opacity-60",
-              showLeading && "pl-4",
+              showLeading && SESSIONS_TEXT_INDENT,
             )}
           >
             <div className="min-w-0 flex-1">
@@ -291,6 +328,7 @@ export function SidebarSessionItem({
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           {statusLeading}
+          {appMark}
           <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
           <TitleRegeneratingHint show={isRegeneratingTitle} />
           <ForkedGlyph show={isFork} />
@@ -324,6 +362,7 @@ export function SidebarSessionItem({
           createdAt={createdAt}
           userId={userId}
           baseBranch={baseBranch}
+          app={app}
         />
       </HoverCardContent>
     </HoverCard>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 
 /** Below this a round-trip costs more than the polish is worth. */
 const MIN_POLISH_WORDS = 10;

@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { IconArrowRight, IconBrowser, IconCheck } from "@tabler/icons-react";
 import { m, type Variants } from "motion/react";
+import { cn } from "@eva/ui";
 import { LANDING_MCP_CALLS, LANDING_MCP_CARDS } from "./landingContent";
 import {
-  LandingLattice,
+  LANDING_CARD,
   LandingReveal,
   LandingSection,
   LandingSectionHeading,
@@ -25,7 +26,7 @@ export function LandingMcp() {
   return (
     <LandingSection id="mcp">
       <LandingReveal>
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:items-center">
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-16">
           <LandingSectionHeading
             eyebrow="Integrations"
             heading="Eva speaks MCP in both directions."
@@ -34,19 +35,22 @@ export function LandingMcp() {
           <McpCallPanel />
         </div>
 
-        <LandingLattice className="mt-12 lg:grid-cols-3">
+        <div className="mt-16 grid gap-3 lg:grid-cols-3">
           {LANDING_MCP_CARDS.map((card) => {
             const Icon = card.icon;
             return (
               <div
                 key={card.name}
-                className="motion-base flex flex-col gap-4 bg-background p-6 hover:bg-muted/30"
+                className={cn(
+                  LANDING_CARD,
+                  "motion-base flex flex-col gap-4 p-7 hover:bg-muted",
+                )}
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex size-9 items-center justify-center rounded-lg border border-border bg-card">
-                    <Icon size={17} className="text-primary" aria-hidden />
+                  <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
+                    <Icon size={18} className="text-primary" aria-hidden />
                   </div>
-                  <h3 className="text-base font-medium text-foreground">
+                  <h3 className="text-lg font-semibold tracking-tight text-foreground">
                     {card.name}
                   </h3>
                 </div>
@@ -55,7 +59,7 @@ export function LandingMcp() {
                   {card.summary}
                 </p>
 
-                <ul className="mt-auto space-y-2 border-t border-border pt-4">
+                <ul className="mt-auto space-y-2 border-t border-border/60 pt-5">
                   {card.points.map((point) => (
                     <li
                       key={point}
@@ -68,14 +72,14 @@ export function LandingMcp() {
               </div>
             );
           })}
-        </LandingLattice>
+        </div>
 
-        <div className="mt-4 flex items-start gap-4 rounded-surface bg-card p-6">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
-            <IconBrowser size={17} className="text-primary" aria-hidden />
+        <div className="mt-3 flex items-start gap-4 rounded-surface bg-muted/50 p-7">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-background">
+            <IconBrowser size={18} className="text-primary" aria-hidden />
           </div>
           <div className="space-y-1.5">
-            <h3 className="text-base font-medium text-foreground">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">
               Chrome extension
             </h3>
             <p className="text-pretty text-sm leading-relaxed text-muted-foreground">
@@ -93,8 +97,8 @@ export function LandingMcp() {
 /** Tool calls arriving from an external MCP client, revealed one at a time. */
 function McpCallPanel() {
   return (
-    <div className="overflow-hidden rounded-surface bg-card">
-      <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+    <div className="overflow-hidden rounded-surface bg-background smooth-shadow-ring-md">
+      <div className="flex items-center gap-2 border-b border-border/60 bg-muted/40 px-4 py-3">
         <p className="font-mono text-2xs text-muted-foreground">
           Claude Desktop
         </p>
@@ -110,7 +114,7 @@ function McpCallPanel() {
       </div>
 
       <m.div
-        className="divide-y divide-border"
+        className="divide-y divide-border/60"
         variants={CALLS_CONTAINER}
         initial="hidden"
         whileInView="show"
@@ -120,14 +124,14 @@ function McpCallPanel() {
           <m.div
             key={call.tool}
             variants={CALL_ROW}
-            className="flex items-center gap-3 px-4 py-2.5"
+            className="flex items-center gap-3 px-4 py-3"
           >
             <IconCheck
               size={13}
               className="shrink-0 text-success"
               aria-hidden
             />
-            <code className="shrink-0 font-mono text-[11.5px] text-foreground">
+            <code className="shrink-0 font-mono text-xs text-foreground">
               {call.tool}
             </code>
             <span className="min-w-0 flex-1 truncate text-right text-2xs text-muted-foreground">
@@ -137,7 +141,7 @@ function McpCallPanel() {
         ))}
       </m.div>
 
-      <p className="border-t border-border px-4 py-2.5 text-2xs text-muted-foreground">
+      <p className="border-t border-border/60 px-4 py-3 text-2xs text-muted-foreground">
         Around 25 tools, the same ones an agent calls from inside a sandbox.
       </p>
     </div>

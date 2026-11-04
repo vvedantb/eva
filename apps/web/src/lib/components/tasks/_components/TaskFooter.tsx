@@ -13,10 +13,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  motionFast,
+  tokenTransition,
   CrossfadeIconSlot,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  CopyLinkMenuItem,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconHammer,
@@ -28,13 +31,13 @@ import {
   IconServerBolt,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -170,7 +173,7 @@ export function TaskFooter({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {executionError ?? latestPrError}
           </m.p>
@@ -191,7 +194,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {executionError ?? latestPrError}
             </m.p>
@@ -204,7 +207,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <SplitRunButton
                 taskId={taskId}
@@ -226,6 +229,9 @@ export function TaskFooter({
               : "flex flex-wrap items-center gap-1.5 sm:gap-2"
           }
         >
+          {isHeader ? (
+            <PrMergeConfetti owner={{ kind: "task", taskId }} />
+          ) : null}
           {showMoreMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -245,7 +251,11 @@ export function TaskFooter({
                     title={skipConfirmTitle("Resolve Conflicts")}
                   >
                     {isStarting ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconHammer size={14} />
                     )}
@@ -263,7 +273,11 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Startup Commands")}
                   >
                     {isRetryingStartupCommands ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconRefresh size={14} />
                     )}
@@ -278,7 +292,11 @@ export function TaskFooter({
                     title={skipConfirmTitle("Run Dev Server")}
                   >
                     {isRunningDevServer ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconPlayerPlay size={14} />
                     )}
@@ -292,7 +310,11 @@ export function TaskFooter({
                     disabled={isRunningBackgroundCommands}
                   >
                     {isRunningBackgroundCommands ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : (
                       <IconServerBolt size={14} />
                     )}
@@ -315,6 +337,12 @@ export function TaskFooter({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          <SandboxCommitPushButton
+            gitSync={task?.sandboxGitSync}
+            isSandboxActive={isSandboxActive}
+            target={{ kind: "task", taskId }}
+            size={buttonSize}
+          />
           <AnimatePresence initial={false} mode="popLayout">
             {showSandboxToggle ? (
               <m.div
@@ -322,7 +350,7 @@ export function TaskFooter({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
               >
                 <SandboxStartStopButton
                   isActive={isSandboxActive}
@@ -374,6 +402,7 @@ function SplitRunButton({
         <TooltipTrigger asChild>
           <div>
             <Button
+              shape="rounded"
               size={size}
               onClick={
                 isScheduled
@@ -390,7 +419,8 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <CircleSpinner
+                  <Spinner
+                    variant="circle"
                     size="sm"
                     style={{ width: iconSize, height: iconSize }}
                   />
@@ -415,6 +445,7 @@ function SplitRunButton({
         scheduledAt={scheduledAt}
         trigger={
           <Button
+            shape="rounded"
             ref={chevronRef}
             size={size}
             aria-label="Schedule options"

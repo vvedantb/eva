@@ -8,7 +8,7 @@ import {
   DialogTitle,
   CrossfadeIcon,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconTrash } from "@tabler/icons-react";
 
 export interface RemoveMemberTarget {
@@ -45,8 +45,8 @@ export function RemoveMemberDialog({
             Remove {target?.label} from {target?.teamName}?
           </DialogTitle>
           <DialogDescription>
-            They lose access to the team&apos;s repos, shared accounts and env vars
-            immediately.
+            They lose access to the team&apos;s repos, shared accounts and env
+            vars immediately.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

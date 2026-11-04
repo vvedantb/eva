@@ -1,12 +1,46 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { marked } from "marked";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
+<<<<<<< HEAD
 import { buildAutomationEmailHtml } from "./emailTemplates";
 import { getEvaBaseUrl } from "./_env/webAppUrl";
+=======
+import {
+  buildAutomationEmailHtml,
+  buildChangelogEmailHtml,
+} from "./emailTemplates";
+import {
+  CHANGELOG_AUTOMATION_TITLE,
+  changelogVoteHmacMessage,
+  parseChangelog,
+  type ChangelogFeedback,
+} from "./_changelog/entry";
+import { hmacSha256Hex } from "./_shared/hmac";
+
+/** Reads a required environment variable, throwing a clear error when it is missing. */
+/** Builds the signed one-click feedback link for one recipient of one changelog run. */
+async function changelogFeedbackUrlBuilder(
+  runId: string,
+  userId: string,
+): Promise<(feedback: ChangelogFeedback) => string> {
+  const sig = await hmacSha256Hex(
+    requiredEnv("ENCRYPTION_KEY"),
+    changelogVoteHmacMessage(runId, userId),
+  );
+  const base = `${requiredEnv("CONVEX_SITE_URL")}/api/changelog/vote`;
+  return (feedback) => {
+    const params = new URLSearchParams({ run: runId, user: userId, sig });
+    params.set("vote", feedback.vote);
+    if ("itemIndex" in feedback) params.set("item", String(feedback.itemIndex));
+    return `${base}?${params}`;
+  };
+}
+>>>>>>> origin/main
 
 /**
  * Emails an automation's latest successful run summary to every user with email
@@ -23,8 +57,19 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
+<<<<<<< HEAD
     const appUrl = getEvaBaseUrl();
     const contentHtml = await marked.parse(run.content);
+=======
+    const appUrl = requiredEnv("WEB_APP_URL");
+    // The weekly changelog returns structured JSON and gets the card layout;
+    // every other automation (and legacy markdown changelogs) gets plain HTML.
+    const changelog =
+      run.automationTitle === CHANGELOG_AUTOMATION_TITLE
+        ? parseChangelog(run.content)
+        : null;
+    const contentHtml = changelog ? "" : await marked.parse(run.content);
+>>>>>>> origin/main
     const recipients = await ctx.runQuery(
       internal.users.listEmailRecipients,
       {},
@@ -33,14 +78,24 @@ export const sendAutomationEmail = internalAction({
     let sent = 0;
     const failures: string[] = [];
     for (const recipient of recipients) {
-      const html = buildAutomationEmailHtml({
-        recipientName: recipient.name,
-        appUrl,
-        contentHtml,
-        publishedAt: run.publishedAt,
-        heading: run.automationTitle,
-      });
       try {
+        const html = changelog
+          ? buildChangelogEmailHtml({
+              appUrl,
+              changelog,
+              publishedAt: run.publishedAt,
+              feedbackUrl: await changelogFeedbackUrlBuilder(
+                args.runId,
+                recipient.userId,
+              ),
+            })
+          : buildAutomationEmailHtml({
+              recipientName: recipient.name,
+              appUrl,
+              contentHtml,
+              publishedAt: run.publishedAt,
+              heading: run.automationTitle,
+            });
         await sendEmail({
           to: recipient.email,
           subject: `${run.automationTitle} #${run.runNumber}`,

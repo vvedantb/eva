@@ -1,4 +1,9 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
+import {
+  CHAT_LOG_AGENT_BODY_MAX,
+  CHAT_LOG_AGENT_TITLE_MAX,
+} from "@eva/shared/chatLog";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
 import {
@@ -9,10 +14,8 @@ import {
 } from "./entityRef";
 import {
   confirmedDeleteArg,
-  errorResult,
   mcpCallAsUser,
   mcpGetContext,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -96,7 +99,7 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
           },
           nullReply,
         );
-        return textResult({ artifactId, status: "deleted" });
+        return toolJsonResult({ artifactId, status: "deleted" });
       },
     }),
   );
@@ -122,7 +125,7 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
           { type: "mutation", path: "docs:remove", args: { id: docId } },
           nullReply,
         );
-        return textResult({ docId, status: "deleted" });
+        return toolJsonResult({ docId, status: "deleted" });
       },
     }),
   );
@@ -158,16 +161,27 @@ The reply is the chat's identity with the title it now has.`,
       handler: async ({ title, regenerate, ...ref }) => {
         const wantsRegenerate = regenerate === true;
         if (wantsRegenerate === (title !== undefined)) {
-          return errorResult('Pass exactly one of "title" or "regenerate".');
+          return toolErrorResult(
+            'Pass exactly one of "title" or "regenerate".',
+          );
         }
 
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
 
         if (title === undefined) {
           if (target.kind !== "session") {
-            return errorResult(
+            return toolErrorResult(
               'regenerate only works on sessions. Pass "title" to rename a quick task or project.',
             );
           }
@@ -181,7 +195,7 @@ The reply is the chat's identity with the title it now has.`,
             },
             z.object({ title: z.string() }),
           );
-          return textResult({
+          return toolJsonResult({
             ...entitySummary(target),
             title: generated.title,
             status: "renamed",
@@ -198,7 +212,7 @@ The reply is the chat's identity with the title it now has.`,
           },
           nullReply,
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           title,
           status: "renamed",
@@ -225,11 +239,20 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           .describe("The full plan as markdown. Replaces what is there."),
       },
       handler: async ({ planContent, ...ref }) => {
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "session") {
-          return errorResult(
+          return toolErrorResult(
             "Only sessions have a Plan tab. Quick tasks and projects keep their plan in the description or spec.",
           );
         }
@@ -244,7 +267,7 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           },
           nullReply,
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           planLength: planContent.length,
           status: "updated",
@@ -276,11 +299,20 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           ),
       },
       handler: async ({ planId, implementationSessionId, ...ref }) => {
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "session") {
-          return errorResult("Only sessions have proposed plans.");
+          return toolErrorResult("Only sessions have proposed plans.");
         }
 
         const plans = await mcpCallAsUser(
@@ -300,7 +332,7 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
                 .filter((row) => row.implementedAt === undefined)
                 .sort((a, b) => b.createdAt - a.createdAt)[0];
         if (plan === undefined) {
-          return errorResult(
+          return toolErrorResult(
             planId !== undefined
               ? "That plan does not belong to this session."
               : "This session has no proposed plan waiting to be implemented.",
@@ -320,7 +352,7 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           },
           nullReply,
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           planId: plan._id,
           status: "implemented",
@@ -351,11 +383,20 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           ),
       },
       handler: async ({ content, parentId, ...ref }) => {
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "task") {
-          return errorResult(
+          return toolErrorResult(
             'Comments live on tasks only. Name a task (kind "task").',
           );
         }
@@ -373,7 +414,7 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           },
           z.string(),
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           commentId,
           status: "posted",
@@ -391,11 +432,20 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "task") {
-          return errorResult(
+          return toolErrorResult(
             'Comments live on tasks only. Name a task (kind "task").',
           );
         }
@@ -418,7 +468,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
           createdAt: row.createdAt,
           deletedAt: row.deletedAt,
         }));
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           comments,
           count: comments.length,
@@ -436,7 +486,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       name: "log_entry",
       description: `Add one entry to a chat's Log, shown at the top of its Documents tab. Name no chat and it writes to the chat you are running in.
 
-The Log is append-only: it is how the user catches up on this chat weeks later. Log decisions (with the reason), research findings and changes, in user terms. To change an earlier decision, add a new decision and pass the old entry's id as "supersedes". The reply carries the new entry's id.`,
+The Log is append-only: it is how the user catches up on this chat weeks later, by skimming. Log decisions (with the reason), research findings and changes, in user terms: a headline title, at most 3 short bullets. When a decision, finding or figure changes, add the new entry and pass the old entry's id as "supersedes". Never log housekeeping (branch syncs, merges with main, sandbox state). The reply carries the new entry's id.`,
       mutating: true,
       input: {
         ...entityRefArgs,
@@ -448,25 +498,36 @@ The Log is append-only: it is how the user catches up on this chat weeks later. 
         title: z
           .string()
           .min(1)
-          .max(200)
-          .describe("One short sentence a reader can scan."),
+          .max(CHAT_LOG_AGENT_TITLE_MAX)
+          .describe(
+            "A headline that keeps the key fact or number. No markdown, no narration.",
+          ),
         body: z
           .string()
-          .max(4000)
+          .max(CHAT_LOG_AGENT_BODY_MAX)
           .optional()
           .describe(
-            "Markdown detail: the reason for a decision, the evidence for a finding.",
+            "Up to 3 short markdown bullets: the reason, the key evidence, an open risk. No paragraphs.",
           ),
         supersedes: z
           .string()
           .optional()
           .describe(
-            "Id of the earlier entry (from read_chat_log) that this decision replaces.",
+            "Id of the earlier entry (from read_chat_log) that this entry replaces: a changed decision, an updated finding or figure.",
           ),
       },
       handler: async ({ entryKind, title, body, supersedes, ...ref }) => {
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
         const entryId = await mcpCallAsUser(
           ctx,
@@ -485,7 +546,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later. 
           },
           z.string(),
         );
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           entryId,
           status: "logged",
@@ -497,12 +558,21 @@ The Log is append-only: it is how the user catches up on this chat weeks later. 
   tools.push(
     defineTool({
       name: "read_chat_log",
-      description: `Read a chat's Log as markdown: current decisions, then every entry by day. Name no chat and it reads the chat you are running in. Use it to catch up on what was agreed earlier, or to find the id of a decision to supersede (ids are listed after the markdown).`,
+      description: `Read a chat's Log as markdown: current decisions, then every entry by day. Name no chat and it reads the chat you are running in. Use it to catch up on what was agreed earlier, or to find the id of an entry to supersede (ids are listed after the markdown).`,
       mutating: false,
       input: { ...entityRefArgs },
       handler: async (ref) => {
+<<<<<<< HEAD
         const resolved = await resolveChat(ref);
         if ("isError" in resolved) return resolved;
+=======
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const resolved = await resolveEntityTarget(
+          withSelfDefault(ref, credentials),
+          userId,
+        );
+        if ("content" in resolved) return resolved;
+>>>>>>> origin/main
         const { target } = resolved;
         const source = chatSourceArg(target);
         const [markdown, rows] = await Promise.all([
@@ -526,12 +596,16 @@ The Log is append-only: it is how the user catches up on this chat weeks later. 
             },
             z.array(
               z
-                .object({ _id: z.string(), kind: z.string(), title: z.string() })
+                .object({
+                  _id: z.string(),
+                  kind: z.string(),
+                  title: z.string(),
+                })
                 .passthrough(),
             ),
           ),
         ]);
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           markdown,
           entries: rows.map((row) => ({

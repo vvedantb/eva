@@ -9,7 +9,7 @@ const boardSource = readFileSync(join(here, "KanbanBoard.tsx"), "utf8");
 
 /**
  * The column width class, read out of the source rather than imported —
- * `KanbanColumn.tsx` pulls in `@eva/ui`, and this only needs the string.
+ * `KanbanColumn.tsx` pulls in `@vvedantb/ui`, and this only needs the string.
  */
 const widthClass = (() => {
   const match = columnSource.match(

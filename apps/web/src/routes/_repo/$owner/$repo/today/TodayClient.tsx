@@ -3,18 +3,19 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, DAILY_STANDUP_KEY } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   CenteredSpinner,
-  cn,
-  motionBase,
-  motionStagger,
-} from "@eva/ui";
+  tokenTransition,
+  staggerDelay,
+  Markdown,
+  EmptyState,
+  Button,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
-import { Markdown } from "@eva/ui/markdown";
-import { IconSunrise } from "@tabler/icons-react";
+import { IconSunrise, IconPlus } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
@@ -59,26 +60,40 @@ export function TodayClient() {
         <CenteredSpinner label="Loading standups" />
       ) : entries.length === 0 ? (
         enabled === false ? (
-          <EmptyState
-            icon={<IconSunrise size={24} />}
-            title="Daily standup is off"
-            description="Turn on the Daily standup automation and eva will post a short summary of what shipped here every morning."
-            actionLabel="Turn on Daily standup"
-            onAction={() => {
-              void withMutationToast(
-                install({ repoId, key: DAILY_STANDUP_KEY }),
-                "Daily standup switched on",
-                "Couldn't switch on Daily standup",
-                "daily-standup-install",
-              );
-            }}
-          />
+          <EmptyState.Root>
+            <EmptyState.Icon icon={IconSunrise} size={24} />
+            <EmptyState.Title>Daily standup is off</EmptyState.Title>
+            <EmptyState.Description>
+              Turn on the Daily standup automation and eva will post a short
+              summary of what shipped here every morning.
+            </EmptyState.Description>
+            <EmptyState.Actions>
+              <Button
+                size="sm"
+                onClick={() => {
+                  void withMutationToast(
+                    install({ repoId, key: DAILY_STANDUP_KEY }),
+                    "Daily standup switched on",
+                    "Couldn't switch on Daily standup",
+                    "daily-standup-install",
+                  );
+                }}
+                className="mt-6"
+              >
+                <IconPlus size={16} />
+                Turn on Daily standup
+              </Button>
+            </EmptyState.Actions>
+          </EmptyState.Root>
         ) : (
-          <EmptyState
-            icon={<IconSunrise size={24} />}
-            title="No standups yet"
-            description="The Daily standup automation is on — its first summary will show up here after the next scheduled run."
-          />
+          <EmptyState.Root>
+            <EmptyState.Icon icon={IconSunrise} size={24} />
+            <EmptyState.Title>No standups yet</EmptyState.Title>
+            <EmptyState.Description>
+              The Daily standup automation is on — its first summary will show
+              up here after the next scheduled run.
+            </EmptyState.Description>
+          </EmptyState.Root>
         )
       ) : (
         // The rail is drawn on the list, not per entry, so it runs unbroken
@@ -90,7 +105,10 @@ export function TodayClient() {
               className="relative"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...motionBase, delay: motionStagger(index) }}
+              transition={{
+                ...tokenTransition.base,
+                delay: staggerDelay(index),
+              }}
             >
               <span
                 className={cn(

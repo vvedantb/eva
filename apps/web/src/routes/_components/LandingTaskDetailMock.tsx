@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@eva/ui";
 import {
   Accordion,
   AccordionContent,
@@ -13,8 +14,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconArrowUp } from "@tabler/icons-react";
 import { TaskStatusBadge } from "@/lib/components/tasks/TaskStatusBadge";
 import {
@@ -169,7 +169,7 @@ function LandingMockComposer() {
       <div className="flex items-center justify-end gap-2 px-2 pb-2">
         <Button
           size="icon"
-          className="size-8 rounded-full"
+          className="size-8"
           disabled
           tabIndex={-1}
           aria-hidden

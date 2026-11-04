@@ -15,6 +15,7 @@ import {
 } from "../validators";
 import { sessionValidator } from "./helpers";
 import {
+  awaitingAnswerEntityIdsForRepo,
   openChatEntityIdsForRepo,
   sessionIsExecuting,
 } from "../_chat/turnProjection";
@@ -25,6 +26,8 @@ const linkedFromValidator = v.object({
   owner: v.string(),
   name: v.string(),
   rootDirectory: v.optional(v.string()),
+  /** The app's custom display label, when set. */
+  label: v.optional(v.string()),
 });
 
 /**
@@ -74,6 +77,8 @@ const sessionListItemValidator = v.object({
    * or they opened it before. One `chatReads` read per list, not per row.
    */
   hasUnread: v.boolean(),
+  /** A turn is paused on a blocking question for the user (sidebar "?" mark). */
+  isAwaitingAnswer: v.boolean(),
   /**
    * Set only on rows this repo sees through a linked checkout rather than as
    * the session's own repo: the identity of the session's PRIMARY repo, so the
@@ -84,17 +89,27 @@ const sessionListItemValidator = v.object({
   linkedRepoCount: v.optional(v.number()),
   /** Source session when this one came from "Fork session" (sidebar fork glyph). */
   forkedFromSessionId: v.optional(v.id("sessions")),
+  /** Linked-session group; the sidebar lists these rows in their own section. */
+  sessionGroupId: v.optional(v.id("sessionGroups")),
+  /** The group's user-set name, when it has one. */
+  sessionGroupName: v.optional(v.string()),
 });
 
 /** Maps a full session doc to the slim list payload. */
 function toSessionListItem(
   session: Doc<"sessions">,
   openSessionIds: ReadonlySet<string>,
+  awaitingAnswerIds: ReadonlySet<string>,
   hasUnread: boolean,
-  linkedFrom?: { owner: string; name: string; rootDirectory?: string },
+  linkedFrom: { owner: string; name: string; rootDirectory?: string } | undefined,
+  groupNames: ReadonlyMap<string, string>,
 ) {
   return {
     linkedFrom,
+    sessionGroupId: session.sessionGroupId,
+    sessionGroupName: session.sessionGroupId
+      ? groupNames.get(session.sessionGroupId)
+      : undefined,
     linkedRepoCount: session.linkedRepoCount,
     forkedFromSessionId: session.forkedFromSessionId,
     _id: session._id,
@@ -124,6 +139,7 @@ function toSessionListItem(
     deploymentUrl: session.deploymentUrl,
     isExecuting: sessionIsExecuting(session, openSessionIds),
     hasUnread,
+    isAwaitingAnswer: awaitingAnswerIds.has(String(session._id)),
   };
 }
 
@@ -188,28 +204,49 @@ async function gatherLinkedSessions(
 }
 
 /**
- * Open-turn ids for every repo the listed sessions actually run under. Turns are
- * filed against a session's primary repo, so a linked-in row's turn is invisible
- * to this repo's own `by_repo_open` range.
+ * Per-repo turn ids (open, awaiting an answer) for every repo the listed
+ * sessions actually run under. Turns are filed against a session's primary
+ * repo, so a linked-in row's turn is invisible to this repo's own range.
  */
-async function openIdsIncludingLinked(
+async function turnIdsIncludingLinked(
   db: DatabaseReader,
-  ownOpenIds: ReadonlySet<string>,
+  repoId: Id<"githubRepos">,
   linked: ReadonlyArray<LinkedSession>,
+  idsForRepo: (
+    db: DatabaseReader,
+    repoId: Id<"githubRepos">,
+  ) => Promise<ReadonlySet<string>>,
 ): Promise<ReadonlySet<string>> {
-  if (linked.length === 0) return ownOpenIds;
-  const repoIds = new Map<string, Id<"githubRepos">>();
+  const repoIds = new Map<string, Id<"githubRepos">>([
+    [String(repoId), repoId],
+  ]);
   for (const row of linked) {
     repoIds.set(String(row.session.repoId), row.session.repoId);
   }
   const sets = await Promise.all(
-    [...repoIds.values()].map((id) => openChatEntityIdsForRepo(db, id)),
+    [...repoIds.values()].map((id) => idsForRepo(db, id)),
   );
-  const merged = new Set<string>(ownOpenIds);
+  const merged = new Set<string>();
   for (const set of sets) {
     for (const id of set) merged.add(id);
   }
   return merged;
+}
+
+/** Names of the named linked-session groups these sessions belong to. */
+async function sessionGroupNames(
+  db: DatabaseReader,
+  sessions: Doc<"sessions">[],
+): Promise<Map<string, string>> {
+  const ids = new Set<Id<"sessionGroups">>();
+  for (const session of sessions) {
+    if (session.sessionGroupId) ids.add(session.sessionGroupId);
+  }
+  const names = new Map<string, string>();
+  for (const group of await Promise.all([...ids].map((id) => db.get(id)))) {
+    if (group?.name) names.set(group._id, group.name);
+  }
+  return names;
 }
 
 /**
@@ -229,24 +266,27 @@ async function toSessionListItems(
     archived,
     new Set(sessions.map((session) => String(session._id))),
   );
-  const openSessionIds = await openIdsIncludingLinked(
-    db,
-    await openChatEntityIdsForRepo(db, repoId),
-    linked,
-  );
+  const [openSessionIds, awaitingAnswerIds] = await Promise.all([
+    turnIdsIncludingLinked(db, repoId, linked, openChatEntityIdsForRepo),
+    turnIdsIncludingLinked(db, repoId, linked, awaitingAnswerEntityIdsForRepo),
+  ]);
   const linkedFromBySession = new Map(
     linked.map((row) => [String(row.session._id), row.linkedFrom]),
   );
   const hasUnread = await unreadLookupForRepo(db, userId, repoId);
+  const rows = [...sessions, ...linked.map((row) => row.session)];
+  const groupNames = await sessionGroupNames(db, rows);
   return Promise.all(
-    [...sessions, ...linked.map((row) => row.session)]
+    rows
       .sort(byMostRecentlyUpdated)
       .map(async (session) =>
         toSessionListItem(
           session,
           openSessionIds,
+          awaitingAnswerIds,
           await hasUnread(session),
           linkedFromBySession.get(String(session._id)),
+          groupNames,
         ),
       ),
   );
@@ -344,6 +384,7 @@ async function toForkLink(
       owner: repo.owner,
       name: repo.name,
       rootDirectory: repo.rootDirectory,
+      label: repo.label,
     },
   };
 }
@@ -375,9 +416,7 @@ export const getForkLinks = authQuery({
       : null;
     const children = await ctx.db
       .query("sessions")
-      .withIndex("by_forked_from", (q) =>
-        q.eq("forkedFromSessionId", args.id),
-      )
+      .withIndex("by_forked_from", (q) => q.eq("forkedFromSessionId", args.id))
       .take(20);
     const forks = (
       await Promise.all(
@@ -385,6 +424,46 @@ export const getForkLinks = authQuery({
       )
     ).filter((link) => link !== null);
     return { forkedFrom, forks };
+  },
+});
+
+/**
+ * This session's linked-session group across repos: its name and every
+ * visible member, oldest first. Null when the session is in no group.
+ */
+export const listGroup = authQuery({
+  args: { id: v.id("sessions") },
+  returns: v.union(
+    v.object({
+      _id: v.id("sessionGroups"),
+      name: v.optional(v.string()),
+      members: v.array(
+        v.object({ ...forkLinkValidator.fields, archived: v.boolean() }),
+      ),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.id);
+    if (!session?.sessionGroupId) return null;
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
+      return null;
+    }
+    const group = await ctx.db.get(session.sessionGroupId);
+    if (!group) return null;
+    const rows = await ctx.db
+      .query("sessions")
+      .withIndex("by_session_group", (q) => q.eq("sessionGroupId", group._id))
+      .take(50);
+    const members = (
+      await Promise.all(
+        rows.map(async (row) => {
+          const link = await toForkLink(ctx.db, ctx.userId, row);
+          return link ? { ...link, archived: row.archived === true } : null;
+        }),
+      )
+    ).filter((member) => member !== null);
+    return { _id: group._id, name: group.name, members };
   },
 });
 

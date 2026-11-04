@@ -34,7 +34,7 @@ function notify() {
   for (const listener of listeners) listener();
 }
 
-function readEntityTitle(): string | null {
+export function readEntityTitle(): string | null {
   return entityTitle;
 }
 
@@ -47,6 +47,19 @@ function setEntityTitle(title: string | null, owner: object | null) {
   if (entityTitle === title) return;
   entityTitle = title;
   notify();
+}
+
+/**
+ * Names the tab after `title` and returns the matching clear. The clear is a
+ * no-op once a newer publish owns the title, so publishers may release in any
+ * order (see `useEntityDocumentTitle`).
+ */
+export function publishEntityTitle(title: string): () => void {
+  const owner = {};
+  setEntityTitle(title, owner);
+  return () => {
+    if (entityOwner === owner) setEntityTitle(null, null);
+  };
 }
 
 /** Mirrors the notification badge into the tab title, e.g. "(3) …". */
@@ -137,10 +150,6 @@ export function useEntityDocumentTitle(
 ) {
   useEffect(() => {
     if (!enabled || title === null || title === undefined) return;
-    const owner = {};
-    setEntityTitle(title, owner);
-    return () => {
-      if (entityOwner === owner) setEntityTitle(null, null);
-    };
+    return publishEntityTitle(title);
   }, [title, enabled]);
 }

@@ -1,4 +1,4 @@
-import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
+import { useDisablePageMotion } from "@vvedantb/ui";
 
 /**
  * Chart.js default duration is ~1000ms and uses a different ease than the rest

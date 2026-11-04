@@ -37,6 +37,9 @@ export const AVE_TOOL_NAMES = [
   "get_agent_state",
   "send_agent_message",
   "create_session",
+  "add_to_session_group",
+  "rename_session_group",
+  "remove_from_session_group",
   "create_task",
   "create_and_run_task",
   "create_tasks_batch",
@@ -59,7 +62,7 @@ const STEP_OUTPUT_CHARS = 2_000;
 const REPLAY_TOOL_OUTPUT_CHARS = 4_000;
 const REPLAY_TOTAL_CHARS = 200_000;
 
-/** The `ActivityStep` JSON shape the shared chat UI renders (`@eva/ui`). */
+/** The `ActivityStep` JSON shape the shared chat UI renders (`@vvedantb/ui`). */
 type AveStep = {
   type: "tool" | "response";
   label: string;

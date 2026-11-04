@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReference } from "convex/server";
 import { convexToJson } from "convex/values";
-import { useState } from "react";
+import { useHeldResult } from "@vvedantb/ui";
 
 /**
  * Like `useQuery`, but when `args` is `"skip"` the last successful result is
@@ -25,17 +25,10 @@ export function useHeldQuery<Query extends FunctionReference<"query">>(
   holdKey?: string,
 ): ReturnType<typeof useQuery<Query>> {
   const result: ReturnType<typeof useQuery<Query>> = useQuery(query, args);
-  const key =
+  return useHeldResult(
+    result,
     args === "skip"
       ? null
-      : (holdKey ?? JSON.stringify(convexToJson(args ?? {})));
-  // Held in state, not a ref: reading a ref during render makes the React
-  // Compiler skip the whole file. Adjusting state during render is the
-  // supported way to remember the previous value.
-  const [held, setHeld] = useState({ key, value: result });
-  if (result !== undefined && (result !== held.value || key !== held.key)) {
-    setHeld({ key, value: result });
-  }
-  if (result !== undefined) return result;
-  return key === null || key === held.key ? held.value : undefined;
+      : (holdKey ?? JSON.stringify(convexToJson(args ?? {}))),
+  );
 }

@@ -1,6 +1,6 @@
 "use node";
 
-import { v, type Infer } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
@@ -21,6 +21,7 @@ import {
 import {
   execHandle,
   resolveSandboxContext,
+  getRunningSandboxHandle,
   getSandboxHandle,
   ensureSandboxRunning,
   ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
@@ -56,6 +57,7 @@ import { buildPortListenProbeCommand } from "./httpReadyProbe";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
 import { isDaytonaNetworkIssue } from "../_taskWorkflow/recovery";
 import { assertActionSandboxAccess } from "../functions";
+import { sandboxGitTargetValidator } from "../sandboxGit";
 import {
   isSandboxGoneError,
   isSandboxUnresponsiveError,
@@ -98,6 +100,8 @@ import {
   getOrCreateSandbox,
   isTransientTransportError,
   pushBranchToOrigin,
+  commitAndPushCheckedOutBranch,
+  writeAutoPublishPolicy,
   EPHEMERAL_LIFECYCLE,
   SESSION_LIFECYCLE,
 } from "./git";
@@ -158,6 +162,8 @@ export const validateSandbox = internalAction({
   args: {
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
+    /** The caller knows another step provisions swap and Docker. */
+    skipDocker: v.optional(v.boolean()),
   },
   returns: v.object({ healthy: v.boolean() }),
   handler: async (ctx, args) => {
@@ -167,6 +173,7 @@ export const validateSandbox = internalAction({
       // Start the sandbox if it's stopped (fast resume ~3-5s)
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
+        skipDocker: args.skipDocker,
       });
       return { healthy: true };
     } catch (e) {
@@ -613,13 +620,9 @@ export const runBackgroundCommands = internalAction({
     // undici's 300s headersTimeout when run as a single long exec).
     if (launchedConvex) {
       const sessionId = args.sessionId;
-      const stillWanted =
-        sessionId === undefined
-          ? true
-          : await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId);
-      if (!stillWanted) {
+      if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
         console.log(
-          `[sandbox] runBackgroundCommands: skipping Convex readiness watch, session not running ${args.sandboxId}`,
+          `[sandbox] runBackgroundCommands: skipping Convex readiness watch, sandbox stopped ${args.sandboxId}`,
         );
       } else {
         await ctx.scheduler.runAfter(0, internal.sandbox.watchConvexReadiness, {
@@ -642,12 +645,23 @@ export const runBackgroundCommands = internalAction({
 const CONVEX_READY_POLL_INTERVAL_MS = 10_000;
 const CONVEX_READY_TIMEOUT_MS = 360_000;
 
-/** False once the user has stopped this session or it no longer owns the VM. */
-async function sessionStillRunningSandbox(
+/**
+ * False once Eva has stopped the VM: the session is no longer active or no
+ * longer owns it, or (no session) every owner is stopping or closed. Any exec
+ * after that resumes the stopped VM (Vercel SDK `withResume`) and bills it.
+ */
+export async function sandboxStillWanted(
   ctx: ActionCtx,
-  sessionId: Id<"sessions">,
   sandboxId: string,
+  sessionId: Id<"sessions"> | undefined,
 ): Promise<boolean> {
+  if (sessionId === undefined) {
+    const state = await ctx.runQuery(
+      internal.sandboxIdlePause.getSandboxOwnerState,
+      { sandboxId },
+    );
+    return state !== "stopping" && state !== "closed";
+  }
   const session = await ctx.runQuery(internal.sessions.getInternal, {
     id: sessionId,
   });
@@ -682,12 +696,9 @@ export const watchConvexReadiness = internalAction({
     if (convexIndexes.length === 0) return null;
 
     const sessionId = args.sessionId;
-    if (
-      sessionId !== undefined &&
-      !(await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId))
-    ) {
+    if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
       console.log(
-        `[sandbox] watchConvexReadiness: aborted, session not running ${args.sandboxId}`,
+        `[sandbox] watchConvexReadiness: aborted, sandbox stopped ${args.sandboxId}`,
       );
       return null;
     }
@@ -717,12 +728,9 @@ export const watchConvexReadiness = internalAction({
 
     const startedAt = Date.now();
     while (Date.now() - startedAt < CONVEX_READY_TIMEOUT_MS) {
-      if (
-        sessionId !== undefined &&
-        !(await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId))
-      ) {
+      if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
         console.log(
-          `[sandbox] watchConvexReadiness: aborted, session not running ${args.sandboxId}`,
+          `[sandbox] watchConvexReadiness: aborted, sandbox stopped ${args.sandboxId}`,
         );
         return null;
       }
@@ -749,10 +757,7 @@ export const watchConvexReadiness = internalAction({
       await sleep(CONVEX_READY_POLL_INTERVAL_MS);
     }
 
-    if (
-      sessionId !== undefined &&
-      !(await sessionStillRunningSandbox(ctx, sessionId, args.sandboxId))
-    ) {
+    if (!(await sandboxStillWanted(ctx, args.sandboxId, sessionId))) {
       console.log(
         `[sandbox] watchConvexReadiness: timed out after stop, not warning (${args.sandboxId})`,
       );
@@ -1316,6 +1321,77 @@ export const pushSandboxBranch = internalAction({
   },
 });
 
+/**
+ * Per-turn auto-publish policy, written before the agent runs. With the
+ * sender's `manualSideBranchPublish` flag on, only `branchName` (the chat
+ * branch) is auto-committed and auto-pushed at turn end; side branches the
+ * agent creates are left for it, or the user's "Commit & push", to publish.
+ * Best-effort: a failed write keeps the previous turn's policy, never fails
+ * the turn.
+ */
+export const applyBranchPublishPolicy = internalAction({
+  args: {
+    sandboxId: v.string(),
+    repoId: v.id("githubRepos"),
+    userId: v.id("users"),
+    branchName: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      const flags = await ctx.runQuery(
+        internal.auth.getExperimentalFlagsInternal,
+        { userId: args.userId },
+      );
+      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      await writeAutoPublishPolicy(
+        sandbox,
+        flags.manualSideBranchPublish ? args.branchName : null,
+      );
+    } catch (error) {
+      console.error(
+        `[sandbox][execution] applyBranchPublishPolicy failed sandbox=${args.sandboxId} branch=${args.branchName}: ${errorMessage(error, "unknown error")}`,
+      );
+    }
+    return null;
+  },
+});
+
+/**
+ * The branch chip's "Commit & push": commits the sandbox's uncommitted work on
+ * the checked-out branch and pushes it, side branches included.
+ */
+export const commitAndPushSandbox = action({
+  args: { target: sandboxGitTargetValidator },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const target = await ctx.runQuery(
+      internal.sandboxGit.getSandboxTargetInternal,
+      { target: args.target },
+    );
+    if (target === null) throw new ConvexError("No sandbox for this chat");
+    await assertActionSandboxAccess(ctx, target.repoId, target.sandboxId);
+    const sandbox = await getSandboxHandle(ctx, target.repoId, target.sandboxId);
+    let state: Awaited<ReturnType<typeof commitAndPushCheckedOutBranch>>;
+    try {
+      state = await commitAndPushCheckedOutBranch(
+        sandbox,
+        target.repoOwner,
+        target.repoName,
+      );
+    } catch (error) {
+      // Production redacts plain Error messages; the reason is the point here.
+      throw new ConvexError(errorMessage(error, "Couldn't push the branch"));
+    }
+    await ctx.runMutation(internal.sandboxGit.setSandboxGitStateInternal, {
+      target: args.target,
+      branch: state.branch,
+      sync: state.sync,
+    });
+    return null;
+  },
+});
+
 const pushLinkedRepoBranchResultValidator = v.object({
   sessionRepoId: v.id("sessionRepos"),
   pushed: v.boolean(),
@@ -1481,6 +1557,7 @@ type PrewarmEntityDaemonBaseParams = {
   openSyntheticTurnMutation: string;
   completeSyntheticTurnMutation: string;
   updateBackgroundAgentsMutation: string;
+  updateGoalMutation?: string;
   model?: string;
   reasoningLevel?: Infer<typeof reasoningLevelValidator>;
   thinkingEnabled?: boolean;
@@ -1757,8 +1834,13 @@ async function runPrewarmEntityDaemon(
       }
 
       if (await skipIfStopped()) return { prewarmed: false };
+      // skipDocker: the agent daemon needs neither swap nor dockerd, and the
+      // sandbox's own startup path already provisions both. On a new session
+      // this wait (~4s measured) sat before the launch, racing the
+      // createSandbox bootstrap of the same dockerd.
       await ensureSandboxRunning(sandbox, {
         timeoutSeconds: ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
+        skipDocker: true,
       });
 
       const claudeSessionId =
@@ -1783,6 +1865,7 @@ async function runPrewarmEntityDaemon(
           openSyntheticTurnMutation: args.openSyntheticTurnMutation,
           completeSyntheticTurnMutation: args.completeSyntheticTurnMutation,
           updateBackgroundAgentsMutation: args.updateBackgroundAgentsMutation,
+          updateGoalMutation: args.updateGoalMutation,
           extraEnvVars: {
             EVA_DAEMON_OPTS: optsSig,
             STREAMING_ENTITY_ID: streamingEntityId,
@@ -1833,6 +1916,8 @@ export const prewarmEntityDaemon = internalAction({
     openSyntheticTurnMutation: v.string(),
     completeSyntheticTurnMutation: v.string(),
     updateBackgroundAgentsMutation: v.string(),
+    // Optional: scheduled prewarms persisted before this field still validate.
+    updateGoalMutation: v.optional(v.string()),
     model: v.optional(v.string()),
     reasoningLevel: v.optional(reasoningLevelValidator),
     thinkingEnabled: v.optional(v.boolean()),
@@ -1857,8 +1942,8 @@ export const prewarmEntityDaemon = internalAction({
  * killed mid-work with no snapshot (filesystem rolls back to the pre-turn
  * snapshot on the next resume). A durable turn's lease renewal schedules
  * this (`renewTurnLease`) for every turn, quick-task runs included. Best-effort: a failed extension must
- * never fail the turn, and it must not resume a stopped sandbox (getting a
- * handle does not exec; extendTimeout on a stopped sandbox errors harmlessly).
+ * never fail the turn, and it must not resume a stopped sandbox — the SDK's
+ * extendTimeout auto-resumes, so it runs only on a VM reported running.
  */
 export const extendSandboxDeadline = internalAction({
   args: {
@@ -1869,7 +1954,12 @@ export const extendSandboxDeadline = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (!sandbox) return null;
       await sandbox.extendTimeout(args.durationMs);
     } catch (error) {
       console.log(
@@ -1954,14 +2044,20 @@ export const killEntityDaemon = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      // No daemon survives a stop, and an exec would resume the VM.
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (!sandbox) return null;
       await execHandle(
         sandbox,
         buildKillEntityDaemonCmd(args.entityIdField, args.entityId),
         10,
       );
     } catch {
-      /* sandbox may be stopped */
+      /* sandbox may be deleted */
     }
     return null;
   },

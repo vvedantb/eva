@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  useDeferredValue,
-  useState,
-  type ComponentType,
-} from "react";
+import { useDeferredValue, useState, type ComponentType } from "react";
 import { formatForDisplay } from "@tanstack/react-hotkeys";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -18,12 +14,9 @@ import {
   CommandShortcut,
   Dialog,
   DialogContent,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconFileCode, IconRefresh } from "@tabler/icons-react";
-import {
-  useShortcut,
-  useShortcutBinding,
-} from "@/lib/hotkeys/useShortcut";
+import { useShortcut, useShortcutBinding } from "@/lib/hotkeys/useShortcut";
 import type { SandboxFileListApi } from "./useSandboxFileList";
 import {
   rankSandboxFiles,

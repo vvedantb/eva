@@ -16,7 +16,7 @@ import {
   Input,
   WebPreviewNavigationButton,
   RefreshSpinIcon,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconArrowLeft,
   IconArrowRight,

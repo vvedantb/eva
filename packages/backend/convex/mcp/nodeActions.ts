@@ -6,9 +6,22 @@ import { createClerkClient } from "@clerk/backend";
 import { jwtVerify, SignJWT } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
+import {
+  consoleClerkVerifyLogger,
+  formatConvexQueryError,
+  getClerkClient,
+  requiredEnv,
+  runSdkMcpRequest,
+  verifyClerkAccessToken,
+} from "@vvedantb/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { buildTools } from "./tools";
+import {
+  ASK_TEAMMATE_TOOL_NAMES,
+  buildTools,
+  PR_WATCH_TOOL_NAMES,
+} from "./tools";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
@@ -33,8 +46,9 @@ import {
   type ChatEntityKind,
 } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { formatConvexQueryError } from "./convexQueryLimits";
+import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
+<<<<<<< HEAD
 import { requireEnv } from "../_env/requireEnv";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { signSandboxUserJwt } from "../sandboxJwt";
@@ -45,25 +59,14 @@ import { sleep } from "../_shared/async";
 // ─────────────────────────────────────────────────────────────────────────────
 // Environment Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+=======
+import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { evaMcpServerInfo } from "./serverInfo";
+>>>>>>> origin/main
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
 // ─────────────────────────────────────────────────────────────────────────────
-
-const refreshTokenClaims = z.object({
-  sub: z.string(),
-  type: z.literal("refresh"),
-  clientId: z.string(),
-  iss: z.literal("eva"),
-  aud: z.literal("mcp-oauth"),
-});
-
-const oauthTokenClaims = z.object({
-  sub: z.string(),
-  clientId: z.string(),
-  iss: z.literal("eva"),
-  aud: z.literal("mcp-oauth"),
-});
 
 const internalTokenClaims = z.object({
   sub: z.string(),
@@ -75,6 +78,7 @@ const internalTokenClaims = z.object({
   chatId: z.string().optional(),
 });
 
+<<<<<<< HEAD
 type OauthTokens = {
   access_token: string;
   token_type: "Bearer";
@@ -94,11 +98,19 @@ function refreshFailure(error: string): RefreshResult {
 function refreshSuccess(tokens: OauthTokens): RefreshResult {
   return { success: true, tokens };
 }
+=======
+const mcpEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+>>>>>>> origin/main
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Actions
 // ─────────────────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 async function createOauthTokens(
   clerkUserId: string,
   clientId: string,
@@ -188,9 +200,41 @@ export const refreshToken = internalAction({
       return refreshSuccess(tokens);
     } catch {
       return refreshFailure("Expired or invalid refresh token");
+=======
+/**
+ * Sandbox tokens: HS256, `aud: "mcp-internal"`, signed with
+ * `MCP_INTERNAL_SECRET`. Carry the repo, entity and chat scope.
+ */
+async function verifyInternalToken(token: string) {
+  const internalSecret = process.env.MCP_INTERNAL_SECRET;
+  if (!internalSecret) return null;
+  try {
+    const secret = new TextEncoder().encode(internalSecret);
+    const { payload } = await jwtVerify(token, secret);
+    const claims = internalTokenClaims.safeParse(payload);
+    if (!claims.success) {
+      console.error("[MCP][verifyAccessToken] internal token payload invalid");
+      return null;
+>>>>>>> origin/main
     }
-  },
-});
+    return {
+      clerkUserId: claims.data.sub,
+      scopedRepoId: claims.data.repoId,
+      ...(claims.data.entityId !== undefined
+        ? { entityId: claims.data.entityId }
+        : {}),
+      ...(claims.data.entityKind !== undefined
+        ? { entityKind: claims.data.entityKind }
+        : {}),
+      ...(claims.data.chatId !== undefined
+        ? { chatId: claims.data.chatId }
+        : {}),
+    };
+  } catch {
+    // Not a valid sandbox token. The caller tries Clerk next.
+    return null;
+  }
+}
 
 export const verifyAccessToken = internalAction({
   args: { token: v.string() },
@@ -205,6 +249,7 @@ export const verifyAccessToken = internalAction({
     v.null(),
   ),
   handler: async (_ctx, { token }) => {
+<<<<<<< HEAD
     // Try OAuth token first
     try {
       const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
@@ -284,6 +329,24 @@ export const verifyAccessToken = internalAction({
       );
       return null;
     }
+=======
+    const sandbox = await verifyInternalToken(token);
+    if (sandbox) return sandbox;
+
+    // Clerk OAuth access token (or session token). `getClerkClient` reads
+    // CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY. `authenticateRequest` needs
+    // both. A missing key throws inside `verifyClerkAccessToken`, which logs it
+    // and returns null.
+    const verified = await verifyClerkAccessToken(
+      () => getClerkClient(createClerkClient),
+      token,
+      {
+        acceptsToken: ["oauth_token", "session_token"],
+        ...consoleClerkVerifyLogger,
+      },
+    );
+    return verified ? { clerkUserId: verified.userId } : null;
+>>>>>>> origin/main
   },
 });
 
@@ -353,7 +416,38 @@ const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
 function getEvaConvexCloudUrl(): string {
   const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
+<<<<<<< HEAD
   return requireEnv("CONVEX_SITE_URL").replace(".convex.site", ".convex.cloud");
+=======
+  return requiredEnv("CONVEX_SITE_URL").replace(
+    ".convex.site",
+    ".convex.cloud",
+  );
+}
+
+/** Deployed web app origin, used to build hosted artifact view links. */
+async function getDeployKey(): Promise<string> {
+  if (cachedDeployKey && cachedDeployKey.expiresAt > Date.now()) {
+    return cachedDeployKey.value;
+  }
+  const response = await fetch(
+    `${requiredEnv("CONVEX_SITE_URL")}/api/mcp/bootstrap`,
+    {
+      headers: {
+        Authorization: `MCPBootstrap ${requiredEnv("MCP_BOOTSTRAP_SECRET")}`,
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to bootstrap deploy key: HTTP ${response.status}`);
+  }
+  const body = z.object({ deployKey: z.string() }).parse(await response.json());
+  cachedDeployKey = {
+    value: body.deployKey,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
+  return body.deployKey;
+>>>>>>> origin/main
 }
 
 async function runTestQueryRemote(
@@ -380,7 +474,25 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
     return cached.jwt;
   }
 
+<<<<<<< HEAD
   const jwt = await signSandboxUserJwt(clerkUserId, "1h");
+=======
+  const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
+  if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
+
+  const issuer = requiredEnv("CONVEX_SITE_URL");
+  const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
+  const kid = privateKeyJwk.kid ?? "sandbox-1";
+  const key = await importJWK(privateKeyJwk, "ES256");
+
+  const jwt = await new SignJWT({ sub: clerkUserId })
+    .setProtectedHeader({ alg: "ES256", kid })
+    .setIssuer(issuer)
+    .setAudience("convex")
+    .setExpirationTime("1h")
+    .setIssuedAt()
+    .sign(key);
+>>>>>>> origin/main
 
   userJwtCache.set(clerkUserId, {
     jwt,
@@ -926,11 +1038,28 @@ const sessionChatRowSchema = z.object({
 });
 
 /** A session's open chats; its transcript is the Main chat's. */
+<<<<<<< HEAD
 async function loadSessionChatsAsUser(clerkUserId: string, sessionId: string) {
   const rows = z.array(sessionChatRowSchema).parse(
     await runAsUser("query", clerkUserId, "sessionChats:listForSession", {
       sessionId,
     }),
+=======
+async function loadSessionChatsAsUser(
+  convexUrl: string,
+  clerkUserId: string,
+  sessionId: string,
+) {
+  const rows = z.array(sessionChatRowSchema).parse(
+    await runQueryAsUser(
+      convexUrl,
+      clerkUserId,
+      "sessionChats:listForSession",
+      {
+        sessionId,
+      },
+    ),
+>>>>>>> origin/main
   );
   return rows.filter((row) => row.archived !== true);
 }
@@ -999,13 +1128,12 @@ const WATCH_MUTATION: Record<ChatEntityKind, { fn: string; idArg: string }> = {
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
 };
 
-const aveThreadPointerSchema = z.object({ _id: z.string() }).nullable();
-
 /**
- * Implicit watch registration for create/send. Ave's own run passes its thread;
- * any other MCP caller registers against the user's live thread, if they have
- * one. Never clears an existing watch — that is what `setWatchedByAve` would
- * do without a thread id.
+ * Implicit watch registration for create/send: only Ave's own run, which passes
+ * its thread. Other senders (sandbox agents, OAuth connectors, PR-watch and
+ * automation-event deliveries) must not fall back to the user's live thread —
+ * that made Ave watch every chat they touched, so each turn end woke it.
+ * Explicit `watch_agent` keeps that fallback. Never clears an existing watch.
  */
 async function registerWatchIfAve(
   clerkUserId: string,
@@ -1013,6 +1141,7 @@ async function registerWatchIfAve(
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
+<<<<<<< HEAD
   const resolved =
     aveThreadId ??
     aveThreadPointerSchema.parse(
@@ -1020,6 +1149,10 @@ async function registerWatchIfAve(
     )?._id;
   if (resolved === undefined) return;
   await setWatchedByAve(clerkUserId, kind, id, resolved);
+=======
+  if (aveThreadId === undefined) return;
+  await setWatchedByAve(clerkUserId, kind, id, aveThreadId);
+>>>>>>> origin/main
 }
 
 export const orchestratorListAgents = internalAction({
@@ -1103,6 +1236,67 @@ export const orchestratorListAgents = internalAction({
  * `internal` — as the session branch does for its linked repos — would
  * otherwise make `internal` depend on itself.
  */
+/** A linked-session group as MCP callers see it: name and members across repos. */
+const mcpSessionGroupValidator = v.object({
+  id: v.string(),
+  name: v.optional(v.string()),
+  members: v.array(
+    v.object({
+      id: v.string(),
+      numId: v.optional(v.number()),
+      title: v.string(),
+      repo: v.string(),
+      archived: v.boolean(),
+    }),
+  ),
+});
+
+/** `sessions:listGroup` as read over HTTP; null when the session is in no group. */
+const sessionGroupSchema = z
+  .object({
+    _id: z.string(),
+    name: z.string().optional(),
+    members: z.array(
+      z.object({
+        _id: z.string(),
+        numId: z.number().optional(),
+        title: z.string(),
+        archived: z.boolean(),
+        repo: z.object({
+          owner: z.string(),
+          name: z.string(),
+          rootDirectory: z.string().optional(),
+        }),
+      }),
+    ),
+  })
+  .nullable();
+
+/** The session's linked-session group, read as the calling user. */
+async function readSessionGroup(
+  convexUrl: string,
+  clerkUserId: string,
+  sessionId: string,
+): Promise<Infer<typeof mcpSessionGroupValidator> | undefined> {
+  const group = sessionGroupSchema.parse(
+    await runQueryAsUser(convexUrl, clerkUserId, "sessions:listGroup", {
+      id: sessionId,
+    }),
+  );
+  if (!group) return undefined;
+  return {
+    id: group._id,
+    name: group.name,
+    members: group.members.map((member) => ({
+      id: member._id,
+      numId: member.numId,
+      title: member.title,
+      repo: repoRefLabel(member.repo),
+      archived: member.archived,
+    })),
+  };
+}
+
 const orchestratorAgentStateValidator = v.object({
   kind: chatEntityKindValidator,
   id: v.string(),
@@ -1142,6 +1336,8 @@ const orchestratorAgentStateValidator = v.object({
       }),
     ),
   ),
+  /** Sessions only, and only when it is in a linked-session group. */
+  sessionGroup: v.optional(mcpSessionGroupValidator),
 });
 
 export const orchestratorGetAgentState = internalAction({
@@ -1168,9 +1364,9 @@ export const orchestratorGetAgentState = internalAction({
       kind === "session"
         ? await loadSessionChatsAsUser(clerkUserId, id)
         : [];
-    const mainChat = sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
-    const transcriptParentId =
-      kind === "session" ? (mainChat?._id ?? id) : id;
+    const mainChat =
+      sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
+    const transcriptParentId = kind === "session" ? (mainChat?._id ?? id) : id;
     const streamingEntityId =
       kind === "session"
         ? transcriptParentId
@@ -1228,6 +1424,7 @@ export const orchestratorGetAgentState = internalAction({
               sessionId: id,
             })
           : undefined;
+      const sessionGroup = await readSessionGroup(convexUrl, clerkUserId, id);
       return {
         ...common,
         numId: session.numId,
@@ -1238,6 +1435,7 @@ export const orchestratorGetAgentState = internalAction({
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
         linkedRepos,
+        sessionGroup,
       };
     }
 
@@ -1270,6 +1468,7 @@ export const orchestratorGetAgentState = internalAction({
   },
 });
 
+<<<<<<< HEAD
 type ChatDocHit =
   | { kind: "session"; doc: z.infer<typeof sessionDocSchema> }
   | { kind: "task"; doc: z.infer<typeof agentTaskSchema> }
@@ -1293,6 +1492,52 @@ async function readChatDocAsUser(
   if (kind === "session") return { kind, doc: sessionDocSchema.parse(raw) };
   if (kind === "task") return { kind, doc: agentTaskSchema.parse(raw) };
   return { kind, doc: projectDocSchema.parse(raw) };
+=======
+/**
+ * Joins, renames or leaves a session's linked-session group as the calling
+ * user, through the same mutations the sidebar and header chip use. Returns
+ * the group as it stands afterwards (undefined once the session is out of it).
+ */
+export const orchestratorUpdateSessionGroup = internalAction({
+  args: {
+    clerkUserId: v.string(),
+    sessionId: v.string(),
+    change: v.union(
+      v.object({ kind: v.literal("add"), groupSessionId: v.string() }),
+      v.object({ kind: v.literal("rename"), name: v.string() }),
+      v.object({ kind: v.literal("remove") }),
+    ),
+  },
+  returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
+  handler: async (_ctx, { clerkUserId, sessionId, change }) => {
+    const convexUrl = getEvaConvexCloudUrl();
+    if (change.kind === "add") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:addToGroup", {
+        sessionId,
+        groupSessionId: change.groupSessionId,
+      });
+    } else if (change.kind === "rename") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:renameGroup", {
+        sessionId,
+        name: change.name,
+      });
+    } else {
+      await runMutationAsUser(
+        convexUrl,
+        clerkUserId,
+        "sessions:removeFromGroup",
+        { sessionId },
+      );
+    }
+    return {
+      sessionGroup: await readSessionGroup(convexUrl, clerkUserId, sessionId),
+    };
+  },
+});
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+>>>>>>> origin/main
 }
 
 /**
@@ -1455,7 +1700,17 @@ export const orchestratorSendMessage = internalAction({
       internal.mcp.queries.entityIsExecuting,
       { kind, id: targetId },
     );
+<<<<<<< HEAD
     const delivery = chatDelivery(storedModel, queuedAhead, model, isExecuting);
+=======
+    const delivery = chatDelivery(
+      kind,
+      rawDoc,
+      queuedAhead,
+      model,
+      isExecuting,
+    );
+>>>>>>> origin/main
     for (const call of buildChatMessageCalls({
       kind,
       id: targetId,
@@ -1690,6 +1945,8 @@ export const orchestratorCreateSession = internalAction({
     /** Saved codebase group whose members prefill the selection. */
     repoGroupId: v.optional(v.string()),
     installDependencies: v.optional(v.boolean()),
+    /** Calling session; the new session joins its linked-session group. */
+    fromSessionId: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -1708,6 +1965,7 @@ export const orchestratorCreateSession = internalAction({
       linkedRepoIds,
       repoGroupId,
       installDependencies,
+      fromSessionId,
     },
   ) => {
     // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
@@ -1727,6 +1985,7 @@ export const orchestratorCreateSession = internalAction({
     if (installDependencies !== undefined) {
       createArgs.installDependencies = installDependencies;
     }
+    if (fromSessionId) createArgs.fromSessionId = fromSessionId;
 
     const created = createdSessionSchema.parse(
       await runAsUser(
@@ -1843,80 +2102,44 @@ export const handleMcpRequest = internalAction({
     ctx,
     { clerkUserId, scopedRepoId, entityId, entityKind, chatId, body },
   ) => {
-    try {
-      const parsedBody = JSON.parse(body);
-
-      // Create MCP server with tools registered
-      const server = new McpServer({
-        name: "eva-mcp",
-        version: "1.0.0",
-      });
-
-      // Register tools with credentials (including optional scoped repo /
-      // session entity for browser tools).
-      const credentials = {
-        clerkUserId,
-        scopedRepoId,
-        entityId,
-        entityKind,
-        chatId,
-      };
-      const tools = buildTools(credentials, ctx);
-      let supabase: EvaTool[] = [];
-      try {
-        supabase = await supabaseTools(credentials, ctx);
-      } catch (err) {
-        console.error(
-          "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
-          err instanceof Error ? err.message : err,
+    return runSdkMcpRequest({
+      body,
+      Transport: WebStandardStreamableHTTPServerTransport,
+      createServer: async () => {
+        const server = new McpServer(evaMcpServerInfo(process.env.WEB_APP_URL));
+        // Register tools with credentials (including optional scoped repo /
+        // session entity for browser tools).
+        const credentials = {
+          clerkUserId,
+          scopedRepoId,
+          entityId,
+          entityKind,
+          chatId,
+        };
+        const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+          clerkId: clerkUserId,
+        });
+        const flags = resolveExperimentalFlags(user);
+        const tools = buildTools(credentials, ctx).filter(
+          (tool) =>
+            (flags.askTeammates || !ASK_TEAMMATE_TOOL_NAMES.has(tool.name)) &&
+            (flags.prWatch || !PR_WATCH_TOOL_NAMES.has(tool.name)),
         );
-      }
-      const allTools = [...tools, ...supabase];
-      // Code mode is additive: `execute` and `search_tools` sit beside the flat
-      // tools and dispatch to the same definitions.
-      mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
-
-      // Create transport in stateless mode with JSON responses (no SSE).
-      // WebStandardStreamableHTTPServerTransport works with Web Standard
-      // Request/Response, avoiding Node.js req/res shimming entirely.
-      const transport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-
-      // Connect server to transport
-      await server.connect(transport);
-
-      // Build a Web Standard Request for the transport.
-      // The transport validates Accept + Content-Type headers.
-      const req = new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json, text/event-stream",
-        },
-        body,
-      });
-
-      const response = await transport.handleRequest(req, { parsedBody });
-      const responseBody = await response.text();
-
-      return {
-        status: response.status,
-        body: responseBody,
-      };
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Internal server error";
-      console.error("[MCP][handleMcpRequest] threw:", message, err);
-      return {
-        status: 500,
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32603, message },
-          id: null,
-        }),
-      };
-    }
+        let supabase: EvaTool[] = [];
+        try {
+          supabase = await supabaseTools(credentials, ctx);
+        } catch (err) {
+          console.error(
+            "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
+            err instanceof Error ? err.message : err,
+          );
+        }
+        const allTools = [...tools, ...supabase];
+        // Code mode is additive: `execute` and `search_tools` sit beside the
+        // flat tools and dispatch to the same definitions.
+        mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
+        return server;
+      },
+    });
   },
 });

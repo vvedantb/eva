@@ -1,4 +1,4 @@
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 
 interface TurnErrorNoticeProps {

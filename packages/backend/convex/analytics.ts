@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { internalQuery } from "./_generated/server";
 import { authQuery, hasRepoAccess } from "./functions";
 import { filterActiveEntities } from "./numId";
 import { loadLastSeenAt } from "./_users/lastSeen";
@@ -160,7 +161,10 @@ export const getImpactStats = authQuery({
       Array<{ startedAt?: number; finishedAt?: number }>
     >();
     // Every PR a task opened, project PRs included (they name their task).
-    const prsByTaskId = new Map<string, Array<{ prUrl: string; createdAt: number }>>();
+    const prsByTaskId = new Map<
+      string,
+      Array<{ prUrl: string; createdAt: number }>
+    >();
     await Promise.all(
       tasksNeedingRuns.map(async (task) => {
         const [runs, prs] = await Promise.all([
@@ -510,6 +514,22 @@ export const getActivityTimeline = authQuery({
         activeUsers: activeUsersByBucket[Number(date)]?.size ?? 0,
       }))
       .sort((a, b) => a.date - b.date);
+  },
+});
+
+/**
+ * PR numbers Eva opened in a repo, for `getEvaMergeShare`. Every
+ * `pullRequests` row sits on an Eva branch, so the table is the list.
+ */
+export const listEvaPrNumbers = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(v.number()),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("pullRequests")
+      .withIndex("by_repo_and_head_branch", (q) => q.eq("repoId", args.repoId))
+      .collect();
+    return rows.map((row) => row.prNumber);
   },
 });
 

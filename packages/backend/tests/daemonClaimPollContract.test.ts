@@ -18,10 +18,11 @@ const bundledScript = readSource(
  * window making ~20 mutation calls a second — ~54k empty claims per idle window
  * per daemon, which also flooded `convex logs` into uselessness (fix 344ecfbb).
  *
- * Both directions of this are regressions, which is why the pair is pinned:
- * flattening back to 50ms restores the cost, and dropping the fast path makes
- * every cancel and stop-task drain up to a second slower, because those ride
- * this same mutation.
+ * Both directions of this are regressions, which is why the cadences are
+ * pinned: flattening back to 50ms restores the cost, and dropping the busy path
+ * makes every cancel and stop-task drain up to a second slower, because those
+ * ride this same mutation. Mid-turn no turn can be handed over, so the busy
+ * cadence sits between the fast handoff and the idle backoff.
  */
 describe("the daemon claim poll is fast only when it has a reason to be", () => {
   const watcher = functionBody(daemon, "function startClaimWatcher(");
@@ -35,7 +36,7 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
     ).toBeGreaterThan(timing("fastPollIntervalMs", daemonProcess));
   });
 
-  test("every supervised work state keeps the fast cadence", () => {
+  test("every supervised work state keeps the busy cadence", () => {
     expect(sliceBetween(dense, "constturnInFlight=", ";")).toContain(
       "supervisor.hasWork",
     );
@@ -62,14 +63,24 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
     ).toBeGreaterThanOrEqual(10_000);
   });
 
-  test("the two cadences are chosen by those two conditions and nothing else", () => {
+  test("the three cadences are chosen by those two conditions and nothing else", () => {
     expect(dense).toContain(
       "awaitsleep(selectClaimPollIntervalMs({busy:turnInFlight,lastIdleActivityAtMs,}),)",
     );
     const selector = withoutWhitespace(daemonProcess);
-    expect(selector).toContain("params.busy||recentlyActive");
-    expect(selector).toContain("DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs");
-    expect(selector).toContain("DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs");
+    expect(selector).toContain(
+      "if(params.busy)returnDAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;",
+    );
+    expect(selector).toContain(
+      "recentlyActive?DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs:DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs",
+    );
+    expect(timing("busyPollIntervalMs", daemonProcess)).toBeGreaterThan(
+      timing("fastPollIntervalMs", daemonProcess),
+    );
+    expect(
+      timing("busyPollIntervalMs", daemonProcess),
+      "a cancel must still land well inside a second",
+    ).toBeLessThanOrEqual(timing("idlePollIntervalMs", daemonProcess) / 2);
   });
 
   /**
@@ -82,7 +93,10 @@ describe("the daemon claim poll is fast only when it has a reason to be", () => 
       "now-params.lastIdleActivityAtMs<DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs",
     );
     expect(flat).toContain(
-      "params.busy||recentlyActive?DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs:DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs",
+      "if(params.busy)returnDAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;",
+    );
+    expect(flat).toContain(
+      "recentlyActive?DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs:DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs",
     );
     expect(
       withoutWhitespace(
@@ -135,7 +149,11 @@ function sliceBetween(source: string, from: string, to: string): string {
  * (`1e3`, `3e4`).
  */
 function timing(
-  name: "fastPollIntervalMs" | "idlePollIntervalMs" | "fastPollWindowMs",
+  name:
+    | "fastPollIntervalMs"
+    | "busyPollIntervalMs"
+    | "idlePollIntervalMs"
+    | "fastPollWindowMs",
   source: string,
 ): number {
   const match = source.match(new RegExp(`${name}:\\s*([\\d_]+(?:e\\d+)?)`));

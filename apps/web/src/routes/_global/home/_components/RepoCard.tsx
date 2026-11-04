@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { m } from "motion/react";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -10,8 +11,8 @@ import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
 import { useRepoLogoUpload } from "@/lib/hooks/useRepoLogoUpload";
 import { appLeafName, repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { cn } from "@eva/ui";
 import {
-  cn,
   Card,
   CardContent,
   ContextMenu,
@@ -20,9 +21,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  motionBase,
-  motionStagger,
-} from "@eva/ui";
+  tokenTransition,
+  staggerDelay,
+} from "@vvedantb/ui";
 import {
   IconBrandGithub,
   IconDots,
@@ -46,14 +47,10 @@ export function RepoCard({
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
-    const visible = localStore.getQuery(api.githubRepos.list, {});
-    if (visible !== undefined && args.hidden) {
-      localStore.setQuery(
-        api.githubRepos.list,
-        {},
-        visible.filter((r) => r._id !== args.repoId),
-      );
-    }
+    if (!args.hidden) return;
+    patchLoadedQuery(localStore, api.githubRepos.list, {}, (repos) =>
+      repos.filter((r) => r._id !== args.repoId),
+    );
   });
   const { uploadLogo, removeLogo } = useRepoLogoUpload();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +81,7 @@ export function RepoCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      transition={{ ...motionBase, delay: motionStagger(index) }}
+      transition={{ ...tokenTransition.base, delay: staggerDelay(index) }}
     >
       <ContextMenu>
         <ContextMenuTrigger asChild>
@@ -122,9 +119,7 @@ export function RepoCard({
                   {repo.connected === false && (
                     <div className="flex max-sm:shrink-0 items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-destructive">
                       <IconPlugConnectedX size={11} />
-                      <span className="text-2xs font-medium">
-                        Disconnected
-                      </span>
+                      <span className="text-2xs font-medium">Disconnected</span>
                     </div>
                   )}
                 </CardContent>

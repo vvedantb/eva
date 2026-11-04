@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useState } from "react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -15,7 +16,7 @@ import {
   Button,
   Spinner,
   toast,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   catchMutationError,
   mutationError,
@@ -28,16 +29,9 @@ export function useBulkDeleteTasks() {
   const restoreTask = useMutation(api.agentTasks.restore);
   const removeTask = useMutation(api.agentTasks.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.filter((task) => task._id !== args.id),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (current) =>
+        current.filter((task) => task._id !== args.id),
+      );
     },
   );
 
@@ -58,7 +52,10 @@ export function useBulkDeleteTasks() {
         onClick: () => {
           void Promise.all(ids.map((id) => restoreTask({ id })))
             .then(() => {
-              mutationSuccess(`${ids.length} ${noun} restored`, "tasks-bulk-restore");
+              mutationSuccess(
+                `${ids.length} ${noun} restored`,
+                "tasks-bulk-restore",
+              );
             })
             .catch(() => {
               mutationError("Couldn't restore tasks", "tasks-bulk-restore");

@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { EVA_GITHUB_URL, LANDING_NAV_LINKS } from "./landingContent";
 
 /** Menu rows are 36px by default; on touch they need the full 40px. */

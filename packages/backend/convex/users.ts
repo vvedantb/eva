@@ -63,7 +63,11 @@ export const get = authQuery({
 export const listEmailRecipients = internalQuery({
   args: {},
   returns: v.array(
-    v.object({ email: v.string(), name: v.optional(v.string()) }),
+    v.object({
+      userId: v.id("users"),
+      email: v.string(),
+      name: v.optional(v.string()),
+    }),
   ),
   handler: async (ctx) => {
     const users = await ctx.db.query("users").collect();
@@ -72,6 +76,7 @@ export const listEmailRecipients = internalQuery({
       if (!user.email) continue;
       if (user.emailNotificationsEnabled !== true) continue;
       recipients.push({
+        userId: user._id,
         email: user.email,
         name: user.firstName ?? user.fullName,
       });

@@ -1,0 +1,246 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.sd .sd-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.sd .sd-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ss-surface);
+}
+
+/* Chat */
+.sd .sd-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-right: 1px solid var(--ss-line);
+}
+
+.sd .sd-ask {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--ss-well);
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.sd .sd-reply {
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.sd .sd-status {
+  color: var(--ss-text);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sd .sd-status[data-on] {
+  opacity: 1;
+}
+
+.sd .sd-composer {
+  margin-top: auto;
+  /* The window runs 48px off the stage's foot: keep the composer clear of it. */
+  margin-bottom: 64px;
+  padding: 9px 12px;
+  border-radius: var(--ss-radius-md);
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+  color: var(--ss-text-faint);
+  font-size: 12px;
+}
+
+.sd .sd-pr {
+  color: var(--ss-success-text);
+  font-weight: 500;
+}
+
+/* Workspace */
+.sd .sd-work {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.sd .sd-tabs {
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ss-line);
+  font-size: 12px;
+}
+
+.sd .sd-panes {
+  position: relative;
+}
+
+.sd .sd-pane {
+  position: absolute;
+  inset: 0;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sd .sd-pane[data-on] {
+  opacity: 1;
+}
+
+/* Preview: the app under test, a checkout step */
+.sd .sd-preview {
+  background: var(--ss-canvas);
+}
+
+.sd .sd-page {
+  display: grid;
+  gap: 10px;
+  width: 280px;
+  padding: 20px;
+  border-radius: var(--ss-radius-lg);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow-card), 0 0 0 1px var(--ss-line);
+}
+
+.sd .sd-page-title {
+  color: var(--ss-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sd .sd-filler {
+  display: grid;
+  gap: 8px;
+}
+
+.sd .sd-filler-box {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--ss-radius-md);
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+}
+
+/* Text that moves with a collapsing row keeps one layer, so it never steps. */
+.sd .ss-field__box,
+.sd .sd-continue,
+.sd .sd-line {
+  will-change: transform;
+}
+
+.sd .sd-error {
+  color: var(--ss-danger-text);
+  font-size: 12px;
+}
+
+.sd .sd-continue {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 7px 14px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-fill);
+  color: var(--ss-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.sd .sd-continue[data-on] {
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+}
+
+/* Terminal: one output pane, mono */
+.sd .sd-terminal {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  font-family: var(--ss-mono);
+  font-size: 12px;
+  color: var(--ss-text-strong);
+}
+
+.sd .sd-sigil {
+  color: var(--ss-text);
+}
+
+.sd .sd-ok,
+.sd .sd-pass {
+  opacity: 0;
+  translate: 0 3px;
+  transition: opacity 0.25s ease, translate 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sd .sd-ok[data-on],
+.sd .sd-pass[data-on] {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.sd .sd-ok {
+  color: var(--ss-success-text);
+}
+
+.sd .sd-pass {
+  color: var(--ss-text);
+}
+
+/* Diff */
+.sd .sd-diff {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.sd .sd-file {
+  color: var(--ss-text);
+  font-family: var(--ss-mono);
+  font-size: 11.5px;
+}
+
+/* Compact: the window spans the phone column, chat above the workspace. */
+.sd .ss-stage[data-layout="compact"] .sd-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.sd .ss-stage[data-layout="compact"] .sd-body {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.sd .ss-stage[data-layout="compact"] .sd-chat {
+  width: 326px;
+  border-right: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+.sd .ss-stage[data-layout="compact"] .sd-page {
+  width: 270px;
+}
+
+.sd .ss-stage[data-layout="compact"] .sd-composer {
+  display: none;
+}
+
+.sd .ss-stage[data-layout="compact"] .sd-filler {
+  display: none;
+}
+
+.sd .ss-stage[data-layout="compact"] .sd-pane {
+  padding: 16px;
+}

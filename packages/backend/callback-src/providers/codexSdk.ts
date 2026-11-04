@@ -50,7 +50,7 @@ function codexEnvironment(): Record<string, string> {
   return env;
 }
 
-export function buildCodexSdkThreadOptions(): ThreadOptions {
+function buildCodexSdkThreadOptions(): ThreadOptions {
   return {
     model: normalizedCodexModel,
     sandboxMode: "danger-full-access",

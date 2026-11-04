@@ -26,7 +26,11 @@ import {
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+<<<<<<< HEAD
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
+=======
+import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+>>>>>>> origin/main
 import {
   stopAlertText,
   stopReasonValidator,
@@ -425,6 +429,7 @@ export const markSandboxClosed = internalMutation({
     if (!session) return null;
     // Only flip if still stopping — don't overwrite a fresh start.
     if (session.status !== "stopping") return null;
+    await scheduleDrainAfterStopSettles(ctx, args.sessionId);
     const mainChat = await ensureMainChat(ctx, session);
     if (args.error) {
       await ctx.db.insert("messages", {

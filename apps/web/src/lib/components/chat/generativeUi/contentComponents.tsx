@@ -1,8 +1,8 @@
+import { cn } from "@eva/ui";
 import {
   Badge,
   Button,
   CodeBlock,
-  cn,
   Progress,
   Table,
   TableBody,
@@ -10,7 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCheck, IconCircle } from "@tabler/icons-react";
 import type { ComponentRenderProps } from "@json-render/react";
 import type { ChatUiTone } from "@eva/shared/generativeUi";

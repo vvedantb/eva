@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useState } from "react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -19,7 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import {
   type DisplayTaskStatus,
@@ -46,16 +47,11 @@ export function ChangeStatusModal({
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id ? { ...task, status: args.status } : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (current) =>
+      current.map((task) =>
+        task._id === args.id ? { ...task, status: args.status } : task,
+      ),
+    );
   });
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus | "">("");
   const [isLoading, setIsLoading] = useState(false);

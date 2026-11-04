@@ -1,3 +1,4 @@
+import { toolErrorResult } from "@vvedantb/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
@@ -5,7 +6,10 @@ import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
+<<<<<<< HEAD
 import { errorResult, type McpCredentials } from "./toolShared";
+=======
+>>>>>>> origin/main
 import { defineTool, type EvaTool } from "./registry";
 import { errorText } from "../_shared/errors";
 import { withTimeout } from "../_shared/async";
@@ -215,7 +219,9 @@ export async function supabaseTools(
             { clerkUserId },
           );
           if (!currentToken) {
-            return errorResult("SUPABASE_ACCESS_TOKEN is no longer available.");
+            return toolErrorResult(
+              "SUPABASE_ACCESS_TOKEN is no longer available.",
+            );
           }
 
           try {
@@ -265,8 +271,13 @@ export async function supabaseTools(
               await client.close();
             }
           } catch (err) {
+<<<<<<< HEAD
             const message = errorText(err);
             return errorResult(`Supabase tool error: ${message}`);
+=======
+            const message = err instanceof Error ? err.message : String(err);
+            return toolErrorResult(`Supabase tool error: ${message}`);
+>>>>>>> origin/main
           }
         },
       }),

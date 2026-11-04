@@ -19,8 +19,11 @@ import {
   DropdownMenuLabel,
   ModelPickerContent,
   modelPickerSurfaceClass,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+} from "@vvedantb/ui";
 import { normalizeAIModel, type Id, api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
   IconArrowMoveRight,
@@ -47,7 +50,6 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
@@ -98,42 +100,30 @@ export function TaskCardMenuItems({
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
     if (!repoId) return;
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id ? { ...task, status: args.status } : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+      cur.map((task) =>
+        task._id === args.id ? { ...task, status: args.status } : task,
+      ),
+    );
   });
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       if (!repoId) return;
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.map((task) => {
-            if (task._id !== args.id) return task;
-            const updated = { ...task };
-            if (args.tags !== undefined) updated.tags = args.tags;
-            if (args.assignedTo !== undefined)
-              updated.assignedTo = args.assignedTo ?? undefined;
-            if (args.model !== undefined) updated.model = args.model;
-            if (args.providerAccountId !== undefined)
-              updated.providerAccountId = args.providerAccountId ?? undefined;
-            if (args.projectId !== undefined)
-              updated.projectId = args.projectId ?? undefined;
-            return updated;
-          }),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+        cur.map((task) => {
+          if (task._id !== args.id) return task;
+          const updated = { ...task };
+          if (args.tags !== undefined) updated.tags = args.tags;
+          if (args.assignedTo !== undefined)
+            updated.assignedTo = args.assignedTo ?? undefined;
+          if (args.model !== undefined) updated.model = args.model;
+          if (args.providerAccountId !== undefined)
+            updated.providerAccountId = args.providerAccountId ?? undefined;
+          if (args.projectId !== undefined)
+            updated.projectId = args.projectId ?? undefined;
+          return updated;
+        }),
+      );
     },
   );
   const startExecution = useMutation(api.agentTasks.startExecution);

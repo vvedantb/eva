@@ -1,7 +1,7 @@
 "use client";
 
 import { formatExactDateTime } from "@eva/shared/dates";
-import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
+import { useCountUpDisplay } from "@vvedantb/ui";
 import {
   formatUtilization,
   resetsInLabel,

@@ -12,12 +12,16 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
-import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import {
+  openChatTurnOptimistically,
+  useChatTurnOpen,
+} from "@/lib/components/chat/useChatTurnOpen";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
   isAssistantTurnInProgress,
@@ -35,6 +39,7 @@ import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -135,7 +140,11 @@ export function TaskSandboxChatPanel({
       : [];
 
   const addMessage = useMutation(api.agentTaskChatWorkflow.addMessage);
-  const startExecute = useMutation(api.agentTaskChatWorkflow.startExecute);
+  const startExecute = useMutation(
+    api.agentTaskChatWorkflow.startExecute,
+  ).withOptimisticUpdate((localStore, args) =>
+    openChatTurnOptimistically(localStore, args.taskId),
+  );
   const enqueueMessage = useMutation(api.agentTaskChatWorkflow.enqueueMessage);
   const cancelExecution = useMutation(
     api.agentTaskChatWorkflow.cancelExecution,
@@ -157,15 +166,11 @@ export function TaskSandboxChatPanel({
   const setTraitsMutation = useMutation(
     api.agentTasks.setTraits,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.agentTasks.get, { id: args.id });
-    if (!current) return;
-    localStore.setQuery(
+    patchLoadedQuery(
+      localStore,
       api.agentTasks.get,
       { id: args.id },
-      {
-        ...current,
-        ...composerTraitFields(args),
-      },
+      (cur) => cur && { ...cur, ...composerTraitFields(args) },
     );
   });
 
@@ -321,21 +326,27 @@ export function TaskSandboxChatPanel({
     }
     const accountId = resolveAccountId(providerAccountId);
     try {
-      await addMessage({
-        taskId,
-        content,
-        attachmentStorageIds,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel: displayTraits.effortLevel,
-      });
-      await startExecute({
-        taskId,
-        message: content,
-        model,
-        ...executionTraits,
-        providerAccountId: accountId,
-      });
+      // Fired together, not one after the other: `startExecute`'s optimistic
+      // status must apply at once, so a second send before the server answers
+      // queues. Convex runs one client's mutations in order, so the user row
+      // still lands first.
+      await Promise.all([
+        addMessage({
+          taskId,
+          content,
+          attachmentStorageIds,
+          providerAccountId: accountId,
+          model,
+          reasoningLevel: displayTraits.effortLevel,
+        }),
+        startExecute({
+          taskId,
+          message: content,
+          model,
+          ...executionTraits,
+          providerAccountId: accountId,
+        }),
+      ]);
     } catch (error) {
       raiseSendFailure(
         error instanceof Error ? error.message : "",
@@ -375,9 +386,16 @@ export function TaskSandboxChatPanel({
             isSandboxActive,
           }
         : undefined,
+    goal: task?.goal,
     // No review-comment append on this send path (sessions-only), so a slash
     // command already reaches the harness verbatim.
+    sendCommand: (command) => handleSend(command),
   };
+
+  const chatMessages = [...firstRunTurn, ...(messages ?? [])];
+  const streamingActivity = isFirstRunInProgress
+    ? firstRunStreaming?.currentActivity
+    : streaming?.currentActivity;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -387,83 +405,88 @@ export function TaskSandboxChatPanel({
         providerAccountId={providerAccountId}
         usageAccountLabel={usageAccountLabel}
       />
-      <ChatBody
-        repo={{ id: repo._id, basePath }}
-        conversationId={taskId}
-        chatParentId={taskId}
-        messages={[...firstRunTurn, ...(messages ?? [])]}
-        isLoadingMessages={messages === undefined}
-        queuedMessages={queuedMessages ?? []}
-        queueLabel={queueGate.queueLabel(isExecuting)}
-        streamingActivity={
-          isFirstRunInProgress
-            ? firstRunStreaming?.currentActivity
-            : streaming?.currentActivity
-        }
-        streamingContent={
-          isFirstRunInProgress
-            ? firstRunStreaming?.currentContent
-            : streaming?.currentContent
-        }
-        streamingPendingQuestion={
-          isFirstRunInProgress
-            ? firstRunStreaming?.pendingQuestion
-            : streaming?.pendingQuestion
-        }
-        blockingQuestion={activeQuestion ?? undefined}
-        onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
-        isExecuting={isExecuting}
-        isInputDisabled={composer.isInputDisabled}
-        placeholder={composer.placeholder}
-        emptyStateTitle={
-          isSandboxActive
-            ? "Ask Eva anything about this task's running sandbox."
-            : SANDBOX_CHAT_COPY.asleepTitle
-        }
-        emptyStateDescription={
-          isSandboxActive
-            ? SANDBOX_CHAT_COPY.activeDescription
-            : SANDBOX_CHAT_COPY.asleepDescription
-        }
-        disabledReason={composer.disabledReason}
-        onStartSandbox={
-          !isSandboxActive && !isSandboxToggling && onSandboxToggle
-            ? () => onSandboxToggle("start")
-            : undefined
-        }
-        modelPicker={{
-          model,
-          setModel: queueGate.setModel,
-          modelOptions,
-          accounts,
-          accountId: providerAccountId,
-          onAccountChange: queueGate.setAccount,
-          displayTraits,
-          onTraitsChange,
-        }}
-        onSend={handleSend}
-        onCancel={handleCancel}
-        preInputContent={<SandboxChatPreInput surface={chatSurface} />}
-        underCardLeading={
-          <SandboxBranchChip
-            branch={task?.sandboxBranch}
-            isSandboxActive={isSandboxActive}
-          />
-        }
-        draft={draftBundle}
-        isDraftLoading={!draftSeed.isReady}
-        onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
-        onOpenAgentsTab={onOpenAgentsTab}
-        backgroundAgents={task?.backgroundAgents}
+      <SubagentThreadLayer
+        surface={chatSurface}
+        parentTitle={task?.title ?? "Task"}
+        messages={chatMessages}
+        streamingActivity={streamingActivity}
         sandboxRunning={isSandboxActive}
-        transcriptTail={sandboxStartupTail(
-          sandboxStartupActivity,
-          sandboxStartupActivity !== undefined &&
-            !isSandboxActive &&
-            !isExecuting,
-        )}
-      />
+        onOpenFile={onOpenFile}
+      >
+        <ChatBody
+          repo={{ id: repo._id, basePath }}
+          conversationId={taskId}
+          chatParentId={taskId}
+          messages={chatMessages}
+          isLoadingMessages={messages === undefined}
+          queuedMessages={queuedMessages ?? []}
+          queueLabel={queueGate.queueLabel(isExecuting)}
+          streamingActivity={streamingActivity}
+          streamingContent={
+            isFirstRunInProgress
+              ? firstRunStreaming?.currentContent
+              : streaming?.currentContent
+          }
+          streamingPendingQuestion={
+            isFirstRunInProgress
+              ? firstRunStreaming?.pendingQuestion
+              : streaming?.pendingQuestion
+          }
+          blockingQuestion={activeQuestion ?? undefined}
+          onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
+          isExecuting={isExecuting}
+          isInputDisabled={composer.isInputDisabled}
+          placeholder={composer.placeholder}
+          emptyStateTitle={
+            isSandboxActive
+              ? "Ask Eva anything about this task's running sandbox."
+              : SANDBOX_CHAT_COPY.asleepTitle
+          }
+          emptyStateDescription={
+            isSandboxActive
+              ? SANDBOX_CHAT_COPY.activeDescription
+              : SANDBOX_CHAT_COPY.asleepDescription
+          }
+          disabledReason={composer.disabledReason}
+          onStartSandbox={
+            !isSandboxActive && !isSandboxToggling && onSandboxToggle
+              ? () => onSandboxToggle("start")
+              : undefined
+          }
+          modelPicker={{
+            model,
+            setModel: queueGate.setModel,
+            modelOptions,
+            accounts,
+            accountId: providerAccountId,
+            onAccountChange: queueGate.setAccount,
+            displayTraits,
+            onTraitsChange,
+          }}
+          onSend={handleSend}
+          onCancel={handleCancel}
+          preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+          underCardLeading={
+            <SandboxBranchChip
+              branch={task?.sandboxBranch}
+              isSandboxActive={isSandboxActive}
+            />
+          }
+          draft={draftBundle}
+          isDraftLoading={!draftSeed.isReady}
+          onOpenFile={onOpenFile}
+          onViewDiff={onViewDiff}
+          onOpenAgentsTab={onOpenAgentsTab}
+          backgroundAgents={task?.backgroundAgents}
+          sandboxRunning={isSandboxActive}
+          transcriptTail={sandboxStartupTail(
+            sandboxStartupActivity,
+            sandboxStartupActivity !== undefined &&
+              !isSandboxActive &&
+              !isExecuting,
+          )}
+        />
+      </SubagentThreadLayer>
       {queueGate.switchDialog}
     </div>
   );

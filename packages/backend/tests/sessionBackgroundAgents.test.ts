@@ -1,7 +1,10 @@
 import { test, expect } from "vitest";
 import {
+  MAX_SETTLED_BACKGROUND_AGENTS,
   mergeBackgroundAgents,
+  pruneSettledBackgroundAgents,
   runningBackgroundAgents,
+  settleOrphanedBackgroundAgents,
 } from "../convex/_sessions/backgroundAgents";
 import { readStopTaskToolUseIds } from "../callback-src/providers/claimPendingTurnParse";
 
@@ -150,4 +153,64 @@ test("readStopTaskToolUseIds unwraps Convex HTTP envelope", () => {
       stopTaskToolUseIds: ["tool-3"],
     }),
   ).toEqual(["tool-3"]);
+});
+
+test("mergeBackgroundAgents keeps running entries and only the newest settled ones", () => {
+  const settled = Array.from(
+    { length: MAX_SETTLED_BACKGROUND_AGENTS + 5 },
+    (_, index) => ({
+      toolUseId: `done-${index}`,
+      status: "completed",
+      startedAt: index,
+      settledAt: 1000 + index,
+    }),
+  );
+  const merged = mergeBackgroundAgents(settled, [
+    { toolUseId: "live", status: "running", startedAt: 5000 },
+  ]);
+
+  expect(merged).toHaveLength(MAX_SETTLED_BACKGROUND_AGENTS + 1);
+  expect(merged.some((entry) => entry.toolUseId === "done-0")).toBe(false);
+  expect(merged.at(-2)?.toolUseId).toBe(
+    `done-${MAX_SETTLED_BACKGROUND_AGENTS + 4}`,
+  );
+  expect(merged.at(-1)?.toolUseId).toBe("live");
+});
+
+test("pruneSettledBackgroundAgents never drops unsettled entries and returns the same array under the cap", () => {
+  const running = Array.from(
+    { length: MAX_SETTLED_BACKGROUND_AGENTS + 5 },
+    (_, index) => ({
+      toolUseId: `live-${index}`,
+      status: "running",
+      startedAt: index,
+    }),
+  );
+
+  // The prune migration skips the patch on reference equality.
+  expect(pruneSettledBackgroundAgents(running)).toBe(running);
+});
+
+test("settleOrphanedBackgroundAgents caps settled entries and keeps the newly stale ones", () => {
+  const settled = Array.from(
+    { length: MAX_SETTLED_BACKGROUND_AGENTS },
+    (_, index) => ({
+      toolUseId: `done-${index}`,
+      status: "completed",
+      startedAt: index,
+      settledAt: 1000 + index,
+    }),
+  );
+  const result = settleOrphanedBackgroundAgents(
+    [...settled, { toolUseId: "orphan", status: "running", startedAt: 5000 }],
+    9000,
+  );
+
+  expect(result).toHaveLength(MAX_SETTLED_BACKGROUND_AGENTS);
+  expect(result?.some((entry) => entry.toolUseId === "done-0")).toBe(false);
+  expect(result?.at(-1)).toMatchObject({
+    toolUseId: "orphan",
+    status: "stale",
+    settledAt: 9000,
+  });
 });

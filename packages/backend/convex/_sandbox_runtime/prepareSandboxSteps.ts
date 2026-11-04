@@ -3,8 +3,12 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { ensureSandboxStartedSteps } from "./resumeSandboxSteps";
+<<<<<<< HEAD
 import type { ProgressStep } from "../_sandbox/startupActivity";
 import { errorText } from "../_shared/errors";
+=======
+import { type ProgressStep, startupProgress } from "./startupProgress";
+>>>>>>> origin/main
 
 type PrepareSandboxArgs = {
   installationId: number;
@@ -30,6 +34,29 @@ const BRANCH_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2500, base: 2 },
 };
 
+/**
+ * Stages this run walks through after the sandbox exists, in order. The UI
+ * shows the ones not reached yet as pending. A stage can still drop out (a
+ * failed task-branch fetch, a startup-commands marker that already exists).
+ */
+export function plannedStartupStages(
+  args: Pick<PrepareSandboxArgs, "branchName" | "baseBranch" | "skipStartupCommands">,
+): string[] {
+  const branchStages = args.branchName
+    ? ["Fetching task branch...", "Setting up branch..."]
+    : args.baseBranch
+      ? ["Checking out base branch..."]
+      : [];
+  const commandStages = args.skipStartupCommands
+    ? []
+    : [
+        "Restoring seeded runtime...",
+        "Launching background commands...",
+        "Running startup commands...",
+      ];
+  return ["Fetching base branch...", ...branchStages, ...commandStages];
+}
+
 /** Emits progress steps to the streaming entity for real-time UI updates. */
 async function emitSteps(
   step: WorkflowCtx,
@@ -54,6 +81,13 @@ export async function prepareSandboxSteps(
 ): Promise<PrepareSandboxResult> {
   const completedSteps: Array<ProgressStep> = [];
   const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+  const plan = plannedStartupStages(args);
+  const emitActive = (label: string) =>
+    emitSteps(
+      step,
+      args.streamingEntityId,
+      startupProgress(completedSteps, label, plan),
+    );
 
   // Resolve which existing sandbox (if any) to reuse before the create/resume
   // action inside createOrResumeSandbox → ensureSandboxRunning.
@@ -91,10 +125,7 @@ export async function prepareSandboxSteps(
   });
 
   // Step 2: Fetch latest refs needed for checkout/setup.
-  await emitSteps(step, args.streamingEntityId, [
-    ...completedSteps,
-    { type: "tool", label: "Fetching base branch...", status: "active" },
-  ]);
+  await emitActive("Fetching base branch...");
   try {
     await step.runAction(
       internal.sandbox.fetchBaseBranch,
@@ -122,10 +153,7 @@ export async function prepareSandboxSteps(
   });
 
   if (args.branchName) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      { type: "tool", label: "Fetching task branch...", status: "active" },
-    ]);
+    await emitActive("Fetching task branch...");
     try {
       await step.runAction(
         internal.sandbox.fetchBaseBranch,
@@ -155,10 +183,7 @@ export async function prepareSandboxSteps(
 
   // Step 3: Checkout or create the working branch from latest fetched refs.
   if (args.branchName) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      { type: "tool", label: "Setting up branch...", status: "active" },
-    ]);
+    await emitActive("Setting up branch...");
 
     await step.runAction(
       internal.sandbox.setupSandboxBranch,
@@ -171,14 +196,7 @@ export async function prepareSandboxSteps(
       BRANCH_STEP_RETRY,
     );
   } else if (args.baseBranch) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      {
-        type: "tool",
-        label: "Checking out base branch...",
-        status: "active",
-      },
-    ]);
+    await emitActive("Checking out base branch...");
 
     await step.runAction(
       internal.sandbox.checkoutBaseBranch,
@@ -194,14 +212,7 @@ export async function prepareSandboxSteps(
   // Step 4: Restore service state baked into seeded snapshots before daemons
   // or startup commands touch local dependencies. No-ops for ordinary snapshots.
   if (!args.skipStartupCommands) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      {
-        type: "tool",
-        label: "Restoring seeded runtime...",
-        status: "active",
-      },
-    ]);
+    await emitActive("Restoring seeded runtime...");
     await step.runAction(
       internal.sandbox.restoreSeededRuntimeState,
       { sandboxId, repoId: args.repoId },
@@ -219,14 +230,7 @@ export async function prepareSandboxSteps(
   // being up (e.g. `supabase start`, `npx convex dev`). Skipped together with
   // startup for read-only ephemeral flows (PR recap, interview). Non-fatal.
   if (!args.skipStartupCommands) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      {
-        type: "tool",
-        label: "Launching background commands...",
-        status: "active",
-      },
-    ]);
+    await emitActive("Launching background commands...");
     try {
       const result = await step.runAction(
         internal.sandbox.runBackgroundCommands,
@@ -275,10 +279,7 @@ export async function prepareSandboxSteps(
   }
 
   if (shouldRunStartupCommands) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      { type: "tool", label: "Running startup commands...", status: "active" },
-    ]);
+    await emitActive("Running startup commands...");
     try {
       const result = await step.runAction(
         internal.sandbox.runStartupCommands,

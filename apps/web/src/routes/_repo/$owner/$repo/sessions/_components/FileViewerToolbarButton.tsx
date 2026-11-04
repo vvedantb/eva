@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@eva/ui";
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 
 /** Shared so the viewer header's icon buttons cannot drift apart. */
 export const VIEWER_ICON_BUTTON_CLASS =
@@ -31,6 +31,7 @@ export function FileViewerToolbarButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          shape="rounded"
           size="sm"
           variant="ghost"
           // Radix wires TooltipContent as `aria-describedby` — a description,

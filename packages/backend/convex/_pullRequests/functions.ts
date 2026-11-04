@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
+import {
+  authMutation,
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+} from "../functions";
 import { sandboxOwnerValidator } from "../_sandbox/owner";
 import {
   prOriginValidator,
@@ -14,7 +19,9 @@ import {
   findPullRequestByUrl,
   listOwnerPullRequests,
   recordPullRequest,
+  ownerRef,
   setPullRequestState,
+  setPullRequestWatch,
   type PrOwnerRef,
 } from "./store";
 
@@ -40,6 +47,8 @@ const pullRequestListItemValidator = v.object({
   repoName: v.string(),
   /** True for a multi-repo session's linked-repo PR. */
   linkedRepo: v.boolean(),
+  /** The agent is watching it (`watch_pull_request`). */
+  watching: v.boolean(),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -93,11 +102,27 @@ export const listForOwner = authQuery({
           linkedRepo:
             row.owner.kind === "session" &&
             row.owner.sessionRepoId !== undefined,
+          watching: row.watch !== undefined,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
         };
       }),
     );
+  },
+});
+
+/** Stops the agent's watch on a PR (the eye button on its row). */
+export const stopWatch = authMutation({
+  args: { pullRequestId: v.id("pullRequests") },
+  returns: v.null(),
+  handler: async (ctx, { pullRequestId }) => {
+    const row = await ctx.db.get(pullRequestId);
+    if (!row || row.watch === undefined) return null;
+    if (!(await canReadOwner(ctx.db, ownerRef(row.owner), ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    await setPullRequestWatch(ctx, row._id, undefined);
+    return null;
   },
 });
 

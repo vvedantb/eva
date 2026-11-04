@@ -4,7 +4,7 @@ import {
   isSandboxStartupActivity,
   parseActivitySteps,
 } from "@eva/shared/parseActivitySteps";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 /**
  * Regression guard for the streaming-renderer parse cache (commit 7f38b7770)
@@ -113,6 +113,18 @@ describe("isSandboxStartupActivity", () => {
           step("Starting sandbox...", { status: "complete" }),
           step("Cloning repository...", { status: "complete" }),
           step("Installing dependencies..."),
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  test("planned stages still pending keep the run collapsed", () => {
+    expect(
+      isSandboxStartupActivity(
+        payload(
+          step("Fetching base branch..."),
+          step("Restoring seeded runtime...", { status: "pending" }),
+          step("Running startup commands...", { status: "pending" }),
         ),
       ),
     ).toBe(true);

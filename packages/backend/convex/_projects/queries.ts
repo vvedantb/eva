@@ -17,8 +17,13 @@ import {
   getProjectDetails,
 } from "./helpers";
 import { unreadLookupForRepo } from "../chatReads";
+<<<<<<< HEAD
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+=======
+import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
+import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+>>>>>>> origin/main
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
@@ -55,11 +60,16 @@ export const list = authQuery({
       ctx.userId,
       args.repoId,
     );
+    const awaitingAnswerIds = await awaitingAnswerEntityIdsForRepo(
+      ctx.db,
+      args.repoId,
+    );
     return await Promise.all(
       projects.map(async (project) => ({
         ...project,
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
+        isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
       })),
     );
   },

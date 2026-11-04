@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   RefreshSpinIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconFoldDown,
   IconFoldUp,
@@ -169,6 +169,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={TOOLBAR_BUTTON_CLASS}
@@ -185,6 +186,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={TOOLBAR_BUTTON_CLASS}
@@ -210,6 +212,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={cn(TOOLBAR_BUTTON_CLASS, "hidden md:inline-flex")}
@@ -228,6 +231,7 @@ export function SandboxFileTree({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               className={TOOLBAR_BUTTON_CLASS}

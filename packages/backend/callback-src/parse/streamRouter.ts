@@ -13,7 +13,7 @@ export function emitParsedStreamLine(line: string): void {
 }
 
 /** Buffers stdout chunks and processes complete lines for realtime event handling. */
-export function processRealtimeStdoutChunk(text: string): void {
+function processRealtimeStdoutChunk(text: string): void {
   S.realtimeOutputBuffer += text;
   while (true) {
     const newlineIndex = S.realtimeOutputBuffer.indexOf("\n");

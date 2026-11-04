@@ -2,14 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readAppStylesheet } from "./appStylesheet";
 
 const webSrc = dirname(fileURLToPath(import.meta.url));
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
 
 /** Comments here name the very declarations these rules ban, so they go first. */
-const cssRules = stripComments(
-  readFileSync(join(webSrc, "globals.css"), "utf8").replaceAll("\r\n", "\n"),
-);
+const cssRules = stripComments(readAppStylesheet());
 
 /** `@utility hit-target { … }`, up to the brace that closes it at column 0. */
 function hitTargetUtility(): string {
@@ -101,8 +100,17 @@ describe("the utility is what every call site uses", () => {
 
   /** The two button sizes that fall under the tap floor carry it by default. */
   it.each(["xs", '"icon-xs"'])("is built into the %s button size", (key) => {
-    const button = stripComments(
-      readFileSync(join(uiSrc, "ui", "button.tsx"), "utf8"),
+    // eva's config replaces vvedantb's Button sizes with `buttonSize`.
+    const controls = stripComments(
+      readFileSync(join(uiSrc, "config", "controls.ts"), "utf8"),
+    );
+    expect(controls, "Button no longer renders buttonSize").toContain(
+      "size: buttonSize",
+    );
+    // Sliced to `buttonSize`: InputGroup's button sizes reuse the same keys.
+    const button = controls.slice(
+      controls.indexOf("const buttonSize = {"),
+      controls.indexOf("\n};", controls.indexOf("const buttonSize = {")),
     );
     // `xs: "` cannot match inside `"icon-xs": "`, which quotes its key.
     const startAt = button.indexOf(`${key}: "`);

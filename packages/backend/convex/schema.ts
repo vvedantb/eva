@@ -8,11 +8,13 @@ import {
   aveMessageFields,
   automationFields,
   automationRunFields,
+  changelogVoteFields,
   agentTaskFields,
   agentRunFields,
   pullRequestFields,
   sessionFields,
   sessionRepoFields,
+  sessionGroupFields,
   repoGroupFields,
   githubRepoFields,
   teamFields,
@@ -43,6 +45,7 @@ import {
   connectorOauthStateFields,
   docFields,
   chatLogEntryFields,
+  feedbackFields,
   docCommentFields,
   docSubscriberFields,
   docVersionFields,
@@ -94,7 +97,8 @@ const schema = defineSchema({
     .index("by_uploader", ["uploadedBy"])
     .index("by_source_session", ["sourceSessionId"])
     .index("by_source_task", ["sourceTaskId"])
-    .index("by_source_project", ["sourceProjectId"]),
+    .index("by_source_project", ["sourceProjectId"])
+    .index("by_chat_parent", ["chatParentId"]),
 
   artifactState: defineTable(artifactStateFields).index(
     "by_artifact_owner_key",
@@ -111,6 +115,7 @@ const schema = defineSchema({
       "repoId",
       "reviewProjectSandboxStatus",
     ])
+    .index("by_sandbox_status", ["reviewProjectSandboxStatus"])
     .index("by_sandbox", ["sandboxId"]),
 
   projectDetails: defineTable(projectDetailsFields).index("by_project", [
@@ -126,6 +131,7 @@ const schema = defineSchema({
     .index("by_project_and_status", ["projectId", "status"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_repo_and_sandbox_status", ["repoId", "reviewTaskSandboxStatus"])
+    .index("by_sandbox_status", ["reviewTaskSandboxStatus"])
     .index("by_sandbox", ["sandboxId"]),
 
   agentRuns: defineTable(agentRunFields)
@@ -140,7 +146,15 @@ const schema = defineSchema({
     .index("by_session", ["owner.sessionId"])
     .index("by_task", ["owner.taskId"])
     .index("by_project", ["owner.projectId"])
-    .index("by_repo_and_head_branch", ["repoId", "headBranch"]),
+    .index("by_repo_and_head_branch", ["repoId", "headBranch"])
+    // Watched PRs on a base branch: a push there may cause a merge conflict.
+    .index("by_repo_base_and_watch", [
+      "repoId",
+      "baseBranch",
+      "watch.startedAt",
+    ])
+    // Watched PRs by head branch: a commit status there names no PR.
+    .index("by_head_and_watch", ["headBranch", "watch.startedAt"]),
 
   agentTaskRunSummaries: defineTable({
     taskId: v.id("agentTasks"),
@@ -207,17 +221,20 @@ const schema = defineSchema({
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
+    .index("by_status", ["status"])
     .index("by_repo_and_archived", ["repoId", "archived"])
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
-    .index("by_forked_from", ["forkedFromSessionId"]),
+    .index("by_forked_from", ["forkedFromSessionId"])
+    .index("by_session_group", ["sessionGroupId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
-    .index("by_repo", ["repoId"]),
+    .index("by_repo", ["repoId"])
+    .index("by_repo_main_and_archived", ["repoId", "isMain", "archived"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.
@@ -230,6 +247,8 @@ const schema = defineSchema({
   sessionRepos: defineTable(sessionRepoFields)
     .index("by_session", ["sessionId"])
     .index("by_repo", ["repoId"]),
+  // Linked-session groups (members: `sessions.by_session_group`).
+  sessionGroups: defineTable(sessionGroupFields),
   // Saved codebase groups that prefill a new session's repo selection.
   repoGroups: defineTable(repoGroupFields)
     .index("by_created_by", ["createdBy"])
@@ -335,6 +354,12 @@ const schema = defineSchema({
     .index("by_message", ["messageId"])
     .index("by_repo", ["repoId"]),
 
+  // Thumbs on Eva turns and agent `submit_feedback` reports (Feedback page).
+  feedback: defineTable(feedbackFields)
+    .index("by_parent", ["parentId"])
+    .index("by_message_and_user", ["messageId", "userId"])
+    .index("by_repo", ["repoId"]),
+
   docComments: defineTable(docCommentFields).index("by_doc", ["docId"]),
 
   docSubscribers: defineTable(docSubscriberFields)
@@ -438,17 +463,34 @@ const schema = defineSchema({
   githubUserTokens: defineTable(githubUserTokenFields).index("by_user", [
     "userId",
   ]),
-  githubOauthStates: defineTable(githubOauthStateFields).index("by_nonce", [
-    "nonce",
-  ]),
+  githubOauthStates: defineTable(githubOauthStateFields)
+    .index("by_nonce", ["nonce"])
+    .index("by_expires_at", ["expiresAt"]),
   connectedAccounts: defineTable(connectedAccountFields)
     .index("by_user", ["userId"])
     .index("by_user_and_provider", ["userId", "provider"]),
+<<<<<<< HEAD
   connectorOauthStates: defineTable(connectorOauthStateFields).index(
     "by_nonce",
     ["nonce"],
   ),
   teamEnvVars: defineTable(teamEnvVarFields).index("by_team", ["teamId"]),
+=======
+  connectorOauthStates: defineTable(connectorOauthStateFields)
+    .index("by_nonce", ["nonce"])
+    .index("by_expires_at", ["expiresAt"]),
+  teamEnvVars: defineTable({
+    teamId: v.id("teams"),
+    vars: v.array(
+      v.object({
+        key: v.string(),
+        value: v.string(),
+        sandboxExclude: v.optional(v.boolean()),
+      }),
+    ),
+    updatedAt: v.number(),
+  }).index("by_team", ["teamId"]),
+>>>>>>> origin/main
   automations: defineTable(automationFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_enabled", ["repoId", "enabled"])
@@ -460,6 +502,11 @@ const schema = defineSchema({
     .index("by_automation_and_eventKey", ["automationId", "eventKey"])
     .index("by_automation_and_targetUrl", ["automationId", "targetUrl"])
     .index("by_repo", ["repoId"]),
+
+  changelogVotes: defineTable(changelogVoteFields).index(
+    "by_run_and_user_and_item",
+    ["runId", "userId", "itemIndex"],
+  ),
 
   logs: defineTable(logFields)
     .index("by_repo", ["repoId"])
@@ -478,6 +525,7 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
+  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
   mcpAuthCodes: defineTable({
     code: v.string(),
     clerkUserId: v.string(),
@@ -488,12 +536,16 @@ const schema = defineSchema({
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
 
+  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
   mcpClientRegistrations: defineTable({
     clientId: v.string(),
     clientSecret: v.optional(v.string()),
     redirectUris: v.array(v.string()),
     registeredAt: v.number(),
   }).index("by_clientId", ["clientId"]),
+
+  // MCP bearer token-cache table removed after the drain migration emptied it.
+  // schema-narrowing-ok: drainMcpTokenCache
 
   sandboxGitCredentials: defineTable(sandboxGitCredentialsFields)
     .index("by_sandbox_id", ["sandboxId"])

@@ -373,10 +373,31 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
     // previously fell through to the generic "Using Task..." row).
     case "Agent":
     case "Task":
+<<<<<<< HEAD
       return subtaskStep(
         stringOrUndefined(input.description) ??
           stringOrUndefined(input.subagent_type),
       );
+=======
+      return {
+        type: "subtask",
+        label: "Running agent...",
+        detail:
+          typeof input.description === "string"
+            ? String(input.description)
+            : typeof input.subagent_type === "string"
+              ? String(input.subagent_type)
+              : undefined,
+        // The prompt the subagent was spawned with: the opening message of
+        // its child thread view. Trimmed from the chat transcript query like
+        // any other preview, so it costs nothing until a reader opens it.
+        contentPreview:
+          typeof input.prompt === "string" && input.prompt.trim()
+            ? capContentPreview(input.prompt.trim())
+            : undefined,
+        status: "active",
+      };
+>>>>>>> origin/main
     case "TodoWrite":
       return todosStep();
     case "TodoRead":

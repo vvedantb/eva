@@ -13,7 +13,7 @@
  * an anchor), others are a plain flex child. Compose it:
  *
  * - over a stretched-overlay row (`ListRow`, or any `absolute inset-0` link):
- *   add `LIST_ROW_CONTROL_CLASS` from `@eva/ui`, or the kebab sits *under* the
+ *   add `LIST_ROW_CONTROL_CLASS` from `@vvedantb/ui`, or the kebab sits *under* the
  *   overlay and cannot be tapped;
  * - as an absolutely-positioned sibling of a wrapping `<Link>`: add
  *   `absolute … z-2`, and give the card `max-sm:pr-*` so its content does not run

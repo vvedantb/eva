@@ -3,11 +3,14 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import {
+  Button,
+  RelativeDateTime,
+  ListEnter,
+  MarqueeOnHover,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { DOC_SIDE_PANEL_CLASS } from "./docSidePanel";
 
 export function DocHistoryPanel({

@@ -20,7 +20,7 @@ export interface SummaryComment {
  * GitHub marks apps with a `[bot]` suffix. Review bots are most of the volume on
  * an eva pull request, so Summary folds them into one group below the people.
  */
-export function isBotLogin(login: string | null): boolean {
+function isBotLogin(login: string | null): boolean {
   return login !== null && login.endsWith("[bot]");
 }
 

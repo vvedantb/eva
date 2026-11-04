@@ -11,7 +11,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import type { ThemeTypes } from "@pierre/diffs";
 import {
   IconArrowsDiagonal,
@@ -147,102 +147,103 @@ export function DiffFileAccordionItem({
       {/* File actions on right-click, as Cursor keeps the row to path,
           counts and the tick. */}
       <ContextMenu>
-      <ContextMenuTrigger asChild>
-      <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-background/95 pr-3 pl-3 backdrop-blur-sm group-data-[state=open]/item:border-b">
-        <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline [&>svg:last-child]:hidden">
-          <span className="flex min-w-0 flex-1 items-start gap-2 text-left">
-            <IconChevronRight
-              aria-hidden
-              className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-base)] group-data-[state=open]:rotate-90"
-            />
-            <span className="min-w-0 flex-1 text-sm font-normal break-words text-foreground">
-              {renamedFrom ? (
-                <>
-                  <span className="text-muted-foreground line-through">
-                    {renamedFrom}
-                  </span>
-                  <span className="text-muted-foreground"> → </span>
-                </>
-              ) : null}
-              <BreakablePath path={path} />
-            </span>
-          </span>
-        </AccordionTrigger>
+        <ContextMenuTrigger asChild>
+          <div className="group sticky top-0 z-10 flex items-center gap-3 border-border bg-background/95 pr-3 pl-3 backdrop-blur-sm group-data-[state=open]/item:border-b">
+            <AccordionTrigger className="min-w-0 flex-1 py-3 hover:no-underline [&>svg:last-child]:hidden">
+              <span className="flex min-w-0 flex-1 items-start gap-2 text-left">
+                <IconChevronRight
+                  aria-hidden
+                  className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-[var(--motion-base)] group-data-[state=open]:rotate-90"
+                />
+                <span className="min-w-0 flex-1 text-sm font-normal break-words text-foreground">
+                  {renamedFrom ? (
+                    <>
+                      <span className="text-muted-foreground line-through">
+                        {renamedFrom}
+                      </span>
+                      <span className="text-muted-foreground"> → </span>
+                    </>
+                  ) : null}
+                  <BreakablePath path={path} />
+                </span>
+              </span>
+            </AccordionTrigger>
 
-        <div className="flex shrink-0 items-center gap-2.5">
-          {pendingComments > 0 ? (
-            <span
-              className="flex items-center gap-1 text-xs text-muted-foreground"
-              title={`${pendingComments} pending comment(s)`}
-            >
-              <IconMessage className="size-3.5" />
-              {pendingComments}
-            </span>
-          ) : null}
-          {entry.binary ? null : (
-            <PrDiffStat
-              additions={additions}
-              deletions={deletions}
-              hideZero
-              className="font-sans text-sm"
-            />
-          )}
-
-
-          {/* Outside the trigger so ticking Viewed does not also fold the
-              file. The tick alone, as Cursor has it; the label names it. */}
-          <span
-            className="flex items-center"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <Checkbox
-              checked={viewed}
-              onCheckedChange={(checked) => onViewedChange(checked === true)}
-              aria-label={`Mark ${path} as viewed`}
-              title="Viewed"
-              className="size-5 rounded-md border-border bg-muted/60"
-            />
-          </span>
-        </div>
-      </div>
-      </ContextMenuTrigger>
-              <ContextMenuContent>
-                {canExpandContext ? (
-                  <ContextMenuItem
-                    onSelect={loadFullFile}
-                    disabled={fullFile.status === "loading"}
-                  >
-                    <IconArrowsDiagonal className="size-4" />
-                    {fullFile.status === "error"
-                      ? "Retry loading full file"
-                      : "Load full file context"}
-                  </ContextMenuItem>
-                ) : null}
-                <ContextMenuItem
-                  onSelect={() => void navigator.clipboard.writeText(path)}
+            <div className="flex shrink-0 items-center gap-2.5">
+              {pendingComments > 0 ? (
+                <span
+                  className="flex items-center gap-1 text-xs text-muted-foreground"
+                  title={`${pendingComments} pending comment(s)`}
                 >
-                  <IconCopy className="size-4" />
-                  Copy path
-                </ContextMenuItem>
-                {openInFiles ? (
-                  <ContextMenuItem onSelect={openInFiles} data-testid="open-in-files">
-                    <IconFileText className="size-4" />
-                    Open in Files
-                  </ContextMenuItem>
-                ) : null}
-                <ContextMenuSeparator />
-                <ContextMenuItem asChild>
-                  <a
-                    href={`${repoUrl}/blob/${viewRef}/${path}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <IconExternalLink className="size-4" />
-                    View file on GitHub
-                  </a>
-                </ContextMenuItem>
-              </ContextMenuContent>
+                  <IconMessage className="size-3.5" />
+                  {pendingComments}
+                </span>
+              ) : null}
+              {entry.binary ? null : (
+                <PrDiffStat
+                  additions={additions}
+                  deletions={deletions}
+                  hideZero
+                  className="font-sans text-sm"
+                />
+              )}
+
+              {/* Outside the trigger so ticking Viewed does not also fold the
+              file. The tick alone, as Cursor has it; the label names it. */}
+              <span
+                className="flex items-center"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <Checkbox
+                  checked={viewed}
+                  onCheckedChange={(checked) =>
+                    onViewedChange(checked === true)
+                  }
+                  aria-label={`Mark ${path} as viewed`}
+                  title="Viewed"
+                  className="size-5 rounded-md border-border bg-muted/60"
+                />
+              </span>
+            </div>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {canExpandContext ? (
+            <ContextMenuItem
+              onSelect={loadFullFile}
+              disabled={fullFile.status === "loading"}
+            >
+              <IconArrowsDiagonal className="size-4" />
+              {fullFile.status === "error"
+                ? "Retry loading full file"
+                : "Load full file context"}
+            </ContextMenuItem>
+          ) : null}
+          <ContextMenuItem
+            onSelect={() => void navigator.clipboard.writeText(path)}
+          >
+            <IconCopy className="size-4" />
+            Copy path
+          </ContextMenuItem>
+          {openInFiles ? (
+            <ContextMenuItem onSelect={openInFiles} data-testid="open-in-files">
+              <IconFileText className="size-4" />
+              Open in Files
+            </ContextMenuItem>
+          ) : null}
+          <ContextMenuSeparator />
+          <ContextMenuItem asChild>
+            <a
+              href={`${repoUrl}/blob/${viewRef}/${path}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <IconExternalLink className="size-4" />
+              View file on GitHub
+            </a>
+          </ContextMenuItem>
+        </ContextMenuContent>
       </ContextMenu>
 
       <AccordionContent className="pb-0">

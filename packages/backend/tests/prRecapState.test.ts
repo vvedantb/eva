@@ -71,6 +71,14 @@ test("the views agree on which stored rows are viewable", () => {
   expect(isIncompleteReadyRecap(ready)).toBe(false);
   expect(isViewableRecap(legacy)).toBe(false);
   expect(isIncompleteReadyRecap(legacy)).toBe(true);
+  // Structured steps are a walkthrough on their own; older rows keep HTML.
+  const steps = [{ title: "One", summary: "First.", files: [] }];
+  expect(
+    isViewableRecap({ prRecapStatus: "ready", recapWalkthrough: steps }),
+  ).toBe(true);
+  expect(
+    isIncompleteReadyRecap({ prRecapStatus: "ready", recapWalkthrough: [] }),
+  ).toBe(true);
   // A pending or errored doc is neither viewable nor "incomplete ready".
   expect(isIncompleteReadyRecap({ prRecapStatus: "pending" })).toBe(false);
   expect(isViewableRecap({ prRecapStatus: "error" })).toBe(false);

@@ -1,5 +1,10 @@
-import type { AIModel, BackgroundAgentEntry, Id } from "@eva/backend";
-import type { ModelAccount } from "@eva/ui";
+import type {
+  AgentGoal,
+  AIModel,
+  BackgroundAgentEntry,
+  Id,
+} from "@eva/backend";
+import type { ModelAccount } from "@vvedantb/ui";
 import type { ChatBodyMessage } from "./chatBodyUtils";
 
 /**
@@ -12,42 +17,13 @@ export type ChatEntityRef =
   | { kind: "task"; taskId: Id<"agentTasks"> }
   | { kind: "project"; projectId: Id<"projects"> };
 
-interface ChatEntityKeys {
-  /** Transcript owner — `api.messages.listByParent` / `queuedMessages`. */
-  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
-  /** `api.streaming.get` entity id for that surface's chat turn. */
-  streamingEntityId: string;
-}
-
-/** The Convex query keys each surface's chat is stored under. */
-export function chatEntityKeys(entity: ChatEntityRef): ChatEntityKeys {
-  switch (entity.kind) {
-    case "session":
-      // A session's transcript, turn and daemon all belong to one of its chats.
-      return {
-        parentId: entity.chatId,
-        streamingEntityId: entity.chatId,
-      };
-    case "task":
-      return {
-        parentId: entity.taskId,
-        streamingEntityId: `task-chat-${entity.taskId}`,
-      };
-    case "project":
-      return {
-        parentId: entity.projectId,
-        streamingEntityId: `project-chat-${entity.projectId}`,
-      };
-  }
-}
-
 /**
  * What the usage-limit recovery card needs from a surface. `undefined` when
  * this viewer cannot move the chat onto another account: a read-only session,
  * or a task/project viewed by someone other than its owner (task and project
  * chat are owner-sticky; the account picker is gated the same way).
  */
-export interface UsageLimitRecoveryInputs {
+interface UsageLimitRecoveryInputs {
   messages: ReadonlyArray<ChatBodyMessage>;
   accounts: ReadonlyArray<ModelAccount>;
   /** Maps a picker id string back to the branded id from the live docs. */
@@ -78,4 +54,11 @@ export interface SandboxChatSurface {
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   /** What the usage-limit recovery card needs, or nothing when it cannot show. */
   usageLimitRecovery: UsageLimitRecoveryInputs | undefined;
+  /** Claude's native `/goal` for this chat, mirrored by the daemon. */
+  goal: AgentGoal | undefined;
+  /**
+   * Sends a harness slash command (e.g. `/goal clear`) as a normal chat
+   * message, verbatim. Undefined when the chat cannot be written to.
+   */
+  sendCommand: ((command: string) => Promise<void>) | undefined;
 }

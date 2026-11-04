@@ -28,7 +28,16 @@ export interface ChatRuntimeFacts {
   backgroundCommands?: readonly string[];
   /** Repo opted in to `.eva/memory/` (Agent Memory Repo spec). */
   agentMemoryEnabled?: boolean;
+  /** Owner opted in to Experimental → Ask teammates (`ask_teammate` MCP tool). */
+  askTeammatesEnabled?: boolean;
+  /** Owner opted in to Experimental → PR watch (`watch_pull_request` MCP tool). */
+  prWatchEnabled?: boolean;
 }
+
+const PR_WATCH_INSTRUCTION = ` \`watch_pull_request\` after a PR is opened or pushed, so Eva wakes this chat when its checks fail or pass, a reviewer comments, or it conflicts (\`unwatch_pull_request\` stops it);`;
+
+const ASK_TEAMMATES_INSTRUCTION = `
+- Design / product / role questions: call \`list_work_profiles\` then \`ask_teammate\` with \`context\` (what we are building, why this call matters, constraints). Do not dump those only in this chat. The tool is non-blocking — finish the turn after asking.`;
 
 function commandList(commands: readonly string[] | undefined): string {
   if (commands === undefined || commands.length === 0) return "none";
@@ -51,7 +60,7 @@ function buildChatRuntimeSection(
 ${prLine} Never run \`gh pr create\` for this branch — Eva opens its PR. A chat can hold several PRs: to open another one yourself, push a side branch named \`${branchName}-<short-slug>\` and open the PR from it, and Eva links it to this chat. A PR from any other branch name is not linked.
 - Dev server: \`${runtime.devCommand ?? "auto-detected from package.json"}\` on port ${devPortText}. Startup commands: ${commandList(runtime.startupCommands)}. Background commands: ${commandList(runtime.backgroundCommands)}.
 - Dev server logs: \`tmux capture-pane -p -S -200 -t ${consoleSession}\` (the Preview Console). Read them before concluding the app is broken. To restart it, call eva MCP \`restart_dev_server\` — never kill it or launch your own. A dead daemon (e.g. \`convex dev\`) comes back with \`restart_background_commands\`; \`rerun_startup_commands\` reseeds and may reset local data, so ask first.
-- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked; queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
+- Eva controls (eva MCP): \`get_chat_context\` (this chat's PR, branch, linked repos, dev config, tabs); \`list_env_vars\` (names only) and \`request_env_var\` to ask the user for a missing secret — never ask them to paste one in chat; \`set_preview_path\` to point the user's Preview tab at a route you built; \`notify_user\` for an in-app notification when you finish or are blocked;${runtime.prWatchEnabled === true ? PR_WATCH_INSTRUCTION : ""} queued follow-ups via \`list_queued_messages\`, \`edit_queued_message\`, \`reorder_queued_messages\`; repo-wide custom tabs via the \`*_app_tab\` tools (ask before adding or removing one).
 - Deleting anything through eva MCP (tasks, automations, artifacts, docs) needs the user's explicit yes in chat first. Ask, wait for the answer, then pass \`confirmed: true\`.`;
 }
 
@@ -181,7 +190,6 @@ Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
 - Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
 - If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
 - Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh side branch, named after this one so Eva links the new PR to this chat: \`git fetch origin && git checkout --no-track -b ${branchName}-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/${branchName}-<short-slug>:refs/heads/${branchName}-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
-- Questions only: answer without unnecessary edits. No build/lint/test unless asked.
-- Design / product / role questions: call \`list_work_profiles\` then \`ask_teammate\` with \`context\` (what we are building, why this call matters, constraints). Do not dump those only in this chat. The tool is non-blocking — finish the turn after asking.
+- Questions only: answer without unnecessary edits. No build/lint/test unless asked.${runtime?.askTeammatesEnabled === true ? ASK_TEAMMATES_INSTRUCTION : ""}
 - Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
 }

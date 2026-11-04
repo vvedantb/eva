@@ -7,12 +7,16 @@
  * keeps Convex function references out of this module and lets tests fake it.
  */
 
+import { toolErrorResult, toolTextResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Doc, Id } from "../_generated/dataModel";
 import { defineTool, type EvaTool } from "../mcp/registry";
+<<<<<<< HEAD
 import { errorResult } from "../mcp/toolShared";
 import { sleep } from "../_shared/async";
+=======
+>>>>>>> origin/main
 
 type CallRow = Doc<"previewToolCalls">;
 
@@ -68,12 +72,12 @@ function timeoutMessage(gaveUpFrom: "pending" | "claimed"): string {
 
 function resultOf(row: CallRow): CallToolResult {
   if (row.status === "error") {
-    return errorResult(
+    return toolErrorResult(
       `The preview tool failed: ${row.error ?? "no error message was given."}`,
     );
   }
-  // Raw page output: re-encoding it through textResult would double-escape JSON.
-  return { content: [{ type: "text", text: row.resultJson ?? "null" }] };
+  // Raw page output: re-encoding it through toolJsonResult would double-escape JSON.
+  return toolTextResult(row.resultJson ?? "null");
 }
 
 /**
@@ -90,7 +94,7 @@ export async function awaitPreviewToolCall(
   while (Date.now() < deadline) {
     const row = await relay.get(id);
     if (row === null) {
-      return errorResult(
+      return toolErrorResult(
         "The request was cancelled because this chat's sandbox stopped.",
       );
     }
@@ -101,10 +105,10 @@ export async function awaitPreviewToolCall(
     id,
     `Timed out after ${timing.timeoutMs / 1000} s waiting for the preview.`,
   );
-  if (gaveUpFrom !== null) return errorResult(timeoutMessage(gaveUpFrom));
+  if (gaveUpFrom !== null) return toolErrorResult(timeoutMessage(gaveUpFrom));
   const row = await relay.get(id);
   return row === null
-    ? errorResult(
+    ? toolErrorResult(
         "The request was cancelled because this chat's sandbox stopped.",
       )
     : resultOf(row);
@@ -125,7 +129,7 @@ export function previewTools(
       input: {},
       handler: async () => {
         const id = await relay.create({ kind: "list" });
-        if (id === null) return errorResult(DETACHED_MESSAGE);
+        if (id === null) return toolErrorResult(DETACHED_MESSAGE);
         return awaitPreviewToolCall(relay, id, timing);
       },
     }),
@@ -153,7 +157,7 @@ export function previewTools(
           name: args.name,
           argumentsJson: JSON.stringify(args.arguments ?? {}),
         });
-        if (id === null) return errorResult(DETACHED_MESSAGE);
+        if (id === null) return toolErrorResult(DETACHED_MESSAGE);
         return awaitPreviewToolCall(relay, id, timing);
       },
     }),

@@ -9,7 +9,8 @@ import {
   type AIModel,
   type StoredModelTraits,
 } from "@eva/backend";
-import { ModelSelect, type ModelSelectProps } from "@eva/ui";
+import { ModelPicker } from "@vvedantb/ui";
+import type { ModelPickerProps } from "@vvedantb/ui";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
@@ -38,7 +39,7 @@ function triggerTraitUi(
 }
 
 type ModelSelectWithTraitsProps = Omit<
-  ModelSelectProps<AIModel>,
+  ModelPickerProps<AIModel>,
   | "header"
   | "triggerSuffix"
   | "showFastIcon"
@@ -80,7 +81,7 @@ export function ModelSelectWithTraits({
       : undefined;
 
   return (
-    <ModelSelect
+    <ModelPicker
       {...selectProps}
       value={value}
       disabled={disabled}

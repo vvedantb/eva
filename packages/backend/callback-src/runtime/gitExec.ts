@@ -1,7 +1,7 @@
 import { spawnSync } from "child_process";
 import { WORK_DIR } from "../config.js";
 
-export const GIT_STEP_TIMEOUT_MS = 20_000;
+const GIT_STEP_TIMEOUT_MS = 20_000;
 
 /**
  * Runs git against the sandbox checkout (or `cwd`). `out` is stdout+stderr

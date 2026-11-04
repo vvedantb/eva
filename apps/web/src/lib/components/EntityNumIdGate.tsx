@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { Navigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";

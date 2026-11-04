@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { WAKE_EVA_LABEL } from "@/lib/components/sandbox/SleepControlTooltip";
 

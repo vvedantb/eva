@@ -2,8 +2,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { IconAlertCircle } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { Button, EmptyState } from "@vvedantb/ui";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 interface EntityNotFoundProps {
@@ -27,20 +26,20 @@ export function EntityNotFound({
 }: EntityNotFoundProps) {
   return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center p-4">
-      <EmptyState
-        icon={<IconAlertCircle size={28} />}
-        title={`This ${entityLabel} does not exist`}
-        description={description}
-        action={
-          backTo ? (
+      <EmptyState.Root>
+        <EmptyState.Icon icon={IconAlertCircle} size={28} />
+        <EmptyState.Title>{`This ${entityLabel} does not exist`}</EmptyState.Title>
+        <EmptyState.Description>{description}</EmptyState.Description>
+        <EmptyState.Actions>
+          {backTo ? (
             <Button asChild size="sm" variant="outline" className="mt-5">
               <Link to={toInternalRepoHref(backTo)}>
                 {backLabel ?? `Back to ${entityLabel}s`}
               </Link>
             </Button>
-          ) : undefined
-        }
-      />
+          ) : undefined}
+        </EmptyState.Actions>
+      </EmptyState.Root>
     </div>
   );
 }

@@ -1,12 +1,18 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
 import { buildNotificationDigestHtml } from "./emailTemplates";
+<<<<<<< HEAD
 import { getEvaBaseUrl } from "./_env/webAppUrl";
 
+=======
+
+/** Reads a required environment variable, throwing a clear error when it is missing. */
+>>>>>>> origin/main
 /**
  * Sends the instant notification email for a user, debounced via the scheduler
  * delay in createNotification. It re-reads the user's unread, not-yet-emailed,
@@ -25,7 +31,11 @@ export const sendUnreadForUser = internalAction({
     );
     if (!data) return null;
 
+<<<<<<< HEAD
     const appUrl = getEvaBaseUrl();
+=======
+    const appUrl = requiredEnv("WEB_APP_URL");
+>>>>>>> origin/main
     const count = data.notifications.length;
     const [first] = data.notifications;
 

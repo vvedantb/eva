@@ -5,9 +5,9 @@ import {
   snapshotsOf,
   type UsageAccountEntry,
 } from "./_utils";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { UsageProviderSection } from "./UsageProviderSection";
 import { UsageRefreshButton } from "./UsageRefreshButton";
+import { ListEnter } from "@vvedantb/ui";
 
 interface UsageLimitsDetailsProps {
   repoId: Id<"githubRepos">;

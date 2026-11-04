@@ -5,7 +5,8 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { toast, usePromptInputController } from "@eva/ui";
+import { patchLoadedQuery } from "@vvedantb/server";
+import { toast, usePromptInputController } from "@vvedantb/ui";
 import {
   isAllowedAttachmentFile,
   labelForAttachment,
@@ -74,13 +75,7 @@ export function useComposerStash({
   const addStash = useMutation(api.promptStash.add);
   const removeStash = useMutation(api.promptStash.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.promptStash.listForRepo, {
-        repoId,
-      });
-      if (current === undefined) return;
-      localStore.setQuery(
-        api.promptStash.listForRepo,
-        { repoId },
+      patchLoadedQuery(localStore, api.promptStash.listForRepo, { repoId }, (current) =>
         current.filter((entry) => entry._id !== args.id),
       );
     },

@@ -1,5 +1,6 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import {
   Dialog,
@@ -8,9 +9,9 @@ import {
   DialogTitle,
   Button,
   Surface,
-} from "@eva/ui";
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconEye, IconBrandGithub } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 interface HiddenReposSheetProps {
@@ -26,18 +27,15 @@ export function HiddenReposSheet({
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
-    const withHidden = localStore.getQuery(api.githubRepos.list, {
-      includeHidden: true,
-    });
-    if (withHidden !== undefined) {
-      localStore.setQuery(
-        api.githubRepos.list,
-        { includeHidden: true },
-        withHidden.map((r) =>
+    patchLoadedQuery(
+      localStore,
+      api.githubRepos.list,
+      { includeHidden: true },
+      (repos) =>
+        repos.map((r) =>
           r._id === args.repoId ? { ...r, hidden: args.hidden } : r,
         ),
-      );
-    }
+    );
   });
 
   const hiddenRepos = allRepos?.filter((r) => r.hidden === true) ?? [];

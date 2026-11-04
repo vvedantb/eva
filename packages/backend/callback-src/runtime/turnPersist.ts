@@ -1,27 +1,19 @@
+import {
+  AUTO_PUBLISH_BRANCH_GIT_CONFIG,
+  COMMIT_EXCLUDE_PATHSPECS,
+} from "@eva/shared/gitDefaults";
 import { REQUIRE_TASK_COMMIT, RUN_ID } from "../config.js";
 import { log } from "../utils.js";
+<<<<<<< HEAD
 import { git, readCurrentBranch } from "./gitExec.js";
+=======
+import { requestGitStateCheck } from "./branchWatcher.js";
+import { git } from "./gitExec.js";
+>>>>>>> origin/main
 
 const PUSH_TIMEOUT_MS = 60_000;
 
-// Media exclusions mirror the agent-facing commit convention in
-// convex/_sessions/prompts.ts — captures are chat deliverables, never commits.
-const COMMIT_ADD_ARGS = [
-  "add",
-  "-A",
-  "--",
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md",
-];
+const COMMIT_ADD_ARGS = ["add", "-A", "--", ...COMMIT_EXCLUDE_PATHSPECS];
 
 type BranchSyncResult =
   | { status: "ready"; remoteExists: boolean }
@@ -156,10 +148,22 @@ function tipAlreadyPublished(exclusion: readonly string[]): boolean {
  * workflow owns commit semantics there — the commit gate must keep failing
  * agents that did not commit, and the run's own push/PR steps follow.
  * Only ever acts on eva-owned branches (`eva/…`); never main or a base branch.
+ * With the sender's `manualSideBranchPublish` flag on, Eva pins the one branch
+ * it may publish (`AUTO_PUBLISH_BRANCH_GIT_CONFIG`), so side branches the agent
+ * created and owns are left alone. The UI's "Commit & push" covers them.
  * Best-effort throughout: failure must never fail the turn.
  */
 export function persistTurnWork(): void {
   if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  try {
+    commitAndPushTurnWork();
+  } finally {
+    // The commit and push move refs the HEAD watcher does not see.
+    requestGitStateCheck();
+  }
+}
+
+function commitAndPushTurnWork(): void {
   const startedAt = Date.now();
 
   const branch = readCurrentBranch();
@@ -167,6 +171,13 @@ export function persistTurnWork(): void {
     if (branch) {
       log(`persistTurnWork: skipped — branch "${branch}" is not eva-owned`);
     }
+    return;
+  }
+  const pinned = git(["config", "--get", AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
+  if (pinned.ok && pinned.out.length > 0 && pinned.out !== branch.out) {
+    log(
+      `persistTurnWork: skipped — branch "${branch.out}" is not the chat branch "${pinned.out}"`,
+    );
     return;
   }
 

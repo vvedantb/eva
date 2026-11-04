@@ -7,7 +7,6 @@ import {
   DialogFooter,
   Button,
   Input,
-  CircleSpinner,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -22,7 +21,9 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import {
@@ -34,6 +35,7 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
@@ -48,6 +50,7 @@ import {
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   IconFileText,
   IconTrash,
@@ -88,7 +91,6 @@ import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -127,6 +129,7 @@ export function QuickTaskModal({
   initialDraft,
 }: QuickTaskModalProps) {
   const { repo } = useRepo();
+  const simpleView = useSimpleView();
   const {
     baseBranch,
     setBaseBranch,
@@ -144,7 +147,7 @@ export function QuickTaskModal({
   );
   const [confirmDeleteId, setConfirmDeleteId] =
     useState<Id<"agentTasks"> | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [selectedProjectId, setSelectedProjectId] = useState<
     Id<"projects"> | undefined
   >(initialDraft?.projectId ?? projectId);
@@ -184,26 +187,16 @@ export function QuickTaskModal({
   const activateDraft = useMutation(api.agentTasks.activateDraft);
   const removeDraft = useMutation(api.agentTasks.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.listDrafts, {
-        repoId: repo._id,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.listDrafts,
-          { repoId: repo._id },
-          draftsAfterRemove(current, args.id),
-        );
-      }
-      const count = localStore.getQuery(api.agentTasks.countDrafts, {
-        repoId: repo._id,
-      });
-      if (count !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.countDrafts,
-          { repoId: repo._id },
-          draftCountAfterRemove(count),
-        );
-      }
+      const draftArgs = { repoId: repo._id };
+      patchLoadedQuery(localStore, api.agentTasks.listDrafts, draftArgs, (cur) =>
+        draftsAfterRemove(cur, args.id),
+      );
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.countDrafts,
+        draftArgs,
+        draftCountAfterRemove,
+      );
     },
   );
   const draftRows = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
@@ -533,7 +526,11 @@ export function QuickTaskModal({
                     }
                   >
                     {isConnecting || isPolishing ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
+                      <Spinner
+                        variant="circle"
+                        size="sm"
+                        className="size-3.5"
+                      />
                     ) : isListening ? (
                       <IconPlayerStop size={14} />
                     ) : (
@@ -564,24 +561,30 @@ export function QuickTaskModal({
               setAssignedTo={setAssignedTo}
             />
 
-            <ModelSelectWithTraits
-              value={model}
-              options={modelOptions}
-              onValueChange={(next) => {
-                setModel(next);
-                setProviderAccountId(
-                  providerAccountIdForModel(accounts, providerAccountId, next),
-                );
-              }}
-              accounts={accounts}
-              accountId={providerAccountId}
-              onAccountChange={setProviderAccountId}
-              traits={traits}
-              onTraitsChange={(partial) =>
-                setTraits((prev) => ({ ...prev, ...partial }))
-              }
-              className={QUICK_TASK_OPTION_BADGE_CLASS}
-            />
+            {simpleView ? null : (
+              <ModelSelectWithTraits
+                value={model}
+                options={modelOptions}
+                onValueChange={(next) => {
+                  setModel(next);
+                  setProviderAccountId(
+                    providerAccountIdForModel(
+                      accounts,
+                      providerAccountId,
+                      next,
+                    ),
+                  );
+                }}
+                accounts={accounts}
+                accountId={providerAccountId}
+                onAccountChange={setProviderAccountId}
+                traits={traits}
+                onTraitsChange={(partial) =>
+                  setTraits((prev) => ({ ...prev, ...partial }))
+                }
+                className={QUICK_TASK_OPTION_BADGE_CLASS}
+              />
+            )}
 
             {branchLockedToProject ? (
               <Tooltip>
@@ -794,7 +797,6 @@ export function QuickTaskModal({
                                 className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() =>
                                   requestConfirm(
-                                    altHeld,
                                     () => setConfirmDeleteId(draft._id),
                                     () => {
                                       void handleDeleteDraft(draft._id);

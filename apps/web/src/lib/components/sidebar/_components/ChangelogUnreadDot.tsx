@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
+import { UnreadDot } from "@vvedantb/ui";
 
 /**
  * The same unread signal the changelog popup gates on, on the "What's New" link

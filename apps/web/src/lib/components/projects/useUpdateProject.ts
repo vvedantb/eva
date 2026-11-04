@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 
 /**
  * `projects.update` with an optimistic patch of `projects.get`, so field edits
@@ -15,8 +16,6 @@ import type { Id } from "@eva/backend";
 export function useUpdateProject(projectId: Id<"projects">) {
   return useMutation(api.projects.update).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.projects.get, { id: projectId });
-      if (current === undefined || current === null) return;
       const {
         id: _id,
         priority,
@@ -26,26 +25,28 @@ export function useUpdateProject(projectId: Id<"projects">) {
         providerAccountId,
         ...safeFields
       } = args;
-      localStore.setQuery(
+      patchLoadedQuery(
+        localStore,
         api.projects.get,
         { id: projectId },
-        {
-          ...current,
-          ...safeFields,
-          ...(priority !== undefined
-            ? { priority: priority ?? undefined }
-            : {}),
-          ...(projectLead !== undefined
-            ? { projectLead: projectLead ?? undefined }
-            : {}),
-          ...(codeReviewer !== undefined
-            ? { codeReviewer: codeReviewer ?? undefined }
-            : {}),
-          ...(model !== undefined ? { model: model ?? undefined } : {}),
-          ...(providerAccountId !== undefined
-            ? { providerAccountId: providerAccountId ?? undefined }
-            : {}),
-        },
+        (current) =>
+          current && {
+            ...current,
+            ...safeFields,
+            ...(priority !== undefined
+              ? { priority: priority ?? undefined }
+              : {}),
+            ...(projectLead !== undefined
+              ? { projectLead: projectLead ?? undefined }
+              : {}),
+            ...(codeReviewer !== undefined
+              ? { codeReviewer: codeReviewer ?? undefined }
+              : {}),
+            ...(model !== undefined ? { model: model ?? undefined } : {}),
+            ...(providerAccountId !== undefined
+              ? { providerAccountId: providerAccountId ?? undefined }
+              : {}),
+          },
       );
     },
   );

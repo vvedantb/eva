@@ -115,8 +115,8 @@ test("new snapshots preinstall both provider SDKs at the loader versions", () =>
 });
 
 test("the CLI floor is never older than the agent SDK's own build", () => {
-  // Sandboxes run the registry's latest CLI, resolved per launch. This constant
-  // is the floor a failed lookup falls back to, and what the snapshot seed bakes
+  // Sandboxes run the registry's latest CLI, resolved per launch and baked by
+  // the snapshot seed. This constant is the floor a failed lookup falls back to
   // — so it must still satisfy the SDK, which spawns the binary and whose models
   // are gated on its version. Agent SDK 0.3.X ships CLI 2.1.X, hence the shared
   // patch component.
@@ -127,22 +127,23 @@ test("the CLI floor is never older than the agent SDK's own build", () => {
     CLAUDE_AGENT_SDK_PIN.split(".").at(2),
   );
 
-  // One source of truth: the seed and the launch-time resolver both import it.
-  expect(snapshotActions).toContain(
-    'import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion"',
-  );
+  // One source of truth: the launch-time resolver owns the floor, and the seed
+  // bakes whatever that resolver returns. Baking the floor instead made every
+  // launch npm-install the newer CLI before its daemon could start.
   expect(launchRuntime).toContain(
     'import { CLAUDE_CODE_VERSION } from "./claudeCliVersion"',
   );
+  expect(snapshotActions).toContain("resolveClaudeCliVersion(),");
 
   // The seed stays version-pinned, guard included: an image resolves `@latest`
   // once and then freezes it, so a floating seed is what leaves an old snapshot
-  // serving a CLI too old for the model (2.1.246, changelog 2026-09-02).
+  // serving a CLI too old for the model (2.1.246, changelog 2026-09-02). The
+  // pin is the concrete version resolved for this build.
   expect(snapshotActions).toContain(
-    'globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)',
+    'globalPackageIsVersion("@anthropic-ai/claude-code", claudeCliVersion)',
   );
   expect(snapshotActions).toContain(
-    "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}",
+    "@anthropic-ai/claude-code@${claudeCliVersion}",
   );
   // No unpinned install survives anywhere. The launch install interpolates the
   // version resolved for *this* launch — never a bare package or a literal
@@ -216,8 +217,9 @@ test("the launch-resolved CLI version reaches both the install and the callback"
 });
 
 test("the Codex CLI floor is pinned, guarded in the seed, and floated at launch", () => {
-  // Same contract as Claude's: the seed bakes an exact version behind a
-  // version-aware guard, and launch.ts installs the registry's latest above it.
+  // Same contract as Claude's: the seed bakes the exact version launch.ts
+  // resolves (the registry's latest above the floor) behind a version-aware
+  // guard.
   const floor = /CODEX_CLI_VERSION = "([^"]+)"/.exec(
     codexCliVersionModule,
   )?.[1];
@@ -227,16 +229,14 @@ test("the Codex CLI floor is pinned, guarded in the seed, and floated at launch"
   // driving a mismatched pair.
   expect(backendPackage).toContain(`"@openai/codex-sdk": "${floor}"`);
 
-  expect(snapshotActions).toContain(
-    'import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion"',
-  );
   expect(launchRuntime).toContain(
     'import { CODEX_CLI_VERSION } from "./codexCliVersion"',
   );
+  expect(snapshotActions).toContain("resolveCodexCliVersion(),");
   expect(snapshotActions).toContain(
-    'globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)',
+    'globalPackageIsVersion("@openai/codex", codexCliVersion)',
   );
-  expect(snapshotActions).toContain("@openai/codex@${CODEX_CLI_VERSION}");
+  expect(snapshotActions).toContain("@openai/codex@${codexCliVersion}");
   expect(launchRuntime).toContain("packageName: CODEX_CLI_PACKAGE,");
   // No unpinned or hardcoded install survives.
   expect(snapshotActions).not.toMatch(/@openai\/codex@0\./);

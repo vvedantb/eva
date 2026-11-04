@@ -34,7 +34,7 @@ import {
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { serializeSteps } from "../parse/stepBudget.js";
+import { serializeFinalSteps, serializeSteps } from "../parse/stepBudget.js";
 import { trimBufferHead } from "../runtime/buffers.js";
 import {
   syncClaudeStateToPersist,
@@ -57,6 +57,12 @@ import {
   type ClaudeUsageResponseLike,
 } from "../runtime/usageLimits.js";
 import { materializeTurnAttachments } from "../runtime/turnAttachments.js";
+import {
+  confirmSteerAcks,
+  deliverSteers,
+  readSteers,
+  steerClaimArgs,
+} from "../runtime/steering.js";
 import { persistTurnWork } from "../runtime/turnPersist.js";
 import { beginTurnCheckpoint } from "../runtime/turnCheckpoint.js";
 import {
@@ -97,6 +103,7 @@ import {
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
+import { trackClaudeGoalFrame } from "./claudeGoalSync.js";
 
 // Entity-scoped daemon marker paths (see daemonPaths.ts). Legacy session paths
 // are cleaned up on exit when this daemon is session-scoped.
@@ -115,9 +122,9 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 // coming, and those silent executions flood `convex logs`. Once no turn is in
 // flight and nothing has happened for the fast window, `selectClaimPollIntervalMs`
 // polls at the idle interval instead — worst case adds ~1s before an idle daemon
-// claims a fresh send, invisible next to model time-to-first-token. Any in-flight
-// turn keeps the 50ms cadence so cancel/stop-task drains (which ride the same
-// mutation) stay prompt even through long-silent tool runs.
+// claims a fresh send, invisible next to model time-to-first-token. An in-flight
+// turn polls at the busy interval (250ms) so cancel/stop-task drains (which ride
+// the same mutation) stay prompt even through long-silent tool runs.
 
 // Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
 // emitting a result would never send a completion event, so the workflow's
@@ -149,7 +156,8 @@ type AgentQuery = ReturnType<SdkModule["query"]>;
 type DaemonTurn = { kind: "real" } | { kind: "synthetic"; messageId: string };
 
 type WarmRunner = {
-  push: (text: string) => void;
+  /** `priority: "next"` injects a steer into the live turn at its next boundary. */
+  push: (text: string, priority?: "next") => void;
   waitMessage: () => Promise<DaemonMessage | null>;
   hasPending: () => boolean;
   stopTask: (taskId: string) => Promise<void>;
@@ -195,6 +203,8 @@ const unsettledBackgroundAgents = new Map<string, BackgroundAgentEntry>();
 const pendingAgentStops = new Set<string>();
 let currentAgentRunner: WarmRunner | null = null;
 let usageRefreshInFlight = false;
+/** Resolves the message pump's idle wait; set only while it sleeps. */
+let wakeIdlePump: (() => void) | null = null;
 
 function beginWatchedTurn(): void {
   turnActive = true;
@@ -404,16 +414,23 @@ function createAsyncQueue<T>(): {
  * message starts a new turn (ended by a `result` message).
  */
 function createPromptStream(): {
-  push: (text: string) => void;
+  push: (text: string, priority?: "next") => void;
   iterable: AsyncIterable<SdkUserMessage>;
 } {
+<<<<<<< HEAD
   const queue = createAsyncQueue<SdkUserMessage>();
   const push = (text: string): void => {
+=======
+  const queue: SdkUserMessage[] = [];
+  let notify: (() => void) | null = null;
+  const push = (text: string, priority?: "next"): void => {
+>>>>>>> origin/main
     queue.push({
       type: "user",
       message: { role: "user", content: text },
       parent_tool_use_id: null,
       session_id: S.activeClaudeSessionId || "",
+      ...(priority ? { priority } : {}),
     });
   };
   const iterable: AsyncIterable<SdkUserMessage> = {
@@ -454,7 +471,10 @@ async function finalizeTurn(
   // loop has parsed this turn's tool steps — yielding an empty "[]" activityLog.
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-  const activityLog = serializeSteps(S.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    S.accumulatedSteps,
+    resultEvent?.result ?? "",
+  );
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = buildTurnCompletionPayload({
     success,
@@ -854,6 +874,13 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   }
   const toolUseId = readTrimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
+    // Shell commands also arrive as tasks. They are not subagents: background
+    // shells have their own registry (`backgroundShells`), and a dev server
+    // run in the background never ends, so as an entry it held the chat queue
+    // for the full 2-hour cap.
+    if (readStringField(message, "task_type") === "local_bash") {
+      return;
+    }
     const entry: BackgroundAgentEntry = {
       toolUseId,
       taskId: readTrimmedString(message.task_id),
@@ -955,6 +982,13 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
+<<<<<<< HEAD
+=======
+  const activityLog = serializeFinalSteps(
+    S.accumulatedSteps,
+    resultEvent?.result ?? "",
+  );
+>>>>>>> origin/main
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = syntheticCompletionArgs(messageId, {
     success,
@@ -1030,6 +1064,13 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   });
 }
 
+/** A real turn is live, so a pushed message joins it instead of starting one. */
+function canTakeSteer(): boolean {
+  return (
+    supervisor.phase === "running" && supervisor.currentTurn?.kind === "real"
+  );
+}
+
 function startClaimWatcher(agentRunner: WarmRunner): void {
   void (async () => {
     while (!supervisor.isStopping) {
@@ -1060,12 +1101,14 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
       }
       const acceptTurn =
         supervisor.phase === "idle" && supervisor.pendingClaim === null;
+      const steerArgs = steerClaimArgs(canTakeSteer());
       try {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION ?? "",
-          entityMutationArgs({ model: MODEL, acceptTurn }),
+          entityMutationArgs({ model: MODEL, acceptTurn, ...steerArgs }),
         );
+        confirmSteerAcks(steerArgs);
         const stopIds = readStopTaskToolUseIds(claimed);
         for (const toolUseId of stopIds) {
           pendingAgentStops.add(toolUseId);
@@ -1074,6 +1117,13 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (readCancelRequested(claimed)) {
           handleCancelRequested(agentRunner);
         }
+        // After the cancel: a steer that races a Stop is rejected and runs
+        // as the next queued turn instead.
+        await deliverSteers(readSteers(claimed), async (text) => {
+          if (!canTakeSteer()) return false;
+          agentRunner.push(text, "next");
+          return true;
+        });
         if (readUsageRefreshRequested(claimed) && !usageRefreshInFlight) {
           usageRefreshInFlight = true;
           log("daemon: usage refresh requested — reading SDK plan usage");
@@ -1089,6 +1139,7 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
+<<<<<<< HEAD
           routeClaimedTurn({
             turn,
             hasActiveRealTurn: supervisor.currentTurn?.kind === "real",
@@ -1096,6 +1147,33 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
             park: () => supervisor.parkClaim(turn),
             logPrefix: "daemon",
           });
+=======
+          // claimPendingTurn already cleared session.pendingTurn atomically, so
+          // any branch that does not park/start the claim loses that prompt.
+          // Same-turn restages (workflow re-staging the prompt already running)
+          // must still be discarded — parking those replays the prompt twice.
+          const currentTurn = supervisor.currentTurn;
+          const currentLease = getCurrentTurnLease();
+          if (
+            shouldParkClaimedTurn({
+              hasActiveRealTurn: currentTurn?.kind === "real",
+              isCancellationInFlight: supervisor.isCancellationInFlight,
+              isFinalizing: false,
+              currentLeaseTurnId: currentLease?.turnId ?? null,
+              claimedLeaseTurnId: turn.turnLease?.turnId ?? null,
+            })
+          ) {
+            if (supervisor.parkClaim(turn)) {
+              wakeIdlePump?.();
+            } else {
+              log("daemon: duplicate claimed turn ignored");
+            }
+          } else {
+            log(
+              "daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
+            );
+          }
+>>>>>>> origin/main
         }
       } catch {
         /* retry on next poll */
@@ -1130,7 +1208,13 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     }
 
     if (supervisor.currentTurn === null && !agentRunner.hasPending()) {
-      await sleep(PROMPT_POLL_INTERVAL_MS);
+      // The claim watcher wakes this early when it parks a turn, so a claimed
+      // prompt no longer waits out the rest of the 50ms tick (~25ms average).
+      await new Promise<void>((resolve) => {
+        wakeIdlePump = resolve;
+        setTimeout(resolve, PROMPT_POLL_INTERVAL_MS);
+      });
+      wakeIdlePump = null;
       continue;
     }
 
@@ -1165,6 +1249,7 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
     recogniseSubagentToolUses(message);
     handleSystemTaskMessage(message);
     handleBackgroundTasksChanged(message);
+    trackClaudeGoalFrame(message);
 
     if (supervisor.isCancellationInFlight) {
       if (message.type !== "result") {
@@ -1401,10 +1486,19 @@ export async function runSdkDaemon(): Promise<void> {
   });
   startStreamingLoops();
 
+  // The GitHub token round trip (~0.3–0.45s) and the SDK import (~0.2s, CPU)
+  // are independent, so overlap them. The fetch must reach the wire first:
+  // the import blocks the event loop and, started in the same tick, held the
+  // request back until it finished (measured: no overlap at all). One
+  // setImmediate lets fetch send; then the overlap saved ~0.16s. The token
+  // still lands before buildSdkOptions copies process.env, since the CLI's
+  // tool shells inherit `GH_TOKEN` from it. refreshGithubToken never rejects.
+  const tokenRefreshed = refreshGithubToken();
+  await new Promise<void>((resolve) => setImmediate(resolve));
   // Session mode establishes/continues the Claude session id used for resume.
   const sessionMode = prepareClaudeSessionState();
+  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
   const options = buildSdkOptions(sessionMode);
-  const sdk = await loadSdk();
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
 

@@ -1,12 +1,16 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
 import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
 import { execHandle } from "./helpers";
+<<<<<<< HEAD
 import { requireEnv } from "../_env/requireEnv";
+=======
+>>>>>>> origin/main
 import {
   resolvePublicConvexCloudUrl,
   resolvePublicConvexSiteUrl,
@@ -129,7 +133,7 @@ function computeScopedHmac(message: string): string | null {
  */
 function publicConvexUrl(): string {
   return (
-    resolvePublicConvexCloudUrl(process.env) ?? requireEnv("CONVEX_CLOUD_URL")
+    resolvePublicConvexCloudUrl(process.env) ?? requiredEnv("CONVEX_CLOUD_URL")
   );
 }
 
@@ -456,6 +460,7 @@ export async function launchScript(
     openSyntheticTurnMutation?: string;
     completeSyntheticTurnMutation?: string;
     updateBackgroundAgentsMutation?: string;
+    updateGoalMutation?: string;
     harnessCatalogToken?: string;
     /** Multi-repo sessions only: the session's linked repo clones. */
     linkedRepos?: LinkedRepoEnvRow[];
@@ -609,6 +614,9 @@ export async function launchScript(
     envParts.push(
       `UPDATE_BACKGROUND_AGENTS_MUTATION=${quote([opts.updateBackgroundAgentsMutation])}`,
     );
+  }
+  if (opts.updateGoalMutation) {
+    envParts.push(`UPDATE_GOAL_MUTATION=${quote([opts.updateGoalMutation])}`);
   }
   if (opts.extraEnvVars) {
     for (const [key, val] of Object.entries(opts.extraEnvVars)) {

@@ -29,6 +29,8 @@ export {
   checkoutBaseBranch,
   setupSandboxBranch,
   pushSandboxBranch,
+  applyBranchPublishPolicy,
+  commitAndPushSandbox,
   pushLinkedRepoBranches,
   launchOnExistingSandbox,
   launchAgentTurn,

@@ -1,12 +1,15 @@
 "use node";
 
-import { randomBytes } from "crypto";
+import { randomToken, requiredEnv } from "@vvedantb/server";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
+<<<<<<< HEAD
 import { requireEnv } from "../_env/requireEnv";
+=======
+>>>>>>> origin/main
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
@@ -122,7 +125,7 @@ printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 function resolveConvexSiteUrl(): string {
   return (
     resolvePublicConvexSiteUrl(process.env) ??
-    requireEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
+    requiredEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
   );
 }
 
@@ -153,23 +156,26 @@ export async function ensureGitCredentialHelper(
   homeRepo: { owner: string; name: string },
   extraInstallationIds: number[] = [],
 ): Promise<void> {
-  const secret = randomBytes(32).toString("hex");
-  await ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
-    sandboxId: sandbox.id,
-    installationId,
-    installationIds: Array.from(
-      new Set([installationId, ...extraInstallationIds]),
-    ),
-    secret,
-    repoOwner: homeRepo.owner,
-    repoName: homeRepo.name,
-  });
-
+  const secret = randomToken(32, "hex");
   const siteUrl = resolveConvexSiteUrl();
   const envFileContent = `EVA_SANDBOX_SECRET=${secret}\nCONVEX_SITE_URL=${siteUrl}\n`;
 
-  await writeSandboxFile(sandbox, HELPER_SCRIPT_PATH, HELPER_SCRIPT);
-  await writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent);
+  // Independent of each other, and nothing calls the helper until the exec
+  // below wires it into git config — so one round trip instead of three.
+  await Promise.all([
+    ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: sandbox.id,
+      installationId,
+      installationIds: Array.from(
+        new Set([installationId, ...extraInstallationIds]),
+      ),
+      secret,
+      repoOwner: homeRepo.owner,
+      repoName: homeRepo.name,
+    }),
+    writeSandboxFile(sandbox, HELPER_SCRIPT_PATH, HELPER_SCRIPT),
+    writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent),
+  ]);
 
   // Legacy snapshots and pre-helper clones embed the installation token in
   // `remote.origin.url` (e.g. `https://x-access-token:ghs_xxx@github.com/...`).

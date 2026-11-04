@@ -2,13 +2,20 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { Button, Checkbox, RefreshSpinIcon, Spinner, toast } from "@eva/ui";
+import {
+  Button,
+  Checkbox,
+  RefreshSpinIcon,
+  Spinner,
+  toast,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconGitBranch } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type RepoEntry = {
@@ -65,21 +72,15 @@ function SyncSettingsRoute() {
   const bulkSetSyncSettings = useMutation(
     api.syncSettings.bulkSet,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.syncSettings.list, {});
-    if (current !== undefined) {
-      const updates = new Map(
-        args.repos.map((r) => [`${args.owner}/${r.name}`, r.enabled]),
-      );
-      localStore.setQuery(
-        api.syncSettings.list,
-        {},
-        current.map((s) => {
-          const key = `${s.owner}/${s.name}`;
-          const newEnabled = updates.get(key);
-          return newEnabled !== undefined ? { ...s, enabled: newEnabled } : s;
-        }),
-      );
-    }
+    const updates = new Map(
+      args.repos.map((r) => [`${args.owner}/${r.name}`, r.enabled]),
+    );
+    patchLoadedQuery(localStore, api.syncSettings.list, {}, (current) =>
+      current.map((s) => {
+        const newEnabled = updates.get(`${s.owner}/${s.name}`);
+        return newEnabled !== undefined ? { ...s, enabled: newEnabled } : s;
+      }),
+    );
   });
   const listAvailableRepos = useAction(api.github.listAllAvailableRepos);
 

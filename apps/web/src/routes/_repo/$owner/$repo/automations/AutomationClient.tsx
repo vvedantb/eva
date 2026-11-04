@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -13,17 +14,21 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  ModelSelect,
+  ModelPicker,
   toast,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+  SettingsField,
+  SettingsStack,
+  SettingsToggleRow,
+  SettingsSection,
+  MarqueeOnHover,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
-import { SettingsStack } from "@/lib/components/settings/SettingsStack";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
 import { TriggerSection } from "./_components/TriggerSection";
@@ -33,15 +38,8 @@ import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { entityPathSegment } from "@/lib/numId";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { isAutomationTab, type AutomationTab } from "@/lib/search-params";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import {
   catchMutationError,
   withMutationToast,
@@ -148,7 +146,7 @@ export function AutomationClient({
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "latest" ? 1 : 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={activeTab !== "latest" ? "hidden" : undefined}
         >
           <LatestRun
@@ -163,7 +161,7 @@ export function AutomationClient({
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "run-history" ? 1 : 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={activeTab !== "run-history" ? "hidden" : undefined}
         >
           <RunHistory
@@ -177,7 +175,7 @@ export function AutomationClient({
         <m.div
           initial={false}
           animate={{ opacity: activeTab === "settings" ? 1 : 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={activeTab !== "settings" ? "hidden" : undefined}
         >
           {automation.systemKey === undefined ? (
@@ -222,26 +220,20 @@ function SettingsForm({
   ).withOptimisticUpdate((localStore, args) => {
     if (automation.numId === undefined) return;
     const q = { repoId, numId: automation.numId };
-    const current = localStore.getQuery(api.automations.getByNumId, q);
-    if (current) {
-      const { id: _id, contextRepoId: _contextRepoId, ...fields } = args;
-      localStore.setQuery(api.automations.getByNumId, q, {
-        ...current,
-        ...fields,
-      });
-    }
+    const { id: _id, contextRepoId: _contextRepoId, ...fields } = args;
+    patchLoadedQuery(
+      localStore,
+      api.automations.getByNumId,
+      q,
+      (current) => current && { ...current, ...fields },
+    );
   });
   const removeAutomation = useMutation(
     api.automations.remove,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.automations.list, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.automations.list,
-        { repoId },
-        current.filter((a) => a._id !== args.id),
-      );
-    }
+    patchLoadedQuery(localStore, api.automations.list, { repoId }, (list) =>
+      list.filter((a) => a._id !== args.id),
+    );
   });
   // The cron input is a controlled field doing local↔UTC conversion with a
   // live preview, so it needs an editing buffer to save on blur rather than on
@@ -249,7 +241,7 @@ function SettingsForm({
   const [cronDraft, setCronDraft] = useState(automation.cronSchedule);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const titleFieldId = useId();
   const promptFieldId = useId();
   const model = normalizeAIModel(automation.model ?? repo.defaultModel);
@@ -393,7 +385,7 @@ function SettingsForm({
 
       <SettingsSection title="Model">
         <SettingsField label="Provider and model">
-          <ModelSelect
+          <ModelPicker
             value={model}
             options={modelOptions}
             onValueChange={(m) => commit({ model: m })}
@@ -413,7 +405,6 @@ function SettingsForm({
           title={skipConfirmTitle("Delete")}
           onClick={(event) =>
             requestConfirm(
-              altHeld,
               () => setShowDeleteDialog(true),
               () => {
                 void handleDelete();

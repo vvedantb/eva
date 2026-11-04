@@ -1,27 +1,48 @@
-import { httpAction } from "../_generated/server";
+import { httpAction, type ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
+<<<<<<< HEAD
 import { z } from "zod";
 import { isAllowedOAuthRedirectUri } from "../_mcp/redirectUri";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
+=======
+import {
+  createAuthorizationServerMetadataProxy,
+  createHealthHandler,
+  createMcpHttpHandler,
+  createProtectedResourceMetadata,
+} from "@vvedantb/server";
+import {
+  authenticateMcpToken,
+  clerkIssuer,
+  type McpPrincipal,
+} from "./authenticate";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OAuth Metadata
-// ─────────────────────────────────────────────────────────────────────────────
+// Clerk is the OAuth authorization server. These routes only point clients at it.
+export const oauthMetadata = httpAction(
+  createAuthorizationServerMetadataProxy({ issuer: clerkIssuer }),
+);
+>>>>>>> origin/main
 
-export const oauthMetadata = httpAction(async (_ctx, request) => {
-  const baseUrl = new URL(request.url).origin;
-  return Response.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/mcp/oauth/authorize`,
-    token_endpoint: `${baseUrl}/mcp/oauth/token`,
-    registration_endpoint: `${baseUrl}/mcp/oauth/register`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
-  });
-});
+export const protectedResourceMetadata = httpAction(
+  createProtectedResourceMetadata({ authorizationServer: clerkIssuer }),
+);
 
+export const mcpHandler = httpAction(
+  createMcpHttpHandler<McpPrincipal, ActionCtx>({
+    authenticate: ({ ctx, token }) => authenticateMcpToken(ctx, token),
+    handleRpc: ({ ctx, principal, body }) =>
+      ctx.runAction(internal.mcp.nodeActions.handleMcpRequest, {
+        clerkUserId: principal.clerkUserId,
+        scopedRepoId: principal.scopedRepoId,
+        entityId: principal.entityId,
+        entityKind: principal.entityKind,
+        chatId: principal.chatId,
+        body,
+      }),
+  }),
+);
+
+<<<<<<< HEAD
 export const protectedResourceMetadata = httpAction(async (_ctx, request) => {
   const baseUrl = new URL(request.url).origin;
   return Response.json({
@@ -373,3 +394,6 @@ export const mcpHandler = httpAction(async (ctx, request) => {
 export const health = httpAction(async () => {
   return Response.json({ status: "ok" });
 });
+=======
+export const health = httpAction(createHealthHandler());
+>>>>>>> origin/main

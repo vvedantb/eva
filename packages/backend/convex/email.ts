@@ -1,8 +1,14 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import sendgrid from "@sendgrid/mail";
+<<<<<<< HEAD
 import { requireEnv } from "./_env/requireEnv";
 
+=======
+
+/** Reads a required environment variable, throwing a clear error when it is missing. */
+>>>>>>> origin/main
 export interface SendEmailPayload {
   to: string | string[];
   subject: string;
@@ -29,10 +35,17 @@ function normalizeEmails(emails: string | string[] | undefined): string[] {
  * never reach real users.
  */
 export async function sendEmail(data: SendEmailPayload): Promise<void> {
+<<<<<<< HEAD
   sendgrid.setApiKey(requireEnv("SENDGRID_API_KEY"));
   // SendGrid renders { email, name } as the sender display name in the inbox.
   const from = {
     email: data.from ?? requireEnv("SENDGRID_FROM_EMAIL"),
+=======
+  sendgrid.setApiKey(requiredEnv("SENDGRID_API_KEY"));
+  // SendGrid renders { email, name } as the sender display name in the inbox.
+  const from = {
+    email: data.from ?? requiredEnv("SENDGRID_FROM_EMAIL"),
+>>>>>>> origin/main
     name: "Eva",
   };
 
@@ -61,6 +74,10 @@ export async function sendEmail(data: SendEmailPayload): Promise<void> {
     from,
     subject: `[dev] ${data.subject}`,
     html: data.html,
+<<<<<<< HEAD
     to: requireEnv("SENDGRID_DEV_TEST_EMAIL"),
+=======
+    to: requiredEnv("SENDGRID_DEV_TEST_EMAIL"),
+>>>>>>> origin/main
   });
 }
