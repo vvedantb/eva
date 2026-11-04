@@ -13,7 +13,7 @@ import {
 import { IconX } from "@tabler/icons-react";
 import { AveStatePip } from "@/lib/components/ave/AveActiveDot";
 import { AveEyes } from "@/lib/components/ave/AveEyes";
-import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
+import { AveBadge } from "@/lib/components/ave/AveBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import {
   aveLogoState,
@@ -172,7 +172,7 @@ function AveLiveFace({ labelId }: { labelId: string }) {
   const { state, clearOneShot } = useAveLogoState();
   return (
     <AveFace state={state} labelId={labelId} onOneShotEnd={clearOneShot}>
-      <AveQuestionsBadge />
+      <AveBadge />
     </AveFace>
   );
 }

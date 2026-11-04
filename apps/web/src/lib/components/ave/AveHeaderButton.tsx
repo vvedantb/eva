@@ -2,7 +2,7 @@
 
 import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { AveActiveDot } from "@/lib/components/ave/AveActiveDot";
-import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
+import { AveBadge } from "@/lib/components/ave/AveBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import { useAveLauncher } from "@/lib/components/ave/AveLauncherContext";
 
@@ -37,7 +37,7 @@ export function AveHeaderButton() {
       <AveMark size={20} />
       <ErrorBoundary>
         <AveActiveDot />
-        <AveQuestionsBadge />
+        <AveBadge />
       </ErrorBoundary>
     </Button>
   );

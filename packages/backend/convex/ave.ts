@@ -24,12 +24,27 @@ export const getThread = authQuery({
     v.object({
       _id: v.id("aveThreads"),
       status: v.union(v.literal("idle"), v.literal("running")),
+      readAt: v.optional(v.number()),
     }),
     v.null(),
   ),
   handler: async (ctx) => {
     const thread = await findLiveThread(ctx.db, ctx.userId);
-    return thread ? { _id: thread._id, status: thread.status } : null;
+    return thread
+      ? { _id: thread._id, status: thread.status, readAt: thread.readAt }
+      : null;
+  },
+});
+
+/** The chat is on screen: clears the launcher's unread dot. */
+export const markRead = authMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const thread = await findLiveThread(ctx.db, ctx.userId);
+    if (!thread) return null;
+    await ctx.db.patch(thread._id, { readAt: Date.now() });
+    return null;
   },
 });
 
