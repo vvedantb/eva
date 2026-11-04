@@ -83,7 +83,8 @@ function GatewaySpeechButton({
       // The tooltip is hover-only, so on touch this is the button's only name.
       aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
-      disabled={disabled || isConnecting || isPolishing}
+      // Clickable while connecting: the click cancels a slow mic prompt.
+      disabled={disabled || isPolishing}
       className={isListening && !isConnecting ? "text-destructive" : undefined}
     >
       <CrossfadeIconSlot iconKey={iconKey}>

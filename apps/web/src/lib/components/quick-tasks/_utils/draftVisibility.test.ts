@@ -104,8 +104,14 @@ describe("the quick-task modal's delete path", () => {
       join(dirname(fileURLToPath(import.meta.url)), "../QuickTaskModal.tsx"),
       "utf8",
     );
-    expect(modal).toContain("draftsAfterRemove(current, args.id)");
-    expect(modal).toContain("draftCountAfterRemove(count)");
+    // Both writes go through `patchLoadedQuery`, so the helpers are called
+    // with the loaded value, or passed as the updater itself.
+    expect(modal).toMatch(
+      /api\.agentTasks\.listDrafts,[^;]*draftsAfterRemove\(\w+, args\.id\)/,
+    );
+    expect(modal).toMatch(
+      /api\.agentTasks\.countDrafts,[^;]*\bdraftCountAfterRemove\b/,
+    );
     expect(modal).toContain("visibleDrafts(draftRows)");
     // A hand-rolled predicate alongside the helper means one of the two paths
     // has drifted.

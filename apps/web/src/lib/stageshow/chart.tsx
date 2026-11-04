@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, type CSSProperties } from 'react'
-import { useReducedMotion } from './reduced-motion'
+import { useStill } from './reduced-motion'
 import './chart.css'
 
 // Charts drawn the way product dashboards draw them: a smooth line with a
@@ -115,7 +115,7 @@ function resample(p: { x: number; y: number }[]) {
  * never by redrawing.
  */
 export function Chart({ data, kind = 'line', width, height, show = true, area = true, dot = true, max, className, style }: ChartProps) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const id = useId().replace(/:/g, '')
   const drawRef = useRef<SVGGElement>(null)
   const wipeRef = useRef<SVGRectElement>(null)

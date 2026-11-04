@@ -1,5 +1,5 @@
 import { useLayoutEffect, useEffect, useRef, useState, type HTMLAttributes } from 'react'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import './Count.css'
 
 export interface CountProps extends HTMLAttributes<HTMLSpanElement> {
@@ -49,7 +49,7 @@ const digitsFromRight = (text: string) => {
  * offscreen reset it jumps to the value, so unseen resets stay unseen.
  */
 export function Count({ value, format = (n) => Math.round(n).toLocaleString('en-US'), duration = 700, stagger = 45, className, style, ...rest }: CountProps) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const el = useRef<HTMLSpanElement>(null)
   const text = format(value)
   const { head, space, unit } = unitOf(text)

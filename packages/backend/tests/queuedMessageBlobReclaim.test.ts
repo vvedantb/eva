@@ -15,6 +15,11 @@ const queueHelpersSource = readFileSync(
   "utf8",
 );
 
+const attachmentsSource = readFileSync(
+  join(testsDir, "../convex/_queues/attachments.ts"),
+  "utf8",
+);
+
 /**
  * A queued message's attachments are uploaded for that message alone, so
  * deleting the row without deleting the blobs leaks them into `_storage`
@@ -25,14 +30,14 @@ test("queuedMessages.remove deletes the row's attachment blobs", () => {
     "await ctx.db.delete(args.id);",
   );
   const deleteBlobsAt = queuedMessagesSource.indexOf(
-    "await ctx.storage.delete(storageId);",
+    "await reclaimQueuedAttachments(ctx, queuedMessage);",
   );
   expect(deleteRowAt).toBeGreaterThan(-1);
   expect(
     deleteBlobsAt,
     "remove must reclaim attachmentStorageIds, or the blobs leak",
   ).toBeGreaterThan(-1);
-  expect(queuedMessagesSource).toContain(
+  expect(attachmentsSource).toContain(
     "for (const storageId of queuedMessage.attachmentStorageIds ?? [])",
   );
 });
@@ -40,24 +45,40 @@ test("queuedMessages.remove deletes the row's attachment blobs", () => {
 /**
  * The other half of the invariant: dequeuing deletes the queued row too, but it
  * hands the same storage ids to the `messages` row, so it must NOT delete the
- * blobs. The row-delete now lives once in the shared dequeue
- * (`startNextQueuedChatMessage`) that all three surfaces call through, so a
- * regression back to a per-surface copy (or a dropped delete) would move this
- * count away from exactly one.
+ * blobs. The row-delete lives only in the shared dequeue
+ * (`startNextQueuedChatMessage`) that all three surfaces call through: once on
+ * the start path, and once where an unresolvable provider account consumes the
+ * message with an error bubble (264df6080). A regression back to a per-surface
+ * copy (or a dropped delete) would move these counts.
  */
-test("the shared dequeue deletes the queued row exactly once, and never a blob", () => {
-  const rowDeletes = countOccurrences(
+test("the shared dequeue deletes the queued row exactly once per path, and never a blob", () => {
+  const rowDelete = "await ctx.db.delete(nextMessage._id);";
+  const dequeue = functionBody(
     queueHelpersSource,
-    "await ctx.db.delete(nextMessage._id);",
+    "async function startNextQueuedChatMessage<",
   );
   expect(
-    rowDeletes,
+    countOccurrences(dequeue, rowDelete),
     "the queued-row delete moved, was duplicated, or was dropped",
-  ).toBe(1);
+  ).toBe(2);
+  expect(
+    countOccurrences(queueHelpersSource, rowDelete),
+    "the queued-row delete was copied out of the shared dequeue",
+  ).toBe(2);
   expect(
     queueHelpersSource,
     "dequeue must not delete blobs the messages row now owns",
   ).not.toContain("ctx.storage.delete");
+  // The two paths that consume the row WITHOUT inserting the user message
+  // (unresolvable account, failed guard) reclaim the uploads; the start path,
+  // which hands them to the messages row, must not.
+  expect(
+    countOccurrences(dequeue, "await reclaimQueuedAttachments(ctx, nextMessage);"),
+    "a failure path stopped reclaiming its uploads, or the start path began to",
+  ).toBe(2);
+  const startPath = dequeue.slice(dequeue.indexOf("if (!guard.ok)"));
+  const afterGuard = startPath.slice(startPath.indexOf("\n  }\n") + 4);
+  expect(afterGuard).not.toContain("reclaimQueuedAttachments");
 });
 
 /**
@@ -90,6 +111,14 @@ function countOccurrences(source: string, needle: string): number {
     from = at + needle.length;
   }
   return count;
+}
+
+/** A top-level function, ending on the `\n}\n` that closes it. */
+function functionBody(source: string, declaration: string): string {
+  const startAt = source.indexOf(declaration);
+  expect(startAt, `${declaration} moved or was renamed`).toBeGreaterThan(-1);
+  const end = source.indexOf("\n}\n", startAt);
+  return source.slice(startAt, end < 0 ? undefined : end);
 }
 
 /** One `const name: SomeConfig<...> = {...}` object literal, ending on the `\n};` that closes it. */

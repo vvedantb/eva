@@ -5,7 +5,10 @@ import { toast } from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
-import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
+import {
+  chatTurnOpenFromStatus,
+  openChatTurnOptimistically,
+} from "@/lib/components/chat/useChatTurnOpen";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
@@ -13,7 +16,7 @@ import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel"
 import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import {
-  isAssistantTurnInProgress,
+  isChatTurnExecuting,
   readableSendError,
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ChatSendOptions } from "@/lib/components/chat/ChatBody";
@@ -138,13 +141,11 @@ export function useChatSend({
     isRouteActive ? { entityId: chatId } : "skip",
   );
 
-  // The persisted open turn is canonical. Message shape only covers the first
-  // render while that subscription loads, so a stale empty bubble cannot keep
-  // the composer in queue mode after the turn has terminally settled.
-  const isExecuting =
-    turnStatus === undefined
-      ? isAssistantTurnInProgress(messages)
-      : turnStatus !== null;
+  // The persisted open turn is canonical; see `isChatTurnExecuting`.
+  const isExecuting = isChatTurnExecuting({
+    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    messages,
+  });
 
   // The composer clears optimistically, so a failed send's prompt only exists
   // in this closure. Writing the failure as an assistant turn used to read like

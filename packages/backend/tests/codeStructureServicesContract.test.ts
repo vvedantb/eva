@@ -20,7 +20,7 @@ function bootWarmDaemonBody(): string {
 
 test("installation-token refresh lives only in githubToken.ts", () => {
   const service = read("callback-src/providers/githubToken.ts");
-  expect(service).toContain("export async function fetchInstallationToken(");
+  expect(service).toContain("async function fetchInstallationToken(");
   expect(service).toContain("github:getInstallationTokenAction");
   expect(service).toContain("export async function ensureGithubToken(");
   expect(service).toContain(

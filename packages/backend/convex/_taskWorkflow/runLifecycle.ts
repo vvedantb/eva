@@ -299,7 +299,11 @@ export const completeRun = internalMutation({
       (await isSupersededTaskRun(ctx.db, args.taskId, args.runId));
     if (task && !staleCompletion) {
       await ctx.db.patch(args.taskId, {
-        status: args.success ? "business_review" : "todo",
+        // The run owns `in_progress` only. A status the user picked mid-run
+        // (done, cancelled, a review column) is theirs and stays.
+        ...(task.status === "in_progress"
+          ? { status: args.success ? "business_review" : "todo" }
+          : {}),
         updatedAt: now,
         // Released with the status, not in the workflow's `finally`: the
         // remaining steps (PR description, sandbox stop) run for tens of

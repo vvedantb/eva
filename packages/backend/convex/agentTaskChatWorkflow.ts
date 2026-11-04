@@ -79,6 +79,10 @@ import {
   resolveCompletionTurn,
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import {
+  canRequestSandboxStart,
+  nextSandboxStartAttempt,
+} from "./_sandbox/transitions";
 import { taskPrUrl } from "./_pullRequests/store";
 import { buildTaskBranchName } from "./_git/branchNames";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
@@ -1136,8 +1140,14 @@ export const markTaskSandboxStartingForChat = internalMutation({
     if (!task) throw new Error("Task not found");
     if (task.reviewTaskSandboxStatus === "active") return null;
     if (task.reviewTaskSandboxStatus === "starting") return null;
+    // A stop landed after the workflow chose to start: leave it to finish. The
+    // start action then aborts and the turn reports "did not become ready".
+    if (!canRequestSandboxStart(task.reviewTaskSandboxStatus)) return null;
+    // This start carries no token (its action args are journaled), but bumping
+    // still fences out any older attempt that is still running.
     await ctx.db.patch(args.taskId, {
       reviewTaskSandboxStatus: "starting",
+      sandboxStartAttempt: nextSandboxStartAttempt(task.sandboxStartAttempt),
       updatedAt: Date.now(),
     });
     await seedSandboxStartupActivity(

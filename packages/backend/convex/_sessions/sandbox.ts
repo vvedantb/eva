@@ -34,6 +34,14 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import {
+  canRequestSandboxStart,
+  discardUntrackedSandbox,
+  isCurrentSandboxStartAttempt,
+  nextSandboxStartAttempt,
+  scheduleStuckStartExpiry,
+  shouldApplySandboxStartFailure,
+} from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { errorText } from "../_shared/errors";
 
@@ -85,12 +93,20 @@ export async function requestSessionSandboxStart(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
+  if (!canRequestSandboxStart(session.status)) {
+    console.log(
+      `[sessions] startSandbox skipped sessionId=${session._id} status=${session.status}`,
+    );
+    return;
+  }
   const repo = await ctx.db.get(session.repoId);
   if (!repo) throw new Error("Repository not found");
   const branchName = session.branchName || `eva/session-${session._id}`;
   const baseBranch = resolveSessionBaseBranch(session, repo);
+  const startAttempt = nextSandboxStartAttempt(session.sandboxStartAttempt);
   await ctx.db.patch(session._id, {
     status: "starting",
+    sandboxStartAttempt: startAttempt,
     // A new attempt owns the outcome: drop the previous failure so the dot
     // leaves "Couldn't wake up" the moment Try again is pressed.
     sandboxError: undefined,
@@ -116,7 +132,13 @@ export async function requestSessionSandboxStart(
     baseBranch,
     repoId: session.repoId,
     hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
+    startAttempt,
   };
+  await scheduleStuckStartExpiry(
+    ctx,
+    { kind: "session", id: session._id },
+    startAttempt,
+  );
   // Vercel: schedule the start action directly. Workflow step scheduling was
   // measured at ~6s before the first action ran.
   // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
@@ -482,11 +504,29 @@ export const sandboxReady = internalMutation({
     markServicesPending: v.optional(v.boolean()),
     /** Existing sandbox id was unresumable; we created a fresh one. */
     resumeFellBack: v.optional(v.boolean()),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        session.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[sessions] sandboxReady ignored stale attempt ${args.startAttempt} (current ${session.sandboxStartAttempt}) sessionId=${args.sessionId}`,
+      );
+      await discardUntrackedSandbox(ctx, {
+        sandboxId: args.sandboxId,
+        trackedSandboxId: session.sandboxId,
+        repoId: session.repoId,
+        isNew: args.isNew,
+      });
+      return null;
+    }
     // User may have clicked Stop while start/resume was still running. Never
     // flip closed/stopping back to active — that left Vercel running with UI
     // showing stopped, or re-activated after stop confirmation.
@@ -494,6 +534,17 @@ export const sandboxReady = internalMutation({
       console.log(
         `[sessions] sandboxReady ignored sessionId=${args.sessionId} status=${session.status} sandboxId=${args.sandboxId}`,
       );
+      // Only a start request's own attempt (it carries a number) made this
+      // VM for nobody else. Untokened callers such as sessionExecuteWorkflow
+      // go on to use the VM they prepared, so it must not be deleted here.
+      if (args.startAttempt !== undefined) {
+        await discardUntrackedSandbox(ctx, {
+          sandboxId: args.sandboxId,
+          trackedSandboxId: session.sandboxId,
+          repoId: session.repoId,
+          isNew: args.isNew,
+        });
+      }
       return null;
     }
     // Early-ready (right after Sandbox.create) + final-ready (after services)
@@ -608,11 +659,29 @@ export const sandboxError = internalMutation({
   args: {
     sessionId: v.id("sessions"),
     error: v.string(),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        session.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[sessions] sandboxError ignored stale attempt ${args.startAttempt} (current ${session.sandboxStartAttempt}) sessionId=${args.sessionId}`,
+      );
+      return null;
+    }
+    if (!shouldApplySandboxStartFailure(session.status)) {
+      console.log(
+        `[sessions] sandboxError ignored sessionId=${args.sessionId} status=${session.status}: ${args.error}`,
+      );
+      return null;
+    }
     await markAllRunningExited(ctx.db, args.sessionId);
     const mainChat = await ensureMainChat(ctx, session);
     await ctx.db.insert("messages", {

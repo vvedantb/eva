@@ -144,6 +144,9 @@ export const getSeededAppStatus = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
+    const config = await ctx.db.get(args.repoSnapshotId);
+    if (!config) return [];
+    await getRepoWithAccess(ctx.db, config.repoId, ctx.userId);
     const apps = await findSeedableAppRepos(ctx.db, args.repoSnapshotId);
     return apps.map((r) => ({
       repoId: r._id,

@@ -268,7 +268,7 @@ test("the Cursor SDK still reads the model catalog Eva hands it", () => {
   );
   expect(cursorSdkBundle).toContain(CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV);
   expect(cursorLoader).toContain(
-    "process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog",
+    "process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = resolution.catalog",
   );
 });
 

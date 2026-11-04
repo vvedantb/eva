@@ -28,6 +28,14 @@ import {
 import { touchUserActivity } from "../_sandbox/activity";
 import { errorText } from "../_shared/errors";
 import { sleep } from "../_shared/async";
+import {
+  canRequestSandboxStart,
+  discardUntrackedSandbox,
+  isCurrentSandboxStartAttempt,
+  nextSandboxStartAttempt,
+  scheduleStuckStartExpiry,
+  shouldApplySandboxStartFailure,
+} from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 
 const PREVIEW_ALLOWED_STATUSES = [
@@ -105,6 +113,12 @@ export async function requestTaskSandboxStart(
   task: Doc<"agentTasks">,
   repo: Doc<"githubRepos">,
 ): Promise<void> {
+  if (!canRequestSandboxStart(task.reviewTaskSandboxStatus)) {
+    console.log(
+      `[tasks] startTaskSandbox skipped taskId=${task._id} status=${task.reviewTaskSandboxStatus}`,
+    );
+    return;
+  }
   const branchName = buildTaskBranchName(task._id);
   const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
     ctx.db,
@@ -112,8 +126,10 @@ export async function requestTaskSandboxStart(
     repo,
   );
 
+  const startAttempt = nextSandboxStartAttempt(task.sandboxStartAttempt);
   await ctx.db.patch(task._id, {
     reviewTaskSandboxStatus: "starting",
+    sandboxStartAttempt: startAttempt,
     updatedAt: Date.now(),
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
@@ -136,7 +152,13 @@ export async function requestTaskSandboxStart(
     branchName,
     baseBranch,
     repoId: repo._id,
+    startAttempt,
   };
+  await scheduleStuckStartExpiry(
+    ctx,
+    { kind: "task", id: task._id },
+    startAttempt,
+  );
   // Vercel: schedule start action directly (skip ~6s workflow scheduling).
   if (reusableSandboxId) {
     await ctx.scheduler.runAfter(
@@ -214,8 +236,10 @@ export const retryStartupCommands = authMutation({
       repo,
     );
 
+    const startAttempt = nextSandboxStartAttempt(task.sandboxStartAttempt);
     await ctx.db.patch(args.taskId, {
       reviewTaskSandboxStatus: "starting",
+      sandboxStartAttempt: startAttempt,
       updatedAt: Date.now(),
     });
 
@@ -232,7 +256,13 @@ export const retryStartupCommands = authMutation({
         baseBranch,
         repoId: task.repoId,
         forceStartupCommands: true,
+        startAttempt,
       },
+    );
+    await scheduleStuckStartExpiry(
+      ctx,
+      { kind: "task", id: args.taskId },
+      startAttempt,
     );
 
     return null;
@@ -584,16 +614,42 @@ export const taskSandboxReady = internalMutation({
     isNew: v.boolean(),
     devPort: v.optional(v.number()),
     devCommand: v.optional(v.string()),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
+    if (
+      !isCurrentSandboxStartAttempt(task.sandboxStartAttempt, args.startAttempt)
+    ) {
+      console.log(
+        `[tasks] taskSandboxReady ignored stale attempt ${args.startAttempt} (current ${task.sandboxStartAttempt}) taskId=${args.taskId}`,
+      );
+      await discardUntrackedSandbox(ctx, {
+        sandboxId: args.sandboxId,
+        trackedSandboxId: task.sandboxId,
+        repoId: task.repoId,
+        isNew: args.isNew,
+      });
+      return null;
+    }
 
     if (isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
       console.log(
         `[tasks] taskSandboxReady ignored taskId=${args.taskId} status=${task.reviewTaskSandboxStatus} sandboxId=${args.sandboxId}`,
       );
+      // Only a start request's own attempt (it carries a number) made this
+      // VM for nobody else. Untokened callers such as sessionExecuteWorkflow
+      // go on to use the VM they prepared, so it must not be deleted here.
+      if (args.startAttempt !== undefined) {
+        await discardUntrackedSandbox(ctx, {
+          sandboxId: args.sandboxId,
+          trackedSandboxId: task.sandboxId,
+          repoId: task.repoId,
+          isNew: args.isNew,
+        });
+      }
       return null;
     }
 
@@ -664,11 +720,26 @@ export const taskSandboxError = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
     error: v.string(),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
+    if (
+      !isCurrentSandboxStartAttempt(task.sandboxStartAttempt, args.startAttempt)
+    ) {
+      console.log(
+        `[tasks] taskSandboxError ignored stale attempt ${args.startAttempt} (current ${task.sandboxStartAttempt}) taskId=${args.taskId}`,
+      );
+      return null;
+    }
+    if (!shouldApplySandboxStartFailure(task.reviewTaskSandboxStatus)) {
+      console.log(
+        `[tasks] taskSandboxError ignored taskId=${args.taskId} status=${task.reviewTaskSandboxStatus}: ${args.error}`,
+      );
+      return null;
+    }
 
     await ctx.db.insert("taskSandboxEvents", {
       taskId: args.taskId,
