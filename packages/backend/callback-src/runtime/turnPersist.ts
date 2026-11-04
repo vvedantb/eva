@@ -4,12 +4,8 @@ import {
 } from "@eva/shared/gitDefaults";
 import { REQUIRE_TASK_COMMIT, RUN_ID } from "../config.js";
 import { log } from "../utils.js";
-<<<<<<< HEAD
-import { git, readCurrentBranch } from "./gitExec.js";
-=======
 import { requestGitStateCheck } from "./branchWatcher.js";
-import { git } from "./gitExec.js";
->>>>>>> origin/main
+import { git, readCurrentBranch } from "./gitExec.js";
 
 const PUSH_TIMEOUT_MS = 60_000;
 
@@ -174,9 +170,9 @@ function commitAndPushTurnWork(): void {
     return;
   }
   const pinned = git(["config", "--get", AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
-  if (pinned.ok && pinned.out.length > 0 && pinned.out !== branch.out) {
+  if (pinned.ok && pinned.out.length > 0 && pinned.out !== branch) {
     log(
-      `persistTurnWork: skipped — branch "${branch.out}" is not the chat branch "${pinned.out}"`,
+      `persistTurnWork: skipped — branch "${branch}" is not the chat branch "${pinned.out}"`,
     );
     return;
   }
