@@ -10,10 +10,7 @@ import {
   deriveSubagents,
   subagentTone,
 } from "@/lib/components/sandbox/agentActivity";
-import {
-  isAssistantTurnInProgress,
-  type ChatBodyMessage,
-} from "./chatBodyUtils";
+import type { ChatBodyMessage } from "./chatBodyUtils";
 import type { SandboxChatSurface } from "./sandboxChatSurface";
 import { useStopBackgroundAgent } from "./useStopBackgroundAgent";
 import {
@@ -58,10 +55,8 @@ export function SubagentThreadLayer({
   let liveActivity: string | undefined;
   if (subagentId) {
     // Streaming payloads can outlive their turn; only read one while it runs.
-    if (
-      isAssistantTurnInProgress(messages) &&
-      streamingActivity?.includes(subagentId)
-    ) {
+    // The surface's `isExecuting` is the same turn rule the composer uses.
+    if (surface.isExecuting && streamingActivity?.includes(subagentId)) {
       liveActivity = streamingActivity;
     }
     // The live payload already holds the running turn's steps; reading that

@@ -19,7 +19,6 @@ export {
 export {
   create,
   addMessage,
-  updateStatus,
   update,
   updateSummary,
   archive,
@@ -29,8 +28,6 @@ export {
 } from "./_sessions/mutations";
 
 export {
-  updateSandbox,
-  clearSandbox,
   startSandbox,
   forcePushBranch,
   stopSandbox,

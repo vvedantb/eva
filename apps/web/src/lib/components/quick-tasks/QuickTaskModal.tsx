@@ -513,7 +513,8 @@ export function QuickTaskModal({
                       isListening && !isConnecting ? "destructive" : "secondary"
                     }
                     onClick={() => handleToggle({ isListening, toggle })}
-                    disabled={isLoading || isConnecting || isPolishing}
+                    // Clickable while connecting: the click cancels.
+                    disabled={isLoading || isPolishing}
                     className="h-8 w-8"
                     aria-label={
                       isPolishing

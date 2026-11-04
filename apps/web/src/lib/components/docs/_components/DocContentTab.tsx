@@ -214,6 +214,10 @@ export function DocContentTab({
    */
   const runSaveVersion = () => {
     if (!editor) return;
+    // Only the edits this snapshot covers are settled by it. Edits typed while
+    // it is in flight stay counted, keep the line on "Unsaved version", and
+    // the idle timer they re-armed saves them next.
+    const editsCovered = editCountRef.current;
     setDocSaveState({ status: "saving" });
     saveVersion({
       docId: doc._id,
@@ -221,8 +225,15 @@ export function DocContentTab({
       pmContent: JSON.stringify(editor.state.doc.toJSON()),
     })
       .then(() => {
-        editCountRef.current = 0;
-        setDocSaveState({ status: "saved", at: Date.now() });
+        editCountRef.current = Math.max(
+          0,
+          editCountRef.current - editsCovered,
+        );
+        setDocSaveState(
+          editCountRef.current > 0
+            ? { status: "pending" }
+            : { status: "saved", at: Date.now() },
+        );
       })
       .catch(() => setDocSaveState({ status: "error" }));
   };

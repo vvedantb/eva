@@ -22,7 +22,7 @@ import {
 } from "@/lib/components/chat/useChatTurnOpen";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
-  isAssistantTurnInProgress,
+  isChatTurnExecuting,
   readableSendError,
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
@@ -196,10 +196,11 @@ export function ProjectSandboxChatPanel({
     await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
-  // The open durable turn is canonical, synthetic turns included; message
-  // shape only covers the first render while it loads (same rule as
-  // useChatSend).
-  const isExecuting = chatTurnOpen ?? isAssistantTurnInProgress(messages ?? []);
+  // Same rule as every chat; see `isChatTurnExecuting`.
+  const isExecuting = isChatTurnExecuting({
+    turnOpen: chatTurnOpen,
+    messages,
+  });
 
   const queueGate = useChatQueueGate({
     parentId: projectId,

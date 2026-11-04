@@ -55,7 +55,8 @@ import {
   getLatestVariations,
   type SessionDesignMessage,
 } from "./_utils/designVariations";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
+import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { previewPortOptions } from "./_utils";
 import { designVariationPrompt } from "./_utils/composerPrompts";
 
@@ -174,7 +175,16 @@ export function SandboxPanel({
   const artifactSource = { kind: "session" as const, sessionId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
-  const isDesignExecuting = isAssistantTurnInProgress(messages);
+  // Same subscription as the chat's `useChatSend`, so the panel and the
+  // composer read one turn status.
+  const turnStatus = useHeldQuery(
+    api.turns.getChatStatus,
+    isRouteActive ? { entityId: chatId } : "skip",
+  );
+  const isDesignExecuting = isChatTurnExecuting({
+    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    messages,
+  });
   // Streaming payloads can outlive their turn; only fold them in while one runs.
   const agents = deriveSubagents({
     activityLogs: messages.map((m) => m.activityLog),

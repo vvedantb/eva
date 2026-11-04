@@ -168,6 +168,10 @@ export function SandboxIframeService({
   const attempts = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const handledAutoStartKey = useRef<number | undefined>(undefined);
+  // Bumped by every start, stop, sandbox swap and unmount. Async work from an
+  // older generation drops its result, so a Stop pressed mid-start stays
+  // stopped (same pattern as CustomTabPanel and useSandboxPreview).
+  const generation = useRef(0);
   const refreshIframe = () => {
     setIframeKey((k) => k + 1);
   };
@@ -193,6 +197,7 @@ export function SandboxIframeService({
   };
 
   const pollForReady = async (
+    gen: number,
     transform: ((url: string) => string) | undefined,
   ) => {
     if (!sandboxId || !isActive) return;
@@ -206,6 +211,7 @@ export function SandboxIframeService({
           checkReady: true,
           repoId,
         });
+        if (generation.current !== gen) return;
         if (data.ready) {
           acceptReady(data.url, transform);
           return;
@@ -218,6 +224,7 @@ export function SandboxIframeService({
         }
         pollTimer.current = setTimeout(check, 3000);
       } catch (err) {
+        if (generation.current !== gen) return;
         setError(err instanceof Error ? err.message : loadFailedError);
         setState("error");
       }
@@ -228,6 +235,8 @@ export function SandboxIframeService({
 
   const start = async () => {
     if (!sandboxId) return;
+    generation.current += 1;
+    const gen = generation.current;
     setState("starting");
     setError(null);
     setUrl(null);
@@ -235,12 +244,13 @@ export function SandboxIframeService({
     try {
       if (ensureStartedBeforeReady) {
         const result = await startAction();
+        if (generation.current !== gen) return;
         if (!result.success) {
           setError(startErrorMessage(result, startFailedError));
           setState("error");
           return;
         }
-        await pollForReady(viewerTransform(result, transformUrl));
+        await pollForReady(gen, viewerTransform(result, transformUrl));
         return;
       }
 
@@ -250,18 +260,21 @@ export function SandboxIframeService({
         checkReady: true,
         repoId,
       });
+      if (generation.current !== gen) return;
       if (existing.ready) {
         acceptReady(existing.url, transformUrl);
         return;
       }
       const result = await startAction();
+      if (generation.current !== gen) return;
       if (!result.success) {
         setError(startErrorMessage(result, startFailedError));
         setState("error");
         return;
       }
-      await pollForReady(viewerTransform(result, transformUrl));
+      await pollForReady(gen, viewerTransform(result, transformUrl));
     } catch (err) {
+      if (generation.current !== gen) return;
       setError(err instanceof Error ? err.message : startFailedError);
       setState("error");
     }
@@ -269,6 +282,7 @@ export function SandboxIframeService({
 
   const stop = async () => {
     if (!sandboxId) return;
+    generation.current += 1;
     stopPolling();
     setState("idle");
     setUrl(null);
@@ -299,12 +313,12 @@ export function SandboxIframeService({
         // this effect re-running against the same key.
         handledAutoStartKey.current = autoStartKey;
         void start();
-        return stopPolling;
+        return;
       }
       if (cachedUrl) {
         if (ensureStartedBeforeReady) {
           void start();
-          return stopPolling;
+          return;
         }
         setUrl(cachedUrl);
         setState("running");
@@ -314,12 +328,10 @@ export function SandboxIframeService({
     if (!isActive) {
       setCachedUrl(null);
     }
-    return stopPolling;
   }, [
     isActive,
     sandboxId,
     state,
-    stopPolling,
     cachedUrl,
     setCachedUrl,
     onReady,
@@ -328,6 +340,21 @@ export function SandboxIframeService({
     autoStartKey,
   ]);
   /* eslint-enable no-effect/no-adjust-state-on-prop-change */
+
+  // A poll belongs to one sandbox. Cancel it only when the sandbox goes away
+  // or the panel unmounts — not whenever a callback prop changes identity,
+  // which used to kill the poll and leave the panel on "starting" for good.
+  // The cancelled start can no longer settle the state, so go back to idle:
+  // the auto-start / cache effect only runs from idle, and the "starting"
+  // view has no Retry, so leaving it there stranded the panel on a spinner.
+  useEffect(
+    () => () => {
+      generation.current += 1;
+      stopPolling();
+      setState((current) => (current === "starting" ? "idle" : current));
+    },
+    [sandboxId, isActive],
+  );
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
