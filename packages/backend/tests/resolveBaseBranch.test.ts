@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
   resolveNewTaskBaseBranch,
+  resolveProjectBaseBranch,
   resolveTaskWorkflowBaseBranch,
 } from "../convex/_taskWorkflow/resolveBaseBranch";
 import { resolveSessionBaseBranch } from "../convex/_sessions/baseBranch";
@@ -61,6 +62,27 @@ test("resolveNewTaskBaseBranch prefers explicit then project then repo", () => {
   expect(
     resolveNewTaskBaseBranch(undefined, { defaultBaseBranch: "main" }),
   ).toBe("main");
+});
+
+test("resolveProjectBaseBranch prefers the project base over the repo default", () => {
+  expect(
+    resolveProjectBaseBranch(
+      { baseBranch: "release/carepulse" },
+      { defaultBaseBranch: "main" },
+    ),
+  ).toBe("release/carepulse");
+});
+
+test("resolveProjectBaseBranch treats an empty project base as missing", () => {
+  expect(
+    resolveProjectBaseBranch(
+      { baseBranch: "  " },
+      { defaultBaseBranch: "main" },
+    ),
+  ).toBe("main");
+  expect(resolveProjectBaseBranch({ baseBranch: undefined }, null)).toBe(
+    FALLBACK_GIT_BASE_BRANCH,
+  );
 });
 
 test("resolveSessionBaseBranch prefers the branch chosen at session creation", () => {

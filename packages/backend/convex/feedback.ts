@@ -1,17 +1,18 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
-import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import {
+  assertMessageParentAccess,
+  authMutation,
+  authQuery,
+} from "./functions";
+import {
+  chatEntityKindValidator,
   feedbackFields,
   feedbackSentimentValidator,
   messageFields,
 } from "./validators";
-import {
-  chatEntityKindValidator,
-  latestChatMessageId,
-  resolveChatParent,
-} from "./_chat/chatParent";
+import { latestChatMessageId, resolveChatParent } from "./_chat/chatParent";
 import {
   callerCanSeeChatSource,
   chatSourceArgFromFields,
@@ -95,7 +96,9 @@ export const rateTurn = authMutation({
       return null;
     }
     const comment =
-      args.comment === undefined ? existing?.comment : cleanComment(args.comment);
+      args.comment === undefined
+        ? existing?.comment
+        : cleanComment(args.comment);
     if (existing) {
       // `comment: undefined` unsets the field (an emptied comment box).
       await ctx.db.patch(existing._id, { sentiment: args.sentiment, comment });

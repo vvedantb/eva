@@ -12,6 +12,7 @@ import {
   mcpGetContext,
   mcpListUserRepos,
   repoRefLabel,
+  truncateForAgent,
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
@@ -91,12 +92,6 @@ function scheduleSummary(automation: Automation) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Small helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function truncate(text: string, limit: number): string {
-  return text.length > limit
-    ? `${text.slice(0, limit)}… [${text.length - limit} more characters]`
-    : text;
-}
 
 function isoTime(ms: number | undefined): string | null {
   return ms === undefined ? null : new Date(ms).toISOString();
@@ -328,7 +323,10 @@ A shared monorepo automation appears once, under the first app that surfaces it.
                     : `${repoBasePath({ owner: repo.owner, name: repo.name, rootDirectory: repo.rootDirectory ?? undefined })}/automations/${automation.numId}`,
                 enabled: automation.enabled,
                 ...scheduleSummary(automation),
-                prompt: truncate(automation.description, FINDING_TEXT_LIMIT),
+                prompt: truncateForAgent(
+                  automation.description,
+                  FINDING_TEXT_LIMIT,
+                ),
                 model: automation.model ?? "repo default",
                 readOnly: automation.readOnly === true,
                 actionsEnabled: automation.actionsEnabled === true,
@@ -385,7 +383,7 @@ Each finding has an "id" for create_tasks_from_automation_findings, a severity, 
               title: automation.title,
               enabled: automation.enabled,
               ...scheduleSummary(automation),
-              prompt: truncate(automation.description, SUMMARY_LIMIT),
+              prompt: truncateForAgent(automation.description, SUMMARY_LIMIT),
             },
             runs: runs.map((run) => ({
               id: run._id,
@@ -396,16 +394,19 @@ Each finding has an "id" for create_tasks_from_automation_findings, a severity, 
               error:
                 run.error === undefined
                   ? null
-                  : truncate(run.error, FINDING_TEXT_LIMIT),
+                  : truncateForAgent(run.error, FINDING_TEXT_LIMIT),
               summary:
                 run.resultSummary === undefined
                   ? null
-                  : truncate(run.resultSummary, SUMMARY_LIMIT),
+                  : truncateForAgent(run.resultSummary, SUMMARY_LIMIT),
               findings: (run.findings ?? []).map((finding) => ({
                 id: finding.id,
                 title: finding.title,
                 severity: finding.severity,
-                description: truncate(finding.description, FINDING_TEXT_LIMIT),
+                description: truncateForAgent(
+                  finding.description,
+                  FINDING_TEXT_LIMIT,
+                ),
                 filePaths: finding.filePaths ?? [],
                 taskId: finding.taskId ?? null,
                 triage: finding.triage ?? null,

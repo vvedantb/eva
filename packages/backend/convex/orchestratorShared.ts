@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -22,14 +22,9 @@ export const orchestratorNotifyChildValidator = v.union(
 );
 
 /** The `child` payload of `notifyOrchestratorOfChild`, for hook call sites. */
-export type OrchestratorNotifyChild =
-  | {
-      kind: "session";
-      sessionId: Id<"sessions">;
-      chatId?: Id<"sessionChats">;
-    }
-  | { kind: "task"; taskId: Id<"agentTasks"> }
-  | { kind: "project"; projectId: Id<"projects"> };
+export type OrchestratorNotifyChild = Infer<
+  typeof orchestratorNotifyChildValidator
+>;
 
 /**
  * Schedules a master wake-up for a finished quick-task run. No-op when the task

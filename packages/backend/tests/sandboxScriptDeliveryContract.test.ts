@@ -92,7 +92,6 @@ function recordingHandle(): {
     execDetached: () => outOfScope("execDetached"),
     start: () => outOfScope("start"),
     stop: () => outOfScope("stop"),
-    archive: () => outOfScope("archive"),
     extendTimeout: () => outOfScope("extendTimeout"),
     delete: () => outOfScope("delete"),
     refresh: () => outOfScope("refresh"),

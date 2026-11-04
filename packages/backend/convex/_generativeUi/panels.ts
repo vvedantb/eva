@@ -2,12 +2,12 @@ import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { assertMessageParentAccess, authQuery } from "../functions";
-import { chatUiPanelFields, messageFields } from "../validators";
 import {
   chatEntityKindValidator,
-  latestChatMessageId,
-  resolveChatParent,
-} from "../_chat/chatParent";
+  chatUiPanelFields,
+  messageFields,
+} from "../validators";
+import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
 
 const parentIdValidator = messageFields.parentId;
 

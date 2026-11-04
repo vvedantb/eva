@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { ensureSandboxStartedSteps } from "./resumeSandboxSteps";
+import { errorText } from "../_shared/errors";
 import { type ProgressStep, startupProgress } from "./startupProgress";
 
 type PrepareSandboxArgs = {
@@ -16,8 +17,6 @@ type PrepareSandboxArgs = {
   attachRunId?: Id<"agentRuns">;
   baseBranch?: string;
   branchName?: string;
-  sessionPersistenceId?: Id<"sessions"> | Id<"projects">;
-  sessionPersistenceKind?: "sessions" | "projects";
   createRetry?: { maxAttempts: number; initialBackoffMs: number; base: number };
   /** Skip repo startup + background commands (read-only ephemeral agent runs). */
   skipStartupCommands?: boolean;
@@ -109,8 +108,6 @@ export async function prepareSandboxSteps(
       ephemeral: args.ephemeral,
       repoId: args.repoId,
       attachRunId: args.attachRunId,
-      sessionPersistenceId: args.sessionPersistenceId,
-      sessionPersistenceKind: args.sessionPersistenceKind,
       streamingEntityId: args.streamingEntityId,
     },
     args.createRetry ? { retry: args.createRetry } : undefined,
@@ -259,7 +256,7 @@ export async function prepareSandboxSteps(
           }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         console.warn(
           `[prepareSandbox] Background commands failed — continuing: ${msg}`,
         );
@@ -309,7 +306,7 @@ export async function prepareSandboxSteps(
         }
       } catch (e) {
         // Non-fatal: log warning and continue
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorText(e);
         console.warn(
           `[prepareSandbox] Startup commands failed — continuing: ${msg}`,
         );

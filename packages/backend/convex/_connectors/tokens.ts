@@ -5,8 +5,6 @@ import {
   connectorProviderValidator,
 } from "../validators";
 
-const STATE_TTL_MS = 10 * 60 * 1000;
-
 const storedTokenValidator = v.object({
   _id: v.id("connectedAccounts"),
   accessToken: v.string(),
@@ -95,30 +93,6 @@ export const putStoredToken = internalMutation({
       ...fields,
     });
     return null;
-  },
-});
-
-export const insertOauthState = internalMutation({
-  args: {
-    userId: v.id("users"),
-    provider: connectorProviderValidator,
-    actor: connectorActorValidator,
-    returnPath: v.optional(v.string()),
-    codeVerifier: v.optional(v.string()),
-  },
-  returns: v.string(),
-  handler: async (ctx, args) => {
-    const nonce = crypto.randomUUID();
-    await ctx.db.insert("connectorOauthStates", {
-      nonce,
-      userId: args.userId,
-      provider: args.provider,
-      actor: args.actor,
-      returnPath: args.returnPath,
-      codeVerifier: args.codeVerifier,
-      expiresAt: Date.now() + STATE_TTL_MS,
-    });
-    return nonce;
   },
 });
 

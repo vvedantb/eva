@@ -35,6 +35,7 @@
  */
 import type { SandboxHandle } from "../_sandbox/provider";
 import { writeSandboxFile } from "./sandboxFiles";
+import { errorText } from "../_shared/errors";
 
 /** Swapfile location. On `/`, which is a real fs (fallocate-capable). */
 export const SWAP_FILE_PATH = "/swapfile";
@@ -238,7 +239,7 @@ async function runSwapScript(
     return status;
   } catch (error) {
     console.log(
-      `[sandbox] ${label}: skipped on ${sandbox.id} — ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox] ${label}: skipped on ${sandbox.id} — ${errorText(error)}`,
     );
     return "";
   }
@@ -265,7 +266,7 @@ export async function ensureSwapFile(sandbox: SandboxHandle): Promise<string> {
 /**
  * Drops the swapfile so it is not captured into the sandbox's next snapshot.
  *
- * Call immediately before `stop()` / `archive()`: the next boot recreates swap
+ * Call immediately before `stop()`: the next boot recreates swap
  * in a second or two with fallocate, which is far cheaper than carrying the
  * file through every restore. See {@link buildReleaseSwapScript}.
  */

@@ -264,14 +264,6 @@ describe("the swapfile never enters a snapshot", () => {
       stopBody.indexOf("sandbox.stop()"),
     );
 
-    const archiveBody = functionBody(
-      lifecycle,
-      "export const archiveSandbox = internalAction({",
-    );
-    expect(archiveBody.indexOf("releaseSwapFile")).toBeLessThan(
-      archiveBody.indexOf("sandbox.stop()"),
-    );
-
     const seedBody = functionBody(
       snapshotActions,
       "export const triggerSeededSnapshot = internalAction({",

@@ -1,3 +1,4 @@
+import { errorText } from "../_shared/errors";
 /**
  * Which message a finished turn's result belongs on, and which leftover bubbles
  * to drop.
@@ -36,7 +37,7 @@ export function formatDelayedPublishFailureError(
   scope: PublishFailureScope,
   cause: unknown,
 ): string {
-  const detail = cause instanceof Error ? cause.message : String(cause);
+  const detail = errorText(cause);
   return `${PUBLISH_FAILURE_LEAD[scope]}, ${PUBLISH_FAILURE_MARKER}. The sandbox was preserved for recovery. ${detail}`;
 }
 

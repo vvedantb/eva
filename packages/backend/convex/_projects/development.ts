@@ -3,7 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import {
   authMutation,
   getProjectWithAccess,
-  hasRepoAccess,
+  getRepoWithAccess,
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
@@ -16,6 +16,7 @@ import {
 } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 
 /** Converts a finalized project spec into tasks with dependencies and sets the project to business_review. */
 export const startDevelopment = authMutation({
@@ -38,10 +39,8 @@ export const startDevelopment = authMutation({
     }
     const spec = parseSpec(generatedSpec);
     const branchName = buildProjectBranchName(args.projectId);
-    const projectBaseBranch =
-      project.baseBranch ??
-      (await ctx.db.get(project.repoId))?.defaultBaseBranch ??
-      FALLBACK_GIT_BASE_BRANCH;
+    const repo = await ctx.db.get(project.repoId);
+    const projectBaseBranch = resolveProjectBaseBranch(project, repo);
     const taskIdMap = new Map<number, Id<"agentTasks">>();
     const now = Date.now();
     for (let i = 0; i < spec.tasks.length; i++) {
@@ -101,16 +100,12 @@ export const createFromTasks = authMutation({
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    // Only this repo's tasks may join the project: a foreign id would move
-    // another team's task under a project the caller owns.
-    const tasks = await Promise.all(args.taskIds.map((id) => ctx.db.get(id)));
-    if (tasks.some((task) => task !== null && task.repoId !== args.repoId)) {
-      throw new Error("Tasks must belong to this repository");
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    for (const taskId of args.taskIds) {
+      const task = await ctx.db.get(taskId);
+      if (!task || task.repoId !== args.repoId) {
+        throw new Error("Task does not belong to this repository");
+      }
     }
     const projectNumId = await allocateNumId(ctx.db, args.repoId, "projects");
     const projectId = await ctx.db.insert("projects", {
@@ -129,14 +124,11 @@ export const createFromTasks = authMutation({
       branchName: buildProjectBranchName(projectId),
     });
     for (let i = 0; i < args.taskIds.length; i++) {
-      const taskId = args.taskIds[i];
-      if (tasks[i]) {
-        await ctx.db.patch(taskId, {
-          projectId,
-          taskNumber: i + 1,
-          updatedAt: Date.now(),
-        });
-      }
+      await ctx.db.patch(args.taskIds[i], {
+        projectId,
+        taskNumber: i + 1,
+        updatedAt: Date.now(),
+      });
     }
     await recomputeProjectPhase(ctx, projectId);
     return projectId;

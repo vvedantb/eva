@@ -4,14 +4,19 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import { workspaceDirShell } from "../_sandbox_runtime/helpers";
 import { ensureSwapFile } from "../_sandbox_runtime/swap";
 import {
+  buildFreePortLines,
+  buildPortListenProbeCommand,
+} from "../_sandbox_runtime/httpReadyProbe";
+import {
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "../_sandbox_runtime/packageManager";
 import {
-  EVA_ENV_FILE,
+  EVA_ENV_SOURCE_CMD,
   tmuxNewSessionWithEvaEnv,
 } from "../_sandbox/vercelEnvFile";
 import { previewConsoleSessionName } from "./consoleSessionName";
+import { PRIMARY_REPO_DIR } from "../_sandbox_runtime/workspaceLayout";
 
 /**
  * Per-`sessionName` so a linked repo's console session (a distinct tmux
@@ -50,14 +55,10 @@ export async function launchDevServerInVercelConsole(
   );
 
   const portBusy = (
-    await handle.exec(
-      [
-        `if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q ":${port} " && echo busy && exit 0; fi`,
-        `if command -v lsof >/dev/null 2>&1; then lsof -iTCP:${port} -sTCP:LISTEN >/dev/null 2>&1 && echo busy && exit 0; fi`,
-        "echo free",
-      ].join("; "),
-      { cwd: "/", timeoutSeconds: 10 },
-    )
+    await handle.exec(buildPortListenProbeCommand(port, "busy", "free"), {
+      cwd: "/",
+      timeoutSeconds: 10,
+    })
   ).output.trim();
   if (portBusy === "busy") {
     console.log(
@@ -77,13 +78,11 @@ export async function launchDevServerInVercelConsole(
   const script = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
-    `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`,
-    `cd ${workspace} 2>/dev/null || cd /vercel/sandbox || cd /tmp/repo || true`,
+    EVA_ENV_SOURCE_CMD,
+    `cd ${workspace} 2>/dev/null || cd /vercel/sandbox || cd ${PRIMARY_REPO_DIR} || true`,
     `export INIT_CWD="$(pwd)"`,
     // Free the port if a previous background launch left something behind.
-    `if command -v fuser >/dev/null 2>&1; then fuser -k ${port}/tcp >/dev/null 2>&1 || true`,
-    `elif command -v lsof >/dev/null 2>&1; then for p in $(lsof -ti :${port} 2>/dev/null || true); do kill "$p" 2>/dev/null || true; done`,
-    "fi",
+    ...buildFreePortLines(port),
     // Cap the dev server's V8 heap: one leaky Next dev compile at ~5.5GB RSS
     // was enough to trigger kernel OOM kills of unrelated processes on a 16GB
     // VM. A clean heap error is the recoverable failure — the preview

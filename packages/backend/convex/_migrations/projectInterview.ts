@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 
 /** Clears a project interview stuck after sandbox or agent failure. */
 export const repairStuckProjectInterview = internalMutation({
@@ -47,7 +48,7 @@ export const repairStuckProjectInterview = internalMutation({
     await clearStreamingActivity(ctx, String(args.projectId));
     await clearStreamingActivity(
       ctx,
-      `project-sandbox-startup-${String(args.projectId)}`,
+      sandboxStartupEntityId({ kind: "project", projectId: args.projectId }),
     );
 
     const clearedWorkflow = project.activeWorkflowId !== undefined;

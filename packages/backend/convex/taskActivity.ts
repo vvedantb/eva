@@ -2,19 +2,14 @@ import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { Infer } from "convex/values";
-import { taskActivityFieldValidator } from "./validators";
+import { taskActivityFieldValidator, taskActivityFields } from "./validators";
 import { authQuery, hasTaskAccess } from "./functions";
 import { shouldCoalesceTaskActivity } from "./taskActivityCoalesce";
 
 const taskActivityDocValidator = v.object({
   _id: v.id("taskActivity"),
   _creationTime: v.number(),
-  taskId: v.id("agentTasks"),
-  field: taskActivityFieldValidator,
-  oldValue: v.optional(v.string()),
-  newValue: v.optional(v.string()),
-  userId: v.optional(v.id("users")),
-  createdAt: v.number(),
+  ...taskActivityFields,
 });
 
 export const listByTask = authQuery({

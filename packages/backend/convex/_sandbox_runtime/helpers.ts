@@ -30,8 +30,11 @@ import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
 import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
+import { PRIMARY_REPO_DIR } from "./workspaceLayout";
+import { withTimeout as withTimeoutShared } from "../_shared/async";
+import { errorText } from "../_shared/errors";
 
-export const WORKSPACE_DIR = "/tmp/repo";
+export const WORKSPACE_DIR = PRIMARY_REPO_DIR;
 export const LEGACY_WORKSPACE_DIR = "/workspace/repo";
 
 /** Kills prior agent runners without matching the current shell wrapper. */
@@ -288,7 +291,7 @@ export async function bootstrapVercelDocker(
     return true;
   } catch (error) {
     console.log(
-      `[sandbox] bootstrapVercelDocker failed on ${sandbox.id}: ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox] bootstrapVercelDocker failed on ${sandbox.id}: ${errorText(error)}`,
     );
     return false;
   }
@@ -345,7 +348,7 @@ export async function ensureSandboxRunning(
     knownState = sandbox.state;
   } catch (refreshErr) {
     console.log(
-      `[sandbox] ensureSandboxRunning: initial refresh failed (${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}); falling back to exec probe`,
+      `[sandbox] ensureSandboxRunning: initial refresh failed (${errorText(refreshErr)}); falling back to exec probe`,
     );
   }
 
@@ -368,7 +371,7 @@ export async function ensureSandboxRunning(
       return;
     } catch (e) {
       console.log(
-        `[sandbox] ensureSandboxRunning: sandbox ${sandbox.id} not running, starting... (check took ${Date.now() - startedAt}ms, error: ${e instanceof Error ? e.message : String(e)})`,
+        `[sandbox] ensureSandboxRunning: sandbox ${sandbox.id} not running, starting... (check took ${Date.now() - startedAt}ms, error: ${errorText(e)})`,
       );
     }
   } else {
@@ -458,13 +461,7 @@ export async function restartUnresponsiveSandbox(
   });
 }
 
-/** Returns the value of a required environment variable, throwing if missing. */
-/** Returns a promise that resolves after the specified milliseconds. */
-export async function sleep(ms: number): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+export { sleep } from "../_shared/async";
 
 export const WARMING_SANDBOX_READY_TIMEOUT_SECONDS = 60;
 
@@ -475,18 +472,9 @@ export async function withTimeout<T>(
   label: string,
   makeError: (message: string) => Error = (message) => new Error(message),
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(makeError(`Sandbox ${label} timed out after ${ms}ms`)),
-      ms,
-    );
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
+  return withTimeoutShared(promise, ms, () =>
+    makeError(`Sandbox ${label} timed out after ${ms}ms`),
+  );
 }
 
 /** Extracts the message from an error, returning a fallback if not an Error instance. */
@@ -581,7 +569,7 @@ export async function getSandboxHandle(
   repoId: Id<"githubRepos">,
   sandboxId: string,
 ): Promise<SandboxHandle> {
-  const { credentials } = await resolveSandboxCredentials(ctx, repoId);
+  const credentials = await resolveSandboxCredentialsOnly(ctx, repoId);
   return getSandboxClient(credentials).get(sandboxId);
 }
 

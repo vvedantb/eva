@@ -4,11 +4,19 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import type { JsonValue } from "../_jev/jsonValue";
+import type { ChatEntityKind } from "../validators";
 
 // Leaf module shared by tools.ts and orchestratorTools.ts. Lives apart from
 // tools.ts so the orchestrator registration does not close an import cycle
 // (tools -> orchestratorTools -> tools), which would land in the "use node"
 // action chunk and break the prod push.
+
+/** Cuts long text for an agent reply and says how much was left out. */
+export function truncateForAgent(text: string, limit: number): string {
+  return text.length > limit
+    ? `${text.slice(0, limit)}… [${text.length - limit} more characters]`
+    : text;
+}
 
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
@@ -22,7 +30,7 @@ export interface McpCredentials {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  entityKind?: "session" | "task" | "project";
+  entityKind?: ChatEntityKind;
   /**
    * The session chat a session daemon runs in. Chat content (panels, HTML,
    * preview tool calls, env var cards) lands here; `entityId` is the session.
@@ -107,6 +115,19 @@ export async function mcpCallAsUser<T>(
 }
 
 /**
+ * The `source` arg Eva's docs and artifacts mutations take to link a record to
+ * the chat (session, quick task or project) it came from.
+ */
+export function chatSourceArg(
+  kind: ChatEntityKind,
+  id: string,
+): Record<string, string> {
+  if (kind === "session") return { kind, sessionId: id };
+  if (kind === "task") return { kind, taskId: id };
+  return { kind, projectId: id };
+}
+
+/**
  * Required on every tool that deletes or irreversibly removes something. The
  * agent must ask the user in chat first; the literal makes skipping that a
  * visible choice rather than a default.
@@ -121,7 +142,7 @@ export const confirmedDeleteArg = z
 export async function mcpGetContext(
   ctx: ActionCtx,
   clerkUserId: string,
-): Promise<{ deployKey: string; userId: string }> {
+): Promise<{ userId: string }> {
   return ctx.runAction(internal.mcp.nodeActions.getContext, { clerkUserId });
 }
 
@@ -149,7 +170,7 @@ export async function mcpListUserRepos(
   ctx: ActionCtx,
   userId: string,
 ): Promise<RepoInfo[]> {
-  return ctx.runAction(internal.mcp.nodeActions.listUserRepos, { userId });
+  return ctx.runQuery(internal.mcp.queries.listUserRepos, { userId });
 }
 
 /** `owner/name` for a plain repo, `owner/name/app` for one app of a monorepo. */

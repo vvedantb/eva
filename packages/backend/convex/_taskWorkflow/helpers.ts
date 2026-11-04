@@ -4,13 +4,15 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { Infer, Validator } from "convex/values";
 import { LlmJson } from "@solvers-hub/llm-json";
 import { toWorkflowId, workflow } from "../workflowManager";
-import { buildProjectBranchName } from "../_projects/helpers";
+import {
+  buildTaskBranchName,
+  resolveProjectBranchName,
+} from "../_git/branchNames";
 import {
   findPullRequestByUrl,
   recordPullRequest,
   type PrState,
 } from "../_pullRequests/store";
-import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
@@ -24,13 +26,12 @@ export async function resolveTaskBranchName(
   task: Doc<"agentTasks">,
 ): Promise<string> {
   if (task.projectId) {
-    const project = await db.get(task.projectId);
-    return (
-      project?.branchName ??
-      buildProjectBranchName(task.projectId, project?.branchVersion)
+    return resolveProjectBranchName(
+      task.projectId,
+      await db.get(task.projectId),
     );
   }
-  return `eva/task-${String(task._id)}`;
+  return buildTaskBranchName(task._id);
 }
 
 /** Resolves the sandbox id to use for a task run (push). */
@@ -41,13 +42,9 @@ export async function resolveTaskSandboxIdForRun(
 ): Promise<string | undefined> {
   if (task.projectId) {
     const project = await db.get(task.projectId);
-    return preferPersistedSandboxId({
-      sandboxId: project?.sandboxId ?? run.sandboxId,
-    });
+    return project?.sandboxId ?? run.sandboxId;
   }
-  return preferPersistedSandboxId({
-    sandboxId: run.sandboxId ?? task.sandboxId,
-  });
+  return run.sandboxId ?? task.sandboxId;
 }
 
 /** Returns the streaming entity ID used for a task run's activity stream. */
@@ -66,28 +63,6 @@ export async function clearStreamingActivity(
     .collect();
   for (const streaming of streamingRows) {
     await ctx.db.delete(streaming._id);
-  }
-}
-
-/** Creates or updates the streaming activity record for a given entity. */
-export async function upsertStreamingActivity(
-  ctx: MutationCtx,
-  entityId: string,
-  currentActivity: string,
-): Promise<void> {
-  const existing = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", entityId))
-    .first();
-  const now = Date.now();
-  if (existing) {
-    await ctx.db.patch(existing._id, { currentActivity, lastUpdatedAt: now });
-  } else {
-    await ctx.db.insert("streamingActivity", {
-      entityId,
-      currentActivity,
-      lastUpdatedAt: now,
-    });
   }
 }
 
@@ -127,6 +102,22 @@ export async function snapshotStreamingActivityToLog(
   if (streaming?.currentActivity) {
     await upsertActivityLog(ctx, runId, streaming.currentActivity);
   }
+}
+
+/** Clears a task run's streaming rows (run stream and task stream), optionally
+ * snapshotting the run stream into its activity log first. */
+export async function clearTaskRunStreaming(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+  runId: Id<"agentRuns">,
+  opts?: { snapshot?: boolean },
+): Promise<void> {
+  const entityId = getTaskRunStreamingEntityId(runId);
+  if (opts?.snapshot) {
+    await snapshotStreamingActivityToLog(ctx, entityId, runId);
+  }
+  await clearStreamingActivity(ctx, entityId);
+  await clearStreamingActivity(ctx, String(taskId));
 }
 
 /** Builds a human-readable summary string for a completed run result. */
@@ -198,9 +189,8 @@ export async function finalizeRunStatus(
     entityId: String(run.taskId),
   });
 
-  // Single terminal-status choke point for a run, and it is guarded above
-  // against re-finalizing — so a watched task's master is woken exactly once
-  // whether the run ended via finalizeRunStreamingPhase or completeRun.
+  // Guarded against re-finalizing, so completeRun wakes the orchestrator
+  // exactly once.
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,
@@ -243,9 +233,7 @@ export async function recordRunPullRequest(
       state: existing?.state ?? args.state ?? "draft",
       primary: true,
       origin: "eva",
-      headBranch:
-        project.branchName ??
-        buildProjectBranchName(project._id, project.branchVersion),
+      headBranch: resolveProjectBranchName(project._id, project),
       baseBranch: project.baseBranch,
       title: project.title,
     });
@@ -263,7 +251,7 @@ export async function recordRunPullRequest(
     state: existing?.state ?? args.state ?? "draft",
     primary: true,
     origin: "eva",
-    headBranch: `eva/task-${task._id}`,
+    headBranch: buildTaskBranchName(task._id),
     baseBranch: task.baseBranch,
     title: task.title,
   });

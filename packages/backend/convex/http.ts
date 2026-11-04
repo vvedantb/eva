@@ -18,6 +18,7 @@ import {
   parseCiPassed,
   parseRepoEvents,
 } from "./_automationEvents/events";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 import { hmacSha256Hex } from "./_shared/hmac";
 import {
@@ -34,15 +35,6 @@ import {
 } from "./mcp/native";
 
 const http = httpRouter();
-
-/** Verifies the MCP bootstrap authorization token from the request header. */
-function verifyMcpBootstrapToken(request: Request): boolean {
-  const auth = request.headers.get("Authorization");
-  if (!auth) return false;
-  const expected = process.env.MCP_BOOTSTRAP_SECRET;
-  if (!expected) return false;
-  return timingSafeEqual(auth, `MCPBootstrap ${expected}`);
-}
 
 /** Verifies the EVA deploy key from the request Authorization header. */
 function verifyDeployKey(request: Request): boolean {
@@ -232,24 +224,6 @@ function parseEnvVarsBody(
   const parsed = envVarsBodySchema.safeParse(body);
   return parsed.success ? parsed.data : null;
 }
-
-http.route({
-  path: "/api/mcp/bootstrap",
-  method: "GET",
-  handler: httpAction(async (_ctx, request) => {
-    if (!verifyMcpBootstrapToken(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-    const deployKey = process.env.EVA_DEPLOY_KEY;
-    if (!deployKey) {
-      return new Response(
-        "EVA_DEPLOY_KEY is not configured in Convex env vars",
-        { status: 500 },
-      );
-    }
-    return Response.json({ deployKey });
-  }),
-});
 
 http.route({
   path: "/api/mcp/env-vars",
@@ -733,7 +707,7 @@ http.route({
  * installations resume setup; anything else lands on the codebase list.
  */
 function githubAuthReturnUrl(installationId: number | null): string {
-  const webAppUrl = process.env.WEB_APP_URL ?? "";
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   return installationId === null
     ? `${webAppUrl}/home`
     : `${webAppUrl}/setup/${installationId}`;
@@ -808,7 +782,7 @@ http.route({
 });
 
 function connectorAuthReturnUrl(returnPath: string | null): string {
-  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   const path =
     returnPath &&
     returnPath.startsWith("/settings") &&
@@ -913,7 +887,7 @@ http.route({
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!expected || !appUrl) {
       return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
         status: 500,

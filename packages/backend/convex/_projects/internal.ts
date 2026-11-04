@@ -1,17 +1,11 @@
 import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
-import { projectFields } from "../validators";
-
-const projectDocValidator = v.object({
-  _id: v.id("projects"),
-  _creationTime: v.number(),
-  ...projectFields,
-});
+import { projectSummaryValidator } from "./helpers";
 
 /** Retrieves a project by ID for internal use (no auth check). */
 export const getInternal = internalQuery({
   args: { id: v.id("projects") },
-  returns: v.union(projectDocValidator, v.null()),
+  returns: v.union(projectSummaryValidator, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
   },
@@ -24,7 +18,7 @@ export const getInternal = internalQuery({
  */
 export const getInternalByStringId = internalQuery({
   args: { id: v.string() },
-  returns: v.union(projectDocValidator, v.null()),
+  returns: v.union(projectSummaryValidator, v.null()),
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("projects", args.id);
     if (!id) return null;
@@ -35,7 +29,7 @@ export const getInternalByStringId = internalQuery({
 /** Project owning a sandbox — preview recovery relaunches services through it. */
 export const getBySandboxInternal = internalQuery({
   args: { sandboxId: v.string() },
-  returns: v.union(projectDocValidator, v.null()),
+  returns: v.union(projectSummaryValidator, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("projects")

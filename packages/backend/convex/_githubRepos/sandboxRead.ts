@@ -1,7 +1,6 @@
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
-import { userCanAccessRepo } from "../functions";
-import { gatherAccessibleRepos } from "./helpers";
+import { gatherAccessibleRepos, findReposByOwnerAndName } from "./helpers";
 
 /**
  * A GitHub repository a sandbox may mint a sibling (contents read/write) token
@@ -45,14 +44,7 @@ async function collectGroupRows(
     pairs.set(`${row.owner}/${row.name}`, { owner: row.owner, name: row.name });
   }
   const siblingGroups = await Promise.all(
-    [...pairs.values()].map(({ owner, name }) =>
-      db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", owner).eq("name", name),
-        )
-        .collect(),
-    ),
+    [...pairs.values()].map((pair) => findReposByOwnerAndName(db, pair)),
   );
   for (const sibling of siblingGroups.flat()) {
     byId.set(String(sibling._id), sibling);
@@ -79,19 +71,15 @@ export async function listReadableSiblingRepos(
     db.get(homeRepoId),
     gatherAccessibleRepos(db, userId, true),
   ]);
-  const canAccess = await Promise.all(
-    candidates.map((repo) => userCanAccessRepo(db, repo, userId)),
-  );
 
   const groups = new Map<string, Array<Doc<"githubRepos">>>();
-  candidates.forEach((repo, i) => {
-    if (!canAccess[i]) return;
-    if (homeRepo && isSameGitHubRepo(repo, homeRepo)) return;
+  for (const repo of candidates) {
+    if (homeRepo && isSameGitHubRepo(repo, homeRepo)) continue;
     const key = repoKey(repo);
     const existing = groups.get(key);
     if (existing) existing.push(repo);
     else groups.set(key, [repo]);
-  });
+  }
 
   const groupList = [...groups.values()];
   const groupRowsList = await Promise.all(

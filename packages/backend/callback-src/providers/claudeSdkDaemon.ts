@@ -4,14 +4,11 @@ import {
   CLAIM_MUTATION,
   COMPLETE_SYNTHETIC_TURN_MUTATION,
   COMPLETION_MUTATION,
-  CALLBACK_SCRIPT_FP,
-  DAEMON_OPTS_SIG,
   ENTITY_ID,
-  ENTITY_ID_FIELD,
   HARNESS_CATALOG_TOKEN,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
-  NO_OUTPUT_TIMEOUT_MS,
+  NO_MESSAGE_TIMEOUT_MS,
   OPEN_SYNTHETIC_TURN_MUTATION,
   UPDATE_BACKGROUND_AGENTS_MUTATION,
   WORK_DIR,
@@ -20,7 +17,6 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 import {
   callConvexWithRetry,
   callHarnessSkillCatalogReport,
-  unwrapConvexMutationPayload,
   type HarnessCommandReport,
 } from "../http/convexClient.js";
 import {
@@ -30,10 +26,10 @@ import {
   extractResultEvent,
   postClaimedTurnFailureCompletion,
   reconcileStreamingAndPersist,
+  sendTurnCompletion,
   uploadAndAttachSandboxMedia,
 } from "../runtime/completion.js";
 import {
-  runPreflightHeartbeat,
   startStreamingLoops,
   stopStreamingLoops,
 } from "../runtime/heartbeats.js";
@@ -68,29 +64,28 @@ import {
   steerClaimArgs,
 } from "../runtime/steering.js";
 import { persistTurnWork } from "../runtime/turnPersist.js";
+import { beginTurnCheckpoint } from "../runtime/turnCheckpoint.js";
 import {
-  appendTurnCheckpoint,
-  beginTurnCheckpoint,
-} from "../runtime/turnCheckpoint.js";
-import {
+  appendCurrentTurnLease,
   beginTurnOwnership,
   endTurnOwnership,
-  getCurrentTurnLease,
-  releaseTurnLeaseForCompletion,
 } from "../runtime/turnLease.js";
-import { log } from "../utils.js";
+import {
+  isJsonObject,
+  log,
+  readTrimmedString,
+  unwrapConvexMutationPayload,
+  errorText,
+} from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
-  buildEntityMutationArgs,
-  callbackBundleWentStale,
-  claimDaemonPidfileBoot,
-  cleanOwnedDaemonMarkers,
-  readPidFromFile,
+  bootWarmDaemon,
+  callbackScriptWentStale,
+  cleanOwnedMarkers,
+  entityMutationArgs,
   sleep,
   selectClaimPollIntervalMs,
-  startDaemonDepositionFence,
 } from "../runtime/daemonProcess.js";
-import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
 import type { JsonObject, JsonValue } from "../types.js";
 import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";
 import {
@@ -103,33 +98,22 @@ import {
   appendClaimedTurnCompletion,
   finishClaimedTurn,
   readClaimedTurn,
-  shouldParkClaimedTurn,
+  routeClaimedTurn,
   startClaimedTurn,
   type ClaimedTurn,
 } from "./claimedTurnLifecycle.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 import { trackClaudeGoalFrame } from "./claudeGoalSync.js";
 
-/** Reads the entity daemon pidfile; NaN when missing or unreadable. */
-function readDaemonPidFile(): number {
-  return readPidFromFile(DAEMON_PID_FILE);
-}
-
 // Entity-scoped daemon marker paths (see daemonPaths.ts). Legacy session paths
 // are cleaned up on exit when this daemon is session-scoped.
 const daemonPaths = resolveDaemonPaths();
-const DAEMON_PID_FILE = daemonPaths.pid;
 
 // Exit if no new turn arrives for this long, so the sandbox can be reclaimed.
 // Kept generous so a normal work session never pays a mid-session respawn (the
 // respawn — re-upload + boot — is the ~20s "slow hi" users feel). Matches the
 // keep-warm window of comparable agents (t3code reaps at 30min).
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-// How often a daemon re-checks that it still owns the entity pidfile. Concurrent
-// launches race the multi-second gap between the launcher's alive-check and the
-// pidfile write below, so several daemons can boot for one entity (observed in
-// prod: 5 daemons flip-flopping one streaming row). Deposed daemons exit here.
-const FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 // Poll interval for the claim mutation. Low enough to keep handoff→turn-start
 // latency to ~one poll; the turn itself dominates so this only trims the tail.
 const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
@@ -151,7 +135,7 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 // tool run, so a long bash call would otherwise be killed as a hang (seen in
 // prod). On a fire we send a failure completion (resolving awaitEvent) and exit
 // so the next turn respawns a clean daemon rather than reusing a wedged query.
-const NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
+// Silence limit: NO_MESSAGE_TIMEOUT_MS (config.ts).
 const WATCHDOG_TICK_MS = 5000;
 
 // Safety net for a cancel whose interrupted `result` never arrives (SDK
@@ -175,7 +159,6 @@ type WarmRunner = {
   /** `priority: "next"` injects a steer into the live turn at its next boundary. */
   push: (text: string, priority?: "next") => void;
   waitMessage: () => Promise<DaemonMessage | null>;
-  drainPending: () => DaemonMessage[];
   hasPending: () => boolean;
   stopTask: (taskId: string) => Promise<void>;
   /** Interrupts the in-flight turn (cancel). Logs and no-ops when the SDK
@@ -183,8 +166,8 @@ type WarmRunner = {
   interrupt: () => Promise<void>;
   /** Reads the SDK's experimental plan-usage data; null when unavailable. */
   readUsage: () => Promise<ClaudeUsageResponseLike | null>;
-  /** Claude-native plan mode. No-ops when the SDK handle lacks the method. */
-  setPermissionMode: (mode: "plan" | "default") => Promise<void>;
+  /** Re-asserts default permission mode. No-ops when the SDK handle lacks it. */
+  resetPermissionMode: () => Promise<void>;
 };
 
 type BackgroundAgentEntry = {
@@ -202,8 +185,8 @@ let callbackRefreshDeferralLogged = false;
 let lastIdleActivityAtMs = Date.now();
 let agentTurnOutput = "";
 let agentTurnStartedAt = 0;
-let sawFirstMessageThisTurn = { value: false };
-let sawAssistantThisTurn = { value: false };
+let sawFirstMessageThisTurn = false;
+let sawAssistantThisTurn = false;
 // Cancel state machine: set when a claim response drains a user cancel for
 // the in-flight turn (see handleCancelRequested); cleared once that turn's
 // result settles in runDaemonMessagePump, or force-exited by the safety net
@@ -223,20 +206,6 @@ let usageRefreshInFlight = false;
 /** Resolves the message pump's idle wait; set only while it sleeps. */
 let wakeIdlePump: (() => void) | null = null;
 
-function entityMutationArgs(
-  fields: Record<string, JsonValue>,
-): Record<string, JsonValue> {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-
-/** Removes marker files only while this process still owns the pidfile. */
-function cleanOwnedMarkers(): void {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId",
-  });
-}
-
 function beginWatchedTurn(): void {
   turnActive = true;
   turnStartedAtMs = Date.now();
@@ -251,6 +220,46 @@ function noteWatchedMessage(): void {
 // turns, so the watchdog only guards a turn that is genuinely in flight.
 function endWatchedTurn(): void {
   turnActive = false;
+}
+
+/** Starts the per-turn clocks and arms the watchdog for a new turn. */
+function beginAgentTurnClock(): void {
+  agentTurnStartedAt = Date.now();
+  sawFirstMessageThisTurn = false;
+  sawAssistantThisTurn = false;
+  S.activeAttemptStartedAt = agentTurnStartedAt;
+  beginWatchedTurn();
+}
+
+/** Tears down a synthetic turn once its completion was sent (or abandoned). */
+function settleSyntheticTurn(): void {
+  endWatchedTurn();
+  resetTurnState();
+  endTurnOwnership();
+  supervisor.settleTurn();
+  agentTurnOutput = "";
+}
+
+/** Fails whichever turn is live: a synthetic turn settles, a real one exits. */
+function failCurrentTurn(error: string): Promise<void> {
+  return supervisor.currentTurn?.kind === "synthetic"
+    ? failSyntheticTurn(error)
+    : failTurnAndExit(error);
+}
+
+/** Synthetic completion payload, fenced by the synthetic turn's lease. */
+function syntheticCompletionArgs(
+  messageId: string,
+  fields: {
+    success: boolean;
+    result: JsonValue;
+    error: string | null;
+    activityLog: string;
+  },
+): JsonObject {
+  const args = entityMutationArgs({ messageId, ...fields });
+  appendCurrentTurnLease(args);
+  return args;
 }
 
 /**
@@ -287,7 +296,7 @@ async function failTurnAndExit(error: string): Promise<never> {
   // Only unlink markers this daemon still owns — a deposed daemon that
   // deferred its fence exit through this failing turn would otherwise delete
   // the rival's pidfile and take the healthy daemon down with it.
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
   process.exit(1);
 }
@@ -308,7 +317,7 @@ async function exitWithoutCompletion(reason: string): Promise<void> {
   // safe on a turn the server has already finalized.
   persistTurnWork();
   // Same ownership gate as failTurnAndExit: never delete a rival's pidfile.
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
 }
 
@@ -348,29 +357,55 @@ function startTurnWatchdog(): void {
     }
     if (now - turnStartedAtMs > MAX_TOTAL_RUNTIME_MS) {
       turnActive = false;
-      if (supervisor.currentTurn?.kind === "synthetic") {
-        void failSyntheticTurn(
-          "The assistant exceeded the maximum turn runtime.",
-        );
-      } else {
-        void failTurnAndExit(
-          "The assistant exceeded the maximum turn runtime.",
-        );
-      }
+      void failCurrentTurn("The assistant exceeded the maximum turn runtime.");
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {
       turnActive = false;
-      if (supervisor.currentTurn?.kind === "synthetic") {
-        void failSyntheticTurn(
-          "The assistant stopped responding. Please try again.",
-        );
-      } else {
-        void failTurnAndExit(
-          "The assistant stopped responding. Please try again.",
-        );
-      }
+      void failCurrentTurn(
+        "The assistant stopped responding. Please try again.",
+      );
     }
   }, WATCHDOG_TICK_MS);
   timer.unref?.();
+}
+
+/**
+ * FIFO whose `next()` blocks until an item arrives, and resolves null once the
+ * queue is closed and drained.
+ */
+function createAsyncQueue<T>(): {
+  push: (item: T) => void;
+  next: () => Promise<T | null>;
+  close: () => void;
+  size: () => number;
+} {
+  const items: T[] = [];
+  let notify: (() => void) | null = null;
+  let closed = false;
+  const wake = (): void => {
+    const resume = notify;
+    notify = null;
+    if (resume) resume();
+  };
+  return {
+    push: (item) => {
+      items.push(item);
+      wake();
+    },
+    next: async () => {
+      while (items.length === 0) {
+        if (closed) return null;
+        await new Promise<void>((resolve) => {
+          notify = resolve;
+        });
+      }
+      return items.shift() ?? null;
+    },
+    close: () => {
+      closed = true;
+      wake();
+    },
+    size: () => items.length,
+  };
 }
 
 /**
@@ -383,8 +418,7 @@ function createPromptStream(): {
   push: (text: string, priority?: "next") => void;
   iterable: AsyncIterable<SdkUserMessage>;
 } {
-  const queue: SdkUserMessage[] = [];
-  let notify: (() => void) | null = null;
+  const queue = createAsyncQueue<SdkUserMessage>();
   const push = (text: string, priority?: "next"): void => {
     queue.push({
       type: "user",
@@ -393,21 +427,14 @@ function createPromptStream(): {
       session_id: S.activeClaudeSessionId || "",
       ...(priority ? { priority } : {}),
     });
-    const resume = notify;
-    notify = null;
-    if (resume) resume();
   };
   const iterable: AsyncIterable<SdkUserMessage> = {
     [Symbol.asyncIterator]() {
       return {
         async next() {
-          while (queue.length === 0) {
-            await new Promise<void>((resolve) => {
-              notify = resolve;
-            });
-          }
-          const value = queue.shift();
-          if (value === undefined) {
+          // The prompt queue is never closed, so null never arrives.
+          const value = await queue.next();
+          if (value === null) {
             return { value: undefined, done: true as const };
           }
           return { value, done: false as const };
@@ -416,11 +443,6 @@ function createPromptStream(): {
     },
   };
   return { push, iterable };
-}
-
-/** Sessions may push git commits; refresh the installation token like the one-shot path. */
-async function refreshGithubToken(): Promise<void> {
-  await refreshDaemonGithubTokenFromEnv();
 }
 
 /** Clears the per-turn accumulators so the next turn starts clean on the same query. */
@@ -507,28 +529,12 @@ function readSyntheticTurnMessageId(result: JsonValue): string | null {
   return typeof messageId === "string" ? messageId : null;
 }
 
-function readParentToolUseId(message: DaemonMessage): string | null {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-
-function readStringField(
-  message: DaemonMessage,
-  field: string,
-): string | undefined {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 function recogniseSubagentToolUses(message: DaemonMessage): void {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -536,7 +542,7 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -546,15 +552,13 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
     if (name !== "Agent" && name !== "Task") {
       continue;
     }
-    const id = block.id;
-    if (typeof id === "string" && id.trim()) {
-      recognisedSubagentToolUseIds.add(id.trim());
-    }
+    const id = readTrimmedString(block.id);
+    if (id) recognisedSubagentToolUseIds.add(id);
   }
 }
 
 function shouldDropSubagentMessage(message: DaemonMessage): boolean {
-  const parentId = readParentToolUseId(message);
+  const parentId = readTrimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -572,7 +576,7 @@ function shouldMintSyntheticTurn(message: DaemonMessage): boolean {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = readTrimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -752,7 +756,7 @@ async function reportHarnessSkillCatalog(
         cliVersion,
     );
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: harness skill report failed — " + messageText);
   }
 }
@@ -768,7 +772,7 @@ function noteHarnessInitMessage(
 ): void {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField(message, "claude_code_version");
+  const cliVersion = readTrimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -815,8 +819,7 @@ async function dispatchPendingAgentStops(
       await agentRunner.stopTask(entry.taskId);
       log("daemon: stopTask dispatched taskId=" + entry.taskId);
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("daemon: stopTask failed — " + messageText);
       pendingAgentStops.add(toolUseId);
     }
@@ -864,19 +867,19 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField(message, "tool_use_id");
+  const toolUseId = readTrimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
     // Shell commands also arrive as tasks. They are not subagents: background
     // shells have their own registry (`backgroundShells`), and a dev server
     // run in the background never ends, so as an entry it held the chat queue
     // for the full 2-hour cap.
-    if (readStringField(message, "task_type") === "local_bash") {
+    if (readTrimmedString(message.task_type) === "local_bash") {
       return;
     }
     const entry: BackgroundAgentEntry = {
       toolUseId,
-      taskId: readStringField(message, "task_id"),
-      description: readStringField(message, "description"),
+      taskId: readTrimmedString(message.task_id),
+      description: readTrimmedString(message.description),
       status: "running",
       startedAt: Date.now(),
     };
@@ -891,7 +894,7 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
     (subtype === "task_updated" || subtype === "task_notification") &&
     toolUseId
   ) {
-    const status = readStringField(message, "status");
+    const status = readTrimmedString(message.status);
     const terminal =
       status === "completed" ||
       status === "failed" ||
@@ -917,30 +920,20 @@ async function failSyntheticTurn(error: string): Promise<void> {
   persistTurnWork();
   try {
     await drainStreamingAndCompleteSteps();
-    const turnLease = getCurrentTurnLease();
-    const completionArgs = entityMutationArgs({
-      messageId,
+    const completionArgs = syntheticCompletionArgs(messageId, {
       success: false,
       result: null,
       error,
       activityLog: serializeSteps(S.accumulatedSteps),
-      ...turnLease,
     });
-    appendTurnCheckpoint(completionArgs);
-    releaseTurnLeaseForCompletion();
-    await callConvexWithRetry(
-      "mutation",
+    await sendTurnCompletion(
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
       completionArgs,
     );
   } catch {
     /* best-effort */
   }
-  endWatchedTurn();
-  resetTurnState();
-  endTurnOwnership();
-  supervisor.settleTurn();
-  agentTurnOutput = "";
+  settleSyntheticTurn();
 }
 
 async function ensureSyntheticTurn(): Promise<void> {
@@ -969,11 +962,7 @@ async function ensureSyntheticTurn(): Promise<void> {
       endTurnOwnership();
       return;
     }
-    agentTurnStartedAt = Date.now();
-    sawFirstMessageThisTurn = { value: false };
-    sawAssistantThisTurn = { value: false };
-    S.activeAttemptStartedAt = agentTurnStartedAt;
-    beginWatchedTurn();
+    beginAgentTurnClock();
     log("daemon: synthetic turn opened messageId=" + messageId);
   } finally {
     supervisor.abandonSyntheticOpen();
@@ -994,8 +983,7 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
     resultEvent?.result ?? "",
   );
   const success = resultEvent ? !resultEvent.isError : false;
-  const completionArgs: Record<string, JsonValue> = entityMutationArgs({
-    messageId,
+  const completionArgs = syntheticCompletionArgs(messageId, {
     success,
     result: resultEvent?.result ?? S.rawOutput,
     error: resultEvent?.isError ? resultEvent.result : null,
@@ -1004,11 +992,6 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   if (S.pendingQuestionData) {
     completionArgs.pendingQuestion = S.pendingQuestionData;
   }
-  const turnLease = getCurrentTurnLease();
-  if (turnLease) {
-    completionArgs.turnId = turnLease.turnId;
-    completionArgs.leaseGeneration = turnLease.leaseGeneration;
-  }
   // Durability BEFORE completion, exactly as finalizeTurn does it: a synthetic
   // turn has no workflow, so the server-side pushSandboxBranch step never runs
   // for it and this is the ONLY push. Work committed here sat local for hours
@@ -1016,15 +999,10 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   // completion may immediately dequeue the next message, and a VM death after
   // that point erases anything not on origin (see turnPersist.ts).
   persistTurnWork();
-  appendTurnCheckpoint(completionArgs);
-  // completeSyntheticTurn closes this turn server-side. Any heartbeat still
-  // emitted under its lease after this point is answered `closed`; the daemon
-  // used to read that as a takeover and exit 400ms after minting the next
-  // synthetic turn, which then stalled with nobody heartbeating it (session
-  // 225, 21 Sep 2026). Release first so the reply is judged stale instead.
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
+  // completeSyntheticTurn closes this turn server-side; sendTurnCompletion
+  // releases the lease first so a late heartbeat is judged stale, not a
+  // takeover (session 225, 21 Sep 2026).
+  await sendTurnCompletion(
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
     completionArgs,
   );
@@ -1033,11 +1011,7 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   // so attaching to the latest message could put these captures on that turn.
   await uploadAndAttachSandboxMedia({ messageId });
   syncClaudeStateToPersist("daemon-synthetic-turn");
-  endWatchedTurn();
-  resetTurnState();
-  endTurnOwnership();
-  supervisor.settleTurn();
-  agentTurnOutput = "";
+  settleSyntheticTurn();
   log("daemon: synthetic turn finalized success=" + success);
 }
 
@@ -1054,13 +1028,9 @@ async function startRealAgentTurn(
     return;
   }
   startClaimedTurn(turn);
-  agentTurnStartedAt = Date.now();
-  sawFirstMessageThisTurn = { value: false };
-  sawAssistantThisTurn = { value: false };
-  beginWatchedTurn();
-  await agentRunner.setPermissionMode("default");
+  beginAgentTurnClock();
+  await agentRunner.resetPermissionMode();
   agentRunner.push(turn.prompt);
-  S.activeAttemptStartedAt = agentTurnStartedAt;
   agentTurnOutput = "";
   log("daemon: real turn started");
 }
@@ -1083,7 +1053,7 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   endWatchedTurn();
   log("daemon: cancel requested — interrupting in-flight turn");
   void agentRunner.interrupt().catch((error) => {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: interrupt failed — " + messageText);
   });
 }
@@ -1098,7 +1068,7 @@ function canTakeSteer(): boolean {
 function startClaimWatcher(agentRunner: WarmRunner): void {
   void (async () => {
     while (!supervisor.isStopping) {
-      if (callbackScriptWentStaleOnDisk()) {
+      if (callbackScriptWentStale()) {
         supervisor.noticeRefresh();
       }
       const refreshDecision = supervisor.decideRefresh({
@@ -1163,31 +1133,14 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
-          // claimPendingTurn already cleared session.pendingTurn atomically, so
-          // any branch that does not park/start the claim loses that prompt.
-          // Same-turn restages (workflow re-staging the prompt already running)
-          // must still be discarded — parking those replays the prompt twice.
-          const currentTurn = supervisor.currentTurn;
-          const currentLease = getCurrentTurnLease();
-          if (
-            shouldParkClaimedTurn({
-              hasActiveRealTurn: currentTurn?.kind === "real",
-              isCancellationInFlight: supervisor.isCancellationInFlight,
-              isFinalizing: false,
-              currentLeaseTurnId: currentLease?.turnId ?? null,
-              claimedLeaseTurnId: turn.turnLease?.turnId ?? null,
-            })
-          ) {
-            if (supervisor.parkClaim(turn)) {
-              wakeIdlePump?.();
-            } else {
-              log("daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
-            );
-          }
+          const routed = routeClaimedTurn({
+            turn,
+            hasActiveRealTurn: supervisor.currentTurn?.kind === "real",
+            isCancellationInFlight: supervisor.isCancellationInFlight,
+            park: () => supervisor.parkClaim(turn),
+            logPrefix: "daemon",
+          });
+          if (routed === "parked") wakeIdlePump?.();
         }
       } catch {
         /* retry on next poll */
@@ -1245,15 +1198,9 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
         return;
       }
       if (turnActive) {
-        if (supervisor.currentTurn?.kind === "synthetic") {
-          await failSyntheticTurn(
-            "The assistant ended without a reply. Please try again.",
-          );
-        } else {
-          await failTurnAndExit(
-            "The assistant ended without a reply. Please try again.",
-          );
-        }
+        await failCurrentTurn(
+          "The assistant ended without a reply. Please try again.",
+        );
       }
       return;
     }
@@ -1329,8 +1276,6 @@ async function runDaemonMessagePump(agentRunner: WarmRunner): Promise<void> {
       message,
       agentTurnOutput,
       agentTurnStartedAt,
-      sawFirstMessageThisTurn,
-      sawAssistantThisTurn,
     );
     agentTurnOutput = processed.output;
     if (!processed.isResult) {
@@ -1372,12 +1317,10 @@ function handleDaemonMessage(
   message: DaemonMessage,
   output: string,
   turnStartedAt: number,
-  sawFirstMessageThisTurn: { value: boolean },
-  sawAssistantThisTurn: { value: boolean },
 ): { output: string; isResult: boolean } {
   const messageType = typeof message.type === "string" ? message.type : "?";
-  if (!sawFirstMessageThisTurn.value) {
-    sawFirstMessageThisTurn.value = true;
+  if (!sawFirstMessageThisTurn) {
+    sawFirstMessageThisTurn = true;
     log(
       "daemon[timing]: first SDK message (" +
         messageType +
@@ -1386,8 +1329,8 @@ function handleDaemonMessage(
         "ms after turn start",
     );
   }
-  if (!sawAssistantThisTurn.value && messageType === "assistant") {
-    sawAssistantThisTurn.value = true;
+  if (!sawAssistantThisTurn && messageType === "assistant") {
+    sawAssistantThisTurn = true;
     log(
       "daemon[timing]: first assistant msg +" +
         (Date.now() - turnStartedAt) +
@@ -1415,15 +1358,7 @@ function createWarmAgentRunner(
   log("daemon: booting warm agent query()");
   const query = sdk.query({ prompt: iterable, options });
 
-  const pending: DaemonMessage[] = [];
-  let notify: (() => void) | null = null;
-  let pumpFinished = false;
-
-  const wakeWaiters = (): void => {
-    const resume = notify;
-    notify = null;
-    if (resume) resume();
-  };
+  const pending = createAsyncQueue<DaemonMessage>();
 
   void (async () => {
     try {
@@ -1432,37 +1367,18 @@ function createWarmAgentRunner(
         if (message === null) continue;
         noteHarnessInitMessage(message, query);
         pending.push(message);
-        wakeWaiters();
       }
     } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : String(error);
+      const messageText = errorText(error);
       log("daemon: agent query pump failed — " + messageText);
     } finally {
-      pumpFinished = true;
-      wakeWaiters();
+      pending.close();
     }
   })();
 
-  const waitMessage = async (): Promise<DaemonMessage | null> => {
-    while (pending.length === 0) {
-      if (pumpFinished) return null;
-      await new Promise<void>((resolve) => {
-        notify = resolve;
-      });
-      if (pending.length === 0 && pumpFinished) return null;
-    }
-    const message = pending.shift();
-    return message ?? null;
-  };
+  const waitMessage = (): Promise<DaemonMessage | null> => pending.next();
 
-  const drainPending = (): DaemonMessage[] => {
-    const drained = pending.slice();
-    pending.length = 0;
-    return drained;
-  };
-
-  const hasPending = (): boolean => pending.length > 0;
+  const hasPending = (): boolean => pending.size() > 0;
 
   const stopTask = async (taskId: string): Promise<void> => {
     if (typeof query.stopTask === "function") {
@@ -1480,16 +1396,16 @@ function createWarmAgentRunner(
     log("daemon: interrupt unavailable on SDK query handle");
   };
 
-  const setPermissionMode = async (mode: "plan" | "default"): Promise<void> => {
+  const resetPermissionMode = async (): Promise<void> => {
     if (typeof query.setPermissionMode !== "function") {
       log("daemon: setPermissionMode unavailable on SDK query handle");
       return;
     }
     try {
-      await query.setPermissionMode(mode === "plan" ? "plan" : "default");
-      log("daemon: permission mode set to " + mode);
+      await query.setPermissionMode("default");
+      log("daemon: permission mode set to default");
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorText(error);
       log("daemon: setPermissionMode failed — " + message);
     }
   };
@@ -1500,29 +1416,14 @@ function createWarmAgentRunner(
   return {
     push,
     waitMessage,
-    drainPending,
     hasPending,
     stopTask,
     interrupt,
     readUsage,
-    setPermissionMode,
+    resetPermissionMode,
   };
 }
 
-/**
- * Returns true when a newer callback bundle was uploaded while this daemon is
- * running — exit cleanly so the next prewarm can spawn with fresh code.
- */
-function callbackScriptWentStaleOnDisk(): boolean {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
-
-/**
- * Polls the claimPendingTurn mutation until a turn is staged for this session
- * (daemon-pull), then returns it. Returns null on idle timeout so the
- * daemon can exit and free the sandbox. The claim is atomic server-side, so a
- * prompt is handed to exactly one poll and never re-executed.
- */
 /**
  * Persistent warm-session daemon. Creates one `query()` and feeds it prompts
  * across turns so only the first turn pays the CLI/MCP/API boot; later turns
@@ -1542,58 +1443,22 @@ export async function runSdkDaemon(): Promise<void> {
     process.exit(1);
   }
 
-  // Single-daemon fence, part 1 (boot claim): if a live rival already owns the
-  // pidfile, exit without touching its marker files. First writer wins. A dead
-  // pid in the file (e.g. after KILL_PRIOR_AGENT_PROCESSES_CMD) is overwritten.
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths: daemonPaths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG,
-  });
-  if (bootClaim.status === "rival_alive") {
-    log(
-      `daemon: rival daemon pid=${bootClaim.rivalPid} already owns ${DAEMON_PID_FILE} — exiting`,
-    );
-    process.exit(0);
-  }
-
-  // Single-daemon fence, part 2: a launch racing past the boot claim (or an
-  // optsmismatch respawn) overwrites the pidfile; the deposed daemon must exit
-  // or it lives forever, double-claiming turns and flip-flopping the shared
-  // streaming row. Deferred while a real turn is active so work is never
-  // killed mid-flight — the rival idles on claim polling meanwhile. A missing
-  // pidfile also means deposed (a kill+respawn removed it; the successor will
-  // claim it).
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile,
-    hasActiveWork: () => supervisor.hasWork,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS,
-    log,
     logPrefix: "daemon",
+    hasActiveWork: () => supervisor.hasWork,
     onDeposedIdle: () => {
       process.exit(0);
     },
   });
-
-  const preflightOk = await runPreflightHeartbeat();
-  if (!preflightOk) {
-    log("daemon: preflight failed");
-    process.exit(1);
-  }
   startStreamingLoops();
 
-  // The GitHub token round trip (~0.3–0.45s) and the SDK import (~0.2s, CPU)
-  // are independent, so overlap them. The fetch must reach the wire first:
-  // the import blocks the event loop and, started in the same tick, held the
-  // request back until it finished (measured: no overlap at all). One
-  // setImmediate lets fetch send; then the overlap saved ~0.16s. The token
-  // still lands before buildSdkOptions copies process.env, since the CLI's
-  // tool shells inherit `GH_TOKEN` from it. refreshGithubToken never rejects.
-  const tokenRefreshed = refreshGithubToken();
-  await new Promise<void>((resolve) => setImmediate(resolve));
+  // bootWarmDaemon already refreshed the GitHub token alongside the preflight,
+  // so it lands before buildSdkOptions copies process.env (the CLI's tool
+  // shells inherit `GH_TOKEN` from it).
   // Session mode establishes/continues the Claude session id used for resume.
   const sessionMode = prepareClaudeSessionState();
-  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
+  const sdk = await loadSdk();
   const options = buildSdkOptions(sessionMode);
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
@@ -1616,28 +1481,23 @@ export async function runSdkDaemon(): Promise<void> {
   try {
     await runDaemonMessagePump(agentRunner);
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log("daemon: query failed — " + messageText);
     // Durability BEFORE completion, as failTurnAndExit does it: the SDK stream
     // died under a turn that may have committed work, and this daemon is
     // shutting down through the finally block below.
     persistTurnWork();
     try {
-      const completionArgs: JsonObject = {
-        [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+      // Not postClaimedTurnFailureCompletion: the stream can die on a
+      // synthetic turn or while idle, where no claim owns the turn.
+      const completionArgs = entityMutationArgs({
         success: false,
         result: null,
         error: "Agent SDK daemon failed: " + messageText,
         activityLog: serializeSteps(S.accumulatedSteps),
-        ...getCurrentTurnLease(),
-      };
-      appendTurnCheckpoint(completionArgs);
-      releaseTurnLeaseForCompletion();
-      await callConvexWithRetry(
-        "mutation",
-        COMPLETION_MUTATION ?? "",
-        completionArgs,
-      );
+      });
+      appendCurrentTurnLease(completionArgs);
+      await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
     } catch {
       /* ignore */
     }
@@ -1645,7 +1505,7 @@ export async function runSdkDaemon(): Promise<void> {
     // Only tear down markers this daemon still owns — after a fence
     // deposition a rival owns them (fence exits bypass this via
     // process.exit, but an SDK failure can reach here deposed).
-    cleanOwnedMarkers();
+    cleanOwnedMarkers(daemonPaths);
     await stopStreamingLoops();
   }
   process.exit(0);

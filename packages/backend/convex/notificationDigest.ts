@@ -1,13 +1,12 @@
 "use node";
 
-import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
 import { buildNotificationDigestHtml } from "./emailTemplates";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
 /**
  * Sends the daily unread-notification digest. For every user with an email and
  * at least one unread notification, builds an HTML summary and emails it.
@@ -18,7 +17,7 @@ export const sendDailyDigests = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const appUrl = requiredEnv("WEB_APP_URL");
+    const appUrl = getEvaBaseUrl();
     // Only summarise notifications from the past 24 hours, matching the daily
     // cadence — older unread items stay in the in-app inbox.
     const since = Date.now() - 24 * 60 * 60 * 1000;

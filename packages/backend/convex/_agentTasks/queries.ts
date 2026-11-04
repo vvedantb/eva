@@ -7,6 +7,7 @@ import { aiModelValidator, taskStatusValidator } from "../validators";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
   awaitingAnswerEntityIdsForRepo,
@@ -14,7 +15,6 @@ import {
   taskIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
-import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 
 /** Validator for a task document enriched with its latest run and busy state. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -227,8 +227,9 @@ async function activeTasksForUser(
       if (!(await hasRepoAccess(ctx.db, args.repoId, ctxUserId))) return [];
       repoIds = [args.repoId];
     } else {
-      const repos = await gatherAccessibleRepos(ctx.db, ctxUserId, true);
-      repoIds = repos.map((repo) => repo._id);
+      repoIds = (await gatherAccessibleRepos(ctx.db, ctxUserId, true)).map(
+        (repo) => repo._id,
+      );
     }
 
     const taskArrays = await Promise.all(

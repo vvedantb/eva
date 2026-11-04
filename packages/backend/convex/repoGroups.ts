@@ -3,8 +3,13 @@ import type { GenericDatabaseReader, StorageReader } from "convex/server";
 import { internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
-import { userCanAccessRepo } from "./_githubRepos/helpers";
+import {
+  authMutation,
+  authQuery,
+  getRepoWithAccess,
+  hasRepoAccess,
+  hasTeamAccess,
+} from "./functions";
 import { repoGroupFields } from "./validators";
 import {
   validateRepoGroupMembers,
@@ -57,16 +62,11 @@ export async function canAccessRepoGroup(
   group: Doc<"repoGroups">,
   userId: Id<"users">,
 ): Promise<boolean> {
-  if (group.createdBy === userId) return true;
-  const teamId = group.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
+  return (
+    group.createdBy === userId ||
+    (group.teamId !== undefined &&
+      (await hasTeamAccess(db, group.teamId, userId)))
+  );
 }
 
 /** Loads a group and throws unless the caller may see it. */
@@ -83,20 +83,6 @@ async function getGroupWithAccess(
   return group;
 }
 
-/** Loads one repo, throwing unless it exists and the caller may use it. */
-async function loadAccessibleRepo(
-  db: GenericDatabaseReader<DataModel>,
-  repoId: Id<"githubRepos">,
-  userId: Id<"users">,
-): Promise<Doc<"githubRepos">> {
-  const repo = await db.get(repoId);
-  if (!repo) throw new Error("Repository not found");
-  if (!(await userCanAccessRepo(db, userId, repo))) {
-    throw new Error("Not authorized");
-  }
-  return repo;
-}
-
 /** Loads every linked repo the caller may use, in the given order. */
 async function loadAccessibleRepos(
   db: GenericDatabaseReader<DataModel>,
@@ -105,7 +91,7 @@ async function loadAccessibleRepos(
 ): Promise<Array<Doc<"githubRepos">>> {
   const repos: Array<Doc<"githubRepos">> = [];
   for (const repoId of repoIds) {
-    repos.push(await loadAccessibleRepo(db, repoId, userId));
+    repos.push(await getRepoWithAccess(db, repoId, userId));
   }
   return repos;
 }
@@ -164,7 +150,7 @@ export const create = authMutation({
   handler: async (ctx, args) => {
     const name = args.name.trim();
     if (!name) throw new Error("Name is required");
-    const primary = await loadAccessibleRepo(
+    const primary = await getRepoWithAccess(
       ctx.db,
       args.primaryRepoId,
       ctx.userId,
@@ -230,7 +216,7 @@ export const update = authMutation({
     }
 
     if (args.linkedRepoIds !== undefined) {
-      const primary = await loadAccessibleRepo(
+      const primary = await getRepoWithAccess(
         ctx.db,
         group.primaryRepoId,
         ctx.userId,
@@ -251,7 +237,10 @@ export const update = authMutation({
 
     if (args.installDependencies !== undefined) {
       patch.installDependencies = args.installDependencies;
-      if ((group.installDependencies !== false) !== (args.installDependencies !== false)) {
+      if (
+        (group.installDependencies !== false) !==
+        (args.installDependencies !== false)
+      ) {
         inputsChanged = true;
       }
     }
@@ -349,7 +338,9 @@ async function loadGroupsForUser(
       );
       return {
         ...group,
-        primaryRepo: primaryDoc ? await toRepoSummary(storage, primaryDoc) : null,
+        primaryRepo: primaryDoc
+          ? await toRepoSummary(storage, primaryDoc)
+          : null,
         linkedRepos: await Promise.all(
           linkedDocs
             .filter((repo): repo is Doc<"githubRepos"> => repo !== null)
@@ -363,7 +354,8 @@ async function loadGroupsForUser(
 export const listMine = authQuery({
   args: {},
   returns: v.array(repoGroupWithMembersValidator),
-  handler: async (ctx) => await loadGroupsForUser(ctx.db, ctx.storage, ctx.userId),
+  handler: async (ctx) =>
+    await loadGroupsForUser(ctx.db, ctx.storage, ctx.userId),
 });
 
 /**
@@ -391,11 +383,7 @@ export async function getRepoGroupForSession(
   primaryRepoId: Id<"githubRepos">,
   userId: Id<"users">,
 ): Promise<Doc<"repoGroups">> {
-  const group = await db.get(id);
-  if (!group) throw new Error("Codebase group not found");
-  if (!(await canAccessRepoGroup(db, group, userId))) {
-    throw new Error("Not authorized");
-  }
+  const group = await getGroupWithAccess(db, id, userId);
   if (group.primaryRepoId !== primaryRepoId) {
     throw new Error(
       "This codebase group is saved for a different primary repository",

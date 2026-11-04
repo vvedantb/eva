@@ -103,7 +103,8 @@ describe("queued work counts as busy", () => {
       nodeActions.indexOf("function chatDelivery("),
       nodeActions.indexOf("export const orchestratorSendMessage"),
     );
-    expect(delivery.match(/^\s+isBusy,$/gm)?.length).toBe(3);
+    // Session, quick task and project chats share one resolveAgentDelivery call.
+    expect(delivery.match(/^\s+isBusy,$/gm)?.length).toBe(1);
   });
 });
 

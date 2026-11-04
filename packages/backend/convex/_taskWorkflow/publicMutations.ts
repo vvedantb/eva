@@ -2,14 +2,17 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, hasTaskAccess } from "../functions";
+import { authMutation, getActiveTaskRun, hasTaskAccess } from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
 import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
-import { turnCheckpointArgs, turnLeaseFenceArgs } from "../validators";
+import {
+  completionCallbackArgs,
+  turnLeaseFenceArgs,
+} from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
   clearStreamingActivity,
@@ -20,6 +23,7 @@ import {
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { errorText } from "../_shared/errors";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -58,12 +62,7 @@ export const handleCompletion = authMutation({
   args: {
     taskId: v.id("agentTasks"),
     runId: v.optional(v.id("agentRuns")),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     // The run's lease, sent by every callback launched with one.
     ...turnLeaseFenceArgs,
   },
@@ -146,7 +145,7 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(latestRunningRun._id, {
         finalizingAt: undefined,
       });
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = errorText(error);
       console.error(
         `[taskWorkflow] handleCompletion: workflow.sendEvent failed after finalizing; run=${String(args.runId)} task=${String(args.taskId)}: ${detail}`,
       );
@@ -181,16 +180,7 @@ export const cancelExecution = authMutation({
 
     await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
 
-    const run = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
+    const run = await getActiveTaskRun(ctx.db, args.taskId);
 
     if (run) {
       await closeOpenTurn(ctx, run._id, "cancelled");
@@ -226,4 +216,3 @@ export const cancelExecution = authMutation({
     return null;
   },
 });
-

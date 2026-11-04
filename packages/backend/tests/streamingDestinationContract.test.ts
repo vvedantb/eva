@@ -10,6 +10,9 @@ const executionSource = readSource(
 );
 const taskChatSource = readSource("../convex/agentTaskChatWorkflow.ts");
 const projectChatSource = readSource("../convex/projectChatWorkflow.ts");
+const chatDaemonLaunchSource = readSource(
+  "../convex/_chat/chatDaemonLaunch.ts",
+);
 const streamRouterSource = readSource("../callback-src/parse/streamRouter.ts");
 const generatedCallbackSource = readSource(
   "../convex/_sandbox_runtime/callbackScript.generated.ts",
@@ -46,10 +49,28 @@ describe("warm daemons stream to the UI's entity key", () => {
       const calls = prewarmCalls(source);
       expect(calls.length).toBe(expectedCalls);
       for (const call of calls) {
-        expect(call).toContain("streamingEntityId");
+        expect(
+          call.builder !== undefined || call.args.includes("streamingEntityId"),
+          "a hand-built prewarm payload dropped its stream id",
+        ).toBe(true);
       }
     },
   );
+
+  test.each([
+    {
+      builder: "export function taskChatDaemonLaunchArgs(",
+      streamId: "streamingEntityId: taskChatStreamEntityId(p.taskId)",
+    },
+    {
+      builder: "export function projectChatDaemonLaunchArgs(",
+      streamId: "streamingEntityId: projectChatStreamEntityId(p.projectId)",
+    },
+  ])("the shared $builder payload sets the prefixed stream id", (c) => {
+    expect(functionBody(chatDaemonLaunchSource, c.builder)).toContain(
+      c.streamId,
+    );
+  });
 });
 
 test("complete provider events request an immediate activity drain", () => {
@@ -94,10 +115,13 @@ function functionBody(source: string, declaration: string): string {
   return declaration + (nextAt < 0 ? rest : rest.slice(0, nextAt));
 }
 
-function prewarmCalls(source: string): string[] {
+/** Each prewarm payload: a literal, or a `*ChatDaemonLaunchArgs({...})` call. */
+function prewarmCalls(
+  source: string,
+): { builder: string | undefined; args: string }[] {
   return [
     ...source.matchAll(
-      /internal\.sandbox\.prewarmEntityDaemon,\s*\{([\s\S]*?)\n\s*\}\);/g,
+      /internal\.sandbox\.prewarmEntityDaemon,\s*(\w+ChatDaemonLaunchArgs\()?\{([\s\S]*?)\n\s*\}\)[;,]/g,
     ),
-  ].map((match) => match[1] ?? "");
+  ].map((match) => ({ builder: match[1], args: match[2] ?? "" }));
 }

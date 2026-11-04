@@ -1,11 +1,11 @@
 import { v } from "convex/values";
 import { authQuery, authMutation, getTaskWithAccess } from "./functions";
+import { taskDependencyFields } from "./validators";
 
 const dependencyValidator = v.object({
   _id: v.id("taskDependencies"),
   _creationTime: v.number(),
-  taskId: v.id("agentTasks"),
-  dependsOnId: v.id("agentTasks"),
+  ...taskDependencyFields,
 });
 
 /** Retrieves all dependency records for a given task. */

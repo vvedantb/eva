@@ -1,4 +1,4 @@
-const WORKSPACE_DIR = "/tmp/repo";
+import { PRIMARY_REPO_DIR as WORKSPACE_DIR } from "./workspaceLayout";
 
 /** POSIX-safe single quotes for a sandbox `cd` path. */
 export function shellSingleQuote(value: string): string {

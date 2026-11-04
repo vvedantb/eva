@@ -17,8 +17,8 @@ import {
   type ChangelogFeedback,
 } from "./_changelog/entry";
 import { hmacSha256Hex } from "./_shared/hmac";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
 /** Builds the signed one-click feedback link for one recipient of one changelog run. */
 async function changelogFeedbackUrlBuilder(
   runId: string,
@@ -52,7 +52,7 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = requiredEnv("WEB_APP_URL");
+    const appUrl = getEvaBaseUrl();
     // The weekly changelog returns structured JSON and gets the card layout;
     // every other automation (and legacy markdown changelogs) gets plain HTML.
     const changelog =

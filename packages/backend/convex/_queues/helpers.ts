@@ -21,8 +21,8 @@ import {
 } from "../_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
+  projectChatStreamEntityId,
+  taskChatStreamEntityId,
   trackAgentTaskChatWorkflow,
   trackProjectChatWorkflow,
   trackSessionChatWorkflow,
@@ -775,7 +775,7 @@ const projectChatQueueConfig: ChatQueueConfig<
   wakeSandbox: wakeProjectSandboxForQueue,
   backgroundAgents: (project) => project.backgroundAgents,
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
-  streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+  streamingEntityId: (id) => projectChatStreamEntityId(id),
   fallbackProvider: (project) => getAIModelProvider(project.model),
   // Owner-only, and a collaborator's stored override is dropped rather than
   // resolved: raising here would strand the whole queue on one bad row.
@@ -816,7 +816,7 @@ const projectChatQueueConfig: ChatQueueConfig<
       ctx,
       {
         entityId: id,
-        streamingEntityId: `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
+        streamingEntityId: projectChatStreamEntityId(id),
         next,
         sandboxId: project.sandboxId,
         repoId: project.repoId,
@@ -889,7 +889,7 @@ const taskChatQueueConfig: ChatQueueConfig<
   wakeSandbox: wakeTaskSandboxForQueue,
   backgroundAgents: (task) => task.backgroundAgents,
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
-  streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+  streamingEntityId: (id) => taskChatStreamEntityId(id),
   fallbackProvider: (task) => getAIModelProvider(task.model),
   // Owner-only, and a collaborator's stored override is dropped rather than
   // resolved: raising here would strand the whole queue on one bad row.
@@ -933,7 +933,7 @@ const taskChatQueueConfig: ChatQueueConfig<
       ctx,
       {
         entityId: id,
-        streamingEntityId: `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
+        streamingEntityId: taskChatStreamEntityId(id),
         next,
         sandboxId: task.sandboxId,
         repoId,

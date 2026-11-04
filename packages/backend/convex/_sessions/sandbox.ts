@@ -13,9 +13,10 @@ import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import { clearPendingQuestionsForEntity } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
@@ -26,6 +27,7 @@ import {
 } from "../_sessionChats/helpers";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
 import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   stopAlertText,
   stopReasonValidator,
@@ -41,6 +43,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+import { errorText } from "../_shared/errors";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
@@ -111,7 +114,10 @@ export async function requestSessionSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `session-startup-${session._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId: session._id }),
+  );
   const reusableSandboxId = session.sandboxId;
   console.log(
     `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -284,19 +290,23 @@ export async function requestSessionSandboxStop(
 
   // Clear leftover start steps so the chat does not re-show "Starting
   // sandbox..." / cold-storage copy while status is stopping.
-  await clearSandboxStartupActivity(ctx.db, `session-startup-${sessionId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
+  );
 
   for (const chat of chats) {
     if (!chat.syntheticTurnMessageId) continue;
     const streamingEntityId = sessionChatStreamingEntityId(chat._id);
-    const syntheticMessage = await ctx.db.get(chat.syntheticTurnMessageId);
-    if (syntheticMessage && syntheticMessage.finishedAt === undefined) {
-      const streaming = await ctx.db
-        .query("streamingActivity")
-        .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-        .first();
-      await finalizeCancelledAssistantMessage(ctx, syntheticMessage, streaming);
-    }
+    const streaming = await ctx.db
+      .query("streamingActivity")
+      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
+      .first();
+    await finalizeOpenSyntheticTurnOnCancel(
+      ctx,
+      chat.syntheticTurnMessageId,
+      streaming,
+    );
     await clearStreamingActivity(ctx, streamingEntityId);
     await ctx.db.patch(chat._id, { syntheticTurnMessageId: undefined });
   }
@@ -382,7 +392,7 @@ export const finalizeStopSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorText(err);
     }
     await ctx.runMutation(internal._sessions.sandbox.markSandboxClosed, {
       sessionId: args.sessionId,
@@ -520,7 +530,7 @@ export const sandboxReady = internalMutation({
     // User may have clicked Stop while start/resume was still running. Never
     // flip closed/stopping back to active — that left Vercel running with UI
     // showing stopped, or re-activated after stop confirmation.
-    if (session.status === "stopping" || session.status === "closed") {
+    if (isSandboxClosingStatus(session.status)) {
       console.log(
         `[sessions] sandboxReady ignored sessionId=${args.sessionId} status=${session.status} sandboxId=${args.sandboxId}`,
       );

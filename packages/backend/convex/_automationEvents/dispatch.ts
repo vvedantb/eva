@@ -28,6 +28,8 @@ import {
 } from "./events";
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
+import { findReposByOwnerAndName } from "../_githubRepos/helpers";
+import { chatEntityKindValidator } from "../validators";
 import { isTerminalRunStatus } from "../_automations/runStatus";
 
 /** Every run an automation made for one PR or issue. */
@@ -112,12 +114,7 @@ export const dispatch = internalMutation({
   args: { event: repoEventValidator },
   returns: v.null(),
   handler: async (ctx, { event }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", event.owner).eq("name", event.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, event);
 
     const matched: Array<{
       automation: Doc<"automations">;
@@ -262,7 +259,7 @@ export const settleEventRun = internalMutation({
 });
 
 const prChatValidator = v.object({
-  kind: v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
 });
@@ -397,12 +394,7 @@ export const noteCiPassed = internalMutation({
   args: { passed: ciPassedValidator },
   returns: v.null(),
   handler: async (ctx, { passed }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", passed.owner).eq("name", passed.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, passed);
     const automationIds: Array<Id<"automations">> = [];
     let installationId: number | null = null;
     for (const repo of repos) {

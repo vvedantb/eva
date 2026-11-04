@@ -7,6 +7,7 @@ const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 const sessions = readSource("_sandbox_runtime/sessions.ts");
 
 const CREATE = "createSandboxAndPrepareRepo(";
+const TEARDOWN = "deleteSandboxAndCredentials(";
 
 /**
  * Every start path creates a sandbox, then runs setup that can throw: ref sync,
@@ -21,48 +22,50 @@ describe("a start that fails does not leak its new sandbox", () => {
   /** A new start path added without cleanup is the whole failure mode. */
   test("every create site is accounted for", () => {
     expect(owners.map((owner) => owner.name).sort()).toEqual([
-      "prepareProjectPreviewSandboxInternal",
+      "preparePreviewSandboxInternal",
       "prepareSessionSandboxInternal",
-      "prepareTaskPreviewSandboxInternal",
     ]);
   });
 
-  test.each([
-    "prepareSessionSandboxInternal",
-    "prepareTaskPreviewSandboxInternal",
-  ])("%s deletes the sandbox it created", (name) => {
+  /**
+   * The shared teardown deletes the VM and its credential row; a deleted VM
+   * whose credential row survives leaves a dangling secret.
+   */
+  test.each(["prepareSessionSandboxInternal", "preparePreviewSandboxInternal"])("%s deletes the sandbox it created and its credentials", (name) => {
     const handler = catchBodyOf(owners, name);
-    expect(handler, `${name} no longer deletes on failure`).toMatch(
-      /await \w+\.delete\(\)/,
-    );
-  });
-
-  /** A deleted VM whose credential row survives leaves a dangling secret. */
-  test.each([
-    "prepareSessionSandboxInternal",
-    "prepareTaskPreviewSandboxInternal",
-  ])("%s drops the sandbox git credentials too", (name) => {
-    expect(catchBodyOf(owners, name)).toContain(
-      "internal.sandboxGitCredentials.deleteBySandboxId",
+    expect(handler, `${name} no longer deletes on failure`).toContain(
+      TEARDOWN,
     );
   });
 
   /**
    * The exception, and it has to stay a deliberate one: the project path records
    * its sandbox on the project straight after create, so a failure leaves a
-   * tracked sandbox rather than an orphan.
+   * tracked sandbox rather than an orphan. Tasks have no such record, so they
+   * delete.
    */
   test("the project path records its sandbox instead of deleting it", () => {
-    const body = bodyOf(owners, "prepareProjectPreviewSandboxInternal");
+    const body = bodyOf(owners, "preparePreviewSandboxInternal");
     const createAt = body.indexOf(CREATE);
-    const recordAt = body.indexOf(
-      "internal.projects.projectSandboxAllocated",
-      createAt,
-    );
     expect(
-      recordAt,
-      "the project path now leaks on setup failure",
+      body.indexOf("hooks.afterCreate(", createAt),
+      "the preview path no longer records its sandbox after create",
     ).toBeGreaterThan(createAt);
+    expect(catchBodyOf(owners, "preparePreviewSandboxInternal")).toContain(
+      "if (hooks.deleteOnSetupFailure) {",
+    );
+
+    const hooks = definitionOf("previewOwnerHooks");
+    const projectAt = hooks.indexOf("const { projectId } = owner;");
+    expect(projectAt, "the project arm moved").toBeGreaterThan(-1);
+    const taskArm = hooks.slice(0, projectAt);
+    const projectArm = hooks.slice(projectAt);
+    expect(taskArm).toContain("deleteOnSetupFailure: true");
+    expect(projectArm).toContain("deleteOnSetupFailure: false");
+    expect(
+      projectArm,
+      "the project path now leaks on setup failure",
+    ).toContain("internal.projects.projectSandboxAllocated");
   });
 
   /**
@@ -74,7 +77,7 @@ describe("a start that fails does not leak its new sandbox", () => {
     const handler = catchBodyOf(owners, "prepareSessionSandboxInternal");
     const guardAt = handler.indexOf("if (earlyReadyEmitted) {");
     expect(guardAt, "the keep-alive guard moved").toBeGreaterThan(-1);
-    const deleteAt = handler.search(/await \w+\.delete\(\)/);
+    const deleteAt = handler.indexOf(TEARDOWN);
     expect(deleteAt, "the delete moved").toBeGreaterThan(-1);
     expect(guardAt, "the guard must come first").toBeLessThan(deleteAt);
     expect(
@@ -90,18 +93,24 @@ describe("a start that fails does not leak its new sandbox", () => {
  * laid out.
  */
 function createSites(): { name: string; body: string }[] {
+  return definitions().filter((definition) => definition.body.includes(CREATE));
+}
+
+function definitions(): { name: string; body: string }[] {
   const boundaries = [
     ...sessions.matchAll(/\n(?:export )?(?:async )?(?:function|const) (\w+)/g),
   ];
-  return boundaries
-    .map((match, index) => ({
-      name: match[1],
-      body: sessions.slice(
-        match.index,
-        boundaries[index + 1]?.index ?? sessions.length,
-      ),
-    }))
-    .filter((definition) => definition.body.includes(CREATE));
+  return boundaries.map((match, index) => ({
+    name: match[1],
+    body: sessions.slice(
+      match.index,
+      boundaries[index + 1]?.index ?? sessions.length,
+    ),
+  }));
+}
+
+function definitionOf(name: string): string {
+  return bodyOf(definitions(), name);
 }
 
 function bodyOf(

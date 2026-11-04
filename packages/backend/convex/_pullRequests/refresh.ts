@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
+import { errorText } from "../_shared/errors";
 
 /**
  * Reads one tracked PR's live state, title and branches from GitHub and writes
@@ -45,7 +46,7 @@ export const refreshFromGitHub = internalAction({
       });
     } catch (error) {
       console.error(
-        `[pullRequests] refresh failed for ${row.prUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        `[pullRequests] refresh failed for ${row.prUrl}: ${errorText(error)}`,
       );
     }
     return null;

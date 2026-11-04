@@ -13,7 +13,7 @@
  * - Lifecycle: Vercel is persistent-by-default and the SDK auto-resumes on
  *   `get` and on any exec. Eva turns both off (`resume: false`,
  *   `withoutLazyResume`), so only `start()` wakes a stopped sandbox.
- *   `archive()` maps to `stop()` (stop auto-snapshots).
+ *   `stop()` auto-snapshots (no separate archive).
  * - git: no native git client — implemented over the shell via runCommand.
  * - PTY: implemented, but NOT via the neutral `SandboxPty` interface, so
  *   `this.pty` stays undefined here. Vercel's PTY is a client-connect WebSocket
@@ -52,20 +52,16 @@ import {
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
-import { EVA_ENV_FILE } from "./vercelEnvFile";
+import { EVA_ENV_SOURCE_CMD } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "../_sandbox_runtime/packageManager";
-
-export {
-  EVA_ENV_FILE,
-  ensureEvaEnvInteractiveHookScript,
-  renderEvaEnvFile,
-  tmuxNewSessionWithEvaEnv,
-} from "./vercelEnvFile";
+import { PRIMARY_REPO_DIR } from "../_sandbox_runtime/workspaceLayout";
+import { errorText } from "../_shared/errors";
+import { sleep } from "../_shared/async";
 
 /** Vercel API credentials, passed on every SDK call. */
 interface VercelCredentials {
@@ -93,7 +89,7 @@ const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 const VERCEL_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
 
 /** Prefix that sources the eva env file (if present) before a command. */
-const SOURCE_ENV = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE};`;
+const SOURCE_ENV = `${EVA_ENV_SOURCE_CMD};`;
 /** Vercel exposes at most 4 ports; default assumes Next on 3000 + Supabase API. */
 const MAX_PORTS = 4;
 const STOP_CONFIRMATION_TIMEOUT_MS = 180_000;
@@ -165,7 +161,7 @@ function extractApiErrorDetail(e: unknown): string {
   try {
     return JSON.stringify(e, Object.getOwnPropertyNames(e)).slice(0, 1000);
   } catch {
-    return e instanceof Error ? e.message : String(e);
+    return errorText(e);
   }
 }
 
@@ -633,7 +629,7 @@ class VercelSandboxHandle implements SandboxHandle {
       };
     } catch (e) {
       console.log(
-        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${e instanceof Error ? e.message : String(e)}`,
+        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${errorText(e)}`,
       );
       return { kind: "error" };
     }
@@ -757,9 +753,7 @@ class VercelSandboxHandle implements SandboxHandle {
         }
       }
 
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, STOP_CONFIRMATION_POLL_MS);
-      });
+      await sleep(STOP_CONFIRMATION_POLL_MS);
       await this.refresh();
       resolved = await this.resolveSessionStatus();
     }
@@ -901,7 +895,7 @@ class VercelSandboxHandle implements SandboxHandle {
       }
       // Still resolving (listSessions error / race) — do not resume yet.
       if (resolved.kind === "unknown") {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await sleep(500);
         await this.refresh();
         continue;
       }
@@ -917,7 +911,7 @@ class VercelSandboxHandle implements SandboxHandle {
         observed = this.state;
         if (observed === "running") return;
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
+        lastError = errorText(e);
         lastErrorStatus = vercelHttpStatus(e);
         lastErrorDetail = extractApiErrorDetail(e);
         // SDK may reject resume while stop finishes even if listSessions lagged.
@@ -937,7 +931,7 @@ class VercelSandboxHandle implements SandboxHandle {
           // Stop confirmed terminal — loop around and retry the resume.
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await sleep(500);
       await this.refresh();
     }
     throw new SandboxProviderError(
@@ -1049,10 +1043,6 @@ class VercelSandboxHandle implements SandboxHandle {
       keepLastSnapshots: KEEP_LAST_SNAPSHOTS,
     });
   }
-  async archive(): Promise<void> {
-    // No separate cold-storage archive on Vercel — stop() auto-snapshots.
-    await this.stop();
-  }
 
   /**
    * Delete every snap_* listed for this sandbox name, optionally keeping seed
@@ -1084,9 +1074,9 @@ class VercelSandboxHandle implements SandboxHandle {
         deleted += 1;
       } catch (error) {
         console.warn(
-          `[vercel] snapshot.delete failed sandbox=${sandboxName} snapshotId=${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `[vercel] snapshot.delete failed sandbox=${sandboxName} snapshotId=${meta.id}: ${errorText(
+            error,
+          )}`,
         );
       }
     }
@@ -1103,9 +1093,9 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.sandbox.delete();
     } catch (error) {
       console.warn(
-        `[vercel] sandbox.delete failed name=${sandboxName}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `[vercel] sandbox.delete failed name=${sandboxName}: ${errorText(
+          error,
+        )}`,
       );
     }
     // Cascade is unreliable — sweep again for anything left after sandbox gone.
@@ -1160,7 +1150,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(driveCacheTeardownScript(), { timeoutSeconds: 30 });
     } catch (error) {
       console.warn(
-        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${errorText(error)}`,
       );
     }
 
@@ -1171,7 +1161,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(snapshotPruneScript(), { timeoutSeconds: 120 });
     } catch (error) {
       console.warn(
-        `[vercel] snapshot prune failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] snapshot prune failed on ${this.id} (continuing): ${errorText(error)}`,
       );
     }
 
@@ -1365,14 +1355,14 @@ class VercelSandboxClient implements SandboxClient {
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
       // (createSandbox) fire onSandboxAcquired first, then write EVA_ENV_FILE.
-      // Fresh sandboxes don't include /tmp/repo on any base image. Every execHandle call
-      // defaults to that cwd (WORKSPACE_DIR = "/tmp/repo" in helpers.ts), so
+      // Fresh sandboxes don't include PRIMARY_REPO_DIR on any base image. Every
+      // execHandle call defaults to that cwd (helpers.WORKSPACE_DIR), so
       // any command with no explicit cwd returns HTTP 400 until the directory
       // exists. Pre-create it here so git config / ensureDockerDaemon calls in
       // createSandbox succeed. Snapshot-restored sandboxes already have the
       // directory baked in, so this is only needed for fresh ones.
       if (!params.snapshot && !params.forkFrom) {
-        await sandbox.mkDir("/tmp/repo");
+        await sandbox.mkDir(PRIMARY_REPO_DIR);
       }
       return new VercelSandboxHandle(sandbox, this.creds);
     } catch (e) {

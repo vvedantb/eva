@@ -170,7 +170,7 @@ describe("public functions refuse callers without repo access", () => {
           title: "Grab",
           taskIds: [f.taskId],
         }),
-      ).rejects.toThrow("Tasks must belong to this repository");
+      ).rejects.toThrow("Task does not belong to this repository");
     },
     TIMEOUT_MS,
   );
@@ -179,12 +179,6 @@ describe("public functions refuse callers without repo access", () => {
     "sessions and tasks",
     async () => {
       const f = await fixture();
-      await expect(
-        f.stranger.mutation(api.sessions.updatePtySession, {
-          id: f.sessionId,
-          ptySessionId: undefined,
-        }),
-      ).rejects.toThrow("Not authorized");
       expect(
         await f.stranger.query(api.agentTasks.getStatusesByIds, {
           ids: [f.taskId],

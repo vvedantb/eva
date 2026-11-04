@@ -1,14 +1,12 @@
 "use node";
 
 import { v } from "convex/values";
-import { z } from "zod";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  resolveSandboxCredentials,
+  resolveSandboxCredentialsOnly,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
-import { getInstallationToken } from "./githubAuth";
 import {
   buildConfigFileDownloadCommands,
   filterDownloadableConfigFiles,
@@ -26,8 +24,10 @@ import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
 import {
   COREPACK_SANDBOX_ENV,
+  EVA_ENV_FILE,
   renderEvaEnvFile,
 } from "./_sandbox/vercelEnvFile";
+import { PRIMARY_REPO_DIR } from "./_sandbox_runtime/workspaceLayout";
 import {
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
@@ -53,6 +53,7 @@ import {
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "./_sandbox_runtime/packageManager";
+import { errorText } from "./_shared/errors";
 
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
 const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
@@ -173,7 +174,7 @@ function seededRuntimeStateCaptureLines(
     // whose network was pruned by a prior `supabase stop`).
     "  if ! { docker ps -a --filter name=supabase_db_web -q | grep -q . && docker start supabase_db_web >/dev/null 2>&1; }; then",
     "    docker ps -aq --filter name=supabase | xargs -r docker rm -f",
-    "    ( cd /tmp/repo && pnpm start-db ) || true",
+    `    ( cd ${PRIMARY_REPO_DIR} && pnpm start-db ) || true`,
     "  fi",
     "fi",
     'if [ "$REQUIRE_SUPABASE_DUMP" = "1" ]; then',
@@ -190,98 +191,6 @@ function seededRuntimeStateCaptureLines(
     "fi",
   ];
 }
-
-// Bump when the Vercel seed-prep toolchain/build inputs change in a way that
-// should invalidate existing image fingerprints (see getImageFingerprint)
-// even though repo/config inputs are unchanged.
-const IMAGE_DEF_VERSION = 2;
-
-// Boundary schema for the small GitHub JSON responses this module reads.
-const shaResponseSchema = z.object({ sha: z.string() });
-
-/** Manifest files that affect baked install output (Node lockfiles + Python). */
-const FINGERPRINT_MANIFEST_FILES = [
-  "pnpm-lock.yaml",
-  "package-lock.json",
-  "yarn.lock",
-  "requirements.txt",
-  "pyproject.toml",
-] as const;
-
-/**
- * Fingerprint of the Image inputs: every dependency manifest blob sha found on
- * the build branch (Node lockfiles + Python), the build commands, the
- * config-file blobs baked into the image, and IMAGE_DEF_VERSION. When this
- * matches the value stored at the last successful Image build, the workflow
- * skips the ~11-15m rebuild — the output would be byte-identical (sandboxes
- * fetch fresh branches at boot, so a repo checkout that is a few commits stale
- * costs nothing; node_modules / site-packages only drift when a manifest
- * changes, which changes this fingerprint). Returns null when the inputs
- * cannot be determined (e.g. no manifests found) — callers must treat null as
- * "always rebuild".
- */
-export const getImageFingerprint = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args): Promise<string | null> => {
-    const config = await ctx.runQuery(
-      internal.repoSnapshots.getRepoSnapshotInternal,
-      { repoSnapshotId: args.repoSnapshotId },
-    );
-    if (!config) return null;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: config.repoId,
-    });
-    if (!repo) return null;
-    const branch = config.workflowRef ?? "main";
-    const manifestShas: string[] = [];
-    try {
-      const token = await getInstallationToken(repo.installationId);
-      // Fixed, small manifest list: fetch in parallel, keep the list order.
-      const shas = await Promise.all(
-        FINGERPRINT_MANIFEST_FILES.map(async (manifest) => {
-          const resp = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/vnd.github+json",
-              },
-            },
-          );
-          if (!resp.ok) return null;
-          const parsed = shaResponseSchema.safeParse(await resp.json());
-          return parsed.success ? `${manifest}:${parsed.data.sha}` : null;
-        }),
-      );
-      for (const sha of shas) if (sha !== null) manifestShas.push(sha);
-    } catch (e) {
-      console.error(
-        `[snapshot] image fingerprint: manifest lookup failed: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      );
-      return null;
-    }
-    if (manifestShas.length === 0) return null;
-    const fileKeys: string[] = await ctx.runQuery(
-      internal.sandboxConfigFiles.getConfigFileKeys,
-      { repoId: config.repoId },
-    );
-    const payload = JSON.stringify({
-      v: IMAGE_DEF_VERSION,
-      branch,
-      manifestShas,
-      buildCommands: config.buildCommands ?? [],
-      files: fileKeys,
-    });
-    let hash = 5381;
-    for (let i = 0; i < payload.length; i++) {
-      hash = (hash * 33) ^ payload.charCodeAt(i);
-    }
-    return `img-${(hash >>> 0).toString(36)}-${payload.length}`;
-  },
-});
 
 /**
  * Seeded-snapshot build — LAUNCH step. Composes the app's whole seed sequence
@@ -313,7 +222,7 @@ export const launchSeedRun = internalAction({
   handler: async (ctx, args): Promise<null> => {
     // Validates Vercel credentials are configured for this repo; the sandbox
     // handle itself is resolved separately below via getSandboxHandle.
-    await resolveSandboxCredentials(ctx, args.repoId);
+    await resolveSandboxCredentialsOnly(ctx, args.repoId);
     // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
     // the compiled floor made every launch npm-install the latest Claude CLI
     // before its daemon could start: ~5-7s on half of all first turns.
@@ -451,7 +360,7 @@ export const launchSeedRun = internalAction({
       'echo "SEEDRUN-STAGE:path-setup"',
       "echo 'export PATH=\"/home/eva/.local/bin:/usr/local/bin:$PATH\"' | sudo tee /etc/profile.d/eva-path.sh >/dev/null && sudo chmod 644 /etc/profile.d/eva-path.sh",
       'grep -qF "/home/eva/.local/bin" /home/eva/.bashrc 2>/dev/null || echo \'export PATH="/home/eva/.local/bin:/usr/local/bin:$PATH"\' >> /home/eva/.bashrc',
-      'grep -qF "/home/eva/.local/bin" /vercel/sandbox/.eva-env.sh 2>/dev/null || echo \'export PATH="/home/eva/.local/bin:/usr/local/bin:$PATH"\' >> /vercel/sandbox/.eva-env.sh',
+      `grep -qF "/home/eva/.local/bin" ${EVA_ENV_FILE} 2>/dev/null || echo 'export PATH="/home/eva/.local/bin:/usr/local/bin:$PATH"' >> ${EVA_ENV_FILE}`,
     );
 
     // Config files (data.sql, backup zips) are NOT baked into a fresh Vercel
@@ -488,13 +397,13 @@ export const launchSeedRun = internalAction({
     // ---- update: latest code + fresh deps/artifacts ----
     lines.push(
       'echo "SEEDRUN-STAGE:update"',
-      'cd /tmp/repo || { echo "SEEDRUN-FAILED:no-repo"; exit 1; }',
+      `cd ${PRIMARY_REPO_DIR} || { echo "SEEDRUN-FAILED:no-repo"; exit 1; }`,
       `( git checkout -f ${args.branch} 2>/dev/null || git checkout -fb ${args.branch} origin/${args.branch} ) && git reset --hard origin/${args.branch} || { echo "SEEDRUN-FAILED:git-reset"; exit 1; }`,
     );
     lines.push(
       // Mirror config files into the repo tree (staged outside the repo so
       // they survive git clean).
-      "cp -a /home/eva/sandbox-config/. /tmp/repo/ 2>/dev/null || true",
+      `cp -a /home/eva/sandbox-config/. ${PRIMARY_REPO_DIR}/ 2>/dev/null || true`,
       'echo "SEEDRUN-STAGE:install"',
       // Node: lockfile at repo root picks the manager. pnpm stays fatal (existing
       // repos); yarn/npm warn and continue so polyglot / legacy roots can still
@@ -626,7 +535,7 @@ export const launchSeedRun = internalAction({
     // Functions land on the local backend only now, once the seeds have set the
     // env vars its auth config needs — see buildConvexPostSeedPushLines.
     if ((backgroundCommands ?? []).some(isConvexBackendCommand)) {
-      lines.push(...buildConvexPostSeedPushLines("/tmp/repo"));
+      lines.push(...buildConvexPostSeedPushLines(PRIMARY_REPO_DIR));
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
     // Marker so a sandbox booting from the captured snapshot skips the seed.
@@ -720,7 +629,7 @@ export const fetchSeedDiagnostics = internalAction({
         90,
       );
     } catch (e) {
-      return `diagnostics unavailable: ${e instanceof Error ? e.message : String(e)}`;
+      return `diagnostics unavailable: ${errorText(e)}`;
     }
   },
 });
@@ -865,7 +774,7 @@ export const deleteSeedPrepSandbox = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
+    const credentials = await resolveSandboxCredentialsOnly(ctx, args.repoId);
     const client = getSandboxClient(credentials);
     try {
       const handle = await client.get(args.sandboxId);
@@ -878,9 +787,9 @@ export const deleteSeedPrepSandbox = internalAction({
     } catch (e) {
       // Best-effort: log but do not fail the build if delete fails.
       console.error(
-        `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${errorText(
+          e,
+        )}`,
       );
     }
     return null;
@@ -913,7 +822,7 @@ export const triggerSeededSnapshot = internalAction({
   // to the DB.
   returns: v.object({ snapshotId: v.string() }),
   handler: async (ctx, args): Promise<{ snapshotId: string }> => {
-    const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
+    const credentials = await resolveSandboxCredentialsOnly(ctx, args.repoId);
     const client = getSandboxClient(credentials);
     const handle = await client.get(args.sandboxId);
     // The seeded snapshot is the base image for every sandbox of this repo —
@@ -944,7 +853,7 @@ export const pollSeededSnapshotState = internalAction({
   },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
-    const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
+    const credentials = await resolveSandboxCredentialsOnly(ctx, args.repoId);
     const client = getSandboxClient(credentials);
     // Not registered yet (or a transient lookup miss) → treat as still pending.
     const snapshot = await client.getSnapshot(args.seededName);
@@ -971,7 +880,7 @@ export const stopAllRepoSandboxes = internalAction({
     if (args.seedableRepoIds.length === 0) return null;
     const primaryRepoId = args.seedableRepoIds[0];
     try {
-      const { credentials } = await resolveSandboxCredentials(
+      const credentials = await resolveSandboxCredentialsOnly(
         ctx,
         primaryRepoId,
       );
@@ -1004,9 +913,9 @@ export const stopAllRepoSandboxes = internalAction({
           deleted++;
         } catch (err) {
           console.warn(
-            `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
+            `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${errorText(
+              err,
+            )}`,
           );
         }
       }
@@ -1015,9 +924,9 @@ export const stopAllRepoSandboxes = internalAction({
       );
     } catch (e) {
       console.error(
-        `[snapshot] stopAllRepoSandboxes: best-effort sweep failed: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `[snapshot] stopAllRepoSandboxes: best-effort sweep failed: ${errorText(
+          e,
+        )}`,
       );
     }
     return null;
@@ -1035,7 +944,7 @@ export const deleteSeededSnapshot = internalAction({
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
     try {
-      const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
+      const credentials = await resolveSandboxCredentialsOnly(ctx, args.repoId);
       const client = getSandboxClient(credentials);
       const deleted = await client.deleteSnapshot(args.snapshotName);
       // Explicit confirmation so "keep-last" / rebuild deletion can be
@@ -1047,9 +956,9 @@ export const deleteSeededSnapshot = internalAction({
       );
     } catch (e) {
       console.error(
-        `[snapshot] deleteSeededSnapshot: failed to delete ${args.snapshotName}: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `[snapshot] deleteSeededSnapshot: failed to delete ${args.snapshotName}: ${errorText(
+          e,
+        )}`,
       );
     }
     return null;
@@ -1083,7 +992,7 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     deletedCount: number;
     skippedCount: number;
   }> => {
-    const { credentials } = await resolveSandboxCredentials(ctx, args.repoId);
+    const credentials = await resolveSandboxCredentialsOnly(ctx, args.repoId);
     const creds = {
       token: credentials.token,
       teamId: credentials.teamId,
@@ -1151,9 +1060,9 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
         deletedCount += 1;
       } catch (error) {
         console.warn(
-          `[snapshot] purgeUnreferencedVercelSnapshots: failed ${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `[snapshot] purgeUnreferencedVercelSnapshots: failed ${meta.id}: ${errorText(
+            error,
+          )}`,
         );
       }
     }
@@ -1230,7 +1139,7 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
     }
 
     try {
-      const { credentials } = await resolveSandboxCredentials(ctx, repoId);
+      const credentials = await resolveSandboxCredentialsOnly(ctx, repoId);
       const projectKey = `${credentials.teamId}:${credentials.projectId}`;
       if (!projectsSeen.has(projectKey)) {
         projectsSeen.add(projectKey);
@@ -1245,9 +1154,9 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
       }
     } catch (err) {
       console.warn(
-        `[purgeUnreferencedVercelSnapshotsAll] skip repo=${repoId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `[purgeUnreferencedVercelSnapshotsAll] skip repo=${repoId}: ${errorText(
+          err,
+        )}`,
       );
     }
 

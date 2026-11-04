@@ -4,29 +4,26 @@ import type {
   GenericDatabaseReader,
   GenericDatabaseWriter,
 } from "convex/server";
-import { projectFields, conversationMessageValidator } from "../validators";
+import { projectDetailsFields, projectFields } from "../validators";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
 type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
 
 export { buildProjectBranchName } from "../_git/branchNames";
 
-/** Convex validator for a project document with its conversation history and generated spec. */
-export const projectWithDetailsValidator = v.object({
+/** Convex validator for a project summary (excludes conversation history and generated spec). */
+export const projectSummaryValidator = v.object({
   _id: v.id("projects"),
   _creationTime: v.number(),
   ...projectFields,
-  generatedSpec: v.optional(v.string()),
-  conversationHistory: v.array(conversationMessageValidator),
 });
 
-const {
-  conversationHistory: _ch,
-  generatedSpec: _gs,
-  ...projectSummaryFields
-} = projectWithDetailsValidator.fields;
-/** Convex validator for a project summary (excludes conversation history and generated spec). */
-export const projectSummaryValidator = v.object(projectSummaryFields);
+/** Convex validator for a project document with its conversation history and generated spec. */
+export const projectWithDetailsValidator = v.object({
+  ...projectSummaryValidator.fields,
+  generatedSpec: projectDetailsFields.generatedSpec,
+  conversationHistory: projectDetailsFields.conversationHistory,
+});
 
 export const projectPlanningModeValidator = v.union(
   v.literal("interview"),
@@ -35,7 +32,7 @@ export const projectPlanningModeValidator = v.union(
 
 /** List rows always include a resolved planning mode (stored or inferred). */
 export const projectListItemValidator = v.object({
-  ...projectSummaryFields,
+  ...projectSummaryValidator.fields,
   planningMode: projectPlanningModeValidator,
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),

@@ -1,4 +1,4 @@
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 
 /**
  * Every branch Eva creates and publishes is namespaced under this prefix, and
@@ -30,6 +30,25 @@ export function buildProjectBranchName(
     return `${EVA_BRANCH_PREFIX}project-${projectId}`;
   }
   return `${EVA_BRANCH_PREFIX}project-${projectId}-v${version}`;
+}
+
+/** A project's stored branch, else the builder name for its branch version. */
+export function resolveProjectBranchName(
+  projectId: Id<"projects">,
+  project:
+    | Pick<Doc<"projects">, "branchName" | "branchVersion">
+    | null
+    | undefined,
+): string {
+  return (
+    project?.branchName ??
+    buildProjectBranchName(projectId, project?.branchVersion)
+  );
+}
+
+/** Standalone task branch. */
+export function buildTaskBranchName(taskId: Id<"agentTasks">): string {
+  return `${EVA_BRANCH_PREFIX}task-${String(taskId)}`;
 }
 
 /** Converts text to a URL-safe lowercase slug, truncated to 50 characters. */

@@ -35,7 +35,12 @@ import type {
   ProviderAttemptResult,
   ResultEvent,
 } from "../types.js";
-import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
+import {
+  attemptElapsedMs,
+  isJsonObject,
+  readResponseJson,
+  tryParseJsonObject,
+} from "../utils.js";
 import {
   existsSync,
   mkdirSync,
@@ -46,12 +51,16 @@ import {
 } from "fs";
 import { createHash } from "crypto";
 
-function parseJsonObject(line: string): JsonObject | null {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
+/** JSON objects from each non-blank line; malformed and non-object lines are skipped. */
+function parseJsonLines(output: string): JsonObject[] {
+  const objects: JsonObject[] = [];
+  for (const line of output.split("\n")) {
+    const clean = line.trim();
+    if (!clean) continue;
+    const parsed = tryParseJsonObject(clean);
+    if (parsed) objects.push(parsed);
   }
-  return parsed;
+  return objects;
 }
 
 /** Idempotent done-file writer. */
@@ -126,6 +135,30 @@ export function buildClaudeShapedResult(args: {
   });
 }
 
+/** One codex turn's usage as the Claude-shaped `result` event the server reads. */
+export function buildCodexResultEvent(usage: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+}): string {
+  return buildClaudeShapedResult({
+    provider: "codex",
+    totalCostUsd: computeCodexCostUsd(
+      normalizedCodexModel,
+      usage.inputTokens,
+      usage.cachedInputTokens,
+      usage.outputTokens,
+    ),
+    durationMs: attemptElapsedMs(),
+    inputTokens: Math.max(0, usage.inputTokens - usage.cachedInputTokens),
+    outputTokens: usage.outputTokens,
+    cacheReadInputTokens: usage.cachedInputTokens,
+    cacheCreationInputTokens: usage.cacheWriteInputTokens,
+    model: normalizedCodexModel,
+  });
+}
+
 type SyntheticResult = {
   sawResult: boolean;
   resultText: string;
@@ -167,62 +200,46 @@ function readSyntheticResult(output: string): SyntheticResult {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   };
   const assistantParts: string[] = [];
-  for (const line of output.split("\n")) {
-    const clean = line.trim();
-    if (!clean) continue;
-    try {
-      const parsed = parseJsonObject(clean);
-      if (!parsed) continue;
-      if (parsed.type === "result") {
-        found.sawResult = true;
-        found.isError = Boolean(parsed.is_error);
-        found.durationMs = readNumberField(parsed, "duration_ms");
-        found.totalCostUsd = readNumberField(parsed, "total_cost_usd");
-        found.model = typeof parsed.model === "string" ? parsed.model : "";
-        if (typeof parsed.result === "string") {
-          found.resultText = parsed.result;
-        } else if (parsed.result !== undefined) {
-          found.resultText = JSON.stringify(parsed.result);
-        }
+  for (const parsed of parseJsonLines(output)) {
+    if (parsed.type === "result") {
+      found.sawResult = true;
+      found.isError = Boolean(parsed.is_error);
+      found.durationMs = readNumberField(parsed, "duration_ms");
+      found.totalCostUsd = readNumberField(parsed, "total_cost_usd");
+      found.model = typeof parsed.model === "string" ? parsed.model : "";
+      if (typeof parsed.result === "string") {
+        found.resultText = parsed.result;
+      } else if (parsed.result !== undefined) {
+        found.resultText = JSON.stringify(parsed.result);
+      }
+      if (isJsonObject(parsed.usage)) {
+        found.inputTokens = readNumberField(parsed.usage, "input_tokens");
+        found.outputTokens = readNumberField(parsed.usage, "output_tokens");
+        found.cacheReadTokens = readNumberField(
+          parsed.usage,
+          "cache_read_input_tokens",
+        );
+        found.cacheWriteTokens = readNumberField(
+          parsed.usage,
+          "cache_creation_input_tokens",
+        );
+      }
+      continue;
+    }
+    if (
+      parsed.type === "assistant" &&
+      isJsonObject(parsed.message) &&
+      Array.isArray(parsed.message.content)
+    ) {
+      for (const block of parsed.message.content) {
         if (
-          parsed.usage &&
-          typeof parsed.usage === "object" &&
-          !Array.isArray(parsed.usage)
+          isJsonObject(block) &&
+          block.type === "text" &&
+          typeof block.text === "string"
         ) {
-          found.inputTokens = readNumberField(parsed.usage, "input_tokens");
-          found.outputTokens = readNumberField(parsed.usage, "output_tokens");
-          found.cacheReadTokens = readNumberField(
-            parsed.usage,
-            "cache_read_input_tokens",
-          );
-          found.cacheWriteTokens = readNumberField(
-            parsed.usage,
-            "cache_creation_input_tokens",
-          );
-        }
-        continue;
-      }
-      if (
-        parsed.type === "assistant" &&
-        parsed.message &&
-        typeof parsed.message === "object" &&
-        !Array.isArray(parsed.message) &&
-        Array.isArray(parsed.message.content)
-      ) {
-        for (const block of parsed.message.content) {
-          if (
-            block &&
-            typeof block === "object" &&
-            !Array.isArray(block) &&
-            block.type === "text" &&
-            typeof block.text === "string"
-          ) {
-            assistantParts.push(block.text);
-          }
+          assistantParts.push(block.text);
         }
       }
-    } catch {
-      /* skip malformed lines */
     }
   }
   found.assistantText = assistantParts.join("");
@@ -271,88 +288,55 @@ export function extractResultEvent(output: string): ResultEvent | null {
     let lastCachedInputTokens = 0;
     let lastCacheWriteInputTokens = 0;
     let lastOutputTokens = 0;
-    for (const line of output.split("\n")) {
-      const clean = line.trim();
-      if (!clean) continue;
-      try {
-        const parsed = parseJsonObject(clean);
-        if (!parsed) continue;
-        if (
-          parsed.type === "item.completed" &&
-          parsed.item &&
-          typeof parsed.item === "object" &&
-          !Array.isArray(parsed.item) &&
-          parsed.item.type === "agent_message"
-        ) {
-          const messageText = getCodexAgentMessageText(parsed.item);
-          if (messageText) finalText = messageText;
-          continue;
+    for (const parsed of parseJsonLines(output)) {
+      if (
+        parsed.type === "item.completed" &&
+        isJsonObject(parsed.item) &&
+        parsed.item.type === "agent_message"
+      ) {
+        const messageText = getCodexAgentMessageText(parsed.item);
+        if (messageText) finalText = messageText;
+        continue;
+      }
+      if (parsed.type === "turn.completed" && isJsonObject(parsed.usage)) {
+        const usage = parsed.usage;
+        if (typeof usage.input_tokens === "number") {
+          lastInputTokens = usage.input_tokens;
         }
-        if (
-          parsed.type === "turn.completed" &&
-          parsed.usage &&
-          typeof parsed.usage === "object" &&
-          !Array.isArray(parsed.usage)
-        ) {
-          const usage = parsed.usage;
-          if (typeof usage.input_tokens === "number") {
-            lastInputTokens = usage.input_tokens;
-          }
-          if (typeof usage.cached_input_tokens === "number") {
-            lastCachedInputTokens = usage.cached_input_tokens;
-          }
-          if (typeof usage.cache_write_input_tokens === "number") {
-            lastCacheWriteInputTokens = usage.cache_write_input_tokens;
-          }
-          if (typeof usage.output_tokens === "number") {
-            lastOutputTokens = usage.output_tokens;
-          }
+        if (typeof usage.cached_input_tokens === "number") {
+          lastCachedInputTokens = usage.cached_input_tokens;
         }
-      } catch {
-        /* skip malformed lines */
+        if (typeof usage.cache_write_input_tokens === "number") {
+          lastCacheWriteInputTokens = usage.cache_write_input_tokens;
+        }
+        if (typeof usage.output_tokens === "number") {
+          lastOutputTokens = usage.output_tokens;
+        }
       }
     }
     if (!finalText) return null;
-    const nonCachedInput = Math.max(0, lastInputTokens - lastCachedInputTokens);
     return {
       result: finalText,
       isError: false,
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          lastInputTokens,
-          lastCachedInputTokens,
-          lastOutputTokens,
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: nonCachedInput,
+      rawResultEvent: buildCodexResultEvent({
+        inputTokens: lastInputTokens,
+        cachedInputTokens: lastCachedInputTokens,
+        cacheWriteInputTokens: lastCacheWriteInputTokens,
         outputTokens: lastOutputTokens,
-        cacheReadInputTokens: lastCachedInputTokens,
-        cacheCreationInputTokens: lastCacheWriteInputTokens,
-        model: normalizedCodexModel,
       }),
     };
   }
 
   let resultEvent: ResultEvent | null = null;
-  for (const line of output.split("\n")) {
-    const clean = line.trim();
-    if (!clean) continue;
-    try {
-      const parsed = parseJsonObject(clean);
-      if (!parsed) continue;
-      if (parsed.type === "result") {
-        const r = parsed.result ?? "";
-        const withProvider = JSON.stringify({ ...parsed, provider: "claude" });
-        resultEvent = {
-          result: typeof r === "string" ? r : JSON.stringify(r),
-          isError: Boolean(parsed.is_error),
-          rawResultEvent: withProvider,
-        };
-      }
-    } catch {
-      /* skip malformed lines */
+  for (const parsed of parseJsonLines(output)) {
+    if (parsed.type === "result") {
+      const r = parsed.result ?? "";
+      const withProvider = JSON.stringify({ ...parsed, provider: "claude" });
+      resultEvent = {
+        result: typeof r === "string" ? r : JSON.stringify(r),
+        isError: Boolean(parsed.is_error),
+        rawResultEvent: withProvider,
+      };
     }
   }
   return resultEvent;
@@ -528,8 +512,12 @@ export function buildTurnCompletionPayload(params: {
   error: string | null;
   activityLog: string | null;
   resultEvent?: ResultEvent | null;
+  /** For callers that build the usage event themselves (codex app-server). */
+  rawResultEvent?: string;
   entityFieldFallback?: string;
 }): JsonObject {
+  const rawResultEvent =
+    params.resultEvent?.rawResultEvent ?? params.rawResultEvent;
   return buildEntityMutationArgs(
     ENTITY_ID_FIELD ?? params.entityFieldFallback,
     ENTITY_ID,
@@ -539,9 +527,7 @@ export function buildTurnCompletionPayload(params: {
       error: params.error,
       activityLog: params.activityLog,
       ...(RUN_ID ? { runId: RUN_ID } : {}),
-      ...(params.resultEvent?.rawResultEvent
-        ? { rawResultEvent: params.resultEvent.rawResultEvent }
-        : {}),
+      ...(rawResultEvent ? { rawResultEvent } : {}),
       ...(S.pendingQuestionData
         ? { pendingQuestion: S.pendingQuestionData }
         : {}),
@@ -566,13 +552,7 @@ export async function postClaimedTurnFailureCompletion(params: {
     ...(RUN_ID ? { runId: RUN_ID } : {}),
   });
   appendClaimedTurnCompletion(completionArgs);
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
 }
 
 export function appendDiagnosticTail(message: string): string {
@@ -678,6 +658,24 @@ async function attachRunMediaIfAny(
 }
 
 /**
+ * The one send sequence for every turn-closing mutation. The payload must
+ * already carry the lease.
+ */
+export async function sendTurnCompletion(
+  mutation: string,
+  args: JsonObject,
+): Promise<void> {
+  // Every caller runs persistTurnWork() before this, so the checkpoint's
+  // afterSha is the pushed turn-end tip.
+  appendTurnCheckpoint(args);
+  // Stop heartbeating under the lease before the server closes the turn, or a
+  // later heartbeat (e.g. during the chat media upload) comes back `closed` and
+  // reads as a takeover (session 225).
+  releaseTurnLeaseForCompletion();
+  await callConvexWithRetry("mutation", mutation, args);
+}
+
+/**
  * Sends the completion mutation and attaches sandbox media around it.
  *
  * A chat turn harvests after completion, so `screenshots:attachMedia` can patch
@@ -689,19 +687,10 @@ async function attachRunMediaIfAny(
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
 ): Promise<void> {
-  // Every success path runs persistTurnWork() before this, so the checkpoint's
-  // afterSha is the pushed turn-end tip.
-  appendTurnCheckpoint(completionArgs);
-  // The payload already carries the lease; stop heartbeating under it before
-  // the server closes the turn, or the media upload window below emits
-  // heartbeats that come back `closed` and read as a takeover (session 225).
-  releaseTurnLeaseForCompletion();
+  // The run harvest runs while the lease is still held: the server has not
+  // closed the turn yet, so its heartbeats stay valid.
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) await uploadAndAttachSandboxMedia({});
 }
 

@@ -13,8 +13,11 @@ import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
 import { assertActionSandboxAccess } from "../functions";
 import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
+import { chatEntityKindValidator } from "../_validators/enums";
 // Aliased: this module's public action is also called writeSandboxFile.
 import { writeSandboxFile as writeFileToSandbox } from "./sandboxFiles";
+import { errorText } from "../_shared/errors";
+import { sleep } from "../_shared/async";
 
 /** Starts or stops a code-server instance inside a sandbox. */
 export const toggleCodeServer = action({
@@ -85,7 +88,7 @@ export const toggleCodeServer = action({
           `code-server --port ${listenPort} --auth none --bind-addr ${bindAddr} ${openDir} > /tmp/code-server.log 2>&1`,
         );
 
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await sleep(2000);
 
         const ready = await execHandle(
           handle,
@@ -115,7 +118,7 @@ export const toggleCodeServer = action({
         console.error(`[code-server] Failed to start. Logs:\n${logs}`);
         return { success: false, message: "Failed to start", logs };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = errorText(error);
         console.error(`[code-server] Error starting: ${errorMsg}`);
         let logs = "";
         try {
@@ -136,7 +139,7 @@ export const toggleCodeServer = action({
         console.log(`[code-server] Stopped`);
         return { success: true, message: "Stopped" };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = errorText(error);
         console.error(`[code-server] Error stopping: ${errorMsg}`);
         return { success: false, message: errorMsg };
       }
@@ -187,8 +190,6 @@ export const launchChromeInDesktop = action({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await assertActionSandboxAccess(ctx, args.repoId, args.sandboxId);
 
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
@@ -205,11 +206,7 @@ export const launchChromeInDesktop = action({
  */
 export const startDesktopForBrowserEntity = internalAction({
   args: {
-    entityKind: v.union(
-      v.literal("session"),
-      v.literal("task"),
-      v.literal("project"),
-    ),
+    entityKind: chatEntityKindValidator,
     entityId: v.string(),
     clerkUserId: v.string(),
   },
@@ -240,8 +237,8 @@ export const startDesktopForBrowserEntity = internalAction({
       };
     }
 
-    const user = await ctx.runQuery(internal.mcp.queries.getUserByClerkId, {
-      clerkUserId: args.clerkUserId,
+    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+      clerkId: args.clerkUserId,
     });
     if (!user) {
       return { ok: false, message: "User not found." };

@@ -3,7 +3,6 @@
 import { requiredEnv } from "@vvedantb/server";
 import sendgrid from "@sendgrid/mail";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
 export interface SendEmailPayload {
   to: string | string[];
   subject: string;

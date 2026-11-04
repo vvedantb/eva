@@ -3,7 +3,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { createNotification } from "../notifications";
 import { formatMessagePreview } from "../_messages/preview";
-import { extractMentionedUserIds } from "./extractMentionedUserIds";
+import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
 
@@ -85,14 +85,16 @@ export async function notifyChatMentions(
     surface: ChatMentionSurface;
   },
 ): Promise<void> {
-  const mentionedUserIds = extractMentionedUserIds(ctx, args.content);
-  if (mentionedUserIds.length === 0) return;
-
   const target = notificationTarget(args.surface);
-  const repo = target.repoId ? await ctx.db.get(target.repoId) : null;
-  const teamId = repo?.teamId;
-  const author = await ctx.db.get(args.authorUserId);
-  const authorName = author?.fullName?.trim() || "Someone";
+  const recipients = await teamMentionRecipients(
+    ctx,
+    args.content,
+    target.repoId,
+    new Set([args.authorUserId]),
+  );
+  if (recipients.length === 0) return;
+
+  const authorName = await authorDisplayName(ctx, args.authorUserId);
   const title = `${authorName} mentioned you in a ${SURFACE_NAME[args.surface.kind]} chat`;
   const message = formatMessagePreview(args.content);
 
@@ -104,17 +106,7 @@ export async function notifyChatMentions(
     mentionedName: string;
   }[] = [];
 
-  for (const userId of mentionedUserIds) {
-    if (userId === args.authorUserId) continue;
-    if (teamId) {
-      const membership = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_team_and_user", (q) =>
-          q.eq("teamId", teamId).eq("userId", userId),
-        )
-        .first();
-      if (!membership) continue;
-    }
+  for (const userId of recipients) {
     const notificationId = await createNotification(ctx, {
       userId,
       type: "mention",

@@ -229,7 +229,6 @@ export interface SandboxHandle {
     opts?: { resumeAfterStop?: boolean },
   ): Promise<void>;
   stop(): Promise<void>;
-  archive(): Promise<void>;
   /**
    * Push the provider's hard session deadline out by `durationMs`. Vercel's
    * `timeout` is a hard runtime cap per session — without extension a turn
