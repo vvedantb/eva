@@ -6,11 +6,14 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 
 const badgeSource = readFileSync(join(here, "ProjectPhaseBadge.tsx"), "utf8");
+const projectsDir = join(here, "../../../routes/_repo/$owner/$repo/projects");
+/** The header controls render here; their flags derive in the helpers. */
 const detailSource = readFileSync(
-  join(
-    here,
-    "../../../routes/_repo/$owner/$repo/projects/ProjectDetailClient.tsx",
-  ),
+  join(projectsDir, "_components/ProjectDetailHeaderActions.tsx"),
+  "utf8",
+);
+const helpersSource = readFileSync(
+  join(projectsDir, "_components/projectDetailHelpers.ts"),
   "utf8",
 );
 
@@ -98,13 +101,13 @@ describe("build is offered only on phases that can still build", () => {
  */
 describe("the project header reads the allow-list", () => {
   it("derives its gate from BUILDABLE_PROJECT_PHASES", () => {
-    expect(detailSource).toContain(
+    expect(helpersSource).toContain(
       `const canBuildProject = ${BUILDABLE}.includes(project.phase)`,
     );
   });
 
   it("gates both the build and stop-build controls on it", () => {
-    const gateAt = detailSource.indexOf("{canBuildProject ? (");
+    const gateAt = detailSource.indexOf("{flags.canBuildProject ? (");
     const buildAt = detailSource.indexOf("<SplitBuildButton");
     // Anchor the stop control on its aria-label, not its visible "Stop Build"
     // text: the header's prose above the gate names the button too, and
@@ -117,7 +120,7 @@ describe("the project header reads the allow-list", () => {
 
   /** The exact reasoning the fix replaced: draft/finalized as the only exclusion. */
   it("does not fall back to the draft-or-finalized test", () => {
-    const gateAt = detailSource.indexOf("{canBuildProject ? (");
+    const gateAt = detailSource.indexOf("{flags.canBuildProject ? (");
     const region = detailSource.slice(
       gateAt,
       detailSource.indexOf("<SplitBuildButton"),

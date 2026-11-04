@@ -2,7 +2,6 @@
 
 import { Link } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { IconSunrise } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
@@ -20,7 +19,7 @@ import {
   sidebarNavLinkClass,
 } from "@/lib/components/sidebar/SharedLayoutNav";
 
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
+import type { RepoDoc } from "@/lib/components/sidebar/sidebarPanelState";
 
 interface RepoTopNavProps {
   repoBasePath: string;

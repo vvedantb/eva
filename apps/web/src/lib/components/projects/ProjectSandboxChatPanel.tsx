@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import {
   api,
   buildTraitsExecutionPayload,
@@ -27,12 +28,15 @@ import {
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
 } from "@/lib/components/chat/chatBodyUtils";
-import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
+import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
-import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
+import {
+  buildSandboxChatSurface,
+  startSandboxHandler,
+} from "@/lib/components/chat/sandboxChatSurface";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   useAvailableAiModels,
@@ -109,64 +113,24 @@ export function ProjectSandboxChatPanel({
   });
   const setTraits = useSetProjectTraits(projectId);
 
-  const defaultModel = normalizeAIModel(repo.defaultModel ?? DEFAULT_AI_MODEL);
-  // Sandbox chat model is `lastChatModel` (sticky); falls back to metadata
-  // `model` then repo default. Distinct from projects.model build prefs.
-  const model = normalizeAIModel(
-    project?.lastChatModel ?? project?.model ?? defaultModel,
-  );
+  const model = projectChatModel(project, repo.defaultModel);
   const storedTraits = projectStoredTraits(project);
   const displayTraits = resolveTraitsForDisplay(model, storedTraits);
   const executionTraits = buildTraitsExecutionPayload(model, storedTraits);
-  const providerAccountId = project?.providerAccountId ?? null;
-  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const { options: accounts, resolveId: resolveAccountId } =
-    useProviderAccounts();
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner =
-    currentUserId !== undefined &&
-    project?.userId !== undefined &&
-    currentUserId === project.userId;
-  const ownerProfile = useQuery(
-    api.users.get,
-    project?.userId ? { id: project.userId } : "skip",
-  );
-  const ownerAccountLabel =
-    ownerProfile?.firstName?.trim() ||
-    ownerProfile?.fullName?.trim() ||
-    "Personal";
-  const displayAccounts =
-    isOwner || !providerAccountId
-      ? accounts
-      : [
-          {
-            id: providerAccountId,
-            provider: getAIModelProvider(model),
-            label: ownerAccountLabel,
-            // The project owner's account, shown to a collaborator: theirs, not
-            // the viewer's, so it must never be defaulted to.
-            isOwn: false,
-          },
-          ...accounts,
-        ];
-  const usageAccountLabel =
-    providerAccountId === null
-      ? "Team"
-      : (displayAccounts.find((account) => account.id === providerAccountId)
-          ?.label ?? "Selected account");
+  const {
+    providerAccountId,
+    modelOptions,
+    accounts,
+    resolveAccountId,
+    isOwner,
+    displayAccounts,
+    usageAccountLabel,
+  } = useProjectChatAccounts(repo._id, project, model);
 
-  const draftSeed = useChatDraftSeed({
-    kind: "projectChat" as const,
+  const { draftBundle, isDraftLoading } = useSandboxChatDraft({
+    kind: "projectChat",
     projectId,
   });
-  const draftBundle = draftSeed.isReady
-    ? {
-        target: { kind: "projectChat" as const, projectId },
-        initialDisplay: draftSeed.initialDisplay,
-        mentionMap: draftSeed.mentionMap,
-        skillMap: draftSeed.skillMap,
-      }
-    : undefined;
 
   // Same entityId the project-chat sandbox posts with (project id, not stream prefix).
   const activeQuestion = useQuery(api.pendingQuestions.getActive, {
@@ -196,6 +160,8 @@ export function ProjectSandboxChatPanel({
     await switchProviderAccount(resolveAccountId(next) ?? null);
   };
 
+  const chatMessages = messages ?? [];
+
   // Same rule as every chat; see `isChatTurnExecuting`.
   const isExecuting = isChatTurnExecuting({
     turnOpen: chatTurnOpen,
@@ -204,7 +170,7 @@ export function ProjectSandboxChatPanel({
 
   const queueGate = useChatQueueGate({
     parentId: projectId,
-    messages: messages ?? [],
+    messages: chatMessages,
     queuedMessages: queuedMessages ?? [],
     model,
     accountId: providerAccountId,
@@ -314,33 +280,22 @@ export function ProjectSandboxChatPanel({
     await cancelExecution({ projectId });
   };
 
-  const chatSurface: SandboxChatSurface = {
+  // `accounts`, not `displayAccounts`: the synthetic owner row exists only
+  // for non-owners, who never see the usage-limit recovery card.
+  const chatSurface = buildSandboxChatSurface({
     entity: { kind: "project", projectId },
     repoId: repo._id,
     model,
     isExecuting,
-    isReadOnly: false,
-    // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
-    backgroundAgents: project?.backgroundAgents,
-    // Owner-only, like the account picker: project chat is owner-sticky. The
-    // account list is `accounts`, not `displayAccounts` — the synthetic owner
-    // row exists only for non-owners, who never see the card.
-    usageLimitRecovery:
-      isOwner && project
-        ? {
-            messages: messages ?? [],
-            accounts,
-            resolveAccountId,
-            currentAccountId: project.providerAccountId ?? null,
-            onSwitchAccount: switchProviderAccount,
-            isSandboxActive,
-          }
-        : undefined,
-    goal: project?.goal,
-    // No review-comment append on this send path (sessions-only), so a slash
-    // command already reaches the harness verbatim.
+    doc: project,
+    isOwner,
+    messages,
+    accounts,
+    resolveAccountId,
+    switchProviderAccount,
+    isSandboxActive,
     sendCommand: (command) => handleSend(command),
-  };
+  });
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -353,7 +308,7 @@ export function ProjectSandboxChatPanel({
       <SubagentThreadLayer
         surface={chatSurface}
         parentTitle={project?.title ?? "Project"}
-        messages={messages ?? []}
+        messages={chatMessages}
         streamingActivity={streaming?.currentActivity}
         sandboxRunning={isSandboxActive}
         onOpenFile={onOpenFile}
@@ -362,7 +317,7 @@ export function ProjectSandboxChatPanel({
           repo={{ id: repo._id, basePath }}
           conversationId={projectId}
           chatParentId={projectId}
-          messages={messages ?? []}
+          messages={chatMessages}
           isLoadingMessages={messages === undefined}
           queuedMessages={queuedMessages ?? []}
           queueLabel={queueGate.queueLabel(isExecuting)}
@@ -385,11 +340,11 @@ export function ProjectSandboxChatPanel({
               : SANDBOX_CHAT_COPY.asleepDescription
           }
           disabledReason={composer.disabledReason}
-          onStartSandbox={
-            !isSandboxActive && !isSandboxToggling && onSandboxToggle
-              ? () => onSandboxToggle("start")
-              : undefined
-          }
+          onStartSandbox={startSandboxHandler(
+            isSandboxActive,
+            isSandboxToggling,
+            onSandboxToggle,
+          )}
           modelPicker={{
             model,
             setModel: queueGate.setModel,
@@ -411,7 +366,7 @@ export function ProjectSandboxChatPanel({
             />
           }
           draft={draftBundle}
-          isDraftLoading={!draftSeed.isReady}
+          isDraftLoading={isDraftLoading}
           onOpenFile={onOpenFile}
           onViewDiff={onViewDiff}
           onOpenAgentsTab={onOpenAgentsTab}
@@ -427,5 +382,79 @@ export function ProjectSandboxChatPanel({
       </SubagentThreadLayer>
       {queueGate.switchDialog}
     </div>
+  );
+}
+
+type ProjectChatProject = FunctionReturnType<typeof api.projects.get>;
+
+// Sandbox chat model is `lastChatModel` (sticky); falls back to metadata
+// `model` then repo default. Distinct from projects.model build prefs.
+function projectChatModel(
+  project: ProjectChatProject | undefined,
+  repoDefaultModel: string | undefined,
+): AIModel {
+  const defaultModel = normalizeAIModel(repoDefaultModel ?? DEFAULT_AI_MODEL);
+  return normalizeAIModel(
+    project?.lastChatModel ?? project?.model ?? defaultModel,
+  );
+}
+
+/** The sticky project account, the picker's account list and its labels. */
+function useProjectChatAccounts(
+  repoId: Id<"githubRepos">,
+  project: ProjectChatProject | undefined,
+  model: AIModel,
+) {
+  const providerAccountId = project?.providerAccountId ?? null;
+  const { options: modelOptions } = useAvailableAiModels(repoId, model);
+  const { options: accounts, resolveId: resolveAccountId } =
+    useProviderAccounts();
+  const currentUserId = useQuery(api.auth.me);
+  const isOwner =
+    currentUserId !== undefined &&
+    project?.userId !== undefined &&
+    currentUserId === project.userId;
+  const ownerProfile = useQuery(
+    api.users.get,
+    project?.userId ? { id: project.userId } : "skip",
+  );
+  const ownerAccountLabel = projectOwnerAccountLabel(ownerProfile);
+  const displayAccounts =
+    isOwner || !providerAccountId
+      ? accounts
+      : [
+          {
+            id: providerAccountId,
+            provider: getAIModelProvider(model),
+            label: ownerAccountLabel,
+            // The project owner's account, shown to a collaborator: theirs, not
+            // the viewer's, so it must never be defaulted to.
+            isOwn: false,
+          },
+          ...accounts,
+        ];
+  const usageAccountLabel =
+    providerAccountId === null
+      ? "Team"
+      : (displayAccounts.find((account) => account.id === providerAccountId)
+          ?.label ?? "Selected account");
+  return {
+    providerAccountId,
+    modelOptions,
+    accounts,
+    resolveAccountId,
+    isOwner,
+    displayAccounts,
+    usageAccountLabel,
+  };
+}
+
+function projectOwnerAccountLabel(
+  ownerProfile: FunctionReturnType<typeof api.users.get> | undefined,
+): string {
+  return (
+    ownerProfile?.firstName?.trim() ||
+    ownerProfile?.fullName?.trim() ||
+    "Personal"
   );
 }

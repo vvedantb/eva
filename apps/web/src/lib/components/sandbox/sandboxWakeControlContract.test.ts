@@ -9,12 +9,12 @@ const control = read("./SandboxStartStopButton.tsx");
 const taskFooter = read("../tasks/_components/TaskFooter.tsx");
 const taskDetail = read("../tasks/TaskDetailInline.tsx");
 const projectDetail = read(
-  "../../../routes/_repo/$owner/$repo/projects/ProjectDetailClient.tsx",
+  "../../../routes/_repo/$owner/$repo/projects/_components/ProjectDetailHeaderActions.tsx",
 );
 
 const headers: { name: string; source: string }[] = [
   { name: "TaskFooter", source: taskFooter },
-  { name: "ProjectDetailClient", source: projectDetail },
+  { name: "ProjectDetailHeaderActions", source: projectDetail },
 ];
 
 /**
@@ -45,32 +45,34 @@ describe("task and project headers can wake a sleeping sandbox", () => {
     expect(control).toContain("isActive || (!hasStartError && autoWakes)");
   });
 
-  test.each(headers)("$name renders the control, not a sleep-only button", ({
-    source,
-  }) => {
-    expect(source).toContain("SandboxStartStopButton");
-    expect(source, "the sleep-only button was the bug").not.toContain(
-      "SleepEvaButton",
-    );
-  });
+  test.each(headers)(
+    "$name renders the control, not a sleep-only button",
+    ({ source }) => {
+      expect(source).toContain("SandboxStartStopButton");
+      expect(source, "the sleep-only button was the bug").not.toContain(
+        "SleepEvaButton",
+      );
+    },
+  );
 
-  test.each(headers)("$name keeps the control visible while asleep", ({
-    source,
-  }) => {
-    const gate =
-      source.match(/const showSandboxToggle =\s*([^;]+);/)?.[1] ??
-      source.match(/\{(isSandboxActive \|\| canStartSandbox)\s*\?/)?.[1] ??
-      "";
-    expect(gate, "the visibility gate moved or was renamed").not.toBe("");
-    expect(gate).toContain("isSandboxActive");
-    expect(
-      gate,
-      "dropping canStartSandbox hides the only play button once eva sleeps",
-    ).toContain("canStartSandbox");
-    // Held open through both transitions so the row does not jump; a
-    // `!isSandboxStopping` term would pop it out again mid-sleep.
-    expect(gate).not.toContain("isSandboxStopping");
-  });
+  test.each(headers)(
+    "$name keeps the control visible while asleep",
+    ({ source }) => {
+      const gate =
+        source.match(/const showSandboxToggle =\s*([^;]+);/)?.[1] ??
+        source.match(/\{(isSandboxActive \|\| canStartSandbox)\s*\?/)?.[1] ??
+        "";
+      expect(gate, "the visibility gate moved or was renamed").not.toBe("");
+      expect(gate).toContain("isSandboxActive");
+      expect(
+        gate,
+        "dropping canStartSandbox hides the only play button once eva sleeps",
+      ).toContain("canStartSandbox");
+      // Held open through both transitions so the row does not jump; a
+      // `!isSandboxStopping` term would pop it out again mid-sleep.
+      expect(gate).not.toContain("isSandboxStopping");
+    },
+  );
 
   test.each(headers)("$name wires start as well as stop", ({ source }) => {
     const handlerAt = source.indexOf("onToggle={(action) =>");

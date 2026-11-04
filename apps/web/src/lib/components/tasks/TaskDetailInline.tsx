@@ -50,7 +50,7 @@ import {
   type SandboxTab,
   type TaskRouteSandboxTab,
 } from "@/lib/search-params";
-import type { UseTaskDetailRouting } from "./useTaskDetail";
+import type { UseTaskDetailRouting } from "./useTaskDetailControls";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -480,7 +480,6 @@ export function TaskDetailInline({
                 projects={projects}
                 baseBranch={baseBranch}
                 latestDeployment={latestDeployment}
-                hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}
                 isOwner={isOwner}
                 allTags={allTags}
