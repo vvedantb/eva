@@ -97,6 +97,50 @@ describe("automation run terminal states", () => {
     TIMEOUT_MS,
   );
 
+  /**
+   * Event preset runs settle through `settleEventRun`, not `updateRunStatus`.
+   * A run the user cancelled (or the watchdog expired) must stay that way,
+   * but the event cursor still has to advance, or the next webhook replays
+   * the same PR events.
+   */
+  test(
+    "a late event settle keeps the cancel but advances the cursor",
+    async () => {
+      const f = await runWithStatus("cancelled");
+      await f.t.mutation(internal._automationEvents.dispatch.settleEventRun, {
+        runId: f.runId,
+        status: "success",
+        message: "Fixed CI",
+        eventCursor: 42,
+      });
+      const run = await f.read();
+      expect(run?.status).toBe("cancelled");
+      expect(run?.resultSummary).toBeUndefined();
+      expect(run?.finishedAt).toBeUndefined();
+      expect(run?.eventCursor).toBe(42);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "an event settle on a running run records the outcome",
+    async () => {
+      const f = await runWithStatus("running");
+      await f.t.mutation(internal._automationEvents.dispatch.settleEventRun, {
+        runId: f.runId,
+        status: "error",
+        message: "CI still red",
+        eventCursor: 7,
+      });
+      const run = await f.read();
+      expect(run?.status).toBe("error");
+      expect(run?.error).toBe("CI still red");
+      expect(run?.finishedAt).toBeDefined();
+      expect(run?.eventCursor).toBe(7);
+    },
+    TIMEOUT_MS,
+  );
+
   test(
     "cancel on a finished run changes nothing",
     async () => {
