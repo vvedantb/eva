@@ -1274,6 +1274,7 @@ class VercelSandboxClient implements SandboxClient {
         ? (
             await Sandbox.get({
               ...this.creds,
+              onResume: rewireDriveCacheOnResume,
               name: params.forkFrom,
               resume: false,
             })

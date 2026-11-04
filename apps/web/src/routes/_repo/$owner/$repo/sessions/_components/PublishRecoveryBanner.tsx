@@ -146,6 +146,11 @@ export function PublishRecoveryBanner({
     setConfirmTarget(null);
     if (newestId === undefined) return;
     const key = forcePushOfferKey(newestId, target);
+    // Marked requested before the mutation settles: the button unmounts at
+    // once, so an alt-click double-click cannot send a second force-push.
+    // A failure takes the mark back so the user can retry.
+    if (requestedOffers.includes(key)) return;
+    setRequestedOffers((keys) => [...keys, key]);
     void catchMutationError(
       forcePushBranch({
         sessionId,
@@ -156,8 +161,9 @@ export function PublishRecoveryBanner({
       "Couldn't start the force-push",
       "session-force-push",
     )
-      .then(() => setRequestedOffers((keys) => [...keys, key]))
-      .catch(() => undefined);
+      .catch(() =>
+        setRequestedOffers((keys) => keys.filter((entry) => entry !== key)),
+      );
   };
 
   /** Alt-click skips the dialog, as everywhere else confirmation is offered. */

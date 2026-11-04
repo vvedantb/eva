@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import type { Rect } from '../measure'
 import { css, type Bezier, type EaseName } from '../ease'
 import './Camera.css'
@@ -21,7 +21,7 @@ import './Camera.css'
 export function Camera({ focus, pad = 32, max = 2, duration = 1100, feather = 28, ease: curve = 'camera', children, className }: { focus: Rect | null; pad?: number; max?: number; duration?: number; feather?: number; ease?: EaseName | Bezier; children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   // Followed, not read once: a Stage switching to its compact design (or any
   // resize) changes the frame the zoom is worked out in
   useLayoutEffect(() => {

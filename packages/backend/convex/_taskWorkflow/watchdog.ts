@@ -22,7 +22,10 @@ export const handleStaleRun = internalMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
-    if (task.status !== "in_progress" || !task.activeWorkflowId) return null;
+    // Keyed on the workflow, not the status: a task the user moved mid-run
+    // still has a run to time out. Status resets below only touch
+    // `in_progress`, so the user's choice survives.
+    if (!task.activeWorkflowId) return null;
 
     const runs = await ctx.db
       .query("agentRuns")
@@ -55,7 +58,7 @@ export const handleStaleRun = internalMutation({
       const taskStatus =
         run && run.status === "success" ? "business_review" : "todo";
       await ctx.db.patch(args.taskId, {
-        status: taskStatus,
+        ...(task.status === "in_progress" ? { status: taskStatus } : {}),
         activeWorkflowId: undefined,
         updatedAt: Date.now(),
       });

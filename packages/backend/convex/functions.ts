@@ -21,7 +21,11 @@ import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
 import { buildProjectBranchName } from "./_git/branchNames";
-import { findLivePullRequestOnBranch } from "./_pullRequests/store";
+import {
+  allPullRequestsTerminal,
+  findLivePullRequestOnBranch,
+  listOwnerPullRequests,
+} from "./_pullRequests/store";
 
 /** Checks a loaded repo against connector ownership or team membership. */
 export async function userCanAccessRepo(
@@ -237,12 +241,27 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  const businessReviewTask = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "business_review"),
+  // A merged / closed PR is final on GitHub, so the phase the PR webhook set
+  // is final too: only a new build (above) reopens it. A `completed` reached
+  // from "every task done" while a PR is still open is not — reopening a task
+  // moves the project back to review.
+  if (
+    (project.phase === "completed" || project.phase === "cancelled") &&
+    allPullRequestsTerminal(
+      await listOwnerPullRequests(db, { kind: "project", projectId }),
     )
-    .first();
+  ) {
+    return;
+  }
+
+  const firstTaskWith = (status: Doc<"agentTasks">["status"]) =>
+    db
+      .query("agentTasks")
+      .withIndex("by_project_and_status", (q) =>
+        q.eq("projectId", projectId).eq("status", status),
+      )
+      .first();
+  const businessReviewTask = await firstTaskWith("business_review");
   if (businessReviewTask) {
     if (project.phase !== "business_review") {
       await applyPhaseTransition(ctx, project, "business_review");
@@ -250,12 +269,7 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  const codeReviewTask = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "code_review"),
-    )
-    .first();
+  const codeReviewTask = await firstTaskWith("code_review");
   if (codeReviewTask) {
     if (project.phase !== "code_review") {
       await applyPhaseTransition(ctx, project, "code_review");
@@ -263,27 +277,15 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  const nonDoneStatuses = ["draft", "cancelled"] as const;
-  const nonDoneChecks = await Promise.all(
-    nonDoneStatuses.map((status) =>
-      db
-        .query("agentTasks")
-        .withIndex("by_project_and_status", (q) =>
-          q.eq("projectId", projectId).eq("status", status),
-        )
-        .first(),
-    ),
-  );
-  const hasNonDone = nonDoneChecks.some((t) => t !== null);
+  const [draft, cancelled, todo, inProgress, done] = await Promise.all([
+    firstTaskWith("draft"),
+    firstTaskWith("cancelled"),
+    firstTaskWith("todo"),
+    firstTaskWith("in_progress"),
+    firstTaskWith("done"),
+  ]);
 
-  const hasDone = await db
-    .query("agentTasks")
-    .withIndex("by_project_and_status", (q) =>
-      q.eq("projectId", projectId).eq("status", "done"),
-    )
-    .first();
-
-  if (!hasDone && !hasNonDone) {
+  if (!done && !draft && !cancelled) {
     // Build-only phase: demote stale in_progress when no active build remains.
     if (project.phase === "in_progress") {
       await applyPhaseTransition(ctx, project, "business_review");
@@ -291,10 +293,25 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  const allDone = hasDone !== null && !hasNonDone;
-  if (allDone && project.phase !== "completed") {
+  // Completed means every task is done: unstarted or running tasks block it.
+  const allDone = done !== null && !draft && !cancelled && !todo && !inProgress;
+  if (allDone) {
     await applyPhaseTransition(ctx, project, "completed");
   }
+}
+
+/** Fetches a doc by ID, throwing if not found or the user lacks repo access. */
+export async function getDocWithAccess(
+  db: GenericDatabaseReader<DataModel>,
+  docId: Id<"docs">,
+  userId: Id<"users">,
+): Promise<Doc<"docs">> {
+  const doc = await db.get(docId);
+  if (!doc) throw new Error("Doc not found");
+  if (!(await hasRepoAccess(db, doc.repoId, userId))) {
+    throw new Error("Not authorized");
+  }
+  return doc;
 }
 
 /** Fetches a project by ID, throwing if not found or the user lacks access. */

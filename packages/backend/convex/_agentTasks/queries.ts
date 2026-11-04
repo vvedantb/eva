@@ -391,7 +391,12 @@ export const getDependentTasks = authQuery({
   },
 });
 
-/** Returns the status of multiple tasks by their IDs. */
+type TaskStatusRow = {
+  id: Id<"agentTasks">;
+  status: Doc<"agentTasks">["status"];
+};
+
+/** Returns the status of the given tasks the caller can access. */
 export const getStatusesByIds = authQuery({
   args: { ids: v.array(v.id("agentTasks")) },
   returns: v.array(
@@ -401,10 +406,16 @@ export const getStatusesByIds = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const tasks = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return tasks
-      .filter((t): t is Exclude<typeof t, null> => t !== null)
-      .map((t) => ({ id: t._id, status: t.status }));
+    // The Chrome extension polls ids it has seen; ids the caller cannot
+    // access are dropped exactly like deleted tasks.
+    const statuses: TaskStatusRow[] = [];
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (task && (await hasTaskAccess(ctx.db, task, ctx.userId))) {
+        statuses.push({ id: task._id, status: task.status });
+      }
+    }
+    return statuses;
   },
 });
 

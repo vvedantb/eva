@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import './Swap.css'
 
 /**
@@ -8,7 +8,7 @@ import './Swap.css'
  * never snap. Key it on what changed: `<Swap id={step}>{text}</Swap>`.
  */
 export function Swap({ id, children, duration = 450, className, style, ...rest }: { id: string | number; children: ReactNode; duration?: number; className?: string; style?: CSSProperties } & Record<`data-${string}`, unknown>) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const box = useRef<HTMLSpanElement>(null)
   const inner = useRef<HTMLSpanElement>(null)
   const [prev, setPrev] = useState<{ id: string | number; node: ReactNode; w?: number } | null>(null)
