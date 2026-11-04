@@ -1,6 +1,6 @@
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
+import type { DesktopStreamer, Id } from "@eva/backend";
 import { IconDeviceDesktop } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import { BorderBeam, Button, tokenTransition } from "@vvedantb/ui";
@@ -54,15 +54,9 @@ const SURFACE_COPY = {
 } as const;
 
 /**
- * NoVNC remote-desktop panel. Thin wrapper around `SandboxIframeService` —
- * port 6080, transforms the preview URL into a vnc_lite.html viewer URL, and
- * fires `launchChromeInDesktop` once the viewer is ready.
- *
- * Forwards `__eva_grant` onto noVNC's websockify `path` so the auth proxy can
- * authorize the WebSocket upgrade even when the Partitioned session cookie is
- * missing in a cross-site iframe (Eva app → *.vercel.run).
- *
- * Shared by Browser (first-class) and Computer (`+` menu) tabs — same Chrome.
+ * noVNC: vnc_lite.html. Forwards `__eva_grant` onto websockify's `path` so the
+ * auth proxy can authorize the WebSocket upgrade even when the Partitioned
+ * session cookie is missing in a cross-site iframe (Eva app → *.vercel.run).
  */
 function appendNoVncParams(baseUrl: string): string {
   const url = new URL(baseUrl);
@@ -82,11 +76,33 @@ function appendNoVncParams(baseUrl: string): string {
   return url.toString();
 }
 
+/**
+ * voxl serves its client at `/` and copies the page's query string (with
+ * `__eva_grant`) onto its WebSocket and worker URLs, so the preview URL is
+ * already the viewer URL. It scales the desktop to fit by itself.
+ */
+function voxlViewerUrl(baseUrl: string): string {
+  return baseUrl;
+}
+
+const VIEWER_URL: Record<DesktopStreamer, (url: string) => string> = {
+  novnc: appendNoVncParams,
+  voxl: voxlViewerUrl,
+};
+
 function isAgentBrowsingActive(agentBrowsingAt: number | undefined): boolean {
   if (agentBrowsingAt === undefined) return false;
   return Date.now() - agentBrowsingAt < AGENT_BROWSING_LOCK_TTL_MS;
 }
 
+/**
+ * Remote-desktop panel. Thin wrapper around `SandboxIframeService` — port
+ * 6080, turns the preview URL into the viewer URL of whichever streamer the
+ * start reports (noVNC or voxl, picked by the `DESKTOP_STREAMER` Convex env
+ * var), and fires `launchChromeInDesktop` once the viewer is ready.
+ *
+ * Shared by Browser (first-class) and Computer (`+` menu) tabs — same Chrome.
+ */
 export function DesktopPanel({
   cacheKey,
   sandboxId,
@@ -104,8 +120,15 @@ export function DesktopPanel({
 
   const startAction = async (): Promise<StartResult> => {
     if (!sandboxId) return { success: false, message: "No sandbox" };
-    await toggleDesktopServer({ sandboxId, repoId, action: "start" });
-    return { success: true };
+    const streamer = await toggleDesktopServer({
+      sandboxId,
+      repoId,
+      action: "start",
+    });
+    if (streamer === null) {
+      return { success: false, message: copy.startFailedError };
+    }
+    return { success: true, transformUrl: VIEWER_URL[streamer] };
   };
 
   const stopAction = async () => {
@@ -143,7 +166,6 @@ export function DesktopPanel({
         port={6080}
         startAction={startAction}
         stopAction={stopAction}
-        transformUrl={appendNoVncParams}
         onReady={handleReady}
         ensureStartedBeforeReady
         maxAttempts={40}

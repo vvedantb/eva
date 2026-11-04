@@ -21,7 +21,7 @@
  *   so terminals are wired one layer up in ../pty.ts, which returns a
  *   `ptyProtocol: v.literal("vercel")` discriminator and hands the browser a ws
  *   URL. See ../_pty/vercel.ts (tmux-backed shared panes).
- * - desktop: implemented, see VercelDesktop below (TigerVNC + websockify/noVNC).
+ * - desktop: implemented, see VercelDesktop below (TigerVNC + noVNC or voxl).
  * - volumes: Drives, attached at create via `SandboxCreateParams.mounts`. See
  *   resolveMounts below and ./driveCache.ts for the shared-cache policy.
  */
@@ -51,6 +51,9 @@ import {
 } from "./vercelSnapshotOptions";
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
+import { configuredDesktopStreamer } from "./desktopStreamer";
+import type { DesktopStreamer } from "./desktopStreamer";
+import { VOXL_INSTALL_SCRIPT } from "./voxlInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
 import { EVA_ENV_FILE } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
@@ -265,15 +268,53 @@ class VercelGit implements SandboxGit {
   }
 }
 
+/** Internal port of the desktop viewer; the auth proxy owns exposed 6080. */
+const DESKTOP_VIEWER_PORT = 16080;
+
+/**
+ * Exit 0 when a live (non-zombie) process has this exact command name. Matches
+ * `comm`, not the command line, so the checking `awk` never matches itself.
+ */
+function liveProcessCheck(comm: string): string {
+  return `ps -eo stat=,comm= | awk '$1 !~ /Z/ && $2 == "${comm}" { found=1 } END { exit(found ? 0 : 1) }'`;
+}
+
+/** Shell checks that pass only while that streamer serves the viewer port. */
+const STREAMER_HEALTHY: Record<DesktopStreamer, string> = {
+  novnc: [
+    // websockify is a Python script; keep the command-line match it always had.
+    "ps -eo pid,stat,cmd | awk '$2 !~ /Z/ && /websockify/ { found=1 } END { exit(found ? 0 : 1) }'",
+    `&& (curl -fsS http://127.0.0.1:${DESKTOP_VIEWER_PORT}/vnc_lite.html >/dev/null 2>&1 || curl -fsS http://127.0.0.1:${DESKTOP_VIEWER_PORT}/vnc.html >/dev/null 2>&1)`,
+  ].join(" "),
+  // noVNC 404s on /healthz, so this also tells the two apart.
+  voxl: [
+    liveProcessCheck("voxl"),
+    `&& curl -fsS http://127.0.0.1:${DESKTOP_VIEWER_PORT}/healthz >/dev/null 2>&1`,
+  ].join(" "),
+};
+
+const STOP_VIEWERS = [
+  "pkill -9 -f '[w]ebsockify' 2>/dev/null || true",
+  "pkill -9 -x voxl 2>/dev/null || true",
+  `fuser -k ${DESKTOP_VIEWER_PORT}/tcp 2>/dev/null || true`,
+].join("\n");
+
+/** What `VercelDesktop.probe` found on display :1. */
+const desktopProbeSchema = z.enum(["down", "display", "novnc", "voxl"]);
+type DesktopProbe = z.infer<typeof desktopProbeSchema>;
+
 /**
  * Vercel desktop operations, aligned with timolins/vercel-sandbox-gui:
- * TigerVNC (Xvnc :1) + websockify + noVNC. Amazon Linux 2023 has no usable
+ * TigerVNC (Xvnc :1) plus a viewer on the internal port — websockify + noVNC,
+ * or voxl when `DESKTOP_STREAMER=voxl` (see ./desktopStreamer.ts). voxl reads
+ * the same Xvnc display through X11 (XShm + XDamage), so Xvnc and Chrome stay
+ * the same for both. Amazon Linux 2023 has no usable
  * window-manager packages (openbox/fluxbox/icewm are absent), so we follow the
  * GUI reference and run Chrome directly on the Xvnc display — no WM required.
  * Ubuntu managed images do ship window managers, but the no-WM setup works on
  * both, so it stays as the single path rather than branching by distro.
  *
- * Critical: long-running Xvnc/websockify MUST use native `detached: true`
+ * Critical: long-running Xvnc/websockify/voxl MUST use native `detached: true`
  * (execDetached). Backgrounding with `setsid … &` OR plain `&` inside a
  * synchronous runCommand leaves zombies (ppid=1, state Z) once that command
  * exits — HTTP may briefly answer then the RFB WebSocket hangs on noVNC
@@ -282,7 +323,7 @@ class VercelGit implements SandboxGit {
 class VercelDesktop implements SandboxDesktop {
   constructor(private readonly handle: VercelSandboxHandle) {}
 
-  async start(): Promise<void> {
+  async start(): Promise<DesktopStreamer> {
     // ffmpeg: required by `agent-browser record` (WebM encode). Runs BEFORE the
     // health/install logic below because older snapshots bake the VNC stack but
     // not ffmpeg — both the healthy early-return and the INSTALLED=1 guard would
@@ -290,22 +331,49 @@ class VercelDesktop implements SandboxDesktop {
     // Idempotent and soft-failing; see FFMPEG_INSTALL_SCRIPT.
     await this.handle.exec(FFMPEG_INSTALL_SCRIPT, { timeoutSeconds: 180 });
 
-    // Idempotent: if a live (non-zombie) stack is already healthy, keep it.
-    // Re-killing a working Xvnc mid-session blacks the Computer tab and races
-    // Chrome relaunch. websockify listens on 16080 (internal); exposed 6080 is
-    // the auth preview proxy (see getPreviewUrl / VERCEL_DESKTOP_INTERNAL_PORT).
-    const healthy = await this.handle.exec(
+    // Idempotent: keep a live, healthy stack. Re-killing a working Xvnc
+    // mid-session blacks the Computer tab and races Chrome relaunch, so a
+    // healthy display only gets its viewer swapped (env var changed, or the
+    // viewer died) and Chrome keeps running.
+    const wanted = configuredDesktopStreamer();
+    const found = await this.probe();
+    if (found === wanted) return wanted;
+    if (found === "down") await this.startDisplay();
+    return this.startViewer(wanted);
+  }
+
+  async stop(): Promise<void> {
+    await this.handle.exec(
       [
-        "ps -eo pid,stat,cmd | awk '$2 !~ /Z/ && /Xvnc/ { xvnc=1 } $2 !~ /Z/ && /websockify/ { ws=1 } END { exit(xvnc && ws ? 0 : 1) }'",
-        "&& (curl -fsS http://127.0.0.1:16080/vnc_lite.html >/dev/null 2>&1 || curl -fsS http://127.0.0.1:16080/vnc.html >/dev/null 2>&1)",
-        "&& xprop -display :1 -root >/dev/null 2>&1",
-      ].join(" "),
+        "pkill -9 -x Xvnc 2>/dev/null || true",
+        "pkill -9 -x x0vncserver 2>/dev/null || true",
+        STOP_VIEWERS,
+        "fuser -k 5901/tcp 2>/dev/null || true",
+        "pkill -f '[X]vfb :0' 2>/dev/null || true",
+      ].join("\n"),
+      { timeoutSeconds: 30 },
+    );
+  }
+
+  /** Is display :1 up, and which streamer (if any) serves it? */
+  private async probe(): Promise<DesktopProbe> {
+    const result = await this.handle.exec(
+      [
+        `${liveProcessCheck("Xvnc")} && xprop -display :1 -root >/dev/null 2>&1 || { echo down; exit 0; }`,
+        `if ${STREAMER_HEALTHY.voxl}; then echo voxl`,
+        `elif ${STREAMER_HEALTHY.novnc}; then echo novnc`,
+        "else echo display; fi",
+      ].join("\n"),
       { timeoutSeconds: 15 },
     );
-    if (healthy.exitCode === 0) {
-      return;
-    }
+    const parsed = desktopProbeSchema.safeParse(
+      result.output.trim().split("\n").pop()?.trim(),
+    );
+    return parsed.success ? parsed.data : "down";
+  }
 
+  /** Installs the VNC stack and (re)starts Xvnc on display :1. */
+  private async startDisplay(): Promise<void> {
     // 1) Install + kill previous servers (sync).
     await this.handle.exec(
       [
@@ -326,8 +394,8 @@ class VercelDesktop implements SandboxDesktop {
         "sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix",
         "pkill -9 -x Xvnc 2>/dev/null || true",
         "pkill -9 -x x0vncserver 2>/dev/null || true",
-        "pkill -9 -f '[w]ebsockify' 2>/dev/null || true",
-        "fuser -k 16080/tcp 5901/tcp 2>/dev/null || true",
+        STOP_VIEWERS,
+        "fuser -k 5901/tcp 2>/dev/null || true",
         "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true",
         "sleep 1",
       ].join("\n"),
@@ -339,8 +407,7 @@ class VercelDesktop implements SandboxDesktop {
       "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true; Xvnc :1 -geometry ${VNC_RESOLUTION:-1920x1080} -depth 24 -SecurityTypes None -AlwaysShared=1 >/tmp/xvnc.log 2>&1",
     );
 
-    // 3) Wait for the display, then detach websockify on the INTERNAL port.
-    // Exposed 6080 is reserved for the auth preview proxy (open-in-new-tab gate).
+    // 3) Wait for the display.
     await this.handle.exec(
       [
         "for i in $(seq 1 30); do xprop -display :1 -root >/dev/null 2>&1 && break; sleep 0.5; done",
@@ -349,45 +416,71 @@ class VercelDesktop implements SandboxDesktop {
       ].join("\n"),
       { timeoutSeconds: 60 },
     );
+  }
+
+  /**
+   * (Re)starts the viewer on the INTERNAL port. Exposed 6080 is reserved for
+   * the auth preview proxy (open-in-new-tab gate). voxl falls back to noVNC
+   * when it cannot install (AL2023, download or checksum failure) or start.
+   */
+  private async startViewer(wanted: DesktopStreamer): Promise<DesktopStreamer> {
+    await this.handle.exec(STOP_VIEWERS, { timeoutSeconds: 15 });
+
+    if (wanted === "voxl") {
+      const install = await this.handle.exec(VOXL_INSTALL_SCRIPT, {
+        timeoutSeconds: 180,
+      });
+      if (install.exitCode === 0) {
+        // Behind Eva's auth proxy, so voxl's own login is off, and it binds
+        // loopback only. The proxy rewrites Host and keeps the browser's
+        // Origin, hence `*` for both. Audio, files and the microphone are off
+        // until there is a reason to expose them.
+        await this.handle.execDetached(
+          [
+            `DISPLAY=:1 exec /usr/local/bin/voxl --addr=127.0.0.1 --port=${DESKTOP_VIEWER_PORT}`,
+            "--enable-basic-auth=false --allowed-hosts='*' --allowed-origins='*'",
+            "--audio-enabled=false --microphone-enabled=false --file-transfers=none",
+            ">/tmp/voxl.log 2>&1",
+          ].join(" "),
+        );
+        if (await this.waitHealthy("voxl")) return "voxl";
+      }
+      console.warn(
+        `[desktop] voxl unavailable, falling back to noVNC: ${install.output.slice(-500)}`,
+      );
+      await this.handle.exec(STOP_VIEWERS, { timeoutSeconds: 15 });
+    }
 
     await this.handle.execDetached(
       [
         'NOVNC_DIR=""; if [ -d /opt/novnc ]; then NOVNC_DIR=/opt/novnc; elif [ -d /opt/noVNC ]; then NOVNC_DIR=/opt/noVNC; fi',
         'WEBSOCKIFY_BIN="$(command -v websockify || echo "$(python3 -m site --user-base)/bin/websockify")"',
-        'exec "$WEBSOCKIFY_BIN" --web="$NOVNC_DIR" 127.0.0.1:16080 127.0.0.1:5901 >/tmp/novnc.log 2>&1',
+        `exec "$WEBSOCKIFY_BIN" --web="$NOVNC_DIR" 127.0.0.1:${DESKTOP_VIEWER_PORT} 127.0.0.1:5901 >/tmp/novnc.log 2>&1`,
       ].join("; "),
     );
+    if (!(await this.waitHealthy("novnc"))) {
+      throw new Error("desktop start: websockify/noVNC not healthy");
+    }
+    return "novnc";
+  }
 
-    // 4) Health-check: live (non-zombie) websockify + HTTP 200 on internal port.
-    await this.handle.exec(
+  /** Polls up to ~15 s for a live, answering viewer; logs why when it fails. */
+  private async waitHealthy(streamer: DesktopStreamer): Promise<boolean> {
+    const result = await this.handle.exec(
       [
         "for i in $(seq 1 30); do",
-        "  if ps -eo pid,stat,cmd | awk '$2 !~ /Z/ && /websockify/ { found=1 } END { exit(found ? 0 : 1) }' \\",
-        "    && (curl -fsS http://127.0.0.1:16080/vnc_lite.html >/dev/null 2>&1 || curl -fsS http://127.0.0.1:16080/vnc.html >/dev/null 2>&1); then",
-        "    exit 0",
-        "  fi",
+        `  if ${STREAMER_HEALTHY[streamer]}; then exit 0; fi`,
         "  sleep 0.5",
         "done",
-        'echo "desktop start: websockify/noVNC not healthy" >&2',
-        "tail -40 /tmp/novnc.log >&2 || true",
+        `echo "desktop start: ${streamer} not healthy" >&2`,
+        `tail -40 ${streamer === "voxl" ? "/tmp/voxl.log" : "/tmp/novnc.log"} >&2 || true`,
         "tail -20 /tmp/xvnc.log >&2 || true",
         "exit 1",
       ].join("\n"),
       { timeoutSeconds: 60 },
     );
-  }
-
-  async stop(): Promise<void> {
-    await this.handle.exec(
-      [
-        "pkill -9 -x Xvnc 2>/dev/null || true",
-        "pkill -9 -x x0vncserver 2>/dev/null || true",
-        "pkill -9 -f '[w]ebsockify' 2>/dev/null || true",
-        "fuser -k 16080/tcp 5901/tcp 2>/dev/null || true",
-        "pkill -f '[X]vfb :0' 2>/dev/null || true",
-      ].join("; "),
-      { timeoutSeconds: 30 },
-    );
+    if (result.exitCode !== 0) console.warn(result.output.slice(-1500));
+    return result.exitCode === 0;
   }
 }
 

@@ -223,6 +223,7 @@ import type * as _repoSnapshots_sanitizeSeededApps from "../_repoSnapshots/sanit
 import type * as _routedThreads_participantPicking from "../_routedThreads/participantPicking.js";
 import type * as _sandbox_activity from "../_sandbox/activity.js";
 import type * as _sandbox_closingStatus from "../_sandbox/closingStatus.js";
+import type * as _sandbox_desktopStreamer from "../_sandbox/desktopStreamer.js";
 import type * as _sandbox_driveCache from "../_sandbox/driveCache.js";
 import type * as _sandbox_factory from "../_sandbox/factory.js";
 import type * as _sandbox_ffmpegInstall from "../_sandbox/ffmpegInstall.js";
@@ -240,6 +241,7 @@ import type * as _sandbox_vercelEnvFile from "../_sandbox/vercelEnvFile.js";
 import type * as _sandbox_vercelProvider from "../_sandbox/vercelProvider.js";
 import type * as _sandbox_vercelRegion from "../_sandbox/vercelRegion.js";
 import type * as _sandbox_vercelSnapshotOptions from "../_sandbox/vercelSnapshotOptions.js";
+import type * as _sandbox_voxlInstall from "../_sandbox/voxlInstall.js";
 import type * as _sandbox_runtime_agentLaunchStep from "../_sandbox_runtime/agentLaunchStep.js";
 import type * as _sandbox_runtime_attachments from "../_sandbox_runtime/attachments.js";
 import type * as _sandbox_runtime_backgroundProcesses from "../_sandbox_runtime/backgroundProcesses.js";
@@ -774,6 +776,7 @@ declare const fullApi: ApiFromModules<{
   "_routedThreads/participantPicking": typeof _routedThreads_participantPicking;
   "_sandbox/activity": typeof _sandbox_activity;
   "_sandbox/closingStatus": typeof _sandbox_closingStatus;
+  "_sandbox/desktopStreamer": typeof _sandbox_desktopStreamer;
   "_sandbox/driveCache": typeof _sandbox_driveCache;
   "_sandbox/factory": typeof _sandbox_factory;
   "_sandbox/ffmpegInstall": typeof _sandbox_ffmpegInstall;
@@ -791,6 +794,7 @@ declare const fullApi: ApiFromModules<{
   "_sandbox/vercelProvider": typeof _sandbox_vercelProvider;
   "_sandbox/vercelRegion": typeof _sandbox_vercelRegion;
   "_sandbox/vercelSnapshotOptions": typeof _sandbox_vercelSnapshotOptions;
+  "_sandbox/voxlInstall": typeof _sandbox_voxlInstall;
   "_sandbox_runtime/agentLaunchStep": typeof _sandbox_runtime_agentLaunchStep;
   "_sandbox_runtime/attachments": typeof _sandbox_runtime_attachments;
   "_sandbox_runtime/backgroundProcesses": typeof _sandbox_runtime_backgroundProcesses;
