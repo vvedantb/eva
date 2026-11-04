@@ -37,12 +37,12 @@ export const createSessionPr = action({
       throw new Error("No branch associated with this session");
     }
 
-    const repo = await getActionRepoWithAccess(ctx, session.repoId);
-
-    const sessionPrs = await ctx.runQuery(
-      internal.pullRequests.listForOwnerInternal,
-      { owner: { kind: "session", sessionId: args.sessionId } },
-    );
+    const [repo, sessionPrs] = await Promise.all([
+      getActionRepoWithAccess(ctx, session.repoId),
+      ctx.runQuery(internal.pullRequests.listForOwnerInternal, {
+        owner: { kind: "session", sessionId: args.sessionId },
+      }),
+    ]);
     let prUrl = sessionRepoPullRequest(sessionPrs, undefined)?.prUrl;
     if (prUrl === undefined) {
       // Recovery for sessions that pushed commits before auto-draft existed.
@@ -142,22 +142,25 @@ async function siblingPullRequests(
   sessionPrs: Doc<"pullRequests">[],
   sessionRepoId: Id<"sessionRepos"> | undefined,
 ): Promise<SiblingPr[]> {
-  const siblings: SiblingPr[] = [];
-  for (const pr of sessionPrs) {
-    if (pr.owner.kind !== "session") continue;
-    const sameRepoOwnPr =
-      pr.owner.sessionRepoId === sessionRepoId &&
-      (sessionRepoId === undefined ? pr.primary : pr.origin === "eva");
-    if (sameRepoOwnPr) continue;
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: pr.repoId,
-    });
-    siblings.push({
-      label: repo ? `${repo.owner}/${repo.name}` : `#${pr.prNumber}`,
-      url: pr.prUrl,
-    });
-  }
-  return siblings;
+  const others = sessionPrs.filter(
+    (pr) =>
+      pr.owner.kind === "session" &&
+      !(
+        pr.owner.sessionRepoId === sessionRepoId &&
+        (sessionRepoId === undefined ? pr.primary : pr.origin === "eva")
+      ),
+  );
+  return Promise.all(
+    others.map(async (pr): Promise<SiblingPr> => {
+      const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+        id: pr.repoId,
+      });
+      return {
+        label: repo ? `${repo.owner}/${repo.name}` : `#${pr.prNumber}`,
+        url: pr.prUrl,
+      };
+    }),
+  );
 }
 
 /**
@@ -172,15 +175,14 @@ export const createDraftSessionPr = internalAction({
   args: { sessionId: v.id("sessions") },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args): Promise<string | null> => {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: args.sessionId,
-    });
+    const [session, sessionPrs] = await Promise.all([
+      ctx.runQuery(internal.sessions.getInternal, { id: args.sessionId }),
+      ctx.runQuery(internal.pullRequests.listForOwnerInternal, {
+        owner: { kind: "session", sessionId: args.sessionId },
+      }),
+    ]);
     if (!session) return null;
     if (!session.branchName) return null;
-    const sessionPrs = await ctx.runQuery(
-      internal.pullRequests.listForOwnerInternal,
-      { owner: { kind: "session", sessionId: args.sessionId } },
-    );
     const existing = sessionRepoPullRequest(sessionPrs, undefined);
     if (existing) return existing.prUrl;
 

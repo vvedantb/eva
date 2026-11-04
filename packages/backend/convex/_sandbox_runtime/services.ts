@@ -8,7 +8,6 @@ import type { DataModel, Id } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { desktopStreamerValidator } from "../_sandbox/desktopStreamer";
 import { internal } from "../_generated/api";
-import { resolveSandboxCredentials } from "../envVarResolver";
 import { execHandle, getSandboxHandle, workspaceDirShell } from "./helpers";
 import { WORKSPACE_ROOT } from "./workspaceLayout";
 import { launchChrome, startDesktopWithChrome } from "./desktop";
@@ -43,10 +42,8 @@ export const toggleCodeServer = action({
     console.log(
       `[code-server] ${args.action} requested for sandbox ${args.sandboxId}`,
     );
+    // getSandboxHandle also validates the repo's Vercel credentials.
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    // Validates that the repo has Vercel sandbox credentials configured;
-    // throws before touching the sandbox if it does not.
-    await resolveSandboxCredentials(ctx, args.repoId);
     // Listen internally so the auth proxy can own the exposed port.
     const listenPort = VERCEL_EDITOR_INTERNAL_PORT;
     const bindAddr = "127.0.0.1";

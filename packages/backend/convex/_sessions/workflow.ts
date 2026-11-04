@@ -779,12 +779,31 @@ export const getSessionData = internalQuery({
     sandboxSetupPending: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
+      getSessionChatOrThrow(ctx.db, args.chatId),
+      ctx.db.get(args.userId),
+      // Input images attached to the triggering user message. Used to re-stage
+      // pendingTurn on the queued/cancel-race path (immediate sends stage them
+      // directly in startExecute).
+      ctx.db
+        .query("messages")
+        .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
+        .order("desc")
+        .filter((q) => q.eq(q.field("role"), "user"))
+        .first(),
+    ]);
 
-    const repo = await ctx.db.get(session.repoId);
+    const [repo, primaryPr] = await Promise.all([
+      ctx.db.get(session.repoId),
+      // The primary repo's own PR: a side-branch PR the agent opened must not
+      // stop Eva from opening the session's draft.
+      findPrimaryPullRequest(ctx.db, {
+        kind: "session",
+        sessionId: session._id,
+      }),
+    ]);
     if (!repo) throw new Error("Repository not found");
 
-    const user = await ctx.db.get(args.userId);
     const { prompt, branchName } = await buildSessionPrompt(ctx, {
       session,
       chat,
@@ -793,16 +812,6 @@ export const getSessionData = internalQuery({
       message: args.message,
       model: args.model,
     });
-
-    // Input images attached to the triggering user message. Used to re-stage
-    // pendingTurn on the queued/cancel-race path (immediate sends stage them
-    // directly in startExecute).
-    const triggeringUserMessage = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.chatId))
-      .order("desc")
-      .filter((q) => q.eq(q.field("role"), "user"))
-      .first();
 
     return {
       sessionId: session._id,
@@ -814,14 +823,7 @@ export const getSessionData = internalQuery({
       repoId: session.repoId,
       prompt,
       branchName,
-      // The primary repo's own PR: a side-branch PR the agent opened must not
-      // stop Eva from opening the session's draft.
-      primaryPrUrl: (
-        await findPrimaryPullRequest(ctx.db, {
-          kind: "session",
-          sessionId: session._id,
-        })
-      )?.prUrl,
+      primaryPrUrl: primaryPr?.prUrl,
       baseBranch: resolveSessionBaseBranch(session, repo),
       model: normalizeAIModel(args.model),
       deploymentProjectName: repo.deploymentProjectName,

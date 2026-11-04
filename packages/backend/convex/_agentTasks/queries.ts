@@ -14,6 +14,7 @@ import {
   taskIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 
 /** Validator for a task document enriched with its latest run and busy state. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -58,31 +59,30 @@ async function enrichTasksWithLastRun(
   userId: Id<"users">,
   tasks: Array<Doc<"agentTasks">>,
 ) {
-  const repoIds = repoIdsOf(tasks);
-  const [openChatEntityIds, awaitingAnswerIds] = await Promise.all([
-    turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
-    turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
-  ]);
+  const repoIds = [...repoIdsOf(tasks)];
+  const [openChatEntityIds, awaitingAnswerIds, unreadByRepo, summaryGroups] =
+    await Promise.all([
+      turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
+      turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
+      Promise.all(
+        repoIds.map((repoId) => unreadLookupForRepo(db, userId, repoId)),
+      ),
+      Promise.all(
+        repoIds.map((repoId) =>
+          db
+            .query("agentTaskRunSummaries")
+            .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+            .collect(),
+        ),
+      ),
+    ]);
   const unreadLookups = new Map<
     string,
     (task: Doc<"agentTasks">) => Promise<boolean>
   >();
-  await Promise.all(
-    [...repoIds].map(async (repoId) => {
-      unreadLookups.set(
-        String(repoId),
-        await unreadLookupForRepo(db, userId, repoId),
-      );
-    }),
-  );
-  const summaryGroups = await Promise.all(
-    [...repoIds].map((repoId) =>
-      db
-        .query("agentTaskRunSummaries")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect(),
-    ),
-  );
+  repoIds.forEach((repoId, i) => {
+    unreadLookups.set(String(repoId), unreadByRepo[i]);
+  });
   const summariesByTask = new Map(
     summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
   );
@@ -227,29 +227,8 @@ async function activeTasksForUser(
       if (!(await hasRepoAccess(ctx.db, args.repoId, ctxUserId))) return [];
       repoIds = [args.repoId];
     } else {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", ctxUserId))
-        .collect();
-      const teamRepos = await Promise.all(
-        memberships.map((m) =>
-          ctx.db
-            .query("githubRepos")
-            .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-            .collect(),
-        ),
-      );
-      const connectedRepos = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", ctxUserId))
-        .collect();
-      const seen = new Set<string>();
-      repoIds = [];
-      for (const repo of [...connectedRepos, ...teamRepos.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        repoIds.push(repo._id);
-      }
+      const repos = await gatherAccessibleRepos(ctx.db, ctxUserId, true);
+      repoIds = repos.map((repo) => repo._id);
     }
 
     const taskArrays = await Promise.all(

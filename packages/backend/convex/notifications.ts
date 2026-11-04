@@ -285,9 +285,9 @@ async function ownedNotifications(
       `Too many notifications: ${ids.length} (max ${BULK_ID_LIMIT})`,
     );
   }
+  const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
   const owned = [];
-  for (const id of ids) {
-    const notification = await ctx.db.get(id);
+  for (const notification of rows) {
     if (!notification || notification.userId !== userId) continue;
     owned.push(notification);
   }
