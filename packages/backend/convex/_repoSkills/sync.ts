@@ -187,13 +187,14 @@ async function syncSkillsForTarget(
 
   const skills: SyncedSkill[] = [];
   const seenSourcePaths = new Set<string>();
-  // Fetch side by side; results are read back in directory order.
-  const fetchResults = await Promise.all(
-    directories.map((directory) =>
-      fetchSkill(octokit, target.owner, target.name, target.ref, directory),
-    ),
-  );
-  for (const fetchResult of fetchResults) {
+  for (const directory of directories) {
+    const fetchResult = await fetchSkill(
+      octokit,
+      target.owner,
+      target.name,
+      target.ref,
+      directory,
+    );
     if (!fetchResult.ok) {
       skipped++;
       warnings.push(fetchResult.warning);

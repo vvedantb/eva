@@ -41,17 +41,16 @@ export async function usersShareTeam(
     .query("teamMembers")
     .withIndex("by_user", (q) => q.eq("userId", a))
     .collect();
-  const others = await Promise.all(
-    memberships.map((membership) =>
-      db
-        .query("teamMembers")
-        .withIndex("by_team_and_user", (q) =>
-          q.eq("teamId", membership.teamId).eq("userId", b),
-        )
-        .first(),
-    ),
-  );
-  return others.some((other) => other !== null);
+  for (const membership of memberships) {
+    const other = await db
+      .query("teamMembers")
+      .withIndex("by_team_and_user", (q) =>
+        q.eq("teamId", membership.teamId).eq("userId", b),
+      )
+      .first();
+    if (other) return true;
+  }
+  return false;
 }
 
 /**

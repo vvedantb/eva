@@ -333,21 +333,20 @@ export async function hasActiveRun(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
 ): Promise<boolean> {
-  const [queued, running] = await Promise.all([
-    db
-      .query("agentRuns")
-      .withIndex("by_task_and_status", (q) =>
-        q.eq("taskId", taskId).eq("status", "queued"),
-      )
-      .first(),
-    db
-      .query("agentRuns")
-      .withIndex("by_task_and_status", (q) =>
-        q.eq("taskId", taskId).eq("status", "running"),
-      )
-      .first(),
-  ]);
-  return queued !== null || running !== null;
+  const queued = await db
+    .query("agentRuns")
+    .withIndex("by_task_and_status", (q) =>
+      q.eq("taskId", taskId).eq("status", "queued"),
+    )
+    .first();
+  if (queued) return true;
+  const running = await db
+    .query("agentRuns")
+    .withIndex("by_task_and_status", (q) =>
+      q.eq("taskId", taskId).eq("status", "running"),
+    )
+    .first();
+  return running !== null;
 }
 
 /** True when a later-started run exists on the same task (stale workflow completion). */

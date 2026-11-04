@@ -638,15 +638,13 @@ export const run = internalAction({
     let busy = 0;
     let present = 0;
     let paused = 0;
-    // Read-only inspections are independent: one round trip for all of them.
-    // Writes below stay sequential so MAX_PAUSES_PER_RUN still caps the run.
-    const candidates = await Promise.all(
-      refs.map((ref) =>
-        ctx.runQuery(internal.sandboxIdlePause.inspectCandidate, ref),
-      ),
-    );
-    for (const [index, ref] of refs.entries()) {
-      const candidate = candidates[index];
+    // Inspect each sandbox just before deciding on it: `pause` re-checks only
+    // status and busy, so a batched read could act on stale presence.
+    for (const ref of refs) {
+      const candidate = await ctx.runQuery(
+        internal.sandboxIdlePause.inspectCandidate,
+        ref,
+      );
       if (!candidate) continue;
       if (candidate.present) {
         present += 1;

@@ -313,19 +313,18 @@ export const launchSeedRun = internalAction({
   handler: async (ctx, args): Promise<null> => {
     // Validates Vercel credentials are configured for this repo; the sandbox
     // handle itself is resolved separately below via getSandboxHandle.
+    await resolveSandboxCredentials(ctx, args.repoId);
     // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
     // the compiled floor made every launch npm-install the latest Claude CLI
     // before its daemon could start: ~5-7s on half of all first turns.
-    // All reads are independent, so they run together.
+    // These reads are independent, so they run together.
     const [
-      ,
       claudeCliVersion,
       codexCliVersion,
       startupCommands,
       backgroundCommands,
       stopCommands,
     ] = await Promise.all([
-      resolveSandboxCredentials(ctx, args.repoId),
       resolveClaudeCliVersion(),
       resolveCodexCliVersion(),
       ctx.runQuery(internal.repoSnapshots.getStartupCommands, {
