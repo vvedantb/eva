@@ -3,7 +3,7 @@
 import { v, type Infer } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
-import { jwtVerify, SignJWT } from "jose";
+import { jwtVerify } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
@@ -46,23 +46,13 @@ import {
   type ChatEntityKind,
 } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { repoRefLabel } from "./toolShared";
+import { chatSourceArg, repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
-<<<<<<< HEAD
-import { requireEnv } from "../_env/requireEnv";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { signSandboxUserJwt } from "../sandboxJwt";
-import { chatSourceArg } from "./toolShared";
 import { errorText } from "../_shared/errors";
 import { sleep } from "../_shared/async";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Environment Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-=======
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
 import { evaMcpServerInfo } from "./serverInfo";
->>>>>>> origin/main
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -78,129 +68,10 @@ const internalTokenClaims = z.object({
   chatId: z.string().optional(),
 });
 
-<<<<<<< HEAD
-type OauthTokens = {
-  access_token: string;
-  token_type: "Bearer";
-  expires_in: number;
-  scope: string;
-  refresh_token: string;
-};
-
-type RefreshResult =
-  | { success: true; tokens: OauthTokens }
-  | { success: false; error: string };
-
-function refreshFailure(error: string): RefreshResult {
-  return { success: false, error };
-}
-
-function refreshSuccess(tokens: OauthTokens): RefreshResult {
-  return { success: true, tokens };
-}
-=======
-const mcpEntityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
->>>>>>> origin/main
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Actions
 // ─────────────────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
-async function createOauthTokens(
-  clerkUserId: string,
-  clientId: string,
-  secret: Uint8Array,
-): Promise<OauthTokens> {
-  const accessToken = await new SignJWT({ sub: clerkUserId, clientId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("eva")
-    .setAudience("mcp-oauth")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(secret);
-
-  const refreshToken = await new SignJWT({
-    sub: clerkUserId,
-    clientId,
-    type: "refresh",
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("eva")
-    .setAudience("mcp-oauth")
-    .setExpirationTime("30d")
-    .setIssuedAt()
-    .sign(secret);
-
-  return {
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: 3600,
-    scope: "claudeai",
-    refresh_token: refreshToken,
-  };
-}
-
-export const issueTokens = internalAction({
-  args: { clerkUserId: v.string(), clientId: v.string() },
-  returns: v.object({
-    access_token: v.string(),
-    token_type: v.literal("Bearer"),
-    expires_in: v.number(),
-    scope: v.string(),
-    refresh_token: v.string(),
-  }),
-  handler: async (_ctx, { clerkUserId, clientId }) => {
-    const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
-    return await createOauthTokens(clerkUserId, clientId, secret);
-  },
-});
-
-export const refreshToken = internalAction({
-  args: { refreshToken: v.string(), clientId: v.string() },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      tokens: v.object({
-        access_token: v.string(),
-        token_type: v.literal("Bearer"),
-        expires_in: v.number(),
-        scope: v.string(),
-        refresh_token: v.string(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      error: v.string(),
-    }),
-  ),
-  handler: async (_ctx, { refreshToken, clientId }) => {
-    try {
-      const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
-      const { payload } = await jwtVerify(refreshToken, secret, {
-        issuer: "eva",
-        audience: "mcp-oauth",
-      });
-
-      const claims = refreshTokenClaims.safeParse(payload);
-      if (!claims.success || claims.data.clientId !== clientId) {
-        return refreshFailure("Invalid refresh token");
-      }
-
-      const clerk = createClerkClient({
-        secretKey: requireEnv("CLERK_SECRET_KEY"),
-      });
-      await clerk.users.getUser(claims.data.sub);
-      const tokens = await createOauthTokens(claims.data.sub, clientId, secret);
-
-      return refreshSuccess(tokens);
-    } catch {
-      return refreshFailure("Expired or invalid refresh token");
-=======
 /**
  * Sandbox tokens: HS256, `aud: "mcp-internal"`, signed with
  * `MCP_INTERNAL_SECRET`. Carry the repo, entity and chat scope.
@@ -215,7 +86,6 @@ async function verifyInternalToken(token: string) {
     if (!claims.success) {
       console.error("[MCP][verifyAccessToken] internal token payload invalid");
       return null;
->>>>>>> origin/main
     }
     return {
       clerkUserId: claims.data.sub,
@@ -249,87 +119,6 @@ export const verifyAccessToken = internalAction({
     v.null(),
   ),
   handler: async (_ctx, { token }) => {
-<<<<<<< HEAD
-    // Try OAuth token first
-    try {
-      const secret = new TextEncoder().encode(requireEnv("MCP_JWT_SECRET"));
-      const { payload } = await jwtVerify(token, secret, {
-        issuer: "eva",
-        audience: "mcp-oauth",
-      });
-
-      const claims = oauthTokenClaims.safeParse(payload);
-      if (claims.success) {
-        // Best-effort Clerk lookup — agent/test users may not exist in Clerk but
-        // a verified JWT sub is still authoritative for MCP auth.
-        try {
-          const clerk = createClerkClient({
-            secretKey: requireEnv("CLERK_SECRET_KEY"),
-          });
-          await clerk.users.getUser(claims.data.sub);
-        } catch (err) {
-          console.error(
-            "[MCP][verifyAccessToken] Clerk getUser failed (using JWT sub):",
-            err instanceof Error ? err.message : err,
-          );
-          return null;
-        }
-        // Same shape as internal tokens so callers can read optional fields
-        // without narrowing (OAuth tokens just leave them unset).
-        return {
-          clerkUserId: claims.data.sub,
-          scopedRepoId: undefined,
-          entityId: undefined,
-          entityKind: undefined,
-          chatId: undefined,
-        };
-      }
-      // OAuth payload missing sub — fall through to internal token
-    } catch {
-      // Not an OAuth token — fall through to internal token
-    }
-
-    // Try internal token (scoped repo access)
-    try {
-      const internalSecret = process.env.MCP_INTERNAL_SECRET;
-      if (!internalSecret) {
-        console.error("[MCP][verifyAccessToken] MCP_INTERNAL_SECRET not set");
-        return null;
-      }
-
-      const secret = new TextEncoder().encode(internalSecret);
-      const { payload } = await jwtVerify(token, secret);
-
-      // Validate internal token structure
-      const claims = internalTokenClaims.safeParse(payload);
-      if (!claims.success) {
-        console.error(
-          "[MCP][verifyAccessToken] internal token payload invalid",
-        );
-        return null;
-      }
-
-      return {
-        clerkUserId: claims.data.sub,
-        scopedRepoId: claims.data.repoId,
-        ...(claims.data.entityId !== undefined
-          ? { entityId: claims.data.entityId }
-          : {}),
-        ...(claims.data.entityKind !== undefined
-          ? { entityKind: claims.data.entityKind }
-          : {}),
-        ...(claims.data.chatId !== undefined
-          ? { chatId: claims.data.chatId }
-          : {}),
-      };
-    } catch (err) {
-      console.error(
-        "[MCP][verifyAccessToken] all verification failed:",
-        err instanceof Error ? err.message : err,
-      );
-      return null;
-    }
-=======
     const sandbox = await verifyInternalToken(token);
     if (sandbox) return sandbox;
 
@@ -346,7 +135,6 @@ export const verifyAccessToken = internalAction({
       },
     );
     return verified ? { clerkUserId: verified.userId } : null;
->>>>>>> origin/main
   },
 });
 
@@ -416,38 +204,10 @@ const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
 function getEvaConvexCloudUrl(): string {
   const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
-<<<<<<< HEAD
-  return requireEnv("CONVEX_SITE_URL").replace(".convex.site", ".convex.cloud");
-=======
   return requiredEnv("CONVEX_SITE_URL").replace(
     ".convex.site",
     ".convex.cloud",
   );
-}
-
-/** Deployed web app origin, used to build hosted artifact view links. */
-async function getDeployKey(): Promise<string> {
-  if (cachedDeployKey && cachedDeployKey.expiresAt > Date.now()) {
-    return cachedDeployKey.value;
-  }
-  const response = await fetch(
-    `${requiredEnv("CONVEX_SITE_URL")}/api/mcp/bootstrap`,
-    {
-      headers: {
-        Authorization: `MCPBootstrap ${requiredEnv("MCP_BOOTSTRAP_SECRET")}`,
-      },
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to bootstrap deploy key: HTTP ${response.status}`);
-  }
-  const body = z.object({ deployKey: z.string() }).parse(await response.json());
-  cachedDeployKey = {
-    value: body.deployKey,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  };
-  return body.deployKey;
->>>>>>> origin/main
 }
 
 async function runTestQueryRemote(
@@ -474,25 +234,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
     return cached.jwt;
   }
 
-<<<<<<< HEAD
   const jwt = await signSandboxUserJwt(clerkUserId, "1h");
-=======
-  const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
-  if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
-
-  const issuer = requiredEnv("CONVEX_SITE_URL");
-  const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
-  const kid = privateKeyJwk.kid ?? "sandbox-1";
-  const key = await importJWK(privateKeyJwk, "ES256");
-
-  const jwt = await new SignJWT({ sub: clerkUserId })
-    .setProtectedHeader({ alg: "ES256", kid })
-    .setIssuer(issuer)
-    .setAudience("convex")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(key);
->>>>>>> origin/main
 
   userJwtCache.set(clerkUserId, {
     jwt,
@@ -1038,28 +780,11 @@ const sessionChatRowSchema = z.object({
 });
 
 /** A session's open chats; its transcript is the Main chat's. */
-<<<<<<< HEAD
 async function loadSessionChatsAsUser(clerkUserId: string, sessionId: string) {
   const rows = z.array(sessionChatRowSchema).parse(
     await runAsUser("query", clerkUserId, "sessionChats:listForSession", {
       sessionId,
     }),
-=======
-async function loadSessionChatsAsUser(
-  convexUrl: string,
-  clerkUserId: string,
-  sessionId: string,
-) {
-  const rows = z.array(sessionChatRowSchema).parse(
-    await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      "sessionChats:listForSession",
-      {
-        sessionId,
-      },
-    ),
->>>>>>> origin/main
   );
   return rows.filter((row) => row.archived !== true);
 }
@@ -1141,18 +866,8 @@ async function registerWatchIfAve(
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
-<<<<<<< HEAD
-  const resolved =
-    aveThreadId ??
-    aveThreadPointerSchema.parse(
-      await runAsUser("query", clerkUserId, "ave:getThread", {}),
-    )?._id;
-  if (resolved === undefined) return;
-  await setWatchedByAve(clerkUserId, kind, id, resolved);
-=======
   if (aveThreadId === undefined) return;
   await setWatchedByAve(clerkUserId, kind, id, aveThreadId);
->>>>>>> origin/main
 }
 
 export const orchestratorListAgents = internalAction({
@@ -1274,12 +989,11 @@ const sessionGroupSchema = z
 
 /** The session's linked-session group, read as the calling user. */
 async function readSessionGroup(
-  convexUrl: string,
   clerkUserId: string,
   sessionId: string,
 ): Promise<Infer<typeof mcpSessionGroupValidator> | undefined> {
   const group = sessionGroupSchema.parse(
-    await runQueryAsUser(convexUrl, clerkUserId, "sessions:listGroup", {
+    await runAsUser("query", clerkUserId, "sessions:listGroup", {
       id: sessionId,
     }),
   );
@@ -1424,7 +1138,7 @@ export const orchestratorGetAgentState = internalAction({
               sessionId: id,
             })
           : undefined;
-      const sessionGroup = await readSessionGroup(convexUrl, clerkUserId, id);
+      const sessionGroup = await readSessionGroup(clerkUserId, id);
       return {
         ...common,
         numId: session.numId,
@@ -1468,7 +1182,42 @@ export const orchestratorGetAgentState = internalAction({
   },
 });
 
-<<<<<<< HEAD
+/**
+ * Joins, renames or leaves a session's linked-session group as the calling
+ * user, through the same mutations the sidebar and header chip use. Returns
+ * the group as it stands afterwards (undefined once the session is out of it).
+ */
+export const orchestratorUpdateSessionGroup = internalAction({
+  args: {
+    clerkUserId: v.string(),
+    sessionId: v.string(),
+    change: v.union(
+      v.object({ kind: v.literal("add"), groupSessionId: v.string() }),
+      v.object({ kind: v.literal("rename"), name: v.string() }),
+      v.object({ kind: v.literal("remove") }),
+    ),
+  },
+  returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
+  handler: async (_ctx, { clerkUserId, sessionId, change }) => {
+    if (change.kind === "add") {
+      await runAsUser("mutation", clerkUserId, "sessions:addToGroup", {
+        sessionId,
+        groupSessionId: change.groupSessionId,
+      });
+    } else if (change.kind === "rename") {
+      await runAsUser("mutation", clerkUserId, "sessions:renameGroup", {
+        sessionId,
+        name: change.name,
+      });
+    } else {
+      await runAsUser("mutation", clerkUserId, "sessions:removeFromGroup", {
+        sessionId,
+      });
+    }
+    return { sessionGroup: await readSessionGroup(clerkUserId, sessionId) };
+  },
+});
+
 type ChatDocHit =
   | { kind: "session"; doc: z.infer<typeof sessionDocSchema> }
   | { kind: "task"; doc: z.infer<typeof agentTaskSchema> }
@@ -1492,52 +1241,6 @@ async function readChatDocAsUser(
   if (kind === "session") return { kind, doc: sessionDocSchema.parse(raw) };
   if (kind === "task") return { kind, doc: agentTaskSchema.parse(raw) };
   return { kind, doc: projectDocSchema.parse(raw) };
-=======
-/**
- * Joins, renames or leaves a session's linked-session group as the calling
- * user, through the same mutations the sidebar and header chip use. Returns
- * the group as it stands afterwards (undefined once the session is out of it).
- */
-export const orchestratorUpdateSessionGroup = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    sessionId: v.string(),
-    change: v.union(
-      v.object({ kind: v.literal("add"), groupSessionId: v.string() }),
-      v.object({ kind: v.literal("rename"), name: v.string() }),
-      v.object({ kind: v.literal("remove") }),
-    ),
-  },
-  returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
-  handler: async (_ctx, { clerkUserId, sessionId, change }) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    if (change.kind === "add") {
-      await runMutationAsUser(convexUrl, clerkUserId, "sessions:addToGroup", {
-        sessionId,
-        groupSessionId: change.groupSessionId,
-      });
-    } else if (change.kind === "rename") {
-      await runMutationAsUser(convexUrl, clerkUserId, "sessions:renameGroup", {
-        sessionId,
-        name: change.name,
-      });
-    } else {
-      await runMutationAsUser(
-        convexUrl,
-        clerkUserId,
-        "sessions:removeFromGroup",
-        { sessionId },
-      );
-    }
-    return {
-      sessionGroup: await readSessionGroup(convexUrl, clerkUserId, sessionId),
-    };
-  },
-});
-
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
->>>>>>> origin/main
 }
 
 /**
@@ -1700,17 +1403,7 @@ export const orchestratorSendMessage = internalAction({
       internal.mcp.queries.entityIsExecuting,
       { kind, id: targetId },
     );
-<<<<<<< HEAD
     const delivery = chatDelivery(storedModel, queuedAhead, model, isExecuting);
-=======
-    const delivery = chatDelivery(
-      kind,
-      rawDoc,
-      queuedAhead,
-      model,
-      isExecuting,
-    );
->>>>>>> origin/main
     for (const call of buildChatMessageCalls({
       kind,
       id: targetId,

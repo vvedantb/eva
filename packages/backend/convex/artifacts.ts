@@ -14,12 +14,12 @@ import {
   authAction,
   hasTeamAccess,
 } from "./functions";
-import { artifactFields, messageFields } from "./validators";
 import {
+  artifactFields,
   chatEntityKindValidator,
-  latestChatMessageId,
-  resolveChatParent,
-} from "./_chat/chatParent";
+  messageFields,
+} from "./validators";
+import { latestChatMessageId, resolveChatParent } from "./_chat/chatParent";
 import { deleteAllArtifactState } from "./artifactState";
 import {
   callerCanSeeChatSource,
@@ -415,10 +415,9 @@ export const callTool = authAction({
         case "list_repos": {
           // Kept direct: artifacts parse this bare-array shape, while the MCP
           // tool now returns `{ repos, groups }` plus repo instructions.
-          const repos = await ctx.runQuery(
-            internal.mcp.queries.listUserRepos,
-            { userId },
-          );
+          const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
+            userId,
+          });
           const replicaIds = new Set(
             await ctx.runQuery(internal.mcp.queries.reposWithPostgresReplica, {
               repoIds: repos.map((r) => r.id),

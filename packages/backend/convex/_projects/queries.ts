@@ -17,13 +17,9 @@ import {
   getProjectDetails,
 } from "./helpers";
 import { unreadLookupForRepo } from "../chatReads";
-<<<<<<< HEAD
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-=======
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
->>>>>>> origin/main
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.

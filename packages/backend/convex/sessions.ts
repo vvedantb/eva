@@ -37,16 +37,12 @@ export {
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
 
-<<<<<<< HEAD
-=======
-export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 export {
   addToGroup,
   renameGroup,
   removeFromGroup,
 } from "./_sessions/groups";
 
->>>>>>> origin/main
 export {
   getForkSource,
   createForkedSession,

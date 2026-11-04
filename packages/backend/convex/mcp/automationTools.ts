@@ -12,11 +12,7 @@ import {
   mcpGetContext,
   mcpListUserRepos,
   repoRefLabel,
-<<<<<<< HEAD
-  textResult,
   truncateForAgent,
-=======
->>>>>>> origin/main
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";

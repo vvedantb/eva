@@ -7,10 +7,6 @@ import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
 import { execHandle } from "./helpers";
-<<<<<<< HEAD
-import { requireEnv } from "../_env/requireEnv";
-=======
->>>>>>> origin/main
 import {
   resolvePublicConvexCloudUrl,
   resolvePublicConvexSiteUrl,

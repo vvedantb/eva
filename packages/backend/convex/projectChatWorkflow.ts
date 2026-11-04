@@ -39,16 +39,9 @@ import { trackProjectChatWorkflow } from "./workflowWatchdog";
 import { projectChatStreamEntityId } from "./_chat/surfaceAdapters";
 import { buildProjectChatPrompt } from "./_projects/chatPrompt";
 import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
-<<<<<<< HEAD
 import { getProjectGeneratedSpec } from "./_projects/helpers";
 import { resolveProjectBranchName } from "./_git/branchNames";
-=======
-import {
-  buildProjectBranchName,
-  getProjectGeneratedSpec,
-} from "./_projects/helpers";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
->>>>>>> origin/main
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
 import { bareHarnessCommandPrompt } from "./_mentions/bareHarnessCommand";
@@ -715,81 +708,33 @@ export async function cancelProjectChatExecution(
   ctx: MutationCtx,
   project: Doc<"projects">,
 ): Promise<void> {
-  await cancelTrackedWorkflow(ctx, project.activeChatWorkflowId);
-
-  const workflowIdToCancel = project.activeChatWorkflowId;
-  const pendingRequestedAt = project.pendingTurn?.requestedAt;
-
-  if (usesChatDaemon(project.lastChatModel ?? project.model)) {
-    await ctx.db.patch(project._id, { cancelRequestedAt: Date.now() });
-  } else if (project.sandboxId) {
-    if (project.activeWorkflowId || project.activeBuildWorkflowId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-        sandboxId: project.sandboxId,
-        repoId: project.repoId,
-        entityIdField: "projectId",
-        entityId: String(project._id),
-      });
-    } else {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-        sandboxId: project.sandboxId,
-        repoId: project.repoId,
-      });
-    }
-  }
-
-  if (workflowIdToCancel !== undefined) {
-    await closeTurnForWorkflow(
-      ctx,
-      project._id,
-      workflowIdToCancel,
-      "cancelled",
-      { error: "Cancelled by the user" },
-    );
-  }
-
-  const streamingEntityId = chatStreamEntityId(project._id);
-  const streaming = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-    .first();
-
-  const latest = await ctx.db.get(project._id);
-  if (!latest) return;
-
-  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-    latestPendingTurn: latest.pendingTurn,
-    cancelPendingRequestedAt: pendingRequestedAt,
-    latestActiveWorkflowId: latest.activeChatWorkflowId,
-    cancelWorkflowId: workflowIdToCancel,
+  const cancelled = await cancelChatTurn(ctx, {
+    id: project._id,
+    entity: project,
+    activeWorkflowId: (p) => p.activeChatWorkflowId,
+    streamingEntityId: projectChatStreamEntityId(project._id),
+    interrupt: async () => {
+      if (usesChatDaemon(project.lastChatModel ?? project.model)) {
+        await ctx.db.patch(project._id, { cancelRequestedAt: Date.now() });
+      } else if (project.sandboxId) {
+        if (project.activeWorkflowId || project.activeBuildWorkflowId) {
+          await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
+            sandboxId: project.sandboxId,
+            repoId: project.repoId,
+            entityIdField: "projectId",
+            entityId: String(project._id),
+          });
+        } else {
+          await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+            sandboxId: project.sandboxId,
+            repoId: project.repoId,
+          });
+        }
+      }
+    },
+    getLatest: () => ctx.db.get(project._id),
   });
-
-  if (cancelOwnsCurrentTurn) {
-    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", project._id))
-      .order("desc")
-      .first();
-    if (
-      last &&
-      last.role === "assistant" &&
-      last.finishedAt === undefined &&
-      last._id !== syntheticTurnMessageId
-    ) {
-      await finalizeCancelledAssistantMessage(ctx, last, streaming);
-    }
-    await finalizeOpenSyntheticTurnOnCancel(
-      ctx,
-      syntheticTurnMessageId,
-      streaming,
-    );
-    await closeOpenTurn(ctx, project._id, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  await clearStreamingActivity(ctx, streamingEntityId);
+  if (!cancelled) return;
 
   const projectPatch: {
     activeChatWorkflowId?: undefined;
@@ -797,23 +742,11 @@ export async function cancelProjectChatExecution(
     syntheticTurnMessageId?: undefined;
     updatedAt: number;
   } = { updatedAt: Date.now() };
-
-  if (
-    workflowIdToCancel !== undefined &&
-    latest.activeChatWorkflowId === workflowIdToCancel
-  ) {
-    projectPatch.activeChatWorkflowId = undefined;
-  }
-  if (
-    pendingRequestedAt !== undefined &&
-    latest.pendingTurn?.requestedAt === pendingRequestedAt
-  ) {
-    projectPatch.pendingTurn = undefined;
-  }
-  if (cancelOwnsCurrentTurn) {
+  if (cancelled.clearsWorkflow) projectPatch.activeChatWorkflowId = undefined;
+  if (cancelled.clearsPendingTurn) projectPatch.pendingTurn = undefined;
+  if (cancelled.cancelOwnsCurrentTurn) {
     projectPatch.syntheticTurnMessageId = undefined;
   }
-
   await ctx.db.patch(project._id, projectPatch);
 
   await startNextQueuedProjectChatMessage(ctx, project._id);
@@ -832,56 +765,7 @@ export const cancelExecution = authMutation({
       ctx.userId,
     );
 
-<<<<<<< HEAD
-    const cancelled = await cancelChatTurn(ctx, {
-      id: args.projectId,
-      entity: project,
-      activeWorkflowId: (p) => p.activeChatWorkflowId,
-      streamingEntityId: projectChatStreamEntityId(args.projectId),
-      interrupt: async () => {
-        if (usesChatDaemon(project.lastChatModel ?? project.model)) {
-          await ctx.db.patch(args.projectId, { cancelRequestedAt: Date.now() });
-        } else if (project.sandboxId) {
-          if (project.activeWorkflowId || project.activeBuildWorkflowId) {
-            await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-              sandboxId: project.sandboxId,
-              repoId: project.repoId,
-              entityIdField: "projectId",
-              entityId: String(args.projectId),
-            });
-          } else {
-            await ctx.scheduler.runAfter(
-              0,
-              internal.sandbox.killSandboxProcess,
-              {
-                sandboxId: project.sandboxId,
-                repoId: project.repoId,
-              },
-            );
-          }
-        }
-      },
-      getLatest: () => ctx.db.get(args.projectId),
-    });
-    if (!cancelled) return null;
-
-    const projectPatch: {
-      activeChatWorkflowId?: undefined;
-      pendingTurn?: undefined;
-      syntheticTurnMessageId?: undefined;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-    if (cancelled.clearsWorkflow) projectPatch.activeChatWorkflowId = undefined;
-    if (cancelled.clearsPendingTurn) projectPatch.pendingTurn = undefined;
-    if (cancelled.cancelOwnsCurrentTurn) {
-      projectPatch.syntheticTurnMessageId = undefined;
-    }
-    await ctx.db.patch(args.projectId, projectPatch);
-
-    await startNextQueuedProjectChatMessage(ctx, args.projectId);
-=======
     await cancelProjectChatExecution(ctx, project);
->>>>>>> origin/main
     return null;
   },
 });

@@ -6,10 +6,7 @@ import { z } from "zod";
 import type { ZodTypeAny } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-<<<<<<< HEAD
-import { errorResult, type McpCredentials } from "./toolShared";
-=======
->>>>>>> origin/main
+import type { McpCredentials } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
 import { errorText } from "../_shared/errors";
 import { withTimeout } from "../_shared/async";
@@ -271,13 +268,7 @@ export async function supabaseTools(
               await client.close();
             }
           } catch (err) {
-<<<<<<< HEAD
-            const message = errorText(err);
-            return errorResult(`Supabase tool error: ${message}`);
-=======
-            const message = err instanceof Error ? err.message : String(err);
-            return toolErrorResult(`Supabase tool error: ${message}`);
->>>>>>> origin/main
+            return toolErrorResult(`Supabase tool error: ${errorText(err)}`);
           }
         },
       }),

@@ -1,8 +1,8 @@
-import { requireEnv } from "./requireEnv";
+import { requiredEnvUrl } from "@vvedantb/server";
 
 /** Eva web app origin, no trailing slash. Throws when WEB_APP_URL is unset. */
 export function getEvaBaseUrl(): string {
-  return requireEnv("WEB_APP_URL").replace(/\/$/, "");
+  return requiredEnvUrl("WEB_APP_URL");
 }
 
 /** Eva web app origin, no trailing slash, or null when WEB_APP_URL is unset. */

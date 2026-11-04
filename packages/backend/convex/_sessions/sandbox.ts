@@ -26,11 +26,8 @@ import {
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-<<<<<<< HEAD
-import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
-=======
 import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
->>>>>>> origin/main
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   stopAlertText,
   stopReasonValidator,

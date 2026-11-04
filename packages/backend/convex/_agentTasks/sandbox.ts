@@ -7,11 +7,8 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-<<<<<<< HEAD
-import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
-=======
 import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
->>>>>>> origin/main
+import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
@@ -29,12 +26,9 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
-<<<<<<< HEAD
 import { errorText } from "../_shared/errors";
 import { sleep } from "../_shared/async";
-=======
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
->>>>>>> origin/main
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",

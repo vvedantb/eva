@@ -99,23 +99,23 @@ function readWatchedBranch(): string | null {
 function readGitSync(): GitSync | null {
   const status = git(
     ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
-    GIT_TIMEOUT_MS,
+    { timeoutMs: GIT_TIMEOUT_MS },
   );
   const ahead = git(
     ["rev-list", "--count", "HEAD", "--not", "--remotes=origin"],
-    GIT_TIMEOUT_MS,
+    { timeoutMs: GIT_TIMEOUT_MS },
   );
-  const unpushedCommits = Number(ahead.out);
+  const unpushedCommits = Number(ahead.stdout);
   if (!status.ok || !ahead.ok || !Number.isSafeInteger(unpushedCommits)) {
     return null;
   }
   const uncommittedFiles =
-    status.out.length === 0 ? 0 : status.out.split("\n").length;
+    status.stdout.length === 0 ? 0 : status.stdout.split("\n").length;
   return { uncommittedFiles, unpushedCommits };
 }
 
 function readGitState(): GitState | null {
-  const branch = readCurrentBranch();
+  const branch = readWatchedBranch();
   if (branch === null) return null;
   return { branch, sync: readGitSync() };
 }
@@ -143,13 +143,8 @@ async function runCheckLoop(): Promise<void> {
     let again = true;
     while (again) {
       again = false;
-<<<<<<< HEAD
-      const branch = decideBranchReport({
-        current: readWatchedBranch(),
-=======
       const state = decideGitStateReport({
         current: readGitState(),
->>>>>>> origin/main
         lastReported,
       });
       if (state !== null) {
@@ -161,16 +156,8 @@ async function runCheckLoop(): Promise<void> {
           });
           lastReported = state;
         } catch (error) {
-<<<<<<< HEAD
-          // Leave lastReported alone so the next tick retries this branch.
-          log("branchWatcher: report failed: " + errorText(error));
-=======
           // Leave lastReported alone so the next tick retries this state.
-          log(
-            "branchWatcher: report failed: " +
-              (error instanceof Error ? error.message : String(error)),
-          );
->>>>>>> origin/main
+          log("branchWatcher: report failed: " + errorText(error));
         }
       }
       if (recheckQueued) {

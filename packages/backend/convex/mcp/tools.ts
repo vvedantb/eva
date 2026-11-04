@@ -20,11 +20,8 @@ import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
-<<<<<<< HEAD
 import type { ChatEntityKind } from "../validators";
-=======
 import { submitFeedbackTool } from "../_mcp/submitFeedbackTool";
->>>>>>> origin/main
 import {
   entityAccess,
   entityRefArgs,
@@ -34,11 +31,7 @@ import {
 } from "./entityRef";
 
 import {
-<<<<<<< HEAD
   chatSourceArg,
-  errorResult,
-=======
->>>>>>> origin/main
   matchRepoByName,
   repoRefLabel,
   mcpCallAsUser,
@@ -104,10 +97,10 @@ export function buildTools(
   async function resolveTargetWithAccess(
     ref: RepoRef,
     environment: "staging" | "prod",
-  ): Promise<RepoCredentials | ReturnType<typeof errorResult>> {
+  ): Promise<RepoCredentials | ReturnType<typeof toolErrorResult>> {
     const { userId } = await getContext();
     const resolved = await resolveRepoRef(ref, userId);
-    if ("isError" in resolved) return resolved;
+    if ("content" in resolved) return resolved;
     const repoId = resolved.repoId;
     await assertRepoAccess(repoId, userId);
 
@@ -139,8 +132,8 @@ export function buildTools(
       deployKey: target.deployKey,
       code,
     });
-    if (!result.ok) return errorResult(result.error);
-    return textResult({
+    if (!result.ok) return toolErrorResult(result.error);
+    return toolJsonResult({
       [key]: result.value,
       ...(result.logLines.length > 0 ? { logLines: result.logLines } : {}),
     });
@@ -245,17 +238,11 @@ export function buildTools(
         environment: environmentArg,
       },
       handler: async ({ repoId, repoName, app, environment }) => {
-<<<<<<< HEAD
-=======
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("content" in ref) return ref;
->>>>>>> origin/main
         const target = await resolveTargetWithAccess(
           { repoId, repoName, app },
           environment,
         );
-        if ("isError" in target) return target;
+        if ("content" in target) return target;
 
         const tables = await ctx.runAction(
           internal.mcp.nodeActions.listTables,
@@ -308,17 +295,11 @@ export function buildTools(
         app,
         environment,
       }) => {
-<<<<<<< HEAD
-=======
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("content" in ref) return ref;
->>>>>>> origin/main
         const target = await resolveTargetWithAccess(
           { repoId, repoName, app },
           environment,
         );
-        if ("isError" in target) return target;
+        if ("content" in target) return target;
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.queryTable,
@@ -364,36 +345,17 @@ export function buildTools(
             "Invalid document ID format. IDs should be alphanumeric.",
           );
         }
-<<<<<<< HEAD
-=======
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("content" in ref) return ref;
->>>>>>> origin/main
         const target = await resolveTargetWithAccess(
           { repoId, repoName, app },
           environment,
         );
-        if ("isError" in target) return target;
+        if ("content" in target) return target;
 
         return runRemote(
           target,
           `return await ctx.db.get(${JSON.stringify(id)});`,
           "document",
         );
-<<<<<<< HEAD
-=======
-        if (!result.ok) return toolErrorResult(result.error);
-
-        const output: { document: unknown; logLines?: string[] } = {
-          document: result.value,
-        };
-        if (result.logLines.length > 0) {
-          output.logLines = result.logLines;
-        }
-
-        return toolJsonResult(output);
->>>>>>> origin/main
       },
     }),
   );
@@ -423,40 +385,13 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
         environment: environmentArg,
       },
       handler: async ({ code, repoId, repoName, app, environment }) => {
-<<<<<<< HEAD
-=======
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("content" in ref) return ref;
->>>>>>> origin/main
         const target = await resolveTargetWithAccess(
           { repoId, repoName, app },
           environment,
         );
-        if ("isError" in target) return target;
+        if ("content" in target) return target;
 
-<<<<<<< HEAD
         return runRemote(target, code, "result");
-=======
-        const result = await ctx.runAction(
-          internal.mcp.nodeActions.runTestQuery,
-          {
-            convexUrl: target.convexUrl,
-            deployKey: target.deployKey,
-            code,
-          },
-        );
-        if (!result.ok) return toolErrorResult(result.error);
-
-        const output: { result: unknown; logLines?: string[] } = {
-          result: result.value,
-        };
-        if (result.logLines.length > 0) {
-          output.logLines = result.logLines;
-        }
-
-        return toolJsonResult(output);
->>>>>>> origin/main
       },
     }),
   );
@@ -481,17 +416,11 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
             "Invalid table name. Use alphanumeric characters and underscores.",
           );
         }
-<<<<<<< HEAD
-=======
-        const { deployKey, userId } = await getContext();
-        const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("content" in ref) return ref;
->>>>>>> origin/main
         const target = await resolveTargetWithAccess(
           { repoId, repoName, app },
           environment,
         );
-        if ("isError" in target) return target;
+        if ("content" in target) return target;
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.runTestQuery,
@@ -1127,16 +1056,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         const doc = await mcpCallAsUser(
           ctx,
           clerkUserId,
-<<<<<<< HEAD
           { type: "query", path: "docs:get", args: { id: docId } },
           jsonValue,
         );
-        return textResult({ document: doc });
-=======
-          docId,
-        });
         return toolJsonResult({ document: doc });
->>>>>>> origin/main
       },
     }),
   );
@@ -1173,7 +1096,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         const docs = await mcpCallAsUser(
           ctx,
           clerkUserId,
-<<<<<<< HEAD
           {
             type: "query",
             path: "docs:list",
@@ -1181,13 +1103,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
           jsonValue,
         );
-        return textResult({ repo: repoRefLabel(repo), docs });
-=======
-          repoId: repo.id,
-          kind,
-        });
         return toolJsonResult({ repo: repoRefLabel(repo), docs });
->>>>>>> origin/main
       },
     }),
   );
@@ -1209,7 +1125,6 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         await mcpCallAsUser(
           ctx,
           clerkUserId,
-<<<<<<< HEAD
           {
             type: "mutation",
             path: "docs:update",
@@ -1222,15 +1137,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
           z.null(),
         );
-        return textResult({ docId, status: "updated" });
-=======
-          docId,
-          title,
-          content,
-          description,
-        });
         return toolJsonResult({ docId, status: "updated" });
->>>>>>> origin/main
       },
     }),
   );
@@ -1569,13 +1476,8 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   // ─────────────────────────────────────────────────────────────────────────────
 
   function requireBrowserEntity():
-<<<<<<< HEAD
     | { entityKind: ChatEntityKind; entityId: string }
-    | ReturnType<typeof errorResult> {
-=======
-    | { entityKind: "session" | "task" | "project"; entityId: string }
     | ReturnType<typeof toolErrorResult> {
->>>>>>> origin/main
     if (entityKind === undefined || entityId === undefined) {
       return toolErrorResult(
         "browser_* tools require a session, task, or project sandbox (token has no entity).",

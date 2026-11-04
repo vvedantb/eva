@@ -262,7 +262,7 @@ export function startDaemonDepositionFence(params: {
 
 /**
  * Shared warm-daemon boot: pidfile claim, deposition fence, preflight
- * heartbeat, then a GitHub installation-token refresh (sessions may push).
+ * heartbeat alongside a GitHub installation-token refresh (sessions may push).
  *
  * Fence part 1 (boot claim): if a live rival already owns the pidfile, exit
  * without touching its marker files. First writer wins. A dead pid in the file
@@ -304,9 +304,16 @@ export async function bootWarmDaemon(params: {
     logPrefix,
     onDeposedIdle: params.onDeposedIdle,
   });
-  if (!(await runPreflightHeartbeat())) {
+  // The lease preflight and the GitHub token are independent Convex round
+  // trips (measured ~0.1–0.2s and ~0.3–0.45s), so run them side by side. Both
+  // still land before the provider spawns: its tool shells inherit `GH_TOKEN`
+  // from process.env.
+  const [preflightOk] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshDaemonGithubTokenFromEnv(),
+  ]);
+  if (!preflightOk) {
     log(`${logPrefix}: preflight failed`);
     process.exit(1);
   }
-  await refreshDaemonGithubTokenFromEnv();
 }

@@ -14,11 +14,6 @@ import {
 } from "./entityRef";
 import {
   mcpCallAsUser,
-<<<<<<< HEAD
-  textResult,
-=======
-  mcpGetContext,
->>>>>>> origin/main
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -122,17 +117,8 @@ export function chatSelfTools(
     | { target: EntityTarget; details: ChatDetails }
     | ReturnType<typeof toolErrorResult>
   > {
-<<<<<<< HEAD
     const resolved = await resolveChat(ref);
-    if ("isError" in resolved) return resolved;
-=======
-    const { userId } = await mcpGetContext(ctx, clerkUserId);
-    const resolved = await resolveEntityTarget(
-      withSelfDefault(ref, credentials),
-      userId,
-    );
     if ("content" in resolved) return resolved;
->>>>>>> origin/main
     const { target } = resolved;
     const details = await ctx.runQuery(
       internal.mcp.chatSelfQueries.getChatDetails,
@@ -157,13 +143,8 @@ Name no chat and it answers for your own. Use it before guessing at ports, branc
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
         return toolJsonResult({
           ...entitySummary(target),
@@ -221,13 +202,8 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
           ),
       },
       handler: async ({ lines, ...ref }) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
         const summary = {
           ...entitySummary(target),
@@ -299,13 +275,8 @@ Name no chat and it restarts your own. Refused while the sandbox is starting, st
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
 
         if (
@@ -363,13 +334,8 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
 
         const repoVars = await mcpCallAsUser(
@@ -454,13 +420,8 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
           ),
       },
       handler: async ({ key, reason, scope, ...ref }) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
         if (scope === "team" && details.repoTeamId === undefined) {
           return toolErrorResult(
@@ -534,13 +495,8 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
         if (path === undefined && port === undefined) {
           return toolErrorResult('Pass "path", "port" or both.');
         }
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target } = chat;
         const owner = sandboxOwner(target);
 
@@ -593,13 +549,8 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
 
         if (details.backgroundCommands.length === 0) {
@@ -680,13 +631,8 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const chat = await resolveChatDetails(ref);
-        if ("isError" in chat) return chat;
-=======
-        const chat = await resolveChat(ref);
         if ("content" in chat) return chat;
->>>>>>> origin/main
         const { target, details } = chat;
 
         if (details.startupCommands.length === 0) {
@@ -770,11 +716,8 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
         "Only an agent running inside an Eva session, quick task or project can watch a pull request.",
       );
     }
-    const { userId } = await mcpGetContext(ctx, clerkUserId);
-    const resolved = await resolveEntityTarget(
-      { id: entityId, kind: entityKind },
-      userId,
-    );
+    // Credentials name a chat here, so the empty ref resolves to this one.
+    const resolved = await resolveChat({});
     return "content" in resolved ? resolved : resolved.target;
   }
 

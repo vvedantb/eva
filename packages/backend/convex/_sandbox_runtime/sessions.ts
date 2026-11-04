@@ -27,11 +27,7 @@ import {
   isRetryableSessionStepError,
   isUnresolvedGitIndexError,
   recoverUnresolvedGitIndex,
-<<<<<<< HEAD
   retryGitNetworkOperation,
-  resolveBaseTarget,
-=======
->>>>>>> origin/main
   copySandboxConfigFilesToWorkspace,
   dependencyInstallCommand,
   SESSION_LIFECYCLE,
@@ -48,7 +44,7 @@ import {
   sandboxStartupEntityId,
   type SandboxOwner,
 } from "../_sandbox/owner";
-import type { ProgressStep } from "../_sandbox/startupActivity";
+import type { ProgressStep } from "./startupProgress";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import {
   detectPackageManager,
@@ -709,7 +705,10 @@ type PreparedSessionSandbox = {
  * completed steps plus one active step; `complete` records a step locally (the
  * next `active` or `clear` publishes it); `step` brackets one async call.
  */
-function startupProgress(ctx: GenericActionCtx<DataModel>, entityId: string) {
+function createStartupProgress(
+  ctx: GenericActionCtx<DataModel>,
+  entityId: string,
+) {
   const completed: ProgressStep[] = [];
   const set = async (steps: ProgressStep[]): Promise<void> => {
     await ctx.runMutation(internal.streaming.internalSet, {
@@ -735,7 +734,7 @@ function startupProgress(ctx: GenericActionCtx<DataModel>, entityId: string) {
   };
 }
 
-type StartupProgress = ReturnType<typeof startupProgress>;
+type StartupProgress = ReturnType<typeof createStartupProgress>;
 
 /** Core logic for preparing a session sandbox: reuses existing or creates new, syncs refs, and starts services. */
 async function prepareSessionSandboxInternal(
@@ -749,7 +748,7 @@ async function prepareSessionSandboxInternal(
   const actionDetails = `sessionId=${args.sessionId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
   const owner: SandboxOwner = { kind: "session", sessionId: args.sessionId };
   const ownerKey = sandboxOwnerKey(owner);
-  const progress = startupProgress(ctx, sandboxStartupEntityId(owner));
+  const progress = createStartupProgress(ctx, sandboxStartupEntityId(owner));
 
   const repo = await progress.step("Loading repository config...", () =>
     runLoggedSessionStep("loadSessionRepo", actionDetails, () =>
@@ -1093,30 +1092,7 @@ async function prepareSessionSandboxInternal(
           ),
       ),
     );
-<<<<<<< HEAD
-=======
-    await runLoggedSessionStep(
-      "newSessionSandbox.syncSessionRefsForRestore",
-      sandboxDetails,
-      () =>
-        syncSessionRefsForRestore(
-          handle,
-          args.repoOwner,
-          args.repoName,
-          args.branchName,
-          args.baseBranch,
-          // Refresh origin/<base> so a brand-new session branch is created from
-          // the latest base commit, not the snapshot's stale baked base.
-          { refreshBase: true },
-        ),
-    );
-    completedSteps.push({
-      type: "tool",
-      label: "Syncing repository refs...",
-      status: "complete",
-    });
     const bakedSha = await bakedShaPromise;
->>>>>>> origin/main
 
     await progress.step("Checking out branch...", () =>
       runLoggedSessionStep(
@@ -1131,20 +1107,10 @@ async function prepareSessionSandboxInternal(
       ),
     );
 
-<<<<<<< HEAD
-    await progress.step("Preparing branch...", () =>
-      runLoggedSessionStep(
-        "newSessionSandbox.setupBranch",
-        sandboxDetails,
-        () => setupBranch(handle, args.branchName, args.baseBranch),
-      ),
-    );
-=======
     // No `setupBranch` here: the checkout above already left the session
     // branch checked out with its upstream pinned, so setupBranch could only
     // resolve `localBranch` and re-run `checkout -B <branch> <branch>` — ~1.5s
     // of pure repeat on the first-turn gate.
->>>>>>> origin/main
 
     // Now on the latest base: reinstall only when the lockfile actually drifted
     // from the snapshot's baked commit, so the common no-dep-change session keeps
@@ -1215,9 +1181,11 @@ async function prepareSessionSandboxInternal(
     }
     progress.complete("Restoring config files...");
 
-<<<<<<< HEAD
-    const services = await progress.step("Starting dev server...", () =>
-      runLoggedSessionStep(
+    const services = await progress.step("Starting dev server...", async () => {
+      // Deferred at create so it overlapped the repo prep above. Services,
+      // background and startup commands may need dockerd (e.g. Supabase).
+      await prepared.dockerReady;
+      return await runLoggedSessionStep(
         "newSessionSandbox.startSessionServices",
         sandboxDetails,
         () =>
@@ -1228,30 +1196,8 @@ async function prepareSessionSandboxInternal(
             rootDir,
             repo,
           ),
-      ),
-=======
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Starting dev server...",
-    );
-    // Deferred at create so it overlapped the repo prep above. Services,
-    // background and startup commands may need dockerd (e.g. Supabase).
-    await prepared.dockerReady;
-    const services = await runLoggedSessionStep(
-      "newSessionSandbox.startSessionServices",
-      sandboxDetails,
-      () =>
-        startServicesWithRestoreAlert(
-          ctx,
-          args.sessionId,
-          handle,
-          rootDir,
-          repo,
-        ),
->>>>>>> origin/main
-    );
+      );
+    });
     resolvedDevPort = services.port;
     resolvedDevCommand = services.devCommand;
 
@@ -1691,7 +1637,7 @@ function previewOwnerHooks(
   owner: PreviewOwner,
 ): PreviewOwnerHooks {
   const ownerKey = sandboxOwnerKey(owner);
-  const progress = startupProgress(ctx, sandboxStartupEntityId(owner));
+  const progress = createStartupProgress(ctx, sandboxStartupEntityId(owner));
   if (owner.kind === "task") {
     const { taskId } = owner;
     return {

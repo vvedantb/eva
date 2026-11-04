@@ -1,12 +1,12 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { importJWK, SignJWT } from "jose";
 import { z } from "zod";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
-import { requireEnv } from "./_env/requireEnv";
 import { chatEntityKindValidator } from "./_validators/enums";
 import { errorText } from "./_shared/errors";
 
@@ -23,7 +23,7 @@ export async function signSandboxUserJwt(
   expiresIn: "1h" | "24h",
 ): Promise<string> {
   const privateKeyJwk = sandboxPrivateJwkSchema.parse(
-    JSON.parse(requireEnv("SANDBOX_JWT_PRIVATE_KEY")),
+    JSON.parse(requiredEnv("SANDBOX_JWT_PRIVATE_KEY")),
   );
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");

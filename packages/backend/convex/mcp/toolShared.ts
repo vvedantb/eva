@@ -11,14 +11,6 @@ import type { ChatEntityKind } from "../validators";
 // (tools -> orchestratorTools -> tools), which would land in the "use node"
 // action chunk and break the prod push.
 
-<<<<<<< HEAD
-export function errorResult(message: string) {
-  return {
-    content: [{ type: "text" as const, text: message }],
-    isError: true,
-  };
-}
-
 /** Cuts long text for an agent reply and says how much was left out. */
 export function truncateForAgent(text: string, limit: number): string {
   return text.length > limit
@@ -26,14 +18,6 @@ export function truncateForAgent(text: string, limit: number): string {
     : text;
 }
 
-export function textResult(data: Record<string, unknown> | Array<unknown>) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-  };
-}
-
-=======
->>>>>>> origin/main
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
  * (`claude:claude-fable-5-1`); opus/sonnet/haiku keep their existing aliases.
@@ -251,11 +235,7 @@ export function matchRepoByName(
     // bare `owner/name` list repeated the same string a dozen times and told
     // the caller nothing about which app to ask for.
     const available = repos.map(repoRefLabel).join(", ");
-<<<<<<< HEAD
-    return errorResult(
-=======
     return toolErrorResult(
->>>>>>> origin/main
       `Repo "${repoName}" not found. Your repos: ${available}`,
     );
   }

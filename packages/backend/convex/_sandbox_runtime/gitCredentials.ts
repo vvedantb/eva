@@ -6,10 +6,6 @@ import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
-<<<<<<< HEAD
-import { requireEnv } from "../_env/requireEnv";
-=======
->>>>>>> origin/main
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 

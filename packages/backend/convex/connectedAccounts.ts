@@ -1,11 +1,10 @@
-import { bytesToBase64Url, randomToken } from "@vvedantb/server";
+import { bytesToBase64Url, randomToken, requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authAction, authMutation, authQuery } from "./functions";
 import { findTeamEnvVarDoc } from "./_envVars/documentStore";
-import { requireEnv } from "./_env/requireEnv";
 import {
   connectorActorValidator,
   connectorProviderValidator,
@@ -121,7 +120,7 @@ export const startOAuth = authMutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     const { clientId } = readOAuthClient(args.provider);
-    const siteUrl = requireEnv("CONVEX_SITE_URL");
+    const siteUrl = requiredEnv("CONVEX_SITE_URL");
     const actor = args.actor ?? "user";
     const { verifier, challenge } = await createPkce();
     const nonce = crypto.randomUUID();

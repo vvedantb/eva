@@ -10,15 +10,10 @@
  *   `handle.id === sandbox.name` and resolve `get(sandboxId)` via `Sandbox.get({ name })`.
  * - Resources: the neutral create params carry no vCPU count, so we default it
  *   (Vercel gives 2 GB RAM per vCPU). Override via SANDBOX_VERCEL_VCPUS if needed.
-<<<<<<< HEAD
- * - Lifecycle: Vercel is persistent-by-default and auto-resumes on `get`, so
- *   `start()` is a no-op and `stop()` auto-snapshots (no separate archive).
-=======
  * - Lifecycle: Vercel is persistent-by-default and the SDK auto-resumes on
  *   `get` and on any exec. Eva turns both off (`resume: false`,
  *   `withoutLazyResume`), so only `start()` wakes a stopped sandbox.
- *   `archive()` maps to `stop()` (stop auto-snapshots).
->>>>>>> origin/main
+ *   `stop()` auto-snapshots (no separate archive).
  * - git: no native git client — implemented over the shell via runCommand.
  * - PTY: implemented, but NOT via the neutral `SandboxPty` interface, so
  *   `this.pty` stays undefined here. Vercel's PTY is a client-connect WebSocket

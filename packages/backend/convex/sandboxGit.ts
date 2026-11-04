@@ -1,54 +1,51 @@
-<<<<<<< HEAD
-import { v } from "convex/values";
-import { authMutation } from "./functions";
-import {
-  patchSandboxOwner,
-  resolveSandboxOwnerOrThrow,
-  sandboxOwnerValidator,
-  type SandboxOwner,
-} from "./_sandbox/owner";
-=======
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { authMutation, hasRepoAccess } from "./functions";
+import { authMutation } from "./functions";
+import {
+  resolveSandboxOwnerOrThrow,
+  sandboxOwnerValidator,
+  type SandboxOwner,
+} from "./_sandbox/owner";
 import { sandboxGitSyncValidator } from "./_validators/shapes";
->>>>>>> origin/main
 
 /** Git's own ref-name ceiling is well under this; the cap is just a guard. */
 const BRANCH_MAX_CHARS = 255;
 
 /** The entity a sandbox checkout belongs to; session chats share the session's. */
 export const sandboxGitTargetValidator = v.union(
-  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+  ...sandboxOwnerValidator.members,
   v.object({
     kind: v.literal("sessionChat"),
     chatId: v.id("sessionChats"),
   }),
-  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
-  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
 );
 
 type SandboxGitTarget = Infer<typeof sandboxGitTargetValidator>;
 type SandboxGitSync = Infer<typeof sandboxGitSyncValidator>;
-type SandboxOwner =
-  | Doc<"sessions">
-  | Doc<"agentTasks">
-  | Doc<"projects">;
+type SandboxOwnerDoc = Doc<"sessions"> | Doc<"agentTasks"> | Doc<"projects">;
 
-/** Resolves the sandbox-owning doc. Session daemons run per chat; the checkout belongs to the session. */
-async function resolveSandboxOwner(
+/** Session daemons run per chat; the checkout belongs to the session. */
+async function toSandboxOwner(
   ctx: Pick<QueryCtx, "db">,
   target: SandboxGitTarget,
 ): Promise<SandboxOwner | null> {
-  if (target.kind === "session") return await ctx.db.get(target.sessionId);
-  if (target.kind === "sessionChat") {
-    const chat = await ctx.db.get(target.chatId);
-    return chat ? await ctx.db.get(chat.sessionId) : null;
-  }
-  if (target.kind === "task") return await ctx.db.get(target.taskId);
-  return await ctx.db.get(target.projectId);
+  if (target.kind !== "sessionChat") return target;
+  const chat = await ctx.db.get(target.chatId);
+  return chat ? { kind: "session", sessionId: chat.sessionId } : null;
+}
+
+/** Resolves the sandbox-owning doc without an access check (internal callers). */
+async function resolveSandboxOwnerDoc(
+  ctx: Pick<QueryCtx, "db">,
+  target: SandboxGitTarget,
+): Promise<SandboxOwnerDoc | null> {
+  const owner = await toSandboxOwner(ctx, target);
+  if (!owner) return null;
+  if (owner.kind === "session") return await ctx.db.get(owner.sessionId);
+  if (owner.kind === "task") return await ctx.db.get(owner.taskId);
+  return await ctx.db.get(owner.projectId);
 }
 
 function syncEquals(
@@ -63,7 +60,7 @@ function syncEquals(
 
 async function patchSandboxGitState(
   ctx: Pick<MutationCtx, "db">,
-  owner: SandboxOwner,
+  owner: SandboxOwnerDoc,
   branch: string,
   sync: SandboxGitSync | undefined,
 ): Promise<void> {
@@ -90,17 +87,7 @@ async function patchSandboxGitState(
  */
 export const reportBranch = authMutation({
   args: {
-<<<<<<< HEAD
-    target: v.union(
-      ...sandboxOwnerValidator.members,
-      v.object({
-        kind: v.literal("sessionChat"),
-        chatId: v.id("sessionChats"),
-      }),
-    ),
-=======
     target: sandboxGitTargetValidator,
->>>>>>> origin/main
     branch: v.string(),
     sync: v.optional(sandboxGitSyncValidator),
   },
@@ -108,34 +95,14 @@ export const reportBranch = authMutation({
   handler: async (ctx, args) => {
     const branch = args.branch.trim().slice(0, BRANCH_MAX_CHARS);
     if (branch.length === 0) return null;
-<<<<<<< HEAD
-    const target = args.target;
-    // Session daemons run per chat; the branch belongs to the session.
-    let ownerTarget: SandboxOwner;
-    if (target.kind === "sessionChat") {
-      const chat = await ctx.db.get(target.chatId);
-      if (!chat) throw new Error("Session not found");
-      ownerTarget = { kind: "session", sessionId: chat.sessionId };
-    } else {
-      ownerTarget = target;
-    }
+    const ownerTarget = await toSandboxOwner(ctx, args.target);
+    if (!ownerTarget) throw new Error("Session not found");
     const owner = await resolveSandboxOwnerOrThrow(
       ctx.db,
       ctx.userId,
       ownerTarget,
     );
-    // One filesystem can be reported by several daemon processes, so the
-    // unchanged case must cost nothing.
-    if (owner.doc.sandboxBranch === branch) return null;
-    await patchSandboxOwner(ctx.db, owner, { sandboxBranch: branch });
-=======
-    const owner = await resolveSandboxOwner(ctx, args.target);
-    if (!owner) throw new Error("Not found");
-    if (!owner.repoId || !(await hasRepoAccess(ctx.db, owner.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    await patchSandboxGitState(ctx, owner, branch, args.sync);
->>>>>>> origin/main
+    await patchSandboxGitState(ctx, owner.doc, branch, args.sync);
     return null;
   },
 });
@@ -149,7 +116,7 @@ export const setSandboxGitStateInternal = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const owner = await resolveSandboxOwner(ctx, args.target);
+    const owner = await resolveSandboxOwnerDoc(ctx, args.target);
     if (!owner) return null;
     await patchSandboxGitState(ctx, owner, args.branch, args.sync);
     return null;
@@ -169,7 +136,7 @@ export const getSandboxTargetInternal = internalQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const owner = await resolveSandboxOwner(ctx, args.target);
+    const owner = await resolveSandboxOwnerDoc(ctx, args.target);
     if (!owner?.repoId || !owner.sandboxId) return null;
     const repoId: Id<"githubRepos"> = owner.repoId;
     const repo = await ctx.db.get(repoId);

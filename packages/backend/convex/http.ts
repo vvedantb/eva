@@ -13,29 +13,12 @@ import {
   previewActivityHmacMessage,
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
-<<<<<<< HEAD
-import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
-import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
-
-const http = httpRouter();
-
-/** Compares two strings in constant time to prevent timing attacks. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const bufA = encoder.encode(a);
-  const bufB = encoder.encode(b);
-  if (bufA.byteLength !== bufB.byteLength) return false;
-  let mismatch = 0;
-  for (let i = 0; i < bufA.byteLength; i++) {
-    mismatch |= (bufA[i] ?? 0) ^ (bufB[i] ?? 0);
-  }
-  return mismatch === 0;
-=======
 import {
   parseCiCompleted,
   parseCiPassed,
   parseRepoEvents,
 } from "./_automationEvents/events";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 import { hmacSha256Hex } from "./_shared/hmac";
 import {
@@ -52,16 +35,6 @@ import {
 } from "./mcp/native";
 
 const http = httpRouter();
-
-/** Verifies the MCP bootstrap authorization token from the request header. */
-function verifyMcpBootstrapToken(request: Request): boolean {
-  const auth = request.headers.get("Authorization");
-  if (!auth) return false;
-  const expected = process.env.MCP_BOOTSTRAP_SECRET;
-  if (!expected) return false;
-  return timingSafeEqual(auth, `MCPBootstrap ${expected}`);
->>>>>>> origin/main
-}
 
 /** Verifies the EVA deploy key from the request Authorization header. */
 function verifyDeployKey(request: Request): boolean {
@@ -914,7 +887,7 @@ http.route({
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!expected || !appUrl) {
       return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
         status: 500,

@@ -489,24 +489,6 @@ export async function createSandbox(
       await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
         execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
-<<<<<<< HEAD
-      // Belt-and-suspenders for login shells; tmux Console already sources
-      // eva-env. Never fail create over this hook.
-      try {
-        await runLoggedGitStep(
-          "createSandbox.ensureEvaEnvInteractiveHook",
-          sandbox.id,
-          () =>
-            execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
-        );
-      } catch (hookError) {
-        console.warn(
-          `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${errorText(hookError)}`,
-        );
-      }
-
-=======
->>>>>>> origin/main
       const appSlug = process.env.GITHUB_APP_SLUG;
       const botUserId = process.env.GITHUB_BOT_USER_ID;
       if (!appSlug || !botUserId) {
@@ -536,7 +518,7 @@ export async function createSandbox(
             execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
         ).catch((hookError) => {
           console.warn(
-            `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+            `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${errorText(hookError)}`,
           );
         }),
         // Fresh Vercel sandboxes ship without `jq`, which the git credential
@@ -1175,38 +1157,10 @@ export async function cloneRepoInto(
         () =>
           sandbox.git.clone(repoUrl, destDir, "x-access-token", githubToken),
         REPO_CLONE_TIMEOUT_SECONDS,
-<<<<<<< HEAD
       ),
     3,
     2000,
   );
-=======
-      );
-      if (attempt > 1) {
-        logGit(
-          `cloneRepoInto: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
-        );
-      }
-      return;
-    } catch (error) {
-      if (!(error instanceof Error)) {
-        throw error;
-      }
-      const shouldRetry =
-        attempt < maxCloneAttempts && isRetryableGitNetworkError(error.message);
-      if (!shouldRetry) {
-        throw error;
-      }
-      const delayMs = attempt * 2000;
-      logGit(
-        `cloneRepoInto: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
-      );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
-    }
-  }
->>>>>>> origin/main
 }
 
 /**

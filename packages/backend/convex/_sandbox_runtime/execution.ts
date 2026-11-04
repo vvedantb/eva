@@ -5,7 +5,7 @@ import { quote } from "shell-quote";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import type { ProgressStep } from "../_sandbox/startupActivity";
+import type { ProgressStep } from "./startupProgress";
 import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {

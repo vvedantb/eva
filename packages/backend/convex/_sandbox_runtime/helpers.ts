@@ -461,17 +461,7 @@ export async function restartUnresponsiveSandbox(
   });
 }
 
-<<<<<<< HEAD
 export { sleep } from "../_shared/async";
-=======
-/** Returns the value of a required environment variable, throwing if missing. */
-/** Returns a promise that resolves after the specified milliseconds. */
-export async function sleep(ms: number): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
->>>>>>> origin/main
 
 export const WARMING_SANDBOX_READY_TIMEOUT_SECONDS = 60;
 

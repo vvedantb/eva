@@ -3,12 +3,8 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { ensureSandboxStartedSteps } from "./resumeSandboxSteps";
-<<<<<<< HEAD
-import type { ProgressStep } from "../_sandbox/startupActivity";
 import { errorText } from "../_shared/errors";
-=======
 import { type ProgressStep, startupProgress } from "./startupProgress";
->>>>>>> origin/main
 
 type PrepareSandboxArgs = {
   installationId: number;

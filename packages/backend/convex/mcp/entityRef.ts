@@ -315,7 +315,7 @@ export function entityAccess(ctx: ActionCtx, credentials: McpCredentials) {
   /** The caller's own chat when the ref names none, else the one it names. */
   async function resolveChat(
     ref: EntityRef,
-  ): Promise<{ target: EntityTarget } | ReturnType<typeof errorResult>> {
+  ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
     const { userId } = await mcpGetContext(ctx, credentials.clerkUserId);
     return resolveEntityTarget(withSelfDefault(ref, credentials), userId);
   }

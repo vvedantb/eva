@@ -447,17 +447,13 @@ export async function runCursorTurnWorker(): Promise<void> {
     preloadCursorSdk();
     const [preflightOk] = await Promise.all([
       runPreflightHeartbeat(),
-      refreshGithubToken(),
+      // Sessions may push git commits; refresh the installation token.
+      refreshDaemonGithubTokenFromEnv(),
     ]);
     if (!preflightOk) {
       throw new Error("Cursor turn worker preflight failed");
     }
     startStreamingLoops();
-<<<<<<< HEAD
-    // Sessions may push git commits; refresh the installation token.
-    await refreshDaemonGithubTokenFromEnv();
-=======
->>>>>>> origin/main
     await executeClaimedTurn(turn);
   } finally {
     await stopStreamingLoops();

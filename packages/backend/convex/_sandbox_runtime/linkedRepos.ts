@@ -40,12 +40,8 @@ import {
 } from "./linkedRepoBranch";
 import { launchLinkedRepoDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
 import { resolveEnvVars } from "../envVarResolver";
-<<<<<<< HEAD
 import { sandboxOwnerKey, sandboxStartupEntityId } from "../_sandbox/owner";
-import type { ProgressStep } from "../_sandbox/startupActivity";
-=======
 import { type ProgressStep, startupProgress } from "./startupProgress";
->>>>>>> origin/main
 
 type ActionCtx = GenericActionCtx<DataModel>;
 

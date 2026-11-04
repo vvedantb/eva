@@ -12,11 +12,7 @@ import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Doc, Id } from "../_generated/dataModel";
 import { defineTool, type EvaTool } from "../mcp/registry";
-<<<<<<< HEAD
-import { errorResult } from "../mcp/toolShared";
 import { sleep } from "../_shared/async";
-=======
->>>>>>> origin/main
 
 type CallRow = Doc<"previewToolCalls">;
 

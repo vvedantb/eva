@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-import { mkdirSync } from "fs";
-=======
 import {
   mkdirSync,
   readFileSync,
@@ -9,7 +6,6 @@ import {
   writeFileSync,
 } from "fs";
 import * as nodeModule from "node:module";
->>>>>>> origin/main
 import type {
   Agent,
   AgentOptions,
@@ -494,7 +490,7 @@ function writeCachedCursorModelResolution(
   } catch (error) {
     log(
       "resolveCursorModelSelection: cache write failed (" +
-        (error instanceof Error ? error.message : String(error)) +
+        errorText(error) +
         ")",
     );
   }
@@ -555,7 +551,7 @@ async function fetchCursorModelSelection(
       if (Array.isArray(listed)) models = listed;
     }
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    const messageText = errorText(error);
     log(
       "resolveCursorModelSelection: model list failed — keeping opted-in params only (" +
         messageText +
@@ -589,56 +585,6 @@ function selectCursorModel(model: SdkModel | undefined): SdkModelSelection {
   // confirms the undocumented id (filterModeParamsByModel). Context is opt-in.
   const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
   const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
-<<<<<<< HEAD
-  if (candidates.length === 0 && !level) {
-    return { id: base };
-  }
-
-  let model: SdkModel | undefined;
-  let listUnavailable = false;
-  try {
-    const list = sdk.Cursor?.models?.list;
-    if (list) {
-      // The fetch had no deadline of its own, so a hung list could burn the
-      // whole turn before agent setup even started.
-      const models = await waitForCursorPhase({
-        task: list(),
-        phase: "fetching the model list",
-        timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS,
-      });
-      if (Array.isArray(models)) {
-        // Hand the SDK the list it would otherwise fetch again itself inside
-        // Agent.create/Agent.resume, so agent setup stays local.
-        const catalog = cursorModelCatalogJson(models);
-        if (catalog) process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog;
-      }
-      model = Array.isArray(models)
-        ? models.find(
-            (entry) => entry && typeof entry === "object" && entry.id === base,
-          )
-        : undefined;
-      if (!model) {
-        log(
-          "resolveCursorModelSelection: model " +
-            base +
-            " not in Cursor.models.list — keeping opted-in params only",
-        );
-      }
-    } else {
-      listUnavailable = true;
-    }
-  } catch (error) {
-    const messageText = errorText(error);
-    listUnavailable = true;
-    log(
-      "resolveCursorModelSelection: model list failed — keeping opted-in params only (" +
-        messageText +
-        ")",
-    );
-  }
-
-=======
->>>>>>> origin/main
   const params = filterModeParamsByModel(candidates, model, opted);
   if (params.length < candidates.length && model) {
     log(

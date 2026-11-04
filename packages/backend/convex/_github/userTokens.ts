@@ -2,7 +2,6 @@ import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { authMutation } from "../functions";
-import { requireEnv } from "../_env/requireEnv";
 
 /** How long an authorize-hop nonce stays redeemable. */
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -85,19 +84,8 @@ export const startUserAuthorization = authMutation({
   args: { installationId: v.union(v.number(), v.null()) },
   returns: v.string(),
   handler: async (ctx, args) => {
-<<<<<<< HEAD
-    const clientId = process.env.GITHUB_CLIENT_ID;
-    if (!clientId) {
-      throw new Error("GITHUB_CLIENT_ID is not set in Convex env");
-    }
-    const siteUrl = requireEnv("CONVEX_SITE_URL");
-=======
     const clientId = requiredEnv("GITHUB_CLIENT_ID");
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) {
-      throw new Error("CONVEX_SITE_URL is not set");
-    }
->>>>>>> origin/main
+    const siteUrl = requiredEnv("CONVEX_SITE_URL");
     const nonce = crypto.randomUUID();
     await ctx.db.insert("githubOauthStates", {
       nonce,

@@ -469,28 +469,10 @@ const schema = defineSchema({
   connectedAccounts: defineTable(connectedAccountFields)
     .index("by_user", ["userId"])
     .index("by_user_and_provider", ["userId", "provider"]),
-<<<<<<< HEAD
-  connectorOauthStates: defineTable(connectorOauthStateFields).index(
-    "by_nonce",
-    ["nonce"],
-  ),
-  teamEnvVars: defineTable(teamEnvVarFields).index("by_team", ["teamId"]),
-=======
   connectorOauthStates: defineTable(connectorOauthStateFields)
     .index("by_nonce", ["nonce"])
     .index("by_expires_at", ["expiresAt"]),
-  teamEnvVars: defineTable({
-    teamId: v.id("teams"),
-    vars: v.array(
-      v.object({
-        key: v.string(),
-        value: v.string(),
-        sandboxExclude: v.optional(v.boolean()),
-      }),
-    ),
-    updatedAt: v.number(),
-  }).index("by_team", ["teamId"]),
->>>>>>> origin/main
+  teamEnvVars: defineTable(teamEnvVarFields).index("by_team", ["teamId"]),
   automations: defineTable(automationFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_enabled", ["repoId", "enabled"])

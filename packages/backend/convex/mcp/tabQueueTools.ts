@@ -18,11 +18,7 @@ import {
   mcpCallAsUser,
   mcpGetContext,
   queueParentId,
-<<<<<<< HEAD
-  textResult,
   truncateForAgent,
-=======
->>>>>>> origin/main
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -250,17 +246,8 @@ The queue drains as turns finish, so a message listed here can start running at 
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
 
         const rows = await listQueue(target);
@@ -295,17 +282,8 @@ If the chat dequeued the message since you listed it, it is already running and 
           .describe("The full replacement text."),
       },
       handler: async ({ queuedMessageId, content, ...ref }) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
 
         const rows = await listQueue(target);
@@ -382,17 +360,8 @@ If a message starts running between your list and this call, the reorder fails; 
           );
         }
 
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
 
         const rows = await listQueue(target);

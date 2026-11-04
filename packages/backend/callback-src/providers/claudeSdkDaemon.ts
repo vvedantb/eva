@@ -250,13 +250,14 @@ function failCurrentTurn(error: string): Promise<void> {
 /** Synthetic completion payload, fenced by the synthetic turn's lease. */
 function syntheticCompletionArgs(
   messageId: string,
-  fields: { success: boolean; result: JsonValue; error: string | null },
+  fields: {
+    success: boolean;
+    result: JsonValue;
+    error: string | null;
+    activityLog: string;
+  },
 ): JsonObject {
-  const args = entityMutationArgs({
-    messageId,
-    ...fields,
-    activityLog: serializeSteps(S.accumulatedSteps),
-  });
+  const args = entityMutationArgs({ messageId, ...fields });
   appendCurrentTurnLease(args);
   return args;
 }
@@ -417,14 +418,8 @@ function createPromptStream(): {
   push: (text: string, priority?: "next") => void;
   iterable: AsyncIterable<SdkUserMessage>;
 } {
-<<<<<<< HEAD
   const queue = createAsyncQueue<SdkUserMessage>();
-  const push = (text: string): void => {
-=======
-  const queue: SdkUserMessage[] = [];
-  let notify: (() => void) | null = null;
   const push = (text: string, priority?: "next"): void => {
->>>>>>> origin/main
     queue.push({
       type: "user",
       message: { role: "user", content: text },
@@ -878,7 +873,7 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
     // shells have their own registry (`backgroundShells`), and a dev server
     // run in the background never ends, so as an entry it held the chat queue
     // for the full 2-hour cap.
-    if (readStringField(message, "task_type") === "local_bash") {
+    if (readTrimmedString(message.task_type) === "local_bash") {
       return;
     }
     const entry: BackgroundAgentEntry = {
@@ -929,6 +924,7 @@ async function failSyntheticTurn(error: string): Promise<void> {
       success: false,
       result: null,
       error,
+      activityLog: serializeSteps(S.accumulatedSteps),
     });
     await sendTurnCompletion(
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
@@ -982,18 +978,16 @@ async function finalizeSyntheticTurn(output: string): Promise<void> {
   const messageId = turn.messageId;
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(output);
-<<<<<<< HEAD
-=======
   const activityLog = serializeFinalSteps(
     S.accumulatedSteps,
     resultEvent?.result ?? "",
   );
->>>>>>> origin/main
   const success = resultEvent ? !resultEvent.isError : false;
   const completionArgs = syntheticCompletionArgs(messageId, {
     success,
     result: resultEvent?.result ?? S.rawOutput,
     error: resultEvent?.isError ? resultEvent.result : null,
+    activityLog,
   });
   if (S.pendingQuestionData) {
     completionArgs.pendingQuestion = S.pendingQuestionData;
@@ -1139,41 +1133,14 @@ function startClaimWatcher(agentRunner: WarmRunner): void {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
-<<<<<<< HEAD
-          routeClaimedTurn({
+          const routed = routeClaimedTurn({
             turn,
             hasActiveRealTurn: supervisor.currentTurn?.kind === "real",
             isCancellationInFlight: supervisor.isCancellationInFlight,
             park: () => supervisor.parkClaim(turn),
             logPrefix: "daemon",
           });
-=======
-          // claimPendingTurn already cleared session.pendingTurn atomically, so
-          // any branch that does not park/start the claim loses that prompt.
-          // Same-turn restages (workflow re-staging the prompt already running)
-          // must still be discarded — parking those replays the prompt twice.
-          const currentTurn = supervisor.currentTurn;
-          const currentLease = getCurrentTurnLease();
-          if (
-            shouldParkClaimedTurn({
-              hasActiveRealTurn: currentTurn?.kind === "real",
-              isCancellationInFlight: supervisor.isCancellationInFlight,
-              isFinalizing: false,
-              currentLeaseTurnId: currentLease?.turnId ?? null,
-              claimedLeaseTurnId: turn.turnLease?.turnId ?? null,
-            })
-          ) {
-            if (supervisor.parkClaim(turn)) {
-              wakeIdlePump?.();
-            } else {
-              log("daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
-            );
-          }
->>>>>>> origin/main
+          if (routed === "parked") wakeIdlePump?.();
         }
       } catch {
         /* retry on next poll */
@@ -1486,18 +1453,12 @@ export async function runSdkDaemon(): Promise<void> {
   });
   startStreamingLoops();
 
-  // The GitHub token round trip (~0.3–0.45s) and the SDK import (~0.2s, CPU)
-  // are independent, so overlap them. The fetch must reach the wire first:
-  // the import blocks the event loop and, started in the same tick, held the
-  // request back until it finished (measured: no overlap at all). One
-  // setImmediate lets fetch send; then the overlap saved ~0.16s. The token
-  // still lands before buildSdkOptions copies process.env, since the CLI's
-  // tool shells inherit `GH_TOKEN` from it. refreshGithubToken never rejects.
-  const tokenRefreshed = refreshGithubToken();
-  await new Promise<void>((resolve) => setImmediate(resolve));
+  // bootWarmDaemon already refreshed the GitHub token alongside the preflight,
+  // so it lands before buildSdkOptions copies process.env (the CLI's tool
+  // shells inherit `GH_TOKEN` from it).
   // Session mode establishes/continues the Claude session id used for resume.
   const sessionMode = prepareClaudeSessionState();
-  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
+  const sdk = await loadSdk();
   const options = buildSdkOptions(sessionMode);
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;

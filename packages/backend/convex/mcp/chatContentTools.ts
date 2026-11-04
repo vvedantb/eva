@@ -166,17 +166,8 @@ The reply is the chat's identity with the title it now has.`,
           );
         }
 
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
 
         if (title === undefined) {
@@ -239,17 +230,8 @@ Sessions only: quick tasks and projects have no Plan tab. The whole plan is repl
           .describe("The full plan as markdown. Replaces what is there."),
       },
       handler: async ({ planContent, ...ref }) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "session") {
           return toolErrorResult(
@@ -299,17 +281,8 @@ Pass "planId" to pick one; omit it to mark the newest plan not yet implemented. 
           ),
       },
       handler: async ({ planId, implementationSessionId, ...ref }) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "session") {
           return toolErrorResult("Only sessions have proposed plans.");
@@ -383,17 +356,8 @@ Comments notify the task's subscribers and anyone @mentioned, exactly as a comme
           ),
       },
       handler: async ({ content, parentId, ...ref }) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "task") {
           return toolErrorResult(
@@ -432,17 +396,8 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
         if (target.kind !== "task") {
           return toolErrorResult(
@@ -517,17 +472,8 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
           ),
       },
       handler: async ({ entryKind, title, body, supersedes, ...ref }) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
         const entryId = await mcpCallAsUser(
           ctx,
@@ -562,17 +508,8 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
       mutating: false,
       input: { ...entityRefArgs },
       handler: async (ref) => {
-<<<<<<< HEAD
         const resolved = await resolveChat(ref);
-        if ("isError" in resolved) return resolved;
-=======
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
         if ("content" in resolved) return resolved;
->>>>>>> origin/main
         const { target } = resolved;
         const source = chatSourceArg(target);
         const [markdown, rows] = await Promise.all([
