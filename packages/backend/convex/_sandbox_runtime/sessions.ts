@@ -34,6 +34,7 @@ import { SandboxGoneError, isSandboxGoneError } from "./sandboxErrors";
 import { ensureGitCredentialHelper } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
+import { isSupersededStart } from "../_sandbox/transitions";
 import {
   detectPackageManager,
   installPythonDependenciesBestEffort,
@@ -254,19 +255,6 @@ class SandboxStartAbortedError extends Error {
     super(message);
     this.name = "SandboxStartAbortedError";
   }
-}
-
-/**
- * True once a newer start request owns the sandbox. This start's writes are
- * already ignored (see `_sandbox/transitions.ts`), but its remaining steps
- * would still run against the live VM — relaunching the dev server under the
- * newer start dropped every attached terminal. Untokened starts never are.
- */
-function isSupersededStart(
-  currentAttempt: number | undefined,
-  startAttempt: number | undefined,
-): boolean {
-  return startAttempt !== undefined && currentAttempt !== startAttempt;
 }
 
 /**
@@ -1823,9 +1811,10 @@ export const startSessionSandbox = internalAction({
       // A newer start took over (Start pressed again) and may be resuming
       // this same VM: stopping it here would kill that start mid-resume.
       // `sandboxError` below ignores this stale attempt anyway.
-      const superseded =
-        args.startAttempt !== undefined &&
-        sessionAfter?.sandboxStartAttempt !== args.startAttempt;
+      const superseded = isSupersededStart(
+        sessionAfter?.sandboxStartAttempt,
+        args.startAttempt,
+      );
       // No early-ready — stop any id we were asked to reuse and mark closed.
       if (args.repoId && stopId && !superseded) {
         try {
