@@ -126,7 +126,7 @@ export function AvePanel({
             />
           }
         >
-          <AvePanelBody />
+          <AvePanelBody visible={visible} />
         </ViewTransitionSuspense>
       </div>
     </m.div>

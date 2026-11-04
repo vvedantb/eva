@@ -1391,6 +1391,8 @@ export const aveThreadFields = {
   /** Something arrived mid-run; start one follow-up run when this one ends. */
   rerunRequested: v.optional(v.boolean()),
   cancelRequested: v.optional(v.boolean()),
+  /** Last time the user had the chat on screen; a reply after it is unread. */
+  readAt: v.optional(v.number()),
   archivedAt: v.optional(v.number()),
   updatedAt: v.number(),
 };
