@@ -706,10 +706,12 @@ export const projectSandboxStarting = internalMutation({
     projectId: v.id("projects"),
     startAttempt: v.optional(v.number()),
   },
-  returns: v.null(),
+  // False: this start no longer owns the sandbox (stale attempt, or a stop
+  // landed). The caller must give up without creating or touching a VM.
+  returns: v.boolean(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
-    if (!project) return null;
+    if (!project) return false;
     if (
       !isCurrentSandboxStartAttempt(
         project.sandboxStartAttempt,
@@ -719,7 +721,7 @@ export const projectSandboxStarting = internalMutation({
       console.log(
         `[projects] projectSandboxStarting ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
       );
-      return null;
+      return false;
     }
     // Tokened: the request already marked `starting`; this is a re-mark and
     // must not revive a sandbox stopped since. Untokened (the project
@@ -729,14 +731,23 @@ export const projectSandboxStarting = internalMutation({
       args.startAttempt === undefined
         ? canRequestSandboxStart(project.reviewProjectSandboxStatus)
         : canStartActionMarkStarting(project.reviewProjectSandboxStatus);
-    if (!mayMarkStarting) return null;
+    if (!mayMarkStarting) return false;
 
     await ctx.db.patch(args.projectId, {
       reviewProjectSandboxStatus: "starting",
       lastSandboxActivity: Date.now(),
+      // An untokened start is a new request: take a new attempt number so an
+      // older attempt's stuck-start expiry cannot close this one.
+      ...(args.startAttempt === undefined
+        ? {
+            sandboxStartAttempt: nextSandboxStartAttempt(
+              project.sandboxStartAttempt,
+            ),
+          }
+        : {}),
     });
 
-    return null;
+    return true;
   },
 });
 

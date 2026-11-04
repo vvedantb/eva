@@ -2803,10 +2803,24 @@ export const startProjectPreviewSandbox = internalAction({
     const actionDetails = `projectId=${args.projectId}, repo=${args.repoOwner}/${args.repoName}, branch=${args.branchName}, base=${args.baseBranch}, existingSandboxId=${args.existingSandboxId ?? "none"}`;
     logSession(`startProjectPreviewSandbox invoked (${actionDetails})`);
     try {
-      await ctx.runMutation(internal.projects.projectSandboxStarting, {
-        projectId: args.projectId,
-        startAttempt: args.startAttempt,
-      });
+      const ownsStart = await ctx.runMutation(
+        internal.projects.projectSandboxStarting,
+        { projectId: args.projectId, startAttempt: args.startAttempt },
+      );
+      if (!ownsStart) {
+        // A failed earlier try already closed this attempt, a stop landed, or
+        // a newer attempt took over. Creating a VM now would leave it running
+        // behind a closed project, so give up before touching anything.
+        logSession(
+          `startProjectPreviewSandbox skipped: start no longer owned (${actionDetails})`,
+        );
+        await completeProjectProgress(ctx, args.projectId);
+        if (args.startAttempt === undefined) {
+          // Untokened callers (the interview) need a sandbox to continue.
+          throw new Error("The project sandbox is stopping. Try again.");
+        }
+        return { sandboxId: "" };
+      }
       const prepared = await prepareProjectPreviewSandboxInternal(ctx, {
         projectId: args.projectId,
         startAttempt: args.startAttempt,

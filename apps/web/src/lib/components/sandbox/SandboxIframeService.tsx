@@ -325,10 +325,14 @@ export function SandboxIframeService({
   // A poll belongs to one sandbox. Cancel it only when the sandbox goes away
   // or the panel unmounts — not whenever a callback prop changes identity,
   // which used to kill the poll and leave the panel on "starting" for good.
+  // The cancelled start can no longer settle the state, so go back to idle:
+  // the auto-start / cache effect only runs from idle, and the "starting"
+  // view has no Retry, so leaving it there stranded the panel on a spinner.
   useEffect(
     () => () => {
       generation.current += 1;
       stopPolling();
+      setState((current) => (current === "starting" ? "idle" : current));
     },
     [sandboxId, isActive],
   );

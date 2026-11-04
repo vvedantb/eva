@@ -21,7 +21,11 @@ import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
 import { buildProjectBranchName } from "./_git/branchNames";
-import { findLivePullRequestOnBranch } from "./_pullRequests/store";
+import {
+  allPullRequestsTerminal,
+  findLivePullRequestOnBranch,
+  listOwnerPullRequests,
+} from "./_pullRequests/store";
 
 /** Checks a loaded repo against connector ownership or team membership. */
 export async function userCanAccessRepo(
@@ -237,9 +241,18 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  // Merged / closed is decided by the PR webhook. Only a new build (above)
-  // reopens the project; task status edits after the fact must not.
-  if (project.phase === "completed" || project.phase === "cancelled") return;
+  // A merged / closed PR is final on GitHub, so the phase the PR webhook set
+  // is final too: only a new build (above) reopens it. A `completed` reached
+  // from "every task done" while a PR is still open is not — reopening a task
+  // moves the project back to review.
+  if (
+    (project.phase === "completed" || project.phase === "cancelled") &&
+    allPullRequestsTerminal(
+      await listOwnerPullRequests(db, { kind: "project", projectId }),
+    )
+  ) {
+    return;
+  }
 
   const firstTaskWith = (status: Doc<"agentTasks">["status"]) =>
     db

@@ -21,7 +21,11 @@ type TaskStatus = Doc<"agentTasks">["status"];
 type ProjectPhase = Doc<"projects">["phase"];
 type SandboxStatus = Doc<"sessions">["status"];
 
-async function projectWithTasks(phase: ProjectPhase, statuses: TaskStatus[]) {
+async function projectWithTasks(
+  phase: ProjectPhase,
+  statuses: TaskStatus[],
+  prState?: Doc<"pullRequests">["state"],
+) {
   const t = convexTest(schema, modules);
   const projectId = await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", { clerkId: "clerk|ada" });
@@ -49,6 +53,20 @@ async function projectWithTasks(phase: ProjectPhase, statuses: TaskStatus[]) {
         createdAt: 0,
         updatedAt: 0,
         createdBy: userId,
+      });
+    }
+    if (prState !== undefined) {
+      await ctx.db.insert("pullRequests", {
+        repoId,
+        prUrl: "https://github.com/vvedantb/eva/pull/1",
+        prNumber: 1,
+        headBranch: "eva/project-billing",
+        state: prState,
+        primary: true,
+        origin: "eva",
+        owner: { kind: "project", projectId },
+        createdAt: 0,
+        updatedAt: 0,
       });
     }
     return projectId;
@@ -89,13 +107,33 @@ describe("recomputeProjectPhase", () => {
   );
 
   test(
-    "task edits do not reopen a merged or closed project",
+    "task edits do not reopen a project whose PR merged or closed",
     async () => {
-      for (const phase of ["completed", "cancelled"] as const) {
-        const { recompute } = await projectWithTasks(phase, [
-          "business_review",
-        ]);
+      for (const [phase, prState] of [
+        ["completed", "merged"],
+        ["cancelled", "closed"],
+      ] as const) {
+        const { recompute } = await projectWithTasks(
+          phase,
+          ["business_review"],
+          prState,
+        );
         expect(await recompute()).toBe(phase);
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a completed project with its PR still open reopens when a task does",
+    async () => {
+      for (const prState of [undefined, "open"] as const) {
+        const { recompute } = await projectWithTasks(
+          "completed",
+          ["done", "business_review"],
+          prState,
+        );
+        expect(await recompute()).toBe("business_review");
       }
     },
     TIMEOUT_MS,
@@ -328,11 +366,26 @@ describe("project interview start", () => {
           reviewProjectSandboxStatus: "closed",
         });
       });
-      await t.mutation(internal.projects.projectSandboxStarting, { projectId });
-      const status = await t.run(
-        async (ctx) => (await ctx.db.get(projectId))?.reviewProjectSandboxStatus,
+      expect(
+        await t.mutation(internal.projects.projectSandboxStarting, {
+          projectId,
+        }),
+      ).toBe(true);
+      const project = await t.run(async (ctx) => ctx.db.get(projectId));
+      expect(project?.reviewProjectSandboxStatus).toBe("starting");
+      // A new request takes a new number, so an older expiry cannot close it.
+      expect(project?.sandboxStartAttempt).toBe(1);
+
+      // A retry of a tokened attempt that already failed must not go on.
+      await t.run(async (ctx) =>
+        ctx.db.patch(projectId, { reviewProjectSandboxStatus: "closed" }),
       );
-      expect(status).toBe("starting");
+      expect(
+        await t.mutation(internal.projects.projectSandboxStarting, {
+          projectId,
+          startAttempt: 1,
+        }),
+      ).toBe(false);
     },
     TIMEOUT_MS,
   );
