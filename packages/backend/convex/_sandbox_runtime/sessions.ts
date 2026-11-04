@@ -256,16 +256,36 @@ class SandboxStartAbortedError extends Error {
   }
 }
 
-/** True once the user has requested this session stop/close (Stop clicked). */
+/**
+ * True once a newer start request owns the sandbox. This start's writes are
+ * already ignored (see `_sandbox/transitions.ts`), but its remaining steps
+ * would still run against the live VM — relaunching the dev server under the
+ * newer start dropped every attached terminal. Untokened starts never are.
+ */
+function isSupersededStart(
+  currentAttempt: number | undefined,
+  startAttempt: number | undefined,
+): boolean {
+  return startAttempt !== undefined && currentAttempt !== startAttempt;
+}
+
+/**
+ * True once this start should give up: Stop was clicked, the session is
+ * gone, or a newer start superseded it.
+ */
 async function sessionStopRequested(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
+  startAttempt?: number,
 ): Promise<boolean> {
   const session = await ctx.runQuery(internal.sessions.getInternal, {
     id: sessionId,
   });
   return (
-    !session || session.status === "stopping" || session.status === "closed"
+    !session ||
+    session.status === "stopping" ||
+    session.status === "closed" ||
+    isSupersededStart(session.sandboxStartAttempt, startAttempt)
   );
 }
 
@@ -278,18 +298,20 @@ async function abortReuseIfSessionStopped(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
   sandboxId: string,
+  startAttempt?: number,
 ): Promise<void> {
-  if (await sessionStopRequested(ctx, sessionId)) {
+  if (await sessionStopRequested(ctx, sessionId, startAttempt)) {
     throw new SandboxStartAbortedError(
-      `reuse aborted: stop requested for sandbox ${sandboxId}`,
+      `reuse aborted: stop requested or start superseded for sandbox ${sandboxId}`,
     );
   }
 }
 
-/** True once the user has requested this task's sandbox stop/close. */
+/** True once this task start should give up (stop, gone, or superseded). */
 async function taskStopRequested(
   ctx: GenericActionCtx<DataModel>,
   taskId: Id<"agentTasks">,
+  startAttempt?: number,
 ): Promise<boolean> {
   const task = await ctx.runQuery(internal.agentTasks.getInternal, {
     id: taskId,
@@ -297,14 +319,16 @@ async function taskStopRequested(
   return (
     !task ||
     task.reviewTaskSandboxStatus === "stopping" ||
-    task.reviewTaskSandboxStatus === "closed"
+    task.reviewTaskSandboxStatus === "closed" ||
+    isSupersededStart(task.sandboxStartAttempt, startAttempt)
   );
 }
 
-/** True once the user has requested this project's sandbox stop/close. */
+/** True once this project start should give up (stop, gone, or superseded). */
 async function projectStopRequested(
   ctx: GenericActionCtx<DataModel>,
   projectId: Id<"projects">,
+  startAttempt?: number,
 ): Promise<boolean> {
   const project = await ctx.runQuery(internal.projects.getInternal, {
     id: projectId,
@@ -312,7 +336,8 @@ async function projectStopRequested(
   return (
     !project ||
     project.reviewProjectSandboxStatus === "stopping" ||
-    project.reviewProjectSandboxStatus === "closed"
+    project.reviewProjectSandboxStatus === "closed" ||
+    isSupersededStart(project.sandboxStartAttempt, startAttempt)
   );
 }
 
@@ -891,7 +916,8 @@ async function prepareSessionSandboxInternal(
                     markServicesPending: true,
                   });
                 },
-                shouldAbort: () => sessionStopRequested(ctx, args.sessionId),
+                shouldAbort: () =>
+                  sessionStopRequested(ctx, args.sessionId, args.startAttempt),
               }),
           );
           // No setupBranch here: resumeReusedSandbox already owns the branch
@@ -922,7 +948,12 @@ async function prepareSessionSandboxInternal(
               () => startDesktopWithChrome(handle),
             );
           }
-          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
+          await abortReuseIfSessionStopped(
+            ctx,
+            args.sessionId,
+            handle.id,
+            args.startAttempt,
+          );
           await emitSessionProgress(
             ctx,
             args.sessionId,
@@ -972,7 +1003,12 @@ async function prepareSessionSandboxInternal(
               }
             },
           );
-          await abortReuseIfSessionStopped(ctx, args.sessionId, handle.id);
+          await abortReuseIfSessionStopped(
+            ctx,
+            args.sessionId,
+            handle.id,
+            args.startAttempt,
+          );
           await runLoggedSessionStep(
             "reuseSessionSandbox.launchDevServer",
             sandboxDetails,
@@ -1730,7 +1766,16 @@ export const startSessionSandbox = internalAction({
         console.log(
           `[sandbox][sessions] startSessionSandbox aborted by stop sessionId=${args.sessionId}: ${e.message}`,
         );
-        if (args.repoId && stopId) {
+        // Superseded, not stopped: the newer start is using this VM.
+        const superseded = isSupersededStart(
+          (
+            await ctx.runQuery(internal.sessions.getInternal, {
+              id: args.sessionId,
+            })
+          )?.sandboxStartAttempt,
+          args.startAttempt,
+        );
+        if (args.repoId && stopId && !superseded) {
           try {
             await ctx.runAction(internal.sandbox.stopSandbox, {
               sandboxId: stopId,
@@ -1938,7 +1983,8 @@ async function prepareTaskPreviewSandboxInternal(
             isNew: false,
           });
         },
-        shouldAbort: () => taskStopRequested(ctx, args.taskId),
+        shouldAbort: () =>
+          taskStopRequested(ctx, args.taskId, args.startAttempt),
       }),
     );
     completedSteps.push({
@@ -2414,7 +2460,8 @@ async function prepareProjectPreviewSandboxInternal(
               isNew: false,
             });
           },
-          shouldAbort: () => projectStopRequested(ctx, args.projectId),
+          shouldAbort: () =>
+            projectStopRequested(ctx, args.projectId, args.startAttempt),
         }),
     );
     completedSteps.push({
@@ -2865,8 +2912,18 @@ export const startProjectPreviewSandbox = internalAction({
         console.log(
           `[sandbox][sessions] startProjectPreviewSandbox aborted by stop projectId=${args.projectId}: ${e.message}`,
         );
-        await completeProjectProgress(ctx, args.projectId);
+        // Superseded, not stopped: the newer start owns the VM and progress.
+        const superseded = isSupersededStart(
+          (
+            await ctx.runQuery(internal.projects.getInternal, {
+              id: args.projectId,
+            })
+          )?.sandboxStartAttempt,
+          args.startAttempt,
+        );
         const stopId = args.existingSandboxId;
+        if (superseded) return { sandboxId: stopId ?? "" };
+        await completeProjectProgress(ctx, args.projectId);
         if (stopId) {
           try {
             await ctx.runAction(internal.sandbox.stopSandbox, {
@@ -2948,6 +3005,16 @@ export const startTaskPreviewSandbox = internalAction({
         console.log(
           `[sandbox][sessions] startTaskPreviewSandbox aborted by stop taskId=${args.taskId}: ${e.message}`,
         );
+        // Superseded, not stopped: the newer start owns the VM and progress.
+        const superseded = isSupersededStart(
+          (
+            await ctx.runQuery(internal.agentTasks.getInternal, {
+              id: args.taskId,
+            })
+          )?.sandboxStartAttempt,
+          args.startAttempt,
+        );
+        if (superseded) return null;
         await completeTaskProgress(ctx, args.taskId);
         const stopId = args.existingSandboxId;
         if (stopId) {
