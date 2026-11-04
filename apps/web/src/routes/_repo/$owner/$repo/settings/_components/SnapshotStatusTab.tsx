@@ -1,8 +1,7 @@
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner, SettingsSection } from "@vvedantb/ui";
 import { IconCheck, IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import { describeCron } from "@/lib/components/CronScheduleCard";
 import { BuildStatusBadge } from "./BuildRow";
 
@@ -114,17 +113,15 @@ export function SnapshotStatusTab({
         title="Images"
         description={
           <>
-            Base snapshot with toolchain, <code>pnpm install</code>, and
-            your build commands. Eva captures a running sandbox as{" "}
-            <code>snap_*</code>. This is what sandboxes boot from unless
-            a seeded snapshot exists.
+            Base snapshot with toolchain, <code>pnpm install</code>, and your
+            build commands. Eva captures a running sandbox as{" "}
+            <code>snap_*</code>. This is what sandboxes boot from unless a
+            seeded snapshot exists.
           </>
         }
       >
         <div>
-          <h4 className="text-xs font-medium text-foreground">
-            Base Image
-          </h4>
+          <h4 className="text-xs font-medium text-foreground">Base Image</h4>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Rebuild Now always refreshes this — no seed file needed.
           </p>
@@ -147,10 +144,10 @@ export function SnapshotStatusTab({
             </span>
           </h4>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Running-sandbox capture with DB and services already
-            started. Only needed when cold boot is too slow. Configure
-            Stop Commands on an app (Settings → App); upload seed files
-            only if startup commands reference them.
+            Running-sandbox capture with DB and services already started. Only
+            needed when cold boot is too slow. Configure Stop Commands on an app
+            (Settings → App); upload seed files only if startup commands
+            reference them.
           </p>
           <div className="mt-3">
             <SeededSnapshotStatus
@@ -194,20 +191,15 @@ function CurrentStatusGrid({
       {lastBuild && (
         <>
           <div>
-            <span className="text-muted-foreground">
-              Last Build
-            </span>
+            <span className="text-muted-foreground">Last Build</span>
             <p className="mt-0.5">
-              {new Date(lastBuild.startedAt).toLocaleDateString(
-                "en-GB",
-                {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                },
-              )}
+              {new Date(lastBuild.startedAt).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </p>
           </div>
           <div>
@@ -294,9 +286,7 @@ function BaseImageStatus({
       <div className="flex items-start gap-1 text-xs text-green-500">
         <IconCheck size={12} className="mt-0.5 shrink-0" />
         <span className="min-w-0">
-          <span className="mr-1 text-muted-foreground">
-            Active:
-          </span>
+          <span className="mr-1 text-muted-foreground">Active:</span>
           <span className="font-mono break-all text-foreground">
             {activeBaseSnapshotId}
           </span>
@@ -317,9 +307,7 @@ function BaseImageStatus({
       {snapshot.baseSnapshotId ? (
         <>
           Last active:{" "}
-          <span className="font-mono break-all">
-            {snapshot.baseSnapshotId}
-          </span>
+          <span className="font-mono break-all">{snapshot.baseSnapshotId}</span>
           {" — "}
         </>
       ) : null}
@@ -361,9 +349,7 @@ function SeededSnapshotStatus({
       <div className="flex items-start gap-1 text-xs text-green-500">
         <IconCheck size={12} className="mt-0.5 shrink-0" />
         <span className="min-w-0">
-          <span className="mr-1 text-muted-foreground">
-            Active:
-          </span>
+          <span className="mr-1 text-muted-foreground">Active:</span>
           <span className="font-mono max-sm:break-all">
             {sharedSeededSnapshotName}
           </span>
@@ -374,8 +360,8 @@ function SeededSnapshotStatus({
   if (!hasSeedableApps) {
     return (
       <p className="text-xs text-muted-foreground">
-        Not configured — no apps have Stop Commands. Sandboxes
-        use the base Image only, which is fine for most repos.
+        Not configured — no apps have Stop Commands. Sandboxes use the base
+        Image only, which is fine for most repos.
       </p>
     );
   }

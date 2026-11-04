@@ -28,6 +28,7 @@ import {
 } from "./events";
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
+import { isTerminalRunStatus } from "../_automations/runStatus";
 
 /** Every run an automation made for one PR or issue. */
 async function runsForTarget(
@@ -244,6 +245,12 @@ export const settleEventRun = internalMutation({
   handler: async (ctx, { runId, status, message, eventCursor }) => {
     const run = await ctx.db.get(runId);
     if (!run) return null;
+    if (isTerminalRunStatus(run.status)) {
+      // Expired or cancelled first: keep that outcome, but still advance the
+      // cursor so the next webhook does not redo this work.
+      if (eventCursor !== undefined) await ctx.db.patch(runId, { eventCursor });
+      return null;
+    }
     await ctx.db.patch(runId, {
       status,
       finishedAt: Date.now(),

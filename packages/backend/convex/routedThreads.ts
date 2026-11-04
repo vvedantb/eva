@@ -277,23 +277,23 @@ async function enrichThread(
   thread: Doc<"routedThreads">,
   viewerUserId: Id<"users">,
 ) {
-  const rows = await threadParticipants(ctx, thread._id);
-  const participants = [];
-  let needsMyReply = false;
-  for (const row of rows) {
-    const user = await ctx.db.get(row.userId);
-    participants.push({
-      userId: row.userId,
-      name: displayName(user),
-      needsReply: row.needsReply,
-    });
-    if (row.userId === viewerUserId && row.needsReply) needsMyReply = true;
-  }
+  const [rows, repo, source] = await Promise.all([
+    threadParticipants(ctx, thread._id),
+    ctx.db.get(thread.repoId),
+    loadSource(ctx, thread.sourceKind, thread.sourceId),
+  ]);
+  const users = await Promise.all(rows.map((row) => ctx.db.get(row.userId)));
+  const participants = rows.map((row, i) => ({
+    userId: row.userId,
+    name: displayName(users[i]),
+    needsReply: row.needsReply,
+  }));
+  const needsMyReply = rows.some(
+    (row) => row.userId === viewerUserId && row.needsReply,
+  );
   // Stable order for the UI — row order is insertion order, which shuffles as
   // people are added to an existing thread.
   participants.sort((a, b) => a.name.localeCompare(b.name));
-  const repo = await ctx.db.get(thread.repoId);
-  const source = await loadSource(ctx, thread.sourceKind, thread.sourceId);
   return {
     _id: thread._id,
     teamId: thread.teamId,
@@ -573,14 +573,17 @@ export const listWaitingForMe = authQuery({
       )
       .order("desc")
       .take(50);
-    const out = [];
-    for (const row of rows) {
-      const thread = await ctx.db.get(row.threadId);
-      if (!thread || !OPEN_STATUSES.has(thread.status)) continue;
-      if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) continue;
-      out.push(await enrichThread(ctx, thread, ctx.userId));
-    }
-    return out;
+    const threads = await Promise.all(
+      rows.map(async (row) => {
+        const thread = await ctx.db.get(row.threadId);
+        if (!thread || !OPEN_STATUSES.has(thread.status)) return [];
+        if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) {
+          return [];
+        }
+        return [await enrichThread(ctx, thread, ctx.userId)];
+      }),
+    );
+    return threads.flat();
   },
 });
 
@@ -603,12 +606,11 @@ export const listBySource = authQuery({
       )
       .collect();
     rows.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    const out = [];
-    for (const row of rows) {
-      if (!OPEN_STATUSES.has(row.status)) continue;
-      out.push(await enrichThread(ctx, row, ctx.userId));
-    }
-    return out;
+    return await Promise.all(
+      rows
+        .filter((row) => OPEN_STATUSES.has(row.status))
+        .map((row) => enrichThread(ctx, row, ctx.userId)),
+    );
   },
 });
 
@@ -635,10 +637,20 @@ export const listMessages = authQuery({
       .withIndex("by_thread_and_created", (q) => q.eq("threadId", args.threadId))
       .order("asc")
       .take(200);
+    const authorIds = [
+      ...new Set(
+        rows.flatMap((row) => (row.authorUserId ? [row.authorUserId] : [])),
+      ),
+    ];
+    const authorDocs = await Promise.all(authorIds.map((id) => ctx.db.get(id)));
+    const authors = new Map<Id<"users">, Doc<"users"> | null>();
+    authorIds.forEach((id, i) => {
+      authors.set(id, authorDocs[i]);
+    });
     const out = [];
     for (const row of rows) {
       const author = row.authorUserId
-        ? await ctx.db.get(row.authorUserId)
+        ? (authors.get(row.authorUserId) ?? null)
         : null;
       out.push({
         _id: row._id,
@@ -665,13 +677,14 @@ export const countWaitingForMe = authQuery({
         q.eq("userId", ctx.userId).eq("needsReply", true),
       )
       .collect();
-    let count = 0;
-    for (const row of rows) {
-      const thread = await ctx.db.get(row.threadId);
-      if (!thread || !OPEN_STATUSES.has(thread.status)) continue;
-      if (await hasTeamAccess(ctx.db, thread.teamId, ctx.userId)) count += 1;
-    }
-    return count;
+    const visible = await Promise.all(
+      rows.map(async (row) => {
+        const thread = await ctx.db.get(row.threadId);
+        if (!thread || !OPEN_STATUSES.has(thread.status)) return false;
+        return await hasTeamAccess(ctx.db, thread.teamId, ctx.userId);
+      }),
+    );
+    return visible.filter(Boolean).length;
   },
 });
 

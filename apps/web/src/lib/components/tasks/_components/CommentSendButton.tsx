@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, CrossfadeIcon, CircleSpinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner } from "@vvedantb/ui";
 import { IconArrowUp } from "@tabler/icons-react";
 
 interface CommentSendButtonProps {
@@ -42,7 +43,7 @@ export function CommentSendButton({
       size={size}
       variant={isIdle ? "ghost" : variant}
       className={cn(
-        "rounded-full transition-colors",
+        "transition-colors",
         // Button fades disabled controls to 45%, which leaves the idle arrow
         // barely visible on the card: hold it at a readable muted tone instead.
         isIdle && "text-muted-foreground/70 disabled:opacity-100",
@@ -57,7 +58,7 @@ export function CommentSendButton({
         trueKey="loading"
         falseKey="send"
         className="relative flex size-4 items-center justify-center"
-        whenTrue={<CircleSpinner size="sm" />}
+        whenTrue={<Spinner variant="circle" size="sm" />}
         whenFalse={<IconArrowUp size={16} />}
       />
     </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Toaster } from "@eva/ui";
+import { SonnerToaster } from "@vvedantb/ui";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
 
 /**
@@ -9,5 +9,5 @@ import { useThemeMode } from "@/lib/hooks/useThemeMode";
  */
 export function AppToaster() {
   const { resolvedTheme } = useThemeMode();
-  return <Toaster theme={resolvedTheme} position="top-right" />;
+  return <SonnerToaster theme={resolvedTheme} position="top-right" />;
 }

@@ -264,6 +264,32 @@ function pushClaudeToolUseEvents(
   }
 }
 
+/**
+ * forwardSubagentText also sends the subagent's own text and thinking. Its
+ * text becomes a `response` step under the Agent row (the child thread view
+ * reads it); its thinking is dropped so it never lands in the parent's
+ * reasoning or reply.
+ */
+function pushClaudeSubagentTextEvent(
+  events: CanonicalEvent[],
+  block: JsonObject,
+  parentToolUseId: string,
+): void {
+  if (block.type !== "text" || !("text" in block) || !block.text) return;
+  const output = buildStepOutput(String(block.text));
+  if (!output) return;
+  events.push({
+    kind: "push_subagent_text",
+    step: {
+      type: "response",
+      label: "Agent message",
+      status: "complete",
+      parentToolUseId,
+      output,
+    },
+  });
+}
+
 function pushClaudeAssistantBlockEvents(
   events: CanonicalEvent[],
   block: JsonObject,
@@ -271,6 +297,8 @@ function pushClaudeAssistantBlockEvents(
 ): void {
   if (block.type === "tool_use" && typeof block.name === "string") {
     pushClaudeToolUseEvents(events, block, block.name, parentToolUseId);
+  } else if (parentToolUseId) {
+    pushClaudeSubagentTextEvent(events, block, parentToolUseId);
   } else if (
     block.type === "thinking" &&
     "thinking" in block &&
@@ -309,6 +337,9 @@ export function claudeParseLine(event: JsonObject): CanonicalEvent[] {
     return parseClaudeSdkTaxonomy(event);
   }
   if (event.type === "stream_event") {
+    // Subagent partials must never stream into the parent's reply. Their
+    // finished text arrives as whole assistant messages (forwardSubagentText).
+    if (trimmedString(event.parent_tool_use_id)) return [];
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {

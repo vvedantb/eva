@@ -9,6 +9,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
 import { workflow } from "../workflowManager";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
@@ -28,6 +29,16 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import {
+  canRequestSandboxStart,
+  canStartActionMarkStarting,
+  discardUntrackedSandbox,
+  isCurrentSandboxStartAttempt,
+  nextSandboxStartAttempt,
+  scheduleStuckStartExpiry,
+  shouldApplySandboxStartFailure,
+} from "../_sandbox/transitions";
+import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -72,6 +83,12 @@ async function requestProjectSandboxStart(
   ctx: MutationCtx,
   project: Doc<"projects">,
 ): Promise<void> {
+  if (!canRequestSandboxStart(project.reviewProjectSandboxStatus)) {
+    console.log(
+      `[projects] startProjectSandbox skipped projectId=${project._id} status=${project.reviewProjectSandboxStatus}`,
+    );
+    return;
+  }
   const repo = await ctx.db.get(project.repoId);
   if (!repo) throw new Error("Repository not found");
 
@@ -80,8 +97,10 @@ async function requestProjectSandboxStart(
   const baseBranch =
     project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
 
+  const startAttempt = nextSandboxStartAttempt(project.sandboxStartAttempt);
   await ctx.db.patch(project._id, {
     reviewProjectSandboxStatus: "starting",
+    sandboxStartAttempt: startAttempt,
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
@@ -104,7 +123,13 @@ async function requestProjectSandboxStart(
     branchName,
     baseBranch,
     repoId: project.repoId,
+    startAttempt,
   };
+  await scheduleStuckStartExpiry(
+    ctx,
+    { kind: "project", id: project._id },
+    startAttempt,
+  );
   // Vercel: schedule start action directly (skip ~6s workflow scheduling).
   if (reusableSandboxId) {
     await ctx.scheduler.runAfter(
@@ -175,8 +200,10 @@ export const retryProjectStartupCommands = authMutation({
     const baseBranch =
       project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
 
+    const startAttempt = nextSandboxStartAttempt(project.sandboxStartAttempt);
     await ctx.db.patch(args.projectId, {
       reviewProjectSandboxStatus: "starting",
+      sandboxStartAttempt: startAttempt,
     });
 
     await workflow.start(
@@ -193,7 +220,13 @@ export const retryProjectStartupCommands = authMutation({
         baseBranch,
         repoId: project.repoId,
         forceStartupCommands: true,
+        startAttempt,
       },
+    );
+    await scheduleStuckStartExpiry(
+      ctx,
+      { kind: "project", id: args.projectId },
+      startAttempt,
     );
 
     return null;
@@ -251,7 +284,11 @@ export const resolveProjectConflicts = authMutation({
       kind: "project",
       projectId: project._id,
     });
-    if (!primaryPr || primaryPr.state === "merged" || primaryPr.state === "closed") {
+    if (
+      !primaryPr ||
+      primaryPr.state === "merged" ||
+      primaryPr.state === "closed"
+    ) {
       throw new Error("Project has no open PR to resolve conflicts for");
     }
     if (project.activeBuildWorkflowId) {
@@ -529,6 +566,7 @@ export const markProjectSandboxClosed = internalMutation({
     if (!project) return null;
     // Only flip if still stopping — don't overwrite a fresh start.
     if (project.reviewProjectSandboxStatus !== "stopping") return null;
+    await scheduleDrainAfterStopSettles(ctx, args.projectId);
     if (args.error) {
       await ctx.db.insert("messages", {
         parentId: args.projectId,
@@ -566,11 +604,29 @@ export const projectSandboxReady = internalMutation({
     isNew: v.boolean(),
     devPort: v.optional(v.number()),
     devCommand: v.optional(v.string()),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        project.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[projects] projectSandboxReady ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
+      );
+      await discardUntrackedSandbox(ctx, {
+        sandboxId: args.sandboxId,
+        trackedSandboxId: project.sandboxId,
+        repoId: project.repoId,
+        isNew: args.isNew,
+      });
+      return null;
+    }
 
     if (
       project.reviewProjectSandboxStatus === "stopping" ||
@@ -579,6 +635,17 @@ export const projectSandboxReady = internalMutation({
       console.log(
         `[projects] projectSandboxReady ignored projectId=${args.projectId} status=${project.reviewProjectSandboxStatus} sandboxId=${args.sandboxId}`,
       );
+      // Only a start request's own attempt (it carries a number) made this
+      // VM for nobody else. Untokened callers such as sessionExecuteWorkflow
+      // go on to use the VM they prepared, so it must not be deleted here.
+      if (args.startAttempt !== undefined) {
+        await discardUntrackedSandbox(ctx, {
+          sandboxId: args.sandboxId,
+          trackedSandboxId: project.sandboxId,
+          repoId: project.repoId,
+          isNew: args.isNew,
+        });
+      }
       return null;
     }
 
@@ -588,6 +655,15 @@ export const projectSandboxReady = internalMutation({
       project.reviewProjectSandboxStatus === "active" &&
       project.sandboxId === args.sandboxId;
     if (!alreadyActive) {
+      // Subagents died with the old VM; unsettled, they hold the chat queue
+      // (`runningBackgroundAgents`). Mirrors the session `sandboxReady`.
+      const settledAgents = settleOrphanedBackgroundAgents(
+        project.backgroundAgents,
+        Date.now(),
+      );
+      if (settledAgents) {
+        await ctx.db.patch(args.projectId, { backgroundAgents: settledAgents });
+      }
       const content = args.isNew ? "Sandbox started" : "Sandbox reconnected";
       await ctx.db.insert("messages", {
         parentId: args.projectId,
@@ -628,18 +704,52 @@ export const projectSandboxReady = internalMutation({
 
 /** Marks a project preview sandbox as starting (internal use). */
 export const projectSandboxStarting = internalMutation({
-  args: { projectId: v.id("projects") },
-  returns: v.null(),
+  args: {
+    projectId: v.id("projects"),
+    startAttempt: v.optional(v.number()),
+  },
+  // False: this start no longer owns the sandbox (stale attempt, or a stop
+  // landed). The caller must give up without creating or touching a VM.
+  returns: v.boolean(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
-    if (!project) return null;
+    if (!project) return false;
+    if (
+      !isCurrentSandboxStartAttempt(
+        project.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[projects] projectSandboxStarting ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
+      );
+      return false;
+    }
+    // Tokened: the request already marked `starting`; this is a re-mark and
+    // must not revive a sandbox stopped since. Untokened (the project
+    // interview): this call *is* the start request, so the request rule
+    // applies and a stopped sandbox may start again.
+    const mayMarkStarting =
+      args.startAttempt === undefined
+        ? canRequestSandboxStart(project.reviewProjectSandboxStatus)
+        : canStartActionMarkStarting(project.reviewProjectSandboxStatus);
+    if (!mayMarkStarting) return false;
 
     await ctx.db.patch(args.projectId, {
       reviewProjectSandboxStatus: "starting",
       lastSandboxActivity: Date.now(),
+      // An untokened start is a new request: take a new attempt number so an
+      // older attempt's stuck-start expiry cannot close this one.
+      ...(args.startAttempt === undefined
+        ? {
+            sandboxStartAttempt: nextSandboxStartAttempt(
+              project.sandboxStartAttempt,
+            ),
+          }
+        : {}),
     });
 
-    return null;
+    return true;
   },
 });
 
@@ -648,16 +758,38 @@ export const projectSandboxAllocated = internalMutation({
   args: {
     projectId: v.id("projects"),
     sandboxId: v.string(),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        project.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[projects] projectSandboxAllocated ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
+      );
+      await discardUntrackedSandbox(ctx, {
+        sandboxId: args.sandboxId,
+        trackedSandboxId: project.sandboxId,
+        repoId: project.repoId,
+        isNew: true,
+      });
+      return null;
+    }
 
+    // Always record the VM so a stop or the idle sweep can still find it;
+    // only the status respects a stop that landed while it was being created.
     await ctx.db.patch(args.projectId, {
       sandboxId: args.sandboxId,
-      reviewProjectSandboxStatus: "starting",
       lastSandboxActivity: Date.now(),
+      ...(canStartActionMarkStarting(project.reviewProjectSandboxStatus)
+        ? { reviewProjectSandboxStatus: "starting" as const }
+        : {}),
     });
 
     return null;
@@ -669,11 +801,29 @@ export const projectSandboxError = internalMutation({
   args: {
     projectId: v.id("projects"),
     error: v.string(),
+    startAttempt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
+    if (
+      !isCurrentSandboxStartAttempt(
+        project.sandboxStartAttempt,
+        args.startAttempt,
+      )
+    ) {
+      console.log(
+        `[projects] projectSandboxError ignored stale attempt ${args.startAttempt} (current ${project.sandboxStartAttempt}) projectId=${args.projectId}`,
+      );
+      return null;
+    }
+    if (!shouldApplySandboxStartFailure(project.reviewProjectSandboxStatus)) {
+      console.log(
+        `[projects] projectSandboxError ignored projectId=${args.projectId} status=${project.reviewProjectSandboxStatus}: ${args.error}`,
+      );
+      return null;
+    }
 
     await ctx.db.insert("messages", {
       parentId: args.projectId,

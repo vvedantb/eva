@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@eva/ui";
 import {
   Popover,
   PopoverTrigger,
@@ -9,9 +10,8 @@ import {
   CommandList,
   CommandGroup,
   CommandItem,
-  cn,
   CrossfadeIconSlot,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCheck } from "@tabler/icons-react";
 import { PriorityIcon } from "./PriorityIcon";
 import { PRIORITY_LABELS, PRIORITY_ORDER, type Priority } from "./priorityMeta";

@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -18,6 +19,7 @@ import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
 import { renderHtmlTool } from "../_mcp/renderHtmlTool";
 import { sendEmailTool } from "../_mcp/sendEmailTool";
+import { submitFeedbackTool } from "../_mcp/submitFeedbackTool";
 import {
   entityAccess,
   entityRefArgs,
@@ -26,16 +28,26 @@ import {
 } from "./entityRef";
 
 import {
-  errorResult,
   matchRepoByName,
   repoRefLabel,
   mcpGetContext,
   mcpListUserRepos,
-  textResult,
   MCP_CLAUDE_MODELS,
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
+
+/** Hidden unless the caller opts in to Experimental → Ask teammates. */
+export const ASK_TEAMMATE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "list_work_profiles",
+  "ask_teammate",
+]);
+
+/** Hidden unless the caller opts in to Experimental → PR watch. */
+export const PR_WATCH_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "watch_pull_request",
+  "unwatch_pull_request",
+]);
 
 interface RepoCredentials {
   convexUrl: string;
@@ -178,7 +190,7 @@ export function buildTools(
           };
         }
 
-        return textResult(payload);
+        return toolJsonResult(payload);
       },
     }),
   );
@@ -200,7 +212,7 @@ export function buildTools(
       handler: async ({ repoId, repoName, app, environment }) => {
         const { deployKey, userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
+        if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
           deployKey,
@@ -216,7 +228,7 @@ export function buildTools(
           },
         );
 
-        return textResult(tables);
+        return toolJsonResult(tables);
       },
     }),
   );
@@ -261,7 +273,7 @@ export function buildTools(
       }) => {
         const { deployKey, userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
+        if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
           deployKey,
@@ -281,7 +293,7 @@ export function buildTools(
           },
         );
 
-        return textResult({
+        return toolJsonResult({
           page: result.page,
           isDone: result.isDone,
           continueCursor: result.continueCursor,
@@ -309,13 +321,13 @@ export function buildTools(
       },
       handler: async ({ id, repoId, repoName, app, environment }) => {
         if (!/^[a-zA-Z0-9_]+$/.test(id)) {
-          return errorResult(
+          return toolErrorResult(
             "Invalid document ID format. IDs should be alphanumeric.",
           );
         }
         const { deployKey, userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
+        if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
           deployKey,
@@ -331,7 +343,7 @@ export function buildTools(
             code: `return await ctx.db.get(${JSON.stringify(id)});`,
           },
         );
-        if (!result.ok) return errorResult(result.error);
+        if (!result.ok) return toolErrorResult(result.error);
 
         const output: { document: unknown; logLines?: string[] } = {
           document: result.value,
@@ -340,7 +352,7 @@ export function buildTools(
           output.logLines = result.logLines;
         }
 
-        return textResult(output);
+        return toolJsonResult(output);
       },
     }),
   );
@@ -372,7 +384,7 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
       handler: async ({ code, repoId, repoName, app, environment }) => {
         const { deployKey, userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
+        if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
           deployKey,
@@ -388,7 +400,7 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
             code,
           },
         );
-        if (!result.ok) return errorResult(result.error);
+        if (!result.ok) return toolErrorResult(result.error);
 
         const output: { result: unknown; logLines?: string[] } = {
           result: result.value,
@@ -397,7 +409,7 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
           output.logLines = result.logLines;
         }
 
-        return textResult(output);
+        return toolJsonResult(output);
       },
     }),
   );
@@ -418,13 +430,13 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
       },
       handler: async ({ table, repoId, repoName, app, environment }) => {
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table)) {
-          return errorResult(
+          return toolErrorResult(
             "Invalid table name. Use alphanumeric characters and underscores.",
           );
         }
         const { deployKey, userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
+        if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
           deployKey,
@@ -440,9 +452,9 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
             code: `const docs = await ctx.db.query(${JSON.stringify(table)}).collect(); return docs.length;`,
           },
         );
-        if (!result.ok) return errorResult(result.error);
+        if (!result.ok) return toolErrorResult(result.error);
 
-        return textResult({ table, count: result.value });
+        return toolJsonResult({ table, count: result.value });
       },
     }),
   );
@@ -478,7 +490,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       handler: async ({ sql, limit, repoId, repoName, app }) => {
         const { userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-        if ("isError" in ref) return ref;
+        if ("content" in ref) return ref;
         await assertRepoAccess(ref.repoId, userId);
 
         const result = await ctx.runAction(
@@ -488,14 +500,14 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
 
         if (!result.ok) {
           if (result.errorCode === "missing_config") {
-            return errorResult(
+            return toolErrorResult(
               `This repo has no Postgres read replica configured. Add a POSTGRES_READ_REPLICA_URL env var in the repo's Environment Variables settings in Eva (append "?sslmode=require" if the server needs TLS, and mark it as excluded from sandboxes so the URL never reaches task sandboxes).`,
             );
           }
-          return errorResult(`Postgres query failed: ${result.error}`);
+          return toolErrorResult(`Postgres query failed: ${result.error}`);
         }
 
-        return textResult({
+        return toolJsonResult({
           columns: result.columns,
           rows: result.rows,
           rowCount: result.rowCount,
@@ -582,6 +594,26 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // submit_feedback — frustration or praise, shown under the current reply
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Scoped like render_ui: the feedback has to land in *this* chat.
+  if (entityKind !== undefined && chatContentId !== undefined) {
+    tools.push(
+      submitFeedbackTool(async (input) => {
+        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        return ctx.runMutation(internal.feedback.createFromAgent, {
+          entityKind,
+          entityId: chatContentId,
+          userId,
+          sentiment: input.sentiment,
+          comment: input.summary,
+        });
+      }),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // list_preview_tools / call_preview_tool — WebMCP tools in the live preview
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -611,7 +643,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     repoName: string,
     app: string | undefined,
     userId: string,
-  ): Promise<{ repo: RepoInfo } | ReturnType<typeof errorResult>> {
+  ): Promise<{ repo: RepoInfo } | ReturnType<typeof toolErrorResult>> {
     return matchRepoByName(await getUserRepos(userId), repoName, app);
   }
 
@@ -678,10 +710,11 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     input: TaskInput,
     userId: string,
   ): Promise<
-    { taskId: string; repoFullName: string } | ReturnType<typeof errorResult>
+    | { taskId: string; repoFullName: string }
+    | ReturnType<typeof toolErrorResult>
   > {
     const resolved = await resolveRepoByName(input.repoName, input.app, userId);
-    if ("isError" in resolved) return resolved;
+    if ("content" in resolved) return resolved;
     const { repo } = resolved;
 
     const taskId = await ctx.runAction(internal.mcp.nodeActions.createTask, {
@@ -708,14 +741,14 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       handler: async (input) => {
         const { userId } = await getContext();
         const result = await createTaskForRepo(input, userId);
-        if ("isError" in result) return result;
+        if ("content" in result) return result;
 
         await ctx.runAction(internal.mcp.nodeActions.startTaskExecution, {
           clerkUserId,
           taskId: result.taskId,
         });
 
-        return textResult({
+        return toolJsonResult({
           taskId: result.taskId,
           repo: result.repoFullName,
           title: input.title,
@@ -735,9 +768,9 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       handler: async (input) => {
         const { userId } = await getContext();
         const result = await createTaskForRepo(input, userId);
-        if ("isError" in result) return result;
+        if ("content" in result) return result;
 
-        return textResult({
+        return toolJsonResult({
           taskId: result.taskId,
           repo: result.repoFullName,
           title: input.title,
@@ -812,7 +845,7 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
           input.app,
           userId,
         );
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { repo } = resolved;
 
         const tasksForMutation = input.tasks.map((t) => ({
@@ -849,7 +882,7 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
           }
         }
 
-        return textResult({
+        return toolJsonResult({
           repo: repoRefLabel(repo),
           ...batchResult,
           taskCount: input.tasks.length,
@@ -901,22 +934,26 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       },
       handler: async ({ message, model, chat, ...ref }) => {
         if (message.trim().length === 0) {
-          return errorResult("message cannot be empty.");
+          return toolErrorResult("message cannot be empty.");
         }
-        if (chat !== undefined && ref.kind !== undefined && ref.kind !== "session") {
-          return errorResult('"chat" only applies to sessions.');
+        if (
+          chat !== undefined &&
+          ref.kind !== undefined &&
+          ref.kind !== "session"
+        ) {
+          return toolErrorResult('"chat" only applies to sessions.');
         }
 
         const { userId } = await getContext();
         const resolved = await resolveEntityTarget(ref, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         // A session daemon may message a sibling chat of its own session, but
         // never the chat it is running in.
         if (entityId !== undefined && target.targetId === entityId) {
           if (target.kind !== "session" || chat === undefined) {
-            return errorResult(
+            return toolErrorResult(
               "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
             );
           }
@@ -930,7 +967,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             id: target.targetId,
             message,
             model,
-            ...(target.kind === "session" && chat !== undefined ? { chat } : {}),
+            ...(target.kind === "session" && chat !== undefined
+              ? { chat }
+              : {}),
             ...(credentials.chatId !== undefined
               ? { excludeChatId: credentials.chatId }
               : {}),
@@ -941,7 +980,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
         );
 
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           ...(result.chat !== undefined ? { chat: result.chat } : {}),
           delivered: result.delivered,
@@ -982,7 +1021,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       handler: async ({ repoName, title, content, app }) => {
         const { userId } = await getContext();
         const resolved = await resolveRepoByName(repoName, app, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { repo } = resolved;
 
         const docId = await ctx.runAction(
@@ -998,7 +1037,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
         );
 
-        return textResult({
+        return toolJsonResult({
           docId,
           repo: repoRefLabel(repo),
           title,
@@ -1027,7 +1066,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           clerkUserId,
           docId,
         });
-        return textResult({ document: doc });
+        return toolJsonResult({ document: doc });
       },
     }),
   );
@@ -1058,7 +1097,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       handler: async ({ repoName, app, kind }) => {
         const { userId } = await getContext();
         const resolved = await resolveRepoByName(repoName, app, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { repo } = resolved;
 
         const docs = await ctx.runAction(internal.mcp.nodeActions.listEvaDocs, {
@@ -1066,7 +1105,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           repoId: repo.id,
           kind,
         });
-        return textResult({ repo: repoRefLabel(repo), docs });
+        return toolJsonResult({ repo: repoRefLabel(repo), docs });
       },
     }),
   );
@@ -1092,7 +1131,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           content,
           description,
         });
-        return textResult({ docId, status: "updated" });
+        return toolJsonResult({ docId, status: "updated" });
       },
     }),
   );
@@ -1110,10 +1149,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
   async function resolveTeam(
     teamId: string | undefined,
     userId: string,
-  ): Promise<{ teamId: string } | ReturnType<typeof errorResult>> {
+  ): Promise<{ teamId: string } | ReturnType<typeof toolErrorResult>> {
     const teams = await getUserTeams(userId);
     if (teams.length === 0) {
-      return errorResult(
+      return toolErrorResult(
         "You are not a member of any team. Create a team in Eva before saving artifacts.",
       );
     }
@@ -1123,7 +1162,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       chosen = teams.find((t) => t.id === teamId);
       if (!chosen) {
         const available = teams.map((t) => `${t.name} (${t.id})`).join(", ");
-        return errorResult(
+        return toolErrorResult(
           `Team "${teamId}" not found or you are not a member. Your teams: ${available}`,
         );
       }
@@ -1131,12 +1170,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       chosen = teams[0];
     } else {
       const available = teams.map((t) => `${t.name} (${t.id})`).join(", ");
-      return errorResult(
+      return toolErrorResult(
         `You belong to multiple teams. Pass teamId to choose one (call list_teams). Your teams: ${available}`,
       );
     }
 
-    if (!chosen) return errorResult("Could not resolve a team.");
+    if (!chosen) return toolErrorResult("Could not resolve a team.");
     return { teamId: chosen.id };
   }
 
@@ -1150,7 +1189,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       handler: async () => {
         const { userId } = await getContext();
         const teams = await getUserTeams(userId);
-        return textResult(teams);
+        return toolJsonResult(teams);
       },
     }),
   );
@@ -1168,12 +1207,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           userId,
         });
         if (teams.length === 0) {
-          return textResult({
+          return toolJsonResult({
             teams: [],
             note: "No shared team directory. Ask in this chat instead.",
           });
         }
-        return textResult({ teams });
+        return toolJsonResult({ teams });
       },
     }),
   );
@@ -1228,7 +1267,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         const kind = sourceKind ?? entityKind;
         const id = sourceId ?? entityId;
         if (!kind || !id) {
-          return errorResult(
+          return toolErrorResult(
             "No source chat. Pass sourceKind and sourceId, or call this from a session, task, or project sandbox.",
           );
         }
@@ -1246,7 +1285,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           },
         );
         if (!result.ok) {
-          return errorResult(
+          return toolErrorResult(
             result.candidates
               ? `${result.error} Candidates: ${result.candidates
                   .map((c) => `${c.name} (${c.userId})`)
@@ -1254,7 +1293,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
               : result.error,
           );
         }
-        return textResult(result);
+        return toolJsonResult(result);
       },
     }),
   );
@@ -1273,7 +1312,7 @@ Artifacts can keep persistent state (localStorage is in-memory only and is lost 
 - cowork.state.subscribe(fn) — fn(snapshot) on every change, including other viewers' writes; returns an unsubscribe function
 opts = { scope: "user" } (default, private to each viewer) or { scope: "shared" } (one copy for the whole team). Limits: 200 keys per scope, 64 KB per value.
 
-When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears in the chat's Artifacts tab and on the main Artifacts page.
+When called from a session, quick task, or project sandbox, the artifact is linked to that chat: it appears as a card under your reply (with preview and fullscreen), in the chat's Artifacts tab, and on the main Artifacts page.
 
 Do NOT use this for session walkthrough recordings, screen captures, or screenshots. For those, save the file under repo-root recordings/ or screenshots/ with agent-browser and leave it on disk — Eva attaches it to the chat message with the built-in video/image player.`,
       mutating: true,
@@ -1302,7 +1341,7 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
       handler: async ({ name, html, description, teamId, declaredTools }) => {
         const { userId } = await getContext();
         const resolved = await resolveTeam(teamId, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
 
         const result = await ctx.runAction(
           internal.mcp.nodeActions.createArtifact,
@@ -1318,8 +1357,16 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
               : {}),
           },
         );
+        // Anchor it to this chat's turn, so it shows as a card under the reply.
+        if (entityKind !== undefined && chatContentId !== undefined) {
+          await ctx.runMutation(internal.artifacts.anchorToChat, {
+            artifactId: result.artifactId,
+            entityKind,
+            entityId: chatContentId,
+          });
+        }
 
-        return textResult({
+        return toolJsonResult({
           artifactId: result.artifactId,
           viewUrl: result.viewUrl,
           name,
@@ -1349,8 +1396,8 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
             artifactId,
           },
         );
-        if (result === null) return textResult({ artifact: null });
-        return textResult(result);
+        if (result === null) return toolJsonResult({ artifact: null });
+        return toolJsonResult(result);
       },
     }),
   );
@@ -1368,7 +1415,7 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
           internal.mcp.nodeActions.listArtifacts,
           { clerkUserId },
         );
-        return textResult({ artifacts });
+        return toolJsonResult({ artifacts });
       },
     }),
   );
@@ -1391,7 +1438,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
           internal.mcp.media.generateUploadUrl,
           {},
         );
-        return textResult({ uploadUrl });
+        return toolJsonResult({ uploadUrl });
       },
     }),
   );
@@ -1412,8 +1459,8 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         const result = await ctx.runQuery(internal.mcp.media.getUrl, {
           storageId,
         });
-        if (result === null) return errorResult("Unknown storageId.");
-        return textResult(result);
+        if (result === null) return toolErrorResult("Unknown storageId.");
+        return toolJsonResult(result);
       },
     }),
   );
@@ -1424,9 +1471,9 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
 
   function requireBrowserEntity():
     | { entityKind: "session" | "task" | "project"; entityId: string }
-    | ReturnType<typeof errorResult> {
+    | ReturnType<typeof toolErrorResult> {
     if (entityKind === undefined || entityId === undefined) {
-      return errorResult(
+      return toolErrorResult(
         "browser_* tools require a session, task, or project sandbox (token has no entity).",
       );
     }
@@ -1442,7 +1489,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       input: {},
       handler: async () => {
         const entity = requireBrowserEntity();
-        if ("isError" in entity) return entity;
+        if ("content" in entity) return entity;
 
         const result = await ctx.runAction(
           internal.sandbox.startDesktopForBrowserEntity,
@@ -1452,7 +1499,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
             clerkUserId,
           },
         );
-        if (!result.ok) return errorResult(result.message);
+        if (!result.ok) return toolErrorResult(result.message);
         return {
           content: [{ type: "text" as const, text: result.message }],
         };
@@ -1469,14 +1516,14 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       input: {},
       handler: async () => {
         const entity = requireBrowserEntity();
-        if ("isError" in entity) return entity;
+        if ("content" in entity) return entity;
 
         await ctx.runMutation(internal.mcp.browserLock.setAgentBrowsingAt, {
           entityKind: entity.entityKind,
           entityId: entity.entityId,
           locked: true,
         });
-        return textResult({ locked: true });
+        return toolJsonResult({ locked: true });
       },
     }),
   );
@@ -1490,14 +1537,14 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       input: {},
       handler: async () => {
         const entity = requireBrowserEntity();
-        if ("isError" in entity) return entity;
+        if ("content" in entity) return entity;
 
         await ctx.runMutation(internal.mcp.browserLock.setAgentBrowsingAt, {
           entityKind: entity.entityKind,
           entityId: entity.entityId,
           locked: false,
         });
-        return textResult({ locked: false });
+        return toolJsonResult({ locked: false });
       },
     }),
   );
@@ -1529,9 +1576,9 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
           },
         );
         if (!result.accepted) {
-          return errorResult(result.message);
+          return toolErrorResult(result.message);
         }
-        return textResult(result);
+        return toolJsonResult(result);
       },
     }),
   );
@@ -1585,12 +1632,12 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
         let repoId = scopedRepoId;
         if (!repoId) {
           if (!repoName) {
-            return errorResult(
+            return toolErrorResult(
               'get_skill needs a "repoName" when called outside an Eva sandbox.',
             );
           }
           const resolved = await resolveRepoByName(repoName, app, userId);
-          if ("isError" in resolved) return resolved;
+          if ("content" in resolved) return resolved;
           repoId = resolved.repo.id;
         }
         await assertRepoAccess(repoId, userId);
@@ -1600,10 +1647,10 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
           { repoId, name },
         );
         if (result.status === "repo_not_found") {
-          return errorResult(`Repo ${repoId} was not found.`);
+          return toolErrorResult(`Repo ${repoId} was not found.`);
         }
         if (result.status === "not_installed") {
-          return errorResult(
+          return toolErrorResult(
             `The skill "${name}" is not installed on this repo. Install it in Eva under Settings → Skills, then try again.`,
           );
         }

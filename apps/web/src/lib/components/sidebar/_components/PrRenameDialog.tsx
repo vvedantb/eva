@@ -12,7 +12,7 @@ import {
   DialogTitle,
   Input,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { usePrEdit } from "@/lib/components/reviews/usePrEdit";
 
 /** The pull request being renamed, or null when the dialog is closed. */

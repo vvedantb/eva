@@ -1,8 +1,13 @@
 "use client";
 
 import { Link, useLocation } from "@tanstack/react-router";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
-import { SettingsIcon } from "@/lib/components/sidebar/icons/AnimatedNavIcons";
+import { cn } from "@eva/ui";
+import {
+  SettingsIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import { GLOBAL_SETTINGS_NAV } from "@/lib/components/sidebar/globalSettingsNav";
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
@@ -37,7 +42,7 @@ export function RailSettingsMenu({ onNavigate }: { onNavigate?: () => void }) {
               : "border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground",
           )}
         >
-          <SettingsIcon size={22} className="shrink-0" />
+          <SettingsIcon size={22} variant="turn" className="shrink-0" />
         </Link>
       </TooltipTrigger>
       <TooltipContent side="right">Settings</TooltipContent>

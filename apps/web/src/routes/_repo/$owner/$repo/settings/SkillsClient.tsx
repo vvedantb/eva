@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { OptimisticLocalStore } from "convex/browser";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -9,18 +10,17 @@ import { SkillRow } from "./skills/_components/SkillRow";
 import { SystemSkillRow } from "./skills/_components/SystemSkillRow";
 import {
   Button,
-  motionBase,
-  motionFast,
-  motionStagger,
+  tokenTransition,
+  staggerDelay,
   RefreshSpinIcon,
-} from "@eva/ui";
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconSparkles } from "@tabler/icons-react";
 import { useState } from "react";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export function SkillsClient() {
@@ -29,16 +29,14 @@ export function SkillsClient() {
   const systemSkills = useQuery(api.repoSystemSkills.listForRepo, { repoId });
   const setInstalled = (name: string, installed: boolean) => {
     return (localStore: OptimisticLocalStore) => {
-      const current = localStore.getQuery(api.repoSystemSkills.listForRepo, {
-        repoId,
-      });
-      if (current === undefined) return;
-      localStore.setQuery(
+      patchLoadedQuery(
+        localStore,
         api.repoSystemSkills.listForRepo,
         { repoId },
-        current.map((skill) =>
-          skill.name === name ? { ...skill, installed } : skill,
-        ),
+        (skills) =>
+          skills.map((skill) =>
+            skill.name === name ? { ...skill, installed } : skill,
+          ),
       );
     };
   };
@@ -103,7 +101,7 @@ export function SkillsClient() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {error}
           </m.p>
@@ -115,7 +113,7 @@ export function SkillsClient() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {syncSummary}
           </m.p>
@@ -126,7 +124,7 @@ export function SkillsClient() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <SettingsSection title="Sync warnings" bodyVariant="compact">
               <div className="grid gap-1">
@@ -154,7 +152,10 @@ export function SkillsClient() {
               key={skill.name}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ ...motionBase, delay: motionStagger(index) }}
+              transition={{
+                ...tokenTransition.base,
+                delay: staggerDelay(index),
+              }}
             >
               <SystemSkillRow
                 repoId={repoId}
@@ -199,7 +200,10 @@ export function SkillsClient() {
                 key={skill._id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...motionBase, delay: motionStagger(index) }}
+                transition={{
+                  ...tokenTransition.base,
+                  delay: staggerDelay(index),
+                }}
               >
                 <SkillRow skill={skill} />
               </m.div>

@@ -12,18 +12,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import type { SessionMessage } from "./useChatSend";
 
 interface PublishRecoveryBannerProps {
@@ -113,7 +110,7 @@ export function PublishRecoveryBanner({
   const [requestedOffers, setRequestedOffers] = useState<readonly string[]>([]);
   const forcePushBranch = useMutation(api.sessions.forcePushBranch);
   const repos = useQuery(api.sessions.listRepos, { sessionId });
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const newest = messages.length > 0 ? messages[messages.length - 1] : null;
   // Not an early return: the banner animates out, so it has to stay mounted
@@ -149,6 +146,11 @@ export function PublishRecoveryBanner({
     setConfirmTarget(null);
     if (newestId === undefined) return;
     const key = forcePushOfferKey(newestId, target);
+    // Marked requested before the mutation settles: the button unmounts at
+    // once, so an alt-click double-click cannot send a second force-push.
+    // A failure takes the mark back so the user can retry.
+    if (requestedOffers.includes(key)) return;
+    setRequestedOffers((keys) => [...keys, key]);
     void catchMutationError(
       forcePushBranch({
         sessionId,
@@ -159,8 +161,9 @@ export function PublishRecoveryBanner({
       "Couldn't start the force-push",
       "session-force-push",
     )
-      .then(() => setRequestedOffers((keys) => [...keys, key]))
-      .catch(() => undefined);
+      .catch(() =>
+        setRequestedOffers((keys) => keys.filter((entry) => entry !== key)),
+      );
   };
 
   /** Alt-click skips the dialog, as everywhere else confirmation is offered. */
@@ -169,7 +172,6 @@ export function PublishRecoveryBanner({
     event: { altKey?: boolean },
   ) =>
     requestConfirm(
-      altHeld,
       () => setConfirmTarget(target),
       () => handleConfirm(target),
       event,
@@ -184,7 +186,7 @@ export function PublishRecoveryBanner({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5">
               <Badge

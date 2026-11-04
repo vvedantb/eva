@@ -2,12 +2,7 @@
 
 import { useState, useId, type KeyboardEvent } from "react";
 import { useLocalStorage } from "usehooks-ts";
-import {
-  Input,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from "@eva/ui";
+import { Input, Popover, PopoverAnchor, PopoverContent } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PreviewPathHistoryList } from "./PreviewPathHistoryList";
 import {
@@ -37,7 +32,12 @@ export function PreviewPathInput({
   );
   const [focused, setFocused] = useState(false);
   const [listDismissed, setListDismissed] = useState(false);
-  const matches = filterPreviewPathHistory(history, value);
+  // Like a browser address bar: focus lists the full history; typing filters it.
+  const [typedSinceFocus, setTypedSinceFocus] = useState(false);
+  const matches = filterPreviewPathHistory(
+    history,
+    typedSinceFocus ? value : "",
+  );
   const matchesKey = matches.join("\0");
   const [prevMatchesKey, setPrevMatchesKey] = useState(matchesKey);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -48,7 +48,9 @@ export function PreviewPathInput({
   const open = focused && !listDismissed && matches.length > 0;
   const optionIdPrefix = `${listId}-option-`;
   const activeOptionId =
-    open && selectedIndex >= 0 ? `${optionIdPrefix}${selectedIndex}` : undefined;
+    open && selectedIndex >= 0
+      ? `${optionIdPrefix}${selectedIndex}`
+      : undefined;
 
   function commitDraft() {
     const nextPath = normalizePreviewPath(value);
@@ -118,12 +120,15 @@ export function PreviewPathInput({
           value={value}
           onChange={(event) => {
             onValueChange(event.target.value);
+            setTypedSinceFocus(true);
             setListDismissed(false);
           }}
           onFocus={() => {
             setFocused(true);
+            setTypedSinceFocus(false);
             setListDismissed(false);
           }}
+          onClick={() => setListDismissed(false)}
           onBlur={(event) => {
             const next = event.relatedTarget;
             if (

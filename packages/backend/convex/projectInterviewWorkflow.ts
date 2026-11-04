@@ -6,7 +6,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, getProjectWithAccess } from "./functions";
 import {
   turnCheckpointArgs,
   turnLeaseFenceArgs,
@@ -455,8 +455,11 @@ export const startInterview = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.activeWorkflowId) return null;
 
     const repo = await ctx.db.get(project.repoId);
@@ -491,8 +494,11 @@ export const startSpec = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.activeWorkflowId) return null;
 
     const repo = await ctx.db.get(project.repoId);

@@ -7,6 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { isDocViewerTab, type DocViewerTab } from "@/lib/search-params";
@@ -26,8 +27,12 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -41,7 +46,6 @@ import {
   IconHistory,
   IconPencilCheck,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocInterviewDialog } from "../DocInterviewDialog";
 import { DocContentTab } from "./DocContentTab";
 import { HtmlPreviewFrame } from "./HtmlPreviewFrame";
@@ -51,12 +55,6 @@ import { DocTestGenDialog } from "./DocTestGenDialog";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -64,18 +62,12 @@ function applyDocUpdateOptimistically(
   localStore: OptimisticLocalStore,
   args: FunctionArgs<typeof api.docs.update>,
 ) {
-  const current = localStore.getQuery(api.docs.get, { id: args.id });
-  if (current) {
-    localStore.setQuery(
-      api.docs.get,
-      { id: args.id },
-      {
-        ...current,
-        ...args,
-        updatedAt: Date.now(),
-      },
-    );
-  }
+  patchLoadedQuery(
+    localStore,
+    api.docs.get,
+    { id: args.id },
+    (current) => current && { ...current, ...args, updatedAt: Date.now() },
+  );
 }
 
 export function DocPrdViewer({
@@ -97,7 +89,7 @@ export function DocPrdViewer({
   const [interviewOpen, setInterviewOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [testGenConfirmOpen, setTestGenConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isTriggeringTestGen, setIsTriggeringTestGen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -270,7 +262,6 @@ export function DocPrdViewer({
                   title={skipConfirmTitle("Generate Tests")}
                   onClick={() =>
                     requestConfirm(
-                      altHeld,
                       () => setTestGenConfirmOpen(true),
                       () => {
                         void handleGenerateTests();
@@ -322,7 +313,7 @@ export function DocPrdViewer({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Surface density="tight" className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -371,6 +362,7 @@ export function DocPrdViewer({
               {activeTab === "content" && (
                 <>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={suggestionsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -385,6 +377,7 @@ export function DocPrdViewer({
                     )}
                   </Button>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={commentsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -417,7 +410,7 @@ export function DocPrdViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="content"
@@ -442,7 +435,7 @@ export function DocPrdViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="html"

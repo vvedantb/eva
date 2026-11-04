@@ -54,6 +54,7 @@ describe("chat sends report settlement honestly", () => {
     expect(onFulfilled).toContain("citations?.remove(citation.id)");
     expect(onFulfilled).toContain("snapshots?.remove(item.id)");
     expect(onFulfilled).toContain("webmcp?.remove(item.id)");
+    expect(onFulfilled).toContain("pullRequests?.remove(pr.url)");
     // Nothing is removed once the send has rejected.
     const onRejected = settled.slice(rejectedAt);
     expect(onRejected).not.toContain("remove(");

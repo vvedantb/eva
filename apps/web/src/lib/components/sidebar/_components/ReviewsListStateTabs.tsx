@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 import type { PullRequestListState } from "@/lib/search-params";
 
 const PR_LIST_STATES = ["open", "closed", "all"] as const;

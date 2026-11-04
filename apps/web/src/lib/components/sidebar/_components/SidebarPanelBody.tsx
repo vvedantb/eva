@@ -2,7 +2,7 @@
 
 import { lazy, Suspense } from "react";
 import { m } from "motion/react";
-import { motionBase, Spinner } from "@eva/ui";
+import { tokenTransition, Spinner } from "@vvedantb/ui";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
 import { type ContextSidebarMode } from "@/lib/components/sidebar/contextSidebarModes";
@@ -86,7 +86,7 @@ export function SidebarPanelBody({
       key={`${panelKey}-nav`}
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={motionBase}
+      transition={tokenTransition.base}
     >
       <Suspense fallback={sidebarPanelFallback}>
         {flags.showGlobalSessionsPanel ? (

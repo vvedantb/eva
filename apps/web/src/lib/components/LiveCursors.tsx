@@ -2,7 +2,12 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useLocation } from "@tanstack/react-router";
-import { Cursor, CursorPointer, CursorBody, CursorName } from "@eva/ui";
+import {
+  LiveCursor,
+  LiveCursorPointer,
+  LiveCursorBody,
+  LiveCursorName,
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useLiveCursors, type RemoteCursor } from "@/lib/hooks/useLiveCursors";
@@ -33,12 +38,12 @@ function RemoteCursorItem({ cursor }: { cursor: RemoteCursor }) {
         top: `${cursor.y}%`,
       }}
     >
-      <Cursor style={{ color: hex }}>
-        <CursorPointer />
-        <CursorBody className="text-white" style={{ backgroundColor: hex }}>
-          <CursorName data-pii>{cursor.firstName}</CursorName>
-        </CursorBody>
-      </Cursor>
+      <LiveCursor style={{ color: hex }}>
+        <LiveCursorPointer />
+        <LiveCursorBody className="text-white" style={{ backgroundColor: hex }}>
+          <LiveCursorName data-pii>{cursor.firstName}</LiveCursorName>
+        </LiveCursorBody>
+      </LiveCursor>
     </div>
   );
 }

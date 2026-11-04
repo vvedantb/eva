@@ -1,6 +1,11 @@
 "use client";
 
-import { Popover, PopoverTrigger, PopoverContent, Calendar } from "@eva/ui";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  Calendar,
+} from "@vvedantb/ui";
 import { IconCalendarEvent } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import {

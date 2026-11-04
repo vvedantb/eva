@@ -18,6 +18,7 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { unreadLookupForRepo } from "../chatReads";
+import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Builds a project's detail payload (conversation history + optional generated
@@ -44,22 +45,21 @@ export const list = authQuery({
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = filterActiveEntities(
-      await ctx.db
+    const [allProjects, hasUnread, awaitingAnswerIds] = await Promise.all([
+      ctx.db
         .query("projects")
         .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
         .collect(),
-    );
-    const hasUnread = await unreadLookupForRepo(
-      ctx.db,
-      ctx.userId,
-      args.repoId,
-    );
+      unreadLookupForRepo(ctx.db, ctx.userId, args.repoId),
+      awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
+    ]);
+    const projects = filterActiveEntities(allProjects);
     return await Promise.all(
       projects.map(async (project) => ({
         ...project,
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
+        isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
       })),
     );
   },
@@ -241,13 +241,8 @@ export const getProjectPrCreationData = internalQuery({
       // Only a live PR on the current branch counts: a merged one belongs to
       // an earlier branch version, and the next cycle needs its own PR.
       existingPrUrl:
-        (
-          await findLivePullRequestOnBranch(
-            ctx.db,
-            project.repoId,
-            branchName,
-          )
-        )?.prUrl ?? null,
+        (await findLivePullRequestOnBranch(ctx.db, project.repoId, branchName))
+          ?.prUrl ?? null,
       completedTasks,
     };
   },

@@ -4,10 +4,9 @@ import { useState, type ReactNode } from "react";
 import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { IconArrowBackUp, IconGitCompare } from "@tabler/icons-react";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
-import { ConfirmDialog } from "@/lib/components/quick-tasks/_components/ConfirmDialog";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { TurnDiffDialog } from "./TurnDiffDialog";
 
@@ -144,17 +143,23 @@ export function useTurnCheckpointActions({
         afterSha={afterSha}
       />
       <ConfirmDialog
+        size="md"
         open={restoreOpen}
         onOpenChange={setRestoreOpen}
         title="Restore to before this turn?"
         description="The workspace goes back to how it was before this turn, as a new commit on the session branch."
-        detail="Later turns stay in history and the pull request shows the restore. Restore again on a later turn to undo it."
+        body={
+          <p className="text-sm text-muted-foreground">
+            Later turns stay in history and the pull request shows the restore.
+            Restore again on a later turn to undo it.
+          </p>
+        }
         confirmLabel="Restore"
         variant="destructive"
         onConfirm={() => {
           void handleRestore();
         }}
-        isLoading={restoring}
+        pending={restoring}
       />
     </>
   );

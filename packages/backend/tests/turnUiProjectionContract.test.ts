@@ -16,9 +16,13 @@ test("session lists derive execution from open Turns with a versioned rollout br
   // leaf now, so the MCP entity tools answer "is it running" the same way the
   // sidebar does instead of keying off `activeWorkflowId` on their own.
   expect(queries).toContain("sessionIsExecuting(session, openSessionIds)");
-  // Called directly or through a per-repo helper (#916); either way it reads
-  // the open-Turn set from the database for one repo at a time.
-  expect(queries).toMatch(/openChatEntityIdsForRepo\(\s*(?:ctx\.)?db,/);
+  // Called directly, or handed to the per-repo helper that also covers linked
+  // sessions (#916, #964); either way it reads the open-Turn set from the
+  // database for one repo at a time.
+  expect(queries).toMatch(
+    /openChatEntityIdsForRepo\(\s*(?:ctx\.)?db,|turnIdsIncludingLinked\(\s*db,\s*repoId,\s*linked,\s*openChatEntityIdsForRepo,?\s*\)/,
+  );
+  expect(queries).toContain("idsForRepo(db, id)");
   expect(projection).toContain('.withIndex("by_repo_open"');
   expect(projection).toContain('q.eq("repoId", repoId).eq("open", true)');
   expect(projection).toContain("isLegacySessionExecuting(session)");
@@ -66,8 +70,11 @@ test("the session composer uses persisted turn status after query load", () => {
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
   );
   expect(hook).toContain("api.turns.getChatStatus");
-  expect(hook).toContain("turnStatus === undefined");
-  expect(hook).toContain(": turnStatus !== null");
+  // The projection now lives in shared helpers every surface uses: the
+  // loaded status (null = no open turn) wins, message shape only while loading.
+  expect(hook).toContain("turnOpen: chatTurnOpenFromStatus(turnStatus)");
+  expect(hook).toContain("isChatTurnExecuting({");
+  expectCanonicalProjection();
 });
 
 test("annotation sends share the same canonical turn projection", () => {
@@ -75,5 +82,19 @@ test("annotation sends share the same canonical turn projection", () => {
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionAnnotationSend.ts",
   );
   expect(hook).toContain("api.turns.getChatStatus");
-  expect(hook).toContain(": turnStatus !== null");
+  expect(hook).toContain("turnOpen: chatTurnOpenFromStatus(turnStatus)");
+  expect(hook).toContain("isChatTurnExecuting({");
+  expectCanonicalProjection();
 });
+
+/** The shared helpers keep the old rule: loading → shape, loaded → status. */
+function expectCanonicalProjection(): void {
+  const status = source("apps/web/src/lib/components/chat/useChatTurnOpen.ts");
+  expect(status).toContain(
+    "return status === undefined ? undefined : status !== null;",
+  );
+  const utils = source("apps/web/src/lib/components/chat/chatBodyUtils.ts");
+  expect(utils).toContain(
+    "return turnOpen ?? isAssistantTurnInProgress(messages ?? []);",
+  );
+}

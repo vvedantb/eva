@@ -15,8 +15,8 @@ import {
   TooltipTrigger,
   TooltipContent,
   Badge,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconUserPlus,
@@ -87,7 +87,7 @@ function StatusValue({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
           className={`flex items-center gap-1.5 ${config.text}`}
         >
           <Icon size={14} />
@@ -101,7 +101,7 @@ function StatusValue({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
             className="inline-flex"
           >
             <Badge variant="warning" className="ml-0.5">
@@ -260,7 +260,7 @@ export function ReviewerSelectField({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
               >
                 {assignedUser ? (
                   <UserInitials user={assignedUser} size="sm" hideLastSeen />
@@ -381,7 +381,7 @@ export function BaseBranchRow({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           {status === "todo" ? (
             <BranchSelect
@@ -430,7 +430,7 @@ export function DeploymentRow({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <IconBrandVercelFilled
             size={14}

@@ -4,7 +4,8 @@ import { userCanAccessRepo } from "../functions";
 import { gatherAccessibleRepos } from "./helpers";
 
 /**
- * A GitHub repository a sandbox may mint a read-only token for: the owner/name
+ * A GitHub repository a sandbox may mint a sibling (contents read/write) token
+ * for: the owner/name
  * git asked about plus the installation (and repository id) the token is scoped
  * to. One entry per GitHub repository, not per eva app row.
  */
@@ -38,30 +39,30 @@ async function collectGroupRows(
   rows: Array<Doc<"githubRepos">>,
 ): Promise<Array<Doc<"githubRepos">>> {
   const byId = new Map<string, Doc<"githubRepos">>();
-  const queriedPairs = new Set<string>();
+  const pairs = new Map<string, { owner: string; name: string }>();
   for (const row of rows) {
     byId.set(String(row._id), row);
+    pairs.set(`${row.owner}/${row.name}`, { owner: row.owner, name: row.name });
   }
-  for (const row of rows) {
-    const pair = `${row.owner}/${row.name}`;
-    if (queriedPairs.has(pair)) continue;
-    queriedPairs.add(pair);
-    const siblings = await db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", row.owner).eq("name", row.name),
-      )
-      .collect();
-    for (const sibling of siblings) {
-      byId.set(String(sibling._id), sibling);
-    }
+  const siblingGroups = await Promise.all(
+    [...pairs.values()].map(({ owner, name }) =>
+      db
+        .query("githubRepos")
+        .withIndex("by_owner_and_name", (q) =>
+          q.eq("owner", owner).eq("name", name),
+        )
+        .collect(),
+    ),
+  );
+  for (const sibling of siblingGroups.flat()) {
+    byId.set(String(sibling._id), sibling);
   }
   return [...byId.values()];
 }
 
 /**
  * Sibling GitHub repositories (deduped by owner/name, case-insensitive) that
- * `userId` may read from a sandbox whose home repo is `homeRepoId`.
+ * `userId` may clone and push from a sandbox whose home repo is `homeRepoId`.
  *
  * Excludes the home repository itself (same owner/name), rows with
  * `hidden === true`, rows with `connected === false`, and any repository whose
@@ -74,22 +75,31 @@ export async function listReadableSiblingRepos(
   userId: Id<"users">,
   homeRepoId: Id<"githubRepos">,
 ): Promise<ReadableSiblingRepo[]> {
-  const homeRepo = await db.get(homeRepoId);
-  const candidates = await gatherAccessibleRepos(db, userId, true);
+  const [homeRepo, candidates] = await Promise.all([
+    db.get(homeRepoId),
+    gatherAccessibleRepos(db, userId, true),
+  ]);
+  const canAccess = await Promise.all(
+    candidates.map((repo) => userCanAccessRepo(db, repo, userId)),
+  );
 
   const groups = new Map<string, Array<Doc<"githubRepos">>>();
-  for (const repo of candidates) {
-    if (!(await userCanAccessRepo(db, repo, userId))) continue;
-    if (homeRepo && isSameGitHubRepo(repo, homeRepo)) continue;
+  candidates.forEach((repo, i) => {
+    if (!canAccess[i]) return;
+    if (homeRepo && isSameGitHubRepo(repo, homeRepo)) return;
     const key = repoKey(repo);
     const existing = groups.get(key);
     if (existing) existing.push(repo);
     else groups.set(key, [repo]);
-  }
+  });
 
+  const groupList = [...groups.values()];
+  const groupRowsList = await Promise.all(
+    groupList.map((accessibleRows) => collectGroupRows(db, accessibleRows)),
+  );
   const readable: ReadableSiblingRepo[] = [];
-  for (const accessibleRows of groups.values()) {
-    const groupRows = await collectGroupRows(db, accessibleRows);
+  for (const [i, accessibleRows] of groupList.entries()) {
+    const groupRows = groupRowsList[i];
     if (groupRows.some((row) => row.sandboxReadExcluded === true)) continue;
     const representative = accessibleRows.find(
       (row) => row.hidden !== true && row.connected !== false,

@@ -105,7 +105,7 @@ describe("resetting the turn resets the cursor with it", () => {
   test("the turn is drained before its activity log is read", () => {
     const finalize = functionBody(daemon, "async function finalizeTurn(");
     const flushAt = finalize.indexOf("await drainStreamingAndCompleteSteps()");
-    const serializeAt = finalize.indexOf("serializeSteps(S.accumulatedSteps)");
+    const serializeAt = finalize.indexOf("serializeFinalSteps(");
     expect(flushAt, "the pre-completion drain is gone").toBeGreaterThan(-1);
     expect(serializeAt, "the activity log build moved").toBeGreaterThan(-1);
     expect(flushAt).toBeLessThan(serializeAt);

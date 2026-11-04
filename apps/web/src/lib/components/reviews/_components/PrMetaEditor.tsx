@@ -14,7 +14,7 @@ import {
   PopoverTrigger,
   CrossfadeIcon,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCheck, IconPencil } from "@tabler/icons-react";
 
 export interface PrMetaOption {

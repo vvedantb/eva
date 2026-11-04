@@ -1,3 +1,4 @@
+import { requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import type { GenericDatabaseReader, StorageReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
@@ -374,13 +375,7 @@ export const listSiblingApps = authQuery({
 export const getAppSlug = authQuery({
   args: {},
   returns: v.string(),
-  handler: async () => {
-    const slug = process.env.GITHUB_APP_SLUG;
-    if (!slug) {
-      throw new Error("GITHUB_APP_SLUG is not set in Convex env");
-    }
-    return slug;
-  },
+  handler: async () => requiredEnv("GITHUB_APP_SLUG"),
 });
 
 /** Gets a GitHub repo by ID without access control (internal use only). */

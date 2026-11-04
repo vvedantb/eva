@@ -1,10 +1,9 @@
-import {
-  PromptInputProvider,
-  toast,
-  type ModelAccount,
-  type ModelOption,
-  type PromptInputMessage,
-} from "@eva/ui";
+import { PromptInputProvider, toast } from "@vvedantb/ui";
+import type {
+  ModelAccount,
+  ModelOption,
+  PromptInputMessage,
+} from "@vvedantb/ui";
 import {
   describeFailedAttachments,
   useUploadChatAttachments,
@@ -25,6 +24,7 @@ import { useSkillSuggestions } from "@/lib/components/chat/_components/useSkillS
 import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
 import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
 import {
@@ -57,6 +57,7 @@ import type {
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useQueuedMessageMutations } from "@/lib/components/chat/useQueuedMessageMutations";
+import { PendingSketchDrain } from "@/lib/components/chat/_components/PendingSketchDrain";
 
 /** localStorage-backed draft seed (no Convex row — new session, Manager Ave). */
 export type LocalChatDraft = {
@@ -165,6 +166,9 @@ export function ChatComposer({
   allowEmptySubmit = false,
   predictionTarget,
 }: ChatComposerProps) {
+  // Simple view hides the model picker; the model still drives skill items.
+  const simpleView = useSimpleView();
+  const visibleModelPicker = simpleView ? undefined : modelPicker;
   const skillItems = useSkillSlashItems(
     repo?.id,
     modelPicker ? getAIModelProvider(modelPicker.model) : undefined,
@@ -184,8 +188,12 @@ export function ChatComposer({
   // The composer's text lives inside PromptInput; the readiness verdict is
   // keyed by the exact text it judged, so the last draft is mirrored here.
   const [draftText, setDraftText] = useState("");
-  const { updateQueuedMessage, deleteQueuedMessage, reorderQueuedMessages } =
-    useQueuedMessageMutations(queuedMessages);
+  const {
+    updateQueuedMessage,
+    deleteQueuedMessage,
+    reorderQueuedMessages,
+    steerQueuedMessage,
+  } = useQueuedMessageMutations(queuedMessages);
   // Convex draft wins when both are passed (existing sessions).
   const seed = draft ?? localDraft;
 
@@ -248,10 +256,11 @@ export function ChatComposer({
     model: message.model,
     reasoningLevel: message.reasoningLevel,
     userId: message.userId,
+    steering: message.steer !== undefined,
   }));
 
   const mutedBar = (stashButton: ReactNode) =>
-    !underCardLeading && !stashButton && !modelPicker ? null : (
+    !underCardLeading && !stashButton && !visibleModelPicker ? null : (
       <div className="mx-auto flex w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)] items-center gap-0.5 rounded-b-surface bg-muted/70 px-2 py-0.5">
         {/* On a phone the bar is ~340px wide and the model name is long, so a
           `shrink-0` picker left the leading control (the base branch) one
@@ -264,17 +273,17 @@ export function ChatComposer({
           </div>
         ) : null}
         {stashButton}
-        {modelPicker ? (
+        {visibleModelPicker ? (
           <div className="ml-auto min-w-0 max-sm:shrink sm:shrink-0">
             <ModelSelectWithTraits
-              value={modelPicker.model}
-              options={modelPicker.modelOptions}
-              onValueChange={modelPicker.setModel}
-              accounts={modelPicker.accounts}
-              accountId={modelPicker.accountId}
-              onAccountChange={modelPicker.onAccountChange}
-              traits={modelPicker.displayTraits}
-              onTraitsChange={modelPicker.onTraitsChange}
+              value={visibleModelPicker.model}
+              options={visibleModelPicker.modelOptions}
+              onValueChange={visibleModelPicker.setModel}
+              accounts={visibleModelPicker.accounts}
+              accountId={visibleModelPicker.accountId}
+              onAccountChange={visibleModelPicker.onAccountChange}
+              traits={visibleModelPicker.displayTraits}
+              onTraitsChange={visibleModelPicker.onTraitsChange}
               className="h-7 w-auto max-w-full justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
             />
           </div>
@@ -320,6 +329,9 @@ export function ChatComposer({
           if (!parentId) return;
           await reorderQueuedMessages({ parentId, orderedIds });
         }}
+        onSteer={async (id) => {
+          await steerQueuedMessage({ id });
+        }}
       />
       <QueuedMessagesPanel
         items={heldFollowUps}
@@ -357,7 +369,9 @@ export function ChatComposer({
   );
 
   return (
-    <div className="p-3 md:p-4 max-w-3xl mx-auto w-full">
+    // `relative` anchors the absolutely positioned typing indicator to the
+    // composer, so it floats just above it instead of a distant ancestor.
+    <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
       {preInputContent}
       {isDraftLoading ? (
         <>
@@ -375,6 +389,7 @@ export function ChatComposer({
             userId={currentUserId}
           />
           <ChatTypeToFocus mentionRef={mentionRef} />
+          <PendingSketchDrain />
           {draft && (
             <ChatDraftSync
               target={draft.target}

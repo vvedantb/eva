@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { m } from "motion/react";
 import { IconChevronLeft, IconX } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
-import { Button, cn, motionBase } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { AutomationsSidebarOptionsMenu } from "@/lib/components/sidebar/_components/AutomationsSidebarOptionsMenu";
 import { SessionsSidebarOptionsMenu } from "@/lib/components/sidebar/_components/SessionsSidebarOptionsMenu";
 import { type ContextSidebarMode } from "@/lib/components/sidebar/contextSidebarModes";
@@ -82,7 +83,7 @@ export function SidebarPanelHeader({
         )}
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={motionBase}
+        transition={tokenTransition.base}
       >
         {isFlatPanel ? (
           <FlatPanelHeaderContent flags={flags} onClose={onClose} />
@@ -116,8 +117,14 @@ function FlatPanelHeaderContent({
 }) {
   return (
     <>
-      {/* pl-2 lines the title up with nav row icons (nav px-2 + row px-4). */}
-      <span className="min-w-0 flex-1 truncate pl-2 text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
+      {/* Lines the title up with nav row icons: nav px-2 + row
+          px-4, or the Sessions grid's tighter px-2.5. */}
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary",
+          flags.showGlobalSessionsPanel ? "pl-0.5" : "pl-2",
+        )}
+      >
         {getFlatPanelTitle(flags)}
       </span>
       <div className="flex shrink-0 items-center gap-0.5">
@@ -126,6 +133,7 @@ function FlatPanelHeaderContent({
           <AutomationsSidebarOptionsMenu />
         ) : null}
         <Button
+          shape="rounded"
           size="icon-sm"
           variant="ghost"
           className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -170,6 +178,7 @@ function ContextPanelHeaderContent({
       <div className="relative z-10 ml-auto flex shrink-0 items-center">
         {headerAction}
         <Button
+          shape="rounded"
           size="icon-sm"
           variant="ghost"
           className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -232,6 +241,7 @@ function RepoIdentityHeaderContent({
       ) : null}
 
       <Button
+        shape="rounded"
         size="icon"
         variant="ghost"
         className="motion-press shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"

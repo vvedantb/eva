@@ -5,7 +5,7 @@ import {
   BreadcrumbSwitcher,
   type BreadcrumbSwitcherItem,
 } from "@/lib/components/BreadcrumbSwitcher";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
+import { MarqueeOnHover } from "@vvedantb/ui";
 
 interface RepoSectionBreadcrumbProps {
   sectionLabel: string;

@@ -6,7 +6,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { UserInitials } from "@eva/shared/user-initials";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import {
   CommentMentionInput,

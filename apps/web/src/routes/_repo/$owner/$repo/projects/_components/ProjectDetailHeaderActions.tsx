@@ -9,8 +9,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+  CopyLinkMenuItem,
+} from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import {
   IconHammer,
@@ -23,18 +27,14 @@ import {
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import {
   BusyMenuIcon,
   SandboxCommandMenuItems,
 } from "@/lib/components/sandbox/SandboxCommandMenuItems";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-} from "@/lib/confirm";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 import {
   getProjectMenuFlags,
   type ProjectDetailProject,
@@ -42,6 +42,8 @@ import {
 } from "./projectDetailHelpers";
 
 type ProjectMenuFlags = ReturnType<typeof getProjectMenuFlags>;
+/** `useRequestConfirm().request`: opens the dialog, or runs directly with Alt held. */
+type RequestConfirm = (openDialog: () => void, run: () => void) => void;
 
 interface ProjectDetailHeaderActionsProps {
   projectId: Id<"projects">;
@@ -49,7 +51,6 @@ interface ProjectDetailHeaderActionsProps {
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
   chatTurnOpen: boolean | undefined;
-  altHeld: boolean;
   prError: string | null;
   prLinks: { hasItems: boolean; items: ReactNode };
   hasPlanContext: boolean;
@@ -71,7 +72,6 @@ export function ProjectDetailHeaderActions({
   repoId,
   sandbox,
   chatTurnOpen,
-  altHeld,
   prError,
   prLinks,
   hasPlanContext,
@@ -94,12 +94,14 @@ export function ProjectDetailHeaderActions({
     handleStartSandbox,
     handleStopSandbox,
   } = sandbox;
+  const { request: requestConfirm } = useRequestConfirm();
   const flags = getProjectMenuFlags(project, sandbox);
 
   return (
     <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
       {prError && <p className="text-xs text-destructive">{prError}</p>}
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
+        <PrMergeConfetti owner={{ kind: "project", projectId }} />
         <ProjectContextUsage repoId={repoId} projectId={projectId} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -111,7 +113,7 @@ export function ProjectDetailHeaderActions({
             <ProjectMoreMenuActionItems
               flags={flags}
               sandbox={sandbox}
-              altHeld={altHeld}
+              requestConfirm={requestConfirm}
               isResolvingConflicts={isResolvingConflicts}
               onResolveConflicts={onResolveConflicts}
               setShowResolveConfirm={setShowResolveConfirm}
@@ -149,6 +151,11 @@ export function ProjectDetailHeaderActions({
             own confirmed "Stop Build", so it is not gated here. This is the
             only wake/sleep control now, the sandbox chat header carries
             usage alone. */}
+        <SandboxCommitPushButton
+          gitSync={project.sandboxGitSync}
+          isSandboxActive={isSandboxActive}
+          target={{ kind: "project", projectId }}
+        />
         {isSandboxActive || canStartSandbox ? (
           <SandboxStartStopButton
             isActive={isSandboxActive}
@@ -169,7 +176,6 @@ export function ProjectDetailHeaderActions({
               title={skipConfirmTitle("Stop Build")}
               onClick={() =>
                 requestConfirm(
-                  altHeld,
                   () => setShowStopBuildConfirm(true),
                   () => {
                     void onStopBuild();
@@ -179,7 +185,7 @@ export function ProjectDetailHeaderActions({
               disabled={isStoppingBuild}
             >
               {isStoppingBuild ? (
-                <CircleSpinner size="sm" aria-hidden />
+                <Spinner variant="circle" size="sm" aria-hidden />
               ) : (
                 <IconPlayerStop size={16} aria-hidden />
               )}
@@ -203,7 +209,7 @@ export function ProjectDetailHeaderActions({
 function ProjectMoreMenuActionItems({
   flags,
   sandbox,
-  altHeld,
+  requestConfirm,
   isResolvingConflicts,
   onResolveConflicts,
   setShowResolveConfirm,
@@ -211,7 +217,7 @@ function ProjectMoreMenuActionItems({
 }: {
   flags: ProjectMenuFlags;
   sandbox: ProjectSandboxState;
-  altHeld: boolean;
+  requestConfirm: RequestConfirm;
   isResolvingConflicts: boolean;
   onResolveConflicts: () => Promise<void>;
   setShowResolveConfirm: (open: boolean) => void;
@@ -237,7 +243,6 @@ function ProjectMoreMenuActionItems({
           title={skipConfirmTitle("Resolve Conflicts")}
           onClick={() =>
             requestConfirm(
-              altHeld,
               () => setShowResolveConfirm(true),
               () => {
                 void onResolveConflicts();
@@ -262,7 +267,6 @@ function ProjectMoreMenuActionItems({
           busy: isRetryingStartupCommands,
           onRun: () =>
             requestConfirm(
-              altHeld,
               () => setShowStartupCommandsConfirm(true),
               handleRetryStartupCommands,
             ),
@@ -310,6 +314,7 @@ function SplitBuildButton({
         <TooltipTrigger asChild>
           <div>
             <Button
+              shape="rounded"
               size="sm"
               aria-label={buildLabel}
               onClick={
@@ -336,6 +341,7 @@ function SplitBuildButton({
         disabled={hasActiveBuild}
         trigger={
           <Button
+            shape="rounded"
             ref={chevronRef}
             size="sm"
             aria-label="Schedule build"

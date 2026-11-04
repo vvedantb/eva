@@ -6,9 +6,22 @@ import { createClerkClient } from "@clerk/backend";
 import { jwtVerify, SignJWT, importJWK } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
+import {
+  consoleClerkVerifyLogger,
+  formatConvexQueryError,
+  getClerkClient,
+  requiredEnv,
+  runSdkMcpRequest,
+  verifyClerkAccessToken,
+} from "@vvedantb/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { buildTools } from "./tools";
+import {
+  ASK_TEAMMATE_TOOL_NAMES,
+  buildTools,
+  PR_WATCH_TOOL_NAMES,
+} from "./tools";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
@@ -29,43 +42,14 @@ import {
 } from "../_chat/surfaceAdapters";
 import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { formatConvexQueryError } from "./convexQueryLimits";
+import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Environment Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getJwtSecret(): string {
-  const secret = process.env.MCP_JWT_SECRET;
-  if (!secret) throw new Error("MCP_JWT_SECRET is required");
-  return secret;
-}
-
-function getClerkSecretKey(): string {
-  const key = process.env.CLERK_SECRET_KEY;
-  if (!key) throw new Error("CLERK_SECRET_KEY is required");
-  return key;
-}
+import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { evaMcpServerInfo } from "./serverInfo";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
 // ─────────────────────────────────────────────────────────────────────────────
-
-const refreshTokenClaims = z.object({
-  sub: z.string(),
-  type: z.literal("refresh"),
-  clientId: z.string(),
-  iss: z.literal("eva"),
-  aud: z.literal("mcp-oauth"),
-});
-
-const oauthTokenClaims = z.object({
-  sub: z.string(),
-  clientId: z.string(),
-  iss: z.literal("eva"),
-  aud: z.literal("mcp-oauth"),
-});
 
 const internalTokenClaims = z.object({
   sub: z.string(),
@@ -83,120 +67,43 @@ const mcpEntityKindValidator = v.union(
   v.literal("project"),
 );
 
-type OauthTokens = {
-  access_token: string;
-  token_type: "Bearer";
-  expires_in: number;
-  scope: string;
-  refresh_token: string;
-};
-
-type RefreshResult =
-  | { success: true; tokens: OauthTokens }
-  | { success: false; error: string };
-
-function refreshFailure(error: string): RefreshResult {
-  return { success: false, error };
-}
-
-function refreshSuccess(tokens: OauthTokens): RefreshResult {
-  return { success: true, tokens };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Actions
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function createOauthTokens(
-  clerkUserId: string,
-  clientId: string,
-  secret: Uint8Array,
-): Promise<OauthTokens> {
-  const accessToken = await new SignJWT({ sub: clerkUserId, clientId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("eva")
-    .setAudience("mcp-oauth")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(secret);
-
-  const refreshToken = await new SignJWT({
-    sub: clerkUserId,
-    clientId,
-    type: "refresh",
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer("eva")
-    .setAudience("mcp-oauth")
-    .setExpirationTime("30d")
-    .setIssuedAt()
-    .sign(secret);
-
-  return {
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: 3600,
-    scope: "claudeai",
-    refresh_token: refreshToken,
-  };
-}
-
-export const issueTokens = internalAction({
-  args: { clerkUserId: v.string(), clientId: v.string() },
-  returns: v.object({
-    access_token: v.string(),
-    token_type: v.literal("Bearer"),
-    expires_in: v.number(),
-    scope: v.string(),
-    refresh_token: v.string(),
-  }),
-  handler: async (_ctx, { clerkUserId, clientId }) => {
-    const secret = new TextEncoder().encode(getJwtSecret());
-    return await createOauthTokens(clerkUserId, clientId, secret);
-  },
-});
-
-export const refreshToken = internalAction({
-  args: { refreshToken: v.string(), clientId: v.string() },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      tokens: v.object({
-        access_token: v.string(),
-        token_type: v.literal("Bearer"),
-        expires_in: v.number(),
-        scope: v.string(),
-        refresh_token: v.string(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      error: v.string(),
-    }),
-  ),
-  handler: async (_ctx, { refreshToken, clientId }) => {
-    try {
-      const secret = new TextEncoder().encode(getJwtSecret());
-      const { payload } = await jwtVerify(refreshToken, secret, {
-        issuer: "eva",
-        audience: "mcp-oauth",
-      });
-
-      const claims = refreshTokenClaims.safeParse(payload);
-      if (!claims.success || claims.data.clientId !== clientId) {
-        return refreshFailure("Invalid refresh token");
-      }
-
-      const clerk = createClerkClient({ secretKey: getClerkSecretKey() });
-      await clerk.users.getUser(claims.data.sub);
-      const tokens = await createOauthTokens(claims.data.sub, clientId, secret);
-
-      return refreshSuccess(tokens);
-    } catch {
-      return refreshFailure("Expired or invalid refresh token");
+/**
+ * Sandbox tokens: HS256, `aud: "mcp-internal"`, signed with
+ * `MCP_INTERNAL_SECRET`. Carry the repo, entity and chat scope.
+ */
+async function verifyInternalToken(token: string) {
+  const internalSecret = process.env.MCP_INTERNAL_SECRET;
+  if (!internalSecret) return null;
+  try {
+    const secret = new TextEncoder().encode(internalSecret);
+    const { payload } = await jwtVerify(token, secret);
+    const claims = internalTokenClaims.safeParse(payload);
+    if (!claims.success) {
+      console.error("[MCP][verifyAccessToken] internal token payload invalid");
+      return null;
     }
-  },
-});
+    return {
+      clerkUserId: claims.data.sub,
+      scopedRepoId: claims.data.repoId,
+      ...(claims.data.entityId !== undefined
+        ? { entityId: claims.data.entityId }
+        : {}),
+      ...(claims.data.entityKind !== undefined
+        ? { entityKind: claims.data.entityKind }
+        : {}),
+      ...(claims.data.chatId !== undefined
+        ? { chatId: claims.data.chatId }
+        : {}),
+    };
+  } catch {
+    // Not a valid sandbox token. The caller tries Clerk next.
+    return null;
+  }
+}
 
 export const verifyAccessToken = internalAction({
   args: { token: v.string() },
@@ -211,83 +118,22 @@ export const verifyAccessToken = internalAction({
     v.null(),
   ),
   handler: async (_ctx, { token }) => {
-    // Try OAuth token first
-    try {
-      const secret = new TextEncoder().encode(getJwtSecret());
-      const { payload } = await jwtVerify(token, secret, {
-        issuer: "eva",
-        audience: "mcp-oauth",
-      });
+    const sandbox = await verifyInternalToken(token);
+    if (sandbox) return sandbox;
 
-      const claims = oauthTokenClaims.safeParse(payload);
-      if (claims.success) {
-        // Best-effort Clerk lookup — agent/test users may not exist in Clerk but
-        // a verified JWT sub is still authoritative for MCP auth.
-        try {
-          const clerk = createClerkClient({ secretKey: getClerkSecretKey() });
-          await clerk.users.getUser(claims.data.sub);
-        } catch (err) {
-          console.error(
-            "[MCP][verifyAccessToken] Clerk getUser failed (using JWT sub):",
-            err instanceof Error ? err.message : err,
-          );
-          return null;
-        }
-        // Same shape as internal tokens so callers can read optional fields
-        // without narrowing (OAuth tokens just leave them unset).
-        return {
-          clerkUserId: claims.data.sub,
-          scopedRepoId: undefined,
-          entityId: undefined,
-          entityKind: undefined,
-          chatId: undefined,
-        };
-      }
-      // OAuth payload missing sub — fall through to internal token
-    } catch {
-      // Not an OAuth token — fall through to internal token
-    }
-
-    // Try internal token (scoped repo access)
-    try {
-      const internalSecret = process.env.MCP_INTERNAL_SECRET;
-      if (!internalSecret) {
-        console.error("[MCP][verifyAccessToken] MCP_INTERNAL_SECRET not set");
-        return null;
-      }
-
-      const secret = new TextEncoder().encode(internalSecret);
-      const { payload } = await jwtVerify(token, secret);
-
-      // Validate internal token structure
-      const claims = internalTokenClaims.safeParse(payload);
-      if (!claims.success) {
-        console.error(
-          "[MCP][verifyAccessToken] internal token payload invalid",
-        );
-        return null;
-      }
-
-      return {
-        clerkUserId: claims.data.sub,
-        scopedRepoId: claims.data.repoId,
-        ...(claims.data.entityId !== undefined
-          ? { entityId: claims.data.entityId }
-          : {}),
-        ...(claims.data.entityKind !== undefined
-          ? { entityKind: claims.data.entityKind }
-          : {}),
-        ...(claims.data.chatId !== undefined
-          ? { chatId: claims.data.chatId }
-          : {}),
-      };
-    } catch (err) {
-      console.error(
-        "[MCP][verifyAccessToken] all verification failed:",
-        err instanceof Error ? err.message : err,
-      );
-      return null;
-    }
+    // Clerk OAuth access token (or session token). `getClerkClient` reads
+    // CLERK_SECRET_KEY and CLERK_PUBLISHABLE_KEY. `authenticateRequest` needs
+    // both. A missing key throws inside `verifyClerkAccessToken`, which logs it
+    // and returns null.
+    const verified = await verifyClerkAccessToken(
+      () => getClerkClient(createClerkClient),
+      token,
+      {
+        acceptsToken: ["oauth_token", "session_token"],
+        ...consoleClerkVerifyLogger,
+      },
+    );
+    return verified ? { clerkUserId: verified.userId } : null;
   },
 });
 
@@ -346,18 +192,6 @@ const repoCredentialsCache = new Map<
 >();
 const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
 
-function getConvexSiteUrl(): string {
-  const url = process.env.CONVEX_SITE_URL;
-  if (!url) throw new Error("CONVEX_SITE_URL is required");
-  return url;
-}
-
-function getBootstrapSecret(): string {
-  const secret = process.env.MCP_BOOTSTRAP_SECRET;
-  if (!secret) throw new Error("MCP_BOOTSTRAP_SECRET is required");
-  return secret;
-}
-
 /**
  * Eva's own Convex API URL, used for the `runQueryAsUser`/`runMutationAsUser`
  * calls below.
@@ -372,23 +206,25 @@ function getBootstrapSecret(): string {
 function getEvaConvexCloudUrl(): string {
   const configured = resolvePublicConvexCloudUrl(process.env);
   if (configured) return configured;
-  return getConvexSiteUrl().replace(".convex.site", ".convex.cloud");
+  return requiredEnv("CONVEX_SITE_URL").replace(
+    ".convex.site",
+    ".convex.cloud",
+  );
 }
 
 /** Deployed web app origin, used to build hosted artifact view links. */
-function getWebAppUrl(): string {
-  const url = process.env.WEB_APP_URL;
-  if (!url) throw new Error("WEB_APP_URL is required");
-  return url.replace(/\/$/, "");
-}
-
 async function getDeployKey(): Promise<string> {
   if (cachedDeployKey && cachedDeployKey.expiresAt > Date.now()) {
     return cachedDeployKey.value;
   }
-  const response = await fetch(`${getConvexSiteUrl()}/api/mcp/bootstrap`, {
-    headers: { Authorization: `MCPBootstrap ${getBootstrapSecret()}` },
-  });
+  const response = await fetch(
+    `${requiredEnv("CONVEX_SITE_URL")}/api/mcp/bootstrap`,
+    {
+      headers: {
+        Authorization: `MCPBootstrap ${requiredEnv("MCP_BOOTSTRAP_SECRET")}`,
+      },
+    },
+  );
   if (!response.ok) {
     throw new Error(`Failed to bootstrap deploy key: HTTP ${response.status}`);
   }
@@ -457,7 +293,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
   if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
 
-  const issuer = getConvexSiteUrl();
+  const issuer = requiredEnv("CONVEX_SITE_URL");
   const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");
@@ -1185,7 +1021,7 @@ export const createArtifact = internalAction({
 
     return {
       artifactId,
-      viewUrl: `${getWebAppUrl()}/artifacts/${artifactId}`,
+      viewUrl: `${getEvaBaseUrl()}/artifacts/${artifactId}`,
     };
   },
 });
@@ -1203,7 +1039,7 @@ export const getArtifact = internalAction({
     if (artifact === null) return null;
     return {
       artifact,
-      viewUrl: `${getWebAppUrl()}/artifacts/${artifactId}`,
+      viewUrl: `${getEvaBaseUrl()}/artifacts/${artifactId}`,
     };
   },
 });
@@ -1219,7 +1055,7 @@ export const listArtifacts = internalAction({
       {},
     );
     if (!Array.isArray(artifacts)) return [];
-    const webAppUrl = getWebAppUrl();
+    const webAppUrl = getEvaBaseUrl();
     return artifacts.map((artifact) => {
       const id =
         artifact !== null &&
@@ -1375,13 +1211,16 @@ async function loadSessionChatsAsUser(
   clerkUserId: string,
   sessionId: string,
 ) {
-  const rows = z
-    .array(sessionChatRowSchema)
-    .parse(
-      await runQueryAsUser(convexUrl, clerkUserId, "sessionChats:listForSession", {
+  const rows = z.array(sessionChatRowSchema).parse(
+    await runQueryAsUser(
+      convexUrl,
+      clerkUserId,
+      "sessionChats:listForSession",
+      {
         sessionId,
-      }),
-    );
+      },
+    ),
+  );
   return rows.filter((row) => row.archived !== true);
 }
 
@@ -1449,13 +1288,12 @@ const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
 };
 
-const aveThreadPointerSchema = z.object({ _id: z.string() }).nullable();
-
 /**
- * Implicit watch registration for create/send. Ave's own run passes its thread;
- * any other MCP caller registers against the user's live thread, if they have
- * one. Never clears an existing watch — that is what `setWatchedByAve` would
- * do without a thread id.
+ * Implicit watch registration for create/send: only Ave's own run, which passes
+ * its thread. Other senders (sandbox agents, OAuth connectors, PR-watch and
+ * automation-event deliveries) must not fall back to the user's live thread —
+ * that made Ave watch every chat they touched, so each turn end woke it.
+ * Explicit `watch_agent` keeps that fallback. Never clears an existing watch.
  */
 async function registerWatchIfAve(
   clerkUserId: string,
@@ -1463,18 +1301,8 @@ async function registerWatchIfAve(
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
-  const resolved =
-    aveThreadId ??
-    aveThreadPointerSchema.parse(
-      await runQueryAsUser(
-        getEvaConvexCloudUrl(),
-        clerkUserId,
-        "ave:getThread",
-        {},
-      ),
-    )?._id;
-  if (resolved === undefined) return;
-  await setWatchedByAve(clerkUserId, kind, id, resolved);
+  if (aveThreadId === undefined) return;
+  await setWatchedByAve(clerkUserId, kind, id, aveThreadId);
 }
 
 export const orchestratorListAgents = internalAction({
@@ -1559,6 +1387,67 @@ export const orchestratorListAgents = internalAction({
  * `internal` — as the session branch does for its linked repos — would
  * otherwise make `internal` depend on itself.
  */
+/** A linked-session group as MCP callers see it: name and members across repos. */
+const mcpSessionGroupValidator = v.object({
+  id: v.string(),
+  name: v.optional(v.string()),
+  members: v.array(
+    v.object({
+      id: v.string(),
+      numId: v.optional(v.number()),
+      title: v.string(),
+      repo: v.string(),
+      archived: v.boolean(),
+    }),
+  ),
+});
+
+/** `sessions:listGroup` as read over HTTP; null when the session is in no group. */
+const sessionGroupSchema = z
+  .object({
+    _id: z.string(),
+    name: z.string().optional(),
+    members: z.array(
+      z.object({
+        _id: z.string(),
+        numId: z.number().optional(),
+        title: z.string(),
+        archived: z.boolean(),
+        repo: z.object({
+          owner: z.string(),
+          name: z.string(),
+          rootDirectory: z.string().optional(),
+        }),
+      }),
+    ),
+  })
+  .nullable();
+
+/** The session's linked-session group, read as the calling user. */
+async function readSessionGroup(
+  convexUrl: string,
+  clerkUserId: string,
+  sessionId: string,
+): Promise<Infer<typeof mcpSessionGroupValidator> | undefined> {
+  const group = sessionGroupSchema.parse(
+    await runQueryAsUser(convexUrl, clerkUserId, "sessions:listGroup", {
+      id: sessionId,
+    }),
+  );
+  if (!group) return undefined;
+  return {
+    id: group._id,
+    name: group.name,
+    members: group.members.map((member) => ({
+      id: member._id,
+      numId: member.numId,
+      title: member.title,
+      repo: repoRefLabel(member.repo),
+      archived: member.archived,
+    })),
+  };
+}
+
 const orchestratorAgentStateValidator = v.object({
   kind: agentKindValidator,
   id: v.string(),
@@ -1598,6 +1487,8 @@ const orchestratorAgentStateValidator = v.object({
       }),
     ),
   ),
+  /** Sessions only, and only when it is in a linked-session group. */
+  sessionGroup: v.optional(mcpSessionGroupValidator),
 });
 
 export const orchestratorGetAgentState = internalAction({
@@ -1629,24 +1520,22 @@ export const orchestratorGetAgentState = internalAction({
 
     // A session's transcript is its Main chat's (parallel chats keep their
     // own); the streaming row is that chat's too.
-    const sessionChats =
+    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
+    // never sets `activeWorkflowId`, so that field alone is not "is executing".
+    const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
-        ? await loadSessionChatsAsUser(convexUrl, clerkUserId, id)
-        : [];
-    const mainChat = sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
-    const transcriptParentId =
-      kind === "session" ? (mainChat?._id ?? id) : id;
+        ? loadSessionChatsAsUser(convexUrl, clerkUserId, id)
+        : [],
+      ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
+      ctx.runQuery(internal.mcp.queries.chatPullRequests, { kind, id }),
+    ]);
+    const mainChat =
+      sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
+    const transcriptParentId = kind === "session" ? (mainChat?._id ?? id) : id;
     const streamingEntityId =
       kind === "session"
         ? transcriptParentId
         : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
-
-    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
-    // never sets `activeWorkflowId`, so that field alone is not "is executing".
-    const isExecuting: boolean = await ctx.runQuery(
-      internal.mcp.queries.entityIsExecuting,
-      { kind, id },
-    );
 
     const [rawStreaming, rawMessages, rawQueued] = await Promise.all([
       runQueryAsUser(convexUrl, clerkUserId, "streaming:get", {
@@ -1671,10 +1560,6 @@ export const orchestratorGetAgentState = internalAction({
       truncated: message.content.length > TRANSCRIPT_CHAR_LIMIT,
     }));
 
-    const pullRequests = await ctx.runQuery(
-      internal.mcp.queries.chatPullRequests,
-      { kind, id },
-    );
     const common = {
       kind,
       id,
@@ -1689,12 +1574,14 @@ export const orchestratorGetAgentState = internalAction({
 
     if (kind === "session") {
       const session = sessionDocSchema.parse(rawDoc);
-      const linkedRepos: McpLinkedRepo[] | undefined =
+      const [linkedRepos, sessionGroup] = await Promise.all([
         session.linkedRepoCount !== undefined && session.linkedRepoCount > 0
-          ? await ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
+          ? ctx.runQuery(internal.mcp.queries.sessionLinkedRepos, {
               sessionId: id,
             })
-          : undefined;
+          : undefined,
+        readSessionGroup(convexUrl, clerkUserId, id),
+      ]);
       return {
         ...common,
         numId: session.numId,
@@ -1705,6 +1592,7 @@ export const orchestratorGetAgentState = internalAction({
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
         linkedRepos,
+        sessionGroup,
       };
     }
 
@@ -1733,6 +1621,48 @@ export const orchestratorGetAgentState = internalAction({
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
       deploymentStatus: undefined,
+    };
+  },
+});
+
+/**
+ * Joins, renames or leaves a session's linked-session group as the calling
+ * user, through the same mutations the sidebar and header chip use. Returns
+ * the group as it stands afterwards (undefined once the session is out of it).
+ */
+export const orchestratorUpdateSessionGroup = internalAction({
+  args: {
+    clerkUserId: v.string(),
+    sessionId: v.string(),
+    change: v.union(
+      v.object({ kind: v.literal("add"), groupSessionId: v.string() }),
+      v.object({ kind: v.literal("rename"), name: v.string() }),
+      v.object({ kind: v.literal("remove") }),
+    ),
+  },
+  returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
+  handler: async (_ctx, { clerkUserId, sessionId, change }) => {
+    const convexUrl = getEvaConvexCloudUrl();
+    if (change.kind === "add") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:addToGroup", {
+        sessionId,
+        groupSessionId: change.groupSessionId,
+      });
+    } else if (change.kind === "rename") {
+      await runMutationAsUser(convexUrl, clerkUserId, "sessions:renameGroup", {
+        sessionId,
+        name: change.name,
+      });
+    } else {
+      await runMutationAsUser(
+        convexUrl,
+        clerkUserId,
+        "sessions:removeFromGroup",
+        { sessionId },
+      );
+    }
+    return {
+      sessionGroup: await readSessionGroup(convexUrl, clerkUserId, sessionId),
     };
   },
 });
@@ -1944,7 +1874,13 @@ export const orchestratorSendMessage = internalAction({
       internal.mcp.queries.entityIsExecuting,
       { kind, id: targetId },
     );
-    const delivery = chatDelivery(kind, rawDoc, queuedAhead, model, isExecuting);
+    const delivery = chatDelivery(
+      kind,
+      rawDoc,
+      queuedAhead,
+      model,
+      isExecuting,
+    );
     for (const call of buildChatMessageCalls({
       kind,
       id: targetId,
@@ -2197,6 +2133,8 @@ export const orchestratorCreateSession = internalAction({
     /** Saved codebase group whose members prefill the selection. */
     repoGroupId: v.optional(v.string()),
     installDependencies: v.optional(v.boolean()),
+    /** Calling session; the new session joins its linked-session group. */
+    fromSessionId: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -2215,6 +2153,7 @@ export const orchestratorCreateSession = internalAction({
       linkedRepoIds,
       repoGroupId,
       installDependencies,
+      fromSessionId,
     },
   ) => {
     // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
@@ -2234,6 +2173,7 @@ export const orchestratorCreateSession = internalAction({
     if (installDependencies !== undefined) {
       createArgs.installDependencies = installDependencies;
     }
+    if (fromSessionId) createArgs.fromSessionId = fromSessionId;
 
     const created = createdSessionSchema.parse(
       await runMutationAsUser(
@@ -2365,80 +2305,44 @@ export const handleMcpRequest = internalAction({
     ctx,
     { clerkUserId, scopedRepoId, entityId, entityKind, chatId, body },
   ) => {
-    try {
-      const parsedBody = JSON.parse(body);
-
-      // Create MCP server with tools registered
-      const server = new McpServer({
-        name: "eva-mcp",
-        version: "1.0.0",
-      });
-
-      // Register tools with credentials (including optional scoped repo /
-      // session entity for browser tools).
-      const credentials = {
-        clerkUserId,
-        scopedRepoId,
-        entityId,
-        entityKind,
-        chatId,
-      };
-      const tools = buildTools(credentials, ctx);
-      let supabase: EvaTool[] = [];
-      try {
-        supabase = await supabaseTools(credentials, ctx);
-      } catch (err) {
-        console.error(
-          "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
-          err instanceof Error ? err.message : err,
+    return runSdkMcpRequest({
+      body,
+      Transport: WebStandardStreamableHTTPServerTransport,
+      createServer: async () => {
+        const server = new McpServer(evaMcpServerInfo(process.env.WEB_APP_URL));
+        // Register tools with credentials (including optional scoped repo /
+        // session entity for browser tools).
+        const credentials = {
+          clerkUserId,
+          scopedRepoId,
+          entityId,
+          entityKind,
+          chatId,
+        };
+        const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+          clerkId: clerkUserId,
+        });
+        const flags = resolveExperimentalFlags(user);
+        const tools = buildTools(credentials, ctx).filter(
+          (tool) =>
+            (flags.askTeammates || !ASK_TEAMMATE_TOOL_NAMES.has(tool.name)) &&
+            (flags.prWatch || !PR_WATCH_TOOL_NAMES.has(tool.name)),
         );
-      }
-      const allTools = [...tools, ...supabase];
-      // Code mode is additive: `execute` and `search_tools` sit beside the flat
-      // tools and dispatch to the same definitions.
-      mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
-
-      // Create transport in stateless mode with JSON responses (no SSE).
-      // WebStandardStreamableHTTPServerTransport works with Web Standard
-      // Request/Response, avoiding Node.js req/res shimming entirely.
-      const transport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-        enableJsonResponse: true,
-      });
-
-      // Connect server to transport
-      await server.connect(transport);
-
-      // Build a Web Standard Request for the transport.
-      // The transport validates Accept + Content-Type headers.
-      const req = new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json, text/event-stream",
-        },
-        body,
-      });
-
-      const response = await transport.handleRequest(req, { parsedBody });
-      const responseBody = await response.text();
-
-      return {
-        status: response.status,
-        body: responseBody,
-      };
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Internal server error";
-      console.error("[MCP][handleMcpRequest] threw:", message, err);
-      return {
-        status: 500,
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          error: { code: -32603, message },
-          id: null,
-        }),
-      };
-    }
+        let supabase: EvaTool[] = [];
+        try {
+          supabase = await supabaseTools(credentials, ctx);
+        } catch (err) {
+          console.error(
+            "[MCP][handleMcpRequest] supabase tools registration failed (continuing):",
+            err instanceof Error ? err.message : err,
+          );
+        }
+        const allTools = [...tools, ...supabase];
+        // Code mode is additive: `execute` and `search_tools` sit beside the
+        // flat tools and dispatch to the same definitions.
+        mountFlat(server, [...allTools, ...codeModeTools(allTools)]);
+        return server;
+      },
+    });
   },
 });

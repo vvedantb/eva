@@ -39,6 +39,8 @@ export const projectListItemValidator = v.object({
   planningMode: projectPlanningModeValidator,
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
+  /** The project chat is paused on a blocking question for the user. */
+  isAwaitingAnswer: v.boolean(),
 });
 
 /** Infers interview vs tasks-only for projects created before `planningMode` existed. */

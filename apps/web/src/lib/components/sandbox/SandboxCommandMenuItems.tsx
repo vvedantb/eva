@@ -1,11 +1,15 @@
 import type { ReactNode } from "react";
-import { DropdownMenuItem, CircleSpinner } from "@eva/ui";
+import {
+  DropdownMenuItem,
+  Spinner,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+} from "@vvedantb/ui";
 import {
   IconPlayerPlay,
   IconRefresh,
   IconServerBolt,
 } from "@tabler/icons-react";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 /** One sandbox command row: whether it shows, its in-flight state, its action. */
 export interface SandboxCommandMenuItem {
@@ -79,5 +83,7 @@ export function BusyMenuIcon({
   busy: boolean;
   children: ReactNode;
 }) {
-  return busy ? <CircleSpinner size="sm" className="size-3.5" /> : children;
+  return busy ? (
+    <Spinner variant="circle" size="sm" className="size-3.5" />
+  ) : children;
 }

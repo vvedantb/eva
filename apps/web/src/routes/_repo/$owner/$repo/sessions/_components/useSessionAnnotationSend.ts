@@ -7,7 +7,11 @@ import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModel
 import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
-import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
+import {
+  chatTurnOpenFromStatus,
+  openChatTurnOptimistically,
+} from "@/lib/components/chat/useChatTurnOpen";
+import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
 
 /**
  * Sends an annotation as chat display text + rich agent prompt into the
@@ -48,13 +52,17 @@ export function useSessionAnnotationSend(
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const addMessage = useMutation(api.sessions.addMessage);
-  const startExecution = useMutation(api.sessionWorkflow.startExecute);
+  const startExecution = useMutation(
+    api.sessionWorkflow.startExecute,
+  ).withOptimisticUpdate((localStore, args) =>
+    openChatTurnOptimistically(localStore, args.chatId),
+  );
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
 
-  const isExecuting =
-    turnStatus === undefined
-      ? isAssistantTurnInProgress(messages ?? [])
-      : turnStatus !== null;
+  const isExecuting = isChatTurnExecuting({
+    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    messages,
+  });
 
   return async (display: string, full: string) => {
     const accountId = resolveAccountId(providerAccountId);

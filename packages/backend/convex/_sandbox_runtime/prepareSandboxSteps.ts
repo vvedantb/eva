@@ -3,12 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { ensureSandboxStartedSteps } from "./resumeSandboxSteps";
-
-type ProgressStep = {
-  type: string;
-  label: string;
-  status: string;
-};
+import { type ProgressStep, startupProgress } from "./startupProgress";
 
 type PrepareSandboxArgs = {
   installationId: number;
@@ -36,6 +31,29 @@ const BRANCH_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2500, base: 2 },
 };
 
+/**
+ * Stages this run walks through after the sandbox exists, in order. The UI
+ * shows the ones not reached yet as pending. A stage can still drop out (a
+ * failed task-branch fetch, a startup-commands marker that already exists).
+ */
+export function plannedStartupStages(
+  args: Pick<PrepareSandboxArgs, "branchName" | "baseBranch" | "skipStartupCommands">,
+): string[] {
+  const branchStages = args.branchName
+    ? ["Fetching task branch...", "Setting up branch..."]
+    : args.baseBranch
+      ? ["Checking out base branch..."]
+      : [];
+  const commandStages = args.skipStartupCommands
+    ? []
+    : [
+        "Restoring seeded runtime...",
+        "Launching background commands...",
+        "Running startup commands...",
+      ];
+  return ["Fetching base branch...", ...branchStages, ...commandStages];
+}
+
 /** Emits progress steps to the streaming entity for real-time UI updates. */
 async function emitSteps(
   step: WorkflowCtx,
@@ -60,6 +78,13 @@ export async function prepareSandboxSteps(
 ): Promise<PrepareSandboxResult> {
   const completedSteps: Array<ProgressStep> = [];
   const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+  const plan = plannedStartupStages(args);
+  const emitActive = (label: string) =>
+    emitSteps(
+      step,
+      args.streamingEntityId,
+      startupProgress(completedSteps, label, plan),
+    );
 
   // Resolve which existing sandbox (if any) to reuse before the create/resume
   // action inside createOrResumeSandbox → ensureSandboxRunning.
@@ -92,48 +117,19 @@ export async function prepareSandboxSteps(
   );
   const { sandboxId, resumeFellBack } = setupResult;
 
-  completedSteps.push({
-    type: "tool",
-    label: "Creating sandbox...",
-    status: "complete",
-  });
-
-  // Step 2: Fetch latest refs needed for checkout/setup.
-  await emitSteps(step, args.streamingEntityId, [
-    ...completedSteps,
-    { type: "tool", label: "Fetching base branch...", status: "active" },
-  ]);
+  // From here the sandbox exists but the caller only learns its id when this
+  // returns. A throw below would leave an ephemeral sandbox running that no
+  // caller's cleanup can see, so delete it here before rethrowing. Reused
+  // (non-ephemeral) sandboxes belong to their entity and are left alone.
   try {
-    await step.runAction(
-      internal.sandbox.fetchBaseBranch,
-      {
-        sandboxId,
-        installationId: args.installationId,
-        repoOwner: args.repoOwner,
-        repoName: args.repoName,
-        baseBranch,
-        repoId: args.repoId,
-      },
-      FETCH_STEP_RETRY,
-    );
-  } catch {
-    // Non-fatal: snapshot already has the codebase.
-    // resolveBaseTarget falls back to local refs when remote isn't fetched.
-    console.warn(
-      `[prepareSandbox] fetch base branch (${baseBranch}) failed — continuing with local snapshot refs`,
-    );
-  }
-  completedSteps.push({
-    type: "tool",
-    label: "Fetching base branch...",
-    status: "complete",
-  });
+    completedSteps.push({
+      type: "tool",
+      label: "Creating sandbox...",
+      status: "complete",
+    });
 
-  if (args.branchName) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      { type: "tool", label: "Fetching task branch...", status: "active" },
-    ]);
+    // Step 2: Fetch latest refs needed for checkout/setup.
+    await emitActive("Fetching base branch...");
     try {
       await step.runAction(
         internal.sandbox.fetchBaseBranch,
@@ -142,182 +138,199 @@ export async function prepareSandboxSteps(
           installationId: args.installationId,
           repoOwner: args.repoOwner,
           repoName: args.repoName,
-          baseBranch: args.branchName,
+          baseBranch,
           repoId: args.repoId,
         },
         FETCH_STEP_RETRY,
       );
-      completedSteps.push({
-        type: "tool",
-        label: "Fetching task branch...",
-        status: "complete",
-      });
     } catch {
-      // Non-fatal: branch may not exist yet (new task) or network unreachable.
-      // setupBranch falls back to local refs via resolveBranchStartTarget.
+      // Non-fatal: snapshot already has the codebase.
+      // resolveBaseTarget falls back to local refs when remote isn't fetched.
       console.warn(
-        `[prepareSandbox] fetch task branch (${args.branchName}) failed — continuing with local refs`,
+        `[prepareSandbox] fetch base branch (${baseBranch}) failed — continuing with local snapshot refs`,
       );
     }
-  }
-
-  // Step 3: Checkout or create the working branch from latest fetched refs.
-  if (args.branchName) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      { type: "tool", label: "Setting up branch...", status: "active" },
-    ]);
-
-    await step.runAction(
-      internal.sandbox.setupSandboxBranch,
-      {
-        sandboxId,
-        branchName: args.branchName,
-        baseBranch,
-        repoId: args.repoId,
-      },
-      BRANCH_STEP_RETRY,
-    );
-  } else if (args.baseBranch) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      {
-        type: "tool",
-        label: "Checking out base branch...",
-        status: "active",
-      },
-    ]);
-
-    await step.runAction(
-      internal.sandbox.checkoutBaseBranch,
-      {
-        sandboxId,
-        baseBranch: args.baseBranch,
-        repoId: args.repoId,
-      },
-      BRANCH_STEP_RETRY,
-    );
-  }
-
-  // Step 4: Restore service state baked into seeded snapshots before daemons
-  // or startup commands touch local dependencies. No-ops for ordinary snapshots.
-  if (!args.skipStartupCommands) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      {
-        type: "tool",
-        label: "Restoring seeded runtime...",
-        status: "active",
-      },
-    ]);
-    await step.runAction(
-      internal.sandbox.restoreSeededRuntimeState,
-      { sandboxId, repoId: args.repoId },
-      { retry: { maxAttempts: 1, initialBackoffMs: 1000, base: 2 } },
-    );
     completedSteps.push({
       type: "tool",
-      label: "Restoring seeded runtime...",
+      label: "Fetching base branch...",
       status: "complete",
     });
-  }
 
-  // Step 5: Launch background commands (long-running daemons / services) FIRST,
-  // before startup commands, so one-time startup/seed work can depend on services
-  // being up (e.g. `supabase start`, `npx convex dev`). Skipped together with
-  // startup for read-only ephemeral flows (PR recap, interview). Non-fatal.
-  if (!args.skipStartupCommands) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      {
+    if (args.branchName) {
+      await emitActive("Fetching task branch...");
+      try {
+        await step.runAction(
+          internal.sandbox.fetchBaseBranch,
+          {
+            sandboxId,
+            installationId: args.installationId,
+            repoOwner: args.repoOwner,
+            repoName: args.repoName,
+            baseBranch: args.branchName,
+            repoId: args.repoId,
+          },
+          FETCH_STEP_RETRY,
+        );
+        completedSteps.push({
+          type: "tool",
+          label: "Fetching task branch...",
+          status: "complete",
+        });
+      } catch {
+        // Non-fatal: branch may not exist yet (new task) or network unreachable.
+        // setupBranch falls back to local refs via resolveBranchStartTarget.
+        console.warn(
+          `[prepareSandbox] fetch task branch (${args.branchName}) failed — continuing with local refs`,
+        );
+      }
+    }
+
+    // Step 3: Checkout or create the working branch from latest fetched refs.
+    if (args.branchName) {
+      await emitActive("Setting up branch...");
+
+      await step.runAction(
+        internal.sandbox.setupSandboxBranch,
+        {
+          sandboxId,
+          branchName: args.branchName,
+          baseBranch,
+          repoId: args.repoId,
+        },
+        BRANCH_STEP_RETRY,
+      );
+    } else if (args.baseBranch) {
+      await emitActive("Checking out base branch...");
+
+      await step.runAction(
+        internal.sandbox.checkoutBaseBranch,
+        {
+          sandboxId,
+          baseBranch: args.baseBranch,
+          repoId: args.repoId,
+        },
+        BRANCH_STEP_RETRY,
+      );
+    }
+
+    // Step 4: Restore service state baked into seeded snapshots before daemons
+    // or startup commands touch local dependencies. No-ops for ordinary snapshots.
+    if (!args.skipStartupCommands) {
+      await emitActive("Restoring seeded runtime...");
+      await step.runAction(
+        internal.sandbox.restoreSeededRuntimeState,
+        { sandboxId, repoId: args.repoId },
+        { retry: { maxAttempts: 1, initialBackoffMs: 1000, base: 2 } },
+      );
+      completedSteps.push({
         type: "tool",
-        label: "Launching background commands...",
-        status: "active",
-      },
-    ]);
-    try {
-      const result = await step.runAction(
-        internal.sandbox.runBackgroundCommands,
-        { sandboxId, repoId: args.repoId },
-        { retry: { maxAttempts: 1, initialBackoffMs: 1000, base: 2 } },
-      );
-      if (result.ran) {
-        completedSteps.push({
-          type: "tool",
-          label: "Launching background commands...",
-          status: "complete",
-        });
-        if (result.commandCount > 0) {
-          console.log(
-            `[prepareSandbox] Launched ${result.commandCount} background command(s)`,
-          );
-          if (result.errors.length > 0) {
-            console.warn(
-              `[prepareSandbox] Background command errors: ${result.errors.join("; ")}`,
+        label: "Restoring seeded runtime...",
+        status: "complete",
+      });
+    }
+
+    // Step 5: Launch background commands (long-running daemons / services) FIRST,
+    // before startup commands, so one-time startup/seed work can depend on services
+    // being up (e.g. `supabase start`, `npx convex dev`). Skipped together with
+    // startup for read-only ephemeral flows (PR recap, interview). Non-fatal.
+    if (!args.skipStartupCommands) {
+      await emitActive("Launching background commands...");
+      try {
+        const result = await step.runAction(
+          internal.sandbox.runBackgroundCommands,
+          { sandboxId, repoId: args.repoId },
+          { retry: { maxAttempts: 1, initialBackoffMs: 1000, base: 2 } },
+        );
+        if (result.ran) {
+          completedSteps.push({
+            type: "tool",
+            label: "Launching background commands...",
+            status: "complete",
+          });
+          if (result.commandCount > 0) {
+            console.log(
+              `[prepareSandbox] Launched ${result.commandCount} background command(s)`,
             );
+            if (result.errors.length > 0) {
+              console.warn(
+                `[prepareSandbox] Background command errors: ${result.errors.join("; ")}`,
+              );
+            }
           }
         }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[prepareSandbox] Background commands failed — continuing: ${msg}`,
+        );
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `[prepareSandbox] Background commands failed — continuing: ${msg}`,
-      );
     }
-  }
 
-  // Step 6: Run startup commands once per sandbox (marker file). Skipped for
-  // read-only ephemeral flows (PR recap) and when a reused project sandbox
-  // already paid this cost on the first task. Startup commands that depend on
-  // services should wait for readiness themselves, since background daemons
-  // above are launched detached.
-  let shouldRunStartupCommands = !args.skipStartupCommands;
-  if (shouldRunStartupCommands) {
-    const markerExists = await step.runAction(
-      internal.sandbox.startupCommandsMarkerExists,
-      { sandboxId, repoId: args.repoId },
-    );
-    if (markerExists) {
-      shouldRunStartupCommands = false;
-    }
-  }
-
-  if (shouldRunStartupCommands) {
-    await emitSteps(step, args.streamingEntityId, [
-      ...completedSteps,
-      { type: "tool", label: "Running startup commands...", status: "active" },
-    ]);
-    try {
-      const result = await step.runAction(
-        internal.sandbox.runStartupCommands,
+    // Step 6: Run startup commands once per sandbox (marker file). Skipped for
+    // read-only ephemeral flows (PR recap) and when a reused project sandbox
+    // already paid this cost on the first task. Startup commands that depend on
+    // services should wait for readiness themselves, since background daemons
+    // above are launched detached.
+    let shouldRunStartupCommands = !args.skipStartupCommands;
+    if (shouldRunStartupCommands) {
+      const markerExists = await step.runAction(
+        internal.sandbox.startupCommandsMarkerExists,
         { sandboxId, repoId: args.repoId },
-        { retry: { maxAttempts: 1, initialBackoffMs: 1000, base: 2 } },
       );
-      if (result.ran) {
-        completedSteps.push({
-          type: "tool",
-          label: "Running startup commands...",
-          status: "complete",
-        });
-        if (result.commandCount > 0) {
-          console.log(
-            `[prepareSandbox] Ran ${result.commandCount} startup command(s)`,
-          );
-          if (result.errors.length > 0) {
-            console.warn(
-              `[prepareSandbox] Startup command errors: ${result.errors.join("; ")}`,
+      if (markerExists) {
+        shouldRunStartupCommands = false;
+      }
+    }
+
+    if (shouldRunStartupCommands) {
+      await emitActive("Running startup commands...");
+      try {
+        const result = await step.runAction(
+          internal.sandbox.runStartupCommands,
+          { sandboxId, repoId: args.repoId },
+          { retry: { maxAttempts: 1, initialBackoffMs: 1000, base: 2 } },
+        );
+        if (result.ran) {
+          completedSteps.push({
+            type: "tool",
+            label: "Running startup commands...",
+            status: "complete",
+          });
+          if (result.commandCount > 0) {
+            console.log(
+              `[prepareSandbox] Ran ${result.commandCount} startup command(s)`,
             );
+            if (result.errors.length > 0) {
+              console.warn(
+                `[prepareSandbox] Startup command errors: ${result.errors.join("; ")}`,
+              );
+            }
           }
         }
+      } catch (e) {
+        // Non-fatal: log warning and continue
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[prepareSandbox] Startup commands failed — continuing: ${msg}`,
+        );
       }
-    } catch (e) {
-      // Non-fatal: log warning and continue
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `[prepareSandbox] Startup commands failed — continuing: ${msg}`,
-      );
     }
-  }
 
-  return { sandboxId, resumeFellBack };
+    return { sandboxId, resumeFellBack };
+  } catch (error) {
+    if (args.ephemeral && args.existingSandboxId === undefined) {
+      try {
+        await step.runAction(internal.sandbox.deleteSandbox, {
+          sandboxId,
+          repoId: args.repoId,
+        });
+      } catch (cleanupError) {
+        console.error(
+          `[prepareSandbox] failed to delete half-prepared sandbox ${sandboxId}:`,
+          cleanupError,
+        );
+      }
+    }
+    throw error;
+  }
 }

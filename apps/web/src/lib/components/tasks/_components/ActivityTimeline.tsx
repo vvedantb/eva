@@ -10,15 +10,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  CircleSpinner,
   Spinner,
   toast,
-} from "@eva/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+  useRequestConfirm,
+  ListEnter,
+} from "@vvedantb/ui";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { CreatedTimelineItem } from "./CreatedTimelineItem";
 import { TaskActivityItem } from "./TaskActivityItem";
 import { TaskActivityComposer } from "./TaskActivityComposer";
@@ -100,29 +100,22 @@ export function ActivityTimeline({
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const removeComment = useMutation(
     api.taskComments.remove,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.taskComments.listByTask, {
-      taskId,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.taskComments.listByTask,
-        { taskId },
-        current.map((entry) =>
-          entry._id === args.id
-            ? {
-                ...entry,
-                deletedAt: Date.now(),
-                content: DELETED_COMMENT_PLACEHOLDER,
-              }
-            : entry,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.taskComments.listByTask, { taskId }, (cur) =>
+      cur.map((entry) =>
+        entry._id === args.id
+          ? {
+              ...entry,
+              deletedAt: Date.now(),
+              content: DELETED_COMMENT_PLACEHOLDER,
+            }
+          : entry,
+      ),
+    );
   });
   const deleteComment = async (commentId: Id<"taskComments">) => {
     setIsDeletingComment(true);
@@ -279,7 +272,6 @@ export function ActivityTimeline({
                     repliesByParentId={repliesByParentId}
                     onDeleteRequest={(commentId) =>
                       requestConfirm(
-                        altHeld,
                         () => setDeletingCommentId(commentId),
                         () => {
                           void deleteComment(commentId);
@@ -345,7 +337,7 @@ export function ActivityTimeline({
               onClick={handleDeleteComment}
               disabled={isDeletingComment}
             >
-              {isDeletingComment && <CircleSpinner size="sm" />}
+              {isDeletingComment && <Spinner variant="circle" size="sm" />}
               Delete
             </Button>
           </DialogFooter>

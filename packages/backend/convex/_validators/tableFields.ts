@@ -11,6 +11,8 @@ import {
   docKindValidator,
   chatLogEntryKindValidator,
   chatLogAuthorValidator,
+  feedbackAuthorValidator,
+  feedbackSentimentValidator,
   docVersionSourceValidator,
   errorTypeValidator,
   evaluationStatusValidator,
@@ -53,6 +55,7 @@ import {
   experimentalFlagsValidator,
   logEntryValidator,
   repoShaValidator,
+  sandboxGitSyncValidator,
   scopeCheckValidator,
   terminalPaneValidator,
   usageLimitWindowValidator,
@@ -60,6 +63,7 @@ import {
   variationValidator,
 } from "./shapes";
 import { shortcutOverridesValidator } from "./shortcuts";
+import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 
 export const userFields = {
   clerkId: v.optional(v.string()),
@@ -237,6 +241,20 @@ export const backgroundAgentEntryValidator = v.object(
 
 export type BackgroundAgentEntry = Infer<typeof backgroundAgentEntryValidator>;
 
+/**
+ * Claude's native `/goal` for a chat, mirrored by the warm daemon (parsed in
+ * `callback-src/parse/claudeGoal.ts`). Absent = no goal.
+ */
+export const agentGoalValidator = v.object({
+  objective: v.string(),
+  status: v.union(v.literal("active"), v.literal("complete")),
+  /** Stop hook evaluations that said "not met yet". */
+  checks: v.number(),
+  lastCheck: v.optional(v.string()),
+});
+
+export type AgentGoal = Infer<typeof agentGoalValidator>;
+
 export const turnStateValidator = v.union(
   v.literal("staged"),
   v.literal("launching"),
@@ -358,12 +376,18 @@ export const chatDaemonEntityFields = {
   pendingTurn: pendingTurnValidator,
   syntheticTurnMessageId: v.optional(v.id("messages")),
   backgroundAgents: v.optional(v.array(backgroundAgentEntryValidator)),
+  // Written only when the goal changes (set, check, met, cleared).
+  goal: v.optional(agentGoalValidator),
   pendingTaskStops: v.optional(v.array(v.string())),
   // Interrupt-cancel signal for a warm Claude daemon: cancelExecution sets this
   // instead of killing the sandbox process; claimPendingTurn drains it
   // unconditionally (even mid-turn, with no pendingTurn) so the daemon's poll
   // loop notices and aborts its in-flight SDK query.
   cancelRequestedAt: v.optional(v.number()),
+  // Steer signal for a warm Claude/Codex daemon: a queued message waits with
+  // `steer: "requested"`. Kept on the entity so the 50ms claim poll reads the
+  // queue only while a steer is waiting (see `_chat/steer.ts`).
+  steerRequestedAt: v.optional(v.number()),
   // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
   // for project and task chat daemons.
   usageRefreshRequestedAt: v.optional(v.number()),
@@ -420,6 +444,32 @@ export const prOriginValidator = v.union(
 );
 
 /**
+ * The agent's watch on one PR (`watch_pull_request`). Woken from GitHub
+ * webhooks, never polled; see `_pullRequests/watch.ts`. Only what the agent was
+ * last told is kept, so the next check reports just what changed.
+ */
+export const prWatchValidator = v.object({
+  startedAt: v.number(),
+  /** Session only: the chat that asked, which every wake goes to. */
+  sessionChatId: v.optional(v.id("sessionChats")),
+  /** Head commit the check fields below describe. Unset until first read. */
+  headSha: v.optional(v.string()),
+  /** Names of the checks already reported as failed on `headSha`. */
+  failedChecks: v.array(v.string()),
+  /** "All checks passed" was already reported for `headSha`. */
+  passed: v.boolean(),
+  conflicting: v.boolean(),
+  /** GitHub time of the newest comment already reported. */
+  remarksThrough: v.number(),
+  /** Comment-only wakes in a row; the watch ends at the cap. */
+  commentWakes: v.number(),
+  /** A debounced check is scheduled for this time. */
+  checkAt: v.optional(v.number()),
+  /** First failed GitHub read in a row; the watch ends after 15 minutes. */
+  unreadableSince: v.optional(v.number()),
+});
+
+/**
  * One pull request linked to a session, quick task or project. The single
  * source of truth for every PR Eva tracks: an owner may hold many. All writes
  * go through `_github/pullRequests.ts`, which also refreshes the owner's
@@ -443,6 +493,8 @@ export const pullRequestFields = {
   primary: v.boolean(),
   origin: prOriginValidator,
   owner: prOwnerValidator,
+  /** Set while the owner's agent watches this PR. Cleared once it is terminal. */
+  watch: v.optional(prWatchValidator),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
@@ -545,6 +597,8 @@ export const agentTaskFields = {
   activeChatWorkflowId: v.optional(v.string()),
   // UI state for the reviewer-facing Start/Stop sandbox button.
   reviewTaskSandboxStatus: v.optional(taskSandboxStatusValidator),
+  /** Bumped by every start request; see `_sandbox/transitions.ts`. */
+  sandboxStartAttempt: v.optional(v.number()),
   // Resolved dev server port + full command for the current sandbox. Stored
   // so the task panel can route the preview iframe to the right port and
   // auto-run the dev server in the first terminal pane. Populated by
@@ -589,6 +643,8 @@ export const agentTaskFields = {
    * where the checkout really is. Detached HEAD is reported as the short sha.
    */
   sandboxBranch: v.optional(v.string()),
+  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
+  sandboxGitSync: v.optional(sandboxGitSyncValidator),
   ...prSummaryFields,
 };
 
@@ -668,6 +724,8 @@ export const sessionFields = {
   ptySessionId: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
+  /** Bumped by every start request; see `_sandbox/transitions.ts`. */
+  sandboxStartAttempt: v.optional(v.number()),
   archived: v.optional(v.boolean()),
   summary: v.optional(v.array(v.string())),
   createdBy: v.optional(v.id("users")),
@@ -745,6 +803,8 @@ export const sessionFields = {
    * Detached HEAD is reported as the short commit sha.
    */
   sandboxBranch: v.optional(v.string()),
+  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
+  sandboxGitSync: v.optional(sandboxGitSyncValidator),
   // Saved codebase group the session was created from, when one prefilled the
   // linked repo selection. Informational: the `sessionRepos` rows are the
   // source of truth, so editing the group later never rewrites this session.
@@ -754,6 +814,11 @@ export const sessionFields = {
   linkedRepoCount: v.optional(v.number()),
   /** Session this one was forked from ("Fork session"). Informational. */
   forkedFromSessionId: v.optional(v.id("sessions")),
+  /**
+   * Linked-session group. Set when a session's agent spins up another via
+   * `create_session`; cleared by "Remove from group".
+   */
+  sessionGroupId: v.optional(v.id("sessionGroups")),
   /**
    * Source sandbox to Vercel-fork for this session's first sandbox, instead of
    * booting the repo snapshot, so its local DBs (Supabase volume, Convex local
@@ -767,6 +832,17 @@ export const sessionFields = {
    * something Vercel documents.
    */
   forkRestartsSource: v.optional(v.boolean()),
+};
+
+/**
+ * Linked sessions across repos: one agent spun up the others. Members point
+ * here through `sessions.sessionGroupId`. A group always has two or more
+ * members; removing the second-last one dissolves it.
+ */
+export const sessionGroupFields = {
+  /** User-set name. Unset: the UI shows the oldest member's title. */
+  name: v.optional(v.string()),
+  createdBy: v.id("users"),
 };
 
 /**
@@ -1017,6 +1093,8 @@ export const projectFields = {
   // UI state for the project-level Start/Stop preview sandbox button.
   // Mirrors `agentTasks.reviewTaskSandboxStatus` lifecycle.
   reviewProjectSandboxStatus: v.optional(taskSandboxStatusValidator),
+  /** Bumped by every start request; see `_sandbox/transitions.ts`. */
+  sandboxStartAttempt: v.optional(v.number()),
   // Dev port + full command for the active project preview sandbox.
   // Populated by `projectSandboxReady` from `startSessionServices` output.
   // User Preview port changes also patch `devPort` (sticky, mirrors sessions).
@@ -1082,6 +1160,8 @@ export const projectFields = {
    * Detached HEAD is reported as the short commit sha.
    */
   sandboxBranch: v.optional(v.string()),
+  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
+  sandboxGitSync: v.optional(sandboxGitSyncValidator),
 };
 
 export const projectDetailsFields = {
@@ -1167,6 +1247,24 @@ export const automationRunFields = {
   createdTaskId: v.optional(v.id("agentTasks")),
   // CI fix attempts stop counting toward the cap once the PR goes green.
   superseded: v.optional(v.boolean()),
+};
+
+// One row per (changelog run, user, item): the latest feedback from the email.
+// `itemIndex` is the item's position in the run's structured changelog and
+// takes "up" / "down"; no `itemIndex` is a rating of the whole email
+// ("love" / "ok" / "meh"). The HTTP route enforces that pairing.
+export const changelogVoteFields = {
+  runId: v.id("automationRuns"),
+  userId: v.id("users"),
+  itemIndex: v.optional(v.number()),
+  vote: v.union(
+    v.literal("up"),
+    v.literal("down"),
+    v.literal("love"),
+    v.literal("ok"),
+    v.literal("meh"),
+  ),
+  updatedAt: v.number(),
 };
 
 /**
@@ -1356,6 +1454,11 @@ export const queuedMessageFields = {
   // the "via orchestrator" badge was lost on exactly the messages that had to
   // queue (mirrors messageFields.sentViaOrchestrator).
   sentViaOrchestrator: v.optional(v.boolean()),
+  // The user pressed Steer and the running daemon injects this message into
+  // its live turn: "requested" waits for the daemon, "delivering" is handed
+  // over and waits for its ack. A turn that ends first sends it as the next
+  // queued turn (the row sits at the front). See `_chat/steer.ts`.
+  steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
 };
 
 export const taskSandboxEventFields = {
@@ -1549,6 +1652,27 @@ export const chatLogEntryFields = {
   createdAt: v.number(),
 };
 
+/**
+ * One piece of feedback on an Eva turn: a user's thumbs up / down (one row per
+ * user per turn) or an agent's `submit_feedback` when the user shows clear
+ * frustration or praise. Listed across repos on the global Feedback page.
+ */
+export const feedbackFields = {
+  ...chatSourceFields,
+  // The chat's message parent, so the transcript lists its rows in one query.
+  parentId: messageFields.parentId,
+  // The chat's repo, for the repo filter. Absent for a task with no repo.
+  repoId: v.optional(v.id("githubRepos")),
+  // The assistant turn the feedback is about; absent if the chat had none yet.
+  messageId: v.optional(v.id("messages")),
+  // The user who rated, or the user whose chat the agent reported on.
+  userId: v.id("users"),
+  author: feedbackAuthorValidator,
+  sentiment: feedbackSentimentValidator,
+  comment: v.optional(v.string()),
+  createdAt: v.number(),
+};
+
 export const docFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1561,7 +1685,10 @@ export const docFields = {
   title: v.string(),
   content: v.string(),
   // Stored HTML for the doc's HTML tab; rendered read-only in an iframe.
+  // PR recaps wrote their walkthrough here before `recapWalkthrough`.
   html: v.optional(v.string()),
+  // PR recap walkthrough, rendered natively over the PR diff.
+  recapWalkthrough: v.optional(v.array(recapWalkthroughStepValidator)),
   prUrl: v.optional(v.string()),
   prNumber: v.optional(v.number()),
   headSha: v.optional(v.string()),
@@ -1753,6 +1880,11 @@ export const artifactFields = {
   // Chat that created this artifact (`create_artifact` from a sandbox token).
   // Manual uploads leave these unset. Indexes skip rows with no source.
   ...chatSourceFields,
+  // The chat thread and turn the artifact was created in, for its inline card
+  // in the transcript. Same anchor as a `render_html` page. Rows made before
+  // the card existed, and manual uploads, have neither.
+  chatParentId: v.optional(messageFields.parentId),
+  messageId: v.optional(v.id("messages")),
 };
 
 // Persistent key/value state for one hosted artifact, read and written through

@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { sandboxDisplayStatus } from "./sandboxStatusStyles";
 

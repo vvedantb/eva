@@ -7,7 +7,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPencil } from "@tabler/icons-react";
 import {
   FileViewerToolbarButton,
@@ -47,6 +47,7 @@ export function FileViewerEditControls({
               wrapper to hover — otherwise the reason is unreachable. */}
           <span className="shrink-0">
             <Button
+              shape="rounded"
               size="sm"
               variant="ghost"
               disabled

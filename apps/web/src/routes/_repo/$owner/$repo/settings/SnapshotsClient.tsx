@@ -22,13 +22,13 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  SettingsField,
+  SettingsSection,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import {
@@ -197,42 +197,42 @@ export function SnapshotsClient({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
-      {activeTab === "configuration" ? (
-        <SnapshotConfigurationTab repoId={repoId} snapshot={snapshot} />
-      ) : null}
+          {activeTab === "configuration" ? (
+            <SnapshotConfigurationTab repoId={repoId} snapshot={snapshot} />
+          ) : null}
 
-      {activeTab === "status" ? (
-        snapshot ? (
-          <SnapshotStatusTab
-            snapshot={snapshot}
-            builds={builds}
-            seededApps={seededApps}
-            building={building}
-            cancelling={cancelling}
-            onRebuild={handleRebuild}
-            onCancelBuild={handleCancelBuild}
-          />
-        ) : (
-          <NoSnapshotConfigured />
-        )
-      ) : null}
+          {activeTab === "status" ? (
+            snapshot ? (
+              <SnapshotStatusTab
+                snapshot={snapshot}
+                builds={builds}
+                seededApps={seededApps}
+                building={building}
+                cancelling={cancelling}
+                onRebuild={handleRebuild}
+                onCancelBuild={handleCancelBuild}
+              />
+            ) : (
+              <NoSnapshotConfigured />
+            )
+          ) : null}
 
-      {activeTab === "builds" ? (
-        <SnapshotBuildsTab
-          snapshot={snapshot}
-          builds={builds}
-          expandedBuild={expandedBuild}
-          onExpandedBuildChange={setExpandedBuild}
-          cancelling={cancelling}
-          onCancelBuild={handleCancelBuild}
-        />
-      ) : null}
+          {activeTab === "builds" ? (
+            <SnapshotBuildsTab
+              snapshot={snapshot}
+              builds={builds}
+              expandedBuild={expandedBuild}
+              onExpandedBuildChange={setExpandedBuild}
+              cancelling={cancelling}
+              onCancelBuild={handleCancelBuild}
+            />
+          ) : null}
 
-      {activeTab === "config-files" ? (
-        <ConfigFilesSection repoId={repoId} snapshotId={snapshot?._id} />
-      ) : null}
+          {activeTab === "config-files" ? (
+            <ConfigFilesSection repoId={repoId} snapshotId={snapshot?._id} />
+          ) : null}
         </m.div>
       </AnimatePresence>
     </SettingsPage>
@@ -339,8 +339,8 @@ function SnapshotConfigurationTab({
           label="Branch"
           description={
             <>
-              Branch to clone for the snapshot. Defaults to{" "}
-              <code>main</code> if empty.
+              Branch to clone for the snapshot. Defaults to <code>main</code> if
+              empty.
             </>
           }
         >
@@ -381,9 +381,9 @@ function SnapshotConfigurationTab({
           label="One-time data seeding, run with services up"
           description={
             <>
-              One command per line. Runs once per seeded build after
-              services start. Unlike startup commands, these do not run on
-              every sandbox boot.
+              One command per line. Runs once per seeded build after services
+              start. Unlike startup commands, these do not run on every sandbox
+              boot.
             </>
           }
         >
@@ -400,9 +400,9 @@ function SnapshotConfigurationTab({
       <p className="text-xs leading-relaxed text-muted-foreground">
         Requires Vercel Sandbox credentials:{" "}
         <code className="font-mono">VERCEL_TOKEN</code> and{" "}
-        <code className="font-mono">VERCEL_TEAM_ID</code> (team or repo),
-        and <code className="font-mono">VERCEL_PROJECT_ID</code> on this
-        app — not borrowed from a sibling repo.
+        <code className="font-mono">VERCEL_TEAM_ID</code> (team or repo), and{" "}
+        <code className="font-mono">VERCEL_PROJECT_ID</code> on this app — not
+        borrowed from a sibling repo.
       </p>
     </>
   );
@@ -442,13 +442,9 @@ function SnapshotBuildsTab({
                 <tr className="text-left text-muted-foreground">
                   <th className="px-2 py-2 font-medium w-8 sm:px-4" />
                   <th className="px-2 py-2 font-medium sm:px-4">Date</th>
-                  <th className="px-2 py-2 font-medium sm:px-4">
-                    Duration
-                  </th>
+                  <th className="px-2 py-2 font-medium sm:px-4">Duration</th>
                   <th className="px-2 py-2 font-medium sm:px-4">Trigger</th>
-                  <th className="px-2 py-2 font-medium sm:px-4">
-                    Provider
-                  </th>
+                  <th className="px-2 py-2 font-medium sm:px-4">Provider</th>
                   <th className="px-2 py-2 font-medium sm:px-4">Type</th>
                   <th className="px-2 py-2 font-medium sm:px-4">Status</th>
                   <th className="px-2 py-2 font-medium sm:px-4">Seeded</th>

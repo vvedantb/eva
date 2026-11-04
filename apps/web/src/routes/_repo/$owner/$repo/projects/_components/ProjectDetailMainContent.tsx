@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { motionFast } from "@eva/ui";
+import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { Id } from "@eva/backend";
 import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
@@ -51,7 +51,7 @@ export function ProjectDetailMainContent({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {sandboxContent}
           </m.div>
@@ -62,7 +62,7 @@ export function ProjectDetailMainContent({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <ProjectOverviewTab
               projectId={projectId}
@@ -77,7 +77,7 @@ export function ProjectDetailMainContent({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <ProjectTabs
               projectId={projectId}
@@ -99,7 +99,7 @@ export function ProjectDetailMainContent({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <ProjectActiveLayout
               projectId={projectId}

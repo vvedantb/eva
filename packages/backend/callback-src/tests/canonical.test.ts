@@ -4,7 +4,9 @@ import {
   applyCanonicalEvents,
   updateThinkingStep,
 } from "../parse/canonical.js";
+import { serializeFinalSteps } from "../parse/stepBudget.js";
 import { toolCallToStep } from "../parse/toolSteps.js";
+import type { ProgressStep } from "../types.js";
 import { buildStreamingPayload } from "../runtime/heartbeats.js";
 import {
   callbackState as S,
@@ -149,14 +151,17 @@ test("codex item.started sets toolUseId for id-matched completion", () => {
   resetStateForTests();
 });
 
-test("append_text keeps distinct blocks separated and adds no activity steps", () => {
+test("append_text keeps distinct blocks separated in one response row", () => {
   resetStateForTests();
   // Each append_text is a whole (non-streamed) assistant text block, so distinct
-  // blocks are separated by a paragraph break and never create activity steps.
+  // blocks are separated by a paragraph break. With no tool between them they
+  // share one timeline response row.
   applyCanonicalEvents([{ kind: "append_text", text: "First reply." }]);
   applyCanonicalEvents([{ kind: "append_text", text: "Second reply." }]);
-  expect(S.accumulatedSteps.length).toBe(0);
   expect(S.currentStreamedContent).toBe("First reply.\n\nSecond reply.");
+  expect(S.accumulatedSteps).toHaveLength(1);
+  expect(S.accumulatedSteps[0]?.type).toBe("response");
+  expect(S.accumulatedSteps[0]?.detail).toBe("First reply.\n\nSecond reply.");
   resetStateForTests();
 });
 
@@ -164,9 +169,78 @@ test("append_text replaces streamed content on cumulative snapshots", () => {
   resetStateForTests();
   applyCanonicalEvents([{ kind: "append_text", text: "Hello" }]);
   applyCanonicalEvents([{ kind: "append_text", text: "Hello world" }]);
-  expect(S.accumulatedSteps.length).toBe(0);
   expect(S.currentStreamedContent).toBe("Hello world");
+  // The snapshot adds only its unseen tail to the response row.
+  expect(S.accumulatedSteps).toHaveLength(1);
+  expect(S.accumulatedSteps[0]?.detail).toBe("Hello world");
   resetStateForTests();
+});
+
+test("text between tool runs lands as separate response rows in timeline order", () => {
+  resetStateForTests();
+  applyCanonicalEvents([
+    { kind: "mark_message_start" },
+    { kind: "stream_text_delta", text: "Let me look." },
+    {
+      kind: "push_step",
+      step: { type: "file", label: "Reading a.ts", status: "active" },
+    },
+    { kind: "complete_tool" },
+    { kind: "mark_message_start" },
+    { kind: "stream_text_delta", text: "Found " },
+    { kind: "stream_text_delta", text: "it." },
+  ]);
+  expect(S.accumulatedSteps.map((s) => [s.type, s.detail])).toEqual([
+    ["response", "Let me look."],
+    ["file", undefined],
+    ["response", "Found it."],
+  ]);
+  // The first text row closed when the tool started; the tool closed itself.
+  expect(S.accumulatedSteps[0]?.status).toBe("complete");
+  expect(S.accumulatedSteps[1]?.status).toBe("complete");
+  resetStateForTests();
+});
+
+test("a tool completion without an id never lands on a text row", () => {
+  resetStateForTests();
+  applyCanonicalEvents([
+    {
+      kind: "push_step",
+      step: { type: "command", label: "Running ls", status: "active" },
+    },
+    { kind: "stream_text_delta", text: "While that runs..." },
+    { kind: "complete_tool", result: { output: { text: "a.ts" } } },
+  ]);
+  expect(S.accumulatedSteps[0]?.output).toEqual({ text: "a.ts" });
+  expect(S.accumulatedSteps[1]?.output).toBeUndefined();
+  resetStateForTests();
+});
+
+test("serializeFinalSteps drops the response rows the final message repeats", () => {
+  const steps: ProgressStep[] = [
+    { type: "response", label: "Response", status: "complete", detail: "Let me look." },
+    { type: "file", label: "Read a.ts", status: "complete" },
+    { type: "response", label: "Response", status: "complete", detail: "First half." },
+    { type: "reasoning", label: "Thought", status: "complete", detail: "hm" },
+    { type: "response", label: "Response", status: "complete", detail: "Second half." },
+  ];
+  const kept: ProgressStep[] = JSON.parse(
+    serializeFinalSteps(steps, "First half.\n\nSecond half."),
+  );
+  expect(kept.map((s) => s.detail)).toEqual(["Let me look.", undefined, "hm"]);
+  // Subagent text has no `detail` and is never treated as an echo.
+  const subagentText: ProgressStep = {
+    type: "response",
+    label: "Agent message",
+    status: "complete",
+    parentToolUseId: "toolu_agent",
+    output: { text: "child reply" },
+  };
+  expect(
+    JSON.parse(serializeFinalSteps([subagentText], "Final answer.")),
+  ).toHaveLength(1);
+  // No final text (a failed turn): every row stays.
+  expect(JSON.parse(serializeFinalSteps(steps, ""))).toHaveLength(5);
 });
 
 test("update_reasoning opens one evolving reasoning step with prose in detail", () => {

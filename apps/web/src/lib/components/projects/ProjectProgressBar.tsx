@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@eva/ui";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
 import {
   statusConfig,
   TASK_STATUSES,

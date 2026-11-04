@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { type PanInfo } from "motion/react";
-import { projectVelocity } from "@eva/ui";
+import { projectVelocity } from "@vvedantb/ui";
 
 interface MobileSidebarDrawerInput {
   pathname: string;

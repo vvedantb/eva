@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@eva/ui";
-import { useDisablePageMotion } from "@/lib/components/PageMotionProvider";
+import { useDisablePageMotion } from "@vvedantb/ui";
 
 const SEGMENTS = 32;
 
@@ -55,7 +55,10 @@ export function ScoreBar({
         }}
       >
         {Array.from({ length: SEGMENTS }, (_, i) => (
-          <span key={i} className={cn("h-3.5 flex-1 rounded-full", fillClass)} />
+          <span
+            key={i}
+            className={cn("h-3.5 flex-1 rounded-full", fillClass)}
+          />
         ))}
       </div>
     </div>

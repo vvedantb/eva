@@ -8,15 +8,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  CopyLinkMenuItem,
+} from "@vvedantb/ui";
 import { IconHammer, IconDots } from "@tabler/icons-react";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import {
   BusyMenuIcon,
   SandboxCommandMenuItems,
 } from "@/lib/components/sandbox/SandboxCommandMenuItems";
 import type { TaskStatus } from "../TaskStatusBadge";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 export interface MoreMenuVisibility {
   showResolveConflicts: boolean;

@@ -8,9 +8,9 @@ import {
   CardContent,
   Input,
   LIST_ROW_CONTROL_CLASS,
-  motionBase,
-  CircleSpinner,
-} from "@eva/ui";
+  tokenTransition,
+  Spinner,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -175,7 +175,7 @@ export function MultipleChoiceQuestion({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionBase}
+          transition={tokenTransition.base}
         >
           <div className="flex items-center justify-between">
             <p className="text-[15px] font-semibold leading-snug text-foreground">
@@ -183,10 +183,7 @@ export function MultipleChoiceQuestion({
             </p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               {q.header && (
-                <Badge
-                  variant="secondary"
-                  className="text-3xs font-semibold"
-                >
+                <Badge variant="secondary" className="text-3xs font-semibold">
                   {q.header}
                 </Badge>
               )}
@@ -346,7 +343,9 @@ export function MultipleChoiceQuestion({
           onClick={handleNext}
           disabled={!currentHasAnswer || isLoading}
         >
-          {isLoading ? <CircleSpinner size="sm" className="mr-2" /> : null}
+          {isLoading ? (
+            <Spinner variant="circle" size="sm" className="mr-2" />
+          ) : null}
           {isLastStep ? "Submit" : "Next"}
           {!isLoading && (
             <IconArrowRight size={15} strokeWidth={2.5} className="ml-1" />

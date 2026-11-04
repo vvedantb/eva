@@ -12,7 +12,7 @@ import {
   resetTurnCheckpoint,
 } from "../runtime/turnCheckpoint.js";
 
-export type ClaimedInteractionMode = "default" | "plan";
+type ClaimedInteractionMode = "default" | "plan";
 
 /** A claimed prompt and the durable lease that fences every write of its turn. */
 export type ClaimedTurn = {

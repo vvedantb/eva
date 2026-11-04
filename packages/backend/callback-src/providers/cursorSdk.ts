@@ -1,4 +1,11 @@
-import { mkdirSync, readFileSync } from "fs";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "fs";
+import * as nodeModule from "node:module";
 import type {
   Agent,
   AgentOptions,
@@ -14,6 +21,7 @@ import type {
 } from "@cursor/sdk";
 import type { SqliteLocalAgentStore } from "@cursor/sdk/sqlite";
 import {
+  CURSOR_RUNTIME_HOME_DIR,
   CURSOR_SDK_STORE_DIR,
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
@@ -267,8 +275,32 @@ type CursorSdkSqliteModule = {
   SqliteLocalAgentStore: typeof SqliteLocalAgentStore;
 };
 
-let loadedSdk: CursorSdkModule | null = null;
-let loadedSdkSqlite: CursorSdkSqliteModule | null = null;
+/**
+ * Node's on-disk V8 code cache for the SDK's ~11 MB of ESM. Every turn worker
+ * is a fresh process, so each turn re-compiled it: both imports measured 533ms
+ * median cold vs 410ms cached (n=12). Entries are keyed by file content and
+ * Node version, so a stale one is never used. Optional calls: the API landed
+ * in Node 22.1, and a cache failure must never block the import.
+ */
+function enableSdkCompileCache(): void {
+  try {
+    nodeModule.enableCompileCache?.();
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Writes the cache now: a cancelled worker dies by SIGTERM, not a clean exit. */
+function flushSdkCompileCache(): void {
+  try {
+    nodeModule.flushCompileCache?.();
+  } catch {
+    /* best-effort */
+  }
+}
+
+let loadedSdk: Promise<CursorSdkModule> | null = null;
+let loadedSdkSqlite: Promise<CursorSdkSqliteModule> | null = null;
 
 /**
  * Imports the Cursor SDK version `cursorParseLine` was written against. Taking
@@ -276,20 +308,28 @@ let loadedSdkSqlite: CursorSdkSqliteModule | null = null;
  * 1.0.x message type names exactly, so a drifted SDK streams events it drops on
  * the floor and the turn renders as a bare "Working..." for its whole duration.
  */
-async function loadCursorSdk(): Promise<CursorSdkModule> {
-  // Memoized so the warm daemon pays the resolve (`npm root -g`, manifest
-  // reads) and the import once for the whole session instead of once per turn.
-  // The one-shot path calls this exactly once, so nothing changes there.
-  if (loadedSdk) return loadedSdk;
-  const mod: CursorSdkModule = await import(
+function loadCursorSdk(): Promise<CursorSdkModule> {
+  // Memoized (as the promise, so `preloadCursorSdk` and the attempt share one
+  // import) so the warm daemon pays the resolve and the import once for the
+  // whole session instead of once per turn. A failed import is not cached.
+  enableSdkCompileCache();
+  loadedSdk ??= import(
     resolvePinnedSdkEntry({
       packageName: SDK_PACKAGE,
       version: SDK_VERSION,
       entryRelPath: SDK_ENTRY_RELPATH,
     })
+  ).then(
+    (mod: CursorSdkModule) => {
+      flushSdkCompileCache();
+      return mod;
+    },
+    (error: Error) => {
+      loadedSdk = null;
+      throw error;
+    },
   );
-  loadedSdk = mod;
-  return mod;
+  return loadedSdk;
 }
 
 /**
@@ -298,17 +338,40 @@ async function loadCursorSdk(): Promise<CursorSdkModule> {
  * the main entry does not pull in the sqlite driver, and the two imports must
  * stay independent for that to hold.
  */
-async function loadCursorSdkSqlite(): Promise<CursorSdkSqliteModule> {
-  if (loadedSdkSqlite) return loadedSdkSqlite;
-  const mod: CursorSdkSqliteModule = await import(
+function loadCursorSdkSqlite(): Promise<CursorSdkSqliteModule> {
+  enableSdkCompileCache();
+  loadedSdkSqlite ??= import(
     resolvePinnedSdkEntry({
       packageName: SDK_PACKAGE,
       version: SDK_VERSION,
       entryRelPath: SDK_SQLITE_ENTRY_RELPATH,
     })
+  ).then(
+    (mod: CursorSdkSqliteModule) => {
+      flushSdkCompileCache();
+      return mod;
+    },
+    (error: Error) => {
+      loadedSdkSqlite = null;
+      throw error;
+    },
   );
-  loadedSdkSqlite = mod;
-  return mod;
+  return loadedSdkSqlite;
+}
+
+/**
+ * Starts both SDK imports (~0.45s measured) so they overlap the turn worker's
+ * preflight and token round trips. Failures resurface at the real await in
+ * `runCursorSdkAttempt`.
+ */
+export function preloadCursorSdk(): void {
+  try {
+    loadCursorSdk().catch(() => undefined);
+    loadCursorSdkSqlite().catch(() => undefined);
+  } catch {
+    // A failed resolve throws synchronously; the attempt retries it and posts
+    // the failure completion the user sees.
+  }
 }
 
 function readPromptText(): string {
@@ -343,6 +406,121 @@ export function cursorModelCatalogJson(
   );
 }
 
+/** A model selection plus the catalog JSON to publish for agent setup. */
+type CursorModelResolution = {
+  selection: SdkModelSelection;
+  catalog: string | null;
+};
+
+/**
+ * `Cursor.models.list()` is an API key exchange plus a fetch: 1.3–2.1s
+ * measured, once 26s. Each turn runs in a fresh worker process, so every turn
+ * paid it before agent setup. Workers share the last resolution through this
+ * file instead (keyed by the inputs that shape it); see
+ * `resolveCursorModelSelection`.
+ */
+const CURSOR_MODEL_RESOLUTION_CACHE_FILE =
+  CURSOR_RUNTIME_HOME_DIR + "/model-resolution.json";
+const CURSOR_MODEL_RESOLUTION_MAX_AGE_MS = 60 * 60 * 1000;
+
+function cursorModelResolutionKey(): string {
+  return [
+    normalizedCursorModel,
+    cursorReasoningLevel,
+    String(cursorFastMode),
+    String(cursorUse1mContext),
+  ].join("|");
+}
+
+/** The cached resolution for this model config, or null when absent/stale. */
+function readCachedCursorModelResolution(): CursorModelResolution | null {
+  try {
+    const ageMs =
+      Date.now() - statSync(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
+    if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
+    const cached: JsonLike = JSON.parse(
+      readFileSync(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8"),
+    );
+    if (!cached || typeof cached !== "object" || Array.isArray(cached)) {
+      return null;
+    }
+    const selection = cached.selection;
+    if (
+      cached.key !== cursorModelResolutionKey() ||
+      typeof cached.catalog !== "string" ||
+      !selection ||
+      typeof selection !== "object" ||
+      Array.isArray(selection) ||
+      typeof selection.id !== "string"
+    ) {
+      return null;
+    }
+    const params: SdkModelParameterValue[] = [];
+    for (const param of Array.isArray(selection.params)
+      ? selection.params
+      : []) {
+      if (!param || typeof param !== "object" || Array.isArray(param)) continue;
+      if (typeof param.id !== "string" || typeof param.value !== "string") {
+        continue;
+      }
+      params.push({ id: param.id, value: param.value });
+    }
+    return {
+      selection:
+        params.length > 0 ? { id: selection.id, params } : { id: selection.id },
+      catalog: cached.catalog,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedCursorModelResolution(
+  resolution: CursorModelResolution,
+): void {
+  try {
+    mkdirSync(CURSOR_RUNTIME_HOME_DIR, { recursive: true });
+    const tmpFile =
+      CURSOR_MODEL_RESOLUTION_CACHE_FILE + "." + String(process.pid);
+    writeFileSync(
+      tmpFile,
+      JSON.stringify({ key: cursorModelResolutionKey(), ...resolution }),
+    );
+    // Atomic swap: a worker reading mid-write never sees a torn file.
+    renameSync(tmpFile, CURSOR_MODEL_RESOLUTION_CACHE_FILE);
+  } catch (error) {
+    log(
+      "resolveCursorModelSelection: cache write failed (" +
+        (error instanceof Error ? error.message : String(error)) +
+        ")",
+    );
+  }
+}
+
+/**
+ * Picks the model selection for this turn and publishes the model catalog the
+ * SDK would otherwise fetch again itself inside Agent.create/Agent.resume.
+ *
+ * A cached resolution from an earlier turn (same model config, under an hour
+ * old) skips the list wait; the list is then refreshed in the background for
+ * the next turn, so each turn still makes one list request, just off the
+ * critical path. Only a list that held the model is cached, so a model added
+ * since the last fetch is looked up fresh.
+ */
+async function resolveCursorModelSelection(
+  sdk: CursorSdkModule,
+): Promise<SdkModelSelection> {
+  const cached = readCachedCursorModelResolution();
+  const resolution = cached ?? (await fetchCursorModelSelection(sdk));
+  if (cached) {
+    void fetchCursorModelSelection(sdk).catch(() => undefined);
+  }
+  if (resolution.catalog) {
+    process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = resolution.catalog;
+  }
+  return resolution.selection;
+}
+
 /**
  * Builds the SDK ModelSelection for the configured eva model. Eva slugs bake a
  * reasoning level into the id (grok-4.5-low); the SDK's model list carries the
@@ -351,10 +529,56 @@ export function cursorModelCatalogJson(
  * parameter definition allowing the level value, then a variant carrying it.
  * A reasoning miss (no level, list unavailable, model/parameter absent) keeps
  * the base id and any explicitly selected Fast or context parameters.
+ *
+ * The list is fetched even for a model with no level or mode params: without
+ * the published catalog the SDK fetches the same list inside agent setup
+ * (1.3s measured), and with it the result can be cached.
  */
-async function resolveCursorModelSelection(
+async function fetchCursorModelSelection(
   sdk: CursorSdkModule,
-): Promise<SdkModelSelection> {
+): Promise<CursorModelResolution> {
+  const base = normalizedCursorModel;
+  let models: SdkModel[] | null = null;
+  try {
+    const list = sdk.Cursor?.models?.list;
+    if (list) {
+      // The fetch had no deadline of its own, so a hung list could burn the
+      // whole turn before agent setup even started.
+      const listed = await waitForCursorPhase({
+        task: list(),
+        phase: "fetching the model list",
+        timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS,
+      });
+      if (Array.isArray(listed)) models = listed;
+    }
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    log(
+      "resolveCursorModelSelection: model list failed — keeping opted-in params only (" +
+        messageText +
+        ")",
+    );
+  }
+  const model = models?.find(
+    (entry) => entry && typeof entry === "object" && entry.id === base,
+  );
+  if (models && !model) {
+    log(
+      "resolveCursorModelSelection: model " +
+        base +
+        " not in Cursor.models.list — keeping opted-in params only",
+    );
+  }
+  const catalog = models ? cursorModelCatalogJson(models) : null;
+  const selection = selectCursorModel(model);
+  if (catalog && model) {
+    writeCachedCursorModelResolution({ selection, catalog });
+  }
+  return { selection, catalog };
+}
+
+/** The selection for the configured model, given its list entry (if any). */
+function selectCursorModel(model: SdkModel | undefined): SdkModelSelection {
   const base = normalizedCursorModel;
   const level = cursorReasoningLevel;
   // Cursor first-party models can default to their higher-priced Fast variant,
@@ -362,53 +586,6 @@ async function resolveCursorModelSelection(
   // confirms the undocumented id (filterModeParamsByModel). Context is opt-in.
   const candidates = cursorModeParams(base, cursorFastMode, cursorUse1mContext);
   const opted = { fastMode: cursorFastMode, use1mContext: cursorUse1mContext };
-  if (candidates.length === 0 && !level) {
-    return { id: base };
-  }
-
-  let model: SdkModel | undefined;
-  let listUnavailable = false;
-  try {
-    const list = sdk.Cursor?.models?.list;
-    if (list) {
-      // The fetch had no deadline of its own, so a hung list could burn the
-      // whole turn before agent setup even started.
-      const models = await waitForCursorPhase({
-        task: list(),
-        phase: "fetching the model list",
-        timeoutMs: CURSOR_AGENT_SETUP_TIMEOUT_MS,
-      });
-      if (Array.isArray(models)) {
-        // Hand the SDK the list it would otherwise fetch again itself inside
-        // Agent.create/Agent.resume, so agent setup stays local.
-        const catalog = cursorModelCatalogJson(models);
-        if (catalog) process.env[CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV] = catalog;
-      }
-      model = Array.isArray(models)
-        ? models.find(
-            (entry) => entry && typeof entry === "object" && entry.id === base,
-          )
-        : undefined;
-      if (!model) {
-        log(
-          "resolveCursorModelSelection: model " +
-            base +
-            " not in Cursor.models.list — keeping opted-in params only",
-        );
-      }
-    } else {
-      listUnavailable = true;
-    }
-  } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
-    listUnavailable = true;
-    log(
-      "resolveCursorModelSelection: model list failed — keeping opted-in params only (" +
-        messageText +
-        ")",
-    );
-  }
-
   const params = filterModeParamsByModel(candidates, model, opted);
   if (params.length < candidates.length && model) {
     log(
@@ -422,7 +599,7 @@ async function resolveCursorModelSelection(
         " — dropped",
     );
   }
-  if (!level || listUnavailable || !model) {
+  if (!level || !model) {
     return params.length > 0 ? { id: base, params } : { id: base };
   }
 

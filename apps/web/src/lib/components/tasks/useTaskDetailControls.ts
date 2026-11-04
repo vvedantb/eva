@@ -1,13 +1,12 @@
 "use client";
 
-import { toast } from "@eva/ui";
+import { toast, convexErrorMessage } from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import type { TaskDetailTab } from "./_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";

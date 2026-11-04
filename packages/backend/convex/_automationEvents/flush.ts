@@ -35,7 +35,7 @@ const FEEDBACK_LOOKBACK_MS = 60_000;
 /** How long a review batch waits for an earlier one for the same PR. */
 const SIBLING_RETRY_MS = 30_000;
 
-interface RepoRef {
+export interface RepoRef {
   octokit: Octokit;
   owner: string;
   repo: string;
@@ -80,7 +80,7 @@ async function fetchFailedChecks(
  * Review feedback on a PR newer than `after`. Every page, so a long-running PR
  * past 100 reviews or comments still has its newest ones seen.
  */
-async function fetchFeedback(
+export async function fetchFeedback(
   { octokit, owner, repo }: RepoRef,
   prNumber: number,
   after: number,

@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogFooter,
   DialogBody,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import { IconHammer, IconMessage } from "@tabler/icons-react";

@@ -5,10 +5,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@eva/ui";
+  MarqueeOnHover,
+} from "@vvedantb/ui";
 import { IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 
 export interface BreadcrumbSwitcherItem {
   key: string;

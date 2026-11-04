@@ -9,8 +9,8 @@ import {
   getSpeechRecognition,
   usePromptInputController,
   useSpeechRecognition,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+} from "@vvedantb/ui";
 import { useGatewayDictation } from "@/lib/hooks/useGatewayDictation";
 import { useTranscriptPolish } from "@/lib/hooks/useTranscriptPolish";
 
@@ -83,12 +83,13 @@ function GatewaySpeechButton({
       // The tooltip is hover-only, so on touch this is the button's only name.
       aria-label={label}
       onClick={() => handleToggle({ isListening, toggle })}
-      disabled={disabled || isConnecting || isPolishing}
+      // Clickable while connecting: the click cancels a slow mic prompt.
+      disabled={disabled || isPolishing}
       className={isListening && !isConnecting ? "text-destructive" : undefined}
     >
       <CrossfadeIconSlot iconKey={iconKey}>
         {iconKey === "connecting" ? (
-          <CircleSpinner size="sm" />
+          <Spinner variant="circle" size="sm" />
         ) : iconKey === "listening" ? (
           <IconPlayerStop className="size-4" />
         ) : (
@@ -135,7 +136,7 @@ function WebSpeechButton({
     >
       <CrossfadeIconSlot iconKey={iconKey}>
         {iconKey === "connecting" ? (
-          <CircleSpinner size="sm" />
+          <Spinner variant="circle" size="sm" />
         ) : iconKey === "listening" ? (
           <IconPlayerStop className="size-4" />
         ) : (

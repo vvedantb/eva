@@ -2,6 +2,7 @@
 
 import { useQueryState } from "nuqs";
 import { docModeParser, type DocMode } from "@/lib/search-params";
+import { cn } from "@eva/ui";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -9,8 +10,7 @@ import {
   DropdownMenuItem,
   Button,
   CrossfadeIconSlot,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPencil, IconMessageDots, IconEye } from "@tabler/icons-react";
 
 const MODE_CONFIG: Record<DocMode, { label: string; icon: typeof IconPencil }> =

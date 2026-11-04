@@ -1,0 +1,182 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.ib .ib-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.ib .ib-body {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ss-surface);
+}
+
+/* List pane */
+.ib .ib-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--ss-line);
+}
+
+.ib .ib-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 44px;
+  padding: 0 16px 0 32px;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+.ib .ib-head__title {
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ib .ib-unread {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--ss-radius-pill);
+  background: var(--ss-accent-soft);
+  color: var(--ss-text-strong);
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ib .ib-rows {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px 0;
+}
+
+/* Every row keeps a dot column inside its own fill, as Eva's inbox does. */
+.ib .ib-row {
+  padding-left: 24px;
+  --ss-row-title: 12.5px;
+  --ss-row-subtitle: 12px;
+  --ss-row-line: 17px;
+  --ss-row-line-2: 17px;
+}
+
+.ib .ib-row .ss-row__title {
+  font-weight: 500;
+}
+
+.ib .ib-row:not([data-unread]):not([data-selected]) .ss-row__title {
+  color: var(--ss-text);
+  font-weight: 400;
+}
+
+/* Rows that drop in carry the rows below on one layer, so text never steps. */
+.ib .ib-row,
+.ib .ib-card {
+  will-change: transform;
+}
+
+.ib .ib-lead {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-fill);
+  color: var(--ss-icon);
+}
+
+.ib .ib-lead[data-tone="accent"] {
+  background: var(--ss-accent-soft);
+  color: var(--ss-text-strong);
+}
+
+.ib .ib-lead[data-tone="danger"] {
+  background: var(--ss-danger-soft);
+  color: var(--ss-danger-text);
+}
+
+.ib .ib-lead[data-tone="filler"] {
+  background: var(--ss-well);
+}
+
+/* Detail pane */
+.ib .ib-detail {
+  padding: 28px 32px;
+  background: var(--ss-surface);
+}
+
+.ib .ib-card {
+  display: grid;
+  justify-items: start;
+}
+
+.ib .ib-card .ib-lead {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 14px;
+}
+
+.ib .ib-card__title {
+  color: var(--ss-text-strong);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ib .ib-card__sub {
+  margin-top: 4px;
+  color: var(--ss-text);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.ib .ib-card__lines {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0 24px;
+}
+
+.ib .ib-button {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-fill);
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.ib .ib-button[data-primary] {
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+}
+
+/* Compact: the list alone, across the phone column. */
+.ib .ss-stage[data-layout="compact"] .ib-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.ib .ss-stage[data-layout="compact"] .ib-body {
+  grid-template-columns: 326px;
+}
+
+.ib .ss-stage[data-layout="compact"] .ib-list {
+  border-right: 0;
+}
+
+.ib .ss-stage[data-layout="compact"] .ib-detail {
+  display: none;
+}

@@ -1,17 +1,18 @@
+import { cn } from "@eva/ui";
 import {
-  cn,
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
-  motionFast,
+  tokenTransition,
   ProviderIcon,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
-import { Markdown } from "@eva/ui/markdown";
+  Markdown,
+} from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
+import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -29,6 +30,8 @@ import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage
 import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
+import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
+import type { FeedbackSentiment } from "@/lib/components/chat/feedback/feedbackRows";
 import { ChatMessageContextMenu } from "@/lib/components/chat/ChatMessageContextMenu";
 import {
   useTurnCheckpointActions,
@@ -42,7 +45,8 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
-import { IconGitFork } from "@tabler/icons-react";
+import { IconGitFork, IconLink } from "@tabler/icons-react";
+import { copyMessageLink } from "@/lib/components/chat/messageLink";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import type {
@@ -117,6 +121,14 @@ interface ChatMessageProps {
   isLatestAssistantTurn: boolean;
   /** False in simple view, which hides diff surfaces entirely. */
   showChangedFiles?: boolean;
+  /**
+   * False in simple view: drops the meta row under every turn (user: time,
+   * copy, fork; assistant: model, copy, fork, time · duration). Copy and fork
+   * stay on the right-click menu.
+   */
+  showTurnMeta?: boolean;
+  /** The viewer's `scopeCheck` experimental flag. */
+  showScopeCheck?: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: (messageId: string, expanded: boolean) => void;
   /** True when this user turn belongs to a teammate (left-aligned). */
@@ -152,6 +164,8 @@ interface ChatMessageProps {
   turnCheckpoint?: TurnCheckpointContext;
   /** Flash the row after a citation chip jumps here. */
   citeHighlight?: boolean;
+  /** Flash the row a shared message link (`?message=<id>`) opened at. */
+  linkHighlight?: boolean;
   /**
    * Sessions: start a new chat with the transcript through this message. Takes
    * the id so the parent can pass one stable handler to every row — a per-row
@@ -179,6 +193,19 @@ interface ChatMessageProps {
    * is never dropped.
    */
   belowContent?: ReactNode;
+  /**
+   * Artifacts saved in this turn (`create_artifact`). They sit with the turn's
+   * output, like media, and never take the prose's slot behind a tab.
+   */
+  artifacts?: ReactNode;
+  /**
+   * Shows thumbs up / down on a finished assistant turn. False on surfaces
+   * with no chat parent (Manager Ave) and in simple view's hidden meta row.
+   */
+  canRate?: boolean;
+  /** The viewer's saved rating and comment on this turn, if any. */
+  feedbackSentiment?: FeedbackSentiment;
+  feedbackComment?: string;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -187,6 +214,8 @@ export const ChatMessage = memo(function ChatMessage({
   repo,
   isLatestAssistantTurn,
   showChangedFiles = true,
+  showTurnMeta = true,
+  showScopeCheck = false,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   isOtherUser = false,
@@ -204,10 +233,15 @@ export const ChatMessage = memo(function ChatMessage({
   sandboxRunning,
   turnCheckpoint,
   citeHighlight = false,
+  linkHighlight = false,
   onFork,
   onRetryTurn,
   precedingUser,
   belowContent,
+  artifacts,
+  canRate = false,
+  feedbackSentiment,
+  feedbackComment,
 }: ChatMessageProps) {
   const checkpoint = useTurnCheckpointActions({
     message,
@@ -224,10 +258,15 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
+  const turnState = getAssistantTurnState(message);
   const copySource = turnCopySource(message.content, streamingContent);
   const copyPlain = copySource ? tokenizedToDisplayText(copySource) : undefined;
-  const forkAction = buildForkAction(onFork, message._id);
-  const rowActions = [...(forkAction ? [forkAction] : []), ...checkpoint.items];
+  // A reply still streaming has nothing worth linking to yet.
+  const userActions = [
+    turnState.isStreamingPlaceholder ? undefined : buildLinkAction(message._id),
+    buildForkAction(onFork, message._id),
+  ].filter((action): action is ChatMessageActionItem => action !== undefined);
+  const rowActions = [...userActions, ...checkpoint.items];
 
   return (
     <>
@@ -236,10 +275,11 @@ export const ChatMessage = memo(function ChatMessage({
           data-message-id={message._id}
           initial={animateIn ? { opacity: 0, y: 10 } : false}
           animate={{ opacity: 1, y: 0 }}
-          transition={motionFast}
-          className={
-            citeHighlight ? "rounded-md ring-2 ring-primary/50" : undefined
-          }
+          transition={tokenTransition.fast}
+          className={cn(
+            citeHighlight && "rounded-md ring-2 ring-primary/50",
+            linkHighlight && "rounded-md t-anchor-flash",
+          )}
         >
           <AIMessage
             from={message.role}
@@ -255,14 +295,19 @@ export const ChatMessage = memo(function ChatMessage({
                 senderFirstName={senderFirstName}
                 isHandoffBoundary={isHandoffBoundary}
                 belowContent={belowContent}
+                artifacts={artifacts}
+                showTurnMeta={showTurnMeta}
                 copyPlain={copyPlain}
-                forkAction={forkAction}
+                userActions={userActions}
               />
             ) : (
               <AssistantTurn
                 message={message}
+                turnState={turnState}
                 isLatestAssistantTurn={isLatestAssistantTurn}
                 showChangedFiles={showChangedFiles}
+                showTurnMeta={showTurnMeta}
+                showScopeCheck={showScopeCheck}
                 changedFilesExpanded={changedFilesExpanded}
                 onChangedFilesExpandedChange={onChangedFilesExpandedChange}
                 turnModel={turnModel}
@@ -278,8 +323,12 @@ export const ChatMessage = memo(function ChatMessage({
                 onRetryTurn={onRetryTurn}
                 precedingUser={precedingUser}
                 belowContent={belowContent}
+                artifacts={artifacts}
                 copyPlain={copyPlain}
                 rowActions={rowActions}
+                canRate={canRate}
+                feedbackSentiment={feedbackSentiment}
+                feedbackComment={feedbackComment}
               />
             )}
           </AIMessage>
@@ -309,6 +358,17 @@ function buildForkAction(
     : undefined;
 }
 
+function buildLinkAction(
+  messageId: ChatBodyMessage["_id"],
+): ChatMessageActionItem {
+  return {
+    key: "copy-link",
+    label: "Copy link",
+    icon: <IconLink className="size-4" />,
+    onClick: () => copyMessageLink(messageId),
+  };
+}
+
 function UserTurn({
   message,
   repo,
@@ -316,8 +376,10 @@ function UserTurn({
   senderFirstName,
   isHandoffBoundary,
   belowContent,
+  artifacts,
+  showTurnMeta,
   copyPlain,
-  forkAction,
+  userActions,
 }: {
   message: ChatBodyMessage;
   repo?: ChatRepo;
@@ -325,8 +387,10 @@ function UserTurn({
   senderFirstName?: string;
   isHandoffBoundary: boolean;
   belowContent?: ReactNode;
+  artifacts?: ReactNode;
+  showTurnMeta: boolean;
   copyPlain?: string;
-  forkAction?: ChatMessageActionItem;
+  userActions: ChatMessageActionItem[];
 }) {
   // Two MCP provenances, never both on one row: a child chat shows the turns
   // posted from outside the composer, Eva shows the wake-ups its children fired.
@@ -382,13 +446,18 @@ function UserTurn({
       {belowContent ? (
         <div className="mt-1 flex w-full flex-col gap-2">{belowContent}</div>
       ) : null}
-      <UserMessageMeta
-        align={isOtherUser ? "start" : "end"}
-        copyPlain={copyPlain}
-        actions={forkAction ? [forkAction] : []}
-        timestamp={message.timestamp}
-        className={isOtherUser ? "pl-6" : undefined}
-      />
+      {artifacts ? (
+        <div className="mt-1 flex w-full flex-col gap-2">{artifacts}</div>
+      ) : null}
+      {showTurnMeta ? (
+        <UserMessageMeta
+          align={isOtherUser ? "start" : "end"}
+          copyPlain={copyPlain}
+          actions={userActions}
+          timestamp={message.timestamp}
+          className={isOtherUser ? "pl-6" : undefined}
+        />
+      ) : null}
     </div>
   );
 }
@@ -437,8 +506,11 @@ function UserTurnBubble({
 
 interface AssistantTurnProps {
   message: ChatBodyMessage;
+  turnState: ReturnType<typeof getAssistantTurnState>;
   isLatestAssistantTurn: boolean;
   showChangedFiles: boolean;
+  showTurnMeta: boolean;
+  showScopeCheck: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: ChatMessageProps["onChangedFilesExpandedChange"];
   turnModel?: string;
@@ -454,14 +526,21 @@ interface AssistantTurnProps {
   onRetryTurn?: ChatMessageProps["onRetryTurn"];
   precedingUser?: ChatMessageProps["precedingUser"];
   belowContent?: ReactNode;
+  artifacts?: ReactNode;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  canRate: boolean;
+  feedbackSentiment?: FeedbackSentiment;
+  feedbackComment?: string;
 }
 
 function AssistantTurn({
   message,
+  turnState,
   isLatestAssistantTurn,
   showChangedFiles,
+  showTurnMeta,
+  showScopeCheck,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   turnModel,
@@ -477,8 +556,12 @@ function AssistantTurn({
   onRetryTurn,
   precedingUser,
   belowContent,
+  artifacts,
   copyPlain,
   rowActions,
+  canRate,
+  feedbackSentiment,
+  feedbackComment,
 }: AssistantTurnProps) {
   const turnErrorTitle = getTurnErrorTitle({
     errorType: message.errorType,
@@ -497,6 +580,7 @@ function AssistantTurn({
     <>
       <AssistantTurnContent
         message={message}
+        turnState={turnState}
         isLatestAssistantTurn={isLatestAssistantTurn}
         showChangedFiles={showChangedFiles}
         changedFilesExpanded={changedFilesExpanded}
@@ -514,6 +598,9 @@ function AssistantTurn({
         turnErrorTitle={turnErrorTitle}
         panelTabs={panelTabs}
       />
+      {artifacts ? (
+        <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+      ) : null}
       {/* Sits above `belowContent` so agent-composed panels keep
           their promised slot directly over the meta row, and so the
           chip stays next to the changed-files card it judges.
@@ -522,7 +609,7 @@ function AssistantTurn({
           reader who needs it. The hover card's per-hunk rows only
           link out when the diff surface exists — simple view bounces
           away from that tab, so they degrade to plain rows there. */}
-      {message.scopeCheck ? (
+      {showScopeCheck && message.scopeCheck ? (
         <div className="mt-1">
           <ScopeCheckChip
             check={message.scopeCheck}
@@ -535,14 +622,19 @@ function AssistantTurn({
       {belowContent && !panelTabs ? (
         <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
       ) : null}
-      <AssistantTurnMeta
-        message={message}
-        turnModel={turnModel}
-        turnReasoningLevel={turnReasoningLevel}
-        turnCredentialSourceLabel={turnCredentialSourceLabel}
-        copyPlain={copyPlain}
-        rowActions={rowActions}
-      />
+      {showTurnMeta ? (
+        <AssistantTurnMeta
+          message={message}
+          turnModel={turnModel}
+          turnReasoningLevel={turnReasoningLevel}
+          turnCredentialSourceLabel={turnCredentialSourceLabel}
+          copyPlain={copyPlain}
+          rowActions={rowActions}
+          canRate={canRate && !turnState.isStreamingPlaceholder}
+          feedbackSentiment={feedbackSentiment}
+          feedbackComment={feedbackComment}
+        />
+      ) : null}
     </>
   );
 }
@@ -554,6 +646,7 @@ function AssistantTurn({
  */
 function AssistantTurnContent({
   message,
+  turnState,
   isLatestAssistantTurn,
   showChangedFiles,
   changedFilesExpanded,
@@ -572,23 +665,35 @@ function AssistantTurnContent({
   panelTabs,
 }: Omit<
   AssistantTurnProps,
+  | "showTurnMeta"
+  | "showScopeCheck"
   | "turnModel"
   | "turnReasoningLevel"
   | "turnCredentialSourceLabel"
+  | "artifacts"
   | "copyPlain"
   | "rowActions"
+  | "canRate"
+  | "feedbackSentiment"
+  | "feedbackComment"
 > & {
   turnErrorTitle: string | null;
   panelTabs: boolean;
 }) {
-  const { isStreamingPlaceholder, changedFiles, questionSteps } =
-    getAssistantTurnState(message);
+  const activityLayout = useActivityLayout();
+  const { isStreamingPlaceholder, changedFiles, questionSteps } = turnState;
   // While the turn is live the settled activityLog is not written yet, so the
   // just-answered question comes off the streaming payload instead — that is
   // what makes the record appear the moment the user submits.
-  const streamingQuestionSteps = isStreamingPlaceholder
-    ? collectQuestionSteps(parseActivitySteps(streamingActivity) ?? [])
+  const streamingSteps = isStreamingPlaceholder
+    ? (parseActivitySteps(streamingActivity) ?? [])
     : [];
+  const streamingQuestionSteps = collectQuestionSteps(streamingSteps);
+  // Inline layout already shows the live text between the steps. Older
+  // callbacks send no response steps, so the text block stays for them.
+  const streamingTextIsInline =
+    activityLayout === "inline" &&
+    streamingSteps.some((step) => step.type === "response");
 
   const mediaEntries = message.media ?? [];
 
@@ -618,9 +723,11 @@ function AssistantTurnContent({
           />
           {agentSpawnRow}
           <AssistantQuestionCards steps={streamingQuestionSteps} />
-          {streamingContent ? (
+          {streamingContent && !streamingTextIsInline ? (
             <div data-assistant-cite-source={message._id}>
-              <Markdown className="mt-2">{streamingContent}</Markdown>
+              <Markdown className="mt-2" mode="streaming">
+                {streamingContent}
+              </Markdown>
             </div>
           ) : null}
         </>
@@ -711,7 +818,7 @@ function AssistantTurnOutcome({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <TurnErrorNotice
             title={turnErrorTitle}
@@ -726,7 +833,7 @@ function AssistantTurnOutcome({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           {panelTabs ? (
             <ChatUiPanelTabs panel={belowContent} text={turnProse} />
@@ -746,6 +853,9 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel,
   copyPlain,
   rowActions,
+  canRate,
+  feedbackSentiment,
+  feedbackComment,
 }: {
   message: ChatBodyMessage;
   turnModel?: string;
@@ -753,6 +863,10 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel?: string;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** False while the reply still streams: nothing to rate yet. */
+  canRate: boolean;
+  feedbackSentiment?: FeedbackSentiment;
+  feedbackComment?: string;
 }) {
   if (!(turnModel || copyPlain || rowActions.length > 0)) return null;
   return (
@@ -772,6 +886,13 @@ function AssistantTurnMeta({
             className="ml-0.5"
             revealOnHover={false}
           />
+          {canRate ? (
+            <TurnFeedbackActions
+              messageId={message._id}
+              sentiment={feedbackSentiment}
+              comment={feedbackComment}
+            />
+          ) : null}
           {message.finishedAt && message.timestamp ? (
             <span className="text-2xs tabular-nums text-muted-foreground/60">
               {/* The turn's clock time is when Eva finished, not
@@ -807,10 +928,7 @@ function UserMessageBody({
       />
       {message.content ? (
         <CollapsibleUserMessageBody text={message.content}>
-          <ReviewCommentMessage
-            text={message.content}
-            repo={repo}
-          />
+          <ReviewCommentMessage text={message.content} repo={repo} />
         </CollapsibleUserMessageBody>
       ) : null}
     </>
@@ -838,7 +956,7 @@ function HandoffModelChip({
       )}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionFast}
+      transition={tokenTransition.fast}
     >
       <ProviderIcon provider={option.provider} size={10} />
       {formatModelDisplayLabel(option.provider, option.label)}

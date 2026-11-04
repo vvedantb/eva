@@ -259,29 +259,35 @@ export async function ensureEvaMcpServers(
       log("opencode mcp.status failed: " + resultFailure(status));
       return;
     }
-    for (const [name, server] of configured) {
-      if (status.data[name]) continue;
-      const added = await client.mcp.add({
-        body: {
-          name,
-          config: {
-            type: "remote",
-            url: server.url,
-            headers: server.headers,
-            enabled: true,
-          },
-        },
-      });
-      log(
-        added.data
-          ? "opencode mcp server " +
-              name +
-              " registered (" +
-              (added.data[name]?.status ?? "unknown") +
-              ")"
-          : "opencode mcp.add " + name + " failed: " + resultFailure(added),
-      );
-    }
+    const known = status.data;
+    // Each add is a full remote connect; in parallel eva + linear measured
+    // ~1.5s instead of ~2.5s serially.
+    await Promise.all(
+      configured
+        .filter(([name]) => !known[name])
+        .map(async ([name, server]) => {
+          const added = await client.mcp.add({
+            body: {
+              name,
+              config: {
+                type: "remote",
+                url: server.url,
+                headers: server.headers,
+                enabled: true,
+              },
+            },
+          });
+          log(
+            added.data
+              ? "opencode mcp server " +
+                  name +
+                  " registered (" +
+                  (added.data[name]?.status ?? "unknown") +
+                  ")"
+              : "opencode mcp.add " + name + " failed: " + resultFailure(added),
+          );
+        }),
+    );
   } catch (error) {
     log(
       "opencode mcp registration failed: " +
@@ -350,8 +356,11 @@ export async function runOpencodeSdkAttempt(
   let resultIsError = false;
   let attemptErrorMessage = "";
 
-  const sdk = await loadOpencodeSdk();
-  const baseUrl = await ensureOpencodeServer();
+  // The SDK import (~40ms) overlaps the health probe or a cold server start.
+  const [sdk, baseUrl] = await Promise.all([
+    loadOpencodeSdk(),
+    ensureOpencodeServer(),
+  ]);
   const client: OpencodeClientLike = sdk.createOpencodeClient({
     baseUrl,
     // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
@@ -360,7 +369,9 @@ export async function runOpencodeSdkAttempt(
     // rebuild needed.
     directory: AGENT_CWD,
   });
-  await ensureEvaMcpServers(client);
+  // Registration overlaps session setup and the event subscription; it only
+  // has to land before the prompt. Never throws (best-effort by design).
+  const mcpRegistered = ensureEvaMcpServers(client);
 
   const persistSessionId = (sessionId: string): void => {
     S.activeOpencodeSessionId = sessionId;
@@ -575,6 +586,7 @@ export async function runOpencodeSdkAttempt(
     // error rather than the presence of data. Without this check a rejected
     // prompt (bad model id, deleted session) would silently wait for events
     // that never come.
+    await mcpRegistered;
     const accepted = await client.session.promptAsync({
       path: { id: sessionId },
       body: {

@@ -2,27 +2,20 @@
 
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { toast } from "@eva/ui";
+import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { ConfirmDialog } from "./ConfirmDialog";
 
 /** Deletes a quick task. Shared by the confirm dialog and Alt-click bypass. */
 export function useDeleteAgentTask() {
   const { repoId } = useRepo();
   return useMutation(api.agentTasks.deleteCascade).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.filter((task) => task._id !== args.id),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+        cur.filter((task) => task._id !== args.id),
+      );
     },
   );
 }
@@ -57,6 +50,7 @@ export function DeleteTaskDialog({
 
   return (
     <ConfirmDialog
+      size="md"
       open={open}
       onOpenChange={(v) => {
         if (!v) onClose();
@@ -67,11 +61,15 @@ export function DeleteTaskDialog({
           Are you sure you want to delete <strong>{taskTitle}</strong>?
         </>
       }
-      detail="This action cannot be undone."
+      body={
+        <p className="text-sm text-muted-foreground">
+          This action cannot be undone.
+        </p>
+      }
       confirmLabel="Delete"
       variant="destructive"
       onConfirm={handleDelete}
-      isLoading={isDeleting}
+      pending={isDeleting}
     />
   );
 }

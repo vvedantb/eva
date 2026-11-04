@@ -33,6 +33,8 @@ export const COMPLETE_SYNTHETIC_TURN_MUTATION =
   process.env.COMPLETE_SYNTHETIC_TURN_MUTATION;
 export const UPDATE_BACKGROUND_AGENTS_MUTATION =
   process.env.UPDATE_BACKGROUND_AGENTS_MUTATION;
+/** Mirrors Claude's native `/goal` onto the chat doc (see parse/claudeGoal.ts). */
+export const UPDATE_GOAL_MUTATION = process.env.UPDATE_GOAL_MUTATION;
 export const REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 export const PROVIDER = process.env.AI_PROVIDER || "claude";
 export const MODEL =

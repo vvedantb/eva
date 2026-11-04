@@ -2,7 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@eva/ui";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
 import {
   phaseConfig,
   type ProjectPhase,

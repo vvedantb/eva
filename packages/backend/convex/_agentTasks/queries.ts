@@ -9,10 +9,12 @@ import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
+  awaitingAnswerEntityIdsForRepo,
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 
 /** Validator for a task document enriched with its latest run and busy state. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -22,6 +24,8 @@ export const agentTaskWithLastRunValidator = v.object({
   isExecuting: v.boolean(),
   /** Unread chat reply for this user (`chatReads.ts`). Autonomous runs do not count. */
   hasUnread: v.boolean(),
+  /** A chat turn is paused on a blocking question for the user. */
+  isAwaitingAnswer: v.boolean(),
 });
 
 function repoIdsOf(
@@ -34,13 +38,17 @@ function repoIdsOf(
   return repoIds;
 }
 
-/** Open chat turns across every repo the tasks belong to, one query per repo. */
-async function openChatEntityIdsForRepos(
+/** Per-repo turn ids across every repo the tasks belong to, one query per repo. */
+async function turnIdsForRepos(
   db: QueryCtx["db"],
   tasks: ReadonlyArray<Doc<"agentTasks">>,
+  idsForRepo: (
+    db: QueryCtx["db"],
+    repoId: Id<"githubRepos">,
+  ) => Promise<ReadonlySet<string>>,
 ): Promise<ReadonlySet<string>> {
   const sets = await Promise.all(
-    [...repoIdsOf(tasks)].map((repoId) => openChatEntityIdsForRepo(db, repoId)),
+    [...repoIdsOf(tasks)].map((repoId) => idsForRepo(db, repoId)),
   );
   return new Set(sets.flatMap((set) => [...set]));
 }
@@ -51,28 +59,30 @@ async function enrichTasksWithLastRun(
   userId: Id<"users">,
   tasks: Array<Doc<"agentTasks">>,
 ) {
-  const repoIds = repoIdsOf(tasks);
-  const openChatEntityIds = await openChatEntityIdsForRepos(db, tasks);
+  const repoIds = [...repoIdsOf(tasks)];
+  const [openChatEntityIds, awaitingAnswerIds, unreadByRepo, summaryGroups] =
+    await Promise.all([
+      turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
+      turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
+      Promise.all(
+        repoIds.map((repoId) => unreadLookupForRepo(db, userId, repoId)),
+      ),
+      Promise.all(
+        repoIds.map((repoId) =>
+          db
+            .query("agentTaskRunSummaries")
+            .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+            .collect(),
+        ),
+      ),
+    ]);
   const unreadLookups = new Map<
     string,
     (task: Doc<"agentTasks">) => Promise<boolean>
   >();
-  await Promise.all(
-    [...repoIds].map(async (repoId) => {
-      unreadLookups.set(
-        String(repoId),
-        await unreadLookupForRepo(db, userId, repoId),
-      );
-    }),
-  );
-  const summaryGroups = await Promise.all(
-    [...repoIds].map((repoId) =>
-      db
-        .query("agentTaskRunSummaries")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect(),
-    ),
-  );
+  repoIds.forEach((repoId, i) => {
+    unreadLookups.set(String(repoId), unreadByRepo[i]);
+  });
   const summariesByTask = new Map(
     summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
   );
@@ -83,12 +93,14 @@ async function enrichTasksWithLastRun(
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
       const unreadLookup = unreadLookups.get(String(task.repoId));
       const hasUnread = unreadLookup ? await unreadLookup(task) : false;
+      const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       if (summary) {
         return {
           ...task,
           lastRunStartedAt: summary.lastRunStartedAt,
           isExecuting,
           hasUnread,
+          isAwaitingAnswer,
         };
       }
       // Migration-safe fallback for tasks whose summary row is not backfilled.
@@ -102,6 +114,7 @@ async function enrichTasksWithLastRun(
         lastRunStartedAt: latestRun?.startedAt,
         isExecuting,
         hasUnread,
+        isAwaitingAnswer,
       };
     }),
   );
@@ -214,29 +227,8 @@ async function activeTasksForUser(
       if (!(await hasRepoAccess(ctx.db, args.repoId, ctxUserId))) return [];
       repoIds = [args.repoId];
     } else {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", ctxUserId))
-        .collect();
-      const teamRepos = await Promise.all(
-        memberships.map((m) =>
-          ctx.db
-            .query("githubRepos")
-            .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-            .collect(),
-        ),
-      );
-      const connectedRepos = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", ctxUserId))
-        .collect();
-      const seen = new Set<string>();
-      repoIds = [];
-      for (const repo of [...connectedRepos, ...teamRepos.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        repoIds.push(repo._id);
-      }
+      const repos = await gatherAccessibleRepos(ctx.db, ctxUserId, true);
+      repoIds = repos.map((repo) => repo._id);
     }
 
     const taskArrays = await Promise.all(
@@ -296,7 +288,11 @@ export const getActiveTasksSlim = authQuery({
     ctx,
   ): Promise<Array<Infer<typeof orchestratorTaskValidator>>> => {
     const tasks = await activeTasksForUser(ctx, ctx.userId);
-    const openChatEntityIds = await openChatEntityIdsForRepos(ctx.db, tasks);
+    const openChatEntityIds = await turnIdsForRepos(
+      ctx.db,
+      tasks,
+      openChatEntityIdsForRepo,
+    );
     return tasks.map((task) => ({
       _id: task._id,
       _creationTime: task._creationTime,
@@ -374,7 +370,12 @@ export const getDependentTasks = authQuery({
   },
 });
 
-/** Returns the status of multiple tasks by their IDs. */
+type TaskStatusRow = {
+  id: Id<"agentTasks">;
+  status: Doc<"agentTasks">["status"];
+};
+
+/** Returns the status of the given tasks the caller can access. */
 export const getStatusesByIds = authQuery({
   args: { ids: v.array(v.id("agentTasks")) },
   returns: v.array(
@@ -384,10 +385,16 @@ export const getStatusesByIds = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const tasks = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return tasks
-      .filter((t): t is Exclude<typeof t, null> => t !== null)
-      .map((t) => ({ id: t._id, status: t.status }));
+    // The Chrome extension polls ids it has seen; ids the caller cannot
+    // access are dropped exactly like deleted tasks.
+    const statuses: TaskStatusRow[] = [];
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (task && (await hasTaskAccess(ctx.db, task, ctx.userId))) {
+        statuses.push({ id: task._id, status: task.status });
+      }
+    }
+    return statuses;
   },
 });
 

@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { m, AnimatePresence } from "motion/react";
 import { api } from "@eva/backend";
-import { cn, motionBase, motionSpring } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { tokenTransition, springTransition, useMediaQuery } from "@vvedantb/ui";
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { SidebarMobileHeader } from "@/lib/components/sidebar/_components/SidebarMobileHeader";
 import { SidebarPanel } from "@/lib/components/sidebar/_components/SidebarPanel";
@@ -26,7 +27,6 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { usePageTitle } from "@/lib/contexts/PageTitleContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 export function Sidebar() {
@@ -137,7 +137,7 @@ export function Sidebar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionBase}
+            transition={tokenTransition.base}
           />
         )}
       </AnimatePresence>
@@ -161,7 +161,7 @@ export function Sidebar() {
         )}
         initial={false}
         animate={{ x: isDesktop || mobileOpen ? 0 : "-100%" }}
-        transition={motionSpring}
+        transition={springTransition}
         drag={!isDesktop && mobileOpen ? "x" : false}
         dragDirectionLock
         dragConstraints={{ left: 0, right: 0 }}

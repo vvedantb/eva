@@ -97,6 +97,7 @@
                   "react-dom",
                   "@eva/ui",
                   "@eva/ui/*",
+                  "@vvedantb/ui",
                   "facehash",
                   "convex-helpers/react",
                   "convex-helpers/react/*",
@@ -132,6 +133,7 @@
     "video/**",
     ".claude/skills/**",
     ".agents/skills/**",
+    "apps/web/src/lib/stageshow/**",
     "scripts/oxlint-plugin-anti-slop/**"
   ]
 }

@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { authMutation, recomputeProjectPhase } from "../functions";
+import {
+  authMutation,
+  getProjectWithAccess,
+  hasRepoAccess,
+  recomputeProjectPhase,
+} from "../functions";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import {
@@ -19,10 +24,11 @@ export const startDevelopment = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.phase !== "finalized") {
       throw new Error("Project must be finalized before starting development");
     }
@@ -97,6 +103,15 @@ export const createFromTasks = authMutation({
     }
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    // Only this repo's tasks may join the project: a foreign id would move
+    // another team's task under a project the caller owns.
+    const tasks = await Promise.all(args.taskIds.map((id) => ctx.db.get(id)));
+    if (tasks.some((task) => task !== null && task.repoId !== args.repoId)) {
+      throw new Error("Tasks must belong to this repository");
+    }
     const projectNumId = await allocateNumId(ctx.db, args.repoId, "projects");
     const projectId = await ctx.db.insert("projects", {
       repoId: args.repoId,
@@ -115,8 +130,7 @@ export const createFromTasks = authMutation({
     });
     for (let i = 0; i < args.taskIds.length; i++) {
       const taskId = args.taskIds[i];
-      const task = await ctx.db.get(taskId);
-      if (task) {
+      if (tasks[i]) {
         await ctx.db.patch(taskId, {
           projectId,
           taskNumber: i + 1,

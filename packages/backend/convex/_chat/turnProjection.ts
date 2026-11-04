@@ -50,14 +50,47 @@ export async function openChatEntityIdsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<ReadonlySet<string>> {
+  return idsOfTurns(await openChatTurnsForRepo(db, repoId));
+}
+
+/**
+ * Chat entities in one repo whose open turn waits on an unanswered blocking
+ * question (`pendingQuestions`). Only an open turn can hold one, so this reads
+ * one small range per open turn, never one per list row. Same id shape as
+ * `openChatEntityIdsForRepo`: a session lights up while any of its chats asks.
+ */
+export async function awaitingAnswerEntityIdsForRepo(
+  db: DatabaseReader,
+  repoId: Id<"githubRepos">,
+): Promise<ReadonlySet<string>> {
+  const turns = await openChatTurnsForRepo(db, repoId);
+  const asking = await Promise.all(
+    turns.map(async (turn) => {
+      const rows = await db
+        .query("pendingQuestions")
+        .withIndex("by_entity", (q) => q.eq("entityId", String(turn.entityId)))
+        .collect();
+      return rows.some((row) => row.answer === undefined) ? turn : null;
+    }),
+  );
+  return idsOfTurns(asking.filter((turn) => turn !== null));
+}
+
+/** Open chat turns in one repo. A lane turn (summary, interview) is a one-shot agent, not a chat turn. */
+async function openChatTurnsForRepo(
+  db: DatabaseReader,
+  repoId: Id<"githubRepos">,
+): Promise<Doc<"turns">[]> {
   const turns = await db
     .query("turns")
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
-  // A lane turn (summary, interview) is a one-shot agent, not a chat turn.
+  return turns.filter((turn) => turn.lane === undefined);
+}
+
+function idsOfTurns(turns: ReadonlyArray<Doc<"turns">>): ReadonlySet<string> {
   const ids = new Set<string>();
   for (const turn of turns) {
-    if (turn.lane !== undefined) continue;
     ids.add(String(turn.entityId));
     if (turn.sessionId !== undefined) ids.add(String(turn.sessionId));
   }

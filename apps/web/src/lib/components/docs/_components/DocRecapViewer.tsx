@@ -8,6 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   api,
   INCOMPLETE_PR_RECAP_MESSAGE,
+  hasStoredRecap,
   isIncompleteReadyRecap,
 } from "@eva/backend";
 import { entityPathSegment } from "@/lib/numId";
@@ -31,9 +32,10 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  motionFast,
+  tokenTransition,
   CrossfadeIcon,
-} from "@eva/ui";
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -44,9 +46,10 @@ import {
   IconHistory,
   IconPencilCheck,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { DocContentTab } from "./DocContentTab";
-import { HtmlPreviewFrame } from "./HtmlPreviewFrame";
+import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBody";
+import { RecapStaleBanner } from "@/lib/components/sandbox/_components/RecapStaleBanner";
+import { DocRecapRegenerateButton } from "./DocRecapRegenerateButton";
 import { DocPresenceFacepile } from "./DocPresenceFacepile";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -62,7 +65,7 @@ export function DocRecapViewer({
   activeTab: DocViewerTab;
 }) {
   const navigate = useNavigate();
-  const { basePath } = useRepo();
+  const { basePath, repoId } = useRepo();
   const streaming = useQuery(api.streaming.get, {
     entityId: `pr-recap:${doc._id}`,
   });
@@ -282,6 +285,25 @@ export function DocRecapViewer({
           ) : null}
         </div>
       ) : null}
+      {doc.prUrl !== undefined &&
+      doc.headSha !== undefined &&
+      hasStoredRecap(doc) &&
+      !isRecapPending ? (
+        <div className="mx-3 mb-2 overflow-hidden rounded-surface sm:mx-4">
+          <RecapStaleBanner
+            prUrl={doc.prUrl}
+            repoId={repoId}
+            recapSha={doc.headSha}
+            action={
+              <DocRecapRegenerateButton
+                doc={doc}
+                prUrl={doc.prUrl}
+                repoId={repoId}
+              />
+            }
+          />
+        </div>
+      ) : null}
       <AnimatePresence>
         {isRecapPending && !isRecapStalled ? (
           <m.div
@@ -290,7 +312,7 @@ export function DocRecapViewer({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Surface density="tight" className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -321,6 +343,7 @@ export function DocRecapViewer({
               {viewTab === "summary" && (
                 <>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={suggestionsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -335,6 +358,7 @@ export function DocRecapViewer({
                     )}
                   </Button>
                   <Button
+                    shape="rounded"
                     size="sm"
                     variant={commentsOpen ? "secondary" : "ghost"}
                     className="h-7 px-2 max-sm:h-10 max-sm:px-3"
@@ -367,21 +391,13 @@ export function DocRecapViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="recap"
                 className="mt-0 h-full min-h-0 overflow-hidden"
               >
-                {doc.html ? (
-                  <HtmlPreviewFrame html={doc.html} title="PR recap" />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {isRecapIncompleteReady || isRecapErrored
-                      ? INCOMPLETE_PR_RECAP_MESSAGE
-                      : "No recap generated yet. It is created the next time this review runs."}
-                  </p>
-                )}
+                <RecapTourBody doc={doc} repoId={repoId} />
               </TabsContent>
             </m.div>
           ) : (
@@ -391,7 +407,7 @@ export function DocRecapViewer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <TabsContent
                 value="summary"

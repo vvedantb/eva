@@ -8,9 +8,9 @@ const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 /**
  * Convex caches query results and invalidates them on data dependencies, never on
  * wall-clock time. A query that reads the clock therefore keeps serving whatever
- * the clock said when the result was first computed: `mcp.oauth.getClient` kept
- * an expired OAuth registration alive past its 24h TTL that way (fix 7c49da26,
- * found by convex-doctor). The fix is always the same — take `now` as an arg, so
+ * the clock said when the result was first computed: an old MCP OAuth client
+ * lookup kept an expired registration alive past its 24h TTL that way (found by
+ * convex-doctor). The fix is always the same — take `now` as an arg, so
  * the clock is read in the mutation or action that can safely read it.
  *
  * Nothing in the type system or the test suite catches this: the query compiles,
@@ -30,14 +30,6 @@ describe("Convex queries are deterministic", () => {
       findClockReadingQueries(),
       "take the timestamp as an arg and pass it from the caller instead",
     ).toEqual([]);
-  });
-
-  /** The query the rule was written for, pinned so it cannot slide back. */
-  test("mcp.oauth.getClient takes now as an arg", () => {
-    const source = readFileSync(join(convexDir, "mcp/oauth.ts"), "utf8");
-    const body = definitionBody(source, "getClient");
-    expect(body).toContain("now: v.number()");
-    expect(stripComments(body)).not.toContain("Date.now()");
   });
 });
 
@@ -71,19 +63,6 @@ function findClockReadingQueries(): string[] {
     }
   }
   return found;
-}
-
-/**
- * One Convex definition, from `export const <name> = …({` to the `\n});` that
- * closes it. Ending on the closing brace matters: slicing to the next `export`
- * would swallow the un-exported helpers that sit between definitions, and their
- * clock calls are perfectly legal.
- */
-function definitionBody(source: string, name: string): string {
-  const startAt = source.indexOf(`export const ${name} =`);
-  expect(startAt, `${name} moved or was renamed`).toBeGreaterThan(-1);
-  const end = source.indexOf("\n});", startAt);
-  return source.slice(startAt, end < 0 ? undefined : end);
 }
 
 function stripComments(source: string): string {

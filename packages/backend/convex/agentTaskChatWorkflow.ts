@@ -31,6 +31,7 @@ import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
 import { finalizeCancelledAssistantMessage } from "./streaming";
 import {
   drainChatQueueQuietly,
+  dropComposerUserRow,
   startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
 import {
@@ -39,8 +40,10 @@ import {
 } from "./workflowWatchdog";
 import { buildAgentTaskChatPrompt } from "./_agentTasks/chatPrompt";
 import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
+import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
+import { bareHarnessCommandPrompt } from "./_mentions/bareHarnessCommand";
 import { notifyChatMentions } from "./_mentions/notifyChatMentions";
 import { resolveMessageCredential } from "./_userProviderAccounts/credentialSource";
 import {
@@ -76,6 +79,10 @@ import {
   resolveCompletionTurn,
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import {
+  canRequestSandboxStart,
+  nextSandboxStartAttempt,
+} from "./_sandbox/transitions";
 import { taskPrUrl } from "./_pullRequests/store";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 
@@ -99,41 +106,46 @@ async function buildTaskChatTurnPrompt(
   prompt: string;
   attachmentStorageIds: Id<"_storage">[] | undefined;
 }> {
-  const task = await ctx.db.get(args.taskId);
+  const [task, triggeringUserMessage, user] = await Promise.all([
+    ctx.db.get(args.taskId),
+    ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
+      .order("desc")
+      .filter((q) => q.eq(q.field("role"), "user"))
+      .first(),
+    ctx.db.get(args.userId),
+  ]);
   if (!task) throw new Error("Task not found");
-  if (!task.repoId) throw new Error("Task is not associated with a repo");
+  const repoId = task.repoId;
+  if (!repoId) throw new Error("Task is not associated with a repo");
 
-  const repo = await ctx.db.get(task.repoId);
+  const [repo, { resolvedMessage, prefixBlock }] = await Promise.all([
+    ctx.db.get(repoId),
+    resolveMessageTokens(ctx, args.message, repoId),
+  ]);
   if (!repo) throw new Error("Repository not found");
 
-  const triggeringUserMessage = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
-    .order("desc")
-    .filter((q) => q.eq(q.field("role"), "user"))
-    .first();
-
-  const user = await ctx.db.get(args.userId);
   const customInstructionsBlock = buildCustomInstructionsBlock(
     user?.role ?? undefined,
     user?.customInstructions ?? undefined,
   );
 
-  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
-    ctx,
-    args.message,
-    task.repoId,
-  );
-
-  const branchName = await resolveTaskBranchName(ctx.db, task);
+  const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
+  if (bareCommand !== null) {
+    return {
+      prompt: bareCommand,
+      attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
+    };
+  }
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // task owner, whose access the credential helper mints tokens against).
-  const readableRepos = await listReadableSiblingRepos(
-    ctx.db,
-    task.createdBy,
-    repo._id,
-  );
+  const [branchName, readableRepos, prUrl] = await Promise.all([
+    resolveTaskBranchName(ctx.db, task),
+    listReadableSiblingRepos(ctx.db, task.createdBy, repo._id),
+    taskPrUrl(ctx.db, task),
+  ]);
 
   let prompt = buildAgentTaskChatPrompt({
     repoOwner: repo.owner,
@@ -152,11 +164,13 @@ async function buildTaskChatTurnPrompt(
     readableRepos,
     runtime: {
       ownerKey: `task-${args.taskId}`,
-      prUrl: await taskPrUrl(ctx.db, task),
+      prUrl,
       devCommand: task.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,
       agentMemoryEnabled: repo.agentMemoryEnabled,
+      askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
+      prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
   });
   if (prefixBlock) {
@@ -433,6 +447,27 @@ export const startExecute = authMutation({
       surface: { kind: "task", task },
     });
 
+    // A send that lands behind a running turn queues: a burst of sends can all
+    // reach here before the composer sees the first turn, and starting each
+    // one ran two turns at once. Same busy rule as the queue's own drain.
+    if (
+      task.activeChatWorkflowId !== undefined ||
+      task.activeWorkflowId !== undefined ||
+      task.pendingTurn !== undefined
+    ) {
+      await enqueueTaskChatMessage(ctx, task, {
+        ...args,
+        userId: ctx.userId,
+        attachmentStorageIds: await dropComposerUserRow(
+          ctx,
+          args.taskId,
+          args.message,
+        ),
+        resolvedProviderAccountId: providerAccountId,
+      });
+      return null;
+    }
+
     // The user row for this turn is already stored (the client sends addMessage
     // first), so the alert lands above the new placeholder, not below the reply.
     await maybeInsertModelHandoffAlert(
@@ -644,44 +679,180 @@ export const enqueueMessage = authMutation({
       surface: { kind: "task", task },
     });
 
-    await ctx.db.insert("queuedMessages", {
-      parentId: args.taskId,
-      content,
-      createdAt: Date.now(),
-      order: Date.now(),
+    await enqueueTaskChatMessage(ctx, task, {
+      ...args,
+      message: content,
       userId: ctx.userId,
-      model: args.model,
-      reasoningLevel: args.reasoningLevel,
-      thinkingEnabled: args.thinkingEnabled,
-      use1mContext: args.use1mContext,
-      fastMode: args.fastMode,
-      // The sender's raw pick, re-resolved against the owner's accounts at
-      // dequeue: the model and the owner's accounts can both move while the
-      // message waits.
-      providerAccountId: args.providerAccountId,
-      attachmentStorageIds: args.attachmentStorageIds,
-      sentViaOrchestrator: args.sentViaOrchestrator,
+      resolvedProviderAccountId: providerAccountId,
     });
-    await ctx.db.patch(args.taskId, {
-      lastChatModel: normalizedModel,
-      providerAccountId,
-      ...composerTraitFields(args),
-      updatedAt: Date.now(),
-    });
-    // Sends at once when the chat is idle. Otherwise the queue waits: behind
-    // the running turn, for a usage-limit reset, or for Eva to wake — a
-    // sleeping sandbox is woken here and its ready drain sends the message.
-    await drainChatQueueQuietly(ctx, args.taskId);
     return null;
   },
 });
+
+/** Parks a message on the task's chat queue; shared by enqueue and a busy send. */
+async function enqueueTaskChatMessage(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  args: {
+    message: string;
+    userId: Id<"users">;
+    model: Infer<typeof aiModelValidator>;
+    reasoningLevel?: Doc<"queuedMessages">["reasoningLevel"];
+    thinkingEnabled?: boolean;
+    use1mContext?: boolean;
+    fastMode?: boolean;
+    providerAccountId?: Id<"userProviderAccounts">;
+    resolvedProviderAccountId: Id<"userProviderAccounts"> | undefined;
+    attachmentStorageIds?: Id<"_storage">[];
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  await ctx.db.insert("queuedMessages", {
+    parentId: task._id,
+    content: args.message,
+    createdAt: Date.now(),
+    order: Date.now(),
+    userId: args.userId,
+    model: args.model,
+    reasoningLevel: args.reasoningLevel,
+    thinkingEnabled: args.thinkingEnabled,
+    use1mContext: args.use1mContext,
+    fastMode: args.fastMode,
+    // The sender's raw pick, re-resolved against the owner's accounts at
+    // dequeue: the model and the owner's accounts can both move while the
+    // message waits.
+    providerAccountId: args.providerAccountId,
+    attachmentStorageIds: args.attachmentStorageIds,
+    sentViaOrchestrator: args.sentViaOrchestrator,
+  });
+  await ctx.db.patch(task._id, {
+    lastChatModel: normalizeAIModel(args.model),
+    providerAccountId: args.resolvedProviderAccountId,
+    ...composerTraitFields(args),
+    updatedAt: Date.now(),
+  });
+  // Sends at once when the chat is idle. Otherwise the queue waits: behind
+  // the running turn, for a usage-limit reset, or for Eva to wake — a
+  // sleeping sandbox is woken here and its ready drain sends the message.
+  await drainChatQueueQuietly(ctx, task._id);
+}
 
 /**
  * Cancels the active task chat workflow and starts any queued message. For a
  * daemon-backed turn, sets `cancelRequestedAt` so the warm provider process
  * interrupts its own in-flight turn on its next `claimPendingTurn` poll.
  * One-shot providers retain the process-kill path.
+ * Shared by the Stop button and the Steer fallback (`_chat/steer.ts`).
  */
+export async function cancelTaskChatExecution(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, task.activeChatWorkflowId);
+
+  const workflowIdToCancel = task.activeChatWorkflowId;
+  const pendingRequestedAt = task.pendingTurn?.requestedAt;
+
+  if (usesChatDaemon(task.lastChatModel ?? task.model)) {
+    await ctx.db.patch(task._id, { cancelRequestedAt: Date.now() });
+  } else if (task.sandboxId && task.repoId) {
+    if (task.activeWorkflowId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
+        sandboxId: task.sandboxId,
+        repoId: task.repoId,
+        entityIdField: "taskId",
+        entityId: String(task._id),
+      });
+    } else {
+      await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+        sandboxId: task.sandboxId,
+        repoId: task.repoId,
+      });
+    }
+  }
+
+  if (workflowIdToCancel !== undefined) {
+    await closeTurnForWorkflow(
+      ctx,
+      task._id,
+      workflowIdToCancel,
+      "cancelled",
+      { error: "Cancelled by the user" },
+    );
+  }
+
+  const streamingEntityId = chatStreamEntityId(task._id);
+  const streaming = await ctx.db
+    .query("streamingActivity")
+    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
+    .first();
+
+  const latest = await ctx.db.get(task._id);
+  if (!latest) return;
+
+  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
+    latestPendingTurn: latest.pendingTurn,
+    cancelPendingRequestedAt: pendingRequestedAt,
+    latestActiveWorkflowId: latest.activeChatWorkflowId,
+    cancelWorkflowId: workflowIdToCancel,
+  });
+
+  if (cancelOwnsCurrentTurn) {
+    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
+    const last = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", task._id))
+      .order("desc")
+      .first();
+    if (
+      last &&
+      last.role === "assistant" &&
+      last.finishedAt === undefined &&
+      last._id !== syntheticTurnMessageId
+    ) {
+      await finalizeCancelledAssistantMessage(ctx, last, streaming);
+    }
+    await finalizeOpenSyntheticTurnOnCancel(
+      ctx,
+      syntheticTurnMessageId,
+      streaming,
+    );
+    await closeOpenTurn(ctx, task._id, "cancelled", {
+      error: "Cancelled by the user",
+    });
+  }
+
+  await clearStreamingActivity(ctx, streamingEntityId);
+
+  const taskPatch: {
+    activeChatWorkflowId?: undefined;
+    pendingTurn?: undefined;
+    syntheticTurnMessageId?: undefined;
+    updatedAt: number;
+  } = { updatedAt: Date.now() };
+
+  if (
+    workflowIdToCancel !== undefined &&
+    latest.activeChatWorkflowId === workflowIdToCancel
+  ) {
+    taskPatch.activeChatWorkflowId = undefined;
+  }
+  if (
+    pendingRequestedAt !== undefined &&
+    latest.pendingTurn?.requestedAt === pendingRequestedAt
+  ) {
+    taskPatch.pendingTurn = undefined;
+  }
+  if (cancelOwnsCurrentTurn) {
+    taskPatch.syntheticTurnMessageId = undefined;
+  }
+
+  await ctx.db.patch(task._id, taskPatch);
+
+  await startNextQueuedTaskChatMessage(ctx, task._id);
+}
+
+/** The chat Stop button. */
 export const cancelExecution = authMutation({
   args: {
     taskId: v.id("agentTasks"),
@@ -697,108 +868,7 @@ export const cancelExecution = authMutation({
       throw new Error("Not authorized");
     }
 
-    await cancelTrackedWorkflow(ctx, task.activeChatWorkflowId);
-
-    const workflowIdToCancel = task.activeChatWorkflowId;
-    const pendingRequestedAt = task.pendingTurn?.requestedAt;
-
-    if (usesChatDaemon(task.lastChatModel ?? task.model)) {
-      await ctx.db.patch(args.taskId, { cancelRequestedAt: Date.now() });
-    } else if (task.sandboxId && task.repoId) {
-      if (task.activeWorkflowId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-          entityIdField: "taskId",
-          entityId: String(args.taskId),
-        });
-      } else {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-        });
-      }
-    }
-
-    if (workflowIdToCancel !== undefined) {
-      await closeTurnForWorkflow(
-        ctx,
-        args.taskId,
-        workflowIdToCancel,
-        "cancelled",
-        { error: "Cancelled by the user" },
-      );
-    }
-
-    const streamingEntityId = chatStreamEntityId(args.taskId);
-    const streaming = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-      .first();
-
-    const latest = await ctx.db.get(args.taskId);
-    if (!latest) return null;
-
-    const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-      latestPendingTurn: latest.pendingTurn,
-      cancelPendingRequestedAt: pendingRequestedAt,
-      latestActiveWorkflowId: latest.activeChatWorkflowId,
-      cancelWorkflowId: workflowIdToCancel,
-    });
-
-    if (cancelOwnsCurrentTurn) {
-      const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
-        .order("desc")
-        .first();
-      if (
-        last &&
-        last.role === "assistant" &&
-        last.finishedAt === undefined &&
-        last._id !== syntheticTurnMessageId
-      ) {
-        await finalizeCancelledAssistantMessage(ctx, last, streaming);
-      }
-      await finalizeOpenSyntheticTurnOnCancel(
-        ctx,
-        syntheticTurnMessageId,
-        streaming,
-      );
-      await closeOpenTurn(ctx, args.taskId, "cancelled", {
-        error: "Cancelled by the user",
-      });
-    }
-
-    await clearStreamingActivity(ctx, streamingEntityId);
-
-    const taskPatch: {
-      activeChatWorkflowId?: undefined;
-      pendingTurn?: undefined;
-      syntheticTurnMessageId?: undefined;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-
-    if (
-      workflowIdToCancel !== undefined &&
-      latest.activeChatWorkflowId === workflowIdToCancel
-    ) {
-      taskPatch.activeChatWorkflowId = undefined;
-    }
-    if (
-      pendingRequestedAt !== undefined &&
-      latest.pendingTurn?.requestedAt === pendingRequestedAt
-    ) {
-      taskPatch.pendingTurn = undefined;
-    }
-    if (cancelOwnsCurrentTurn) {
-      taskPatch.syntheticTurnMessageId = undefined;
-    }
-
-    await ctx.db.patch(args.taskId, taskPatch);
-
-    await startNextQueuedTaskChatMessage(ctx, args.taskId);
+    await cancelTaskChatExecution(ctx, task);
     return null;
   },
 });
@@ -981,6 +1051,14 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       turnId: args.turnId,
       sandboxId: activeSandboxId,
     });
+    if (data.branchName) {
+      await step.runAction(internal.sandbox.applyBranchPublishPolicy, {
+        sandboxId: activeSandboxId,
+        repoId: data.repoId,
+        userId: args.userId,
+        branchName: data.branchName,
+      });
+    }
 
     if (usesChatDaemon(data.model)) {
       await step.runMutation(internal.agentTaskChatWorkflow.ensurePendingTurn, {
@@ -1134,8 +1212,14 @@ export const markTaskSandboxStartingForChat = internalMutation({
     if (!task) throw new Error("Task not found");
     if (task.reviewTaskSandboxStatus === "active") return null;
     if (task.reviewTaskSandboxStatus === "starting") return null;
+    // A stop landed after the workflow chose to start: leave it to finish. The
+    // start action then aborts and the turn reports "did not become ready".
+    if (!canRequestSandboxStart(task.reviewTaskSandboxStatus)) return null;
+    // This start carries no token (its action args are journaled), but bumping
+    // still fences out any older attempt that is still running.
     await ctx.db.patch(args.taskId, {
       reviewTaskSandboxStatus: "starting",
+      sandboxStartAttempt: nextSandboxStartAttempt(task.sandboxStartAttempt),
       updatedAt: Date.now(),
     });
     await seedSandboxStartupActivity(
@@ -1506,4 +1590,5 @@ export {
   openSyntheticTurn,
   requestStopBackgroundAgent,
   updateBackgroundAgents,
+  updateGoal,
 } from "./_chat/taskChatDaemon";

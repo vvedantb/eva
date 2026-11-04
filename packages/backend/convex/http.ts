@@ -1,4 +1,9 @@
 import { httpRouter } from "convex/server";
+import {
+  registerMcpRoutes,
+  sha256Hex,
+  timingSafeEqual,
+} from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -8,22 +13,27 @@ import {
   previewActivityHmacMessage,
   streamingHeartbeatHmacMessage,
 } from "./_sandbox_runtime/callbackAuth";
-import { parseCiPassed, parseRepoEvents } from "./_automationEvents/events";
+import {
+  parseCiCompleted,
+  parseCiPassed,
+  parseRepoEvents,
+} from "./_automationEvents/events";
+import { prWatchUrls } from "./_pullRequests/watchEvaluate";
+import { hmacSha256Hex } from "./_shared/hmac";
+import {
+  CHANGELOG_EMAIL_RATINGS,
+  CHANGELOG_ITEM_VOTES,
+  changelogVoteHmacMessage,
+} from "./_changelog/entry";
+import { buildChangelogVotePageHtml } from "./emailTemplates";
+import {
+  health,
+  mcpHandler,
+  oauthMetadata,
+  protectedResourceMetadata,
+} from "./mcp/native";
 
 const http = httpRouter();
-
-/** Compares two strings in constant time to prevent timing attacks. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const bufA = encoder.encode(a);
-  const bufB = encoder.encode(b);
-  if (bufA.byteLength !== bufB.byteLength) return false;
-  let mismatch = 0;
-  for (let i = 0; i < bufA.byteLength; i++) {
-    mismatch |= (bufA[i] ?? 0) ^ (bufB[i] ?? 0);
-  }
-  return mismatch === 0;
-}
 
 /** Verifies the MCP bootstrap authorization token from the request header. */
 function verifyMcpBootstrapToken(request: Request): boolean {
@@ -50,26 +60,7 @@ function verifyDeployKey(request: Request): boolean {
 async function computeScopedHmac(message: string): Promise<string | null> {
   const secret = process.env.ENCRYPTION_KEY;
   if (!secret) return null;
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return hmacSha256Hex(secret, message);
 }
 
 /** Reads a required form field from an x-www-form-urlencoded request body. */
@@ -337,10 +328,10 @@ http.route({
     }
     if (resolved.kind === "sibling") {
       console.log(
-        `[git-credentials][sibling-read] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
+        `[git-credentials][sibling] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
       );
       const siblingToken: string = await ctx.runAction(
-        internal.githubAuth.mintReadOnlyRepoToken,
+        internal.githubAuth.mintSiblingRepoToken,
         {
           installationId: resolved.installationId,
           githubId: resolved.githubId,
@@ -493,10 +484,7 @@ const prWebhookSchema = z.object({
         ref: nullableString,
         sha: nullableString,
         // Fork PRs carry the fork here; their branch is not in the base repo.
-        repo: z
-          .object({ full_name: nullableString })
-          .nullable()
-          .catch(null),
+        repo: z.object({ full_name: nullableString }).nullable().catch(null),
       })
       .nullable()
       .catch(null),
@@ -560,44 +548,13 @@ function pushTouchesSkills(
   return !sawAnyPath;
 }
 
-// Boundary schemas for the deploy-key-protected MCP OAuth endpoints. These are
-// internal, so they are strict: any missing/mistyped field yields a 400.
-const oauthClientSchema = z.object({
-  clientId: z.string().min(1),
-  clientSecret: z.string().optional(),
-  redirectUris: z.array(z.string()).catch([]),
-});
-
-const oauthAuthCodeSchema = z.object({
-  code: z.string().min(1),
-  clerkUserId: z.string().min(1),
-  codeChallenge: z.string().min(1),
-  codeChallengeMethod: z.string().min(1),
-  redirectUri: z.string().min(1),
-  clientId: z.string().min(1),
-  expiresAt: z.number(),
-});
-
 /** Verifies a GitHub webhook HMAC-SHA256 signature against the shared secret. */
 async function verifyWebhookSignature(
   body: string,
   signature: string,
   secret: string,
 ): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  const computed =
-    "sha256=" +
-    Array.from(new Uint8Array(sig))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+  const computed = `sha256=${await hmacSha256Hex(secret, body)}`;
   return timingSafeEqual(computed, signature);
 }
 
@@ -625,18 +582,42 @@ http.route({
 
     // Event-triggered automations (CI auto-fix, review responder, issue to
     // task, user automations). Independent of the state sync below.
-    for (const repoEvent of parseRepoEvents(event ?? "", body)) {
+    const repoEvents = parseRepoEvents(event ?? "", body);
+    const ciPassed = parseCiPassed(event ?? "", body);
+    for (const repoEvent of repoEvents) {
       await ctx.scheduler.runAfter(
         0,
         internal._automationEvents.dispatch.dispatch,
         { event: repoEvent },
       );
     }
-    for (const passed of parseCiPassed(event ?? "", body)) {
+    for (const passed of ciPassed) {
       await ctx.scheduler.runAfter(
         0,
         internal._automationEvents.dispatch.noteCiPassed,
         { passed },
+      );
+    }
+    // The agent's PR watch: trusted feedback, plus any CI that finished,
+    // whatever its outcome (the last check to finish may end cancelled).
+    const ciCompleted = parseCiCompleted(event ?? "", body);
+    const watchUrls = prWatchUrls(repoEvents, ciCompleted);
+    if (watchUrls.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watch.noteActivity,
+        { prUrls: watchUrls },
+      );
+    }
+    if (ciCompleted?.kind === "status" && ciCompleted.branches.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._pullRequests.watch.noteHeadStatus,
+        {
+          owner: ciCompleted.owner,
+          name: ciCompleted.name,
+          branches: ciCompleted.branches,
+        },
       );
     }
 
@@ -720,6 +701,16 @@ http.route({
       const parsed = pushWebhookSchema.safeParse(JSON.parse(body));
       if (parsed.success && parsed.data.ref.startsWith("refs/heads/")) {
         const branch = parsed.data.ref.slice("refs/heads/".length);
+        // A push to a watched PR's base branch may cause a merge conflict.
+        await ctx.scheduler.runAfter(
+          0,
+          internal._pullRequests.watch.noteBasePush,
+          {
+            owner: parsed.data.repository.owner.login,
+            name: parsed.data.repository.name,
+            branch,
+          },
+        );
         await ctx.scheduler.runAfter(
           0,
           internal.githubWebhook.handlePushForSkillSync,
@@ -872,178 +863,76 @@ http.route({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MCP OAuth State Endpoints
+// MCP (Clerk OAuth). Well-known routes, /mcp and /health.
 // ─────────────────────────────────────────────────────────────────────────────
 
-http.route({
-  path: "/api/mcp/oauth/clients",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const parsed = oauthClientSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return new Response("Invalid request body", { status: 400 });
-    }
-
-    await ctx.runMutation(internal.mcp.oauth.registerClient, {
-      clientId: parsed.data.clientId,
-      clientSecret: parsed.data.clientSecret,
-      redirectUris: parsed.data.redirectUris,
-    });
-
-    return new Response("OK", { status: 200 });
-  }),
-});
-
-http.route({
-  path: "/api/mcp/oauth/clients/:clientId",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    const clientId = pathParts[pathParts.length - 1];
-
-    if (!clientId) {
-      return new Response("clientId required", { status: 400 });
-    }
-
-    const client = await ctx.runQuery(internal.mcp.oauth.getClient, {
-      clientId,
-      now: Date.now(),
-    });
-
-    if (!client) {
-      return Response.json({ found: false }, { status: 404 });
-    }
-
-    return Response.json({ found: true, client });
-  }),
-});
-
-http.route({
-  path: "/api/mcp/oauth/auth-codes",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const parsed = oauthAuthCodeSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return new Response("Missing required fields", { status: 400 });
-    }
-
-    await ctx.runMutation(internal.mcp.oauth.storeAuthCode, parsed.data);
-
-    return new Response("OK", { status: 200 });
-  }),
-});
-
-http.route({
-  path: "/api/mcp/oauth/auth-codes/:code",
-  method: "DELETE",
-  handler: httpAction(async (ctx, request) => {
-    if (!verifyDeployKey(request)) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    const code = pathParts[pathParts.length - 1];
-
-    if (!code) {
-      return new Response("code required", { status: 400 });
-    }
-
-    const entry = await ctx.runMutation(internal.mcp.oauth.consumeAuthCode, {
-      code,
-    });
-
-    if (!entry) {
-      return Response.json({ found: false }, { status: 404 });
-    }
-
-    return Response.json({ found: true, entry });
-  }),
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Convex-Native MCP Server (Node.js runtime)
-// ─────────────────────────────────────────────────────────────────────────────
-
-import {
-  oauthMetadata,
+registerMcpRoutes(http, {
+  authorizationServerMetadata: oauthMetadata,
   protectedResourceMetadata,
-  register,
-  authorizeGet,
-  token,
-  mcpHandler,
-  health,
-} from "./mcp/native";
+  endpoints: [{ handler: mcpHandler }],
+  health: { handler: health },
+});
 
-// OAuth metadata endpoints
+const changelogLinkFields = {
+  run: z.string().min(1),
+  user: z.string().min(1),
+  sig: z.string().min(1),
+};
+
+/** Either 👍 / 👎 on one item, or a rating of the whole email (no item). */
+const changelogFeedbackQuerySchema = z.union([
+  z.object({
+    ...changelogLinkFields,
+    item: z.coerce.number().int().min(0),
+    vote: z.enum(CHANGELOG_ITEM_VOTES),
+  }),
+  z.object({
+    ...changelogLinkFields,
+    vote: z.enum(CHANGELOG_EMAIL_RATINGS),
+  }),
+]);
+
+/**
+ * One-click feedback from the weekly changelog email: 👍 / 👎 on the top pick,
+ * or a rating of the whole email. The signature covers the run and the
+ * recipient, so a link only records feedback as the user it was mailed to.
+ * An email link has to be a GET; a link scanner that prefetches it only
+ * overwrites that user's row, and the user's own later click wins.
+ */
 http.route({
-  path: "/.well-known/oauth-authorization-server",
+  path: "/api/changelog/vote",
   method: "GET",
-  handler: oauthMetadata,
-});
-
-http.route({
-  path: "/.well-known/oauth-protected-resource",
-  method: "GET",
-  handler: protectedResourceMetadata,
-});
-
-// OAuth flow endpoints
-http.route({
-  path: "/mcp/oauth/register",
-  method: "POST",
-  handler: register,
-});
-
-http.route({
-  path: "/mcp/oauth/authorize",
-  method: "GET",
-  handler: authorizeGet,
-});
-
-http.route({
-  path: "/mcp/oauth/token",
-  method: "POST",
-  handler: token,
-});
-
-// MCP endpoint
-http.route({
-  path: "/mcp",
-  method: "GET",
-  handler: mcpHandler,
-});
-
-http.route({
-  path: "/mcp",
-  method: "POST",
-  handler: mcpHandler,
-});
-
-http.route({
-  path: "/mcp",
-  method: "DELETE",
-  handler: mcpHandler,
-});
-
-// Health check
-http.route({
-  path: "/health",
-  method: "GET",
-  handler: health,
+  handler: httpAction(async (ctx, request) => {
+    const parsed = changelogFeedbackQuerySchema.safeParse(
+      Object.fromEntries(new URL(request.url).searchParams),
+    );
+    if (!parsed.success) {
+      return new Response("Invalid vote link", { status: 400 });
+    }
+    const { run, user, sig } = parsed.data;
+    const expected = await computeScopedHmac(
+      changelogVoteHmacMessage(run, user),
+    );
+    const appUrl = process.env.WEB_APP_URL;
+    if (!expected || !appUrl) {
+      return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
+        status: 500,
+      });
+    }
+    if (!timingSafeEqual(sig, expected)) {
+      return new Response("Invalid vote signature", { status: 401 });
+    }
+    const recorded = await ctx.runMutation(internal.changelog.recordVote, {
+      runId: run,
+      userId: user,
+      itemIndex: "item" in parsed.data ? parsed.data.item : undefined,
+      vote: parsed.data.vote,
+    });
+    return new Response(buildChangelogVotePageHtml({ appUrl, recorded }), {
+      status: recorded ? 200 : 404,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }),
 });
 
 export default http;

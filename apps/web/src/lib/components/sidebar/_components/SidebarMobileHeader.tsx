@@ -9,7 +9,7 @@ import {
 } from "@tabler/icons-react";
 import { AveHeaderButton } from "@/lib/components/ave/AveHeaderButton";
 import { LogoMark } from "@/lib/components/LogoMark";
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { type ThemeMode } from "@/lib/hooks/useThemeMode";
 
 interface SidebarMobileHeaderProps {
@@ -34,6 +34,7 @@ export function SidebarMobileHeader({
       className="fixed inset-x-0 top-0 z-30 flex h-(--eva-mobile-header-height) items-center gap-2 bg-background/80 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:px-4 lg:hidden"
     >
       <Button
+        shape="rounded"
         size="icon"
         variant="ghost"
         onClick={() => setMobileOpen(true)}
@@ -62,6 +63,7 @@ export function SidebarMobileHeader({
           button on a phone. */}
       <AveHeaderButton />
       <Button
+        shape="rounded"
         size="icon"
         variant="ghost"
         onClick={onToggleTheme}

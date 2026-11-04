@@ -8,10 +8,10 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  motionFast,
+  tokenTransition,
   CrossfadeIconSlot,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconPlayerPlay,
@@ -21,9 +21,11 @@ import {
 import dayjs from "@eva/shared/dates";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 import {
   getMoreMenuVisibility,
   TaskFooterMoreMenu,
@@ -134,7 +136,7 @@ function TaskFooterError({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           {executionError ?? latestPrError}
         </m.p>
@@ -240,7 +242,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <SplitRunButton
                 taskId={taskId}
@@ -256,6 +258,9 @@ export function TaskFooter({
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
         <div className={layout.actions}>
+          {isHeader ? (
+            <PrMergeConfetti owner={{ kind: "task", taskId }} />
+          ) : null}
           {moreMenu.showMoreMenu && (
             <TaskFooterMoreMenu
               visibility={moreMenu}
@@ -273,6 +278,12 @@ export function TaskFooter({
               onRunBackgroundCommands={onRunBackgroundCommands}
             />
           )}
+          <SandboxCommitPushButton
+            gitSync={task?.sandboxGitSync}
+            isSandboxActive={isSandboxActive}
+            target={{ kind: "task", taskId }}
+            size={buttonSize}
+          />
           <AnimatePresence initial={false} mode="popLayout">
             {showSandboxToggle ? (
               <m.div
@@ -280,7 +291,7 @@ export function TaskFooter({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
               >
                 <SandboxStartStopButton
                   isActive={isSandboxActive}
@@ -332,6 +343,7 @@ function SplitRunButton({
         <TooltipTrigger asChild>
           <div>
             <Button
+              shape="rounded"
               size={size}
               onClick={
                 isScheduled
@@ -348,7 +360,8 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <CircleSpinner
+                  <Spinner
+                    variant="circle"
                     size="sm"
                     style={{ width: iconSize, height: iconSize }}
                   />
@@ -373,6 +386,7 @@ function SplitRunButton({
         scheduledAt={scheduledAt}
         trigger={
           <Button
+            shape="rounded"
             ref={chevronRef}
             size={size}
             aria-label="Schedule options"

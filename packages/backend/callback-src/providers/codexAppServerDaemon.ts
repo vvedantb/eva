@@ -1,4 +1,10 @@
 import {
+  confirmSteerAcks,
+  deliverSteers,
+  readSteers,
+  steerClaimArgs,
+} from "../runtime/steering.js";
+import {
   CALLBACK_SCRIPT_FP,
   CLAIM_MUTATION,
   DAEMON_OPTS_SIG,
@@ -15,7 +21,7 @@ import {
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { refreshDaemonGithubTokenFromEnv } from "./githubToken.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { serializeSteps } from "../parse/stepBudget.js";
+import { serializeFinalSteps } from "../parse/stepBudget.js";
 import { getCodexAgentMessageText } from "../parse/toolSteps.js";
 import {
   buildClaudeShapedResult,
@@ -50,6 +56,7 @@ import {
   claimDaemonPidfileBoot,
   cleanOwnedDaemonMarkers,
   readPidFromFile,
+  selectClaimPollIntervalMs,
   sleep,
 } from "../runtime/daemonProcess.js";
 import { readCancelRequested } from "./claimPendingTurnParse.js";
@@ -79,6 +86,7 @@ const supervisor = new DaemonSupervisor<ClaimedTurn, CodexDaemonTurn>();
 let activeTurnStartedAt = 0;
 let lastEventAt = 0;
 let lastIdleActivityAt = Date.now();
+let lastClaimAt = 0;
 let finalText = "";
 let exitWithError = false;
 // Cumulative thread usage from `thread/tokenUsage/updated`; per-turn usage is
@@ -203,7 +211,7 @@ async function finalizeTurn(
     success,
     result,
     error,
-    activityLog: serializeSteps(S.accumulatedSteps),
+    activityLog: serializeFinalSteps(S.accumulatedSteps, result),
     ...(RUN_ID ? { runId: RUN_ID } : {}),
     ...(usage
       ? {
@@ -358,6 +366,12 @@ async function startTurn(
   log("codex daemon: turn started " + providerTurnId);
 }
 
+/** The running turn's App Server id, or "" when no turn can take a steer. */
+function liveProviderTurnId(): string {
+  if (supervisor.phase !== "running") return "";
+  return supervisor.currentTurn?.providerTurnId ?? "";
+}
+
 function cleanMarkers(): void {
   cleanOwnedDaemonMarkers({
     paths,
@@ -386,10 +400,17 @@ export async function runCodexAppServerDaemon(): Promise<void> {
   }, FENCE_POLL_INTERVAL_MS);
   fence.unref?.();
 
-  const preflightOk = await runPreflightHeartbeat();
+  // The lease preflight and the GitHub token are independent Convex round
+  // trips (measured ~0.1–0.2s and ~0.3–0.45s), so run them side by side. Both
+  // still land before the app-server spawns: its tool shells inherit
+  // `GH_TOKEN` from the spawn env, and the first turn waits on MCP connects
+  // that only start at `thread/start`, so every ms saved here reaches it.
+  const [preflightOk] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshGithubToken(),
+  ]);
   if (!preflightOk) process.exit(1);
   startStreamingLoops();
-  await refreshGithubToken();
 
   const client = new CodexAppServerClient();
   try {
@@ -420,60 +441,90 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         if (completion) await completion;
       }
 
-      const acceptTurn =
-        supervisor.phase === "idle" && supervisor.pendingClaim === null;
-
-      const claimed = await callConvexWithRetry(
-        "mutation",
-        CLAIM_MUTATION,
-        entityArgs({ model: MODEL, acceptTurn }),
-      );
-      const providerTurnId = supervisor.currentTurn?.providerTurnId ?? "";
+      // The loop ticks at 50ms to drain app-server notifications; the claim
+      // mutation only runs at the shared cadence (busy/fast/idle) so an idle
+      // or mid-turn daemon does not read its chat row 20 times a second.
+      const claimNow = Date.now();
       if (
-        readCancelRequested(claimed) &&
-        providerTurnId &&
-        supervisor.beginCancellation()
+        claimNow - lastClaimAt >=
+        selectClaimPollIntervalMs({
+          busy: supervisor.hasWork,
+          lastIdleActivityAtMs: lastIdleActivityAt,
+          now: claimNow,
+        })
       ) {
-        // Fire-and-forget like the claude daemon: an awaited interrupt can
-        // stall claiming for the full request timeout, and its failure must
-        // not tear the daemon down — the turn settles via `turn/completed`.
-        void client
-          .request("turn/interrupt", {
-            threadId: S.activeCodexThreadId,
-            turnId: providerTurnId,
-          })
-          .catch((error) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            log("codex daemon: interrupt failed — " + message);
-          });
-      }
-      const claimedTurn = readClaimedTurn(claimed);
-      if (claimedTurn) {
-        const currentLease = getCurrentTurnLease();
+        lastClaimAt = claimNow;
+        const acceptTurn =
+          supervisor.phase === "idle" && supervisor.pendingClaim === null;
+        const steerArgs = steerClaimArgs(liveProviderTurnId() !== "");
+
+        const claimed = await callConvexWithRetry(
+          "mutation",
+          CLAIM_MUTATION,
+          entityArgs({ model: MODEL, acceptTurn, ...steerArgs }),
+        );
+        confirmSteerAcks(steerArgs);
+        const providerTurnId = supervisor.currentTurn?.providerTurnId ?? "";
         if (
-          shouldParkClaimedTurn({
-            hasActiveRealTurn: supervisor.currentTurn !== null,
-            isCancellationInFlight: supervisor.isCancellationInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null,
-          })
+          readCancelRequested(claimed) &&
+          providerTurnId &&
+          supervisor.beginCancellation()
         ) {
-          // A cancel response can carry the next queued prompt in the same
-          // mutation; claimPendingTurn already cleared it server-side, so
-          // parking is the only lossless option. A follow-up send during
-          // finalizing is a different turn and must be parked too.
-          if (!supervisor.parkClaim(claimedTurn)) {
-            log("codex daemon: duplicate claimed turn ignored");
+          // Fire-and-forget like the claude daemon: an awaited interrupt can
+          // stall claiming for the full request timeout, and its failure must
+          // not tear the daemon down — the turn settles via `turn/completed`.
+          void client
+            .request("turn/interrupt", {
+              threadId: S.activeCodexThreadId,
+              turnId: providerTurnId,
+            })
+            .catch((error) => {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              log("codex daemon: interrupt failed — " + message);
+            });
+        }
+        // After the cancel: a steer that races a Stop is rejected and runs as
+        // the next queued turn. `expectedTurnId` makes App Server reject a
+        // steer that lands after this turn already ended.
+        await deliverSteers(readSteers(claimed), async (text) => {
+          const turnId = liveProviderTurnId();
+          if (!turnId) return false;
+          await client.request("turn/steer", {
+            threadId: S.activeCodexThreadId,
+            expectedTurnId: turnId,
+            input: [{ type: "text", text }],
+          });
+          lastEventAt = Date.now();
+          return true;
+        });
+        const claimedTurn = readClaimedTurn(claimed);
+        if (claimedTurn) {
+          const currentLease = getCurrentTurnLease();
+          if (
+            shouldParkClaimedTurn({
+              hasActiveRealTurn: supervisor.currentTurn !== null,
+              isCancellationInFlight: supervisor.isCancellationInFlight,
+              isFinalizing: false,
+              currentLeaseTurnId: currentLease?.turnId ?? null,
+              claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null,
+            })
+          ) {
+            // A cancel response can carry the next queued prompt in the same
+            // mutation; claimPendingTurn already cleared it server-side, so
+            // parking is the only lossless option. A follow-up send during
+            // finalizing is a different turn and must be parked too.
+            if (!supervisor.parkClaim(claimedTurn)) {
+              log("codex daemon: duplicate claimed turn ignored");
+            }
+          } else {
+            // Mid-turn claims are the workflow's per-turn re-stage of the
+            // prompt this turn is already running — parking and replaying it
+            // after the turn would execute the same prompt twice.
+            log(
+              "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
+            );
           }
-        } else {
-          // Mid-turn claims are the workflow's per-turn re-stage of the
-          // prompt this turn is already running — parking and replaying it
-          // after the turn would execute the same prompt twice.
-          log(
-            "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)",
-          );
         }
       }
       if (supervisor.currentTurn === null && supervisor.pendingClaim !== null) {

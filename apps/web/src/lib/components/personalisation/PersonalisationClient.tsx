@@ -2,8 +2,8 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api, PERSONALISATION_PRESETS } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
 import {
   Textarea,
   Button,
@@ -11,11 +11,13 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@eva/ui";
+  SettingsSection,
+} from "@vvedantb/ui";
 import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { RolePresetPicker } from "./RolePresetPicker";
 import { WorkProfileSection } from "./WorkProfileSection";
+import { useAskTeammates } from "@/lib/hooks/useAskTeammates";
 import {
   catchMutationError,
   withMutationToast,
@@ -23,34 +25,21 @@ import {
 
 export function PersonalisationClient() {
   const personalisation = useQuery(api.auth.getPersonalisation);
+  const askTeammates = useAskTeammates();
   const setCustomInstructions = useMutation(
     api.auth.setCustomInstructions,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getPersonalisation, {});
-    if (current) {
-      localStore.setQuery(
-        api.auth.getPersonalisation,
-        {},
-        {
-          ...current,
-          customInstructions: args.customInstructions,
-        },
-      );
-    }
+    patchLoadedQuery(localStore, api.auth.getPersonalisation, {}, (current) => ({
+      ...current,
+      customInstructions: args.customInstructions,
+    }));
   });
   const setRole = useMutation(api.auth.setRole).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.auth.getPersonalisation, {});
-      if (current) {
-        localStore.setQuery(
-          api.auth.getPersonalisation,
-          {},
-          {
-            ...current,
-            role: args.role,
-          },
-        );
-      }
+      patchLoadedQuery(localStore, api.auth.getPersonalisation, {}, (current) => ({
+        ...current,
+        role: args.role,
+      }));
     },
   );
 
@@ -136,7 +125,7 @@ export function PersonalisationClient() {
         </div>
       </SettingsSection>
 
-      <WorkProfileSection />
+      {askTeammates && <WorkProfileSection />}
 
       <SettingsSection
         title="Custom instructions"

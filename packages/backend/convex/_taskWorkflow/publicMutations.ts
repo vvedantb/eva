@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./startRun";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
@@ -10,11 +9,7 @@ import {
   resolveCompletionTurn,
 } from "../_chat/turnStore";
 import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
-import {
-  aiModelValidator,
-  turnCheckpointArgs,
-  turnLeaseFenceArgs,
-} from "../validators";
+import { turnCheckpointArgs, turnLeaseFenceArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
   clearStreamingActivity,
@@ -222,7 +217,8 @@ export const cancelExecution = authMutation({
     await clearStreamingActivity(ctx, String(args.taskId));
 
     await ctx.db.patch(args.taskId, {
-      status: "todo",
+      // Same rule as run completion: only the run's own `in_progress` resets.
+      ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
       activeWorkflowId: undefined,
       updatedAt: Date.now(),
     });
@@ -231,48 +227,3 @@ export const cancelExecution = authMutation({
   },
 });
 
-/** Starts a new task execution workflow for a queued run. */
-export const triggerExecution = authMutation({
-  args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.taskId !== args.taskId) {
-      throw new Error("Run not found");
-    }
-
-    if (task.activeWorkflowId || run.status !== "queued") {
-      return null;
-    }
-
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await startTaskRunWorkflow(ctx, {
-      runId: args.runId,
-      taskId: args.taskId,
-      repoId: args.repoId,
-      installationId: repo.installationId,
-      projectId: args.projectId,
-      branchName: args.branchName,
-      baseBranch: args.baseBranch,
-      isFirstTaskOnBranch: args.isFirstTaskOnBranch,
-      model: args.model,
-      userId: ctx.userId,
-    });
-
-    return null;
-  },
-});

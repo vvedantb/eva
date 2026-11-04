@@ -36,6 +36,12 @@ const prDiffResultValidator = v.object({
   baseSha: v.string(),
   /** `https://github.com/<owner>/<name>`, for per-file "View file" links. */
   repoUrl: v.string(),
+  /**
+   * The branch a session can start on to work on this PR: the head branch of
+   * an open PR from this repo. Null for a fork (its branch is not here) and for
+   * a closed PR (its branch may be gone; a merged change is on the base).
+   */
+  workBranch: v.union(v.string(), v.null()),
 });
 
 type PrDiffResult = {
@@ -44,6 +50,7 @@ type PrDiffResult = {
   headSha: string;
   baseSha: string;
   repoUrl: string;
+  workBranch: string | null;
 };
 
 type InstallationOctokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
@@ -129,15 +136,20 @@ export const fetchPrDiff = internalAction({
       headSha: meta.data.head.sha,
       baseSha: meta.data.base.sha,
       repoUrl: `https://github.com/${repo.owner}/${repo.name}`,
+      workBranch:
+        meta.data.state === "open" &&
+        meta.data.head.repo?.full_name === meta.data.base.repo.full_name
+          ? meta.data.head.ref
+          : null,
     };
   },
 });
 
-// V2: the payload gained head/base shas and the repo URL — a bumped name drops
-// V1 entries instead of serving objects that are missing the new fields.
+// V3: the payload gained `workBranch` (V2: head/base shas and the repo URL) —
+// a bumped name drops old entries instead of serving objects missing fields.
 const prDiffCache = new ActionCache(components.actionCache, {
   action: internal._github.prDiff.fetchPrDiff,
-  name: "prDiffV2",
+  name: "prDiffV3",
   ttl: PR_DIFF_CACHE_TTL_MS,
 });
 

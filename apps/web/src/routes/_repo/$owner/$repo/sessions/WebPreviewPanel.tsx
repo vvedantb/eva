@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Id } from "@eva/backend";
-import { cn, Spinner, Button, WebPreview } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner, Button, WebPreview, useMediaQuery } from "@vvedantb/ui";
 import { useSessionStorage } from "usehooks-ts";
 import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
 import { IconRefresh, IconWorld } from "@tabler/icons-react";
@@ -24,8 +25,9 @@ import {
   openPreviewMiniPlayer,
   usePreviewMiniPlayer,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
+import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
+import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
 import { PreviewFloatingPlaceholder } from "./_components/PreviewFloatingPlaceholder";
 import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
@@ -114,6 +116,10 @@ export function WebPreviewPanel({
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
+  const [sketchMode, setSketchMode] = useState(false);
+  // Sketch hands its image to a composer through this context; without one
+  // there is nowhere for it to go.
+  const canSketch = usePendingPreviewSnapshots() !== undefined;
   // The mini-player is a desktop affordance: on a phone there is no "beside".
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const floating = usePreviewMiniPlayer();
@@ -313,8 +319,23 @@ export function WebPreviewPanel({
         contain={contain}
         onToggleContain={handleToggleContain}
         annotationMode={annotationMode}
-        onAnnotationModeChange={setAnnotationMode}
+        onAnnotationModeChange={(active) => {
+          setAnnotationMode(active);
+          if (active) setSketchMode(false);
+        }}
         showAnnotationToggle={Boolean(onAnnotationSubmit)}
+        sketch={
+          canSketch
+            ? {
+                active: sketchMode,
+                onToggle: () => {
+                  setSketchMode(!sketchMode);
+                  // One tool at a time: both read pointer input on the page.
+                  setAnnotationMode(false);
+                },
+              }
+            : undefined
+        }
         popOut={popOut}
       />
       <PreviewToolCallExecutor
@@ -385,6 +406,12 @@ export function WebPreviewPanel({
               }
             />
           </PreviewViewportFrame>
+          {sketchMode ? (
+            <PreviewSketchLayer
+              iframeElement={iframeElement}
+              onClose={() => setSketchMode(false)}
+            />
+          ) : null}
           {onAnnotationSubmit ? (
             <PreviewAnnotationLayer
               mode={annotationMode}

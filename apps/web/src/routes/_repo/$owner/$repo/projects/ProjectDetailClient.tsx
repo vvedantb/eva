@@ -5,11 +5,10 @@ import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useAction, useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import { CenteredSpinner, toast } from "@eva/ui";
+import { CenteredSpinner, toast, convexErrorMessage } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import type { Id } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
@@ -24,13 +23,14 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
-import { StopConfirmDialog } from "@/lib/components/tasks/_components/StopConfirmDialog";
-import { ResolveConfirmDialog } from "@/lib/components/tasks/_components/ResolveConfirmDialog";
-import { StartupCommandsConfirmDialog } from "@/lib/components/tasks/_components/StartupCommandsConfirmDialog";
+import {
+  StopConfirmDialog,
+  ResolveConfirmDialog,
+  StartupCommandsConfirmDialog,
+} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
-import { useAltHeld } from "@/lib/confirm";
 import {
   getAgentBrowsingAt,
   getProjectPrFlags,
@@ -78,7 +78,6 @@ export function ProjectDetailClient({
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
     useState(false);
-  const altHeld = useAltHeld();
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -289,7 +288,6 @@ export function ProjectDetailClient({
             repoId={repo._id}
             sandbox={sandbox}
             chatTurnOpen={chatTurnOpen}
-            altHeld={altHeld}
             prError={prError}
             prLinks={prLinks}
             hasPlanContext={hasPlanContext}
@@ -350,21 +348,21 @@ export function ProjectDetailClient({
         open={showStopBuildConfirm}
         onOpenChange={setShowStopBuildConfirm}
         onConfirm={handleStopBuild}
-        isStopping={isStoppingBuild}
+        isLoading={isStoppingBuild}
       />
 
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
-        isStarting={isResolvingConflicts}
+        isLoading={isResolvingConflicts}
       />
 
       <StartupCommandsConfirmDialog
         open={showStartupCommandsConfirm}
         onOpenChange={setShowStartupCommandsConfirm}
         onConfirm={handleRetryStartupCommands}
-        isStarting={isRetryingStartupCommands}
+        isLoading={isRetryingStartupCommands}
       />
 
       {parsedSpec && (

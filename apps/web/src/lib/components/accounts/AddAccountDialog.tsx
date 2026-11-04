@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAction } from "convex/react";
 import { api, type AIProvider, type Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
   Dialog,
@@ -14,8 +15,7 @@ import {
   Textarea,
   Spinner,
   ProviderIcon,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { PROVIDER_CREDENTIAL_FIELDS, PROVIDER_LABELS } from "./_credentialSpec";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 

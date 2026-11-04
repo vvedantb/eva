@@ -4,12 +4,12 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconChevronDown, IconUsers } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {

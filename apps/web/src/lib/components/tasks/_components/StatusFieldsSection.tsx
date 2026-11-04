@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { FieldsSection } from "@/lib/components/fields/FieldsSection";
 import { canEditTaskModel } from "./task-detail-constants";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
@@ -60,6 +62,7 @@ export function StatusFieldsSection({
   isOwner,
   allTags,
 }: StatusFieldsSectionProps) {
+  const simpleView = useSimpleView();
   const viewVercelDeployment = useViewVercelDeployment();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
@@ -86,56 +89,38 @@ export function StatusFieldsSection({
           ? { providerAccountId: providerAccountId ?? undefined }
           : {}),
       };
-      const list = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId: task.repoId,
-      });
-      if (list !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId: task.repoId },
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.getAllTasks,
+        { repoId: task.repoId },
+        (list) =>
           list.map((t) => (t._id === args.id ? { ...t, ...nullSafe } : t)),
-        );
-      }
-      const cached = localStore.getQuery(api.agentTasks.get, { id: args.id });
-      if (cached) {
-        localStore.setQuery(
-          api.agentTasks.get,
-          { id: args.id },
-          {
-            ...cached,
-            ...nullSafe,
-          },
-        );
-      }
+      );
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.get,
+        { id: args.id },
+        (cached) => cached && { ...cached, ...nullSafe },
+      );
     },
   );
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
     if (!task?.repoId) return;
-    const list = localStore.getQuery(api.agentTasks.getAllTasks, {
-      repoId: task.repoId,
-    });
-    if (list !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId: task.repoId },
-        list.map((t) =>
-          t._id === args.id ? { ...t, status: args.status } : t,
-        ),
-      );
-    }
-    const cached = localStore.getQuery(api.agentTasks.get, { id: args.id });
-    if (cached) {
-      localStore.setQuery(
-        api.agentTasks.get,
-        { id: args.id },
-        {
-          ...cached,
-          status: args.status,
-        },
-      );
-    }
+    patchLoadedQuery(
+      localStore,
+      api.agentTasks.getAllTasks,
+      { repoId: task.repoId },
+      (list) =>
+        list.map((t) => (t._id === args.id ? { ...t, status: args.status } : t)),
+    );
+    patchLoadedQuery(
+      localStore,
+      api.agentTasks.get,
+      { id: args.id },
+      (cached) => cached && { ...cached, status: args.status },
+    );
   });
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
@@ -176,17 +161,19 @@ export function StatusFieldsSection({
           updateTask={updateTask}
         />
 
-        <ModelField
-          taskId={taskId}
-          task={task}
-          currentModel={currentModel}
-          modelOptions={modelOptions}
-          accounts={accounts}
-          resolveAccountId={resolveAccountId}
-          modelLockReason={modelLockReason}
-          isOwner={isOwner}
-          updateTask={updateTask}
-        />
+        {simpleView ? null : (
+          <ModelField
+            taskId={taskId}
+            task={task}
+            currentModel={currentModel}
+            modelOptions={modelOptions}
+            accounts={accounts}
+            resolveAccountId={resolveAccountId}
+            modelLockReason={modelLockReason}
+            isOwner={isOwner}
+            updateTask={updateTask}
+          />
+        )}
 
         <BaseBranchRow
           taskId={taskId}

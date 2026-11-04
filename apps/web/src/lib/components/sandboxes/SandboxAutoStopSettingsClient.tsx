@@ -9,14 +9,14 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  SettingsField,
+  SettingsToggleRow,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { SandboxIdlePauseMode } from "@eva/shared";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 const IDLE_PAUSE_MODES: ReadonlyArray<{
@@ -142,7 +142,7 @@ export function SandboxAutoStopSettingsClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <SettingsField
                 label="Pause after the agent finishes"
@@ -216,7 +216,7 @@ export function SandboxAutoStopSettingsClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <SettingsField
                 label="Stop time"

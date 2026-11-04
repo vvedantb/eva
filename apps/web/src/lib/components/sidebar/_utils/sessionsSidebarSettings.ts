@@ -4,6 +4,10 @@ export const SESSIONS_SIDEBAR_SETTINGS_KEY = "eva:sessions-sidebar-settings:v1";
 /** Per-app expand/collapse in global Sessions sidebar + chrome tabs. */
 export const SESSIONS_APP_GROUPS_OPEN_KEY = "eva:sessions-app-groups-open:v1";
 
+/** Per-group expand/collapse for linked-session groups in the Sessions sidebar. */
+export const LINKED_SESSION_GROUPS_OPEN_KEY =
+  "eva:linked-session-groups-open:v1";
+
 export const APP_SORT_ORDERS = ["updated_at", "created_at", "manual"] as const;
 export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
 
@@ -41,16 +45,17 @@ export interface SessionsSidebarSettings {
   appSortOrder: AppSortOrder;
   sessionSortOrder: SessionSortOrder;
   sessionPreviewCount: number;
-  listMode: SessionListMode;
   layout: SessionLayout;
+  /** Hide sessions another teammate started. */
+  onlyMine: boolean;
 }
 
 export const DEFAULT_SESSIONS_SIDEBAR_SETTINGS: SessionsSidebarSettings = {
   appSortOrder: "updated_at",
   sessionSortOrder: "updated_at",
   sessionPreviewCount: DEFAULT_SESSION_PREVIEW_COUNT,
-  listMode: "active",
   layout: "list",
+  onlyMine: false,
 };
 
 export function isAppSortOrder(value: string): value is AppSortOrder {
@@ -89,12 +94,54 @@ export function clampSessionPreviewCount(value: number): number {
   );
 }
 
+/**
+ * Normalises stored prefs. Builds a fresh object so stale keys from older
+ * versions (for example `listMode`, which is no longer persisted) drop out.
+ */
+export function parseSessionsSidebarSettings(
+  raw: SessionsSidebarSettings,
+): SessionsSidebarSettings {
+  return {
+    appSortOrder: isAppSortOrder(raw.appSortOrder)
+      ? raw.appSortOrder
+      : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.appSortOrder,
+    sessionSortOrder: isSessionSortOrder(raw.sessionSortOrder)
+      ? raw.sessionSortOrder
+      : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.sessionSortOrder,
+    sessionPreviewCount: clampSessionPreviewCount(raw.sessionPreviewCount),
+    layout:
+      typeof raw.layout === "string" && isSessionLayout(raw.layout)
+        ? raw.layout
+        : DEFAULT_SESSIONS_SIDEBAR_SETTINGS.layout,
+    onlyMine: raw.onlyMine === true,
+  };
+}
+
 /** Activity timestamp for sidebar session rows. */
 export function sessionActivityAt(session: {
   updatedAt?: number;
   _creationTime: number;
 }): number {
   return session.updatedAt ?? session._creationTime;
+}
+
+/** The user who started a session; older rows have no `createdBy`. */
+function sessionStartedBy<T extends string>(session: {
+  userId: T;
+  createdBy?: T;
+}): T {
+  return session.createdBy ?? session.userId;
+}
+
+/**
+ * Keeps only sessions `userId` started. Stays `undefined` (loading) while the
+ * rows or the current user are still loading.
+ */
+export function filterSessionsStartedBy<
+  T extends { userId: string; createdBy?: string },
+>(sessions: T[] | undefined, userId: string | undefined): T[] | undefined {
+  if (sessions === undefined || userId === undefined) return undefined;
+  return sessions.filter((session) => sessionStartedBy(session) === userId);
 }
 
 /**

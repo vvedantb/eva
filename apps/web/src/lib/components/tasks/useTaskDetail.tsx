@@ -1,6 +1,6 @@
 "use client";
 
-import { useElapsedSeconds } from "@eva/ui";
+import { useActivityElapsedSeconds } from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -60,7 +60,7 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const hasRuns = (runs?.length ?? 0) > 0;
   const isProjectTask = task?.projectId !== undefined;
   const activeRun = runs?.find((run) => run.status === "running");
-  const activeRunElapsed = useElapsedSeconds(
+  const activeRunElapsed = useActivityElapsedSeconds(
     activeRun?.startedAt,
     Boolean(activeRun),
   );
