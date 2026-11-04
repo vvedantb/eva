@@ -648,11 +648,12 @@ export function TerminalPanel({
       )}
       <div ref={terminalRef} className="min-h-0 flex-1 overflow-hidden" />
       {connection.status === "exited" ? (
-        <div className="flex shrink-0 items-center justify-between gap-3 px-3 py-2">
+        // Retry first: the right edge sits under the floating chat button.
+        <div className="flex shrink-0 items-center gap-3 px-3 py-2">
+          {retryButton}
           <p className="text-sm text-muted-foreground">
             Shell exited ({connection.code})
           </p>
-          {retryButton}
         </div>
       ) : null}
       <TerminalKeyRow
