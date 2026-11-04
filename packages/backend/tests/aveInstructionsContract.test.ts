@@ -40,7 +40,15 @@ describe("Manager Ave instructions", () => {
   });
 
   test("never offer excluded tools", () => {
-    for (const excluded of ["send_chat_message", "start_sandbox", "render_ui", "send_email"]) {
+    for (const excluded of [
+      "send_chat_message",
+      "start_sandbox",
+      "render_ui",
+      "send_email",
+      "create_automation",
+      "schedule_task",
+      "start_project_build",
+    ]) {
       expect(toolNames).not.toContain(excluded);
       expect(instructions).not.toContain(`\`${excluded}\``);
     }
