@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { motionEase } from "@vvedantb/ui";
 
 export function Slide12Demo() {
   return (
@@ -6,7 +7,7 @@ export function Slide12Demo() {
       <motion.h1
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.6, ease: motionEase }}
         className="font-sans text-7xl font-semibold tracking-tight text-zinc-50"
       >
         Demo

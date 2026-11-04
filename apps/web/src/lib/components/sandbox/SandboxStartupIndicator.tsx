@@ -1,6 +1,7 @@
 "use client";
 
-import { cn, Shimmer, Spinner } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Shimmer, Spinner } from "@vvedantb/ui";
 
 /**
  * One line for the whole sandbox startup run: the Eva mark tracing itself

@@ -6,7 +6,8 @@
       "project": ["scripts/*.{ts,mjs}"]
     },
     "apps/web": {
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/lib/stageshow/**"]
     },
     "apps/chrome-extension": {
       "entry": ["src/background/index.ts", "src/content/index.ts"],

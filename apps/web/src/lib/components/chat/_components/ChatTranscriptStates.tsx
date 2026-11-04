@@ -1,4 +1,4 @@
-import { Button, CenteredSpinner, ConversationEmptyState } from "@eva/ui";
+import { Button, CenteredSpinner, ConversationEmptyState } from "@vvedantb/ui";
 
 /**
  * What a chat shows instead of turns: the empty state, and the placeholder for

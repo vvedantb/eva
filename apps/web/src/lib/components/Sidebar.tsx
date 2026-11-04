@@ -19,14 +19,15 @@ import { AveHeaderButton } from "@/lib/components/ave/AveHeaderButton";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
-  motionBase,
-  motionSpring,
+  tokenTransition,
+  springTransition,
   projectVelocity,
   Spinner,
-} from "@eva/ui";
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { RepoNavSections } from "@/lib/components/sidebar/RepoNavSections";
 import { RepoTopNav } from "@/lib/components/sidebar/RepoTopNav";
@@ -45,7 +46,6 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { usePageTitle } from "@/lib/contexts/PageTitleContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 
@@ -371,6 +371,7 @@ export function Sidebar() {
         className="fixed inset-x-0 top-0 z-30 flex h-(--eva-mobile-header-height) items-center gap-2 bg-background/80 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-md sm:px-4 lg:hidden"
       >
         <Button
+          shape="rounded"
           size="icon"
           variant="ghost"
           onClick={() => setMobileOpen(true)}
@@ -399,6 +400,7 @@ export function Sidebar() {
             button on a phone. */}
         <AveHeaderButton />
         <Button
+          shape="rounded"
           size="icon"
           variant="ghost"
           onClick={toggleTheme}
@@ -425,7 +427,7 @@ export function Sidebar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionBase}
+            transition={tokenTransition.base}
           />
         )}
       </AnimatePresence>
@@ -449,7 +451,7 @@ export function Sidebar() {
         )}
         initial={false}
         animate={{ x: isDesktop || mobileOpen ? 0 : "-100%" }}
-        transition={motionSpring}
+        transition={springTransition}
         drag={!isDesktop && mobileOpen ? "x" : false}
         dragDirectionLock
         dragConstraints={{ left: 0, right: 0 }}
@@ -515,12 +517,18 @@ export function Sidebar() {
                       )}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={motionBase}
+                      transition={tokenTransition.base}
                     >
                       {isFlatPanel ? (
                         <>
-                          {/* pl-2 lines the title up with nav row icons (nav px-2 + row px-4). */}
-                          <span className="min-w-0 flex-1 truncate pl-2 text-base font-semibold tracking-[-0.02em] text-sidebar-primary">
+                          {/* Lines the title up with nav row icons: nav px-2 + row
+                              px-4, or the Sessions grid's tighter px-2.5. */}
+                          <span
+                            className={cn(
+                              "min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary",
+                              showGlobalSessionsPanel ? "pl-0.5" : "pl-2",
+                            )}
+                          >
                             {flatPanelTitle}
                           </span>
                           <div className="flex shrink-0 items-center gap-0.5">
@@ -531,6 +539,7 @@ export function Sidebar() {
                               <AutomationsSidebarOptionsMenu />
                             ) : null}
                             <Button
+                              shape="rounded"
                               size="icon-sm"
                               variant="ghost"
                               className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -567,6 +576,7 @@ export function Sidebar() {
                           <div className="relative z-10 ml-auto flex shrink-0 items-center">
                             {headerAction}
                             <Button
+                              shape="rounded"
                               size="icon-sm"
                               variant="ghost"
                               className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -619,6 +629,7 @@ export function Sidebar() {
                           ) : null}
 
                           <Button
+                            shape="rounded"
                             size="icon"
                             variant="ghost"
                             className="motion-press shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
@@ -653,7 +664,7 @@ export function Sidebar() {
                         key={`${panelKey}-nav`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={motionBase}
+                        transition={tokenTransition.base}
                       >
                         <Suspense fallback={sidebarPanelFallback}>
                           {showGlobalSessionsPanel ? (

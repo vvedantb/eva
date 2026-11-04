@@ -2,12 +2,13 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation, useAction } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import { Link } from "@tanstack/react-router";
 import { IconUsers } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { EnvVarsTable } from "@/lib/components/EnvVarsTable";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
+import { SettingsEmptyState } from "@vvedantb/ui";
 
 export function TeamEnvVarsClient() {
   const { repo } = useRepo();
@@ -27,34 +28,25 @@ export function TeamEnvVarsClient() {
   const removeTeamVar = useMutation(
     api.teamEnvVars.removeVar,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.teamEnvVars.list, {
-      teamId: args.teamId,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.teamEnvVars.list,
-        { teamId: args.teamId },
-        current.filter((v) => v.key !== args.key),
-      );
-    }
+    patchLoadedQuery(
+      localStore,
+      api.teamEnvVars.list,
+      { teamId: args.teamId },
+      (vars) => vars.filter((v) => v.key !== args.key),
+    );
   });
   const toggleSandboxExclude = useMutation(
     api.teamEnvVars.toggleSandboxExclude,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.teamEnvVars.list, {
-      teamId: args.teamId,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.teamEnvVars.list,
-        { teamId: args.teamId },
-        current.map((v) =>
-          v.key === args.key
-            ? { ...v, sandboxExclude: args.sandboxExclude }
-            : v,
+    patchLoadedQuery(
+      localStore,
+      api.teamEnvVars.list,
+      { teamId: args.teamId },
+      (vars) =>
+        vars.map((v) =>
+          v.key === args.key ? { ...v, sandboxExclude: args.sandboxExclude } : v,
         ),
-      );
-    }
+    );
   });
 
   if (!repo.teamId || !team) {

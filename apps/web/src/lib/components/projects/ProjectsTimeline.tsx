@@ -7,6 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useNavigate } from "@tanstack/react-router";
 import {
   GanttProvider,
@@ -18,17 +19,15 @@ import {
   GanttFeatureItem,
   GanttToday,
   useGanttContext,
-  type GanttFeature,
-  type GanttStatus,
-  type Range,
-} from "@eva/ui";
+  ListEnter,
+} from "@vvedantb/ui";
+import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
 import {
   phaseConfig,
   type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { TimelineBar } from "./_components/TimelineBar";
 import { TimelineSidebarMeta } from "./_components/TimelineSidebarMeta";
 import { TimelineToolbar } from "./_components/TimelineToolbar";
@@ -47,9 +46,9 @@ type ProjectProgress = FunctionReturnType<
 interface ProjectsTimelineProps {
   projects: Project[];
   basePath: string;
-  range: Range;
+  range: GanttRange;
   zoom: number;
-  onRangeChange: (range: Range) => void;
+  onRangeChange: (range: GanttRange) => void;
   onZoomChange: (zoom: number) => void;
 }
 
@@ -121,22 +120,20 @@ export function ProjectsTimeline({
   });
   const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
     (localStore, args) => {
-      const currentList = localStore.getQuery(api.projects.list, {
-        repoId: repo._id,
-      });
-      if (currentList !== undefined) {
-        const {
-          id: _id,
-          priority,
-          projectLead,
-          codeReviewer,
-          model,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.projects.list,
-          { repoId: repo._id },
+      const {
+        id: _id,
+        priority,
+        projectLead,
+        codeReviewer,
+        model,
+        providerAccountId,
+        ...safeFields
+      } = args;
+      patchLoadedQuery(
+        localStore,
+        api.projects.list,
+        { repoId: repo._id },
+        (currentList) =>
           currentList.map((p) =>
             p._id === args.id
               ? {
@@ -158,8 +155,7 @@ export function ProjectsTimeline({
                 }
               : p,
           ),
-        );
-      }
+      );
     },
   );
 
@@ -250,21 +246,21 @@ export function ProjectsTimeline({
               const Icon = config.icon;
               return (
                 <ListEnter key={feature.id} index={index}>
-                <GanttSidebarItem
-                  feature={feature}
-                  onSelectItem={handleSelectItem}
-                  icon={<Icon size={14} className={config.text} />}
-                  meta={
-                    project ? (
-                      <TimelineSidebarMeta
-                        progress={progressMap.get(feature.id)}
-                        lead={project.projectLead}
-                        members={project.members}
-                        fallbackUserId={project.userId}
-                      />
-                    ) : undefined
-                  }
-                />
+                  <GanttSidebarItem
+                    feature={feature}
+                    onSelectItem={handleSelectItem}
+                    icon={<Icon size={14} className={config.text} />}
+                    meta={
+                      project ? (
+                        <TimelineSidebarMeta
+                          progress={progressMap.get(feature.id)}
+                          lead={project.projectLead}
+                          members={project.members}
+                          fallbackUserId={project.userId}
+                        />
+                      ) : undefined
+                    }
+                  />
                 </ListEnter>
               );
             })}

@@ -2,13 +2,17 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { patchLoadedQuery } from "@vvedantb/server";
+import {
+  Button,
+  Spinner,
+  SettingsToggleRow,
+  SettingsSection,
+  ListEnter,
+} from "@vvedantb/ui";
 import { normalizeHotkey, type Hotkey } from "@tanstack/react-hotkeys";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { ShortcutRow } from "@/lib/components/settings/shortcuts/_components/ShortcutRow";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { EDITING_KEYS } from "@/lib/components/settings/shortcuts/editingKeys";
 import { Kbd } from "@/lib/components/ui/Kbd";
 import {
@@ -52,15 +56,15 @@ export function ShortcutsSettingsClient() {
   const setOverride = useMutation(
     api.auth.setShortcutOverride,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.auth.getShortcutOverrides, {});
-    if (current === undefined) return;
-    const next = { ...current };
-    if (args.hotkey === null) {
-      delete next[args.id];
-    } else {
-      next[args.id] = args.hotkey;
-    }
-    localStore.setQuery(api.auth.getShortcutOverrides, {}, next);
+    patchLoadedQuery(localStore, api.auth.getShortcutOverrides, {}, (cur) => {
+      const next = { ...cur };
+      if (args.hotkey === null) {
+        delete next[args.id];
+      } else {
+        next[args.id] = args.hotkey;
+      }
+      return next;
+    });
   });
 
   const resetAll = useMutation(

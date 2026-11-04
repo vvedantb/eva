@@ -1,8 +1,7 @@
 "use client";
 
-import { Badge, motionFast } from "@eva/ui";
+import { Badge, tokenTransition, CountPop, countLabel } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -34,7 +33,7 @@ export function ActiveTasksBadge({ repoId }: ActiveTasksBadgeProps) {
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.85 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <Badge
             variant="secondary"

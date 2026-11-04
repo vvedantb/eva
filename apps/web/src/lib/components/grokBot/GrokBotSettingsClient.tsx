@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Input, Spinner } from "@eva/ui";
+import {
+  Button,
+  Input,
+  Spinner,
+  SettingsField,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 

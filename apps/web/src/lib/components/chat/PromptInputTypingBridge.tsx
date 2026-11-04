@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePromptInputController } from "@eva/ui";
+import { usePromptInputController } from "@vvedantb/ui";
 
 /**
  * Headless bridge for PromptInput-based composers (e.g. ChatBody). Watches the

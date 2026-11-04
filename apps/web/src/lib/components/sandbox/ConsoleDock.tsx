@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { cn, rubberband } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { rubberband } from "@vvedantb/ui";
 import {
   IconChevronDown,
   IconChevronUp,

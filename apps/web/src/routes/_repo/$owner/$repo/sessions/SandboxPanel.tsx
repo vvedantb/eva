@@ -32,6 +32,7 @@ import {
 } from "@/lib/components/docs/SessionDocumentsPanel";
 import { FilesPanel } from "./FilesPanel";
 import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
+import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
@@ -379,61 +380,65 @@ export function SandboxPanel({
             isReadOnly={isArchived === true}
           />
         </KeepAlivePane>
-        <SandboxPaneSlots
-          activeTab={activeTab}
-          panes={panes}
-          preview={preview}
-          owner={owner}
-          sandboxId={sandboxId}
-          isActive={isActive}
-          repoId={repoId}
-          cacheKey={sessionIdStr}
-          devCommand={devCommand}
-          prUrl={prUrl}
-          customTabs={simpleView ? undefined : customTabs}
-          agentBrowsingAt={agentBrowsingAt}
-          onReleaseBrowserLock={() =>
-            void catchMutationError(
-              releaseBrowserLock({ owner }),
-              "Couldn't unlock browser",
-              "sandbox-browser-unlock",
-            )
-          }
-          // Backend starts the app in the Console tmux session after startup.
-          runConsoleDevCommandOnConnect={false}
-          onStartSandbox={onStartSandbox}
-          isSandboxStarting={isSandboxStarting}
-          onAnnotationSubmit={submitAnnotation}
-          // Only the session on screen holds the idle-pause presence beacon;
-          // cached siblings and a collapsed rail must not keep a VM awake.
-          presenceEnabled={isRouteActive && !collapsed}
-          autoWakeEligible={autoWakeEligible}
-          // Multi-repo sessions run a dev server per repo; the Preview port
-          // control offers each one instead of only the primary's.
-          previewPortOptions={previewPortOptions(
-            sessionRepos,
-            devPort ?? DEFAULT_PREVIEW_PORT,
-          )}
-          // Only the session on screen may float; cached siblings and a
-          // collapsed rail keep their preview parked.
-          miniPlayer={
-            miniPlayer !== undefined && isRouteActive && !collapsed
-              ? { ...miniPlayer, sessionId }
-              : undefined
-          }
-          stickyPreviewPath={viewState?.previewPath}
-          onStickyPreviewPathChange={(path) => {
-            void setPreviewPath({ owner, path });
-          }}
-          stickyTerminalHistoryTail={
-            viewState === undefined
-              ? undefined
-              : (viewState?.terminalHistoryTail ?? "")
-          }
-          onStickyTerminalHistoryTailChange={(tail) => {
-            void setTerminalHistoryTail({ owner, tail });
-          }}
-        />
+        <ReviewChatTargetProvider
+          value={{ kind: "sessionChat", sessionId, chatId }}
+        >
+          <SandboxPaneSlots
+            activeTab={activeTab}
+            panes={panes}
+            preview={preview}
+            owner={owner}
+            sandboxId={sandboxId}
+            isActive={isActive}
+            repoId={repoId}
+            cacheKey={sessionIdStr}
+            devCommand={devCommand}
+            prUrl={prUrl}
+            customTabs={simpleView ? undefined : customTabs}
+            agentBrowsingAt={agentBrowsingAt}
+            onReleaseBrowserLock={() =>
+              void catchMutationError(
+                releaseBrowserLock({ owner }),
+                "Couldn't unlock browser",
+                "sandbox-browser-unlock",
+              )
+            }
+            // Backend starts the app in the Console tmux session after startup.
+            runConsoleDevCommandOnConnect={false}
+            onStartSandbox={onStartSandbox}
+            isSandboxStarting={isSandboxStarting}
+            onAnnotationSubmit={submitAnnotation}
+            // Only the session on screen holds the idle-pause presence beacon;
+            // cached siblings and a collapsed rail must not keep a VM awake.
+            presenceEnabled={isRouteActive && !collapsed}
+            autoWakeEligible={autoWakeEligible}
+            // Multi-repo sessions run a dev server per repo; the Preview port
+            // control offers each one instead of only the primary's.
+            previewPortOptions={previewPortOptions(
+              sessionRepos,
+              devPort ?? DEFAULT_PREVIEW_PORT,
+            )}
+            // Only the session on screen may float; cached siblings and a
+            // collapsed rail keep their preview parked.
+            miniPlayer={
+              miniPlayer !== undefined && isRouteActive && !collapsed
+                ? { ...miniPlayer, sessionId }
+                : undefined
+            }
+            stickyPreviewPath={viewState?.previewPath}
+            onStickyPreviewPathChange={(path) => {
+              void setPreviewPath({ owner, path });
+            }}
+            stickyTerminalHistoryTail={
+              viewState === undefined
+                ? undefined
+                : (viewState?.terminalHistoryTail ?? "")
+            }
+            onStickyTerminalHistoryTailChange={(tail) => {
+              void setTerminalHistoryTail({ owner, tail });
+            }}
+          />
+        </ReviewChatTargetProvider>
       </div>
     </SandboxPanelFrame>
   );

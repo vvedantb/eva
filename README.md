@@ -164,8 +164,8 @@ npx convex env set VAR value
 
 - `SANDBOX_JWT_PRIVATE_KEY`, `SANDBOX_JWT_JWKS` — sandbox authentication
 - `PREVIEW_GRANT_PRIVATE_KEY` — short-lived preview URLs
-- `MCP_BOOTSTRAP_SECRET`, `MCP_JWT_SECRET`, `MCP_INTERNAL_SECRET` — MCP
-- `CLERK_SECRET_KEY` — MCP server
+- `MCP_BOOTSTRAP_SECRET`, `MCP_INTERNAL_SECRET` — MCP
+- `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_ISSUER_DOMAIN` — MCP sign-in (Clerk OAuth)
 - `SENDGRID_API_KEY` — email
 - `EMAIL_ENV` — email routing
 - `EXTENSION_ADMIN_KEY`, `EXTENSION_ID` — Chrome extension updates
@@ -263,7 +263,7 @@ Standard iframe security. Not Eva-specific.
 | `apps/chrome-extension` | `eva-assist-extension` | On-page toolbar to annotate apps and file tasks        |
 | `packages/backend`      | `@eva/backend`         | Convex backend, workflows, in-sandbox callback runtime |
 | `packages/shared`       | `@eva/shared`          | Shared constants and types                             |
-| `packages/ui`           | `@eva/ui`              | Shared component library                               |
+| `packages/ui`           | `@eva/ui`              | eva config for `@vvedantb/ui` components               |
 
 ## Sandbox code
 

@@ -7,9 +7,9 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@eva/ui";
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { IconArrowsSort, IconChevronRight } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { PrCommentCard } from "./PrCommentCard";
 import { NOTICE_CLASS, type PrOverview } from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";
@@ -145,7 +145,8 @@ function BotGroup({ comments }: { comments: readonly SummaryComment[] }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-medium">
-            {comments.length} bot {comments.length === 1 ? "comment" : "comments"}
+            {comments.length} bot{" "}
+            {comments.length === 1 ? "comment" : "comments"}
           </span>
           <span className="flex flex-wrap gap-x-1.5 text-2xs text-muted-foreground">
             {authors.length} {authors.length === 1 ? "author" : "authors"}

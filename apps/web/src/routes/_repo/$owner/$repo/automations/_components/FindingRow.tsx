@@ -3,20 +3,20 @@
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Checkbox,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
   CrossfadeIcon,
-  cn,
-} from "@eva/ui";
+  MarqueeOnHover,
+} from "@vvedantb/ui";
 import {
   IconChevronDown,
   IconChevronRight,
   IconExternalLink,
 } from "@tabler/icons-react";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
 import { entityPathSegment } from "@/lib/numId";
 import {
   effectiveSeverity,

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -13,16 +14,17 @@ import {
   SelectContent,
   SelectItem,
   SelectValue,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconTrash, IconUsers } from "@tabler/icons-react";
 import { UserInitials } from "@eva/shared/user-initials";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
-import { requestConfirm, skipConfirmTitle, useAltHeld } from "@/lib/confirm";
 import { AddTeamMemberDialog } from "./AddTeamMemberDialog";
 import {
   RemoveMemberDialog,
@@ -52,42 +54,35 @@ export function TeamMembersTab({
   const currentUserId = useQuery(api.auth.me);
   const removeMember = useMutation(api.teamMembers.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.teamMembers.list, {
-        teamId: args.teamId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.teamMembers.list,
-          { teamId: args.teamId },
-          current.filter((member) => member.userId !== args.userId),
-        );
-      }
+      patchLoadedQuery(
+        localStore,
+        api.teamMembers.list,
+        { teamId: args.teamId },
+        (members) => members.filter((member) => member.userId !== args.userId),
+      );
     },
   );
   const updateRole = useMutation(
     api.teamMembers.updateRole,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.teamMembers.list, {
-      teamId: args.teamId,
-    });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.teamMembers.list,
-        { teamId: args.teamId },
-        current.map((member) =>
+    patchLoadedQuery(
+      localStore,
+      api.teamMembers.list,
+      { teamId: args.teamId },
+      (members) =>
+        members.map((member) =>
           member.userId === args.userId
             ? { ...member, role: args.role }
             : member,
         ),
-      );
-    }
+    );
   });
 
   const [removeTarget, setRemoveTarget] = useState<
     (RemoveMemberTarget & { userId: Member["userId"] }) | null
   >(null);
   const [isRemoving, setIsRemoving] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const runRemove = (userId: Member["userId"]) => {
     setIsRemoving(true);
@@ -180,7 +175,6 @@ export function TeamMembersTab({
                         title={skipConfirmTitle("Remove member")}
                         onClick={(event) =>
                           requestConfirm(
-                            altHeld,
                             () =>
                               setRemoveTarget({
                                 userId: member.userId,

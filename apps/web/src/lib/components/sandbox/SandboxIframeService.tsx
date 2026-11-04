@@ -5,7 +5,7 @@ import { useAction } from "convex/react";
 import { useSessionStorage } from "usehooks-ts";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner, Button } from "@eva/ui";
+import { Spinner, Button } from "@vvedantb/ui";
 import {
   IconRefresh,
   IconMaximize,

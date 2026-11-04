@@ -5,6 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Button,
@@ -20,7 +21,11 @@ import {
   Spinner,
   Surface,
   Textarea,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+  ListEnter,
+} from "@vvedantb/ui";
 import {
   IconFile,
   IconMessage,
@@ -46,15 +51,8 @@ import {
 } from "@/lib/components/sidebar/SharedLayoutNav";
 import { SidebarListHoverCard } from "@/lib/components/sidebar/SidebarListHoverCard";
 import { entityPathSegment, routeNumIdFromPath } from "@/lib/numId";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 interface DocsSidebarProps {
   repoId: Id<"githubRepos">;
@@ -80,17 +78,12 @@ export function DocsSidebar({
   const createDoc = useCreateDoc();
   const removeDoc = useMutation(api.docs.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.docs.list, {
-        repoId,
-        excludeEvaRecaps: true,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.docs.list,
-          { repoId, excludeEvaRecaps: true },
-          current.filter((d) => d._id !== args.id),
-        );
-      }
+      patchLoadedQuery(
+        localStore,
+        api.docs.list,
+        { repoId, excludeEvaRecaps: true },
+        (cur) => cur.filter((d) => d._id !== args.id),
+      );
     },
   );
   const [docToDelete, setDocToDelete] = useState<{
@@ -98,7 +91,7 @@ export function DocsSidebar({
     title: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [isUploading, setIsUploading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [showUploadSection, setShowUploadSection] = useState(false);
@@ -362,7 +355,6 @@ export function DocsSidebar({
                           onClick={() => {
                             const target = { id: doc._id, title: doc.title };
                             requestConfirm(
-                              altHeld,
                               () => setDocToDelete(target),
                               () => {
                                 void handleDelete(target);

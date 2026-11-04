@@ -1,10 +1,10 @@
 ﻿"use client";
 
+import { cn } from "@eva/ui";
 import {
   Badge,
   BorderBeam,
   Checkbox,
-  cn,
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
@@ -18,7 +18,10 @@ import {
   TooltipContent,
   TooltipTrigger,
   toast,
-} from "@eva/ui";
+  useRequestConfirm,
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -34,8 +37,7 @@ import {
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { PriorityIcon } from "@/lib/components/priority/PriorityIcon";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
+import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import {
   PRIORITY_LABELS,
   type Priority,
@@ -49,11 +51,7 @@ import {
   DeleteTaskDialog,
   useDeleteAgentTask,
 } from "./_components/DeleteTaskDialog";
-import {
-  MoveTaskDialog,
-  useMoveAgentTask,
-} from "./_components/MoveTaskDialog";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
+import { MoveTaskDialog, useMoveAgentTask } from "./_components/MoveTaskDialog";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
@@ -112,6 +110,8 @@ interface QuickTaskCardProps {
   isAgentActive?: boolean;
   /** Finished chat reply the user has not seen. `isAgentActive` hides it. */
   hasUnread?: boolean;
+  /** A chat turn waits on a blocking question; the "?" mark wins every other mark. */
+  isAwaitingAnswer?: boolean;
 }
 
 export function QuickTaskCard({
@@ -146,6 +146,7 @@ export function QuickTaskCard({
   projects,
   isAgentActive = false,
   hasUnread = false,
+  isAwaitingAnswer = false,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
@@ -160,7 +161,7 @@ export function QuickTaskCard({
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const deleteTask = useDeleteAgentTask();
   const moveTask = useMoveAgentTask();
 
@@ -195,19 +196,25 @@ export function QuickTaskCard({
     currentUserId,
     projects,
     onDelete: () =>
-      requestConfirm(altHeld, () => setShowDeleteConfirm(true), () => {
-        void deleteTask({ id }).catch((err) => {
-          console.error("Failed to delete task:", err);
-          toast.error("Could not delete the task. Try again.");
-        });
-      }),
+      requestConfirm(
+        () => setShowDeleteConfirm(true),
+        () => {
+          void deleteTask({ id }).catch((err) => {
+            console.error("Failed to delete task:", err);
+            toast.error("Could not delete the task. Try again.");
+          });
+        },
+      ),
     onMove: (targetId: Id<"githubRepos">) =>
-      requestConfirm(altHeld, () => setMoveTarget(targetId), () => {
-        void moveTask({ id, repoId: targetId }).catch((err) => {
-          console.error("Failed to move task:", err);
-          toast.error("Could not move the task. Try again.");
-        });
-      }),
+      requestConfirm(
+        () => setMoveTarget(targetId),
+        () => {
+          void moveTask({ id, repoId: targetId }).catch((err) => {
+            console.error("Failed to move task:", err);
+            toast.error("Could not move the task. Try again.");
+          });
+        },
+      ),
   };
 
   const hasDialogOpen = showDeleteConfirm || moveTarget !== null;
@@ -285,8 +292,18 @@ export function QuickTaskCard({
           ) : null}
           {/* One mark, never two: a turn in flight already implies an awake
               sandbox, so the pixel grid stands in for the status dot — the same
-              swap the session rows and the sandbox surface tabs make. */}
-          {showAgentPulse ? (
+              swap the session rows and the sandbox surface tabs make. A
+              question waiting on the user beats both. */}
+          {isAwaitingAnswer ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="relative flex items-center hit-target">
+                  <AwaitingAnswerMark />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Eva asked you a question</TooltipContent>
+            </Tooltip>
+          ) : showAgentPulse ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="relative flex items-center hit-target">
@@ -409,11 +426,7 @@ export function QuickTaskCard({
   );
 
   const wrappedCard = isInProgress ? (
-    <BorderBeam
-      active
-      colorVariant="progress"
-      className="rounded-surface"
-    >
+    <BorderBeam active colorVariant="progress" className="rounded-surface">
       {card}
     </BorderBeam>
   ) : (

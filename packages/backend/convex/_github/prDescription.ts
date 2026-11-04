@@ -15,6 +15,7 @@ import {
   getSandboxHandle,
 } from "../_sandbox_runtime/helpers";
 import { writeSandboxFile } from "../_sandbox_runtime/sandboxFiles";
+import { sandboxStillWanted } from "../_sandbox_runtime/execution";
 import {
   CLAUDE_FALLBACK_BIN_PATH,
   ensureClaudeCliAvailable,
@@ -54,8 +55,8 @@ export const generatePrDescription = internalAction({
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
     /** Set by the quick-task review path, whose sandbox was stopped when the
-     * run ended: resume it for the model call and stop it again afterwards, so
-     * a description costs one short resume rather than a sandbox left up. */
+     * run ended. The action also restores on its own when the owner is
+     * stopped by the time it runs (idle pause before "Send for review"). */
     restoreStoppedSandbox: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -102,10 +103,16 @@ export const generatePrDescription = internalAction({
         truncated: diff.truncated,
       });
 
+      // Any exec resumes a stopped VM (Vercel SDK `withResume`). Decide here,
+      // not when scheduled: the owner may have stopped since. A stopped owner
+      // gets one short resume for the model call and a stop afterwards.
+      const restore =
+        args.restoreStoppedSandbox === true ||
+        !(await sandboxStillWanted(ctx, args.sandboxId, undefined));
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
       let text: string;
       try {
-        if (args.restoreStoppedSandbox) {
+        if (restore) {
           // User-initiated (they moved the task to code_review), so a stop
           // still in flight is waited out rather than refusing the resume.
           await ensureSandboxRunning(sandbox, { resumeAfterStop: true });
@@ -125,9 +132,13 @@ export const generatePrDescription = internalAction({
         );
       } finally {
         // Put the sandbox back the way we found it, on the failure path too —
-        // a failed description must not leave a quick-task sandbox running.
-        // The task row still reads "closed", so no UI state to unwind.
-        if (args.restoreStoppedSandbox) {
+        // a failed description must not leave a stopped owner's VM running.
+        // Re-check first: a reviewer who started it meanwhile keeps it. The
+        // owner row still reads "closed", so no UI state to unwind.
+        if (
+          restore &&
+          !(await sandboxStillWanted(ctx, args.sandboxId, undefined))
+        ) {
           try {
             await ctx.runAction(internal.sandbox.stopSandbox, {
               sandboxId: args.sandboxId,

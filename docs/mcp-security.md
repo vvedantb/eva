@@ -1,90 +1,65 @@
 # MCP Server Security
 
-This document covers the security measures implemented in the Eva MCP server (`apps/mcp/`).
+The Eva MCP server runs in Convex (`packages/backend/convex/mcp/`). `POST /mcp` is the endpoint.
 
-## Authentication Flow
+## Authentication
 
-The MCP server uses OAuth 2.0 with PKCE for authentication. Users sign in via Clerk, and the server issues short-lived JWTs for MCP access.
+Clerk is the OAuth 2.0 authorization server. Eva does not register clients, show a consent screen or issue tokens.
 
-1. Client registers via `/oauth/register` with redirect URIs
-2. User authenticates via Clerk on `/oauth/authorize`
-3. Server issues an authorization code (PKCE-protected, 5 min TTL)
-4. Client exchanges code for tokens via `/oauth/token`
-5. Access token (1h) used for MCP requests, refresh token (30d) for renewal
+1. A client reads `/.well-known/oauth-protected-resource`. It lists Clerk as the authorization server.
+2. `/.well-known/oauth-authorization-server` proxies Clerk metadata for older clients.
+3. The client registers, authorizes and gets tokens from Clerk, with PKCE.
+4. The client sends the Clerk token as `Authorization: Bearer <token>` to `/mcp`.
+5. A missing or invalid token gets `401` with a `WWW-Authenticate` header that points to the resource metadata.
+
+Eva accepts two kinds of bearer token:
+
+| Token                                  | Issuer                                | Check                                                                | Scope                                          |
+| -------------------------------------- | ------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------- |
+| Clerk JWT access token                 | Clerk                                 | `authenticateClerkBearer` checks signature, issuer and expiry locally | The user                                       |
+| Clerk opaque token                     | Clerk                                 | `authenticateClerkBearer` falls back to `verifyAccessToken`          | The user                                       |
+| Sandbox (`aud: mcp-internal`)          | Eva, HS256 with `MCP_INTERNAL_SECRET` | `verifyAccessToken` checks the signature and claims                  | The user, plus `scopedRepoId`, entity and chat |
+
+`authenticateMcpToken` checks `isInternalToken` first. A sandbox token goes straight to `verifyAccessToken` and never reaches the Clerk JWT path, which would reject its HS256 signature. A Clerk JWT that fails the local check is not retried with Clerk.
+
+Eva no longer signs `mcp-oauth` tokens. Every MCP client had to sign in again when this change shipped.
 
 ## Security Measures
 
 ### Per-User Data Scoping
 
-Every MCP tool resolves the authenticated user's Clerk ID to a Convex user ID, then verifies the user has access to the requested repo before returning any data. Access is checked at two layers:
+Every MCP tool resolves the Clerk user ID to a Convex user, then checks that the user can access the repo before it returns data. A sandbox token narrows access further to its `scopedRepoId`.
 
-- **MCP app layer**: `resolveTargetWithAccess()` in `tools.ts` checks repo ownership or team membership before making any data queries
-- **Convex endpoint layer**: `/api/mcp/env-vars` in `http.ts` runs `checkRepoAccessForUser` server-side before returning credentials
+`/api/mcp/env-vars` in `http.ts` runs `checkRepoAccessForUser` before it returns credentials.
 
 ### Secret Separation
 
-Two independent secrets are used:
+| Secret                 | Purpose                                               |
+| ---------------------- | ----------------------------------------------------- |
+| `MCP_INTERNAL_SECRET`  | Signs and checks sandbox (`mcp-internal`) tokens      |
+| `MCP_BOOTSTRAP_SECRET` | Authenticates the bootstrap call that returns the key |
+| `CLERK_SECRET_KEY`     | Lets Eva verify Clerk tokens                          |
 
-- **`MCP_JWT_SECRET`**: Signs and verifies JWT access/refresh tokens. Only needed in the MCP app (Railway).
-- **`MCP_BOOTSTRAP_SECRET`**: Authenticates the bootstrap call from the MCP app to Convex to retrieve the deploy key. Needed in both Railway and Convex env vars.
-
-If one leaks, the other remains secure.
-
-### Client Registration Validation
-
-OAuth clients must register via `/oauth/register` before starting an auth flow. Registrations are stored with their declared `redirect_uris` and auto-expire after 24 hours.
-
-- `/oauth/authorize` rejects unknown `client_id` values
-- `redirect_uri` is validated against the URIs registered for that client
-- Token exchange rejects unknown `client_id` values
-- MCP clients re-register on server restart (in-memory store is acceptable)
-
-### Token Lifecycle
-
-- Access tokens expire after 1 hour
-- Refresh tokens expire after 30 days
-- Every MCP request re-validates the user exists in Clerk (catches deleted/revoked users immediately)
-- Refresh token grant issues a new access + refresh token pair
-
-### Constant-Time Comparisons
-
-All secret/token comparisons use `timingSafeEqual()` to prevent timing attacks:
-
-- Bootstrap token verification
-- Deploy key verification
-- GitHub webhook HMAC verification
-- Streaming heartbeat HMAC verification
-
-### Error Sanitization
-
-Error responses to clients are generic ("Authentication failed", "Internal server error"). Detailed error information is logged server-side only, preventing information leakage.
-
-### Rate Limiting
-
-Express rate limiters protect against brute-force and abuse:
-
-| Endpoint          | Limit            |
-| ----------------- | ---------------- |
-| `/oauth/token`    | 10 requests/min  |
-| `/oauth/register` | 20 requests/min  |
-| `POST /mcp`       | 100 requests/min |
+Sandbox signing (`SANDBOX_JWT_*`, `/.well-known/openid-configuration`, `/.well-known/jwks.json`) is separate and unchanged.
 
 ### Code Injection Defense
 
-Tools that interpolate user input into Convex query code (`get_document`, `count_table`) use `JSON.stringify()` for safe interpolation rather than string concatenation.
+Tools that put user input into Convex query code (`get_document`, `count_table`) use `JSON.stringify()`, not string concatenation.
 
-## Environment Variables
+## Environment Variables (Convex)
 
-| Variable                | Where            | Purpose                                    |
-| ----------------------- | ---------------- | ------------------------------------------ |
-| `MCP_JWT_SECRET`        | Railway          | JWT signing/verification                   |
-| `MCP_BOOTSTRAP_SECRET`  | Railway + Convex | Bootstrap endpoint auth                    |
-| `CLERK_PUBLISHABLE_KEY` | Railway          | Clerk sign-in UI                           |
-| `CLERK_SECRET_KEY`      | Railway          | Clerk token verification + user validation |
-| `CONVEX_CLOUD_URL`      | Railway          | Convex API endpoint                        |
-| `EVA_DEPLOY_KEY`        | Convex           | Deploy key returned by bootstrap           |
+| Variable                  | Purpose                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `CLERK_JWT_ISSUER_DOMAIN` | Clerk issuer for OAuth metadata and local JWT verify (falls back to `CLERK_FRONTEND_API_URL`) |
+| `CLERK_SECRET_KEY`        | Clerk opaque-token verification                                               |
+| `CLERK_PUBLISHABLE_KEY`   | Clerk opaque-token verification (`authenticateRequest` needs it with the secret key) |
+| `MCP_INTERNAL_SECRET`     | Sandbox token signing and checking                                            |
+| `MCP_BOOTSTRAP_SECRET`    | Bootstrap endpoint auth                                                       |
+| `WEB_APP_URL`             | `resource_documentation` in the protected resource metadata                   |
+
+`MCP_JWT_SECRET` is no longer read. Remove it from Convex env when convenient.
 
 ## Known Limitations
 
-- **In-memory stores**: Auth codes, client registrations, and credential caches are in-memory. They don't survive server restarts. This is acceptable because MCP clients automatically retry the OAuth flow on failure.
-- **No client approval flow**: Any caller can register a client via `/oauth/register`. The redirect URI validation mitigates the risk, but there's no admin approval step.
+- **JWT revocation**: A Clerk JWT stays valid until it expires, because Eva checks it locally and does not call Clerk.
+- **Unused tables**: `mcpTokenCache` was drained by `dataMigrations:drainMcpTokenCache` and removed from the schema. `mcpAuthCodes` and `mcpClientRegistrations` stay in the schema until a drain migration removes them.

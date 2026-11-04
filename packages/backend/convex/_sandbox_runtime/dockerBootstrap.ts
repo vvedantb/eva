@@ -29,6 +29,21 @@ export function buildDockerdStaleRuntimeCleanup(ignoreErrors = false): string {
   return `sudo rm -f ${DOCKER_STALE_RUNTIME_PATHS.join(" ")} 2>/dev/null${suffix}`;
 }
 
+/**
+ * Serializes concurrent dockerd bootstraps and exits early once another caller
+ * got dockerd up. A new session runs several at once (createSandbox, the turn's
+ * validateSandbox, seeded-runtime restore); without the lock each one that saw
+ * `docker info` fail ran `pkill -9 dockerd` and killed the others' half-started
+ * daemon. Lives on the caller's fd 9 for the rest of the script.
+ */
+export function buildDockerBootstrapLock(waitSeconds: number): string[] {
+  return [
+    `exec 9>/tmp/eva-docker-bootstrap.lock`,
+    `flock -w ${waitSeconds} 9 || true`,
+    'if docker info >/dev/null 2>&1; then echo "bootstrap-docker:already-running"; exit 0; fi',
+  ];
+}
+
 /** Kills half-alive dockerd/containerd before a restart. */
 export function buildDockerdProcessCleanup(ignoreErrors = false): string[] {
   const suffix = ignoreErrors ? " || true" : "";

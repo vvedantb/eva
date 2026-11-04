@@ -1,6 +1,6 @@
 "use client";
 
-import { CommandItem } from "@eva/ui";
+import { CommandItem } from "@vvedantb/ui";
 import { IconFile, IconFileText, IconX } from "@tabler/icons-react";
 import { relativeTime } from "@/lib/components/artifacts/_format";
 import { isImageContentType } from "@/lib/components/attachments/attachmentMeta";
@@ -40,23 +40,25 @@ export function ComposerStashItem({
       </span>
       {entry.attachments.length > 0 ? (
         <span className="flex shrink-0 items-center gap-1">
-          {entry.attachments.slice(0, 3).map((attachment) =>
-            isImageContentType(attachment.contentType) ? (
-              <img
-                key={attachment.url}
-                src={attachment.url}
-                alt=""
-                aria-hidden
-                className="size-4 rounded object-cover"
-              />
-            ) : (
-              <IconFile
-                key={attachment.url}
-                aria-hidden
-                className="size-3.5 text-muted-foreground"
-              />
-            ),
-          )}
+          {entry.attachments
+            .slice(0, 3)
+            .map((attachment) =>
+              isImageContentType(attachment.contentType) ? (
+                <img
+                  key={attachment.url}
+                  src={attachment.url}
+                  alt=""
+                  aria-hidden
+                  className="size-4 rounded object-cover"
+                />
+              ) : (
+                <IconFile
+                  key={attachment.url}
+                  aria-hidden
+                  className="size-3.5 text-muted-foreground"
+                />
+              ),
+            )}
         </span>
       ) : null}
       <span className="shrink-0 text-muted-foreground tabular-nums">

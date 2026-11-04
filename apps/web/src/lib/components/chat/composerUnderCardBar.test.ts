@@ -46,7 +46,7 @@ describe("the composer's under-card bar", () => {
     // strip would be all that rendered. The gate must still include the
     // picker, or a surface with one could lose it again.
     expect(composer).toContain(
-      "!underCardLeading && !stashButton && !modelPicker ? null",
+      "!underCardLeading && !stashButton && !visibleModelPicker ? null",
     );
   });
 

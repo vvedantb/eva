@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { useConvexConnectionState } from "convex/react";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 
 const TOAST_ID = "connection-status";
 

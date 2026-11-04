@@ -7,6 +7,7 @@ import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModel
 import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
 import { isAssistantTurnInProgress } from "@/lib/components/chat/chatBodyUtils";
 
 /**
@@ -48,7 +49,11 @@ export function useSessionAnnotationSend(
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const addMessage = useMutation(api.sessions.addMessage);
-  const startExecution = useMutation(api.sessionWorkflow.startExecute);
+  const startExecution = useMutation(
+    api.sessionWorkflow.startExecute,
+  ).withOptimisticUpdate((localStore, args) =>
+    openChatTurnOptimistically(localStore, args.chatId),
+  );
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
 
   const isExecuting =

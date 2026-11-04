@@ -57,7 +57,8 @@
       "ws@8.20.1": "8.21.0"
     },
     "patchedDependencies": {
-      "@convex-dev/presence@0.3.0": "patches/@convex-dev__presence@0.3.0.patch"
+      "@convex-dev/presence@0.3.0": "patches/@convex-dev__presence@0.3.0.patch",
+      "@vercel/sandbox": "patches/@vercel__sandbox.patch"
     },
     "onlyBuiltDependencies": [
       "@swc/core"

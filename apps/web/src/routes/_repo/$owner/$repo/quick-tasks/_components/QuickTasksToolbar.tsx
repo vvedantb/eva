@@ -12,15 +12,15 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  motionFast,
+  tokenTransition,
   Tabs,
   TabsList,
   TabsTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
-import { ToggleSearch } from "@/lib/components/ui/ToggleSearch";
+  ToggleSearch,
+} from "@vvedantb/ui";
 import {
   IconPlus,
   IconCheckbox,
@@ -257,7 +257,7 @@ export function QuickTasksToolbar({
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <Tooltip>
               <TooltipTrigger asChild>

@@ -1,6 +1,6 @@
 /**
  * Global routes that render the home sidebar (Codebases / Teams / Artifacts /
- * What's New). `/changelog` is the old What's New path, kept so its redirect
+ * What's New / Feedback). `/changelog` is the old What's New path, kept so its redirect
  * keeps the same chrome instead of flashing the bare layout.
  *
  * Shared by `Sidebar` (which renders the panel) and the `/_global` layout
@@ -11,6 +11,7 @@ const HOME_ROOTS = [
   "/teams",
   "/artifacts",
   "/whats-new",
+  "/feedback",
   "/changelog",
 ] as const;
 

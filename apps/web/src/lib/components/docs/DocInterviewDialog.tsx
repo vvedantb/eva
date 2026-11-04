@@ -18,10 +18,13 @@ import {
   Textarea,
   getSpeechRecognition,
   useSpeechRecognition,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+  ListEnter,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import {
   IconTrash,
   IconMicrophone,
@@ -32,12 +35,6 @@ import { MultipleChoiceQuestion } from "@/lib/components/plan/MultipleChoiceQues
 import { ChatMessage } from "@/lib/components/plan/ChatMessage";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
@@ -106,7 +103,7 @@ export function DocInterviewDialog({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const [dictation, setDictation] = useState("");
   const hasTriggeredRef = useRef(false);
   const hasSpeech = !!getSpeechRecognition();
@@ -342,7 +339,7 @@ export function DocInterviewDialog({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={motionFast}
+                    transition={tokenTransition.fast}
                   >
                     <MultipleChoiceQuestion
                       question={currentQuestion.question}
@@ -419,7 +416,7 @@ export function DocInterviewDialog({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={motionFast}
+                    transition={tokenTransition.fast}
                   >
                     <Spinner size="sm" />
                     <span className="text-sm text-muted-foreground">
@@ -438,7 +435,6 @@ export function DocInterviewDialog({
                   title={skipConfirmTitle("Clear")}
                   onClick={(event) =>
                     requestConfirm(
-                      altHeld,
                       () => setConfirmClear(true),
                       () => {
                         void handleClear();

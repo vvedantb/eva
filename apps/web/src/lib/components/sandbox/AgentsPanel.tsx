@@ -6,23 +6,24 @@ import {
   IconPlayerStop,
   IconRobot,
 } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 import {
   ActivityTasks,
   Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  CircleSpinner,
-  cn,
-  formatElapsed,
-  useElapsedSeconds,
-} from "@eva/ui";
+  Spinner,
+  formatActivityElapsed,
+  useActivityElapsedSeconds,
+  ListEnter,
+  RollingNumber,
+} from "@vvedantb/ui";
 import {
   subagentTone,
   type SubagentTone,
   type SubagentView,
 } from "./agentActivity";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 const DOT_CLASS: Record<SubagentTone, string> = {
   active: "bg-primary animate-pulse ring-2 ring-primary/30",
@@ -33,17 +34,17 @@ const DOT_CLASS: Record<SubagentTone, string> = {
 
 function AgentDuration({ agent }: { agent: SubagentView }) {
   const running = subagentTone(agent.status) === "active";
-  const liveElapsed = useElapsedSeconds(agent.startedAt, running);
+  const liveElapsed = useActivityElapsedSeconds(agent.startedAt, running);
   if (agent.startedAt === undefined) return null;
   const seconds =
     running || agent.settledAt === undefined
       ? liveElapsed
       : Math.max(0, Math.floor((agent.settledAt - agent.startedAt) / 1000));
   if (!running && agent.settledAt === undefined) return null;
-  return <span className="tabular-nums">{formatElapsed(seconds)}</span>;
+  return <RollingNumber value={formatActivityElapsed(seconds)} />;
 }
 
-function AgentStopButton({
+export function AgentStopButton({
   toolUseId,
   onRequestStop,
 }: {
@@ -76,7 +77,7 @@ function AgentStopButton({
       }}
     >
       {isStopping ? (
-        <CircleSpinner size="sm" className="size-3.5" />
+        <Spinner variant="circle" size="sm" className="size-3.5" />
       ) : (
         <IconPlayerStop className="size-3.5" />
       )}
@@ -98,7 +99,10 @@ function AgentRow({
   const running = tone === "active";
   const canStop =
     running && agent.backgrounded && !isReadOnly && onRequestStop !== undefined;
-  const stepCount = agent.steps.length;
+  // `response` steps are the agent's own messages, not steps it ran.
+  const stepCount = agent.steps.filter(
+    (step) => step.type !== "response",
+  ).length;
 
   return (
     <Collapsible defaultOpen={running} className="group rounded-xl bg-muted/50">

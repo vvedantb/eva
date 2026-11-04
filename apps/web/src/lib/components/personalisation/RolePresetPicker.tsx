@@ -3,7 +3,7 @@
 import { PERSONALISATION_PRESETS } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { IconBriefcase, IconCode, IconBrush } from "@tabler/icons-react";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+import { ListEnter } from "@vvedantb/ui";
 
 const PRESET_ICONS = {
   business: IconBriefcase,
@@ -32,7 +32,13 @@ export function RolePresetPicker({
         const isActive = activeRole === key;
 
         return (
-          <ListEnter key={key} index={index} fast slide={false} className="h-full">
+          <ListEnter
+            key={key}
+            index={index}
+            fast
+            slide={false}
+            className="h-full"
+          >
             <button
               type="button"
               aria-pressed={isActive}

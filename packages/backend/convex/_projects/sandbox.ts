@@ -9,6 +9,7 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
+import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
 import { workflow } from "../workflowManager";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
@@ -28,6 +29,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -251,7 +253,11 @@ export const resolveProjectConflicts = authMutation({
       kind: "project",
       projectId: project._id,
     });
-    if (!primaryPr || primaryPr.state === "merged" || primaryPr.state === "closed") {
+    if (
+      !primaryPr ||
+      primaryPr.state === "merged" ||
+      primaryPr.state === "closed"
+    ) {
       throw new Error("Project has no open PR to resolve conflicts for");
     }
     if (project.activeBuildWorkflowId) {
@@ -529,6 +535,7 @@ export const markProjectSandboxClosed = internalMutation({
     if (!project) return null;
     // Only flip if still stopping — don't overwrite a fresh start.
     if (project.reviewProjectSandboxStatus !== "stopping") return null;
+    await scheduleDrainAfterStopSettles(ctx, args.projectId);
     if (args.error) {
       await ctx.db.insert("messages", {
         parentId: args.projectId,
@@ -588,6 +595,15 @@ export const projectSandboxReady = internalMutation({
       project.reviewProjectSandboxStatus === "active" &&
       project.sandboxId === args.sandboxId;
     if (!alreadyActive) {
+      // Subagents died with the old VM; unsettled, they hold the chat queue
+      // (`runningBackgroundAgents`). Mirrors the session `sandboxReady`.
+      const settledAgents = settleOrphanedBackgroundAgents(
+        project.backgroundAgents,
+        Date.now(),
+      );
+      if (settledAgents) {
+        await ctx.db.patch(args.projectId, { backgroundAgents: settledAgents });
+      }
       const content = args.isNew ? "Sandbox started" : "Sandbox reconnected";
       await ctx.db.insert("messages", {
         parentId: args.projectId,

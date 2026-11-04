@@ -20,7 +20,7 @@ interface UsePresentationSyncArgs {
   updateSearch: (next: { slide?: number; session?: string }) => void;
 }
 
-export type SessionState = "none" | "loading" | "live" | "ended" | "notfound";
+type SessionState = "none" | "loading" | "live" | "ended" | "notfound";
 
 export function usePresentationSync({
   slide,

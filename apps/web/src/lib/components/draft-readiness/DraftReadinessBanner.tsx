@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconInfoCircle } from "@tabler/icons-react";
 import {
@@ -44,7 +45,7 @@ export function DraftReadinessBanner({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <IconInfoCircle size={16} className="shrink-0 text-warning" />
           <span className="min-w-0 flex-1 text-xs text-muted-foreground">

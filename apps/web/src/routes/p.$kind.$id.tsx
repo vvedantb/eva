@@ -3,7 +3,7 @@ import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
 import { useAction, useConvex, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@eva/backend";
-import { Button, Spinner } from "@eva/ui";
+import { Button, Spinner } from "@vvedantb/ui";
 import {
   PREVIEW_WAKE_KINDS,
   previewWakeSearchSchema,

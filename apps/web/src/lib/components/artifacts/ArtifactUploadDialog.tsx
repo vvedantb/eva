@@ -22,7 +22,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconUpload } from "@tabler/icons-react";
 import { parseArtifactMeta, parseStorageId } from "./_meta";
 

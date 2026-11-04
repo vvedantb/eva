@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { composeDocumentTitle } from "./useDocumentTitle";
+import {
+  composeDocumentTitle,
+  publishEntityTitle,
+  readEntityTitle,
+} from "./useDocumentTitle";
+
+/**
+ * Regression (#957): session shells hand over across two commits — the new
+ * shell publishes first, the old shell's cleanup runs one deferred render
+ * later. An unconditional clear blanked the new title, so every tab read
+ * "Sessions | Eva".
+ */
+describe("publishEntityTitle", () => {
+  it("keeps the newer title when the older publisher clears late", () => {
+    const clearOld = publishEntityTitle("Old session");
+    const clearNew = publishEntityTitle("New session");
+    clearOld();
+    expect(readEntityTitle()).toBe("New session");
+    clearNew();
+    expect(readEntityTitle()).toBeNull();
+  });
+
+  it("does not clear a newer publish of the same title", () => {
+    const clearFirst = publishEntityTitle("Same name");
+    const clearSecond = publishEntityTitle("Same name");
+    clearFirst();
+    expect(readEntityTitle()).toBe("Same name");
+    clearSecond();
+    expect(readEntityTitle()).toBeNull();
+  });
+});
 
 /**
  * The tab title used to read "Sessions | Eva" for every session, so three

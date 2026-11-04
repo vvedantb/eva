@@ -2,8 +2,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { IconMapSearch } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
+import { Button, EmptyState } from "@vvedantb/ui";
 import { useSearch } from "@/lib/contexts/SearchContext";
 
 /**
@@ -20,21 +19,25 @@ export function RouteNotFound() {
 
   return (
     <div className="flex min-h-dvh flex-1 items-center justify-center bg-background p-4">
-      <EmptyState
-        icon={<IconMapSearch size={28} />}
-        title="This page doesn't exist"
-        description="The link may be wrong or the page may have moved."
-        action={
-          <div className="mt-6 flex items-center justify-center gap-2">
-            <Button asChild size="sm">
-              <Link to="/home">Go home</Link>
-            </Button>
-            <Button size="sm" variant="secondary" onClick={openSearch}>
-              Search
-            </Button>
-          </div>
-        }
-      />
+      <EmptyState.Root>
+        <EmptyState.Icon icon={IconMapSearch} size={28} />
+        <EmptyState.Title>This page doesn't exist</EmptyState.Title>
+        <EmptyState.Description>
+          The link may be wrong or the page may have moved.
+        </EmptyState.Description>
+        <EmptyState.Actions>
+          {
+            <div className="mt-6 flex items-center justify-center gap-2">
+              <Button asChild size="sm">
+                <Link to="/home">Go home</Link>
+              </Button>
+              <Button size="sm" variant="secondary" onClick={openSearch}>
+                Search
+              </Button>
+            </div>
+          }
+        </EmptyState.Actions>
+      </EmptyState.Root>
     </div>
   );
 }

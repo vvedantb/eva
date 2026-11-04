@@ -531,7 +531,7 @@ describe("a callback-published session still opens its first pull request", () =
    * pure cost.
    */
   test("the durability push short-circuits before touching the network", () => {
-    const body = functionBody(turnPersist, "export function persistTurnWork(");
+    const body = functionBody(turnPersist, "function commitAndPushTurnWork(");
     const guardAt = body.indexOf("tipAlreadyPublished([");
     const fetchAt = body.indexOf("synchronizeForPush(");
     expect(guardAt, "the local no-op guard is missing").toBeGreaterThan(-1);
@@ -569,19 +569,29 @@ describe("a callback-published session still opens its first pull request", () =
    * upstream to the branch's own name.
    */
   test("branch setup pins the upstream to the working branch", () => {
-    for (const entry of [
-      "export async function checkoutSessionBranch(",
-      "export async function setupBranch(",
+    // checkoutSessionBranch runs as one exec, so it inlines the pin's shell.
+    for (const [entry, pinCall] of [
+      [
+        "export async function checkoutSessionBranch(",
+        "pinBranchUpstreamShell(branchName)",
+      ],
+      [
+        "export async function setupBranch(",
+        "pinBranchUpstream(sandbox, branchName)",
+      ],
     ]) {
       const body = functionBody(sandboxGit, entry);
       expect(body, `${entry} lost --no-track`).toContain("--no-track");
-      expect(body, `${entry} lost the upstream pin`).toContain(
-        "pinBranchUpstream(sandbox, branchName)",
-      );
+      expect(body, `${entry} lost the upstream pin`).toContain(pinCall);
     }
     const pin = functionBody(sandboxGit, "async function pinBranchUpstream(");
-    expect(pin).toContain("branch.${branchName}.remote");
-    expect(pin).toContain("refs/heads/${branchName}");
+    expect(pin).toContain("pinBranchUpstreamShell(branchName)");
+    const pinShell = functionBody(
+      sandboxGit,
+      "function pinBranchUpstreamShell(",
+    );
+    expect(pinShell).toContain("branch.${branchName}.remote");
+    expect(pinShell).toContain("refs/heads/${branchName}");
   });
 
   /**
@@ -601,7 +611,7 @@ describe("a callback-published session still opens its first pull request", () =
       "git checkout -f -b ${quotedBranch} ${quotedRemoteBranch}",
     );
     expect(body, "base fallback arm lost -f").toContain(
-      "git checkout -f --no-track -b ${quotedBranch} ${quotedBase}",
+      'git checkout -f --no-track -b ${quotedBranch} "$start"',
     );
   });
 

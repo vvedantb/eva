@@ -520,13 +520,20 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
     // `Task`. Match both so subagent runs are always recognised (a bare `Task`
     // previously fell through to the generic "Using Task..." row).
     case "Agent":
-    case "Task":
+    case "Task": {
+      // The prompt the subagent was spawned with: the opening message of
+      // its child thread view. Trimmed from the chat transcript query like
+      // any other preview, so it costs nothing until a reader opens it.
+      const prompt = readTrimmedString(input, ["prompt"]);
       return {
         type: "subtask",
         label: "Running agent...",
         detail: readString(input, ["description", "subagent_type"]),
+        contentPreview:
+          prompt === undefined ? undefined : capContentPreview(prompt),
         status: "active",
       };
+    }
     case "TodoWrite":
       return { type: "tool", label: "Updating tasks...", status: "active" };
     case "TodoRead":

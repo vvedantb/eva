@@ -1,9 +1,8 @@
 "use client";
 
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { useAveChat } from "@/lib/components/ave/useAveChat";
 import {
   RoutedQuestionDock,
@@ -27,7 +26,7 @@ export function AveChat({
   size?: RoutedQuestionDockSize;
 }) {
   return (
-    <QueryErrorBoundary
+    <ErrorBoundary
       fallback={(retry) => (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <IconAlertTriangle className="size-8 text-muted-foreground/60" />
@@ -39,7 +38,7 @@ export function AveChat({
       )}
     >
       <AveChatBody size={size} />
-    </QueryErrorBoundary>
+    </ErrorBoundary>
   );
 }
 
@@ -65,9 +64,9 @@ function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
         onCancel={chat.cancel}
         localDraft={chat.localDraft}
         preInputContent={
-          <QueryErrorBoundary>
+          <ErrorBoundary>
             <RoutedQuestionDock size={size} />
-          </QueryErrorBoundary>
+          </ErrorBoundary>
         }
         hideJumpRail
       />

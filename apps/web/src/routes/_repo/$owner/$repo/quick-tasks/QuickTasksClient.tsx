@@ -3,7 +3,12 @@ import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { CenteredSpinner, motionBase } from "@eva/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  EmptyState,
+  Button,
+} from "@vvedantb/ui";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   Navigate,
@@ -13,7 +18,6 @@ import {
 } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import {
   QuickTaskModal,
@@ -24,7 +28,7 @@ import { QuickTasksListSplit } from "./_components/QuickTasksListSplit";
 import { QuickTaskDetailShell } from "./_components/QuickTaskDetailShell";
 import { QuickTaskTaskPageContent } from "./_components/QuickTaskTaskPageContent";
 import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
-import { IconChecklist } from "@tabler/icons-react";
+import { IconChecklist, IconPlus } from "@tabler/icons-react";
 import { TASK_STATUSES } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
@@ -43,10 +47,7 @@ import {
 } from "@/lib/components/quick-tasks/selectionRange";
 import { useBulkDeleteTasks } from "@/lib/components/quick-tasks/DeleteTasksModal";
 import { useBulkRunTasks } from "@/lib/components/quick-tasks/RunTasksModal";
-import {
-  mutationError,
-  mutationSuccess,
-} from "@/lib/utils/mutationToast";
+import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 export function QuickTasksClient() {
   const navigate = useNavigate();
@@ -456,43 +457,45 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <CenteredSpinner label="Loading quick tasks" />
               </m.div>
             ) : !hasQuickTasks &&
-            !(view === "list" && numIdParam !== undefined) ? (
+              !(view === "list" && numIdParam !== undefined) ? (
               <m.div
                 key="quick-tasks-empty"
                 className="flex min-h-0 flex-1 items-center justify-center"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
-                <EmptyState
-                  icon={
-                    <IconChecklist
-                      size={24}
-                      className="text-muted-foreground"
-                    />
-                  }
-                  title={
-                    hasAnyTasks ? "No matching quick tasks" : "No quick tasks"
-                  }
-                  description={
-                    hasAnyTasks
+                <EmptyState.Root enter={!hasAnyTasks}>
+                  <EmptyState.Icon icon={IconChecklist} size={24} />
+                  <EmptyState.Title>
+                    {hasAnyTasks ? "No matching quick tasks" : "No quick tasks"}
+                  </EmptyState.Title>
+                  <EmptyState.Description>
+                    {hasAnyTasks
                       ? "Try clearing filters to see all tasks."
-                      : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."
-                  }
-                  actionLabel={
-                    hasAnyTasks ? "Clear filters" : "Create Quick Task"
-                  }
-                  onAction={
-                    hasAnyTasks ? clearAllFilters : () => setIsCreating(true)
-                  }
-                  animate={!hasAnyTasks}
-                />
+                      : "Quick tasks are standalone tasks not tied to a feature. Create one for small, one-off work."}
+                  </EmptyState.Description>
+                  <EmptyState.Actions>
+                    <Button
+                      size="sm"
+                      onClick={
+                        hasAnyTasks
+                          ? clearAllFilters
+                          : () => setIsCreating(true)
+                      }
+                      className="mt-6"
+                    >
+                      <IconPlus size={16} />
+                      {hasAnyTasks ? "Clear filters" : "Create Quick Task"}
+                    </Button>
+                  </EmptyState.Actions>
+                </EmptyState.Root>
               </m.div>
             ) : view === "kanban" ? (
               <m.div
@@ -501,7 +504,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <QuickTasksKanbanBoard
                   tasks={quickTasks}
@@ -518,7 +521,7 @@ export function QuickTasksClient() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
-                transition={motionBase}
+                transition={tokenTransition.base}
               >
                 <QuickTasksListSplit
                   tasks={quickTasks}

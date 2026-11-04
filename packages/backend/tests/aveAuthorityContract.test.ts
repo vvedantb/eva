@@ -64,6 +64,50 @@ describe("only Manager Ave's own run can grant Ave's powers", () => {
   });
 });
 
+/**
+ * Implicit watches (create_session, send_agent_message) used to fall back to
+ * the user's live Ave thread when the caller was not Ave. Every sandbox agent,
+ * connector and PR-watch delivery then made Ave watch the chat it touched, so
+ * each turn end woke Ave. Only Ave's own thread may register an implicit watch.
+ */
+describe("only Manager Ave's own sends register an implicit watch", () => {
+  const register = sliceTo(
+    nodeActions,
+    "async function registerWatchIfAve(",
+    "\n}\n",
+  );
+
+  test("registration needs Ave's own thread and never looks one up", () => {
+    expect(register).toContain("if (aveThreadId === undefined) return;");
+    expect(register).not.toContain("ave:getThread");
+    expect(register).not.toContain("??");
+  });
+
+  test("create and send register through the guard, not around it", () => {
+    for (const action of [
+      "export const orchestratorSendMessage",
+      "export const orchestratorCreateSession",
+    ]) {
+      const body = sliceTo(nodeActions, action, "\nexport ");
+      expect(body, action).toContain("registerWatchIfAve(");
+      expect(body, action).not.toContain("setWatchedByAve(");
+      expect(body, action).not.toContain("ave:getThread");
+    }
+  });
+
+  test("only the guard and the explicit watch action set the pointer", () => {
+    const calls = nodeActions.match(/await setWatchedByAve\(/g);
+    expect(calls?.length).toBe(2);
+    const explicit = sliceTo(
+      nodeActions,
+      "export const orchestratorSetWatch",
+      "\nexport ",
+    );
+    expect(explicit).toContain("await setWatchedByAve(");
+    expect(register).toContain("await setWatchedByAve(");
+  });
+});
+
 /** Comments name the very shapes these rules pin, so they have to go first. */
 function readSource(relativePath: string): string {
   return readFileSync(join(convexDir, relativePath), "utf8")

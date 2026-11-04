@@ -2,7 +2,11 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
-import { CenteredSpinner } from "@eva/ui";
+import {
+  CenteredSpinner,
+  SettingsSection,
+  SettingsEmptyState,
+} from "@vvedantb/ui";
 import { IconChartBarOff } from "@tabler/icons-react";
 import {
   DAY_MS,
@@ -10,8 +14,6 @@ import {
   getStartTime,
   type TimeRange,
 } from "@/lib/components/analytics/timeRange";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { bucketStartsBetween } from "../_utils";
 import { UsageOverview } from "./UsageOverview";
 import { UsageByModelChart } from "./UsageByModelChart";

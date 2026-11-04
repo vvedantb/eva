@@ -168,7 +168,7 @@ export const prRecapWorkflow = workflow.define({
         const result = await step.awaitEvent(prRecapCompleteEvent);
 
         if (result.success && result.result) {
-          const parsed = parsePrRecapOutput(result.result);
+          const parsed = parsePrRecapOutput(result.result, diff.filePaths);
           if (!parsed.ok) {
             await finalize({
               kind: "error",
@@ -179,7 +179,7 @@ export const prRecapWorkflow = workflow.define({
           await finalize({
             kind: "ready",
             content: parsed.markdown,
-            html: parsed.html,
+            walkthrough: parsed.walkthrough,
           });
           if (
             args.consumeAgentCommentIds &&

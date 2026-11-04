@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 interface AutomationDeleteDialogProps {
   automation: { id: Id<"automations">; title: string } | null;

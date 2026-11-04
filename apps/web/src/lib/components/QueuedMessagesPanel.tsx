@@ -26,11 +26,18 @@ import {
   TooltipContent,
   TooltipTrigger,
   formatModelDisplayLabel,
-  motionBase,
+  tokenTransition,
   useDragSensors,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconArrowUp, IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+  IconArrowUp,
+  IconPencil,
+  IconSteeringWheel,
+  IconTrash,
+} from "@tabler/icons-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -39,11 +46,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 /** `TId` is the row's id: a `queuedMessages` doc, or Manager Ave's held message. */
 interface QueuedMessageItem<TId extends string> {
@@ -51,8 +53,10 @@ interface QueuedMessageItem<TId extends string> {
   content: string;
   model?: string;
   reasoningLevel?: string;
-  /** Who queued it ??? a shared chat's queue mixes several teammates' prompts. */
+  /** Who queued it: a shared chat's queue mixes several teammates' prompts. */
   userId?: Id<"users">;
+  /** Steer pressed: the running agent is taking this message into its turn. */
+  steering?: boolean;
 }
 
 interface QueuedMessagesPanelProps<TId extends string> {
@@ -63,6 +67,8 @@ interface QueuedMessagesPanelProps<TId extends string> {
   onDelete?: (id: TId) => Promise<void>;
   /** When provided, items become reorderable; receives the new top-to-bottom id order. */
   onReorder?: (orderedIds: TId[]) => Promise<void>;
+  /** When provided, each item gets a Steer button: send it now and redirect the agent. */
+  onSteer?: (id: TId) => Promise<void>;
 }
 
 /** Tooltip copy for a queued row's model + effort snapshot. */
@@ -137,6 +143,7 @@ function SortableQueuedItem<TId extends string>({
   onEditClick,
   onDeleteClick,
   onMoveToFront,
+  onSteerClick,
 }: {
   item: QueuedMessageItem<TId>;
   index: number;
@@ -145,6 +152,7 @@ function SortableQueuedItem<TId extends string>({
   onEditClick?: (item: QueuedMessageItem<TId>) => void;
   onDeleteClick?: (item: QueuedMessageItem<TId>) => void;
   onMoveToFront?: (item: QueuedMessageItem<TId>) => void;
+  onSteerClick?: (item: QueuedMessageItem<TId>) => void;
 }) {
   const {
     attributes,
@@ -184,35 +192,52 @@ function SortableQueuedItem<TId extends string>({
         <QueueItemContent className="text-xs leading-4">
           {renderContent ? renderContent(item.content) : item.content}
         </QueueItemContent>
-        {/* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
-            touch by itself; only the tap target still needs growing here. */}
-        <QueueItemActions className="items-center max-sm:[&>button]:size-10">
-          {onEditClick ? (
-            <QueueItemAction
-              aria-label="Edit queued message"
-              onClick={() => onEditClick(item)}
-            >
-              <IconPencil size={14} />
-            </QueueItemAction>
-          ) : null}
-          {onMoveToFront && index > 0 ? (
-            <QueueItemAction
-              aria-label="Move queued message to front"
-              onClick={() => onMoveToFront(item)}
-            >
-              <IconArrowUp size={14} />
-            </QueueItemAction>
-          ) : null}
-          {onDeleteClick ? (
-            <QueueItemAction
-              aria-label="Delete queued message"
-              title={skipConfirmTitle("Delete queued message")}
-              onClick={() => onDeleteClick(item)}
-            >
-              <IconTrash size={14} />
-            </QueueItemAction>
-          ) : null}
-        </QueueItemActions>
+        {item.steering ? (
+          <span className="shrink-0 text-xs leading-4 text-muted-foreground">
+            Steering…
+          </span>
+        ) : (
+          /* `QueueItemActions` now carries `reveal-on-hover`, so it is visible on
+            touch by itself; only the tap target still needs growing here. */
+          <QueueItemActions className="items-center max-sm:[&>button]:size-10">
+            {onSteerClick ? (
+              <QueueItemAction
+                aria-label="Steer with queued message"
+                title="Send now and redirect the running agent"
+                className="gap-1 px-1.5 text-xs max-sm:w-auto"
+                onClick={() => onSteerClick(item)}
+              >
+                <IconSteeringWheel size={14} />
+                Steer
+              </QueueItemAction>
+            ) : null}
+            {onEditClick ? (
+              <QueueItemAction
+                aria-label="Edit queued message"
+                onClick={() => onEditClick(item)}
+              >
+                <IconPencil size={14} />
+              </QueueItemAction>
+            ) : null}
+            {onMoveToFront && index > 0 ? (
+              <QueueItemAction
+                aria-label="Move queued message to front"
+                onClick={() => onMoveToFront(item)}
+              >
+                <IconArrowUp size={14} />
+              </QueueItemAction>
+            ) : null}
+            {onDeleteClick ? (
+              <QueueItemAction
+                aria-label="Delete queued message"
+                title={skipConfirmTitle("Delete queued message")}
+                onClick={() => onDeleteClick(item)}
+              >
+                <IconTrash size={14} />
+              </QueueItemAction>
+            ) : null}
+          </QueueItemActions>
+        )}
       </div>
     </QueueItem>
   );
@@ -231,20 +256,18 @@ export function QueuedMessagesPanel<TId extends string>({
   onEdit,
   onDelete,
   onReorder,
+  onSteer,
 }: QueuedMessagesPanelProps<TId>) {
   const [editingItem, setEditingItem] = useState<QueuedMessageItem<TId> | null>(
     null,
   );
-  const [deletingItem, setDeletingItem] = useState<QueuedMessageItem<TId> | null>(
-    null,
-  );
+  const [deletingItem, setDeletingItem] =
+    useState<QueuedMessageItem<TId> | null>(null);
   const [draftContent, setDraftContent] = useState("");
-  const [draftForId, setDraftForId] = useState<TId | null>(
-    null,
-  );
+  const [draftForId, setDraftForId] = useState<TId | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const deleteQueued = async (item: QueuedMessageItem<TId>) => {
     if (!onDelete) return;
@@ -300,7 +323,7 @@ export function QueuedMessagesPanel<TId extends string>({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionBase}
+            transition={tokenTransition.base}
           >
             {/* Flush above the composer: fills the dock column in ComposerStash,
                 which owns the inset, with a square bottom so it blends into the
@@ -333,7 +356,6 @@ export function QueuedMessagesPanel<TId extends string>({
                               onDelete
                                 ? (item) =>
                                     requestConfirm(
-                                      altHeld,
                                       () => setDeletingItem(item),
                                       () => {
                                         void deleteQueued(item);
@@ -343,6 +365,13 @@ export function QueuedMessagesPanel<TId extends string>({
                             }
                             onMoveToFront={
                               onReorder ? handleMoveToFront : undefined
+                            }
+                            onSteerClick={
+                              onSteer
+                                ? (item) => {
+                                    void onSteer(item.id);
+                                  }
+                                : undefined
                             }
                           />
                         ))}

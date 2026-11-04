@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { useThemeContext } from "@/lib/contexts/useThemeContext";
 import { resolveCustomTheme } from "@/lib/contexts/themeTokens";
@@ -65,14 +66,10 @@ export function WelcomeSetupDialog() {
   });
   const setRole = useMutation(api.auth.setRole).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.auth.getPersonalisation, {});
-      if (current) {
-        localStore.setQuery(
-          api.auth.getPersonalisation,
-          {},
-          { ...current, role: args.role },
-        );
-      }
+      patchLoadedQuery(localStore, api.auth.getPersonalisation, {}, (current) => ({
+        ...current,
+        role: args.role,
+      }));
     },
   );
 

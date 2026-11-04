@@ -10,8 +10,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Textarea,
-  motionSpring,
-} from "@eva/ui";
+  springTransition,
+} from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
   elementChip,
@@ -97,7 +97,7 @@ export function AnnotationCommentCard({
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={motionSpring}
+      transition={springTransition}
       className="pointer-events-auto fixed z-50 w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-popover p-3 smooth-shadow-ring-lg"
       style={{ left: position.left, top: position.top }}
     >

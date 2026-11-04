@@ -1,8 +1,8 @@
+import { requiredEnvUrl } from "@vvedantb/server";
+
 /** Eva web app origin, no trailing slash. */
 export function getEvaBaseUrl(): string {
-  const url = process.env.WEB_APP_URL;
-  if (!url) throw new Error("WEB_APP_URL is not set in Convex env");
-  return url.replace(/\/$/, "");
+  return requiredEnvUrl("WEB_APP_URL");
 }
 
 function repoPath(repoName: string, rootDirectory?: string): string {

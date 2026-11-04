@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import { useDocumentVisible } from "@/lib/hooks/useDocumentVisible";
 import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
+import { useDocumentVisible } from "@vvedantb/ui";
 
 /**
  * Read state of the open chat, for every surface (session, quick task,

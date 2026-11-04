@@ -1,5 +1,8 @@
 export type { Id, Doc } from "./convex/_generated/dataModel";
-export type { BackgroundAgentEntry } from "./convex/_validators/tableFields";
+export type {
+  AgentGoal,
+  BackgroundAgentEntry,
+} from "./convex/_validators/tableFields";
 export type { SandboxOwner } from "./convex/_sandbox/owner";
 export { api } from "./convex/_generated/api";
 export { GITHUB_AUTH_REQUIRED } from "./convex/_github/authErrors";
@@ -8,7 +11,6 @@ export {
   findUsageLimitHold,
   isHeldByUsageLimit,
   parseUsageLimitResetTime,
-  type UsageLimitHold,
 } from "./convex/_taskWorkflow/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
@@ -16,19 +18,15 @@ export {
   REPO_EVENT_LABELS,
   USER_REPO_EVENTS,
   type AutomationTrigger,
-  type RepoEventKind,
 } from "./convex/_automationEvents/labels";
 export {
   INCOMPLETE_PR_RECAP_MESSAGE,
+  hasStoredRecap,
   isIncompleteReadyRecap,
   isViewableRecap,
 } from "./convex/_prRecapWorkflow/recapState";
-export {
-  CONNECTOR_ENV_KEYS,
-  CONNECTOR_PROVIDERS,
-  CONNECTOR_LABEL,
-} from "./convex/_connectors/providers";
-export { pickConnectorToken } from "./convex/_connectors/pick";
+export { type RecapWalkthroughStep } from "./convex/_prRecapWorkflow/walkthrough";
+export { CONNECTOR_ENV_KEYS } from "./convex/_connectors/providers";
 export {
   COMMENT_ANCHOR_PARAM,
   withCommentAnchor,
@@ -52,7 +50,6 @@ export {
   storedTraitsFromRepoDefaults,
   type AIModel,
   type AIProvider,
-  type InteractionMode,
   type ReasoningLevel,
   type StoredModelTraits,
   type ModelTraitsExecutionArgs,

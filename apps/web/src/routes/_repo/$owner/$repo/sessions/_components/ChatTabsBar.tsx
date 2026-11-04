@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import type { Doc, Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
-  cn,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -13,7 +13,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPencil, IconPlus, IconX } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
@@ -95,7 +95,10 @@ export function ChatTabsBar({
                     onClick={() => onSelect(chat)}
                   >
                     {running ? (
-                      <span className="flex shrink-0 items-center" title="Working">
+                      <span
+                        className="flex shrink-0 items-center"
+                        title="Working"
+                      >
                         <LoadingState
                           label="Working"
                           variant="Drive"

@@ -9,6 +9,7 @@ import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
+  awaitingAnswerEntityIdsForRepo,
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../_chat/turnProjection";
@@ -22,6 +23,8 @@ export const agentTaskWithLastRunValidator = v.object({
   isExecuting: v.boolean(),
   /** Unread chat reply for this user (`chatReads.ts`). Autonomous runs do not count. */
   hasUnread: v.boolean(),
+  /** A chat turn is paused on a blocking question for the user. */
+  isAwaitingAnswer: v.boolean(),
 });
 
 function repoIdsOf(
@@ -34,13 +37,17 @@ function repoIdsOf(
   return repoIds;
 }
 
-/** Open chat turns across every repo the tasks belong to, one query per repo. */
-async function openChatEntityIdsForRepos(
+/** Per-repo turn ids across every repo the tasks belong to, one query per repo. */
+async function turnIdsForRepos(
   db: QueryCtx["db"],
   tasks: ReadonlyArray<Doc<"agentTasks">>,
+  idsForRepo: (
+    db: QueryCtx["db"],
+    repoId: Id<"githubRepos">,
+  ) => Promise<ReadonlySet<string>>,
 ): Promise<ReadonlySet<string>> {
   const sets = await Promise.all(
-    [...repoIdsOf(tasks)].map((repoId) => openChatEntityIdsForRepo(db, repoId)),
+    [...repoIdsOf(tasks)].map((repoId) => idsForRepo(db, repoId)),
   );
   return new Set(sets.flatMap((set) => [...set]));
 }
@@ -52,7 +59,10 @@ async function enrichTasksWithLastRun(
   tasks: Array<Doc<"agentTasks">>,
 ) {
   const repoIds = repoIdsOf(tasks);
-  const openChatEntityIds = await openChatEntityIdsForRepos(db, tasks);
+  const [openChatEntityIds, awaitingAnswerIds] = await Promise.all([
+    turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
+    turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
+  ]);
   const unreadLookups = new Map<
     string,
     (task: Doc<"agentTasks">) => Promise<boolean>
@@ -83,12 +93,14 @@ async function enrichTasksWithLastRun(
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
       const unreadLookup = unreadLookups.get(String(task.repoId));
       const hasUnread = unreadLookup ? await unreadLookup(task) : false;
+      const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       if (summary) {
         return {
           ...task,
           lastRunStartedAt: summary.lastRunStartedAt,
           isExecuting,
           hasUnread,
+          isAwaitingAnswer,
         };
       }
       // Migration-safe fallback for tasks whose summary row is not backfilled.
@@ -102,6 +114,7 @@ async function enrichTasksWithLastRun(
         lastRunStartedAt: latestRun?.startedAt,
         isExecuting,
         hasUnread,
+        isAwaitingAnswer,
       };
     }),
   );
@@ -296,7 +309,11 @@ export const getActiveTasksSlim = authQuery({
     ctx,
   ): Promise<Array<Infer<typeof orchestratorTaskValidator>>> => {
     const tasks = await activeTasksForUser(ctx, ctx.userId);
-    const openChatEntityIds = await openChatEntityIdsForRepos(ctx.db, tasks);
+    const openChatEntityIds = await turnIdsForRepos(
+      ctx.db,
+      tasks,
+      openChatEntityIdsForRepo,
+    );
     return tasks.map((task) => ({
       _id: task._id,
       _creationTime: task._creationTime,

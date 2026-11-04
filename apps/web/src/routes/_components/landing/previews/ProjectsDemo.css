@@ -1,0 +1,205 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.pj .pj-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.pj .pj-body {
+  height: 100%;
+  padding: 0 16px;
+  background: var(--ss-surface);
+}
+
+/* Progress on the left, the build button at the board's right edge. */
+.pj .pj-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 584px;
+  padding: 14px 0;
+}
+
+.pj .pj-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pj .pj-meter {
+  width: 120px;
+}
+
+.pj .pj-merged {
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pj .pj-build {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.pj .pj-build[data-on] {
+  background: var(--ss-fill);
+  color: var(--ss-text-strong);
+}
+
+.pj .pj-build-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Board: four wells, the cards on one layer above them. */
+.pj .pj-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 140px);
+  column-gap: 8px;
+}
+
+.pj .pj-col {
+  height: 340px;
+  padding: 9px 12px;
+  border-radius: var(--ss-radius-lg);
+  background: var(--ss-well);
+  color: var(--ss-text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.pj .pj-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pj .pj-col-count {
+  color: var(--ss-text-faint);
+}
+
+.pj .pj-cards {
+  position: absolute;
+  top: 34px;
+  left: 6px;
+}
+
+.pj .pj-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  width: 128px;
+  height: 60px;
+  padding: 0 10px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow-card), 0 0 0 1px var(--ss-line-faint);
+  /* One layer for the whole trip, so the words never step as it lands. */
+  will-change: transform;
+  transition: transform 0.75s cubic-bezier(0.45, 0, 0.1, 1);
+}
+
+.pj .pj-title {
+  overflow: hidden;
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.pj .pj-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pj .pj-status {
+  color: var(--ss-text);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+/* An even line box, so the 14px glyphs sit on whole pixels. */
+.pj .pj-state {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Each 14px glyph centred in an even box, so it lands on whole pixels. */
+.pj .pj-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: -1px;
+}
+
+.pj .pj-done {
+  color: var(--ss-success-text);
+}
+
+/* Compact: the list view of the same project, statuses changing in place. */
+.pj .ss-stage[data-layout="compact"] .pj-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.pj .ss-stage[data-layout="compact"] .pj-head {
+  width: 310px;
+  padding: 16px 0 14px;
+}
+
+.pj .ss-stage[data-layout="compact"] .pj-meter {
+  width: 64px;
+}
+
+.pj .pj-list {
+  display: grid;
+  width: 310px;
+  border-top: 1px solid var(--ss-line);
+}
+
+.pj .pj-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 4px;
+  border-bottom: 1px solid var(--ss-line-faint);
+}
+
+.pj .pj-row .pj-title {
+  font-size: 13.5px;
+}
+
+.pj .pj-row .pj-status {
+  font-size: 12px;
+}

@@ -13,8 +13,10 @@ import { classifyPrActionFailure } from "./_github/prErrors";
 import {
   convertPullRequestToDraft,
   markPullRequestReadyForReview,
+  removeLegacyDraftLabel,
   syncPullRequestDraftState,
 } from "./_github/pullRequestDraftState";
+import { taskPullRequestLabels } from "./_github/prLabels";
 import {
   createPullRequestWithGitHub,
   getPullRequest,
@@ -67,21 +69,6 @@ function buildTaskPullRequestBody(params: {
   return buildPrBody(sections, evaUrl);
 }
 
-function buildTaskPullRequestLabels(params: {
-  rootDirectory: string;
-  isQuickTask: boolean;
-}): string[] {
-  return [
-    "eva",
-    params.isQuickTask ? "quick-task" : "project",
-    ...(params.rootDirectory
-      ? [params.rootDirectory.split("/").pop()].filter(
-          (label): label is string => label !== undefined && label !== "",
-        )
-      : []),
-  ];
-}
-
 /**
  * Runs a manual PR attempt so its failure reaches the user.
  *
@@ -132,7 +119,7 @@ export const createTaskPr = action({
           changeRequests: data.changeRequests,
         });
 
-        const labels = buildTaskPullRequestLabels({
+        const labels = taskPullRequestLabels({
           rootDirectory: data.rootDirectory,
           isQuickTask: data.isQuickTask,
         });
@@ -205,7 +192,7 @@ export const createProjectPr = action({
         );
         const body = buildPrBody(sections, evaUrl);
 
-        const labels = buildTaskPullRequestLabels({
+        const labels = taskPullRequestLabels({
           rootDirectory: data.rootDirectory,
           isQuickTask: false,
         });
@@ -296,7 +283,7 @@ export const createTaskPullRequest = internalAction({
         rootDirectory: args.rootDirectory,
         changeRequests: args.changeRequests,
       }),
-      labels: buildTaskPullRequestLabels({
+      labels: taskPullRequestLabels({
         rootDirectory: args.rootDirectory,
         isQuickTask,
       }),
@@ -441,6 +428,7 @@ export const reopenPullRequest = internalAction({
       // GitHub preserves the previous draft state on reopen, so flip it if the
       // target status doesn't match.
       await syncPullRequestDraftState(octokit, pr, args.asReady);
+      if (args.asReady) await removeLegacyDraftLabel(octokit, target, pr);
       return true;
     } catch (error) {
       console.error(
@@ -498,11 +486,14 @@ export const markPrReadyForReview = internalAction({
   handler: async (_ctx, args) => {
     try {
       const octokit = await getInstallationOctokit(args.installationId);
-      const pr = await getPullRequest(octokit, {
+      const target = {
         owner: args.repoOwner,
         repo: args.repoName,
         pull_number: args.prNumber,
-      });
+      };
+      const pr = await getPullRequest(octokit, target);
+      // Older Eva PRs carry a `draft` label; clear it even if already ready.
+      await removeLegacyDraftLabel(octokit, target, pr);
       if (!pr.draft) return true; // already ready
       await markPullRequestReadyForReview(octokit, pr.node_id);
       console.log(

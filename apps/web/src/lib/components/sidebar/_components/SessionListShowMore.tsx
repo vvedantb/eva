@@ -1,6 +1,11 @@
 "use client";
 
 import { IconDots } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
+import {
+  SESSIONS_LEADING_SLOT,
+  SESSIONS_ROW_X,
+} from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
 interface SessionListShowMoreProps {
   expanded: boolean;
@@ -18,9 +23,12 @@ export function SessionListShowMore({
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center gap-2 rounded-menu-item py-1.5 pl-5 pr-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+      className={cn(
+        "flex w-full items-center gap-2 rounded-menu-item py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+        SESSIONS_ROW_X,
+      )}
     >
-      <span className="flex size-2 shrink-0 items-center justify-center">
+      <span className={SESSIONS_LEADING_SLOT}>
         <IconDots size={12} />
       </span>
       {expanded

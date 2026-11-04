@@ -11,6 +11,7 @@ import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
 import type { Doc, Id } from "../_generated/dataModel";
 import { sessionRepoPullRequest } from "../_pullRequests/store";
+import { sessionPullRequestLabels } from "./prLabels";
 
 /**
  * Promotes a session's draft PR to ready-for-review. Called when the user
@@ -73,8 +74,8 @@ export const createSessionPr = action({
     // the moment the work is offered for review, the diff is final, the
     // session sandbox is normally still up, and it costs one model call per
     // review instead of one per turn. Scheduled, not awaited, so the modal
-    // returns straight away — the action is best-effort, so a stopped sandbox
-    // just logs and leaves the static body in place.
+    // returns straight away. If idle pause stopped the sandbox, the action
+    // resumes it for the model call and stops it again.
     if (session.sandboxId !== undefined) {
       await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
         installationId: repo.installationId,
@@ -188,10 +189,6 @@ export const createDraftSessionPr = internalAction({
     });
     if (!repo) return null;
 
-    const appLabel: string | undefined = repo.rootDirectory
-      ? repo.rootDirectory.split("/").pop()
-      : undefined;
-
     // The reviewer-facing description is generated from the diff after the PR
     // exists (`generatePrDescription`); the session summary is only included
     // when the user has already produced one.
@@ -234,7 +231,7 @@ export const createDraftSessionPr = internalAction({
         baseBranch,
         title: session.title,
         body,
-        labels: ["eva", "session", "draft", ...(appLabel ? [appLabel] : [])],
+        labels: sessionPullRequestLabels(repo.rootDirectory),
       });
     } catch (error) {
       if (isBranchNotAheadError(error)) {
@@ -322,7 +319,7 @@ export const createDraftSessionRepoPr = internalAction({
         baseBranch: linkedRepo.baseBranch,
         title: session.title,
         body,
-        labels: ["eva", "session", "draft"],
+        labels: sessionPullRequestLabels(undefined),
       });
     } catch (error) {
       if (isBranchNotAheadError(error)) {

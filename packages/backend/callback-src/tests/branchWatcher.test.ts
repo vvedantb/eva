@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import {
-  decideBranchReport,
+  decideGitStateReport,
   formatBranch,
   resolveBranchTarget,
   startBranchWatcher,
@@ -46,30 +46,54 @@ describe("formatBranch", () => {
   });
 });
 
-describe("decideBranchReport", () => {
+describe("decideGitStateReport", () => {
+  const clean = { uncommittedFiles: 0, unpushedCommits: 0 };
+  const dirty = { uncommittedFiles: 2, unpushedCommits: 1 };
+
   it("sends the first reading", () => {
-    expect(decideBranchReport({ current: "main", lastReported: null })).toBe(
-      "main",
-    );
+    const current = { branch: "main", sync: clean };
+    expect(decideGitStateReport({ current, lastReported: null })).toBe(current);
   });
 
   it("sends a changed branch", () => {
-    expect(decideBranchReport({ current: "staging", lastReported: "main" })).toBe(
-      "staging",
-    );
+    const current = { branch: "staging", sync: clean };
+    expect(
+      decideGitStateReport({
+        current,
+        lastReported: { branch: "main", sync: clean },
+      }),
+    ).toBe(current);
+  });
+
+  it("sends changed counts on the same branch", () => {
+    const current = { branch: "main", sync: dirty };
+    expect(
+      decideGitStateReport({
+        current,
+        lastReported: { branch: "main", sync: clean },
+      }),
+    ).toBe(current);
   });
 
   it("stays quiet when unchanged", () => {
-    expect(decideBranchReport({ current: "main", lastReported: "main" })).toBe(
-      null,
-    );
+    expect(
+      decideGitStateReport({
+        current: { branch: "main", sync: { ...dirty } },
+        lastReported: { branch: "main", sync: dirty },
+      }),
+    ).toBe(null);
   });
 
   it("stays quiet when git could not be read", () => {
-    expect(decideBranchReport({ current: null, lastReported: "main" })).toBe(
+    expect(
+      decideGitStateReport({
+        current: null,
+        lastReported: { branch: "main", sync: clean },
+      }),
+    ).toBe(null);
+    expect(decideGitStateReport({ current: null, lastReported: null })).toBe(
       null,
     );
-    expect(decideBranchReport({ current: null, lastReported: null })).toBe(null);
   });
 });
 

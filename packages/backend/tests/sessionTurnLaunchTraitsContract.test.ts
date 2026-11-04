@@ -18,6 +18,8 @@ const executionSource = readFileSync(
   "utf8",
 ).replaceAll("\r\n", "\n");
 
+const daemonTurnSource = source("../convex/_sessions/daemonTurn.ts");
+
 /**
  * `stageAndStartChatTurn`'s body with `//` comments stripped — the prose
  * names the very identifiers these tests assert are absent, so an assertion
@@ -95,7 +97,8 @@ const RAW_COMPOSER_ARGS: readonly string[] = [
  */
 describe("stageAndStartChatTurn normalises launch traits once", () => {
   const normaliseAt = stageBody.indexOf("launchTraitsFromStored(");
-  const prewarmAt = stageBody.indexOf("internal.sandbox.prewarmSessionDaemon");
+  // The prewarm itself lives in daemonTurn.ts, shared with the queue drain.
+  const prewarmAt = stageBody.indexOf("scheduleChatDaemonPrewarm(");
   const workflowStartAt = stageBody.indexOf("workflow.start(");
 
   test("both launch call sites are still here", () => {
@@ -136,9 +139,12 @@ describe("stageAndStartChatTurn normalises launch traits once", () => {
 
   test("the normalised traits are what both call sites spread", () => {
     expect(stageBody.slice(prewarmAt, workflowStartAt)).toContain(
-      "...launchTraits",
+      "launchTraits,",
     );
     expect(stageBody.slice(workflowStartAt)).toContain("...launchTraits");
+    // The shared prewarm forwards exactly the traits it was handed.
+    expect(daemonTurnSource).toContain("...params.launchTraits,");
+    expect(daemonTurnSource).toContain("internal.sandbox.prewarmSessionDaemon");
   });
 });
 
@@ -173,7 +179,8 @@ describe("every chat workflow start normalises its launch traits", () => {
       path: "../convex/_queues/helpers.ts",
       anchor: "internal.sessionWorkflow.sessionExecuteWorkflow",
       entityField: "chatId",
-      spread: "launchTraitsFromStored(",
+      // Precomputed: the drain's own daemon prewarm shares the same traits.
+      spread: "...launchTraits",
       rawFields: [
         "next.reasoningLevel",
         "next.thinkingEnabled",

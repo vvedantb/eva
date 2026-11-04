@@ -957,6 +957,8 @@ export const mcpPullRequestValidator = v.object({
   primary: v.boolean(),
   /** "eva" when Eva's flow opened it; "agent" for one opened on a side branch. */
   openedBy: prOriginValidator,
+  /** The agent is watching it (`watch_pull_request`). */
+  watched: v.boolean(),
 });
 
 /** Every PR a chat holds, primary first, then newest first. */
@@ -972,6 +974,7 @@ export function toMcpPullRequests(
       branch: pr.headBranch,
       primary: pr.primary,
       openedBy: pr.origin,
+      watched: pr.watch !== undefined,
     }));
 }
 

@@ -1,9 +1,13 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import type { Id } from "../_generated/dataModel";
+import type { Infer } from "convex/values";
+import type { aiModelValidator } from "../_validators/aiModels";
+import type { ReasoningLevel } from "../_validators/aiModels";
 import { internal } from "../_generated/api";
+import type { RecapWalkthroughStep } from "./walkthrough";
 
 export type PrRecapOutcome =
-  | { kind: "ready"; content: string; html: string }
+  | { kind: "ready"; content: string; walkthrough: RecapWalkthroughStep[] }
   | { kind: "error"; message: string }
   | { kind: "skipped"; message: string };
 
@@ -18,6 +22,12 @@ type FinalizePrRecapOutcomeParams = {
   prUrl: string;
   prTitle: string;
   headSha: string;
+  /** The run's setup, recorded on the doc only when it produced a recap. */
+  model: Infer<typeof aiModelValidator>;
+  reasoningLevel?: ReasoningLevel;
+  thinkingEnabled?: boolean;
+  use1mContext?: boolean;
+  fastMode?: boolean;
   outcome: PrRecapOutcome;
 };
 
@@ -34,7 +44,14 @@ export async function finalizePrRecapOutcome(
       title: `PR #${params.prNumber} — ${params.prTitle}`,
       headSha: params.headSha,
       content: params.outcome.content,
-      html: params.outcome.html,
+      recapWalkthrough: params.outcome.walkthrough,
+      run: {
+        model: params.model,
+        reasoningLevel: params.reasoningLevel,
+        thinkingEnabled: params.thinkingEnabled,
+        use1mContext: params.use1mContext,
+        fastMode: params.fastMode,
+      },
       prRecapStatus: "ready",
       clearActiveWorkflowId: true,
     });

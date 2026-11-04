@@ -56,6 +56,8 @@ const daemonClaimDrainFields = {
   cancelRequested: v.boolean(),
   usageRefreshRequested: v.boolean(),
   interactionMode: v.optional(interactionModeValidator),
+  /** Queued messages the daemon injects into its live turn (`_chat/steer.ts`). */
+  steers: v.optional(v.array(v.object({ id: v.string(), text: v.string() }))),
 };
 
 /**
@@ -275,7 +277,24 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("disablePageMotion"),
   v.literal("viewVercelDeployment"),
   v.literal("disableAutoArchive"),
+  v.literal("askTeammates"),
+  v.literal("claudeStyleActivity"),
+  v.literal("openPrsOnGithub"),
+  v.literal("scopeCheck"),
+  v.literal("manualSideBranchPublish"),
+  v.literal("prWatch"),
 );
+
+/**
+ * Work in the sandbox checkout that is not on GitHub yet, reported live with
+ * `sandboxBranch` (see callback-src/runtime/branchWatcher.ts). Counts use the
+ * same media exclusions as the turn-end commit, so they match what a
+ * "Commit & push" would publish.
+ */
+export const sandboxGitSyncValidator = v.object({
+  uncommittedFiles: v.number(),
+  unpushedCommits: v.number(),
+});
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
 export const experimentalFlagsFields = {
@@ -290,6 +309,12 @@ export const experimentalFlagsFields = {
   disablePageMotion: v.optional(v.boolean()),
   viewVercelDeployment: v.optional(v.boolean()),
   disableAutoArchive: v.optional(v.boolean()),
+  askTeammates: v.optional(v.boolean()),
+  claudeStyleActivity: v.optional(v.boolean()),
+  openPrsOnGithub: v.optional(v.boolean()),
+  scopeCheck: v.optional(v.boolean()),
+  manualSideBranchPublish: v.optional(v.boolean()),
+  prWatch: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -307,6 +332,12 @@ export const resolvedExperimentalFlagsValidator = v.object({
   disablePageMotion: v.boolean(),
   viewVercelDeployment: v.boolean(),
   disableAutoArchive: v.boolean(),
+  askTeammates: v.boolean(),
+  claudeStyleActivity: v.boolean(),
+  openPrsOnGithub: v.boolean(),
+  scopeCheck: v.boolean(),
+  manualSideBranchPublish: v.boolean(),
+  prWatch: v.boolean(),
 });
 
 /**

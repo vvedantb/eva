@@ -24,6 +24,7 @@ import {
 } from "../_userProviderAccounts/defaults";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
+import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import {
   cancelSessionSandboxGraceDelete,
@@ -83,6 +84,11 @@ const createSessionArgs = v.object({
   repoGroupId: v.optional(v.id("repoGroups")),
   /** Whether linked repos install dependencies on clone. Defaults to true. */
   installDependencies: v.optional(v.boolean()),
+  /**
+   * Session whose agent spun this one up (MCP `create_session`). The new
+   * session joins that session's linked-session group.
+   */
+  fromSessionId: v.optional(v.id("sessions")),
 });
 
 type CreateSessionArgs = Infer<typeof createSessionArgs>;
@@ -97,6 +103,18 @@ export interface CreateSessionFork {
 
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
+
+/** The linked-session group a new session spun up from `sourceId` joins. */
+async function joinSessionGroup(
+  ctx: AuthMutationCtx,
+  sourceId: Id<"sessions">,
+): Promise<Id<"sessionGroups">> {
+  const source = await ctx.db.get(sourceId);
+  if (!source || !(await hasRepoAccess(ctx.db, source.repoId, ctx.userId))) {
+    throw new Error("Source session not found");
+  }
+  return await ensureSessionGroup(ctx.db, source, ctx.userId);
+}
 
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
@@ -144,6 +162,10 @@ export async function createSession(
   }
   const installDependencies =
     args.installDependencies ?? group?.installDependencies ?? true;
+  const sessionGroupId =
+    args.fromSessionId === undefined
+      ? undefined
+      : await joinSessionGroup(ctx, args.fromSessionId);
 
   const numId = await allocateNumId(ctx.db, args.repoId, "sessions");
   const model = args.model ?? repo.defaultModel;
@@ -179,6 +201,7 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
+    ...(sessionGroupId ? { sessionGroupId } : {}),
     ...(fork
       ? {
           forkedFromSessionId: fork.sourceSessionId,

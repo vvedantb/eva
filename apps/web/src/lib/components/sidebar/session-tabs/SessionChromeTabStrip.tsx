@@ -3,7 +3,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { motionFast, useDragSensors } from "@eva/ui";
+import { tokenTransition, useDragSensors } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
@@ -93,7 +93,7 @@ export function SessionChromeTabStrip({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
                 className="flex min-w-8"
                 style={{
                   flexBasis: `${TAB_PREFERRED_WIDTH_REM}rem`,

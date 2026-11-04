@@ -20,8 +20,9 @@ import {
   IconGitPullRequestClosed,
   IconMessageQuestion,
 } from "@tabler/icons-react";
-import { Avatar, AvatarFallback, cn } from "@eva/ui";
-import type { BadgeProps } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Avatar, AvatarFallback } from "@vvedantb/ui";
+import type { BadgeProps } from "@vvedantb/ui";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 

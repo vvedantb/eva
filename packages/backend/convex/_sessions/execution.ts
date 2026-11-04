@@ -21,8 +21,13 @@ import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
+  dropComposerUserRow,
 } from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
+import {
+  buildDaemonPendingTurn,
+  scheduleChatDaemonPrewarm,
+} from "./daemonTurn";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
@@ -143,14 +148,12 @@ async function stageAndStartChatTurn(
     repoId: session.repoId,
   });
   const pendingTurn = usesDaemonPull
-    ? {
+    ? buildDaemonPendingTurn({
         prompt,
-        requestedAt: Date.now(),
         turnId,
         attachmentStorageIds: settings.attachmentStorageIds,
         model: normalizedModel,
-        interactionMode: "default" as const,
-      }
+      })
     : undefined;
   const now = Date.now();
   await ctx.db.patch(chat._id, {
@@ -162,18 +165,14 @@ async function stageAndStartChatTurn(
   });
   await ctx.db.patch(session._id, { updatedAt: now });
 
-  if (usesDaemonPull && session.sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
-      sandboxId: session.sandboxId,
-      chatId: chat._id,
-      repoId: session.repoId,
+  if (usesDaemonPull) {
+    await scheduleChatDaemonPrewarm(ctx, {
+      session,
+      chat,
       userId: params.actingUserId,
       model: normalizedModel,
-      ...launchTraits,
-      allowedTools: SESSION_TOOLS,
+      launchTraits,
       providerAccountId: stickyProviderAccountId,
-      credentialOwnerUserId,
-      sessionPersistenceId: sessionChatPersistenceId(chat),
     });
   }
 
@@ -419,23 +418,19 @@ export const startExecute = authMutation({
       }
     }
 
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
+    // A send that lands behind this chat's own running turn queues too: a
+    // burst of sends can all reach here before the composer sees the first
+    // turn, and starting each one ran two turns at once.
+    const chatBusy =
+      chat.activeWorkflowId !== undefined || chat.pendingTurn !== undefined;
+    if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
       await enqueueChatMessage(ctx, {
         context,
         userId: ctx.userId,
         content: message,
         settings,
       });
-      // The composer already inserted the user row (addMessage); drop it so
-      // the queue drain's own insert does not show the prompt twice.
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-        .order("desc")
-        .first();
-      if (last && last.role === "user" && last.content === message) {
-        await ctx.db.delete(last._id);
-      }
+      await dropComposerUserRow(ctx, chat._id, message);
       return "queued";
     }
 

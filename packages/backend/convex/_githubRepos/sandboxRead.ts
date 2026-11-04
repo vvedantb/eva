@@ -4,7 +4,8 @@ import { userCanAccessRepo } from "../functions";
 import { gatherAccessibleRepos } from "./helpers";
 
 /**
- * A GitHub repository a sandbox may mint a read-only token for: the owner/name
+ * A GitHub repository a sandbox may mint a sibling (contents read/write) token
+ * for: the owner/name
  * git asked about plus the installation (and repository id) the token is scoped
  * to. One entry per GitHub repository, not per eva app row.
  */
@@ -61,7 +62,7 @@ async function collectGroupRows(
 
 /**
  * Sibling GitHub repositories (deduped by owner/name, case-insensitive) that
- * `userId` may read from a sandbox whose home repo is `homeRepoId`.
+ * `userId` may clone and push from a sandbox whose home repo is `homeRepoId`.
  *
  * Excludes the home repository itself (same owner/name), rows with
  * `hidden === true`, rows with `connected === false`, and any repository whose

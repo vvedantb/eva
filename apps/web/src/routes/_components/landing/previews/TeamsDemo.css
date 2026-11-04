@@ -1,0 +1,276 @@
+/* Pinned, bottom bleed: one gutter on the top and both sides, off the foot,
+   so the table's right-hand actions stay whole. */
+.tm .tm-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 604px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.tm .tm-body {
+  --tm-icon-quiet: color-mix(in srgb, var(--ss-icon) 55%, var(--ss-surface));
+  height: 100%;
+  padding: 0 24px;
+  background: var(--ss-surface);
+}
+
+.tm .tm-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 10px;
+}
+
+.tm .tm-tabs {
+  font-size: 12px;
+}
+
+.tm .tm-members {
+  flex: none;
+}
+
+/* Section header */
+.tm .tm-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 0 14px;
+}
+
+.tm .tm-section__title {
+  color: var(--ss-text-strong);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.tm .tm-section__note {
+  margin-top: 3px;
+  color: var(--ss-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tm .tm-add {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: opacity 0.2s ease;
+}
+
+.tm .tm-add[data-off] {
+  opacity: 0.45;
+}
+
+/* Table */
+.tm .tm-table {
+  border-radius: var(--ss-radius-lg);
+  box-shadow: inset 0 0 0 1px var(--ss-line);
+}
+
+.tm .tm-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 84px;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px;
+  border-top: 1px solid var(--ss-line);
+}
+
+.tm .tm-row--head {
+  height: 36px;
+  border-top: 0;
+  color: var(--ss-text);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.tm .tm-key,
+.tm .tm-mask,
+.tm .tm-field .ss-field__box {
+  font-family: var(--ss-mono);
+  font-size: 12px;
+}
+
+.tm .tm-key {
+  color: var(--ss-text-strong);
+}
+
+.tm .tm-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ss-text);
+}
+
+.tm .tm-lock {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.tm .tm-mask {
+  letter-spacing: 0.04em;
+}
+
+.tm .tm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--tm-icon-quiet);
+}
+
+/* The new row: inputs whose text sits where a saved row's text sits, so
+   saving only takes the field chrome away. */
+.tm .tm-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.tm .tm-field .ss-field__box {
+  height: 28px;
+  margin-left: -11px;
+  transition:
+    box-shadow 0.3s ease,
+    background-color 0.3s ease;
+}
+
+.tm .tm-new[data-saved] .tm-field .ss-field__box {
+  background: transparent;
+  box-shadow: none;
+}
+
+.tm .tm-new .tm-field--key .ss-field__chars {
+  color: var(--ss-text-strong);
+}
+
+.tm .tm-new .tm-value .ss-field__chars {
+  color: var(--ss-text);
+  letter-spacing: 0.04em;
+}
+
+/* Until it is saved, the lock's slot is empty and the field starts there. */
+.tm .tm-lock--new {
+  opacity: 0;
+  transition: opacity 0.3s ease 0.1s;
+}
+
+.tm .tm-new[data-saved] .tm-lock--new {
+  opacity: 1;
+}
+
+.tm .tm-edit {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tm .tm-edit--saved {
+  gap: 12px;
+  color: var(--tm-icon-quiet);
+}
+
+.tm .tm-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--ss-radius-sm);
+  color: var(--ss-icon);
+  transition: background-color 0.15s ease;
+}
+
+.tm .tm-icon--save {
+  color: var(--ss-text-strong);
+}
+
+.tm .tm-icon[data-hover] {
+  background: var(--ss-ink-2);
+}
+
+.tm .tm-row,
+.tm .ss-field__box {
+  will-change: transform;
+}
+
+/* Compact: the window spans the phone column; no actions column. */
+.tm .ss-stage[data-layout="compact"] .tm-win {
+  top: 16px;
+  left: 16px;
+  width: 326px;
+  height: 480px;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-body {
+  padding: 0 16px;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-members,
+.tm .ss-stage[data-layout="compact"] .tm-row--head span:nth-child(2) {
+  display: none;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-section {
+  align-items: flex-start;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-row {
+  grid-template-columns: minmax(0, 1fr) 26px;
+  grid-template-rows: auto auto;
+  row-gap: 4px;
+  height: auto;
+  padding: 10px 12px;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-row--head {
+  display: none;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-key {
+  grid-column: 1;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-value {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-actions {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-row:not(.tm-new) .tm-actions > :not(:first-child),
+.tm .ss-stage[data-layout="compact"] .tm-edit--saved > :not(:first-child),
+.tm .ss-stage[data-layout="compact"] .tm-edit > .tm-icon:not(.tm-icon--save) {
+  display: none;
+}
+
+/* Saved, the inputs shrink to the line height of the rows above, so the new
+   row ends the same height as its neighbours. */
+.tm .ss-stage[data-layout="compact"] .tm-field .ss-field__box {
+  transition:
+    box-shadow 0.3s ease,
+    background-color 0.3s ease,
+    height 0.35s cubic-bezier(0.45, 0, 0.1, 1);
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-new[data-saved] .tm-field .ss-field__box {
+  height: 16px;
+}
+
+.tm .ss-stage[data-layout="compact"] .tm-row--head + .tm-row {
+  border-top: 0;
+}

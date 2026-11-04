@@ -1,4 +1,4 @@
-import type { ModelAccount } from "@eva/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 
 /** Client-side snapshot matching backend `resolveCredentialSourceLabel`. */
 export function resolveCredentialSourceLabel(

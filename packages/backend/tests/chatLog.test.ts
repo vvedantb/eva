@@ -1,6 +1,10 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { renderChatLogMarkdown } from "@eva/shared/chatLog";
+import {
+  CHAT_LOG_AGENT_BODY_MAX,
+  CHAT_LOG_AGENT_TITLE_MAX,
+  renderChatLogMarkdown,
+} from "@eva/shared/chatLog";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordTurnChange } from "../convex/chatLog";
@@ -214,7 +218,7 @@ describe("chat log", () => {
         const messageId = await ctx.db.insert("messages", {
           parentId: f.taskId,
           role: "assistant",
-          content: "Added the Log to the Documents tab.\nMore detail.",
+          content: "- **Added** the Log to the Documents tab. It is pinned.\nMore detail.",
           timestamp: Date.now(),
         });
         const message = await ctx.db.get(messageId);
@@ -234,6 +238,101 @@ describe("chat log", () => {
         beforeSha: "aaa",
         afterSha: "bbb",
       });
+      expect(rows[0]?.body).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a turn's commits go onto the agent's change entry from that turn",
+    async () => {
+      const f = await fixture();
+      const source = { kind: "task" as const, taskId: f.taskId };
+      await f.asUser.mutation(api.chatLog.append, {
+        source,
+        kind: "change",
+        author: "agent",
+        title: "Older change",
+      });
+      const message = await f.t.run(async (ctx) => {
+        const messageId = await ctx.db.insert("messages", {
+          parentId: f.taskId,
+          role: "assistant",
+          content: "",
+          timestamp: Date.now(),
+        });
+        return ctx.db.get(messageId);
+      });
+      if (!message) throw new Error("message missing");
+      await f.asUser.mutation(api.chatLog.append, {
+        source,
+        kind: "change",
+        author: "agent",
+        title: "Log entries are headlines",
+      });
+      await f.t.run(async (ctx) => {
+        await recordTurnChange(
+          ctx,
+          String(f.taskId),
+          { ...message, content: "Done. Long reply." },
+          "aaa",
+          "bbb",
+        );
+      });
+      const rows = await f.asUser.query(api.chatLog.listForSource, { source });
+      expect(
+        rows.map((row) => [row.author, row.title, row.afterSha]),
+      ).toEqual([
+        ["agent", "Older change", undefined],
+        ["agent", "Log entries are headlines", "bbb"],
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "HEAD moving back to a logged commit is not logged again",
+    async () => {
+      const f = await fixture();
+      await f.t.run(async (ctx) => {
+        for (const [index, range] of [
+          ["aaa", "bbb"],
+          ["ccc", "bbb"],
+        ].entries()) {
+          const messageId = await ctx.db.insert("messages", {
+            parentId: f.taskId,
+            role: "assistant",
+            content: `Turn ${index}.`,
+            timestamp: Date.now(),
+          });
+          const message = await ctx.db.get(messageId);
+          if (!message) throw new Error("message missing");
+          await recordTurnChange(ctx, String(f.taskId), message, range[0], range[1]);
+        }
+      });
+      const rows = await f.asUser.query(api.chatLog.listForSource, {
+        source: { kind: "task", taskId: f.taskId },
+      });
+      expect(rows.map((row) => row.title)).toEqual(["Turn 0."]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "agent titles and bodies are clipped to the headline caps",
+    async () => {
+      const f = await fixture();
+      const source = { kind: "session" as const, sessionId: f.sessionId };
+      await f.asUser.mutation(api.chatLog.append, {
+        source,
+        kind: "research",
+        author: "agent",
+        title: "t".repeat(300),
+        body: "b".repeat(5_000),
+      });
+      const [row] = await f.asUser.query(api.chatLog.listForSource, { source });
+      expect(row?.title.length).toBe(CHAT_LOG_AGENT_TITLE_MAX);
+      expect(row?.body?.length).toBe(CHAT_LOG_AGENT_BODY_MAX);
     },
     TIMEOUT_MS,
   );
@@ -346,6 +445,29 @@ describe("chat log markdown", () => {
     expect(markdown).toContain("Note 49");
     expect(markdown).not.toContain("Note 0\n");
     expect(markdown).toMatch(/\(\d+ older entries omitted\)/);
+  });
+
+  test("a replaced finding keeps its title and drops its body", () => {
+    const markdown = renderChatLogMarkdown([
+      {
+        kind: "research",
+        author: "agent",
+        title: "Cost about $150 a month",
+        body: "Old working.",
+        createdAt: day,
+        supersededById: "next",
+      },
+      {
+        kind: "research",
+        author: "agent",
+        title: "Cost at most $112 a month",
+        body: "New working.",
+        createdAt: day + 1,
+      },
+    ]);
+    expect(markdown).toContain("**Research (replaced)** (agent): Cost about $150");
+    expect(markdown).not.toContain("Old working.");
+    expect(markdown).toContain("New working.");
   });
 });
 

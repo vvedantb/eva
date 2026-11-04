@@ -1,0 +1,210 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.st .st-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.st .st-body {
+  display: grid;
+  grid-template-columns: 340px 196px;
+  column-gap: 40px;
+  align-items: start;
+  align-content: start;
+  height: 100%;
+  padding: 22px 24px;
+  background: var(--ss-surface);
+}
+
+/* Headline and range */
+.st .st-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.st .st-kpi {
+  display: grid;
+  gap: 4px;
+}
+
+.st .st-label {
+  color: var(--ss-text);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.st .st-value {
+  color: var(--ss-text-strong);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.st .st-range {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 9px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-fill);
+  color: var(--ss-text-strong);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+
+.st .st-range svg {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+/* As wide as the longest label, so the chevron never moves. */
+.st .st-range__label {
+  width: 78px;
+  white-space: nowrap;
+}
+
+.st .st-range[data-hover],
+.st .st-range[data-on] {
+  background: var(--ss-ink-2);
+}
+
+/* PRs over time: bars on a baseline, the hovered week solid. */
+.st .st-plot {
+  display: flex;
+  align-items: flex-end;
+  box-shadow: 0 1px 0 var(--ss-line);
+}
+
+.st .st-bar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--ss-accent) 22%, var(--ss-surface));
+  transition:
+    height 0.7s cubic-bezier(0.45, 0, 0.1, 1),
+    background-color 0.12s ease;
+}
+
+.st .st-bar[data-on] {
+  background: var(--ss-accent);
+}
+
+/* Leaderboard and heatmap */
+.st .st-section {
+  margin-bottom: 8px;
+  color: var(--ss-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.st .st-section--heat {
+  margin-top: 22px;
+}
+
+.st .st-board {
+  position: relative;
+}
+
+.st .st-person {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  transition: translate 0.7s cubic-bezier(0.45, 0, 0.1, 1) 0.15s;
+  will-change: transform;
+}
+
+.st .st-person__name {
+  flex: 1;
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.st .st-person__count {
+  color: var(--ss-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.st .st-heat {
+  display: flex;
+  gap: 3px;
+}
+
+.st .st-heat__week {
+  display: grid;
+  gap: 3px;
+}
+
+.st .st-heat__day {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--ss-fill);
+}
+
+.st .st-heat__day[data-level="1"] {
+  background: color-mix(in srgb, var(--ss-accent) 12%, var(--ss-surface));
+}
+
+.st .st-heat__day[data-level="2"] {
+  background: color-mix(in srgb, var(--ss-accent) 24%, var(--ss-surface));
+}
+
+.st .st-heat__day[data-level="3"] {
+  background: color-mix(in srgb, var(--ss-accent) 40%, var(--ss-surface));
+}
+
+.st .st-heat__day[data-level="4"] {
+  background: color-mix(in srgb, var(--ss-accent) 62%, var(--ss-surface));
+}
+
+/* Range menu */
+.st .st-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st .st-menu__tick {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  color: var(--ss-text-strong);
+}
+
+/* Compact: one column, the leaderboard under the chart; no heatmap. */
+.st .ss-stage[data-layout="compact"] .st-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.st .ss-stage[data-layout="compact"] .st-body {
+  grid-template-columns: 302px;
+  row-gap: 26px;
+  padding: 20px;
+}
+
+.st .ss-stage[data-layout="compact"] .st-head {
+  margin-bottom: 18px;
+}
+
+.st .ss-stage[data-layout="compact"] .st-section--heat,
+.st .ss-stage[data-layout="compact"] .st-heat {
+  display: none;
+}

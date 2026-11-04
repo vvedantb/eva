@@ -1,9 +1,11 @@
 import {
+  ChatJumpRail,
   Conversation,
   ConversationContent,
   ConversationScrollButton,
-  motionBase,
-} from "@eva/ui";
+  buildChatJumpRailTicks,
+  tokenTransition,
+} from "@vvedantb/ui";
 import {
   ChatEmptyState,
   ChatTranscriptLoading,
@@ -18,7 +20,6 @@ import {
   type TranscriptScrollAnchor,
 } from "@/lib/components/chat/_components/ChatEarlierTurnsLoader";
 import { useSeenOnce } from "@/lib/components/chat/useSeenOnce";
-import { ChatJumpRail } from "@/lib/components/chat/ChatJumpRail";
 import {
   ChatComposer,
   type ChatModelPicker,
@@ -29,6 +30,8 @@ import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
+import { PendingPullRequestChips } from "@/lib/components/chat/PendingPullRequestChips";
+import { appendPullRequestsToPrompt } from "@/lib/components/chat/pullRequestContext";
 import { ThreadFindBar } from "@/lib/components/chat/ThreadFindBar";
 import {
   collectThreadFindDocuments,
@@ -51,6 +54,10 @@ import {
 } from "@/lib/contexts/PendingCitationsContext";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { usePendingWebMcp } from "@/lib/contexts/PendingWebMcpContext";
+import {
+  PendingPullRequestsProvider,
+  usePendingPullRequests,
+} from "@/lib/contexts/PendingPullRequestsContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
@@ -60,6 +67,9 @@ import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
+import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
+import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
+import { groupChatFeedback } from "@/lib/components/chat/feedback/feedbackRows";
 import {
   startTransition,
   useDeferredValue,
@@ -99,7 +109,10 @@ import {
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 
-export type { ChatBodyMessage };
+import {
+  ChatLinkedMessageScroll,
+  useLinkedMessageId,
+} from "@/lib/components/chat/messageLink";
 
 /**
  * Extra context ChatBody hands its surface's send handler. The prompt the
@@ -284,7 +297,9 @@ interface ChatBodyProps {
 export function ChatBody(props: ChatBodyProps) {
   return (
     <PendingCitationsProvider>
-      <ChatBodyInner {...props} />
+      <PendingPullRequestsProvider>
+        <ChatBodyInner {...props} />
+      </PendingPullRequestsProvider>
     </PendingCitationsProvider>
   );
 }
@@ -337,6 +352,7 @@ function ChatBodyInner({
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
   const webmcp = usePendingWebMcp();
+  const pullRequests = usePendingPullRequests();
   const sendWithPendingContext = async (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
@@ -344,9 +360,14 @@ function ChatBodyInner({
     const sentCitations = citations?.items ?? [];
     const sentSnapshots = snapshots?.items ?? [];
     const sentWebMcp = webmcp?.items ?? [];
+    const sentPullRequests = pullRequests?.items ?? [];
     const withCitations = appendCitationsToPrompt(content, sentCitations);
-    const withSnapshots = appendSnapshotsToPrompt(
+    const withPullRequests = appendPullRequestsToPrompt(
       withCitations,
+      sentPullRequests,
+    );
+    const withSnapshots = appendSnapshotsToPrompt(
+      withPullRequests,
       sentSnapshots.map((item) => item.snapshot),
     );
     const withWebMcp = appendWebMcpToPrompt(
@@ -368,6 +389,7 @@ function ChatBodyInner({
         for (const citation of sentCitations) citations?.remove(citation.id);
         for (const item of sentSnapshots) snapshots?.remove(item.id);
         for (const item of sentWebMcp) webmcp?.remove(item.id);
+        for (const pr of sentPullRequests) pullRequests?.remove(pr.url);
       },
       () => {
         // The send handler already raised the failure toast (with the typed
@@ -380,13 +402,17 @@ function ChatBodyInner({
     (hasPendingContext ?? false) ||
     (citations?.items.length ?? 0) > 0 ||
     (snapshots?.items.length ?? 0) > 0 ||
-    (webmcp?.items.length ?? 0) > 0;
+    (webmcp?.items.length ?? 0) > 0 ||
+    (pullRequests?.items.length ?? 0) > 0;
   // Sandbox start/stop/reconnect banners are always omitted. Simple view also
   // hides remaining system alerts, diffs, and — since it has no Agents tab —
   // the sub-agent CTA row. Quick task / project / session all render through
   // ChatBody, so this is the one gate.
   const simpleView = useSimpleView();
   const displayMessages = visibleChatMessages(messages, simpleView);
+  // Experimental opt-in; off hides verdicts already stored on old turns too.
+  const showScopeCheck =
+    useQuery(api.auth.getExperimentalFlags)?.scopeCheck === true;
 
   // Composer predictions read the chat only while it waits on the user and is
   // on screen — hidden cached shells must not each spend a model call.
@@ -406,6 +432,16 @@ function ChatBodyInner({
   // on the loading spinner and then commit the whole backlog in the render
   // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+  // Keyed on `displayMessages`, which keeps its identity while a turn streams,
+  // so the rail's observer is not rebuilt on every token.
+  const jumpRailTicks = buildChatJumpRailTicks(
+    displayMessages.map((message) => ({
+      id: message._id,
+      role: message.role,
+      content: message.content,
+      isSystemAlert: message.isSystemAlert,
+    })),
+  );
 
   // Streamed prose and the tool timeline arrive in the same Convex patch, but
   // they cost wildly different amounts to render: the prose grows by a few
@@ -561,10 +597,25 @@ function ChatBodyInner({
     pinnedIndex >= 0
       ? pinnedIndex
       : findTurnWindowStart(displayMessages, TRANSCRIPT_TURN_WINDOW);
-  const windowStart =
-    newBoundaryIndex >= 0
-      ? Math.min(baseWindowStart, newBoundaryIndex)
-      : baseWindowStart;
+  // A shared message link (`?message=<id>`) opens the chat at that message.
+  // Only the chat on screen follows it: hidden cached shells read the same URL.
+  const linkedParam = useLinkedMessageId();
+  const linkedIndex =
+    linkedParam === null || !isRouteActive
+      ? -1
+      : displayMessages.findIndex((message) => message._id === linkedParam);
+  const linkedMessageId =
+    linkedIndex >= 0 ? displayMessages[linkedIndex]?._id : undefined;
+  const windowStart = Math.min(
+    baseWindowStart,
+    ...[
+      newBoundaryIndex,
+      // The linked row's whole turn, so it does not open mid-turn.
+      linkedIndex >= 0
+        ? findTurnWindowStart(displayMessages, 1, linkedIndex + 1)
+        : -1,
+    ].filter((index) => index >= 0),
+  );
   const windowFirstId = displayMessages[windowStart]?._id;
   // Pinning during render is React's "adjust state when a prop changes"
   // pattern: it re-renders before commit, and settles once the pin matches.
@@ -651,6 +702,9 @@ function ChatBodyInner({
     api.envVarRequests.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const visibleMessageIds = new Set(
+    displayMessages.map((message) => message._id),
+  );
   const panelPlacement = placeChatUiPanels(
     [
       ...(chatUiPanels ?? []).map(
@@ -678,8 +732,41 @@ function ChatBodyInner({
         }),
       ),
     ],
-    new Set(displayMessages.map((message) => message._id)),
+    visibleMessageIds,
   );
+
+  // Artifacts saved in this chat (`create_artifact`). Placed by the same rule
+  // as the cards above, but kept apart: an artifact sits with the turn's
+  // output and never trades places with its prose.
+  const chatArtifacts = useQuery(
+    api.artifacts.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const artifactPlacement = placeChatUiPanels(
+    chatArtifacts ?? [],
+    visibleMessageIds,
+  );
+  // Thumbs on turns and the agent's `submit_feedback` reports. The agent's
+  // cards share the artifacts slot: both sit with the turn's output and never
+  // trade places with its prose behind a tab.
+  const chatFeedback = useQuery(
+    api.feedback.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const feedback = groupChatFeedback(chatFeedback ?? [], currentUserId);
+  const renderTurnOutput = (messageId: string) => {
+    const artifacts = artifactPlacement.byMessageId.get(messageId) ?? [];
+    const reports = feedback.agentByMessageId.get(messageId) ?? [];
+    if (artifacts.length === 0 && reports.length === 0) return undefined;
+    return [
+      ...artifacts.map((artifact) => (
+        <ChatArtifactCard key={artifact._id} artifact={artifact} />
+      )),
+      ...reports.map((report) => (
+        <AgentFeedbackCard key={report._id} feedback={report} />
+      )),
+    ];
+  };
 
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
   const users = useQuery(
@@ -794,6 +881,8 @@ function ChatBodyInner({
           repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
+          showTurnMeta={!simpleView}
+          showScopeCheck={showScopeCheck}
           {...(expandedByMessageId[message._id] !== undefined
             ? { changedFilesExpanded: expandedByMessageId[message._id] }
             : {})}
@@ -821,6 +910,7 @@ function ChatBodyInner({
           }
           precedingUser={precedingUser}
           citeHighlight={citations?.highlightedMessageId === message._id}
+          linkHighlight={message._id === linkedMessageId}
           onFork={
             onForkTranscript && canForkMessage(message)
               ? setForkThroughId
@@ -829,6 +919,12 @@ function ChatBodyInner({
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
           )}
+          artifacts={renderTurnOutput(message._id)}
+          canRate={chatParentId !== undefined && message.role === "assistant"}
+          feedbackSentiment={
+            feedback.mineByMessageId.get(message._id)?.sentiment
+          }
+          feedbackComment={feedback.mineByMessageId.get(message._id)?.comment}
         />
         {afterMessage?.(message._id)}
       </div>
@@ -843,7 +939,13 @@ function ChatBodyInner({
         onQueryChange={revealFirstFindMatch}
         scopeKey={windowFirstId}
       />
-      <Conversation className="flex-1 min-h-0">
+      <Conversation
+        className="flex-1 min-h-0"
+        // Only a live reply glides down. Any other growth — loading skeleton
+        // to transcript, the deferred backlog, late markdown — snaps, so an
+        // opened chat lands at the bottom instead of animating from the top.
+        resize={streamingTargetId ? "smooth" : "instant"}
+      >
         <ConversationContent
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
@@ -905,6 +1007,9 @@ function ChatBodyInner({
           )}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
+          {artifactPlacement.trailing.map((artifact) => (
+            <ChatArtifactCard key={artifact._id} artifact={artifact} />
+          ))}
         </ConversationContent>
         {newBoundaryId ? (
           <ChatNewMessagesPill
@@ -915,18 +1020,29 @@ function ChatBodyInner({
           />
         ) : null}
         <ConversationScrollButton resetKey={conversationId} />
+        {/* Mounted with the backlog, so a linked row above the last turn is
+            already in the DOM when this scrolls to it. */}
+        {backlogReady && linkedMessageId !== undefined ? (
+          <ChatLinkedMessageScroll
+            key={linkedMessageId}
+            messageId={linkedMessageId}
+          />
+        ) : null}
         {/* Mounted with the backlog: the rail resolves its ticks by querying
             `[data-message-id]` from an effect keyed on the (memoised) tick
             array, so binding it before those rows exist would observe nothing
             and never retry. */}
         {backlogReady && !hideJumpRail ? (
           <ChatJumpRail
-            messages={displayMessages}
+            messages={jumpRailTicks}
             renderedFromId={windowFirstId}
             onRevealMessage={revealMessage}
+            formatPreview={tokenizedToDisplayText}
           />
         ) : null}
-        {isArchived ? null : <AssistantCiteToolbar />}
+        {isArchived ? null : (
+          <AssistantCiteToolbar chatParentId={chatParentId} />
+        )}
       </Conversation>
       {isArchived ? null : (
         <AnimatePresence mode="wait" initial={false}>
@@ -936,7 +1052,7 @@ function ChatBodyInner({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={motionBase}
+              transition={tokenTransition.base}
             >
               <ChatQuestionDock
                 questions={dockedQuestions}
@@ -953,7 +1069,7 @@ function ChatBodyInner({
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
-              transition={motionBase}
+              transition={tokenTransition.base}
             >
               <ChatComposer
                 repo={repo}
@@ -975,6 +1091,7 @@ function ChatBodyInner({
                     <PendingCitationChips />
                     <PendingSnapshotChips />
                     <PendingWebMcpChips />
+                    <PendingPullRequestChips />
                     {preInputContent}
                   </>
                 }

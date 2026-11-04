@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
   Select,
@@ -17,8 +18,8 @@ import {
   TooltipTrigger,
   TooltipContent,
   Badge,
-  motionFast,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconUserPlus,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/components/priority/priorityMeta";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
 import {
   FieldsSection,
@@ -105,6 +107,7 @@ export function StatusFieldsSection({
   isOwner,
   allTags,
 }: StatusFieldsSectionProps) {
+  const simpleView = useSimpleView();
   const viewVercelDeployment = useViewVercelDeployment();
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
@@ -131,56 +134,38 @@ export function StatusFieldsSection({
           ? { providerAccountId: providerAccountId ?? undefined }
           : {}),
       };
-      const list = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId: task.repoId,
-      });
-      if (list !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId: task.repoId },
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.getAllTasks,
+        { repoId: task.repoId },
+        (list) =>
           list.map((t) => (t._id === args.id ? { ...t, ...nullSafe } : t)),
-        );
-      }
-      const cached = localStore.getQuery(api.agentTasks.get, { id: args.id });
-      if (cached) {
-        localStore.setQuery(
-          api.agentTasks.get,
-          { id: args.id },
-          {
-            ...cached,
-            ...nullSafe,
-          },
-        );
-      }
+      );
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.get,
+        { id: args.id },
+        (cached) => cached && { ...cached, ...nullSafe },
+      );
     },
   );
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
     if (!task?.repoId) return;
-    const list = localStore.getQuery(api.agentTasks.getAllTasks, {
-      repoId: task.repoId,
-    });
-    if (list !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId: task.repoId },
-        list.map((t) =>
-          t._id === args.id ? { ...t, status: args.status } : t,
-        ),
-      );
-    }
-    const cached = localStore.getQuery(api.agentTasks.get, { id: args.id });
-    if (cached) {
-      localStore.setQuery(
-        api.agentTasks.get,
-        { id: args.id },
-        {
-          ...cached,
-          status: args.status,
-        },
-      );
-    }
+    patchLoadedQuery(
+      localStore,
+      api.agentTasks.getAllTasks,
+      { repoId: task.repoId },
+      (list) =>
+        list.map((t) => (t._id === args.id ? { ...t, status: args.status } : t)),
+    );
+    patchLoadedQuery(
+      localStore,
+      api.agentTasks.get,
+      { id: args.id },
+      (cached) => cached && { ...cached, status: args.status },
+    );
   });
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
@@ -240,7 +225,7 @@ export function StatusFieldsSection({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={motionFast}
+                            transition={tokenTransition.fast}
                             className={`flex items-center gap-1.5 ${config.text}`}
                           >
                             <Icon size={14} />
@@ -254,7 +239,7 @@ export function StatusFieldsSection({
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
-                              transition={motionFast}
+                              transition={tokenTransition.fast}
                               className="inline-flex"
                             >
                               <Badge variant="warning" className="ml-0.5">
@@ -357,7 +342,7 @@ export function StatusFieldsSection({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={motionFast}
+                    transition={tokenTransition.fast}
                   >
                     {assignedUser ? (
                       <UserInitials
@@ -399,45 +384,47 @@ export function StatusFieldsSection({
           </SelectContent>
         </Select>
 
-        <div className={FIELD_ROW_CLASS}>
-          <ModelSelectWithTraits
-            value={currentModel}
-            options={modelOptions}
-            onValueChange={() => undefined}
-            accounts={accounts}
-            accountId={task?.providerAccountId ?? null}
-            onSelectionChange={(nextModel, nextAccountId) => {
-              if (modelLockReason) return;
-              if (isOwner) {
-                updateTask({
-                  id: taskId,
-                  model: nextModel,
-                  providerAccountId: resolveAccountId(nextAccountId) ?? null,
-                });
-                return;
+        {simpleView ? null : (
+          <div className={FIELD_ROW_CLASS}>
+            <ModelSelectWithTraits
+              value={currentModel}
+              options={modelOptions}
+              onValueChange={() => undefined}
+              accounts={accounts}
+              accountId={task?.providerAccountId ?? null}
+              onSelectionChange={(nextModel, nextAccountId) => {
+                if (modelLockReason) return;
+                if (isOwner) {
+                  updateTask({
+                    id: taskId,
+                    model: nextModel,
+                    providerAccountId: resolveAccountId(nextAccountId) ?? null,
+                  });
+                  return;
+                }
+                updateTask({ id: taskId, model: nextModel });
+              }}
+              canSelectTeamWhilePersonal={isOwner}
+              disabled={modelLockReason !== undefined}
+              traits={storedRunTraits(task)}
+              onTraitsChange={(partial) =>
+                updateTask({ id: taskId, ...toRunTraitArgs(partial) })
               }
-              updateTask({ id: taskId, model: nextModel });
-            }}
-            canSelectTeamWhilePersonal={isOwner}
-            disabled={modelLockReason !== undefined}
-            traits={storedRunTraits(task)}
-            onTraitsChange={(partial) =>
-              updateTask({ id: taskId, ...toRunTraitArgs(partial) })
-            }
-            className={`px-0 ${FIELD_TEXT_CLASS}`}
-          />
-          {modelLockReason ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <IconInfoCircle
-                  size={12}
-                  className="cursor-help text-muted-foreground"
-                />
-              </TooltipTrigger>
-              <TooltipContent>{modelLockReason}</TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
+              className={`px-0 ${FIELD_TEXT_CLASS}`}
+            />
+            {modelLockReason ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <IconInfoCircle
+                    size={12}
+                    className="cursor-help text-muted-foreground"
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{modelLockReason}</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+        )}
 
         <AnimatePresence initial={false}>
           {!task?.projectId ? (
@@ -447,7 +434,7 @@ export function StatusFieldsSection({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {status === "todo" ? (
                 <BranchSelect
@@ -458,7 +445,9 @@ export function StatusFieldsSection({
                   className={`h-7 border-0 shadow-none bg-transparent px-0 hover:bg-transparent [&>svg:last-child]:hidden ${FIELD_TEXT_CLASS}`}
                 />
               ) : (
-                <div className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}>
+                <div
+                  className={`flex items-center gap-1.5 ${FIELD_TEXT_CLASS}`}
+                >
                   <IconGitBranch size={14} className="text-muted-foreground" />
                   <span>{baseBranch}</span>
                   <Tooltip>
@@ -486,7 +475,7 @@ export function StatusFieldsSection({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <IconBrandVercelFilled
                 size={14}

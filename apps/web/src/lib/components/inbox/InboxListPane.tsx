@@ -1,9 +1,8 @@
 "use client";
 
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner, EmptyState } from "@vvedantb/ui";
 import { IconInbox } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import { NotificationList } from "@/lib/components/inbox/NotificationList";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
@@ -58,23 +57,22 @@ export function InboxListPane({
   onToggleCheck,
 }: InboxListPaneProps) {
   if (notifications === undefined) {
-    return (
-      <CenteredSpinner label="Loading inbox" />
-    );
+    return <CenteredSpinner label="Loading inbox" />;
   }
 
   if (notifications.length === 0) {
     const copy = EMPTY_COPY[filter];
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center">
-        <EmptyState
-          icon={<IconInbox size={24} className="text-muted-foreground" />}
-          title={copy.title}
-          description={copy.description}
+        <EmptyState.Root
           // The celebratory animation belongs to "you cleared the inbox", not
           // to a filter that happens to be empty.
-          animate={filter === "all"}
-        />
+          enter={filter === "all"}
+        >
+          <EmptyState.Icon icon={IconInbox} size={24} />
+          <EmptyState.Title>{copy.title}</EmptyState.Title>
+          <EmptyState.Description>{copy.description}</EmptyState.Description>
+        </EmptyState.Root>
       </div>
     );
   }

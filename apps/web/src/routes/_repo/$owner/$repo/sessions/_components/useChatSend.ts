@@ -1,8 +1,11 @@
 import { api } from "@eva/backend";
 import type { AIModel, Id, ModelTraitsExecutionArgs } from "@eva/backend";
-import type { ModelAccount } from "@eva/ui";
+import { tempId } from "@vvedantb/server";
+import { toast } from "@vvedantb/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
@@ -15,17 +18,9 @@ import {
 } from "@/lib/components/chat/chatBodyUtils";
 import type { ChatSendOptions } from "@/lib/components/chat/ChatBody";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { toast } from "@eva/ui";
 export type SessionMessage = NonNullable<
   FunctionReturnType<typeof api.messages.listByParent>
 >[number];
-
-// Convex has no non-assertion way to mint an Id<T> before the server assigns
-// one; this is the single, contained assertion for optimistic-insert temp ids.
-function optimisticMessageId(): Id<"messages"> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- Convex Id<T> is an opaque branded string; there is no non-assertion way to mint a client-side optimistic temp id
-  return crypto.randomUUID() as Id<"messages">;
-}
 
 function applyAddMessageOptimistically(
   localStore: OptimisticLocalStore,
@@ -40,7 +35,7 @@ function applyAddMessageOptimistically(
 
   const now = Date.now();
   const userMsg: SessionMessage = {
-    _id: optimisticMessageId(),
+    _id: tempId("messages"),
     _creationTime: now,
     parentId: args.chatId,
     role: "user",
@@ -56,7 +51,7 @@ function applyAddMessageOptimistically(
     reasoningLevel: args.reasoningLevel,
   };
   const assistantPlaceholder: SessionMessage = {
-    _id: optimisticMessageId(),
+    _id: tempId("messages"),
     _creationTime: now + 1,
     parentId: args.chatId,
     role: "assistant",
@@ -128,7 +123,11 @@ export function useChatSend({
     (localStore, args) =>
       applyAddMessageOptimistically(localStore, args, accounts),
   );
-  const startExecution = useMutation(api.sessionWorkflow.startExecute);
+  const startExecution = useMutation(
+    api.sessionWorkflow.startExecute,
+  ).withOptimisticUpdate((localStore, args) =>
+    openChatTurnOptimistically(localStore, args.chatId),
+  );
   const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
   const cancelExecutionMutation = useMutation(
     api.sessionWorkflow.cancelExecution,

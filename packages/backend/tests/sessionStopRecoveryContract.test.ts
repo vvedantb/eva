@@ -286,12 +286,12 @@ describe("a stop that races reuse does not warn about unfinished startup", () =>
 
   test("the Convex readiness watcher stops once the session no longer owns the VM", () => {
     const body = definitionBody(executionSource, "watchConvexReadiness");
-    expect(body).toContain("sessionStillRunningSandbox");
+    expect(body).toContain("sandboxStillWanted");
     expect(body).toContain("isSandboxGoneError");
     const warnAt = body.indexOf("internal.sessions.sandboxStartupWarning");
     expect(warnAt, "the timeout warning moved").toBeGreaterThan(-1);
     expect(
-      body.lastIndexOf("sessionStillRunningSandbox", warnAt),
+      body.lastIndexOf("sandboxStillWanted", warnAt),
       "timeout must re-check ownership before warning",
     ).toBeGreaterThan(-1);
   });

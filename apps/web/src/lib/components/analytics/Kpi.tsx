@@ -2,14 +2,20 @@
 
 import { Children, type ReactNode } from "react";
 import { m } from "motion/react";
-import { Card, CardContent, cn, motionBase, motionStagger } from "@eva/ui";
+import { cn } from "@eva/ui";
+import {
+  Card,
+  CardContent,
+  tokenTransition,
+  staggerDelay,
+  useCountUpDisplay,
+} from "@vvedantb/ui";
 import {
   type Icon as TablerIcon,
   IconTrendingUp,
   IconTrendingDown,
   IconMinus,
 } from "@tabler/icons-react";
-import { useCountUpDisplay } from "./useCountUpDisplay";
 
 interface KpiProps {
   /** Optional leading icon shown in a rounded pill next to the label. */
@@ -189,7 +195,7 @@ export function KpiGroup({
         <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ ...motionBase, delay: motionStagger(index) }}
+          transition={{ ...tokenTransition.base, delay: staggerDelay(index) }}
         >
           {child}
         </m.div>

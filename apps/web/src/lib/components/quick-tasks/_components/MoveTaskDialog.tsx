@@ -2,11 +2,11 @@
 
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useMutation } from "convex/react";
 import { useState } from "react";
-import { toast } from "@eva/ui";
+import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { ConfirmDialog } from "./ConfirmDialog";
 
 /** Moves a quick task to another app. Shared by the confirm dialog and Alt-click bypass. */
 export function useMoveAgentTask() {
@@ -15,16 +15,12 @@ export function useMoveAgentTask() {
     (localStore, args) => {
       // Moving to a different repo — remove from the current repo's list
       if (args.repoId) {
-        const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-          repoId,
-        });
-        if (current !== undefined) {
-          localStore.setQuery(
-            api.agentTasks.getAllTasks,
-            { repoId },
-            current.filter((task) => task._id !== args.id),
-          );
-        }
+        patchLoadedQuery(
+          localStore,
+          api.agentTasks.getAllTasks,
+          { repoId },
+          (cur) => cur.filter((task) => task._id !== args.id),
+        );
       }
     },
   );
@@ -63,6 +59,7 @@ export function MoveTaskDialog({
 
   return (
     <ConfirmDialog
+      size="md"
       open={targetId !== null}
       onOpenChange={(v) => {
         if (!v) onClose();
@@ -73,10 +70,14 @@ export function MoveTaskDialog({
           Move <strong>{taskTitle}</strong> to <strong>{targetAppName}</strong>?
         </>
       }
-      detail="The task will appear in the other app's quick tasks."
+      body={
+        <p className="text-sm text-muted-foreground">
+          The task will appear in the other app's quick tasks.
+        </p>
+      }
       confirmLabel="Move"
       onConfirm={handleMove}
-      isLoading={isMoving}
+      pending={isMoving}
     />
   );
 }

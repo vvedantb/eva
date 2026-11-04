@@ -234,14 +234,39 @@ test("claude assistant blocks are lenient field by field", () => {
       trackingId: "toolu_read",
       step: { type: "read", toolUseId: "toolu_read" },
     },
-    // Non-string thinking/text payloads are coerced, not dropped.
-    { kind: "update_reasoning", text: "42" },
-    { kind: "append_text", text: "7" },
+    // A subagent's thinking is dropped; its text (coerced, not dropped)
+    // becomes a response step under the Agent row.
+    {
+      kind: "push_subagent_text",
+      step: {
+        type: "response",
+        parentToolUseId: "toolu_parent",
+        output: { text: "7" },
+      },
+    },
   ]);
-  expect(events.length).toBe(4);
+  expect(events.length).toBe(3);
   expect(events[0].kind === "push_step" && events[0].step.toolUseId).toBe(
     undefined,
   );
+
+  // Outside a subagent, non-string thinking/text payloads are coerced, not
+  // dropped.
+  resetStateForTests();
+  expect(
+    claudeParseLine({
+      type: "assistant",
+      message: {
+        content: [
+          { type: "thinking", thinking: 42 },
+          { type: "text", text: 7 },
+        ],
+      },
+    }),
+  ).toMatchObject([
+    { kind: "update_reasoning", text: "42" },
+    { kind: "append_text", text: "7" },
+  ]);
 
   // Read-only todo tools add no row at all.
   expect(

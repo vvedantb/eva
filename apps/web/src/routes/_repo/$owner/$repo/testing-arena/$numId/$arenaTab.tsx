@@ -9,7 +9,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { useDocByNumId } from "@/lib/useResolveByNumId";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import type { FunctionReturnType } from "convex/server";
-import { Button, Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Button, Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { CodeTestingContent } from "../_components/CodeTestingContent";
@@ -70,9 +70,7 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
     activeReport ? { entityId: activeReport._id } : "skip",
   );
   const startEvaluation = useMutation(api.evaluationWorkflow.startEvaluation);
-  const startBrowserRun = useMutation(
-    api.arenaBrowserWorkflow.startManualRun,
-  );
+  const startBrowserRun = useMutation(api.arenaBrowserWorkflow.startManualRun);
   const [isStarting, setIsStarting] = useState(false);
   const [branch, setBranch] = useQueryState("branch", branchParser);
 

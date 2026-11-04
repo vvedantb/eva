@@ -10,9 +10,10 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@eva/ui";
+  CountPop,
+  countLabel,
+} from "@vvedantb/ui";
 import { IconChevronDown, IconFilter } from "@tabler/icons-react";
-import { CountPop, countLabel } from "@/lib/components/ui/CountPop";
 import {
   inboxFilters,
   inboxGroups,

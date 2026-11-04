@@ -5,7 +5,6 @@ import {
   convexErrorPresentation,
   convexErrorTag,
   errorToneClassName,
-  userFacingErrorMessage,
 } from "./convexErrorMessage";
 
 /**
@@ -27,7 +26,23 @@ describe("convexErrorMessage", () => {
     ).toBe("eva/task-12 is not ahead of staging");
   });
 
-  test("prefers the legacy string ConvexError data that survived the wire", () => {
+  /**
+   * `@vvedantb/ui` reads string data only, and `ConvexError.message` for object
+   * data is the JSON — the reason this layer exists.
+   */
+  test("never renders a structured payload as JSON", () => {
+    const message = convexErrorMessage(
+      new ConvexError({
+        tag: "GitNetworkError",
+        message: "Could not reach GitHub",
+      }),
+      "Failed to push",
+    );
+    expect(message).toBe("Could not reach GitHub");
+    expect(message).not.toContain("{");
+  });
+
+  test("delegates string ConvexError data to the package reader", () => {
     expect(
       convexErrorMessage(
         new ConvexError("eva/task-12 is not ahead of staging"),
@@ -188,44 +203,5 @@ describe("errorToneClassName", () => {
   test("maps tone to text colour only", () => {
     expect(errorToneClassName("info")).toBe("text-muted-foreground");
     expect(errorToneClassName("error")).toBe("text-destructive");
-  });
-});
-
-/**
- * Form error slots showed the raw client rejection — request id, envelope and
- * stack frame — so the one sentence the handler threw was the least readable
- * part of it.
- */
-describe("userFacingErrorMessage", () => {
-  test("keeps only the thrown sentence from a wrapped client rejection", () => {
-    const error = new Error(
-      "[CONVEX M(teams:create)] [Request ID: abc] Server Error\n" +
-        "Uncaught Error: Team name is required\n" +
-        "    at handler (../convex/teams.ts:107:12)",
-    );
-    expect(userFacingErrorMessage(error, "Couldn't create team")).toBe(
-      "Team name is required",
-    );
-  });
-
-  test("cuts an inline stack frame off a single-line message", () => {
-    expect(
-      userFacingErrorMessage(
-        "Uncaught Error: User not found at handler (../convex/teamMembers.ts:167:13)",
-        "Couldn't add member",
-      ),
-    ).toBe("User not found");
-  });
-
-  test("falls back when only the client's envelope survives", () => {
-    expect(
-      userFacingErrorMessage(
-        "[CONVEX M(teams:create)] [Request ID: abc] Server Error",
-        "Couldn't create team",
-      ),
-    ).toBe("Couldn't create team");
-    expect(userFacingErrorMessage(null, "Couldn't create team")).toBe(
-      "Couldn't create team",
-    );
   });
 });

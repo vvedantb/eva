@@ -11,15 +11,14 @@ import {
 import { SortableContext } from "@dnd-kit/sortable";
 import { m, AnimatePresence } from "motion/react";
 import { Virtuoso } from "react-virtuoso";
+import { cn } from "@eva/ui";
 import {
-  cn,
   KanbanCard,
   KanbanProvider,
-  motionBase,
+  tokenTransition,
   toast,
-  type KanbanColumnDef,
-  type KanbanItem,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { KanbanColumnDef, KanbanItem } from "@vvedantb/ui";
 import {
   KanbanColumn,
   KANBAN_STATUSES,
@@ -189,7 +188,7 @@ export function KanbanBoard<T extends BaseTask>({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 8 }}
-                      transition={motionBase}
+                      transition={tokenTransition.base}
                     >
                       <VirtualKanbanColumn
                         status={status}

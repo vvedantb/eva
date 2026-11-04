@@ -7,7 +7,7 @@ import {
   type AIModel,
   type StoredModelTraits,
 } from "@eva/backend";
-import { TraitsPanel } from "@eva/ui";
+import { TraitsPanel } from "@vvedantb/ui";
 
 interface ModelTraitsMenuProps {
   model: AIModel;
@@ -49,7 +49,9 @@ export function ModelTraitsMenu({
         const match = config.reasoning?.levels.find((entry) => entry === level);
         if (match) onChange({ effortLevel: match });
       }}
-      onThinkingEnabledChange={(thinkingEnabled) => onChange({ thinkingEnabled })}
+      onThinkingEnabledChange={(thinkingEnabled) =>
+        onChange({ thinkingEnabled })
+      }
       onUse1mContextChange={(use1mContext) => onChange({ use1mContext })}
       onFastModeChange={(fastMode) => onChange({ fastMode })}
       disabled={disabled}

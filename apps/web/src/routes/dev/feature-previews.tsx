@@ -1,7 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button, WebPreview } from "@eva/ui";
+import { ActivityTasks, Button, WebPreview } from "@vvedantb/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
 import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
@@ -11,6 +12,7 @@ import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
 import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
 import { ContextUsageDisplay } from "@/lib/components/context-usage";
 import { DiffsToolbar } from "@/lib/components/sandbox/DiffsToolbar";
+import type { DiffSize } from "@/lib/components/sandbox/diffFiles";
 import { PreviewSnapshotButton } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { PreviewWebMcpButton } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import { DEMO_PREVIEW_SNAPSHOT } from "@/lib/components/sandbox/previewSnapshot";
@@ -28,6 +30,7 @@ import { RepoGate, RepoProvider } from "@/lib/contexts/RepoContext";
 import { PreviewPanelNavBar } from "@/routes/_repo/$owner/$repo/sessions/_components/PreviewPanelNavBar";
 import { FILL_PREVIEW_VIEWPORT } from "@/routes/_repo/$owner/$repo/sessions/_utils/previewViewport";
 import { MessageForkDialog } from "@/lib/components/chat/MessageForkDialog";
+import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
   DEMO_FORK_MESSAGES,
   DEMO_FORK_PREFIX,
@@ -38,11 +41,13 @@ const FEATURES = [
   "snapshot",
   "diffs-files",
   "ignore-whitespace",
+  "pr-size",
   "context-meter",
   "webmcp",
   "thread-find",
   "message-fork",
   "preview-tools",
+  "activity-trace",
 ] as const;
 
 // `.catch` keeps an unknown ?feature= on the default preview instead of
@@ -66,12 +71,134 @@ function FeaturePreviewsPage() {
   if (feature === "snapshot") return <SnapshotPreview />;
   if (feature === "diffs-files") return <DiffsFilesPreview />;
   if (feature === "ignore-whitespace") return <IgnoreWhitespacePreview />;
+  if (feature === "pr-size") return <PrSizePreview />;
   if (feature === "context-meter") return <ContextMeterPreview />;
   if (feature === "webmcp") return <WebMcpPreview />;
   if (feature === "thread-find") return <ThreadFindPreview />;
   if (feature === "message-fork") return <MessageForkPreview />;
   if (feature === "preview-tools") return <PreviewToolsPreview />;
+  if (feature === "activity-trace") return <ActivityTracePreview />;
   return <CitePreview />;
+}
+
+const DEMO_TRACE_STEPS: ActivityStep[] = [
+  {
+    type: "thinking",
+    label: "Thought",
+    detail: "I will read the activity code first, then run the type check.",
+    status: "complete",
+  },
+  {
+    type: "read",
+    label: "Read activity-tasks.tsx",
+    path: "packages/ui/src/ai-elements/activity-tasks.tsx",
+    status: "complete",
+  },
+  {
+    type: "edit",
+    label: "Edited trace.tsx",
+    path: "packages/ui/src/ai-elements/trace.tsx",
+    edits: [{ oldText: "gap-1", newText: "gap-2" }],
+    durationMs: 1200,
+    status: "complete",
+  },
+  {
+    type: "bash",
+    label: "Ran command",
+    detail: "pnpm tsc --noEmit",
+    command: "pnpm tsc --noEmit",
+    output: { text: "src/a.tsx(12,3): error TS2322", exitCode: 2 },
+    isError: true,
+    durationMs: 8200,
+    status: "complete",
+  },
+  {
+    type: "thinking",
+    label: "Thought",
+    detail: "The type check failed. A subagent can find every caller.",
+    status: "complete",
+  },
+  {
+    type: "subtask",
+    label: "Explore: find activity consumers",
+    toolUseId: "demo-agent",
+    status: "active",
+  },
+  {
+    type: "search_code",
+    label: "Searched code",
+    detail: "ActivityTasks",
+    parentToolUseId: "demo-agent",
+    durationMs: 1400,
+    status: "complete",
+  },
+  {
+    type: "thinking",
+    label: "Thought",
+    detail: "Two callers render the old Reasoning fold. Both move to Trace.",
+    parentToolUseId: "demo-agent",
+    durationMs: 12000,
+    status: "complete",
+  },
+  {
+    type: "search_code",
+    label: "Searching code",
+    detail: "Reasoning",
+    parentToolUseId: "demo-agent",
+    status: "active",
+  },
+  {
+    type: "todos",
+    label: "Updated task list",
+    status: "active",
+    todos: [
+      { content: "Read activity code", status: "completed" },
+      { content: "Build the Trace line", status: "completed" },
+      { content: "Move reasoning onto Trace", status: "in_progress" },
+      { content: "Verify in the browser", status: "pending" },
+    ],
+  },
+];
+
+const DEMO_STARTUP_ACTIVITY = JSON.stringify([
+  { type: "tool", label: "Creating sandbox...", status: "complete" },
+  { type: "tool", label: "Fetching base branch...", status: "complete" },
+  { type: "tool", label: "Setting up branch...", status: "active" },
+  { type: "tool", label: "Restoring seeded runtime...", status: "pending" },
+  {
+    type: "tool",
+    label: "Launching background commands...",
+    status: "pending",
+  },
+  { type: "tool", label: "Running startup commands...", status: "pending" },
+]);
+
+function ActivityTracePreview() {
+  const [openedFile, setOpenedFile] = useState<string>();
+  return (
+    <div className="min-h-dvh bg-background px-10 py-12 text-foreground">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Activity timeline
+      </p>
+      <h1 className="mt-1 text-xl font-semibold">Trace lines</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {openedFile ? `Opened ${openedFile}` : "Click a file chip to open it."}
+      </p>
+      <div className="mt-8 grid max-w-5xl grid-cols-2 gap-10">
+        <div className="space-y-8">
+          <ActivityTasks
+            steps={DEMO_TRACE_STEPS}
+            isStreaming
+            onOpenFile={setOpenedFile}
+          />
+        </div>
+        <div className="space-y-8">
+          <SandboxStartupSteps activity={DEMO_STARTUP_ACTIVITY} />
+          <ActivityTasks steps={DEMO_TRACE_STEPS} duration="1m 32s" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CitePreview() {
@@ -180,6 +307,52 @@ function DiffsFilesPreview() {
   );
 }
 
+/** A "+2,000" pull request that is about 300 lines of code. */
+const DEMO_DIFF_SIZE: DiffSize = {
+  total: { files: 14, additions: 2034, deletions: 61 },
+  byKind: {
+    code: { files: 6, additions: 287, deletions: 41 },
+    tests: { files: 4, additions: 512, deletions: 12 },
+    mocks: { files: 2, additions: 168, deletions: 0 },
+    generated: { files: 2, additions: 1067, deletions: 8 },
+  },
+};
+
+function PrSizePreview() {
+  return (
+    <div className="min-h-dvh bg-background text-foreground">
+      <div className="px-10 pt-12">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          PR size split
+        </p>
+        <h1 className="mt-1 text-xl font-semibold">
+          How much of this diff is code?
+        </h1>
+      </div>
+      <div className="mt-8 flex items-center justify-end border-y border-border px-4 py-1">
+        <DiffsToolbar
+          size={DEMO_DIFF_SIZE}
+          scopedCommit={null}
+          onClearScope={() => {}}
+          diffView="unified"
+          onDiffViewChange={() => {}}
+          wrapLines={false}
+          onWrapLinesChange={() => {}}
+          ignoreWhitespace={false}
+          onIgnoreWhitespaceChange={() => {}}
+          allExpanded
+          onExpandAll={() => {}}
+          onCollapseAll={() => {}}
+          isLoading={false}
+          onRefresh={() => {}}
+          treeOpen
+          onTreeOpenChange={() => {}}
+        />
+      </div>
+    </div>
+  );
+}
+
 function IgnoreWhitespacePreview() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
@@ -191,6 +364,7 @@ function IgnoreWhitespacePreview() {
       </div>
       <div className="mt-8 border-y border-border">
         <DiffsToolbar
+          size={null}
           scopedCommit={null}
           onClearScope={() => {}}
           diffView="unified"

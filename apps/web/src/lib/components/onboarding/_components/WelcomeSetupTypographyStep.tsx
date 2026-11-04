@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { IconArrowRight } from "@tabler/icons-react";
 import { TypographySection } from "@/lib/components/theme/_components/TypographySection";
 import type {

@@ -9,7 +9,7 @@ Eva is a monorepo managed with pnpm. The main apps and packages are:
 - **apps/web** — Vite + TanStack Router dashboard
 - **apps/chrome-extension** — Browser extension
 - **packages/backend** — Convex backend (serverless DB + functions)
-- **packages/ui** — Shared component library
+- **packages/ui** — eva's config (look and defaults) for `@vvedantb/ui` components
 - **packages/shared** — Shared utilities and types
 
 ### Prerequisites
