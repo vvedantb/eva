@@ -218,12 +218,14 @@ describe("the doc workflow slot", () => {
       await expect(
         f.owner.mutation(api.testGenWorkflow.startTestGen, { docId: f.docId }),
       ).rejects.toThrow("Another document task is still running");
-      // A re-fired interview start is a quiet no-op, not a second workflow.
-      await f.owner.mutation(api.docInterviewWorkflow.startGenerate, {
-        docId: f.docId,
-        docTitle: "Spec",
-        previousAnswers: [],
-      });
+      // A second interview start is refused, not a second workflow.
+      await expect(
+        f.owner.mutation(api.docInterviewWorkflow.startGenerate, {
+          docId: f.docId,
+          docTitle: "Spec",
+          previousAnswers: [],
+        }),
+      ).rejects.toThrow("Another document task is still running");
       await f.owner.mutation(api.testGenWorkflow.cancelTestGen, {
         docId: f.docId,
       });

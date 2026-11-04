@@ -513,6 +513,7 @@ export const sandboxReady = internalMutation({
         sandboxId: args.sandboxId,
         trackedSandboxId: session.sandboxId,
         repoId: session.repoId,
+        isNew: args.isNew,
       });
       return null;
     }
@@ -531,6 +532,7 @@ export const sandboxReady = internalMutation({
           sandboxId: args.sandboxId,
           trackedSandboxId: session.sandboxId,
           repoId: session.repoId,
+          isNew: args.isNew,
         });
       }
       return null;

@@ -62,10 +62,14 @@ interface ConnectionMount {
   active: boolean;
   state: TerminalConnection;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
+  /** Gives up on a socket that opened but never completed its handshake. */
+  handshakeTimer: ReturnType<typeof setTimeout> | null;
   dispatch: (event: TerminalConnectionEvent) => TerminalConnection;
 }
 
 const CONNECT_FAILED_MESSAGE = "Failed to initialize terminal";
+/** How long a socket may wait for its handshake before it counts as lost. */
+const HANDSHAKE_TIMEOUT_MS = 20_000;
 
 /**
  * xterm takes the font size at construction, so this is read once per init
@@ -253,6 +257,14 @@ export function TerminalPanel({
         },
       };
       mount.dispatch({ type: "ptyReady" });
+      // Without this, a socket that opens but never sends its handshake keeps
+      // the spinner up for good. Closing it (not on purpose) feeds the normal
+      // reconnect path, which retries and then shows "Terminal disconnected".
+      if (mount.handshakeTimer !== null) clearTimeout(mount.handshakeTimer);
+      mount.handshakeTimer = setTimeout(() => {
+        mount.handshakeTimer = null;
+        if (mount.active && socketRef.current?.ws === ws) ws.close();
+      }, HANDSHAKE_TIMEOUT_MS);
       if (initialOutput && initialOutput.length > 0) {
         terminal.write(initialOutput.replace(/\n/g, "\r\n"));
       }
@@ -264,6 +276,10 @@ export function TerminalPanel({
         if (vercelHandshakeComplete && ptyProtocol === "vercel") return;
         if (ptyProtocol === "vercel") {
           vercelHandshakeComplete = true;
+        }
+        if (mount.handshakeTimer !== null) {
+          clearTimeout(mount.handshakeTimer);
+          mount.handshakeTimer = null;
         }
         // Only clear reconnect budget after a real handshake — not on bare
         // ws.onopen (shell can exit immediately and was resetting the counter).
@@ -392,6 +408,7 @@ export function TerminalPanel({
       active: true,
       state: { status: "initialising" },
       reconnectTimer: null,
+      handshakeTimer: null,
       dispatch: (event) => {
         if (!mount.active) return mount.state;
         mount.state = reduceTerminalConnection(mount.state, event);
@@ -503,6 +520,10 @@ export function TerminalPanel({
       if (mount.reconnectTimer !== null) {
         clearTimeout(mount.reconnectTimer);
         mount.reconnectTimer = null;
+      }
+      if (mount.handshakeTimer !== null) {
+        clearTimeout(mount.handshakeTimer);
+        mount.handshakeTimer = null;
       }
       detachWheelScroll();
       if (socketRef.current) {

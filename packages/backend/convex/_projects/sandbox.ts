@@ -623,6 +623,7 @@ export const projectSandboxReady = internalMutation({
         sandboxId: args.sandboxId,
         trackedSandboxId: project.sandboxId,
         repoId: project.repoId,
+        isNew: args.isNew,
       });
       return null;
     }
@@ -642,6 +643,7 @@ export const projectSandboxReady = internalMutation({
           sandboxId: args.sandboxId,
           trackedSandboxId: project.sandboxId,
           repoId: project.repoId,
+          isNew: args.isNew,
         });
       }
       return null;
@@ -775,6 +777,7 @@ export const projectSandboxAllocated = internalMutation({
         sandboxId: args.sandboxId,
         trackedSandboxId: project.sandboxId,
         repoId: project.repoId,
+        isNew: true,
       });
       return null;
     }

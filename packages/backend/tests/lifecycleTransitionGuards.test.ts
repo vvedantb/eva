@@ -284,6 +284,24 @@ describe("sandbox lifecycle guards", () => {
   );
 
   test(
+    "a stale attempt that resumed another VM stops it instead of deleting it",
+    async () => {
+      const s = await sessionWithStatus("starting", 2);
+      await s.t.mutation(internal.sessions.sandboxReady, {
+        sessionId: s.sessionId,
+        sandboxId: "sbx_old",
+        branchName: "eva/session",
+        isNew: false,
+        startAttempt: 1,
+      });
+      const jobs = await s.scheduledNames();
+      expect(jobs).toContain("sandbox:stopSandbox");
+      expect(jobs).not.toContain("sandbox:deleteSandbox");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "the current attempt still settles the sandbox",
     async () => {
       const s = await sessionWithStatus("starting", 2);

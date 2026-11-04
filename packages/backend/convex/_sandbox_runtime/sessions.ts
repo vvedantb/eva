@@ -1773,8 +1773,14 @@ export const startSessionSandbox = internalAction({
         });
         return null;
       }
+      // A newer start took over (Start pressed again) and may be resuming
+      // this same VM: stopping it here would kill that start mid-resume.
+      // `sandboxError` below ignores this stale attempt anyway.
+      const superseded =
+        args.startAttempt !== undefined &&
+        sessionAfter?.sandboxStartAttempt !== args.startAttempt;
       // No early-ready — stop any id we were asked to reuse and mark closed.
-      if (args.repoId && stopId) {
+      if (args.repoId && stopId && !superseded) {
         try {
           await ctx.runAction(internal.sandbox.stopSandbox, {
             sandboxId: stopId,

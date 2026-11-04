@@ -342,9 +342,13 @@ export const startInterview = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
-    // The interview dialog re-fires this from an effect; while a doc workflow
-    // is still running, a second start would only race it for the one slot.
-    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) return null;
+    // One workflow slot per doc: refuse loudly, so the dialog leaves its
+    // loading state and tells the user why (it starts once per message now).
+    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) {
+      throw new Error(
+        "Another document task is still running. Wait for it to finish.",
+      );
+    }
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -573,9 +577,13 @@ export const startGenerate = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
-    // The interview dialog re-fires this from an effect; while a doc workflow
-    // is still running, a second start would only race it for the one slot.
-    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) return null;
+    // One workflow slot per doc: refuse loudly, so the dialog leaves its
+    // loading state and tells the user why (it starts once per message now).
+    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) {
+      throw new Error(
+        "Another document task is still running. Wait for it to finish.",
+      );
+    }
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");
