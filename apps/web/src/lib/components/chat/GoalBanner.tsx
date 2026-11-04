@@ -62,7 +62,7 @@ export function GoalBanner({
               </span>
               <Badge
                 variant={goal.status === "complete" ? "success" : "secondary"}
-                className="h-5 shrink-0 px-1.5 text-[10px] font-medium"
+                className="h-5 shrink-0 px-1.5 text-3xs font-medium"
               >
                 {goal.status === "complete" ? "Met" : "Active"}
               </Badge>

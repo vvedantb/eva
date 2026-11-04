@@ -223,7 +223,7 @@ export function KiboSection() {
             <AvatarStack>
               {["AL", "GH", "MK", "TS"].map((initials) => (
                 <Avatar className="size-full" key={initials}>
-                  <AvatarFallback className="text-[10px]">
+                  <AvatarFallback className="text-3xs">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

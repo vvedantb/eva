@@ -68,6 +68,8 @@ import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFram
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
+import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
+import { groupChatFeedback } from "@/lib/components/chat/feedback/feedbackRows";
 import {
   startTransition,
   useDeferredValue,
@@ -744,12 +746,27 @@ function ChatBodyInner({
     chatArtifacts ?? [],
     visibleMessageIds,
   );
-  const renderChatArtifacts = (artifacts: typeof artifactPlacement.trailing) =>
-    artifacts.length === 0
-      ? undefined
-      : artifacts.map((artifact) => (
-          <ChatArtifactCard key={artifact._id} artifact={artifact} />
-        ));
+  // Thumbs on turns and the agent's `submit_feedback` reports. The agent's
+  // cards share the artifacts slot: both sit with the turn's output and never
+  // trade places with its prose behind a tab.
+  const chatFeedback = useQuery(
+    api.feedback.listForChat,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
+  const feedback = groupChatFeedback(chatFeedback ?? [], currentUserId);
+  const renderTurnOutput = (messageId: string) => {
+    const artifacts = artifactPlacement.byMessageId.get(messageId) ?? [];
+    const reports = feedback.agentByMessageId.get(messageId) ?? [];
+    if (artifacts.length === 0 && reports.length === 0) return undefined;
+    return [
+      ...artifacts.map((artifact) => (
+        <ChatArtifactCard key={artifact._id} artifact={artifact} />
+      )),
+      ...reports.map((report) => (
+        <AgentFeedbackCard key={report._id} feedback={report} />
+      )),
+    ];
+  };
 
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
   const users = useQuery(
@@ -902,9 +919,12 @@ function ChatBodyInner({
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
           )}
-          artifacts={renderChatArtifacts(
-            artifactPlacement.byMessageId.get(message._id) ?? [],
-          )}
+          artifacts={renderTurnOutput(message._id)}
+          canRate={chatParentId !== undefined && message.role === "assistant"}
+          feedbackSentiment={
+            feedback.mineByMessageId.get(message._id)?.sentiment
+          }
+          feedbackComment={feedback.mineByMessageId.get(message._id)?.comment}
         />
         {afterMessage?.(message._id)}
       </div>
@@ -987,7 +1007,9 @@ function ChatBodyInner({
           )}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
-          {renderChatArtifacts(artifactPlacement.trailing)}
+          {artifactPlacement.trailing.map((artifact) => (
+            <ChatArtifactCard key={artifact._id} artifact={artifact} />
+          ))}
         </ConversationContent>
         {newBoundaryId ? (
           <ChatNewMessagesPill

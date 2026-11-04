@@ -9,6 +9,8 @@ const webApp = join(webSrc, "..");
 const uiSrc = join(webSrc, "..", "..", "..", "packages", "ui", "src");
 /** eva's class strings per vvedantb component, the exact ones eva renders. */
 const uiConfig = join(uiSrc, "config");
+/** The `@vvedantb/ui` sources, for the defaults eva's config leaves in place. */
+const vvedantbSrc = join(webApp, "node_modules", "@vvedantb", "ui", "src");
 
 /** Comments here name the very declarations these rules ban, so they go first. */
 const cssRules = stripComments(
@@ -229,18 +231,29 @@ describe("small Button sizes", () => {
   it.each([...ungated, ...mobileOnly])(
     "%s reaches the 40px floor on touch",
     (size) => {
-      // eva's config replaces vvedantb's Button sizes with `buttonSize`;
-      // InputGroup's button sizes reuse the same keys, so slice to it.
+      // eva's `buttonSize` replaces only some vvedantb Button sizes; a size it
+      // leaves out renders the package's `buttonSizeClasses`. InputGroup's
+      // button sizes reuse the same keys, so slice to each object.
       const controls = configSource("controls.ts");
       expect(controls, "Button no longer renders buttonSize").toContain(
         "size: buttonSize",
       );
-      const variants = controls.slice(
-        controls.indexOf("const buttonSize = {"),
-        controls.indexOf("\n};", controls.indexOf("const buttonSize = {")),
-      );
+      const sizeObject = (source: string, name: string) =>
+        source.slice(
+          source.indexOf(`const ${name} = {`),
+          source.indexOf("\n};", source.indexOf(`const ${name} = {`)),
+        );
       // Only the hyphenated keys are quoted in the object literal.
-      const at = variants.search(new RegExp(`"?${size}"?:`));
+      const key = new RegExp(`"?${size}"?:`);
+      const eva = sizeObject(controls, "buttonSize");
+      const variants =
+        eva.search(key) > -1
+          ? eva
+          : sizeObject(
+              readFileSync(join(vvedantbSrc, "ui", "button.tsx"), "utf8"),
+              "buttonSizeClasses",
+            );
+      const at = variants.search(key);
       expect(at, `the ${size} size is gone`).toBeGreaterThan(-1);
       const declaration = variants.slice(at, variants.indexOf("\n", at));
       expect(

@@ -11,6 +11,8 @@ import {
   docKindValidator,
   chatLogEntryKindValidator,
   chatLogAuthorValidator,
+  feedbackAuthorValidator,
+  feedbackSentimentValidator,
   docVersionSourceValidator,
   errorTypeValidator,
   evaluationStatusValidator,
@@ -1647,6 +1649,27 @@ export const chatLogEntryFields = {
   messageId: v.optional(v.id("messages")),
   beforeSha: v.optional(v.string()),
   afterSha: v.optional(v.string()),
+  createdAt: v.number(),
+};
+
+/**
+ * One piece of feedback on an Eva turn: a user's thumbs up / down (one row per
+ * user per turn) or an agent's `submit_feedback` when the user shows clear
+ * frustration or praise. Listed across repos on the global Feedback page.
+ */
+export const feedbackFields = {
+  ...chatSourceFields,
+  // The chat's message parent, so the transcript lists its rows in one query.
+  parentId: messageFields.parentId,
+  // The chat's repo, for the repo filter. Absent for a task with no repo.
+  repoId: v.optional(v.id("githubRepos")),
+  // The assistant turn the feedback is about; absent if the chat had none yet.
+  messageId: v.optional(v.id("messages")),
+  // The user who rated, or the user whose chat the agent reported on.
+  userId: v.id("users"),
+  author: feedbackAuthorValidator,
+  sentiment: feedbackSentimentValidator,
+  comment: v.optional(v.string()),
   createdAt: v.number(),
 };
 

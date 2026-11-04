@@ -118,7 +118,7 @@ Name every visible change you made, however small, and separately flag the ones 
 - This overrides the reply-length limit: these lines are always in scope.`;
 
 /**
- * Nudge towards `render_ui` and `render_html`. Appended to the shared
+ * Nudge towards `render_ui`, `render_html` and `submit_feedback`. Appended to the shared
  * chat-turn prompt, so sessions, quick tasks and project chat all get it — both
  * tools are on every sandbox token, and without a prompt line agents never
  * reach for them.
@@ -127,7 +127,9 @@ export const CHAT_UI_INSTRUCTION = `
 
 Interactive panels (optional): when a result is mostly numbers, a checklist, a comparison table, or a closed question, call the eva MCP tool \`render_ui\` instead of writing it out. You supply the content blocks, Eva lays them out, and a button with \`reply\` lets the user answer in one tap. One panel per reply at most, and keep your own reply as short as ever.
 
-Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.`;
+Visual pages (optional): when a chart, diagram, mockup or small interactive page explains a result better than text or blocks, call the eva MCP tool \`render_html\` with one self-contained HTML page. Screenshot it with agent-browser before you call the tool.
+
+Feedback: when the user clearly shows frustration with Eva or clearly says something went well, or asks you to send feedback, call the eva MCP tool \`submit_feedback\` once for that issue. Then tell the user in one short line that you sent it.`;
 
 /**
  * Keeps the chat's Log (Documents tab) current, so someone returning weeks

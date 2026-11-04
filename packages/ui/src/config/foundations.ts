@@ -69,16 +69,16 @@ export const foundationsConfig = {
         "code-review": "bg-status-code-review-bar",
         done: "bg-status-done-bar",
         cancelled: "bg-status-cancelled-bar",
-        active: "bg-success",
-        critical: "bg-destructive",
-        neutral: "bg-muted-foreground/60",
+        // `active`, `critical` and `neutral` use the package classes.
       },
     },
   },
   ListRow: {
     classes: {
-      root: "group relative overflow-hidden rounded-surface transition-[background-color] duration-[var(--motion-base)] has-[[data-slot=row-control]:focus-visible]:ring-2 has-[[data-slot=row-control]:focus-visible]:ring-ring/35",
-      interactive: "motion-press active:scale-[0.99]",
+      // `scale` is in the root transition: a `motion-press` on the same element
+      // would lose to `transition-[…]`, which comes later in the sheet.
+      root: "group relative overflow-hidden rounded-surface transition-[background-color,scale] duration-[var(--motion-base)] has-[[data-slot=row-control]:focus-visible]:ring-2 has-[[data-slot=row-control]:focus-visible]:ring-ring/35",
+      interactive: "active:scale-[0.99]",
     },
   },
   SonnerToaster: {
@@ -105,12 +105,9 @@ export const foundationsConfig = {
       ].join(" "),
       // `relative` anchors sonner's absolutely-positioned `.sonner-loader`.
       icon: "relative flex h-6 w-6 shrink-0 items-center justify-center",
-      content: "flex min-w-0 grow flex-col",
       title: "me-4 wrap-break-word font-medium text-foreground",
       // `!` beats sonner's `[data-sonner-theme=dark] [data-description]` colour.
       description: "me-4 wrap-break-word text-muted-foreground!",
-      actionButton:
-        "h-7 shrink-0 rounded-control bg-primary px-2.5 text-xs font-medium text-primary-foreground motion-press active:scale-[0.96] hover:bg-primary/90",
       cancelButton:
         "h-7 shrink-0 rounded-control bg-muted px-2.5 text-xs font-medium text-muted-foreground motion-press active:scale-[0.96] hover:bg-muted/80",
       closeButton:
@@ -151,9 +148,6 @@ export const foundationsConfig = {
         "h-full w-full flex-1 bg-primary transition-transform duration-[var(--motion-base)]",
     },
   },
-  Separator: {
-    classes: { root: "shrink-0 bg-border" },
-  },
   Label: {
     classes: {
       root: "text-sm font-semibold leading-none tracking-[-0.01em] cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
@@ -166,7 +160,6 @@ export const foundationsConfig = {
       card: "rounded-surface bg-card [&_input]:bg-muted [&_textarea]:bg-muted [&_[data-slot=select-trigger]]:bg-muted [&_[role=combobox]]:border-input [&_[role=combobox]]:bg-muted",
       footer:
         "flex items-center justify-end gap-2 rounded-b-surface bg-muted px-4 py-3",
-      body: { list: "divide-y divide-border/50 p-0" },
     },
   },
   SettingsEmptyState: {

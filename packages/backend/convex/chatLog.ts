@@ -12,6 +12,7 @@ import {
   chatSourceFieldsForEntityId,
   chatSourceSummaryValidator,
   listRowsForChatSource,
+  repoIdForSource,
   resolveChatSource,
   type ChatSourceArg,
   type ChatSourceStoredFields,
@@ -80,26 +81,6 @@ async function loadRows(
   });
 }
 
-/** The chat's repo; a quick task without one falls back to its project's. */
-async function repoIdForSource(
-  ctx: QueryCtx,
-  source: ChatSourceStoredFields,
-): Promise<Id<"githubRepos"> | undefined> {
-  if (source.sourceSessionId) {
-    return (await ctx.db.get(source.sourceSessionId))?.repoId;
-  }
-  if (source.sourceProjectId) {
-    return (await ctx.db.get(source.sourceProjectId))?.repoId;
-  }
-  if (!source.sourceTaskId) return undefined;
-  const task = await ctx.db.get(source.sourceTaskId);
-  if (!task) return undefined;
-  if (task.repoId) return task.repoId;
-  return task.projectId
-    ? (await ctx.db.get(task.projectId))?.repoId
-    : undefined;
-}
-
 async function insertEntry(
   ctx: MutationCtx,
   source: ChatSourceStoredFields,
@@ -116,7 +97,7 @@ async function insertEntry(
 ): Promise<Id<"chatLogEntries">> {
   const limits = LIMITS[entry.author];
   const body = entry.body ? clip(entry.body, limits.body) : "";
-  const repoId = await repoIdForSource(ctx, source);
+  const repoId = await repoIdForSource(ctx.db, source);
   return ctx.db.insert("chatLogEntries", {
     ...source,
     ...(repoId ? { repoId } : {}),

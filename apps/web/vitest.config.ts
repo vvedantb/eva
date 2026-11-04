@@ -13,8 +13,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    // Same as vite.config.ts: pnpm installs one @vvedantb/ui per peer set, so
-    // @eva/ui's provider and the app would read two UiConfig contexts.
-    dedupe: ["@vvedantb/ui"],
+    // pnpm installs one @vvedantb/ui copy per peer set, so @eva/ui and the app
+    // got different copies, each with its own UiConfig context, and
+    // EvaUiProvider configured nothing the tests rendered. The app bundle
+    // already resolves to one copy.
+    dedupe: ["@vvedantb/ui", "react", "react-dom"],
   },
 });
