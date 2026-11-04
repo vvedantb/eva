@@ -51,7 +51,10 @@ export async function buildSessionPrompt(
   },
 ): Promise<{ prompt: string; branchName: string }> {
   const { session, chat, repo, user } = args;
-  const liveChats = await listLiveSessionChats(ctx.db, session._id);
+  const [liveChats, { resolvedMessage, prefixBlock }] = await Promise.all([
+    listLiveSessionChats(ctx.db, session._id),
+    resolveMessageTokens(ctx, args.message, session.repoId),
+  ]);
   const parallelNote =
     liveChats.length > 1 ? `\n\n${PARALLEL_CHATS_NOTE}` : "";
   const rootDirectory = repo.rootDirectory ?? "";
@@ -62,29 +65,21 @@ export async function buildSessionPrompt(
 
   const branchName = session.branchName || `eva/session-${session._id}`;
 
-  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
-    ctx,
-    args.message,
-    session.repoId,
-  );
   const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
   if (bareCommand !== null) return { prompt: bareCommand, branchName };
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // session owner, whose access the credential helper mints tokens against).
-  const readableRepos = await listReadableSiblingRepos(
-    ctx.db,
-    session.userId,
-    repo._id,
-  );
-
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
   // in as a rotation handoff. Session plan.md / planContent is not injected —
   // that was the old Plan/Build mode contract.
-  const linkedRepoRows = await ctx.db
-    .query("sessionRepos")
-    .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-    .collect();
+  const [readableRepos, linkedRepoRows] = await Promise.all([
+    listReadableSiblingRepos(ctx.db, session.userId, repo._id),
+    ctx.db
+      .query("sessionRepos")
+      .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+      .collect(),
+  ]);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,
     name: row.name,

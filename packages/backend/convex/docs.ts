@@ -169,14 +169,17 @@ export const list = authQuery({
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     const seen = new Set<string>();
     const docs: Doc<"docs">[] = [];
+    const docsBySibling = await Promise.all(
+      siblingIds.map((siblingId) =>
+        ctx.db
+          .query("docs")
+          .withIndex("by_repo", (q) => q.eq("repoId", siblingId))
+          .collect(),
+      ),
+    );
 
-    for (const siblingId of siblingIds) {
-      const siblingDocs = await ctx.db
-        .query("docs")
-        .withIndex("by_repo", (q) => q.eq("repoId", siblingId))
-        .collect();
-
-      for (const doc of siblingDocs) {
+    for (const [i, siblingId] of siblingIds.entries()) {
+      for (const doc of docsBySibling[i]) {
         if (seen.has(doc._id)) continue;
         if (args.kind !== undefined && doc.kind !== args.kind) continue;
         const isCurrentRepo = siblingId === args.repoId;

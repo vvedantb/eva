@@ -46,8 +46,10 @@ export const fetchIssues = action({
     if (!identity) {
       throw new Error("Not authenticated");
     }
-    await getActionRepoWithAccess(ctx, args.repoId);
-    const userId = await ctx.runQuery(internal.auth.getUserIdFromIdentity, {});
+    const [, userId] = await Promise.all([
+      getActionRepoWithAccess(ctx, args.repoId),
+      ctx.runQuery(internal.auth.getUserIdFromIdentity, {}),
+    ]);
     if (!userId) {
       throw new Error("Not authenticated");
     }
