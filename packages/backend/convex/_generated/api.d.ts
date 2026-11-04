@@ -447,6 +447,7 @@ import type * as mcp_registry from "../mcp/registry.js";
 import type * as mcp_renderUi from "../mcp/renderUi.js";
 import type * as mcp_routes from "../mcp/routes.js";
 import type * as mcp_sendEmail from "../mcp/sendEmail.js";
+import type * as mcp_serverInfo from "../mcp/serverInfo.js";
 import type * as mcp_sessionRef from "../mcp/sessionRef.js";
 import type * as mcp_supabase from "../mcp/supabase.js";
 import type * as mcp_tabQueueTools from "../mcp/tabQueueTools.js";
@@ -998,6 +999,7 @@ declare const fullApi: ApiFromModules<{
   "mcp/renderUi": typeof mcp_renderUi;
   "mcp/routes": typeof mcp_routes;
   "mcp/sendEmail": typeof mcp_sendEmail;
+  "mcp/serverInfo": typeof mcp_serverInfo;
   "mcp/sessionRef": typeof mcp_sessionRef;
   "mcp/supabase": typeof mcp_supabase;
   "mcp/tabQueueTools": typeof mcp_tabQueueTools;
