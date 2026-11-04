@@ -4,6 +4,7 @@ import {
   authAction,
   authQuery,
   authMutation,
+  getDocWithAccess,
   hasRepoAccess,
 } from "./functions";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
@@ -400,10 +401,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
       title?: string;
       content?: string;
@@ -547,8 +545,7 @@ export const addInterviewMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const history = doc.interviewHistory ?? [];
     history.push({
       role: args.role,
@@ -566,8 +563,7 @@ export const clearInterview = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       interviewHistory: undefined,
       sandboxId: undefined,

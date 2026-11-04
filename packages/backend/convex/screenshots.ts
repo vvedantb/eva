@@ -26,6 +26,7 @@ export const attachMedia = authAction({
   handler: async (ctx, args) => {
     await ctx.runMutation(internal.messages.updateLastInternal, {
       parentId: args.parentId,
+      requesterUserId: ctx.userId,
       messageId: args.messageId,
       imageStorageId: args.imageStorageId,
       videoStorageId: args.videoStorageId,

@@ -25,6 +25,10 @@ import {
   isSpecContent,
   type ParsedQuestion,
 } from "./projectChatMessage.utils";
+import {
+  catchMutationError,
+  mutationError,
+} from "@/lib/utils/mutationToast";
 
 export interface ConversationMessage {
   role: "user" | "assistant";
@@ -69,7 +73,10 @@ export function ProjectChatTab({
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const [isClearing, setIsClearing] = useState(false);
-  const prevMessagesLengthRef = useRef(initialMessages.length);
+  // The legacy `ready` row that already chained the spec. The effect below
+  // re-runs on every parent callback change; without this it started the
+  // spec again for the same row until `activeWorkflowId` arrived.
+  const specRequestedForRef = useRef<number | null>(null);
 
   const isLocked =
     projectPhase === "in_progress" ||
@@ -110,17 +117,25 @@ export function ProjectChatTab({
         isInterviewTransitionContent(lastMessage.content) &&
         projectPhase === "draft" &&
         !hasSpecMessage &&
-        !hasActiveWorkflow
+        !hasActiveWorkflow &&
+        specRequestedForRef.current !== initialMessages.length
       ) {
         // Legacy rows that still have {"ready":true} before spec was chained server-side.
+        specRequestedForRef.current = initialMessages.length;
         setIsLoading(true);
-        void startProjectSpec({
-          projectId,
-          featureDescription: rawInput,
+        void catchMutationError(
+          startProjectSpec({
+            projectId,
+            featureDescription: rawInput,
+          }),
+          "Couldn't generate the spec",
+          "project-interview-spec",
+        ).catch(() => {
+          specRequestedForRef.current = null;
+          setIsLoading(false);
         });
       }
     }
-    prevMessagesLengthRef.current = initialMessages.length;
   }, [
     initialMessages,
     onSpecGenerated,
@@ -139,11 +154,16 @@ export function ProjectChatTab({
 
   const askQuestion = async () => {
     setIsLoading(true);
-    await startProjectInterview({
-      projectId: projectId,
-      featureDescription: rawInput,
-      previousAnswers: [], // Session persistence provides context
-    });
+    // A failed start used to leave the tab on its loading state for good.
+    await catchMutationError(
+      startProjectInterview({
+        projectId: projectId,
+        featureDescription: rawInput,
+        previousAnswers: [], // Session persistence provides context
+      }),
+      "Couldn't ask the next question",
+      "project-interview-ask",
+    ).catch(() => setIsLoading(false));
   };
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-pass-data-to-parent --
@@ -151,7 +171,9 @@ export function ProjectChatTab({
      closed mid-request) has no user event left to retry from, so the retry has
      to fire when the component remounts. */
   useEffect(() => {
-    if (isLocked || isLoading) return;
+    // A running workflow will write the question itself; asking again would
+    // only be refused server-side.
+    if (isLocked || isLoading || hasActiveWorkflow) return;
     const hasAssistant = initialMessages.some((m) => m.role === "assistant");
     if (initialMessages.length > 0 && !hasAssistant) {
       void askQuestion();
@@ -164,7 +186,12 @@ export function ProjectChatTab({
   };
 
   const handleAnswer = async (answer: string) => {
-    await addMessageDb({ id: projectId, role: "user", content: answer });
+    try {
+      await addMessageDb({ id: projectId, role: "user", content: answer });
+    } catch {
+      mutationError("Couldn't send your answer", "project-interview-answer");
+      return;
+    }
     await askQuestion();
   };
 

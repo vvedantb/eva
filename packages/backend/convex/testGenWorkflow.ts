@@ -4,8 +4,12 @@ import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
-import { workflow, cancelTrackedWorkflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import {
+  workflow,
+  cancelTrackedWorkflow,
+  isTrackedWorkflowRunning,
+} from "./workflowManager";
+import { authMutation, getDocWithAccess } from "./functions";
 import {
   turnCheckpointArgs,
   turnLeaseFenceArgs,
@@ -388,9 +392,11 @@ export const cancelTestGen = authMutation({
   args: { docId: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
 
+    // The doc has one workflow slot shared with the interview, generate and
+    // PR recap flows. Only cancel it when test generation is what holds it.
+    if (doc.testGenStatus !== "running") return null;
     await cancelTrackedWorkflow(ctx, doc.activeWorkflowId);
 
     await clearStreamingActivity(ctx, String(args.docId));
@@ -414,8 +420,12 @@ export const startTestGen = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.docId, ctx.userId);
+    if (await isTrackedWorkflowRunning(ctx, doc.activeWorkflowId)) {
+      throw new Error(
+        "Another document task is still running. Wait for it to finish.",
+      );
+    }
 
     const repo = await ctx.db.get(doc.repoId);
     if (!repo) throw new Error("Repository not found");

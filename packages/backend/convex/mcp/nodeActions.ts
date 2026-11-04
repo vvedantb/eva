@@ -8,7 +8,6 @@ import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
   consoleClerkVerifyLogger,
-  defineMcpServerInfo,
   formatConvexQueryError,
   getClerkClient,
   requiredEnv,
@@ -46,6 +45,7 @@ import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { repoRefLabel } from "./toolShared";
 import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { evaMcpServerInfo } from "./serverInfo";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -2288,11 +2288,6 @@ export const resolveSupabaseToken = internalAction({
 // MCP Request Handler
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MCP_SERVER_INFO = defineMcpServerInfo({
-  name: "eva-mcp",
-  version: "1.0.0",
-});
-
 export const handleMcpRequest = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -2314,7 +2309,7 @@ export const handleMcpRequest = internalAction({
       body,
       Transport: WebStandardStreamableHTTPServerTransport,
       createServer: async () => {
-        const server = new McpServer(MCP_SERVER_INFO);
+        const server = new McpServer(evaMcpServerInfo(process.env.WEB_APP_URL));
         // Register tools with credentials (including optional scoped repo /
         // session entity for browser tools).
         const credentials = {

@@ -5,7 +5,7 @@ import { Cursor, ripple as spawnRipple, type CursorKind, type CursorStyle } from
 import { Keycaps, type Keys, type KeysAt } from './keys'
 import { LookContext, type Fidelity, type Layout, type Palette, type Theme } from './looks'
 import { EMPTY, nameOf, rectOf, sameRects, stageSpace, targetRectOf, thumb, type Point, type Rect, type Target } from './measure'
-import { StillContext, useReducedMotion } from './reduced-motion'
+import { StillContext, useStill } from './reduced-motion'
 import { clock } from './clock'
 import { clamp, easeInOutCubic, isDev, warn } from './util'
 
@@ -28,7 +28,7 @@ export interface StageProps<S> {
   initial?: S
   /** Loops while on screen. Leave out for a static illustration. */
   script?: Script<S>
-  /** The still frame shown under reduced motion or with no script. Defaults to initial. */
+  /** The still frame shown inside a static stage or with no script. Defaults to initial. */
   poster?: S
   /**
    * Where the cursor rests at the start of each loop, or where it sits in a
@@ -131,7 +131,7 @@ export function Stage<S extends object>({
   const fitRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const cursorRef = useRef<HTMLDivElement>(null)
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const still = !script || reduced
 
   const [state, setState] = useState<S>(() => (still && poster ? poster : initial))

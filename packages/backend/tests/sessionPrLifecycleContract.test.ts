@@ -37,8 +37,9 @@ describe("session pull-request lifecycle", () => {
   });
 
   test("only schedules deletion for a newly archived session", () => {
-    expect(reconcile).toContain(
-      "const needsArchive = archive && session.archived !== true",
+    // Further conjuncts (the owner's auto-archive opt-out) may follow.
+    expect(reconcile).toMatch(
+      /const needsArchive =\s*archive &&\s*session\.archived !== true/,
     );
     expect(reconcile).toContain("if (needsArchive) {");
   });

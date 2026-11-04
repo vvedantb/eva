@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import type { Rect } from '../measure'
 import { warn } from '../util'
 import './Fly.css'
@@ -33,7 +33,7 @@ export interface FlyProps {
  * lands, changes size in flight and snaps on the handoff (film.mjs: `fly size`).
  */
 export function Fly({ from: liveFrom, to: liveTo, go, held: shownAtRest = false, duration = 750, children, className }: FlyProps) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   // Both ends are fixed at take-off. Measured live, they move under the flight
   // (a closing menu scales the start away) and every change restarts the
   // transition: a creep near the end, then a jump when the real one appears.

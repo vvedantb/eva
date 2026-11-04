@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import type { Rect } from '../measure'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import './Follow.css'
 
 export interface FollowProps extends HTMLAttributes<HTMLDivElement> {
@@ -18,7 +18,7 @@ export interface FollowProps extends HTMLAttributes<HTMLDivElement> {
  * freeform drag stutters and shakes; this retargets smoothly instead.
  */
 export function Follow({ to, stiffness = 0.25, className, style, children, ...rest }: FollowProps) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const el = useRef<HTMLDivElement>(null)
   const cur = useRef<Rect | null>(null)
   const vel = useRef({ x: 0, y: 0, width: 0, height: 0 })

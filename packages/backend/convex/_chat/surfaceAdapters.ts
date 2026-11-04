@@ -14,6 +14,7 @@ import {
 } from "../_queues/helpers";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
+import { markAllRunningExited } from "../backgroundProcesses";
 import type { TurnLane } from "../validators";
 import {
   loadSessionChat,
@@ -174,9 +175,13 @@ const sessionChatAdapter: ChatSurfaceAdapter<
       // dashboard, and an "active" session with a dead VM just looks
       // frozen. "closed" is also what stops page-open prewarm from
       // silently resurrecting the VM (see prewarmDaemon's status guard).
+      // Only an `active` session was running that VM. A newer start
+      // (`starting`) or a stop already in flight owns the status instead.
       const chat = await ctx.db.get(id);
-      if (chat) {
-        await ctx.db.patch(chat.sessionId, {
+      const session = chat ? await ctx.db.get(chat.sessionId) : null;
+      if (session?.status === "active") {
+        await markAllRunningExited(ctx.db, session._id);
+        await ctx.db.patch(session._id, {
           status: "closed",
           updatedAt: Date.now(),
         });

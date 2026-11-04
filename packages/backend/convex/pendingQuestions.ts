@@ -1,7 +1,9 @@
 import { v } from "convex/values";
+import type { GenericDatabaseReader } from "convex/server";
+import type { DataModel, Id } from "./_generated/dataModel";
 import type { DatabaseWriter } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
-import { authQuery, authMutation } from "./functions";
+import { authQuery, authMutation, hasRepoAccess } from "./functions";
 import { recordAnsweredQuestion } from "./chatLog";
 
 /**
@@ -11,9 +13,10 @@ import { recordAnsweredQuestion } from "./chatLog";
  * turn. `entityId` is the generic session/project/task id, matching how
  * `streaming.ts` keys its state, so this is not tied to any one entity type.
  *
- * Auth mirrors `streaming.ts`: a valid identity (the sandbox CONVEX_TOKEN for
- * post/claim, the signed-in user for answer/getActive) — no per-entity check,
- * since the row only carries the model's own question text.
+ * Auth: the sandbox (CONVEX_TOKEN, the launching user) posts and claims, the
+ * signed-in user reads and answers — each checked against the repo behind
+ * `entityId` (see `questionEntityAccess`), so nobody can read, replace or
+ * answer another team's question.
  */
 
 /**
@@ -45,6 +48,48 @@ export const clearForEntity = internalMutation({
   },
 });
 
+/**
+ * The repo behind a question's `entityId`: a session chat, session, quick
+ * task, project, run, doc or automation run. Undefined for ids of any other
+ * shape, which no UI reads.
+ */
+async function repoIdForQuestionEntity(
+  db: GenericDatabaseReader<DataModel>,
+  entityId: string,
+): Promise<Id<"githubRepos"> | undefined> {
+  const chatId = db.normalizeId("sessionChats", entityId);
+  if (chatId) return (await db.get(chatId))?.repoId;
+  const sessionId = db.normalizeId("sessions", entityId);
+  if (sessionId) return (await db.get(sessionId))?.repoId;
+  const taskId = db.normalizeId("agentTasks", entityId);
+  if (taskId) return (await db.get(taskId))?.repoId;
+  const projectId = db.normalizeId("projects", entityId);
+  if (projectId) return (await db.get(projectId))?.repoId;
+  const runId = db.normalizeId("agentRuns", entityId);
+  if (runId) return (await db.get(runId))?.repoId;
+  const docId = db.normalizeId("docs", entityId);
+  if (docId) return (await db.get(docId))?.repoId;
+  const automationRunId = db.normalizeId("automationRuns", entityId);
+  if (automationRunId) return (await db.get(automationRunId))?.repoId;
+  return undefined;
+}
+
+/**
+ * "allowed" / "denied" for an entity with a repo; "unknown" for an id that
+ * resolves to none. The sandbox (CONVEX_TOKEN = the launching user, who has
+ * access) may still post and claim on unknown ids so no agent kind wedges
+ * mid-turn; the UI's read and answer require "allowed".
+ */
+async function questionEntityAccess(
+  db: GenericDatabaseReader<DataModel>,
+  entityId: string,
+  userId: Id<"users">,
+): Promise<"allowed" | "denied" | "unknown"> {
+  const repoId = await repoIdForQuestionEntity(db, entityId);
+  if (repoId === undefined) return "unknown";
+  return (await hasRepoAccess(db, repoId, userId)) ? "allowed" : "denied";
+}
+
 const activeQuestionValidator = v.union(
   v.object({ toolUseId: v.string(), payload: v.string() }),
   v.null(),
@@ -59,6 +104,12 @@ export const post = authMutation({
   args: { entityId: v.string(), toolUseId: v.string(), payload: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const access = await questionEntityAccess(
+      ctx.db,
+      args.entityId,
+      ctx.userId,
+    );
+    if (access === "denied") throw new Error("Not authorized");
     const stale = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
@@ -81,6 +132,12 @@ export const getActive = authQuery({
   args: { entityId: v.string() },
   returns: activeQuestionValidator,
   handler: async (ctx, args) => {
+    const access = await questionEntityAccess(
+      ctx.db,
+      args.entityId,
+      ctx.userId,
+    );
+    if (access !== "allowed") return null;
     const rows = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
@@ -98,6 +155,12 @@ export const answer = authMutation({
   args: { entityId: v.string(), toolUseId: v.string(), answer: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const access = await questionEntityAccess(
+      ctx.db,
+      args.entityId,
+      ctx.userId,
+    );
+    if (access !== "allowed") throw new Error("Not authorized");
     const existing = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity_tool", (q) =>
@@ -118,6 +181,12 @@ export const claimAnswer = authMutation({
   args: { entityId: v.string(), toolUseId: v.string() },
   returns: v.object({ answer: v.union(v.string(), v.null()) }),
   handler: async (ctx, args) => {
+    const access = await questionEntityAccess(
+      ctx.db,
+      args.entityId,
+      ctx.userId,
+    );
+    if (access === "denied") throw new Error("Not authorized");
     const existing = await ctx.db
       .query("pendingQuestions")
       .withIndex("by_entity_tool", (q) =>

@@ -144,7 +144,8 @@ describe("motion utilities transition the properties Tailwind actually sets", ()
       );
       const durations = /transition-duration:([^;]+);/.exec(body);
       if (!durations) return;
-      const count = (list: string) => list.split(",").length;
+      // Top-level commas only: `var(--motion-fast, 150ms)` is one duration.
+      const count = (list: string) => list.replace(/\([^()]*\)/g, "()").split(",").length;
       if (count(durations[1]) === 1) return;
       expect(count(durations[1]), "positional list is out of step").toBe(
         count(properties),
@@ -152,6 +153,47 @@ describe("motion utilities transition the properties Tailwind actually sets", ()
     },
   );
 
+});
+
+/**
+ * `motion-press` is a `transition-property` list. Another `transition-*` on the
+ * same element sets the same property, and whichever comes later in the sheet
+ * wins — Tailwind emits `transition-colors` and arbitrary lists after the
+ * package utility. The press then loses `scale` and `active:scale-*` snaps in
+ * one frame. Four menu row types, the traits option and the preview history
+ * row shipped that way (fix 407b74ffc). Nothing looks broken; the row still
+ * presses, so it wants a test.
+ *
+ * `transition`, `transition-all` and `transition-transform` keep `scale`, and
+ * an arbitrary list that names `scale` is fine (ListRow's root does that).
+ */
+describe("motion-press is not overridden on the same element", () => {
+  /** Every class literal that carries the press, with the file it came from. */
+  const presses = sourceFiles().flatMap((path) => {
+    const source = stripComments(readFileSync(path, "utf8"));
+    return [...source.matchAll(/(["'`])((?:(?!\1)[^\n])*)\1/g)]
+      .map(({ 2: literal }) => literal)
+      .filter((literal) => /(?:^|[\s:])motion-press\b/.test(literal))
+      .map((literal) => ({
+        file: path.slice(path.indexOf("/src/") + 1),
+        literal,
+      }));
+  });
+
+  /** Guards the regex above: a typo here would pass the rule vacuously. */
+  it("finds the press call sites to check", () => {
+    expect(presses.length).toBeGreaterThan(50);
+  });
+
+  it("no press shares its class list with a transition that drops `scale`", () => {
+    const dropsScale =
+      /(?:^|[\s:])transition-(?:colors|opacity|shadow|none|\[(?![^\]]*\bscale\b)[^\]]*\])(?=\s|$)/;
+    const offenders = presses.filter(({ literal }) => dropsScale.test(literal));
+    expect(
+      offenders,
+      "the later transition-* replaces motion-press, so active:scale snaps — drop it, motion-press already transitions colours",
+    ).toEqual([]);
+  });
 });
 
 /**

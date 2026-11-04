@@ -52,7 +52,6 @@ export const aichatConfig = {
       ].join(" "),
       branchSelector:
         "[&>*:not(:first-child)]:rounded-l-lg [&>*:not(:last-child)]:rounded-r-lg",
-      branchIcon: "size-3.5",
     },
   },
   PromptInput: {
@@ -93,7 +92,7 @@ export const aichatConfig = {
         "w-[4.75rem] shrink-0 pt-1 text-2xs font-medium text-muted-foreground",
       empty: "flex h-6 items-center text-2xs text-muted-foreground/70",
       option:
-        "h-6 rounded-md px-2 text-2xs font-medium motion-press transition-colors active:scale-[0.96]",
+        "h-6 rounded-md px-2 text-2xs font-medium motion-press active:scale-[0.96]",
       note: "pl-[5.375rem] text-2xs leading-snug text-muted-foreground/80",
     },
   },
@@ -120,7 +119,6 @@ export const aichatConfig = {
       pre: "overflow-x-auto p-3 text-xs",
       copyButton:
         "absolute right-2 top-2 size-7 p-0 text-muted-foreground hover:text-foreground after:absolute after:inset-[-6px]",
-      copyIcon: "size-3.5",
     },
   },
   Artifact: {

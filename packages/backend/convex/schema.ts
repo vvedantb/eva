@@ -49,6 +49,7 @@ import {
   connectorOauthStateFields,
   docFields,
   chatLogEntryFields,
+  feedbackFields,
   docCommentFields,
   docSubscriberFields,
   docVersionFields,
@@ -350,6 +351,12 @@ const schema = defineSchema({
     .index("by_source_task", ["sourceTaskId"])
     .index("by_source_project", ["sourceProjectId"])
     .index("by_message", ["messageId"])
+    .index("by_repo", ["repoId"]),
+
+  // Thumbs on Eva turns and agent `submit_feedback` reports (Feedback page).
+  feedback: defineTable(feedbackFields)
+    .index("by_parent", ["parentId"])
+    .index("by_message_and_user", ["messageId", "userId"])
     .index("by_repo", ["repoId"]),
 
   docComments: defineTable(docCommentFields).index("by_doc", ["docId"]),

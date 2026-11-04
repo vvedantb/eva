@@ -1,7 +1,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import type { FunctionArgs } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
 /**
  * Whether one chat (session, task or project) has a turn open, read from its
@@ -11,10 +11,21 @@ import type { FunctionArgs } from "convex/server";
 export function useChatTurnOpen(
   entityId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects"> | undefined,
 ): boolean | undefined {
-  const status = useQuery(
-    api.turns.getChatStatus,
-    entityId === undefined ? "skip" : { entityId },
+  return chatTurnOpenFromStatus(
+    useQuery(
+      api.turns.getChatStatus,
+      entityId === undefined ? "skip" : { entityId },
+    ),
   );
+}
+
+/**
+ * `api.turns.getChatStatus` as "is a turn open": `null` means none,
+ * `undefined` means the status is still loading.
+ */
+export function chatTurnOpenFromStatus(
+  status: FunctionReturnType<typeof api.turns.getChatStatus> | undefined,
+): boolean | undefined {
   return status === undefined ? undefined : status !== null;
 }
 

@@ -77,7 +77,7 @@ export function SidebarChatRow({
                 href={href}
                 onClick={openChat}
                 className={cn(
-                  "block rounded-menu-item py-1.5 text-[13px] leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
+                  "block rounded-menu-item py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
                   SESSIONS_CHAT_ROW_X,
                 )}
               >

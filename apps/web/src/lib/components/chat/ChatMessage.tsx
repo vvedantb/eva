@@ -1,4 +1,4 @@
-import { cn, SmoothMarkdown } from "@eva/ui";
+import { cn } from "@eva/ui";
 import {
   formatModelDisplayLabel,
   Message as AIMessage,
@@ -30,6 +30,8 @@ import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage
 import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
+import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
+import type { FeedbackSentiment } from "@/lib/components/chat/feedback/feedbackRows";
 import { ChatMessageContextMenu } from "@/lib/components/chat/ChatMessageContextMenu";
 import {
   useTurnCheckpointActions,
@@ -196,6 +198,14 @@ interface ChatMessageProps {
    * output, like media, and never take the prose's slot behind a tab.
    */
   artifacts?: ReactNode;
+  /**
+   * Shows thumbs up / down on a finished assistant turn. False on surfaces
+   * with no chat parent (Manager Ave) and in simple view's hidden meta row.
+   */
+  canRate?: boolean;
+  /** The viewer's saved rating and comment on this turn, if any. */
+  feedbackSentiment?: FeedbackSentiment;
+  feedbackComment?: string;
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -229,6 +239,9 @@ export const ChatMessage = memo(function ChatMessage({
   precedingUser,
   belowContent,
   artifacts,
+  canRate = false,
+  feedbackSentiment,
+  feedbackComment,
 }: ChatMessageProps) {
   const activityLayout = useActivityLayout();
   const checkpoint = useTurnCheckpointActions({
@@ -464,9 +477,9 @@ export const ChatMessage = memo(function ChatMessage({
                       <AssistantQuestionCards steps={streamingQuestionSteps} />
                       {streamingContent && !streamingTextIsInline ? (
                         <div data-assistant-cite-source={message._id}>
-                          <SmoothMarkdown className="mt-2" mode="streaming">
+                          <Markdown className="mt-2" mode="streaming">
                             {streamingContent}
-                          </SmoothMarkdown>
+                          </Markdown>
                         </div>
                       ) : null}
                     </>
@@ -584,6 +597,13 @@ export const ChatMessage = memo(function ChatMessage({
                           className="ml-0.5"
                           revealOnHover={false}
                         />
+                        {canRate && !isStreamingPlaceholder ? (
+                          <TurnFeedbackActions
+                            messageId={message._id}
+                            sentiment={feedbackSentiment}
+                            comment={feedbackComment}
+                          />
+                        ) : null}
                         {message.finishedAt && message.timestamp ? (
                           <span className="text-2xs tabular-nums text-muted-foreground/60">
                             {/* The turn's clock time is when Eva finished, not

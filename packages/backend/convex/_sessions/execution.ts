@@ -23,7 +23,7 @@ import {
   drainSessionChatQueues,
   dropComposerUserRow,
 } from "../_queues/helpers";
-import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
+import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
 import {
   buildDaemonPendingTurn,
   scheduleChatDaemonPrewarm,
