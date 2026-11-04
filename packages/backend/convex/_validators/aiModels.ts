@@ -491,8 +491,10 @@ export function getAIProviderAvailability(
 /**
  * Raw model strings (including legacy formats) grouped by the canonical
  * AIModel they normalize to. Unlisted strings fall back to DEFAULT_AI_MODEL.
+ * Each alias may appear once: the Map below would let a repeat win silently,
+ * so `normalizeAIModel.test.ts` checks uniqueness.
  */
-const AI_MODEL_ALIASES: ReadonlyArray<
+export const AI_MODEL_ALIASES: ReadonlyArray<
   readonly [AIModel, ReadonlyArray<string>]
 > = [
   ["claude:opus", ["opus", "claude:opus"]],
@@ -586,11 +588,7 @@ const AI_MODEL_ALIASES: ReadonlyArray<
   ["cursor:gemini-3.1-pro", ["cursor:gemini-3.1-pro"]],
   [
     "cursor:composer-2.5",
-    [
-      "cursor:gpt-5.3-codex-high",
-      "cursor:composer-2",
-      "cursor:composer-2.5",
-    ],
+    ["cursor:gpt-5.3-codex-high", "cursor:composer-2", "cursor:composer-2.5"],
   ],
 ];
 
@@ -599,15 +597,6 @@ const AI_MODEL_BY_ALIAS: ReadonlyMap<string, AIModel> = new Map(
     aliases.map((alias): [string, AIModel] => [alias, model]),
   ),
 );
-
-// The old `switch` rejected a repeated alias at compile time; a Map would let
-// the last entry win silently, so fail on module load (tests, deploy) instead.
-if (
-  AI_MODEL_BY_ALIAS.size !==
-  AI_MODEL_ALIASES.reduce((count, [, aliases]) => count + aliases.length, 0)
-) {
-  throw new Error("AI_MODEL_ALIASES lists the same alias twice");
-}
 
 /** Normalizes a raw model string (including legacy formats) to a canonical AIModel value. */
 export function normalizeAIModel(model: string | null | undefined): AIModel {
