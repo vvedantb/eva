@@ -14,12 +14,16 @@ export async function listTeammateUserIds(
     .query("teamMembers")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
+  const teams = await Promise.all(
+    memberships.map((membership) =>
+      db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
+        .collect(),
+    ),
+  );
   const teammates = new Set<Id<"users">>();
-  for (const membership of memberships) {
-    const members = await db
-      .query("teamMembers")
-      .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-      .collect();
+  for (const members of teams) {
     for (const member of members) {
       if (member.userId !== userId) teammates.add(member.userId);
     }

@@ -177,25 +177,31 @@ export async function listDirectoryForTeam(
     .query("teamMembers")
     .withIndex("by_team", (q) => q.eq("teamId", teamId))
     .collect();
-  const out = [];
-  for (const member of members) {
-    const user = await ctx.db.get(member.userId);
-    if (!user) continue;
-    const profile = await ctx.db
-      .query("workProfiles")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", teamId).eq("userId", member.userId),
-      )
-      .first();
-    out.push({
-      userId: member.userId,
-      name: displayName(user),
-      role: profile?.role ?? user.role ?? null,
-      headline: profile?.headline ?? "",
-      owns: profile?.owns ?? "",
-      askMeAbout: profile?.askMeAbout ?? "",
-    });
-  }
+  const rows = await Promise.all(
+    members.map(async (member) => {
+      const [user, profile] = await Promise.all([
+        ctx.db.get(member.userId),
+        ctx.db
+          .query("workProfiles")
+          .withIndex("by_team_and_user", (q) =>
+            q.eq("teamId", teamId).eq("userId", member.userId),
+          )
+          .first(),
+      ]);
+      if (!user) return [];
+      return [
+        {
+          userId: member.userId,
+          name: displayName(user),
+          role: profile?.role ?? user.role ?? null,
+          headline: profile?.headline ?? "",
+          owns: profile?.owns ?? "",
+          askMeAbout: profile?.askMeAbout ?? "",
+        },
+      ];
+    }),
+  );
+  const out = rows.flat();
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
@@ -217,17 +223,20 @@ export const listForAgent = internalQuery({
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    const teams = [];
-    for (const membership of memberships) {
-      const team = await ctx.db.get(membership.teamId);
-      if (!team) continue;
-      if (!(await teamHasOtherMembers(ctx, team._id, userId))) continue;
-      teams.push({
-        teamId: team._id,
-        teamName: team.name,
-        members: await listDirectoryForTeam(ctx, team._id),
-      });
-    }
-    return teams;
+    const teams = await Promise.all(
+      memberships.map(async (membership) => {
+        const team = await ctx.db.get(membership.teamId);
+        if (!team) return [];
+        if (!(await teamHasOtherMembers(ctx, team._id, userId))) return [];
+        return [
+          {
+            teamId: team._id,
+            teamName: team.name,
+            members: await listDirectoryForTeam(ctx, team._id),
+          },
+        ];
+      }),
+    );
+    return teams.flat();
   },
 });

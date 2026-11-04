@@ -576,74 +576,83 @@ export const listEntitiesForUser = internalQuery({
     const take = rowsPerScan(limit, repoIds.length, kinds.length);
     const rows: ListedEntity[] = [];
 
-    for (const repoId of repoIds) {
-      if (!(await hasRepoAccess(ctx.db, repoId, userId))) continue;
-      const repo = await ctx.db.get(repoId);
-      if (!repo) continue;
-      const columns = repoColumns(repo);
-      const openChatEntityIds = await openChatEntityIdsForRepo(ctx.db, repoId);
+    // Repos and kinds scan side by side; `rows` is sorted below, so the push
+    // order does not matter.
+    await Promise.all(
+      repoIds.map(async (repoId) => {
+        // Access first: a denied repo reads nothing else.
+        if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
+        const [repo, openChatEntityIds] = await Promise.all([
+          ctx.db.get(repoId),
+          openChatEntityIdsForRepo(ctx.db, repoId),
+        ]);
+        if (!repo) return;
+        const columns = repoColumns(repo);
 
-      for (const kind of kinds) {
-        if (kind === "session") {
-          const docs = await scanSessions(ctx, repoId, args.status, take);
-          for (const doc of docs) {
-            rows.push({
-              kind,
-              id: doc._id,
-              numId: doc.numId,
-              title: doc.title,
-              // A session has one status and it is its sandbox's, so both
-              // columns read the same field rather than inventing a second.
-              status: doc.status,
-              sandboxStatus: doc.status,
-              isExecuting: sessionIsExecuting(doc, openChatEntityIds),
-              archived: doc.archived,
-              prUrl: doc.prUrl,
-              branchName: doc.branchName,
-              updatedAt: doc.updatedAt ?? doc._creationTime,
-              linkedRepoCount: doc.linkedRepoCount,
-              ...columns,
-            });
-          }
-          continue;
-        }
+        await Promise.all(
+          kinds.map(async (kind) => {
+            if (kind === "session") {
+              const docs = await scanSessions(ctx, repoId, args.status, take);
+              for (const doc of docs) {
+                rows.push({
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  // A session has one status and it is its sandbox's, so both
+                  // columns read the same field rather than inventing a second.
+                  status: doc.status,
+                  sandboxStatus: doc.status,
+                  isExecuting: sessionIsExecuting(doc, openChatEntityIds),
+                  archived: doc.archived,
+                  prUrl: doc.prUrl,
+                  branchName: doc.branchName,
+                  updatedAt: doc.updatedAt ?? doc._creationTime,
+                  linkedRepoCount: doc.linkedRepoCount,
+                  ...columns,
+                });
+              }
+              return;
+            }
 
-        if (kind === "task") {
-          const docs = await scanTasks(ctx, repoId, args.status, take);
-          for (const doc of docs) {
-            rows.push({
-              kind,
-              id: doc._id,
-              numId: doc.numId,
-              title: doc.title,
-              status: doc.status,
-              sandboxStatus: doc.reviewTaskSandboxStatus ?? "closed",
-              isExecuting: taskIsExecuting(doc, openChatEntityIds),
-              updatedAt: doc.updatedAt,
-              ...columns,
-            });
-          }
-          continue;
-        }
+            if (kind === "task") {
+              const docs = await scanTasks(ctx, repoId, args.status, take);
+              for (const doc of docs) {
+                rows.push({
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  status: doc.status,
+                  sandboxStatus: doc.reviewTaskSandboxStatus ?? "closed",
+                  isExecuting: taskIsExecuting(doc, openChatEntityIds),
+                  updatedAt: doc.updatedAt,
+                  ...columns,
+                });
+              }
+              return;
+            }
 
-        const docs = await scanProjects(ctx, repoId, args.status, take);
-        for (const doc of docs) {
-          rows.push({
-            kind,
-            id: doc._id,
-            numId: doc.numId,
-            title: doc.title,
-            status: doc.phase,
-            sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
-            isExecuting: projectIsExecuting(doc, openChatEntityIds),
-            prUrl: doc.prUrl,
-            branchName: doc.branchName,
-            updatedAt: doc.updatedAt ?? doc._creationTime,
-            ...columns,
-          });
-        }
-      }
-    }
+            const docs = await scanProjects(ctx, repoId, args.status, take);
+            for (const doc of docs) {
+              rows.push({
+                kind,
+                id: doc._id,
+                numId: doc.numId,
+                title: doc.title,
+                status: doc.phase,
+                sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
+                isExecuting: projectIsExecuting(doc, openChatEntityIds),
+                prUrl: doc.prUrl,
+                branchName: doc.branchName,
+                updatedAt: doc.updatedAt ?? doc._creationTime,
+                ...columns,
+              });
+            }
+          }),
+        );
+      }),
+    );
 
     rows.sort((a, b) => b.updatedAt - a.updatedAt);
     const page = rows.slice(0, limit);
@@ -653,11 +662,12 @@ export const listEntitiesForUser = internalQuery({
       page.map(async (row) => {
         const owner = chatTargetOwner(ctx, row.kind, row.id);
         if (owner === null) return row;
-        const prs = await listOwnerPullRequests(ctx.db, owner);
-        const withTaskPr =
+        const [prs, withTaskPr] = await Promise.all([
+          listOwnerPullRequests(ctx.db, owner),
           owner.kind === "task" && row.prUrl === undefined
-            ? await taskPrUrlById(ctx, owner.taskId)
-            : row.prUrl;
+            ? taskPrUrlById(ctx, owner.taskId)
+            : row.prUrl,
+        ]);
         return {
           ...row,
           prUrl: withTaskPr,
@@ -735,37 +745,39 @@ export const reposWithPostgresReplica = internalQuery({
   args: { repoIds: v.array(v.string()) },
   returns: v.array(v.string()),
   handler: async (ctx, { repoIds }): Promise<string[]> => {
-    const teamHasKey = new Map<string, boolean>();
-    const matches: string[] = [];
-
-    for (const rawId of repoIds) {
-      // normalizeId turns the caller's string back into a typed Id (or null
-      // for anything malformed) without an `as` cast.
-      const repoId = ctx.db.normalizeId("githubRepos", rawId);
-      if (!repoId) continue;
-
-      const repoVars = await findRepoEnvVarDoc(ctx.db, repoId);
-      if (repoVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY)) {
-        matches.push(rawId);
-        continue;
-      }
-
-      const repo = await ctx.db.get(repoId);
-      const teamId = repo?.teamId;
-      if (!teamId) continue;
-
-      let teamHas = teamHasKey.get(teamId);
-      if (teamHas === undefined) {
-        const teamVars = await findTeamEnvVarDoc(ctx.db, teamId);
-        teamHas =
+    // One promise per team, so a shared team is still read once while repos
+    // are checked side by side.
+    const teamHasKey = new Map<string, Promise<boolean>>();
+    const teamHasReplica = (teamId: Id<"teams">): Promise<boolean> => {
+      const cached = teamHasKey.get(teamId);
+      if (cached) return cached;
+      const pending = findTeamEnvVarDoc(ctx.db, teamId).then(
+        (teamVars) =>
           teamVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY) ??
-          false;
-        teamHasKey.set(teamId, teamHas);
-      }
-      if (teamHas) matches.push(rawId);
-    }
+          false,
+      );
+      teamHasKey.set(teamId, pending);
+      return pending;
+    };
 
-    return matches;
+    const hits = await Promise.all(
+      repoIds.map(async (rawId) => {
+        // normalizeId turns the caller's string back into a typed Id (or null
+        // for anything malformed) without an `as` cast.
+        const repoId = ctx.db.normalizeId("githubRepos", rawId);
+        if (!repoId) return false;
+        const [repoVars, repo] = await Promise.all([
+          findRepoEnvVarDoc(ctx.db, repoId),
+          ctx.db.get(repoId),
+        ]);
+        if (repoVars?.vars.some((e) => e.key === POSTGRES_REPLICA_ENV_KEY)) {
+          return true;
+        }
+        const teamId = repo?.teamId;
+        return teamId ? teamHasReplica(teamId) : false;
+      }),
+    );
+    return repoIds.filter((_, index) => hits[index]);
   },
 });
 
@@ -861,14 +873,13 @@ export const sessionLinkedRepos = internalQuery({
   handler: async (ctx, { sessionId }): Promise<McpLinkedRepo[]> => {
     const id = ctx.db.normalizeId("sessions", sessionId);
     if (!id) return [];
-    const links = await ctx.db
-      .query("sessionRepos")
-      .withIndex("by_session", (q) => q.eq("sessionId", id))
-      .collect();
-    const prs = await listOwnerPullRequests(ctx.db, {
-      kind: "session",
-      sessionId: id,
-    });
+    const [links, prs] = await Promise.all([
+      ctx.db
+        .query("sessionRepos")
+        .withIndex("by_session", (q) => q.eq("sessionId", id))
+        .collect(),
+      listOwnerPullRequests(ctx.db, { kind: "session", sessionId: id }),
+    ]);
     return links.map((link) => {
       const pr = sessionRepoPullRequest(prs, link._id);
       return {

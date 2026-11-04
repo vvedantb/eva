@@ -96,9 +96,10 @@ export async function waitForPullRequestHead(params: {
 export async function createPullRequestWithGitHub(
   args: PullRequestCreateParams,
 ): Promise<string> {
+  // Mint first: the lookup then reuses the cached installation token.
   const octokit = await getInstallationOctokit(args.installationId);
-  const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const existingPr = await findOpenPullRequestForBranch(args);
+  const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   if (existingPr) {
     await octokit.rest.pulls.update({
       owner: args.repoOwner,
@@ -170,6 +171,7 @@ export async function createPullRequestWithGitHub(
 export async function refreshPullRequestBodyWithGitHub(
   args: PullRequestRefreshParams,
 ): Promise<string> {
+  // Mint first: the lookup then reuses the cached installation token.
   const octokit = await getInstallationOctokit(args.installationId);
   const pr = await findOpenPullRequestForBranch(args);
   if (!pr) {

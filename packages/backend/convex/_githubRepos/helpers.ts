@@ -99,24 +99,26 @@ export async function gatherAccessibleRepos(
   userId: Id<"users">,
   includeHidden: boolean,
 ): Promise<Array<Doc<"githubRepos">>> {
-  const userTeamMemberships = await db
-    .query("teamMembers")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .collect();
-
-  const teamRepoResults = await Promise.all(
-    userTeamMemberships.map((m) =>
-      db
-        .query("githubRepos")
-        .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-        .collect(),
-    ),
-  );
-
-  const connectedRepos = await db
-    .query("githubRepos")
-    .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-    .collect();
+  const [teamRepoResults, connectedRepos] = await Promise.all([
+    db
+      .query("teamMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect()
+      .then((memberships) =>
+        Promise.all(
+          memberships.map((m) =>
+            db
+              .query("githubRepos")
+              .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
+              .collect(),
+          ),
+        ),
+      ),
+    db
+      .query("githubRepos")
+      .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
+      .collect(),
+  ]);
 
   const seen = new Set<string>();
   const repos: Array<Doc<"githubRepos">> = [];

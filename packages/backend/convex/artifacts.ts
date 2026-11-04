@@ -214,12 +214,10 @@ export const listForSource = authQuery({
   handler: async (ctx, args) => {
     if (!(await callerCanSeeChatSource(ctx, args.source))) return [];
     const rows = await listRowsForChatSource(ctx, "artifacts", args.source);
-    const visible: Doc<"artifacts">[] = [];
-    for (const row of rows) {
-      if (await hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId)) {
-        visible.push(row);
-      }
-    }
+    const access = await Promise.all(
+      rows.map((row) => hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId)),
+    );
+    const visible = rows.filter((_row, i) => access[i]);
     const repoCache: RepoCache = new Map();
     return Promise.all(visible.map((row) => withSource(ctx, row, repoCache)));
   },
@@ -276,9 +274,12 @@ export const listForChat = authQuery({
       .query("artifacts")
       .withIndex("by_chat_parent", (q) => q.eq("chatParentId", args.parentId))
       .collect();
+    const access = await Promise.all(
+      rows.map((row) => hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId)),
+    );
     const visible = [];
-    for (const row of rows) {
-      if (!(await hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId))) continue;
+    for (const [i, row] of rows.entries()) {
+      if (!access[i]) continue;
       visible.push({
         _id: row._id,
         name: row.name,

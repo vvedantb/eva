@@ -907,28 +907,30 @@ async function prepareSessionSandboxInternal(
             handle.id,
             args.startAttempt,
           );
-          await runLoggedSessionStep(
-            "reuseSessionSandbox.launchDevServer",
-            sandboxDetails,
-            () =>
-              launchPreviewDevServer(
-                handle,
-                ownerKey,
-                devCommand,
-                devPort,
-                rootDir,
-              ),
-          );
           // Resume is the only path that can relaunch linked repos' dev
           // servers: they were cloned by `prepareLinkedRepo` (run once, from
           // `sessionSandboxStartupWorkflow`, on the session's first-ever
           // create) and never re-run on a plain resume. Rows a create hasn't
           // reached yet (`clonedAt` unset) are silently skipped — nothing to
-          // restart until they exist on disk.
-          const linkedRows = await ctx.runQuery(
-            internal.sessions.listLinkedReposInternal,
-            { sessionId: args.sessionId },
-          );
+          // restart until they exist on disk. The read overlaps the primary
+          // launch so it costs no extra round trip.
+          const [, linkedRows] = await Promise.all([
+            runLoggedSessionStep(
+              "reuseSessionSandbox.launchDevServer",
+              sandboxDetails,
+              () =>
+                launchPreviewDevServer(
+                  handle,
+                  ownerKey,
+                  devCommand,
+                  devPort,
+                  rootDir,
+                ),
+            ),
+            ctx.runQuery(internal.sessions.listLinkedReposInternal, {
+              sessionId: args.sessionId,
+            }),
+          ]);
           for (const linkedRow of linkedRows) {
             if (
               linkedRow.clonedAt === undefined ||

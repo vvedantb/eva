@@ -101,31 +101,31 @@ async function buildTaskChatTurnPrompt(
   prompt: string;
   attachmentStorageIds: Id<"_storage">[] | undefined;
 }> {
-  const task = await ctx.db.get(args.taskId);
+  const [task, triggeringUserMessage, user] = await Promise.all([
+    ctx.db.get(args.taskId),
+    ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
+      .order("desc")
+      .filter((q) => q.eq(q.field("role"), "user"))
+      .first(),
+    ctx.db.get(args.userId),
+  ]);
   if (!task) throw new Error("Task not found");
-  if (!task.repoId) throw new Error("Task is not associated with a repo");
+  const repoId = task.repoId;
+  if (!repoId) throw new Error("Task is not associated with a repo");
 
-  const repo = await ctx.db.get(task.repoId);
+  const [repo, { resolvedMessage, prefixBlock }] = await Promise.all([
+    ctx.db.get(repoId),
+    resolveMessageTokens(ctx, args.message, repoId),
+  ]);
   if (!repo) throw new Error("Repository not found");
 
-  const triggeringUserMessage = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", args.taskId))
-    .order("desc")
-    .filter((q) => q.eq(q.field("role"), "user"))
-    .first();
-
-  const user = await ctx.db.get(args.userId);
   const customInstructionsBlock = buildCustomInstructionsBlock(
     user?.role ?? undefined,
     user?.customInstructions ?? undefined,
   );
 
-  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
-    ctx,
-    args.message,
-    task.repoId,
-  );
   const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
   if (bareCommand !== null) {
     return {
@@ -134,15 +134,13 @@ async function buildTaskChatTurnPrompt(
     };
   }
 
-  const branchName = await resolveTaskBranchName(ctx.db, task);
-
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // task owner, whose access the credential helper mints tokens against).
-  const readableRepos = await listReadableSiblingRepos(
-    ctx.db,
-    task.createdBy,
-    repo._id,
-  );
+  const [branchName, readableRepos, prUrl] = await Promise.all([
+    resolveTaskBranchName(ctx.db, task),
+    listReadableSiblingRepos(ctx.db, task.createdBy, repo._id),
+    taskPrUrl(ctx.db, task),
+  ]);
 
   let prompt = buildAgentTaskChatPrompt({
     repoOwner: repo.owner,
@@ -161,7 +159,7 @@ async function buildTaskChatTurnPrompt(
     readableRepos,
     runtime: {
       ownerKey: sandboxOwnerKey({ kind: "task", taskId: args.taskId }),
-      prUrl: await taskPrUrl(ctx.db, task),
+      prUrl,
       devCommand: task.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,

@@ -425,11 +425,10 @@ async function finishCandidate(
   fallbacks: Array<number | undefined>,
   creationTime: number,
 ): Promise<Candidate> {
-  const activity = await getSandboxActivity(ctx.db, ref);
-  const presentUser = await firstPresentUserInRoom(
-    ctx,
-    sandboxPresenceRoomId(ref.entityId),
-  );
+  const [activity, presentUser] = await Promise.all([
+    getSandboxActivity(ctx.db, ref),
+    firstPresentUserInRoom(ctx, sandboxPresenceRoomId(ref.entityId)),
+  ]);
   return {
     status,
     busy,
@@ -653,6 +652,8 @@ export const run = internalAction({
     let busy = 0;
     let present = 0;
     let paused = 0;
+    // Inspect each sandbox just before deciding on it: `pause` re-checks only
+    // status and busy, so a batched read could act on stale presence.
     for (const ref of refs) {
       const candidate = await ctx.runQuery(
         internal.sandboxIdlePause.inspectCandidate,

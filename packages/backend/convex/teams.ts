@@ -46,14 +46,13 @@ async function attachTeamMediaUrls(
   ctx: QueryCtx | MutationCtx,
   team: Doc<"teams">,
 ): Promise<{ logoUrl: string | null; backgroundUrl: string | null }> {
-  return {
-    logoUrl: team.logoStorageId
-      ? await ctx.storage.getUrl(team.logoStorageId)
+  const [logoUrl, backgroundUrl] = await Promise.all([
+    team.logoStorageId ? ctx.storage.getUrl(team.logoStorageId) : null,
+    team.backgroundStorageId
+      ? ctx.storage.getUrl(team.backgroundStorageId)
       : null,
-    backgroundUrl: team.backgroundStorageId
-      ? await ctx.storage.getUrl(team.backgroundStorageId)
-      : null,
-  };
+  ]);
+  return { logoUrl, backgroundUrl };
 }
 
 /** Throws unless the user is a member of the team (any role). */
@@ -138,20 +137,19 @@ export const list = authQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .collect();
 
-    const teams = [];
-    for (const membership of memberships) {
-      const team = await ctx.db.get(membership.teamId);
-      if (team) {
-        teams.push({
-          ...team,
-          ...(await attachTeamMediaUrls(ctx, team)),
-          displayName: await resolveDisplayName(ctx, team, ctx.userId),
-          userRole: membership.role,
-        });
-      }
-    }
+    const teams = await Promise.all(
+      memberships.map(async (membership) => {
+        const team = await ctx.db.get(membership.teamId);
+        if (!team) return [];
+        const [media, displayName] = await Promise.all([
+          attachTeamMediaUrls(ctx, team),
+          resolveDisplayName(ctx, team, ctx.userId),
+        ]);
+        return [{ ...team, ...media, displayName, userRole: membership.role }];
+      }),
+    );
 
-    return teams;
+    return teams.flat();
   },
 });
 
@@ -165,18 +163,17 @@ export const get = authQuery({
     const teamId = ctx.db.normalizeId("teams", args.id);
     if (!teamId) return null;
 
-    const team = await ctx.db.get(teamId);
-    if (!team) return null;
+    const [team, membership] = await Promise.all([
+      ctx.db.get(teamId),
+      getTeamMembership(ctx.db, teamId, ctx.userId),
+    ]);
+    if (!team || !membership) return null;
 
-    const membership = await getTeamMembership(ctx.db, teamId, ctx.userId);
-    if (!membership) return null;
-
-    return {
-      ...team,
-      ...(await attachTeamMediaUrls(ctx, team)),
-      displayName: await resolveDisplayName(ctx, team, ctx.userId),
-      userRole: membership.role,
-    };
+    const [media, displayName] = await Promise.all([
+      attachTeamMediaUrls(ctx, team),
+      resolveDisplayName(ctx, team, ctx.userId),
+    ]);
+    return { ...team, ...media, displayName, userRole: membership.role };
   },
 });
 

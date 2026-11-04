@@ -78,15 +78,15 @@ async function recoverPreviewOwner<TEntity>(
   // only owns the primary dev server.
   if (devPort !== args.expectedPort) return null;
 
-  const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+  const [handle, repo] = await Promise.all([
+    getSandboxHandle(ctx, args.repoId, args.sandboxId),
+    ctx.runQuery(internal.githubRepos.getInternal, { id: args.repoId }),
+  ]);
   // Never exec on a non-running sandbox — on Vercel any exec lazily resumes
   // a stopped VM (see prewarmNeverResurrects contract). handle.state is
   // fresh: getSandboxHandle fetches with resume:false.
   if (handle.state !== "running") return null;
 
-  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-    id: args.repoId,
-  });
   console.log(
     `[sandbox] preview recovery: relaunching dev server sandbox=${args.sandboxId} port=${devPort}`,
   );
@@ -130,10 +130,22 @@ export const ensureSessionPreviewServices = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    const session: Doc<"sessions"> | null = await ctx.runQuery(
-      internal.sessions.getBySandboxInternal,
-      { sandboxId: args.sandboxId },
-    );
+    // One round trip for all three owner lookups; sessions still win first.
+    const [session, task, project]: [
+      Doc<"sessions"> | null,
+      Doc<"agentTasks"> | null,
+      Doc<"projects"> | null,
+    ] = await Promise.all([
+      ctx.runQuery(internal.sessions.getBySandboxInternal, {
+        sandboxId: args.sandboxId,
+      }),
+      ctx.runQuery(internal.agentTasks.getBySandboxInternal, {
+        sandboxId: args.sandboxId,
+      }),
+      ctx.runQuery(internal.projects.getBySandboxInternal, {
+        sandboxId: args.sandboxId,
+      }),
+    ]);
     if (session) {
       return recoverPreviewOwner<Doc<"sessions">>(
         ctx,
@@ -143,10 +155,6 @@ export const ensureSessionPreviewServices = internalAction({
       );
     }
 
-    const task: Doc<"agentTasks"> | null = await ctx.runQuery(
-      internal.agentTasks.getBySandboxInternal,
-      { sandboxId: args.sandboxId },
-    );
     if (task) {
       return recoverPreviewOwner<Doc<"agentTasks">>(
         ctx,
@@ -156,10 +164,6 @@ export const ensureSessionPreviewServices = internalAction({
       );
     }
 
-    const project: Doc<"projects"> | null = await ctx.runQuery(
-      internal.projects.getBySandboxInternal,
-      { sandboxId: args.sandboxId },
-    );
     if (project) {
       return recoverPreviewOwner<Doc<"projects">>(
         ctx,

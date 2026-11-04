@@ -98,30 +98,29 @@ async function buildProjectChatTurnPrompt(
   prompt: string;
   attachmentStorageIds: Id<"_storage">[] | undefined;
 }> {
-  const project = await ctx.db.get(args.projectId);
+  const [project, triggeringUserMessage, generatedSpec, user] =
+    await Promise.all([
+      ctx.db.get(args.projectId),
+      ctx.db
+        .query("messages")
+        .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
+        .order("desc")
+        .filter((q) => q.eq(q.field("role"), "user"))
+        .first(),
+      getProjectGeneratedSpec(ctx.db, args.projectId),
+      ctx.db.get(args.userId),
+    ]);
   if (!project) throw new Error("Project not found");
 
-  const repo = await ctx.db.get(project.repoId);
+  const [repo, { resolvedMessage, prefixBlock }] = await Promise.all([
+    ctx.db.get(project.repoId),
+    resolveMessageTokens(ctx, args.message, project.repoId),
+  ]);
   if (!repo) throw new Error("Repository not found");
 
-  const triggeringUserMessage = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", args.projectId))
-    .order("desc")
-    .filter((q) => q.eq(q.field("role"), "user"))
-    .first();
-
-  const generatedSpec = await getProjectGeneratedSpec(ctx.db, args.projectId);
-  const user = await ctx.db.get(args.userId);
   const customInstructionsBlock = buildCustomInstructionsBlock(
     user?.role ?? undefined,
     user?.customInstructions ?? undefined,
-  );
-
-  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
-    ctx,
-    args.message,
-    project.repoId,
   );
   const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
   if (bareCommand !== null) {

@@ -857,6 +857,8 @@ async function buildPreviewUrl(
   }
   const responsePort = customTabPort ?? args.port;
 
+  // getSandboxHandle resolves (and validates) the repo's Vercel credentials,
+  // throwing before it touches the sandbox if they are missing.
   const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 
   // Services listen on internal ports and the auth proxy owns the exposed
@@ -1339,11 +1341,12 @@ export const applyBranchPublishPolicy = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const flags = await ctx.runQuery(
-        internal.auth.getExperimentalFlagsInternal,
-        { userId: args.userId },
-      );
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      const [flags, sandbox] = await Promise.all([
+        ctx.runQuery(internal.auth.getExperimentalFlagsInternal, {
+          userId: args.userId,
+        }),
+        getSandboxHandle(ctx, args.repoId, args.sandboxId),
+      ]);
       await writeAutoPublishPolicy(
         sandbox,
         flags.manualSideBranchPublish ? args.branchName : null,

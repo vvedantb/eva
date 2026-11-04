@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { roleUserValidator } from "./validators";
 import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
@@ -142,7 +143,13 @@ export const listTeamWithMembers = authQuery({
     if (memberships.length === 0) return null;
 
     const teamMembership = memberships[0];
-    const team = await ctx.db.get(teamMembership.teamId);
+    const [team, teamMembers] = await Promise.all([
+      ctx.db.get(teamMembership.teamId),
+      ctx.db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", teamMembership.teamId))
+        .collect(),
+    ]);
     if (!team) return null;
 
     let displayName = team.name;
@@ -156,30 +163,30 @@ export const listTeamWithMembers = authQuery({
       }
     }
 
-    const teamMembers = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team", (q) => q.eq("teamId", teamMembership.teamId))
-      .collect();
-
-    const members = [];
-    for (const tm of teamMembers) {
-      if (tm.userId === ctx.userId) continue;
-      const user = await ctx.db.get(tm.userId);
-      if (user) {
-        const seen = mergeLastSeen(
-          await getUserPresenceRow(ctx.db, tm.userId),
-          user,
-        );
-        members.push({
-          _id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          fullName: user.fullName,
-          lastSeenAt: seen.lastSeenAt,
-          lastSeenPath: seen.lastSeenPath,
-        });
-      }
-    }
+    const members = (
+      await Promise.all(
+        teamMembers
+          .filter((tm) => tm.userId !== ctx.userId)
+          .map(async (tm) => {
+            const [user, presence] = await Promise.all([
+              ctx.db.get(tm.userId),
+              getUserPresenceRow(ctx.db, tm.userId),
+            ]);
+            if (!user) return [];
+            const seen = mergeLastSeen(presence, user);
+            return [
+              {
+                _id: user._id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                fullName: user.fullName,
+                lastSeenAt: seen.lastSeenAt,
+                lastSeenPath: seen.lastSeenPath,
+              },
+            ];
+          }),
+      )
+    ).flat();
 
     // By name: the previous online-first order changed with the clock, which is
     // what made this query non-cacheable, and it reshuffled avatars under the
@@ -215,30 +222,38 @@ export const listAll = authQuery({
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .collect();
-    const memberRows = [];
-    for (const membership of memberships) {
-      const rows = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-        .collect();
-      memberRows.push(...rows);
-    }
+    const memberRows = (
+      await Promise.all(
+        memberships.map((membership) =>
+          ctx.db
+            .query("teamMembers")
+            .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
+            .collect(),
+        ),
+      )
+    ).flat();
     const ids = collectDirectoryUserIds(ctx.userId, memberRows);
-    const profiles = [];
-    for (const id of ids) {
-      const user = await ctx.db.get(id);
-      if (!user) continue;
-      profiles.push({
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: user.fullName,
-        role: user.role,
-      });
-    }
-    return profiles;
+    const users = await Promise.all([...ids].map((id) => ctx.db.get(id)));
+    return toPublicProfiles(users);
   },
 });
+
+/** Public profiles for fetched users, in order, skipping deleted ones. */
+function toPublicProfiles(users: Array<Doc<"users"> | null>) {
+  return users.flatMap((user) =>
+    user
+      ? [
+          {
+            _id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: user.fullName,
+            role: user.role,
+          },
+        ]
+      : [],
+  );
+}
 
 /**
  * Public profiles for specific users. Chat uses this instead of `listAll` so a
@@ -249,19 +264,8 @@ export const getMany = authQuery({
   args: { ids: v.array(v.id("users")) },
   returns: v.array(publicProfileValidator),
   handler: async (ctx, args) => {
-    const uniqueIds = [...new Set(args.ids)];
-    const profiles = [];
-    for (const id of uniqueIds) {
-      const user = await ctx.db.get(id);
-      if (!user) continue;
-      profiles.push({
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: user.fullName,
-        role: user.role,
-      });
-    }
-    return profiles;
+    const ids = [...new Set(args.ids)];
+    const users = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return toPublicProfiles(users);
   },
 });

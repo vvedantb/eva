@@ -539,23 +539,20 @@ export async function resolveSandboxContext(
   snapshotName: string | undefined;
 }> {
   const startedAt = Date.now();
-  const { credentials, sandboxEnvVars } = await resolveSandboxCredentials(
-    ctx,
-    repoId,
-  );
+  const repoGroupId = opts?.repoGroupId;
+  // Independent reads: run them together to save round trips on every boot.
+  const [{ credentials, sandboxEnvVars }, repoSnapshot, groupSnapshotName] =
+    await Promise.all([
+      resolveSandboxCredentials(ctx, repoId),
+      ctx.runQuery(internal.repoSnapshots.getRepoSnapshotName, { repoId }),
+      repoGroupId
+        ? ctx.runQuery(internal.repoGroups.getGroupSnapshotForBoot, {
+            groupId: repoGroupId,
+          })
+        : null,
+    ]);
   const client = getSandboxClient(credentials);
-  const repoSnapshot = await ctx.runQuery(
-    internal.repoSnapshots.getRepoSnapshotName,
-    { repoId },
-  );
-  let snapshotName = repoSnapshot?.snapshotName;
-  if (opts?.repoGroupId) {
-    const groupSnapshotName = await ctx.runQuery(
-      internal.repoGroups.getGroupSnapshotForBoot,
-      { groupId: opts.repoGroupId },
-    );
-    if (groupSnapshotName) snapshotName = groupSnapshotName;
-  }
+  const snapshotName = groupSnapshotName || repoSnapshot?.snapshotName;
   console.log(
     `[sandbox] resolveSandboxContext repoId=${repoId} kind=${client.kind} repoGroupId=${opts?.repoGroupId ?? "none"} elapsed=${Date.now() - startedAt}ms`,
   );

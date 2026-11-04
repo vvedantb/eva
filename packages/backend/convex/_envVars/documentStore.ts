@@ -35,10 +35,13 @@ export async function hasTeamOrRepoEnvVarKey(
   teamId: Id<"teams">,
   key: string,
 ): Promise<boolean> {
-  const teamDoc = await findTeamEnvVarDoc(db, teamId);
-  if (teamDoc?.vars.some((entry) => entry.key === key)) return true;
-  const repoDoc = await findRepoEnvVarDoc(db, repoId);
-  return repoDoc?.vars.some((entry) => entry.key === key) ?? false;
+  const [teamDoc, repoDoc] = await Promise.all([
+    findTeamEnvVarDoc(db, teamId),
+    findRepoEnvVarDoc(db, repoId),
+  ]);
+  const hasKey = (doc: typeof teamDoc | typeof repoDoc): boolean =>
+    doc?.vars.some((entry) => entry.key === key) ?? false;
+  return hasKey(teamDoc) || hasKey(repoDoc);
 }
 
 export type EnvVarEntry = Infer<typeof envVarEntryValidator>;

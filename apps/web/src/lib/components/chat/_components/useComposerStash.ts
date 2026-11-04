@@ -38,23 +38,25 @@ function contentTypeForFile(
 async function filesFromStashAttachments(
   attachments: StashAttachment[],
 ): Promise<File[] | null> {
-  const files: File[] = [];
-  for (const attachment of attachments) {
-    try {
-      const response = await fetch(attachment.url);
-      if (!response.ok) return null;
-      const blob = await response.blob();
-      const type = contentTypeForFile(attachment.contentType, blob.type);
-      files.push(
-        new File([blob], filenameForAttachment(attachment.contentType), {
-          type,
-        }),
-      );
-    } catch {
-      return null;
-    }
+  const files = await Promise.all(attachments.map(fileFromStashAttachment));
+  if (files.includes(null)) return null;
+  return files.filter((file) => file !== null);
+}
+
+async function fileFromStashAttachment(
+  attachment: StashAttachment,
+): Promise<File | null> {
+  try {
+    const response = await fetch(attachment.url);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const type = contentTypeForFile(attachment.contentType, blob.type);
+    return new File([blob], filenameForAttachment(attachment.contentType), {
+      type,
+    });
+  } catch {
+    return null;
   }
-  return files;
 }
 
 /**

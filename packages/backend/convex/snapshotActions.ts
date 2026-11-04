@@ -226,22 +226,26 @@ export const launchSeedRun = internalAction({
     // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
     // the compiled floor made every launch npm-install the latest Claude CLI
     // before its daemon could start: ~5-7s on half of all first turns.
-    const [claudeCliVersion, codexCliVersion] = await Promise.all([
+    // These reads are independent, so they run together.
+    const [
+      claudeCliVersion,
+      codexCliVersion,
+      startupCommands,
+      backgroundCommands,
+      stopCommands,
+    ] = await Promise.all([
       resolveClaudeCliVersion(),
       resolveCodexCliVersion(),
+      ctx.runQuery(internal.repoSnapshots.getStartupCommands, {
+        repoId: args.repoId,
+      }),
+      ctx.runQuery(internal.repoSnapshots.getBackgroundCommands, {
+        repoId: args.repoId,
+      }),
+      ctx.runQuery(internal.repoSnapshots.getStopCommands, {
+        repoId: args.repoId,
+      }),
     ]);
-    const startupCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStartupCommands,
-      { repoId: args.repoId },
-    );
-    const backgroundCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getBackgroundCommands,
-      { repoId: args.repoId },
-    );
-    const stopCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStopCommands,
-      { repoId: args.repoId },
-    );
     const requireSupabaseDump = shouldCaptureSupabaseState([
       ...(startupCommands ?? []),
       ...(backgroundCommands ?? []),
@@ -702,7 +706,10 @@ export const createSeedPrepSandbox = internalAction({
   ): Promise<
     { ok: true; sandboxId: string } | { ok: false; error: string }
   > => {
-    const resolved = await tryResolveSandboxCredentials(ctx, args.repoId);
+    const [resolved, repo] = await Promise.all([
+      tryResolveSandboxCredentials(ctx, args.repoId),
+      ctx.runQuery(internal.repoSnapshots.getRepo, { repoId: args.repoId }),
+    ]);
     if (!resolved.ok) {
       console.warn(`[snapshot] createSeedPrepSandbox: ${resolved.error}`);
       return { ok: false, error: resolved.error };
@@ -715,9 +722,6 @@ export const createSeedPrepSandbox = internalAction({
     const effectiveImageSnapshot = !args.imageSnapshot.startsWith("snap_")
       ? undefined
       : args.imageSnapshot;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: args.repoId,
-    });
     if (!repo) throw new Error("Repo not found");
     const seedPrepLifecycle = {
       ...SESSION_LIFECYCLE,

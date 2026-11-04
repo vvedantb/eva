@@ -45,21 +45,15 @@ export const list = authQuery({
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = filterActiveEntities(
-      await ctx.db
+    const [allProjects, hasUnread, awaitingAnswerIds] = await Promise.all([
+      ctx.db
         .query("projects")
         .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
         .collect(),
-    );
-    const hasUnread = await unreadLookupForRepo(
-      ctx.db,
-      ctx.userId,
-      args.repoId,
-    );
-    const awaitingAnswerIds = await awaitingAnswerEntityIdsForRepo(
-      ctx.db,
-      args.repoId,
-    );
+      unreadLookupForRepo(ctx.db, ctx.userId, args.repoId),
+      awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
+    ]);
+    const projects = filterActiveEntities(allProjects);
     return await Promise.all(
       projects.map(async (project) => ({
         ...project,

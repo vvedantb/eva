@@ -1231,22 +1231,25 @@ class VercelSandboxClient implements SandboxClient {
     mounts: ReadonlyArray<SandboxMount>,
   ): Promise<SandboxMounts | undefined> {
     const resolved: SandboxMounts = {};
-    for (const mount of mounts) {
-      try {
-        const drive = await Drive.getOrCreate({
-          ...this.creds,
-          name: mount.volumeName,
-          region: SANDBOX_REGION,
-          maxSize: DRIVE_MAX_SIZE_BYTES,
-        });
-        resolved[mount.path] =
-          mount.mode === "read-write" ? drive : drive.snapshot();
-      } catch (e) {
-        console.warn(
-          `[vercel] drive mount skipped name=${mount.volumeName} path=${mount.path} mode=${mount.mode}: ${extractApiErrorDetail(e)}`,
-        );
-      }
-    }
+    // Each Drive lookup is an independent API call on the create path.
+    await Promise.all(
+      mounts.map(async (mount) => {
+        try {
+          const drive = await Drive.getOrCreate({
+            ...this.creds,
+            name: mount.volumeName,
+            region: SANDBOX_REGION,
+            maxSize: DRIVE_MAX_SIZE_BYTES,
+          });
+          resolved[mount.path] =
+            mount.mode === "read-write" ? drive : drive.snapshot();
+        } catch (e) {
+          console.warn(
+            `[vercel] drive mount skipped name=${mount.volumeName} path=${mount.path} mode=${mount.mode}: ${extractApiErrorDetail(e)}`,
+          );
+        }
+      }),
+    );
     return Object.keys(resolved).length > 0 ? resolved : undefined;
   }
 

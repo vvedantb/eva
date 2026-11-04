@@ -148,26 +148,26 @@ export const getChatDetails = internalQuery({
   },
   returns: v.union(v.null(), chatDetailsValidator),
   handler: async (ctx, { kind, id, repoId }): Promise<ChatDetails | null> => {
-    const fields = await ownerFields(ctx, kind, id);
-    if (!fields) return null;
+    const sessionId =
+      kind === "session" ? ctx.db.normalizeId("sessions", id) : null;
+    const [fields, repo, tabs, links] = await Promise.all([
+      ownerFields(ctx, kind, id),
+      ctx.db.get(repoId),
+      ctx.db
+        .query("appTabs")
+        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+        .collect(),
+      sessionId
+        ? ctx.db
+            .query("sessionRepos")
+            .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+            .collect()
+        : [],
+    ]);
+    if (!fields || !repo) return null;
     const { owner: prOwner, ...owner } = fields;
     const ownerKey = sandboxOwnerKey(prOwner);
     const prs = await listOwnerPullRequests(ctx.db, prOwner);
-    const repo = await ctx.db.get(repoId);
-    if (!repo) return null;
-
-    const tabs = await ctx.db
-      .query("appTabs")
-      .withIndex("by_repo", (q) => q.eq("repoId", repo._id))
-      .collect();
-    const sessionId =
-      kind === "session" ? ctx.db.normalizeId("sessions", id) : null;
-    const links = sessionId
-      ? await ctx.db
-          .query("sessionRepos")
-          .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-          .collect()
-      : [];
 
     return {
       ...owner,

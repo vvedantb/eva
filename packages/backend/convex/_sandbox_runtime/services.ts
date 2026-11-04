@@ -44,6 +44,7 @@ export const toggleCodeServer = action({
     console.log(
       `[code-server] ${args.action} requested for sandbox ${args.sandboxId}`,
     );
+    // getSandboxHandle also validates the repo's Vercel credentials.
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
     // Listen internally so the auth proxy can own the exposed port.
     const listenPort = VERCEL_EDITOR_INTERNAL_PORT;

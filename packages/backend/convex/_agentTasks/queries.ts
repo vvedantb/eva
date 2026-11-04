@@ -59,31 +59,30 @@ async function enrichTasksWithLastRun(
   userId: Id<"users">,
   tasks: Array<Doc<"agentTasks">>,
 ) {
-  const repoIds = repoIdsOf(tasks);
-  const [openChatEntityIds, awaitingAnswerIds] = await Promise.all([
-    turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
-    turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
-  ]);
+  const repoIds = [...repoIdsOf(tasks)];
+  const [openChatEntityIds, awaitingAnswerIds, unreadByRepo, summaryGroups] =
+    await Promise.all([
+      turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
+      turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
+      Promise.all(
+        repoIds.map((repoId) => unreadLookupForRepo(db, userId, repoId)),
+      ),
+      Promise.all(
+        repoIds.map((repoId) =>
+          db
+            .query("agentTaskRunSummaries")
+            .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+            .collect(),
+        ),
+      ),
+    ]);
   const unreadLookups = new Map<
     string,
     (task: Doc<"agentTasks">) => Promise<boolean>
   >();
-  await Promise.all(
-    [...repoIds].map(async (repoId) => {
-      unreadLookups.set(
-        String(repoId),
-        await unreadLookupForRepo(db, userId, repoId),
-      );
-    }),
-  );
-  const summaryGroups = await Promise.all(
-    [...repoIds].map((repoId) =>
-      db
-        .query("agentTaskRunSummaries")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect(),
-    ),
-  );
+  repoIds.forEach((repoId, i) => {
+    unreadLookups.set(String(repoId), unreadByRepo[i]);
+  });
   const summariesByTask = new Map(
     summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
   );

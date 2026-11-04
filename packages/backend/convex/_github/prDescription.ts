@@ -83,12 +83,14 @@ export const generatePrDescription = internalAction({
         repo: args.repoName,
         prNumber,
       };
-      const { data: pr } = await octokit.rest.pulls.get({
-        owner: target.owner,
-        repo: target.repo,
-        pull_number: target.prNumber,
-      });
-      const diff = await fetchPullRequestDiff(octokit, target);
+      const [{ data: pr }, diff] = await Promise.all([
+        octokit.rest.pulls.get({
+          owner: target.owner,
+          repo: target.repo,
+          pull_number: target.prNumber,
+        }),
+        fetchPullRequestDiff(octokit, target),
+      ]);
       if (diff.additions + diff.deletions === 0) {
         console.log(`[pr-description] ${label} has no diff; skipping`);
         return null;

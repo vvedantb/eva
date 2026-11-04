@@ -11,10 +11,10 @@ export const syncRepos = action({
   args: {},
   returns: v.object({ success: v.boolean(), synced: v.number() }),
   handler: async (ctx) => {
-    const accessibleRepos = await ctx.runQuery(api.githubRepos.list, {
-      includeHidden: true,
-    });
-    const syncSettings = await ctx.runQuery(api.syncSettings.list, {});
+    const [accessibleRepos, syncSettings] = await Promise.all([
+      ctx.runQuery(api.githubRepos.list, { includeHidden: true }),
+      ctx.runQuery(api.syncSettings.list, {}),
+    ]);
     const disabledRepos = new Set(
       syncSettings
         .filter((s: { enabled: boolean }) => !s.enabled)
@@ -36,21 +36,25 @@ export const syncRepos = action({
       }
       seenCodebases.add(codebaseKey);
 
+      // githubAuth caches the token, so later repos of the installation reuse it.
       const octokit = await getInstallationOctokit(existingRepo.installationId);
       const { data: repo } = await octokit.rest.repos.get({
         owner: existingRepo.owner,
         repo: existingRepo.name,
       });
-      const id = await ctx.runMutation(internal.githubRepos.upsert, {
-        owner: repo.owner.login,
-        name: repo.name,
-        installationId: existingRepo.installationId,
-        githubId: repo.id,
-        teamId: existingRepo.teamId,
-      });
-
-      const apps = await detectAppsForRepo(octokit, repo.owner.login, repo.name);
+      const [id, apps] = await Promise.all([
+        ctx.runMutation(internal.githubRepos.upsert, {
+          owner: repo.owner.login,
+          name: repo.name,
+          installationId: existingRepo.installationId,
+          githubId: repo.id,
+          teamId: existingRepo.teamId,
+        }),
+        detectAppsForRepo(octokit, repo.owner.login, repo.name),
+      ]);
       const appPaths: string[] = [];
+      // Sequential on purpose: every app upsert reads and inserts into the same
+      // `by_github_id` range, so parallel ones would only conflict and retry.
       for (const app of apps) {
         await ctx.runMutation(internal.githubRepos.upsert, {
           owner: repo.owner.login,
