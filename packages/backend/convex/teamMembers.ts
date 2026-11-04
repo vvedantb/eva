@@ -60,16 +60,18 @@ export const list = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    // The members list is discarded when the caller is not a member.
-    const [currentUserMembership, members] = await Promise.all([
-      getTeamMembership(ctx.db, args.teamId, ctx.userId),
-      ctx.db
-        .query("teamMembers")
-        .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-        .collect(),
-    ]);
+    const currentUserMembership = await getTeamMembership(
+      ctx.db,
+      args.teamId,
+      ctx.userId,
+    );
 
     if (!currentUserMembership) return [];
+
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+      .collect();
 
     return await Promise.all(
       members.map(async (member) => {

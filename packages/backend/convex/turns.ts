@@ -85,12 +85,9 @@ async function readChatStatus(
   userId: Id<"users">,
   entityId: ChatTurnEntityId,
 ): Promise<ChatTurnStatus | null> {
-  // Access check and turn read are independent; the turn is dropped if denied.
-  const [legacyExecuting, turn] = await Promise.all([
-    readLegacyExecuting(ctx, userId, entityId),
-    findOpenTurn(ctx, entityId),
-  ]);
+  const legacyExecuting = await readLegacyExecuting(ctx, userId, entityId);
   if (legacyExecuting === null) return null;
+  const turn = await findOpenTurn(ctx, entityId);
   if (!turn) return legacyExecuting ? { source: "legacy" } : null;
   return {
     source: "durable",

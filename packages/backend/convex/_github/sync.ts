@@ -34,11 +34,6 @@ export const syncRepos = action({
     const monorepos: Array<{ owner: string; name: string }> = [];
     let totalAdded = 0;
     const seenCodebases = new Set<string>();
-    // One installation token serves every repo in that installation.
-    const octokits = new Map<
-      number,
-      ReturnType<typeof getInstallationOctokit>
-    >();
     for (const existingRepo of accessibleRepos) {
       const codebaseKey = `${existingRepo.owner}/${existingRepo.name}`;
       if (seenCodebases.has(codebaseKey) || disabledRepos.has(codebaseKey)) {
@@ -46,12 +41,8 @@ export const syncRepos = action({
       }
       seenCodebases.add(codebaseKey);
 
-      let octokitPromise = octokits.get(existingRepo.installationId);
-      if (!octokitPromise) {
-        octokitPromise = getInstallationOctokit(existingRepo.installationId);
-        octokits.set(existingRepo.installationId, octokitPromise);
-      }
-      const octokit = await octokitPromise;
+      // githubAuth caches the token, so later repos of the installation reuse it.
+      const octokit = await getInstallationOctokit(existingRepo.installationId);
       const { data: repo } = await octokit.rest.repos.get({
         owner: existingRepo.owner,
         repo: existingRepo.name,

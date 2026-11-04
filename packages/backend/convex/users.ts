@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import { roleUserValidator } from "./validators";
 import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
@@ -245,16 +244,13 @@ export const listAll = authQuery({
       )
     ).flat();
     const ids = collectDirectoryUserIds(ctx.userId, memberRows);
-    return await loadPublicProfiles(ctx.db, ids);
+    const users = await Promise.all([...ids].map((id) => ctx.db.get(id)));
+    return toPublicProfiles(users);
   },
 });
 
-/** Public profiles for `ids`, in order, skipping users that no longer exist. */
-async function loadPublicProfiles(
-  db: QueryCtx["db"],
-  ids: Iterable<Id<"users">>,
-) {
-  const users = await Promise.all([...ids].map((id) => db.get(id)));
+/** Public profiles for fetched users, in order, skipping deleted ones. */
+function toPublicProfiles(users: Array<Doc<"users"> | null>) {
   return users.flatMap((user) =>
     user
       ? [
@@ -279,6 +275,8 @@ export const getMany = authQuery({
   args: { ids: v.array(v.id("users")) },
   returns: v.array(publicProfileValidator),
   handler: async (ctx, args) => {
-    return await loadPublicProfiles(ctx.db, new Set(args.ids));
+    const ids = [...new Set(args.ids)];
+    const users = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return toPublicProfiles(users);
   },
 });

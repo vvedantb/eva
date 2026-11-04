@@ -100,10 +100,9 @@ export async function waitForPullRequestHead(params: {
 export async function createPullRequestWithGitHub(
   args: PullRequestCreateParams,
 ): Promise<string> {
-  const [octokit, existingPr] = await Promise.all([
-    getInstallationOctokit(args.installationId),
-    findOpenPullRequestForBranch(args),
-  ]);
+  // Mint first: the lookup then reuses the cached installation token.
+  const octokit = await getInstallationOctokit(args.installationId);
+  const existingPr = await findOpenPullRequestForBranch(args);
   const baseBranch = args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   if (existingPr) {
     await octokit.rest.pulls.update({
@@ -176,10 +175,9 @@ export async function createPullRequestWithGitHub(
 export async function refreshPullRequestBodyWithGitHub(
   args: PullRequestRefreshParams,
 ): Promise<string> {
-  const [octokit, pr] = await Promise.all([
-    getInstallationOctokit(args.installationId),
-    findOpenPullRequestForBranch(args),
-  ]);
+  // Mint first: the lookup then reuses the cached installation token.
+  const octokit = await getInstallationOctokit(args.installationId);
+  const pr = await findOpenPullRequestForBranch(args);
   if (!pr) {
     throw new Error(
       `No open pull request found for ${args.repoOwner}/${args.repoName}:${args.branchName}`,

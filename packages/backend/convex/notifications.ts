@@ -286,10 +286,12 @@ async function ownedNotifications(
     );
   }
   const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
-  return rows.filter(
-    (notification): notification is Doc<"notifications"> =>
-      notification !== null && notification.userId === userId,
-  );
+  const owned = [];
+  for (const notification of rows) {
+    if (!notification || notification.userId !== userId) continue;
+    owned.push(notification);
+  }
+  return owned;
 }
 
 /**

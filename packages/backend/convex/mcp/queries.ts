@@ -2,6 +2,7 @@ import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { listAutomationsForRepo } from "../_automations/helpers";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { prOriginValidator, prStateValidator } from "../validators";
@@ -58,38 +59,7 @@ export const getUserByClerkId = internalQuery({
 /** List repos accessible to a user. */
 export const listUserRepos = internalQuery({
   args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    // Repos connected by this user, and the teams that grant the rest.
-    const [connectedRepos, memberships] = await Promise.all([
-      ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-        .collect(),
-      ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect(),
-    ]);
-
-    const teamRepoResults = await Promise.all(
-      memberships.map((m) =>
-        ctx.db
-          .query("githubRepos")
-          .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-          .collect(),
-      ),
-    );
-
-    // Dedupe repos
-    const seen = new Set<string>();
-    const result: typeof connectedRepos = [];
-    for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-      if (seen.has(repo._id)) continue;
-      seen.add(repo._id);
-      result.push(repo);
-    }
-    return result;
-  },
+  handler: (ctx, { userId }) => gatherAccessibleRepos(ctx.db, userId, true),
 });
 
 /**
@@ -593,12 +563,13 @@ export const listEntitiesForUser = internalQuery({
     // order does not matter.
     await Promise.all(
       repoIds.map(async (repoId) => {
-        const [hasAccess, repo, openChatEntityIds] = await Promise.all([
-          hasRepoAccess(ctx.db, repoId, userId),
+        // Access first: a denied repo reads nothing else.
+        if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
+        const [repo, openChatEntityIds] = await Promise.all([
           ctx.db.get(repoId),
           openChatEntityIdsForRepo(ctx.db, repoId),
         ]);
-        if (!hasAccess || !repo) return;
+        if (!repo) return;
         const columns = repoColumns(repo);
 
         await Promise.all(
