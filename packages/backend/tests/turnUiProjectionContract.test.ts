@@ -70,8 +70,11 @@ test("the session composer uses persisted turn status after query load", () => {
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
   );
   expect(hook).toContain("api.turns.getChatStatus");
-  expect(hook).toContain("turnStatus === undefined");
-  expect(hook).toContain(": turnStatus !== null");
+  // The projection now lives in shared helpers every surface uses: the
+  // loaded status (null = no open turn) wins, message shape only while loading.
+  expect(hook).toContain("turnOpen: chatTurnOpenFromStatus(turnStatus)");
+  expect(hook).toContain("isChatTurnExecuting({");
+  expectCanonicalProjection();
 });
 
 test("annotation sends share the same canonical turn projection", () => {
@@ -79,5 +82,19 @@ test("annotation sends share the same canonical turn projection", () => {
     "apps/web/src/routes/_repo/$owner/$repo/sessions/_components/useSessionAnnotationSend.ts",
   );
   expect(hook).toContain("api.turns.getChatStatus");
-  expect(hook).toContain(": turnStatus !== null");
+  expect(hook).toContain("turnOpen: chatTurnOpenFromStatus(turnStatus)");
+  expect(hook).toContain("isChatTurnExecuting({");
+  expectCanonicalProjection();
 });
+
+/** The shared helpers keep the old rule: loading → shape, loaded → status. */
+function expectCanonicalProjection(): void {
+  const status = source("apps/web/src/lib/components/chat/useChatTurnOpen.ts");
+  expect(status).toContain(
+    "return status === undefined ? undefined : status !== null;",
+  );
+  const utils = source("apps/web/src/lib/components/chat/chatBodyUtils.ts");
+  expect(utils).toContain(
+    "return turnOpen ?? isAssistantTurnInProgress(messages ?? []);",
+  );
+}
