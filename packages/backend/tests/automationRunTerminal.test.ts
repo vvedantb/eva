@@ -152,4 +152,42 @@ describe("automation run terminal states", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "a late event-run settle keeps the cancel but still advances the cursor",
+    async () => {
+      const f = await runWithStatus("cancelled");
+      await f.t.mutation(internal._automationEvents.dispatch.settleEventRun, {
+        runId: f.runId,
+        status: "success",
+        message: "Sent 2 review comments",
+        eventCursor: 42,
+      });
+      const run = await f.read();
+      expect(run?.status).toBe("cancelled");
+      expect(run?.resultSummary).toBeUndefined();
+      // Without the cursor, the next webhook would resend the same comments.
+      expect(run?.eventCursor).toBe(42);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a live event run settles with its status, message and cursor",
+    async () => {
+      const f = await runWithStatus("running");
+      await f.t.mutation(internal._automationEvents.dispatch.settleEventRun, {
+        runId: f.runId,
+        status: "error",
+        message: "PR is closed",
+        eventCursor: 7,
+      });
+      const run = await f.read();
+      expect(run?.status).toBe("error");
+      expect(run?.error).toBe("PR is closed");
+      expect(run?.eventCursor).toBe(7);
+      expect(run?.finishedAt).toBeTypeOf("number");
+    },
+    TIMEOUT_MS,
+  );
 });
