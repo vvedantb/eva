@@ -22,6 +22,7 @@ import { KeepAlivePane } from "./KeepAlivePane";
 import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
+import type { PreviewMiniPlayerSource } from "./previewMiniPlayerStore";
 import {
   isSimpleViewHiddenSandboxTab,
   useSimpleView,
@@ -59,10 +60,10 @@ interface SandboxPaneSlotsProps {
   /** Preview empty state Start button when sandbox is stopped. */
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /** Session-only: preview select-element → chat submit. */
+  /** Preview select-element → owner chat submit. */
   onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
-  /** Session-only: the visible preview may float into the mini-player. */
-  miniPlayer?: { sessionId: Id<"sessions">; returnTo: string; title: string };
+  /** The visible preview may float into the mini-player. */
+  miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
   /**
    * Multi-repo sessions: the dev-server port of each checked-out repo, offered
    * beside the Preview port input. Omitted for a single-repo surface.

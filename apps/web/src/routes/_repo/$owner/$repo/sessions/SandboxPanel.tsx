@@ -432,7 +432,7 @@ export function SandboxPanel({
             // collapsed rail keep their preview parked.
             miniPlayer={
               miniPlayer !== undefined && isRouteActive && !collapsed
-                ? { ...miniPlayer, sessionId }
+                ? { ...miniPlayer, owner: { kind: "session", sessionId } }
                 : undefined
             }
             stickyPreviewPath={viewState?.previewPath}
