@@ -14,6 +14,7 @@ import {
   HELPER_CONFIG_PATH,
   HELPER_SCRIPT,
 } from "../convex/_sandbox_runtime/gitCredentials";
+import { toSandboxGitCredential } from "../convex/githubAuth";
 
 /**
  * PR #1084. The in-sandbox git credential helper cached every token for a
@@ -150,6 +151,38 @@ bashDescribe("git credential helper caches to the token's real expiry", () => {
 
     expect(runHelper()).toContain("password=ghs_new");
     expect(curlCalls()).toBe(1);
+  });
+
+  // The backend half of #1084: octokit gives an ISO `expiresAt`, and the
+  // helper compares it to `date +%s`. A milliseconds value would read as far
+  // future and cache dead tokens forever, so run the real converter's output
+  // through the real script.
+  const backendResponse = (token: string, expiresInSeconds: number) => ({
+    username: "x-access-token",
+    ...toSandboxGitCredential({
+      token,
+      expiresAt: new Date(
+        Date.now() + expiresInSeconds * 1000,
+      ).toISOString(),
+    }),
+  });
+
+  test("the backend's expiresAt is unix seconds the helper caches against", () => {
+    const response = backendResponse("ghs_backend", 3600);
+    respond(response);
+
+    expect(runHelper()).toContain("password=ghs_backend");
+    expect(readFileSync(cacheFile(), "utf8").split("\n")[0]).toBe(
+      String(response.expiresAt),
+    );
+    expect(Math.abs(response.expiresAt - (nowSeconds() + 3600))).toBeLessThanOrEqual(1);
+  });
+
+  test("a near-expiry token from the backend is not cached", () => {
+    respond(backendResponse("ghs_backend_old", 240));
+
+    expect(runHelper()).toContain("password=ghs_backend_old");
+    expect(existsSync(cacheFile())).toBe(false);
   });
 
   test("a response without expiresAt is not cached", () => {
