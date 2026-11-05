@@ -1,0 +1,1567 @@
+{
+ "label": "smoke",
+ "gitSha": "633928541+dirty",
+ "startedAt": "2026-11-05T15:15:26.488Z",
+ "samplesPerCase": 3,
+ "warmupRounds": 0,
+ "scales": [
+  {
+   "scale": 10,
+   "seedMs": 2934.6262180000012,
+   "seedDocs": 6870,
+   "tableCounts": {
+    "teamMembers": 50,
+    "users": 50,
+    "githubRepos": 30,
+    "chatLogEntries": 300,
+    "chatReads": 570,
+    "drafts": 60,
+    "logs": 600,
+    "messages": 1300,
+    "notifications": 300,
+    "pendingQuestions": 30,
+    "pullRequests": 320,
+    "sessionChats": 400,
+    "sessionRepos": 30,
+    "sessions": 300,
+    "turns": 30,
+    "agentRuns": 640,
+    "agentTaskRunSummaries": 300,
+    "agentTasks": 300,
+    "projectDetails": 50,
+    "projects": 50,
+    "taskActivity": 200,
+    "taskComments": 200,
+    "docs": 100,
+    "automationRuns": 230,
+    "automations": 30,
+    "docComments": 100,
+    "routedParticipants": 200,
+    "routedThreads": 100
+   },
+   "cases": [
+    {
+     "name": "auth.me",
+     "surface": "every page",
+     "samples": [
+      {
+       "clientMs": 23.248663000002125,
+       "serverMs": 19.931003999999998,
+       "userMs": 14.478723,
+       "docsRead": 1,
+       "bytesRead": 207,
+       "returnBytes": 34,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 23.680599999999686,
+       "serverMs": 21.084806,
+       "userMs": 15.674427000000001,
+       "docsRead": 1,
+       "bytesRead": 207,
+       "returnBytes": 34,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 14.930333000000246,
+       "serverMs": 12.673049,
+       "userMs": 8.990961,
+       "docsRead": 1,
+       "bytesRead": 207,
+       "returnBytes": 34,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "githubRepos.list",
+     "surface": "sidebar repo picker",
+     "samples": [
+      {
+       "clientMs": 25.547897000000376,
+       "serverMs": 22.861877,
+       "userMs": 15.217045,
+       "docsRead": 35,
+       "bytesRead": 8488,
+       "returnBytes": 5948,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 23.62784499999907,
+       "serverMs": 20.497415,
+       "userMs": 12.337111,
+       "docsRead": 35,
+       "bytesRead": 8488,
+       "returnBytes": 5948,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 20.722474999998667,
+       "serverMs": 18.436877,
+       "userMs": 11.703834,
+       "docsRead": 35,
+       "bytesRead": 8488,
+       "returnBytes": 5948,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "githubRepos.countActiveSessions",
+     "surface": "sidebar badges",
+     "samples": [
+      {
+       "clientMs": 38.61271399999896,
+       "serverMs": 35.908758,
+       "userMs": 17.350168999999998,
+       "docsRead": 109,
+       "bytesRead": 33259,
+       "returnBytes": 4,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 34.110820000001695,
+       "serverMs": 32.066161,
+       "userMs": 15.801376,
+       "docsRead": 109,
+       "bytesRead": 33259,
+       "returnBytes": 4,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 38.29899799999839,
+       "serverMs": 36.200388,
+       "userMs": 17.935198,
+       "docsRead": 109,
+       "bytesRead": 33259,
+       "returnBytes": 4,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "githubRepos.listActiveSandboxCounts",
+     "surface": "sidebar badges",
+     "samples": [
+      {
+       "clientMs": 39.269233999999415,
+       "serverMs": 36.75901,
+       "userMs": 19.362746,
+       "docsRead": 35,
+       "bytesRead": 8488,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 44.227694000001065,
+       "serverMs": 41.808184999999995,
+       "userMs": 23.737556,
+       "docsRead": 35,
+       "bytesRead": 8488,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 38.65390599999955,
+       "serverMs": 36.45039,
+       "userMs": 17.457420000000003,
+       "docsRead": 35,
+       "bytesRead": 8488,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "sessions.list",
+     "surface": "sessions sidebar",
+     "samples": [
+      {
+       "clientMs": 142.0798419999992,
+       "serverMs": 137.446407,
+       "userMs": 53.995096,
+       "docsRead": 894,
+       "bytesRead": 292816,
+       "returnBytes": 72517,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 167.51507299999867,
+       "serverMs": 162.643508,
+       "userMs": 72.87276700000001,
+       "docsRead": 894,
+       "bytesRead": 292816,
+       "returnBytes": 72517,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 141.98812399999952,
+       "serverMs": 137.383346,
+       "userMs": 53.171939,
+       "docsRead": 894,
+       "bytesRead": 292816,
+       "returnBytes": 72517,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "sessions.listRepos",
+     "surface": "session header",
+     "samples": [
+      {
+       "clientMs": 49.04490199999782,
+       "serverMs": 45.924495,
+       "userMs": 32.013316,
+       "docsRead": 54,
+       "bytesRead": 20370,
+       "returnBytes": 280,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 33.55054700000255,
+       "serverMs": 31.269878000000002,
+       "userMs": 21.373076,
+       "docsRead": 54,
+       "bytesRead": 20370,
+       "returnBytes": 280,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 42.23475300000064,
+       "serverMs": 40.202942,
+       "userMs": 30.885513,
+       "docsRead": 54,
+       "bytesRead": 20370,
+       "returnBytes": 280,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "sessionChats.listExtraForRepo",
+     "surface": "sessions sidebar",
+     "samples": [
+      {
+       "clientMs": 40.19438000000082,
+       "serverMs": 37.115949,
+       "userMs": 25.211687,
+       "docsRead": 92,
+       "bytesRead": 28224,
+       "returnBytes": 23484,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 50.64142600000196,
+       "serverMs": 47.041636,
+       "userMs": 32.768916000000004,
+       "docsRead": 92,
+       "bytesRead": 28224,
+       "returnBytes": 23484,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 39.5623259999993,
+       "serverMs": 36.752907,
+       "userMs": 24.961047,
+       "docsRead": 92,
+       "bytesRead": 28224,
+       "returnBytes": 23484,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "messages.listByParent",
+     "surface": "chat transcript",
+     "samples": [
+      {
+       "clientMs": 72.1503530000009,
+       "serverMs": 61.997864,
+       "userMs": 28.586474,
+       "docsRead": 404,
+       "bytesRead": 411048,
+       "returnBytes": 392492,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 68.38931600000069,
+       "serverMs": 60.793275,
+       "userMs": 25.590984000000002,
+       "docsRead": 404,
+       "bytesRead": 411048,
+       "returnBytes": 392492,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 68.29232400000183,
+       "serverMs": 61.675978,
+       "userMs": 25.894588,
+       "docsRead": 404,
+       "bytesRead": 411048,
+       "returnBytes": 392492,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "pullRequests.listForOwner",
+     "surface": "session PR chrome",
+     "samples": [
+      {
+       "clientMs": 35.82718499999828,
+       "serverMs": 32.619268,
+       "userMs": 20.546789,
+       "docsRead": 103,
+       "bytesRead": 30513,
+       "returnBytes": 17490,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 27.373467000001256,
+       "serverMs": 24.355566,
+       "userMs": 14.228919,
+       "docsRead": 103,
+       "bytesRead": 30513,
+       "returnBytes": 17490,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 31.12178899999708,
+       "serverMs": 28.249731,
+       "userMs": 16.88457,
+       "docsRead": 103,
+       "bytesRead": 30513,
+       "returnBytes": 17490,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "projects.list",
+     "surface": "projects page",
+     "samples": [
+      {
+       "clientMs": 87.28639600000315,
+       "serverMs": 83.735847,
+       "userMs": 33.531135,
+       "docsRead": 623,
+       "bytesRead": 222363,
+       "returnBytes": 33513,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 85.28074199999901,
+       "serverMs": 82.38587899999999,
+       "userMs": 32.986993999999996,
+       "docsRead": 623,
+       "bytesRead": 222363,
+       "returnBytes": 33513,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 107.39554299999872,
+       "serverMs": 103.959937,
+       "userMs": 44.096706,
+       "docsRead": 623,
+       "bytesRead": 222363,
+       "returnBytes": 33513,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "projects.listTaskProgress",
+     "surface": "projects page",
+     "samples": [
+      {
+       "clientMs": 62.59685399999944,
+       "serverMs": 59.331322,
+       "userMs": 30.937064,
+       "docsRead": 189,
+       "bytesRead": 178177,
+       "returnBytes": 7223,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 64.43631499999901,
+       "serverMs": 61.726330000000004,
+       "userMs": 33.949114,
+       "docsRead": 189,
+       "bytesRead": 178177,
+       "returnBytes": 7223,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 61.135927000002994,
+       "serverMs": 58.522525,
+       "userMs": 26.648141,
+       "docsRead": 189,
+       "bytesRead": 178177,
+       "returnBytes": 7223,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "projects.getActive",
+     "surface": "repo home",
+     "samples": [
+      {
+       "clientMs": 36.86075699999856,
+       "serverMs": 34.072618,
+       "userMs": 22.09513,
+       "docsRead": 53,
+       "bytesRead": 37323,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 31.94661100000303,
+       "serverMs": 29.540022,
+       "userMs": 20.284672999999998,
+       "docsRead": 53,
+       "bytesRead": 37323,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 31.18267399999968,
+       "serverMs": 28.79354,
+       "userMs": 19.53885,
+       "docsRead": 53,
+       "bytesRead": 37323,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.getAllTasks",
+     "surface": "tasks board",
+     "samples": [
+      {
+       "clientMs": 156.67797100000098,
+       "serverMs": 147.885701,
+       "userMs": 61.587214,
+       "docsRead": 1144,
+       "bytesRead": 520865,
+       "returnBytes": 264057,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 136.44830000000002,
+       "serverMs": 129.095439,
+       "userMs": 49.009896,
+       "docsRead": 1144,
+       "bytesRead": 520865,
+       "returnBytes": 264057,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 133.48295199999848,
+       "serverMs": 126.44055100000001,
+       "userMs": 47.383582,
+       "docsRead": 1144,
+       "bytesRead": 520865,
+       "returnBytes": 264057,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.getActiveTasks",
+     "surface": "repo home",
+     "samples": [
+      {
+       "clientMs": 51.099270000002434,
+       "serverMs": 44.684835,
+       "userMs": 25.635441,
+       "docsRead": 123,
+       "bytesRead": 125064,
+       "returnBytes": 120677,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 59.82499599999937,
+       "serverMs": 55.862797,
+       "userMs": 37.767404,
+       "docsRead": 123,
+       "bytesRead": 125064,
+       "returnBytes": 120677,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 50.83423000000039,
+       "serverMs": 46.716750000000005,
+       "userMs": 27.04525,
+       "docsRead": 123,
+       "bytesRead": 125064,
+       "returnBytes": 120677,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.listDrafts",
+     "surface": "tasks board",
+     "samples": [
+      {
+       "clientMs": 35.27293600000121,
+       "serverMs": 32.542460000000005,
+       "userMs": 22.431835,
+       "docsRead": 32,
+       "bytesRead": 30362,
+       "returnBytes": 9603,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 39.1579410000013,
+       "serverMs": 36.866366,
+       "userMs": 26.572896,
+       "docsRead": 32,
+       "bytesRead": 30362,
+       "returnBytes": 9603,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 32.03207000000111,
+       "serverMs": 29.355832,
+       "userMs": 20.230714,
+       "docsRead": 32,
+       "bytesRead": 30362,
+       "returnBytes": 9603,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.listByProject",
+     "surface": "project page",
+     "samples": [
+      {
+       "clientMs": 100.76521099999809,
+       "serverMs": 98.219074,
+       "userMs": 38.090473,
+       "docsRead": 905,
+       "bytesRead": 273875,
+       "returnBytes": 415,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 114.83959200000027,
+       "serverMs": 112.111429,
+       "userMs": 46.63601,
+       "docsRead": 905,
+       "bytesRead": 273875,
+       "returnBytes": 415,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 123.61227000000144,
+       "serverMs": 121.372223,
+       "userMs": 57.123678,
+       "docsRead": 905,
+       "bytesRead": 273875,
+       "returnBytes": 415,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentRuns.listByTask",
+     "surface": "task page",
+     "samples": [
+      {
+       "clientMs": 43.45734399999856,
+       "serverMs": 39.06784,
+       "userMs": 23.983776,
+       "docsRead": 103,
+       "bytesRead": 57282,
+       "returnBytes": 53574,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 30.608237000000372,
+       "serverMs": 26.230202000000002,
+       "userMs": 13.684003,
+       "docsRead": 103,
+       "bytesRead": 57282,
+       "returnBytes": 53574,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 38.86396999999852,
+       "serverMs": 34.633981,
+       "userMs": 20.372348,
+       "docsRead": 103,
+       "bytesRead": 57282,
+       "returnBytes": 53574,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "taskComments.listByTask",
+     "surface": "task page",
+     "samples": [
+      {
+       "clientMs": 40.26581199999782,
+       "serverMs": 36.878344,
+       "userMs": 25.429834,
+       "docsRead": 103,
+       "bytesRead": 51682,
+       "returnBytes": 46278,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 35.74411500000133,
+       "serverMs": 33.017324,
+       "userMs": 20.773269,
+       "docsRead": 103,
+       "bytesRead": 51682,
+       "returnBytes": 46278,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 26.05826000000161,
+       "serverMs": 23.415321,
+       "userMs": 12.753501,
+       "docsRead": 103,
+       "bytesRead": 51682,
+       "returnBytes": 46278,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "taskActivity.listByTask",
+     "surface": "task page",
+     "samples": [
+      {
+       "clientMs": 39.39645499999824,
+       "serverMs": 35.707795,
+       "userMs": 24.472078,
+       "docsRead": 103,
+       "bytesRead": 22082,
+       "returnBytes": 16669,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 27.335942000001523,
+       "serverMs": 24.610039999999998,
+       "userMs": 14.309675,
+       "docsRead": 103,
+       "bytesRead": 22082,
+       "returnBytes": 16669,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 29.512808999999834,
+       "serverMs": 26.270868999999998,
+       "userMs": 14.932834000000001,
+       "docsRead": 103,
+       "bytesRead": 22082,
+       "returnBytes": 16669,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "notifications.list",
+     "surface": "inbox",
+     "samples": [
+      {
+       "clientMs": 29.13860100000238,
+       "serverMs": 26.031926000000002,
+       "userMs": 14.508811,
+       "docsRead": 101,
+       "bytesRead": 29707,
+       "returnBytes": 26029,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 31.511053000001993,
+       "serverMs": 28.091352999999998,
+       "userMs": 15.138356,
+       "docsRead": 101,
+       "bytesRead": 29707,
+       "returnBytes": 26029,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 28.038794000000053,
+       "serverMs": 25.030653,
+       "userMs": 13.397602999999998,
+       "docsRead": 101,
+       "bytesRead": 29707,
+       "returnBytes": 26029,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "notifications.countUnread",
+     "surface": "inbox badge",
+     "samples": [
+      {
+       "clientMs": 25.04603899999711,
+       "serverMs": 22.449776,
+       "userMs": 12.611883,
+       "docsRead": 101,
+       "bytesRead": 29752,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 24.407302999999956,
+       "serverMs": 22.159053,
+       "userMs": 12.97989,
+       "docsRead": 101,
+       "bytesRead": 29752,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 24.52135200000339,
+       "serverMs": 22.478712,
+       "userMs": 12.648593,
+       "docsRead": 101,
+       "bytesRead": 29752,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "docs.list",
+     "surface": "docs page",
+     "samples": [
+      {
+       "clientMs": 107.93202700000256,
+       "serverMs": 103.644167,
+       "userMs": 78.468417,
+       "docsRead": 287,
+       "bytesRead": 274045,
+       "returnBytes": 59919,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 87.31672299999991,
+       "serverMs": 83.49756599999999,
+       "userMs": 59.97563,
+       "docsRead": 287,
+       "bytesRead": 274045,
+       "returnBytes": 59919,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 88.14752700000099,
+       "serverMs": 83.85463,
+       "userMs": 58.236488,
+       "docsRead": 287,
+       "bytesRead": 274045,
+       "returnBytes": 59919,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "docComments.listByDoc",
+     "surface": "doc page",
+     "samples": [
+      {
+       "clientMs": 32.97015400000237,
+       "serverMs": 28.738698,
+       "userMs": 16.069057,
+       "docsRead": 103,
+       "bytesRead": 53553,
+       "returnBytes": 46175,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 36.26342300000033,
+       "serverMs": 32.787994,
+       "userMs": 21.869514,
+       "docsRead": 103,
+       "bytesRead": 53553,
+       "returnBytes": 46175,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 37.77140800000052,
+       "serverMs": 34.689655,
+       "userMs": 21.276691,
+       "docsRead": 103,
+       "bytesRead": 53553,
+       "returnBytes": 46175,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "users.listAll",
+     "surface": "assignee pickers",
+     "samples": [
+      {
+       "clientMs": 43.028196999999636,
+       "serverMs": 40.508527,
+       "userMs": 18.373127,
+       "docsRead": 112,
+       "bytesRead": 22754,
+       "returnBytes": 3786,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 36.04586199999903,
+       "serverMs": 33.268944000000005,
+       "userMs": 12.570742,
+       "docsRead": 112,
+       "bytesRead": 22754,
+       "returnBytes": 3786,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 37.24768699999913,
+       "serverMs": 34.659909000000006,
+       "userMs": 12.492972,
+       "docsRead": 112,
+       "bytesRead": 22754,
+       "returnBytes": 3786,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "teamMembers.list",
+     "surface": "team settings",
+     "samples": [
+      {
+       "clientMs": 53.04340699999739,
+       "serverMs": 49.497945,
+       "userMs": 20.017121,
+       "docsRead": 112,
+       "bytesRead": 22788,
+       "returnBytes": 17780,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 48.54161000000022,
+       "serverMs": 45.769115,
+       "userMs": 17.893449,
+       "docsRead": 112,
+       "bytesRead": 22788,
+       "returnBytes": 17780,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 64.30833200000052,
+       "serverMs": 61.314749,
+       "userMs": 27.339451,
+       "docsRead": 112,
+       "bytesRead": 22788,
+       "returnBytes": 17780,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "chatLog.listForRepo",
+     "surface": "log page",
+     "samples": [
+      {
+       "clientMs": 227.0559179999982,
+       "serverMs": 222.005721,
+       "userMs": 62.596279,
+       "docsRead": 1083,
+       "bytesRead": 277664,
+       "returnBytes": 63425,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 239.35511499999848,
+       "serverMs": 233.572776,
+       "userMs": 65.589325,
+       "docsRead": 1083,
+       "bytesRead": 277664,
+       "returnBytes": 63425,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 253.78202299999975,
+       "serverMs": 249.061108,
+       "userMs": 75.87231999999999,
+       "docsRead": 1083,
+       "bytesRead": 277664,
+       "returnBytes": 63425,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "automations.countUnreadAll",
+     "surface": "sidebar badge",
+     "samples": [
+      {
+       "clientMs": 64.50667600000088,
+       "serverMs": 62.115099,
+       "userMs": 34.861444999999996,
+       "docsRead": 129,
+       "bytesRead": 38639,
+       "returnBytes": 4,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 50.28436900000088,
+       "serverMs": 48.044303,
+       "userMs": 24.374858,
+       "docsRead": 129,
+       "bytesRead": 38639,
+       "returnBytes": 4,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 60.61069200000202,
+       "serverMs": 58.038528,
+       "userMs": 28.46915,
+       "docsRead": 129,
+       "bytesRead": 38639,
+       "returnBytes": 4,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "automations.listRuns",
+     "surface": "automation page",
+     "samples": [
+      {
+       "clientMs": 43.49461300000257,
+       "serverMs": 40.579541,
+       "userMs": 28.583832,
+       "docsRead": 53,
+       "bytesRead": 14530,
+       "returnBytes": 11918,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 32.52495999999883,
+       "serverMs": 29.815327,
+       "userMs": 20.185826,
+       "docsRead": 53,
+       "bytesRead": 14530,
+       "returnBytes": 11918,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 48.892398000003595,
+       "serverMs": 46.127794,
+       "userMs": 34.438678,
+       "docsRead": 53,
+       "bytesRead": 14530,
+       "returnBytes": 11918,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "today.listStandups",
+     "surface": "today page",
+     "samples": [
+      {
+       "clientMs": 25.543323999998393,
+       "serverMs": 22.40644,
+       "userMs": 12.182983,
+       "docsRead": 64,
+       "bytesRead": 25563,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 23.616602999998577,
+       "serverMs": 21.308277,
+       "userMs": 12.436084,
+       "docsRead": 64,
+       "bytesRead": 25563,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 22.351072999997996,
+       "serverMs": 20.368219,
+       "userMs": 11.583539,
+       "docsRead": 64,
+       "bytesRead": 25563,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "analytics.getImpactStats",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 284.29180199999973,
+       "serverMs": 281.07251,
+       "userMs": 64.37279,
+       "docsRead": 1385,
+       "bytesRead": 792086,
+       "returnBytes": 339,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 311.8320329999988,
+       "serverMs": 309.186717,
+       "userMs": 78.5681,
+       "docsRead": 1385,
+       "bytesRead": 792086,
+       "returnBytes": 339,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 289.13591599999927,
+       "serverMs": 286.75804999999997,
+       "userMs": 78.402374,
+       "docsRead": 1385,
+       "bytesRead": 792086,
+       "returnBytes": 339,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "analytics.getActivityTimeline",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 292.17795500000284,
+       "serverMs": 288.94380600000005,
+       "userMs": 66.186667,
+       "docsRead": 1337,
+       "bytesRead": 752905,
+       "returnBytes": 4363,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 275.3792590000012,
+       "serverMs": 272.891351,
+       "userMs": 63.99533,
+       "docsRead": 1337,
+       "bytesRead": 752905,
+       "returnBytes": 4363,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 313.63861100000213,
+       "serverMs": 310.824047,
+       "userMs": 72.67989499999999,
+       "docsRead": 1337,
+       "bytesRead": 752905,
+       "returnBytes": 4363,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "analytics.getActivityHeatmap",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 95.48828200000207,
+       "serverMs": 92.742758,
+       "userMs": 28.504819,
+       "docsRead": 537,
+       "bytesRead": 346284,
+       "returnBytes": 545,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 91.93406400000094,
+       "serverMs": 89.602819,
+       "userMs": 22.643036,
+       "docsRead": 537,
+       "bytesRead": 346284,
+       "returnBytes": 545,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 98.30384100000083,
+       "serverMs": 95.97591,
+       "userMs": 24.06947,
+       "docsRead": 537,
+       "bytesRead": 346284,
+       "returnBytes": 545,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "analytics.getLeaderboard",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 121.1910280000011,
+       "serverMs": 118.104022,
+       "userMs": 31.851224,
+       "docsRead": 641,
+       "bytesRead": 422141,
+       "returnBytes": 354,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 121.82117599999765,
+       "serverMs": 119.549789,
+       "userMs": 30.641744,
+       "docsRead": 641,
+       "bytesRead": 422141,
+       "returnBytes": 354,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 125.67118699999992,
+       "serverMs": 123.56861199999999,
+       "userMs": 31.099271,
+       "docsRead": 641,
+       "bytesRead": 422141,
+       "returnBytes": 354,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "usage.summary",
+     "surface": "usage page",
+     "samples": [
+      {
+       "clientMs": 49.775526000001264,
+       "serverMs": 46.936085000000006,
+       "userMs": 17.490259000000002,
+       "docsRead": 302,
+       "bytesRead": 111114,
+       "returnBytes": 4601,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 44.925445000000764,
+       "serverMs": 41.759022,
+       "userMs": 13.25813,
+       "docsRead": 302,
+       "bytesRead": 111114,
+       "returnBytes": 4601,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 44.09510299999965,
+       "serverMs": 41.853428,
+       "userMs": 15.256195,
+       "docsRead": 302,
+       "bytesRead": 111114,
+       "returnBytes": 4601,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "mentions.listData",
+     "surface": "@-mention picker",
+     "samples": [
+      {
+       "clientMs": 76.2295129999984,
+       "serverMs": 68.588223,
+       "userMs": 23.71308,
+       "docsRead": 460,
+       "bytesRead": 435949,
+       "returnBytes": 70651,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 66.44559600000139,
+       "serverMs": 61.153904000000004,
+       "userMs": 20.985197,
+       "docsRead": 460,
+       "bytesRead": 435949,
+       "returnBytes": 70651,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 65.25452200000291,
+       "serverMs": 60.643323,
+       "userMs": 20.246298,
+       "docsRead": 460,
+       "bytesRead": 435949,
+       "returnBytes": 70651,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "spotlight.search",
+     "surface": "⌘K search",
+     "samples": [
+      {
+       "clientMs": 157.60568200000125,
+       "serverMs": 154.991237,
+       "userMs": 61.375011,
+       "docsRead": 651,
+       "bytesRead": 578590,
+       "returnBytes": 884,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 109.89532999999938,
+       "serverMs": 107.643771,
+       "userMs": 32.943110999999995,
+       "docsRead": 651,
+       "bytesRead": 578590,
+       "returnBytes": 884,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 131.24221100000432,
+       "serverMs": 128.51588,
+       "userMs": 38.542268,
+       "docsRead": 651,
+       "bytesRead": 578590,
+       "returnBytes": 884,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "routedThreads.countWaitingForMe",
+     "surface": "sidebar badge",
+     "samples": [
+      {
+       "clientMs": 77.61384900000121,
+       "serverMs": 74.880533,
+       "userMs": 32.158166,
+       "docsRead": 301,
+       "bytesRead": 108587,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 75.84411800000089,
+       "serverMs": 73.776328,
+       "userMs": 30.576394999999998,
+       "docsRead": 301,
+       "bytesRead": 108587,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 94.07368799999676,
+       "serverMs": 91.637186,
+       "userMs": 39.726234999999996,
+       "docsRead": 301,
+       "bytesRead": 108587,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "routedThreads.listWaitingForMe",
+     "surface": "inbox",
+     "samples": [
+      {
+       "clientMs": 123.18771000000197,
+       "serverMs": 118.859475,
+       "userMs": 55.226458,
+       "docsRead": 451,
+       "bytesRead": 121407,
+       "returnBytes": 37851,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 108.87669800000003,
+       "serverMs": 105.384068,
+       "userMs": 48.676023,
+       "docsRead": 451,
+       "bytesRead": 121407,
+       "returnBytes": 37851,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 99.50020400000358,
+       "serverMs": 95.717139,
+       "userMs": 39.966771,
+       "docsRead": 451,
+       "bytesRead": 121407,
+       "returnBytes": 37851,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "drafts.listForRepo",
+     "surface": "composer",
+     "samples": [
+      {
+       "clientMs": 50.46621099999902,
+       "serverMs": 46.878246,
+       "userMs": 19.197912000000002,
+       "docsRead": 122,
+       "bytesRead": 43452,
+       "returnBytes": 27927,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 47.16270100000111,
+       "serverMs": 44.006587,
+       "userMs": 16.921695,
+       "docsRead": 122,
+       "bytesRead": 43452,
+       "returnBytes": 27927,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 44.23029999999926,
+       "serverMs": 41.216772,
+       "userMs": 15.261087,
+       "docsRead": 122,
+       "bytesRead": 43452,
+       "returnBytes": 27927,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
