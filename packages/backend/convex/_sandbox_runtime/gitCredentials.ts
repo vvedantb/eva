@@ -28,7 +28,7 @@ const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 // owner can reach in eva. A short file cache, keyed by repository so tokens
 // never cross installations, trims duplicate mints during a single git
 // operation (clone/fetch/push fan out into several helper invocations).
-const HELPER_SCRIPT = `#!/usr/bin/env bash
+export const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
 
 if [ "\${1:-}" != "get" ]; then
