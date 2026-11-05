@@ -26,6 +26,7 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useProjectAnnotationSend } from "./useProjectAnnotationSend";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -60,6 +61,8 @@ interface ProjectSandboxPanelProps {
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Mini-player title; Expand returns to this project's Preview tab. */
+  title?: string;
 }
 
 export function ProjectSandboxPanel({
@@ -81,12 +84,14 @@ export function ProjectSandboxPanel({
   autoWakeEligible,
   collapsed = false,
   onToggle,
+  title,
 }: ProjectSandboxPanelProps) {
   const simpleView = useSimpleView();
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const projectIdStr = String(projectId);
+  const submitAnnotation = useProjectAnnotationSend(projectId);
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
@@ -255,8 +260,19 @@ export function ProjectSandboxPanel({
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
+              onAnnotationSubmit={submitAnnotation}
               // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
+              // A collapsed rail keeps its preview parked.
+              miniPlayer={
+                projectPathSegment && title !== undefined && !collapsed
+                  ? {
+                      owner: { kind: "project", projectId },
+                      returnTo: `${basePath}/projects/${projectPathSegment}/sandbox/preview`,
+                      title,
+                    }
+                  : undefined
+              }
               stickyPreviewPath={viewState?.previewPath}
               onStickyPreviewPathChange={(path) => {
                 void setPreviewPath({ owner, path });

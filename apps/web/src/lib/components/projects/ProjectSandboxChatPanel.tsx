@@ -389,7 +389,7 @@ type ProjectChatProject = FunctionReturnType<typeof api.projects.get>;
 
 // Sandbox chat model is `lastChatModel` (sticky); falls back to metadata
 // `model` then repo default. Distinct from projects.model build prefs.
-function projectChatModel(
+export function projectChatModel(
   project: ProjectChatProject | undefined,
   repoDefaultModel: string | undefined,
 ): AIModel {
@@ -400,7 +400,7 @@ function projectChatModel(
 }
 
 /** The sticky project account, the picker's account list and its labels. */
-function useProjectChatAccounts(
+export function useProjectChatAccounts(
   repoId: Id<"githubRepos">,
   project: ProjectChatProject | undefined,
   model: AIModel,

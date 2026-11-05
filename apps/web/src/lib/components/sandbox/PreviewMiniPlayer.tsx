@@ -17,7 +17,7 @@ import {
 import { usePreviewMiniPlayerFrame } from "./usePreviewMiniPlayerFrame";
 
 /**
- * Floating picture-in-picture window for a session's or quick task's dev-server preview.
+ * Floating picture-in-picture window for a session's, quick task's or project's dev-server preview.
  *
  * Mounted once at the app root, just before {@link PreviewIframeHost} and on
  * the same z layer: the host overlays its iframe on the anchor rendered here,
@@ -120,16 +120,25 @@ function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
     api.agentTasks.get,
     !fixture && owner.kind === "task" ? { id: owner.taskId } : "skip",
   );
+  const project = useQuery(
+    api.projects.get,
+    !fixture && owner.kind === "project" ? { id: owner.projectId } : "skip",
+  );
   const live =
     owner.kind === "session"
       ? session && {
           sandboxId: session.sandboxId,
           active: session.status === "active",
         }
-      : task && {
-          sandboxId: task.sandboxId,
-          active: task.reviewTaskSandboxStatus === "active",
-        };
+      : owner.kind === "task"
+        ? task && {
+            sandboxId: task.sandboxId,
+            active: task.reviewTaskSandboxStatus === "active",
+          }
+        : project && {
+            sandboxId: project.sandboxId,
+            active: project.reviewProjectSandboxStatus === "active",
+          };
   return (
     live === null ||
     (live !== undefined && (live.sandboxId !== entry.sandboxId || !live.active))
