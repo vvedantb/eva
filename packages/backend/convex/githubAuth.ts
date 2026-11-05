@@ -75,11 +75,11 @@ export async function getInstallationToken(
  * repository id when known; GitHub also accepts the repository name for
  * installations whose id we never recorded.
  */
-export async function getSiblingRepoInstallationToken(
+function siblingRepoInstallationAuth(
   installationId: number,
   repo: { githubId: number | undefined; name: string },
-): Promise<string> {
-  const installationAuth = await appAuth()({
+) {
+  return appAuth()({
     type: "installation",
     installationId,
     permissions: { contents: "write", metadata: "read" },
@@ -87,7 +87,6 @@ export async function getSiblingRepoInstallationToken(
       ? { repositoryIds: [repo.githubId] }
       : { repositoryNames: [repo.name] }),
   });
-  return installationAuth.token;
 }
 
 /** Creates an Octokit client authenticated as a specific GitHub App installation. */
@@ -107,12 +106,34 @@ export function getAppOctokit(): Octokit {
   });
 }
 
+/**
+ * A token plus its real GitHub expiry (unix seconds). The process cache above
+ * can hand out a token up to 59 minutes old, so callers that cache it again
+ * (the sandbox credential helper) must key off `expiresAt`, not fetch time.
+ */
+const sandboxGitCredentialValidator = v.object({
+  token: v.string(),
+  expiresAt: v.number(),
+});
+
+function toSandboxGitCredential(auth: { token: string; expiresAt: string }) {
+  return {
+    token: auth.token,
+    expiresAt: Math.floor(Date.parse(auth.expiresAt) / 1000),
+  };
+}
+
 /** Internal action wrapper so HTTP actions can mint an installation token via ctx.runAction. */
 export const mintInstallationToken = internalAction({
   args: { installationId: v.number() },
-  returns: v.string(),
+  returns: sandboxGitCredentialValidator,
   handler: async (_ctx, args) => {
-    return await getInstallationToken(args.installationId);
+    return toSandboxGitCredential(
+      await appAuth()({
+        type: "installation",
+        installationId: args.installationId,
+      }),
+    );
   },
 });
 
@@ -123,11 +144,13 @@ export const mintSiblingRepoToken = internalAction({
     githubId: v.optional(v.number()),
     name: v.string(),
   },
-  returns: v.string(),
+  returns: sandboxGitCredentialValidator,
   handler: async (_ctx, args) => {
-    return await getSiblingRepoInstallationToken(args.installationId, {
-      githubId: args.githubId,
-      name: args.name,
-    });
+    return toSandboxGitCredential(
+      await siblingRepoInstallationAuth(args.installationId, {
+        githubId: args.githubId,
+        name: args.name,
+      }),
+    );
   },
 });

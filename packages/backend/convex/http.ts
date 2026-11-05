@@ -330,7 +330,7 @@ http.route({
       console.log(
         `[git-credentials][sibling] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,
       );
-      const siblingToken: string = await ctx.runAction(
+      const sibling = await ctx.runAction(
         internal.githubAuth.mintSiblingRepoToken,
         {
           installationId: resolved.installationId,
@@ -338,10 +338,7 @@ http.route({
           name: resolved.name,
         },
       );
-      return Response.json({
-        username: "x-access-token",
-        token: siblingToken,
-      });
+      return Response.json({ username: "x-access-token", ...sibling });
     }
     if (resolved.kind === "linked") {
       // A multi-repo session's linked repo: a full token, but for that repo's
@@ -351,11 +348,12 @@ http.route({
       );
     }
 
-    const token: string = await ctx.runAction(
+    const credential = await ctx.runAction(
       internal.githubAuth.mintInstallationToken,
       { installationId: resolved.installationId },
     );
-    return Response.json({ username: "x-access-token", token });
+    // `expiresAt` (unix seconds) bounds the helper's cache; see gitCredentials.ts.
+    return Response.json({ username: "x-access-token", ...credential });
   }),
 });
 
