@@ -1,9 +1,9 @@
 {
  "label": "before",
- "gitSha": "633928541+dirty",
- "startedAt": "2026-11-05T15:16:06.070Z",
- "samplesPerCase": 30,
- "warmupRounds": 3,
+ "gitSha": "565fade29",
+ "startedAt": "2026-11-05T16:58:01.286Z",
+ "samplesPerCase": 5,
+ "warmupRounds": 1,
  "scales": [
   {
    "scale": 1,
@@ -39423,6 +39423,2423 @@
        "memoryMb": 64,
        "cached": false,
        "error": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "scale": 1000,
+   "samples": 5,
+   "seedMs": 197427.411247,
+   "seedDocs": 687000,
+   "tableCounts": {
+    "teamMembers": 5000,
+    "users": 5000,
+    "githubRepos": 3000,
+    "chatLogEntries": 30000,
+    "chatReads": 57000,
+    "drafts": 6000,
+    "logs": 60000,
+    "messages": 130000,
+    "notifications": 30000,
+    "pendingQuestions": 3000,
+    "pullRequests": 32000,
+    "sessionChats": 40000,
+    "sessionRepos": 3000,
+    "sessions": 30000,
+    "turns": 3000,
+    "agentRuns": 64000,
+    "agentTaskRunSummaries": 30000,
+    "agentTasks": 30000,
+    "projectDetails": 5000,
+    "projects": 5000,
+    "taskActivity": 20000,
+    "taskComments": 20000,
+    "docs": 10000,
+    "automationRuns": 23000,
+    "automations": 3000,
+    "docComments": 10000,
+    "routedParticipants": 20000,
+    "routedThreads": 10000
+   },
+   "cases": [
+    {
+     "name": "auth.me",
+     "surface": "every page",
+     "samples": [
+      {
+       "clientMs": 83.71548999997322,
+       "serverMs": 81.49397,
+       "userMs": 15.324918,
+       "docsRead": 1,
+       "bytesRead": 207,
+       "returnBytes": 34,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 14.739386000088416,
+       "serverMs": 12.475115,
+       "userMs": 8.907200000000001,
+       "docsRead": 1,
+       "bytesRead": 207,
+       "returnBytes": 34,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 14.634670000057667,
+       "serverMs": 12.332324,
+       "userMs": 8.610868,
+       "docsRead": 1,
+       "bytesRead": 207,
+       "returnBytes": 34,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 16.50025300006382,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 21.18396700010635,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "githubRepos.list",
+     "surface": "sidebar repo picker",
+     "samples": [
+      {
+       "clientMs": 649.2895599999465,
+       "serverMs": 623.123208,
+       "userMs": 90.481329,
+       "docsRead": 3005,
+       "bytesRead": 729160,
+       "returnBytes": 559496,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 695.4637189999921,
+       "serverMs": 672.007564,
+       "userMs": 97.785577,
+       "docsRead": 3005,
+       "bytesRead": 729160,
+       "returnBytes": 559496,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 786.9415339999832,
+       "serverMs": 749.226785,
+       "userMs": 87.761729,
+       "docsRead": 3005,
+       "bytesRead": 729160,
+       "returnBytes": 559496,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 701.6959790000692,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 802.9623119998723,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "githubRepos.countActiveSessions",
+     "surface": "sidebar badges",
+     "samples": [
+      {
+       "clientMs": 1184.381560000009,
+       "serverMs": 1182.21287,
+       "userMs": 167.619402,
+       "docsRead": 3133,
+       "bytesRead": 771997,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1418.5702019999735,
+       "serverMs": 1413.036777,
+       "userMs": 194.661327,
+       "docsRead": 3133,
+       "bytesRead": 771997,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1742.2669679999817,
+       "serverMs": 1739.4648849999999,
+       "userMs": 274.602309,
+       "docsRead": 3133,
+       "bytesRead": 771997,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1354.1762449999806,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 1529.7294100001454,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "githubRepos.listActiveSandboxCounts",
+     "surface": "sidebar badges",
+     "samples": [
+      {
+       "clientMs": 1715.7507210000185,
+       "serverMs": 1711.713919,
+       "userMs": 409.253389,
+       "docsRead": 3005,
+       "bytesRead": 729160,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1610.2376459999941,
+       "serverMs": 1606.842292,
+       "userMs": 358.708053,
+       "docsRead": 3005,
+       "bytesRead": 729160,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1608.2173639999237,
+       "serverMs": 1604.957407,
+       "userMs": 351.830012,
+       "docsRead": 3005,
+       "bytesRead": 729160,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1513.9426700000186,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1731.3777779999655,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "sessions.list",
+     "surface": "sessions sidebar",
+     "samples": [
+      {
+       "clientMs": 15817.390492000035,
+       "serverMs": 15812.274902000001,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15846.458916999982,
+       "serverMs": 15843.541514,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15262.542604000075,
+       "serverMs": 15258.313979,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15991.39583100006,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15323.287508999929,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "sessions.listRepos",
+     "surface": "session header",
+     "samples": [
+      {
+       "clientMs": 2345.124927000026,
+       "serverMs": 2342.572342,
+       "userMs": 143.90324299999997,
+       "docsRead": 5004,
+       "bytesRead": 1964720,
+       "returnBytes": 282,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2131.246909999987,
+       "serverMs": 2129.0579470000002,
+       "userMs": 127.73271199999999,
+       "docsRead": 5004,
+       "bytesRead": 1964720,
+       "returnBytes": 282,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2240.215963000199,
+       "serverMs": 2237.926344,
+       "userMs": 142.39906,
+       "docsRead": 5004,
+       "bytesRead": 1964720,
+       "returnBytes": 282,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2267.1127189998515,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 2277.306189000141,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "sessionChats.listExtraForRepo",
+     "surface": "sessions sidebar",
+     "samples": [
+      {
+       "clientMs": 5862.704517000006,
+       "serverMs": 5859.990341,
+       "userMs": 291.535638,
+       "docsRead": 9002,
+       "bytesRead": 2781414,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function sessionChats.js:listExtraForRepo return value invalid: Array length is too long (9000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5551.278133999906,
+       "serverMs": 5549.028611,
+       "userMs": 252.115737,
+       "docsRead": 9002,
+       "bytesRead": 2781414,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function sessionChats.js:listExtraForRepo return value invalid: Array length is too long (9000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 7510.267664999934,
+       "serverMs": 7506.256949,
+       "userMs": 335.354211,
+       "docsRead": 9002,
+       "bytesRead": 2781414,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function sessionChats.js:listExtraForRepo return value invalid: Array length is too long (9000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5557.298068000004,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function sessionChats.js:listExtraForRepo return value invalid: Array length is too long (9000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5857.909138000105,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function sessionChats.js:listExtraForRepo return value invalid: Array length is too long (9000 > maximum length 8192)"
+      }
+     ]
+    },
+    {
+     "name": "messages.listByParent",
+     "surface": "chat transcript",
+     "samples": [
+      {
+       "clientMs": 15089.717532999988,
+       "serverMs": 15086.369814,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15126.365862000035,
+       "serverMs": 15124.321919,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15355.350287000067,
+       "serverMs": 15351.911297,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15135.571857999777,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15710.49429900013,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "pullRequests.listForOwner",
+     "surface": "session PR chrome",
+     "samples": [
+      {
+       "clientMs": 2824.284837000014,
+       "serverMs": 2725.267064,
+       "userMs": 283.60772899999995,
+       "docsRead": 10003,
+       "bytesRead": 2999513,
+       "returnBytes": 1758890,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2407.106654000003,
+       "serverMs": 2323.2051,
+       "userMs": 257.35534,
+       "docsRead": 10003,
+       "bytesRead": 2999513,
+       "returnBytes": 1758890,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2722.9074009999167,
+       "serverMs": 2639.2234989999997,
+       "userMs": 267.182755,
+       "docsRead": 10003,
+       "bytesRead": 2999513,
+       "returnBytes": 1758890,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2616.636216000188,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 2906.3100119999144,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "projects.list",
+     "surface": "projects page",
+     "samples": [
+      {
+       "clientMs": 16181.32288699993,
+       "serverMs": 16178.206645999999,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15620.460094999988,
+       "serverMs": 15617.691003999998,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15410.45824399998,
+       "serverMs": 15407.966532999999,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15315.025777000003,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15188.150146000087,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "projects.listTaskProgress",
+     "surface": "projects page",
+     "samples": [
+      {
+       "clientMs": 4602.848513000063,
+       "serverMs": 4598.3945300000005,
+       "userMs": 365.96562700000004,
+       "docsRead": 9035,
+       "bytesRead": 7827094,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 5523.661798999994,
+       "serverMs": 5519.213446,
+       "userMs": 401.068561,
+       "docsRead": 9035,
+       "bytesRead": 7827094,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 4440.093655999983,
+       "serverMs": 4436.700631,
+       "userMs": 343.416157,
+       "docsRead": 9035,
+       "bytesRead": 7827094,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 4183.263227000134,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 4340.9785230001435,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "projects.getActive",
+     "surface": "repo home",
+     "samples": [
+      {
+       "clientMs": 2138.943423999939,
+       "serverMs": 2135.938268,
+       "userMs": 142.41236600000002,
+       "docsRead": 5003,
+       "bytesRead": 3629529,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2049.1505009999964,
+       "serverMs": 2046.586823,
+       "userMs": 122.516384,
+       "docsRead": 5003,
+       "bytesRead": 3629529,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2169.9953960001003,
+       "serverMs": 2167.472424,
+       "userMs": 113.296068,
+       "docsRead": 5003,
+       "bytesRead": 3629529,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 2124.565736999968,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 2004.7636420000345,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.getAllTasks",
+     "surface": "tasks board",
+     "samples": [
+      {
+       "clientMs": 9552.480685999966,
+       "serverMs": 9549.359391,
+       "userMs": 257.388803,
+       "docsRead": 17642,
+       "bytesRead": 18349063,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 8506.056459999993,
+       "serverMs": 8503.769413,
+       "userMs": 232.793787,
+       "docsRead": 17642,
+       "bytesRead": 18349063,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 10831.493429000024,
+       "serverMs": 10828.634280999999,
+       "userMs": 298.068646,
+       "docsRead": 17642,
+       "bytesRead": 18349063,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 9972.829187999945,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 10156.966763000004,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.getActiveTasks",
+     "surface": "repo home",
+     "samples": [
+      {
+       "clientMs": 4723.489732999937,
+       "serverMs": 4719.7720150000005,
+       "userMs": 398.662315,
+       "docsRead": 12003,
+       "bytesRead": 12453884,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function agentTasks.js:getActiveTasks return value invalid: Array length is too long (12001 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5410.226811999921,
+       "serverMs": 5404.3853850000005,
+       "userMs": 382.230352,
+       "docsRead": 12003,
+       "bytesRead": 12453884,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function agentTasks.js:getActiveTasks return value invalid: Array length is too long (12001 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5137.099095999962,
+       "serverMs": 5134.444347,
+       "userMs": 433.424927,
+       "docsRead": 12003,
+       "bytesRead": 12453884,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function agentTasks.js:getActiveTasks return value invalid: Array length is too long (12001 > maximum length 8192)"
+      },
+      {
+       "clientMs": 4652.368193000089,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function agentTasks.js:getActiveTasks return value invalid: Array length is too long (12001 > maximum length 8192)"
+      },
+      {
+       "clientMs": 4768.493065999821,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function agentTasks.js:getActiveTasks return value invalid: Array length is too long (12001 > maximum length 8192)"
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.listDrafts",
+     "surface": "tasks board",
+     "samples": [
+      {
+       "clientMs": 1899.7089050000068,
+       "serverMs": 1872.5663670000001,
+       "userMs": 108.544758,
+       "docsRead": 3002,
+       "bytesRead": 3001192,
+       "returnBytes": 964736,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1333.9924449999817,
+       "serverMs": 1308.860069,
+       "userMs": 112.835987,
+       "docsRead": 3002,
+       "bytesRead": 3001192,
+       "returnBytes": 964736,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1260.4857310000807,
+       "serverMs": 1243.320656,
+       "userMs": 116.586515,
+       "docsRead": 3002,
+       "bytesRead": 3001192,
+       "returnBytes": 964736,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1274.78409500001,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 1310.7137000001967,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "agentTasks.listByProject",
+     "surface": "project page",
+     "samples": [
+      {
+       "clientMs": 15150.376835000003,
+       "serverMs": 15147.584037,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15354.37508899998,
+       "serverMs": 15351.919992,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15172.288644999964,
+       "serverMs": 15169.844520999999,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15158.537234999938,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15483.633169000037,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "agentRuns.listByTask",
+     "surface": "task page",
+     "samples": [
+      {
+       "clientMs": 6115.407867000089,
+       "serverMs": 6112.624426,
+       "userMs": 316.19278699999995,
+       "docsRead": 10003,
+       "bytesRead": 5660682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function agentRuns.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 6140.565690999967,
+       "serverMs": 6137.8026500000005,
+       "userMs": 293.724439,
+       "docsRead": 10003,
+       "bytesRead": 5660682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function agentRuns.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 6832.510003999807,
+       "serverMs": 6830.3421530000005,
+       "userMs": 347.507745,
+       "docsRead": 10003,
+       "bytesRead": 5660682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function agentRuns.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 6939.371260999935,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function agentRuns.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 6927.542571000056,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function agentRuns.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      }
+     ]
+    },
+    {
+     "name": "taskComments.listByTask",
+     "surface": "task page",
+     "samples": [
+      {
+       "clientMs": 5031.730531000067,
+       "serverMs": 5028.393266,
+       "userMs": 250.38055999999997,
+       "docsRead": 10003,
+       "bytesRead": 5100682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function taskComments.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5075.588873999892,
+       "serverMs": 5073.4169360000005,
+       "userMs": 241.755245,
+       "docsRead": 10003,
+       "bytesRead": 5100682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function taskComments.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5070.821767000016,
+       "serverMs": 5067.921983,
+       "userMs": 235.132323,
+       "docsRead": 10003,
+       "bytesRead": 5100682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function taskComments.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5351.2619549999945,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function taskComments.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5605.850515999831,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function taskComments.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      }
+     ]
+    },
+    {
+     "name": "taskActivity.listByTask",
+     "surface": "task page",
+     "samples": [
+      {
+       "clientMs": 4265.160551999928,
+       "serverMs": 4261.300744,
+       "userMs": 221.162392,
+       "docsRead": 10003,
+       "bytesRead": 2140682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function taskActivity.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 4570.730635000044,
+       "serverMs": 4568.854547,
+       "userMs": 226.048307,
+       "docsRead": 10003,
+       "bytesRead": 2140682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function taskActivity.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 4616.286561999936,
+       "serverMs": 4613.722243,
+       "userMs": 242.083058,
+       "docsRead": 10003,
+       "bytesRead": 2140682,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function taskActivity.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 15147.25847,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function taskActivity.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 4910.365362000186,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function taskActivity.js:listByTask return value invalid: Array length is too long (10000 > maximum length 8192)"
+      }
+     ]
+    },
+    {
+     "name": "notifications.list",
+     "surface": "inbox",
+     "samples": [
+      {
+       "clientMs": 340.5078280000016,
+       "serverMs": 337.029693,
+       "userMs": 15.953746,
+       "docsRead": 101,
+       "bytesRead": 29907,
+       "returnBytes": 26217,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 340.5205549999373,
+       "serverMs": 337.292395,
+       "userMs": 14.439992,
+       "docsRead": 101,
+       "bytesRead": 29907,
+       "returnBytes": 26217,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 359.5537849999964,
+       "serverMs": 355.68861699999997,
+       "userMs": 14.942779999999999,
+       "docsRead": 101,
+       "bytesRead": 29907,
+       "returnBytes": 26217,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 290.03970499988645,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 321.8425700000953,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "notifications.countUnread",
+     "surface": "inbox badge",
+     "samples": [
+      {
+       "clientMs": 194.57792200002586,
+       "serverMs": 191.694177,
+       "userMs": 13.414335,
+       "docsRead": 101,
+       "bytesRead": 29752,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 533.2324999999255,
+       "serverMs": 529.3698049999999,
+       "userMs": 16.206048,
+       "docsRead": 101,
+       "bytesRead": 29752,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 215.870449999813,
+       "serverMs": 213.757878,
+       "userMs": 17.337446999999997,
+       "docsRead": 101,
+       "bytesRead": 29752,
+       "returnBytes": 5,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 179.82980299997143,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 214.8290290001314,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "docs.list",
+     "surface": "docs page",
+     "samples": [
+      {
+       "clientMs": 9494.541881999932,
+       "serverMs": 9492.263223,
+       "userMs": 227.101606,
+       "docsRead": 7445,
+       "bytesRead": 17351358,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 9228.050792000024,
+       "serverMs": 9223.932812,
+       "userMs": 232.482807,
+       "docsRead": 7445,
+       "bytesRead": 17351358,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 9958.191994000226,
+       "serverMs": 9955.948551000001,
+       "userMs": 261.85701300000005,
+       "docsRead": 7445,
+       "bytesRead": 17351358,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 9859.712972000008,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 9991.06985999993,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many bytes read in a single function execution (limit: 16777216 bytes). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "docComments.listByDoc",
+     "surface": "doc page",
+     "samples": [
+      {
+       "clientMs": 5230.978161000065,
+       "serverMs": 5227.467799,
+       "userMs": 259.605573,
+       "docsRead": 10003,
+       "bytesRead": 5092653,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function docComments.js:listByDoc return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5061.492810999975,
+       "serverMs": 5058.802126,
+       "userMs": 249.160731,
+       "docsRead": 10003,
+       "bytesRead": 5092653,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function docComments.js:listByDoc return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5398.329717000015,
+       "serverMs": 5396.1462759999995,
+       "userMs": 262.93468199999995,
+       "docsRead": 10003,
+       "bytesRead": 5092653,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Function docComments.js:listByDoc return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5750.000590999844,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function docComments.js:listByDoc return value invalid: Array length is too long (10000 > maximum length 8192)"
+      },
+      {
+       "clientMs": 5817.701434000162,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Function docComments.js:listByDoc return value invalid: Array length is too long (10000 > maximum length 8192)"
+      }
+     ]
+    },
+    {
+     "name": "users.listAll",
+     "surface": "assignee pickers",
+     "samples": [
+      {
+       "clientMs": 2632.4362579999724,
+       "serverMs": 2627.4125980000003,
+       "userMs": 186.390919,
+       "docsRead": 9071,
+       "bytesRead": 1897958,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2533.023760000011,
+       "serverMs": 2529.4852690000002,
+       "userMs": 164.318918,
+       "docsRead": 9071,
+       "bytesRead": 1897958,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2830.7725420000497,
+       "serverMs": 2827.9366499999996,
+       "userMs": 189.800091,
+       "docsRead": 9071,
+       "bytesRead": 1897958,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2593.700404000003,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2724.3052319998387,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "teamMembers.list",
+     "surface": "team settings",
+     "samples": [
+      {
+       "clientMs": 2241.429333999986,
+       "serverMs": 2238.4303389999995,
+       "userMs": 327.527711,
+       "docsRead": 7047,
+       "bytesRead": 1582248,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2575.7191069999244,
+       "serverMs": 2572.381639,
+       "userMs": 371.565945,
+       "docsRead": 7047,
+       "bytesRead": 1582248,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2726.4686400000937,
+       "serverMs": 2723.4938140000004,
+       "userMs": 371.78149,
+       "docsRead": 7047,
+       "bytesRead": 1582248,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2768.810507000191,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2567.3896819998045,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "chatLog.listForRepo",
+     "surface": "log page",
+     "samples": [
+      {
+       "clientMs": 3292.8404769999906,
+       "serverMs": 3282.300066,
+       "userMs": 146.81275799999997,
+       "docsRead": 4003,
+       "bytesRead": 1033857,
+       "returnBytes": 238873,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 3404.441298000049,
+       "serverMs": 3393.242973,
+       "userMs": 139.966824,
+       "docsRead": 4003,
+       "bytesRead": 1033857,
+       "returnBytes": 238873,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 3532.385210999986,
+       "serverMs": 3518.0415080000002,
+       "userMs": 181.461873,
+       "docsRead": 4003,
+       "bytesRead": 1033857,
+       "returnBytes": 238873,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 3397.216924000066,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 3343.4412330000196,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "automations.countUnreadAll",
+     "surface": "sidebar badge",
+     "samples": [
+      {
+       "clientMs": 1055.320309999981,
+       "serverMs": 1050.891423,
+       "userMs": 223.24439800000002,
+       "docsRead": 6008,
+       "bytesRead": 1226786,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 9876.569839000003,
+       "serverMs": 9873.550406,
+       "userMs": 212.59824799999998,
+       "docsRead": 6008,
+       "bytesRead": 1226786,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1120.2593920000363,
+       "serverMs": 1117.051375,
+       "userMs": 233.835562,
+       "docsRead": 6008,
+       "bytesRead": 1226786,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1247.8871999999974,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 1167.3139760000631,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "automations.listRuns",
+     "surface": "automation page",
+     "samples": [
+      {
+       "clientMs": 218.09445099998266,
+       "serverMs": 215.16292,
+       "userMs": 19.989523,
+       "docsRead": 53,
+       "bytesRead": 14530,
+       "returnBytes": 11918,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 408.6510160000762,
+       "serverMs": 406.124198,
+       "userMs": 39.421454000000004,
+       "docsRead": 53,
+       "bytesRead": 14530,
+       "returnBytes": 11918,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 853.1263370000524,
+       "serverMs": 846.4024850000001,
+       "userMs": 41.437628999999994,
+       "docsRead": 53,
+       "bytesRead": 14530,
+       "returnBytes": 11918,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 236.95589399989694,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 215.1130539998412,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "today.listStandups",
+     "surface": "today page",
+     "samples": [
+      {
+       "clientMs": 1037.1776300000492,
+       "serverMs": 1034.207667,
+       "userMs": 80.708247,
+       "docsRead": 3034,
+       "bytesRead": 1607533,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 868.8862840000074,
+       "serverMs": 866.440929,
+       "userMs": 74.985707,
+       "docsRead": 3034,
+       "bytesRead": 1607533,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1221.0135939999018,
+       "serverMs": 1217.2974199999999,
+       "userMs": 84.686477,
+       "docsRead": 3034,
+       "bytesRead": 1607533,
+       "returnBytes": 2,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1064.4701880000066,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 6149.376377000008,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "analytics.getImpactStats",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 15292.92856000003,
+       "serverMs": 15287.079661,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15313.019920000108,
+       "serverMs": 15310.46662,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15274.56543399999,
+       "serverMs": 15271.579478,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15804.34731699992,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15421.396212999942,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "analytics.getActivityTimeline",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 15413.531029000005,
+       "serverMs": 15410.812618,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15779.537777999998,
+       "serverMs": 15777.267458,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15799.64614099986,
+       "serverMs": 15794.740839,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15130.085925000021,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15226.106548000127,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "analytics.getActivityHeatmap",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 15511.489738999982,
+       "serverMs": 15507.547153000001,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 16037.177566000028,
+       "serverMs": 16034.428975,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 16108.118174999952,
+       "serverMs": 16103.878423000002,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15262.929181999993,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15302.937665999867,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "analytics.getLeaderboard",
+     "surface": "analytics page",
+     "samples": [
+      {
+       "clientMs": 15111.343822999974,
+       "serverMs": 15108.642303,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15474.669609000091,
+       "serverMs": 15472.548451999999,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15591.889036000008,
+       "serverMs": 15589.965716,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15123.58278099983,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 15951.925853999797,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "usage.summary",
+     "surface": "usage page",
+     "samples": [
+      {
+       "clientMs": 15758.650640999898,
+       "serverMs": 15752.697644,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 14727.120121999993,
+       "serverMs": 14724.825569,
+       "userMs": 133.360428,
+       "docsRead": 5002,
+       "bytesRead": 1855414,
+       "returnBytes": 1189,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 15779.277349000098,
+       "serverMs": 15775.594104,
+       "userMs": 0,
+       "docsRead": 0,
+       "bytesRead": 0,
+       "returnBytes": null,
+       "memoryMb": 0,
+       "cached": false,
+       "error": "Your request timed out performing too many system operations."
+      },
+      {
+       "clientMs": 14972.332642000169,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 15329.200304999948,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Your request timed out performing too many system operations."
+      }
+     ]
+    },
+    {
+     "name": "mentions.listData",
+     "surface": "@-mention picker",
+     "samples": [
+      {
+       "clientMs": 1607.150185000035,
+       "serverMs": 1592.06865,
+       "userMs": 52.905758,
+       "docsRead": 1402,
+       "bytesRead": 1524886,
+       "returnBytes": 258626,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1436.6396790000144,
+       "serverMs": 1427.204107,
+       "userMs": 45.33071,
+       "docsRead": 1402,
+       "bytesRead": 1524886,
+       "returnBytes": 258626,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1580.1870780000463,
+       "serverMs": 1570.390387,
+       "userMs": 56.359931,
+       "docsRead": 1402,
+       "bytesRead": 1524886,
+       "returnBytes": 258626,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 1885.7530890000053,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 1582.378684999887,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "spotlight.search",
+     "surface": "⌘K search",
+     "samples": [
+      {
+       "clientMs": 2835.2200520000188,
+       "serverMs": 2832.156191,
+       "userMs": 609.8588990000001,
+       "docsRead": 3014,
+       "bytesRead": 734061,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2656.817778000026,
+       "serverMs": 2652.635611,
+       "userMs": 477.599515,
+       "docsRead": 3014,
+       "bytesRead": 734061,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 2739.6478709999938,
+       "serverMs": 2732.855399,
+       "userMs": 533.094135,
+       "docsRead": 3014,
+       "bytesRead": 734061,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 3287.210493999999,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 3000.7019730000757,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "routedThreads.countWaitingForMe",
+     "surface": "sidebar badge",
+     "samples": [
+      {
+       "clientMs": 6859.558890999993,
+       "serverMs": 6853.92337,
+       "userMs": 497.463917,
+       "docsRead": 14001,
+       "bytesRead": 5167987,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 6585.070034000091,
+       "serverMs": 6582.094361,
+       "userMs": 458.547815,
+       "docsRead": 14001,
+       "bytesRead": 5167987,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 7611.255295000039,
+       "serverMs": 7606.989947,
+       "userMs": 595.3521400000001,
+       "docsRead": 14001,
+       "bytesRead": 5167987,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 8192.91215400002,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 8032.029056000058,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      }
+     ]
+    },
+    {
+     "name": "routedThreads.listWaitingForMe",
+     "surface": "inbox",
+     "samples": [
+      {
+       "clientMs": 1410.1122909999685,
+       "serverMs": 1406.109348,
+       "userMs": 39.465993999999995,
+       "docsRead": 451,
+       "bytesRead": 121607,
+       "returnBytes": 38051,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 213.7034660000354,
+       "serverMs": 210.321112,
+       "userMs": 38.194496,
+       "docsRead": 451,
+       "bytesRead": 121607,
+       "returnBytes": 38051,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 529.2461170000024,
+       "serverMs": 525.407154,
+       "userMs": 73.47806899999999,
+       "docsRead": 451,
+       "bytesRead": 121607,
+       "returnBytes": 38051,
+       "memoryMb": 64,
+       "cached": false,
+       "error": null
+      },
+      {
+       "clientMs": 225.3225720000919,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      },
+      {
+       "clientMs": 213.42926899995655,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": null
+      }
+     ]
+    },
+    {
+     "name": "drafts.listForRepo",
+     "surface": "composer",
+     "samples": [
+      {
+       "clientMs": 3517.905112000066,
+       "serverMs": 3513.565712,
+       "userMs": 198.881061,
+       "docsRead": 10066,
+       "bytesRead": 3827036,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 3473.9898210000247,
+       "serverMs": 3470.351055,
+       "userMs": 198.430138,
+       "docsRead": 10066,
+       "bytesRead": 3827036,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 4408.720961000072,
+       "serverMs": 4405.612863,
+       "userMs": 239.77331099999998,
+       "docsRead": 10066,
+       "bytesRead": 3827036,
+       "returnBytes": null,
+       "memoryMb": 64,
+       "cached": false,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 3939.36149400007,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
+      },
+      {
+       "clientMs": 4533.796796999872,
+       "serverMs": null,
+       "userMs": null,
+       "docsRead": null,
+       "bytesRead": null,
+       "returnBytes": null,
+       "memoryMb": null,
+       "cached": null,
+       "error": "Uncaught Error: Too many reads in a single function execution (limit: 4096). Consider using smaller limits in your queries, paginating your queries, or using indexed queries with a selective index range expressions."
       }
      ]
     }

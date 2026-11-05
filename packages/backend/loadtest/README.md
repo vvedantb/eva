@@ -55,8 +55,9 @@ grows as N² and models no real tenant. 1000× is about 690,000 documents.
   spread over months read less. Windows on `createdAt`/`updatedAt` work.
 - One focal repo has 3,000 open turns at 1000×. Real repos have as many open
   turns as running sandboxes, so turn-driven costs are an upper bound.
-- The local backend applies Convex's per-function limits (32,000 documents
-  scanned, 4,096 index reads, 16 MiB read). Absolute times are for this VM,
+- The local backend applies Convex's per-function limits. The runs hit four:
+  4,096 reads per function, 16 MiB read, 8,192 items in a returned array,
+  and "too many system operations" timeouts. Absolute times are for this VM,
   not for Convex cloud; compare before and after on the same machine.
 - The backend's crons run during the probe; their executions are not counted.
 

@@ -200,7 +200,6 @@ function miniChart(title: string, unit: string, series: Array<{ run: Run; points
   return `<figure class="mini"><figcaption>${esc(title)} <span class="unit">${esc(unit)}</span></figcaption>${parts.join("")}</figure>`;
 }
 
-const DOC_LIMIT = 32_000;
 
 function pointsFor(name: string, run: Run, metric: "docs" | "time"): Array<Point> {
   return scales.flatMap((scale): Array<Point> => {
@@ -228,7 +227,7 @@ function dumbbell(): string {
   const top = scales[scales.length - 1] ?? 1;
   const rows = caseNames
     .map((name) => ({ name, b: get("before", top, name), a: get("after", top, name) }))
-    .sort((x, y) => (y.b?.docs ?? DOC_LIMIT * 2) - (x.b?.docs ?? DOC_LIMIT * 2) || (y.b?.failed ?? 0) - (x.b?.failed ?? 0));
+    .sort((x, y) => (y.b?.docs ?? 1e7) - (x.b?.docs ?? 1e7) || (y.b?.failed ?? 0) - (x.b?.failed ?? 0));
   const rowH = 20;
   const left = 250;
   const width = 900;
@@ -238,7 +237,6 @@ function dumbbell(): string {
   for (const t of [1, 10, 100, 1e3, 1e4, 1e5, 1e6]) {
     parts.push(`<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="10" y2="${height - 24}"/><text class="tick" x="${x(t)}" y="${height - 8}" text-anchor="middle">${compact(t)}</text>`);
   }
-  parts.push(`<line class="limit" x1="${x(DOC_LIMIT)}" x2="${x(DOC_LIMIT)}" y1="10" y2="${height - 24}"/><text class="tick" x="${x(DOC_LIMIT) + 4}" y="20">Convex limit 32K</text>`);
   const FAIL_X = width - 40;
   rows.forEach((r, i) => {
     const cy = 30 + i * rowH;
@@ -314,16 +312,16 @@ const failingBefore = caseNames.filter((n) => (get("before", top, n)?.ok ?? 1) =
 const failingAfter = after ? caseNames.filter((n) => (get("after", top, n)?.ok ?? 1) === 0) : [];
 const overLimitBefore = caseNames.filter((n) => {
   const s = get("before", top, n);
-  return s !== undefined && (s.ok === 0 || (s.docs ?? 0) > DOC_LIMIT / 4);
+  return s !== undefined && (s.ok === 0 || (s.docs ?? 0) > 4096);
 });
 const significant = tests.filter((t) => t.adjusted < 0.05 && t.delta > 0).length;
 
 const tiles = [
   ["Queries tested", String(caseNames.length)],
-  ["Samples per query per scale", before.scales.map((s) => `${s.samples ?? before.samplesPerCase} @${s.scale}×`).join(", ")],
+  ["Samples per query (before, by scale)", before.scales.map((s) => `${Math.max(...s.cases.map((c) => c.samples.length))} @${s.scale}×`).join(", ")],
   [`Fail at ${top}× before`, String(failingBefore.length)],
   ...(after ? [[`Fail at ${top}× after`, String(failingAfter.length)], ["Significantly faster (Holm p<0.05)", `${significant} / ${tests.length}`]] : []),
-  [`Read >8K docs or fail at ${top}× before`, String(overLimitBefore.length)],
+  [`Read >4K docs or fail at ${top}× before`, String(overLimitBefore.length)],
 ];
 
 function afterSeries(name: string, metric: "docs" | "time"): { run: Run; points: Array<Point> } {
@@ -337,7 +335,7 @@ const smallMultiples = caseNames
       ...(after ? [afterSeries(name, metric)] : []),
     ];
     return `<section class="case"><h3>${esc(name)} <span class="muted">${esc(surfaceByCase.get(name) ?? "")}</span></h3><div class="pair">
-      ${miniChart("Documents read", "median, log scale", series("docs"), DOC_LIMIT)}
+      ${miniChart("Documents read", "median, log scale", series("docs"))}
       ${miniChart("Server time", "median ms, 95% CI band, log scale", series("time"))}
     </div></section>`;
   })
@@ -391,7 +389,7 @@ p.note{color:var(--text-secondary);max-width:900px}
   <span><svg width="22" height="10"><line x1="0" x2="22" y1="5" y2="5" stroke="var(--series-1)" stroke-width="2"/><circle cx="11" cy="5" r="4" fill="var(--series-1)"/></svg>Before (circle)</span>
   ${after ? `<span><svg width="22" height="10"><line x1="0" x2="22" y1="5" y2="5" stroke="var(--series-2)" stroke-width="2"/><rect x="7" y="1" width="8" height="8" fill="var(--series-2)"/></svg>After (square)</span>` : ""}
   <span><svg width="12" height="12"><path d="M2,2 l8,8 M10,2 l-8,8" stroke="var(--critical)" stroke-width="2.5"/></svg>Query failed (hover for the error)</span>
-  <span><svg width="22" height="10"><line x1="0" x2="22" y1="5" y2="5" stroke="var(--critical)" stroke-width="1"/></svg>Convex limit: 32,000 documents scanned per function</span>
+  <span>Convex limits seen: 4,096 reads per function, 16 MiB read, 8,192-item return array, system-operation timeout</span>
 </div>
 
 <h2>Documents read per query at ${top}×</h2>

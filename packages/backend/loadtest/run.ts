@@ -88,20 +88,32 @@ class LogStream {
     this.cursor = (await this.page()).newCursor;
   }
 
-  /** Completed public query executions since the last call, in order. */
-  async drainQueries(expected: number): Promise<Array<LogEntry>> {
-    const out: Array<LogEntry> = [];
-    for (let attempt = 0; attempt < 40 && out.length < expected; attempt++) {
+  private buffer: Array<LogEntry> = [];
+
+  /**
+   * The log entry for the call that just returned. Calls run one at a time,
+   * so the next completed public query with this identifier is that call;
+   * strays (a late entry from a timed-out wait) are skipped. Matching per
+   * call, not per round, stops a slow log at 1000× from shifting every later
+   * sample.
+   */
+  async nextQuery(identifier: string, timeoutMs: number): Promise<LogEntry | undefined> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      while (this.buffer.length > 0) {
+        const entry = this.buffer.shift();
+        if (entry?.identifier === identifier) return entry;
+      }
       const page = await this.page();
       this.cursor = page.newCursor;
-      for (const entry of page.entries) {
-        if (entry.kind === "Completion" && entry.udfType === "Query" && entry.caller === "HttpApi") {
-          out.push(entry);
-        }
-      }
-      if (out.length < expected) await sleep(100);
+      this.buffer.push(
+        ...page.entries.filter(
+          (e) => e.kind === "Completion" && e.udfType === "Query" && e.caller === "HttpApi",
+        ),
+      );
+      if (this.buffer.length === 0) await sleep(50);
     }
-    return out;
+    return undefined;
   }
 }
 
@@ -122,7 +134,8 @@ async function probeScale(client: AdminClient, adminKey: string, refs: SeedRefs)
   for (let round = 0; round < WARMUP + SAMPLES; round++) {
     // Shuffle per round so drift (GC, compaction, crons) spreads evenly.
     const order = [...cases].sort(() => rand() - 0.5);
-    const pending: Array<{ name: string; identifier: string; clientMs: number; error: string | null }> = [];
+    let callMs = 0;
+    let drainMs = 0;
     for (const queryCase of order) {
       // A fresh token identifier per call defeats the query cache, so every
       // sample is a real execution. `subject` still resolves the focal user.
@@ -140,17 +153,13 @@ async function probeScale(client: AdminClient, adminKey: string, refs: SeedRefs)
       } catch (e) {
         error = firstLine(e instanceof Error ? e.message : String(e));
       }
-      pending.push({ name: queryCase.name, identifier: queryCase.functionName, clientMs: performance.now() - started, error });
-    }
-    const callsDone = performance.now();
-    const entries = await logs.drainQueries(pending.length);
-    const drainMs = performance.now() - callsDone;
-    if (round < WARMUP) continue;
-    pending.forEach((p, index) => {
-      const entry = entries[index];
-      const matched = entry?.identifier === p.identifier ? entry : undefined;
+      const clientMs = performance.now() - started;
+      const matched = await logs.nextQuery(queryCase.functionName, 120_000);
+      drainMs += performance.now() - started - clientMs;
+      callMs += clientMs;
+      if (round < WARMUP) continue;
       const sample: Sample = {
-        clientMs: p.clientMs,
+        clientMs,
         serverMs: typeof matched?.executionTime === "number" ? matched.executionTime * 1000 : null,
         userMs: typeof matched?.userExecutionTime === "number" ? matched.userExecutionTime * 1000 : null,
         docsRead: matched?.usageStats?.databaseReadDocuments ?? null,
@@ -158,12 +167,12 @@ async function probeScale(client: AdminClient, adminKey: string, refs: SeedRefs)
         returnBytes: matched?.returnBytes ?? null,
         memoryMb: matched?.usageStats?.memoryUsedMb ?? null,
         cached: matched?.cachedResult ?? null,
-        error: p.error,
+        error,
       };
-      results.get(p.name)?.samples.push(sample);
-    });
-    const callMs = pending.reduce((sum, p) => sum + p.clientMs, 0);
-    process.stdout.write(`  round ${round + 1 - WARMUP}/${SAMPLES} (calls ${(callMs / 1000).toFixed(1)}s, log drain ${(drainMs / 1000).toFixed(1)}s)\r`);
+      results.get(queryCase.name)?.samples.push(sample);
+    }
+    if (round < WARMUP) continue;
+    process.stdout.write(`  round ${round + 1 - WARMUP}/${SAMPLES} (calls ${(callMs / 1000).toFixed(1)}s, log wait ${(drainMs / 1000).toFixed(1)}s)\r`);
   }
   process.stdout.write("\n");
   return [...results.values()];
