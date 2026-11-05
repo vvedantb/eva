@@ -15,6 +15,10 @@ import {
 } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
 import {
+  annotationSender,
+  type AnnotationSubmit,
+} from "@/lib/components/sandbox/annotationSend";
+import {
   projectChatModel,
   useProjectChatAccounts,
 } from "./ProjectSandboxChatPanel";
@@ -27,7 +31,7 @@ import { projectStoredTraits } from "./useProjectTraits";
  */
 export function useProjectAnnotationSend(
   projectId: Id<"projects">,
-): (display: string, full: string) => Promise<void> {
+): AnnotationSubmit {
   const { repo } = useRepo();
   const project = useQuery(api.projects.get, { id: projectId });
   const model = projectChatModel(project, repo.defaultModel);
@@ -51,44 +55,39 @@ export function useProjectAnnotationSend(
   );
   const enqueueMessage = useMutation(api.projectChatWorkflow.enqueueMessage);
 
-  return async (display: string, full: string) => {
-    const accountId = resolveAccountId(providerAccountId);
-    const reasoningLevel = displayTraits.effortLevel;
-    if (isExecuting) {
-      await enqueueMessage({
+  return annotationSender({
+    isExecuting,
+    enqueue: (display, full) =>
+      enqueueMessage({
         projectId,
         message: full,
         displayContent: display,
         model,
         ...executionTraits,
-        reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: accountId,
-      });
-      return;
-    }
-    await Promise.all([
-      addMessage({
-        projectId,
-        content: display,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel,
+        reasoningLevel:
+          displayTraits.effortLevel ?? executionTraits.reasoningLevel,
+        providerAccountId: resolveAccountId(providerAccountId),
       }),
-      startExecute({
-        projectId,
-        message: full,
-        model,
-        ...executionTraits,
-        providerAccountId: accountId,
-      }),
-    ]).catch(async (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send annotation";
-      await addMessage({
-        projectId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
-      });
-    });
-  };
+    send: async (display, full) => {
+      const accountId = resolveAccountId(providerAccountId);
+      await Promise.all([
+        addMessage({
+          projectId,
+          content: display,
+          providerAccountId: accountId,
+          model,
+          reasoningLevel: displayTraits.effortLevel,
+        }),
+        startExecute({
+          projectId,
+          message: full,
+          model,
+          ...executionTraits,
+          providerAccountId: accountId,
+        }),
+      ]);
+    },
+    postError: (content) =>
+      addMessage({ projectId, role: "assistant", content }),
+  });
 }

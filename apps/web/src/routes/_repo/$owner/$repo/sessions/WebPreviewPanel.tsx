@@ -25,6 +25,7 @@ import {
   usePreviewMiniPlayer,
   type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -79,7 +80,7 @@ interface WebPreviewPanelProps {
    * Submit compact display + rich agent prompt for a preview annotation into
    * the owner's chat. When absent, the select-element toggle is hidden.
    */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
+  onAnnotationSubmit?: AnnotationSubmit;
   /**
    * Set while this pane is the visible preview: lets it float into the
    * mini-player when the user leaves the preview or pops it out.

@@ -23,6 +23,7 @@ import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
 import type { PreviewMiniPlayerSource } from "./previewMiniPlayerStore";
+import type { AnnotationSubmit } from "./annotationSend";
 import {
   isSimpleViewHiddenSandboxTab,
   useSimpleView,
@@ -60,10 +61,18 @@ interface SandboxPaneSlotsProps {
   /** Preview empty state Start button when sandbox is stopped. */
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
+  /*
+   * Preview tools every surface must wire (session, quick task, project).
+   * Required on purpose: an optional prop here let one surface silently lose
+   * menu items. Add a new preview tool as a required prop too.
+   */
   /** Preview select-element → owner chat submit. */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
-  /** The visible preview may float into the mini-player. */
-  miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
+  onAnnotationSubmit: AnnotationSubmit;
+  /**
+   * The visible preview may float into the mini-player. `undefined` only
+   * while this pane is not on screen (collapsed rail, cached sibling).
+   */
+  miniPlayer: Omit<PreviewMiniPlayerSource, "sandboxId"> | undefined;
   /**
    * Multi-repo sessions: the dev-server port of each checked-out repo, offered
    * beside the Preview port input. Omitted for a single-repo surface.

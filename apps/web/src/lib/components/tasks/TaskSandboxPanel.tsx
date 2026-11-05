@@ -63,7 +63,7 @@ interface TaskSandboxPanelProps {
   collapsed?: boolean;
   onToggle?: () => void;
   /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
-  miniPlayer?: { returnTo: string; title: string };
+  miniPlayer: { returnTo: string; title: string } | undefined;
 }
 
 /**

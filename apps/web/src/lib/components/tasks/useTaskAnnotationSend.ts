@@ -9,6 +9,10 @@ import {
   useChatTurnOpen,
 } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
+import {
+  annotationSender,
+  type AnnotationSubmit,
+} from "@/lib/components/sandbox/annotationSend";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
 import { useTaskChatModelSettings } from "./TaskSandboxChatPanel";
 
@@ -19,7 +23,7 @@ import { useTaskChatModelSettings } from "./TaskSandboxChatPanel";
  */
 export function useTaskAnnotationSend(
   taskId: Id<"agentTasks">,
-): (display: string, full: string) => Promise<void> {
+): AnnotationSubmit {
   const { repo } = useRepo();
   const task = useQuery(api.agentTasks.get, { id: taskId });
   const {
@@ -52,44 +56,38 @@ export function useTaskAnnotationSend(
   );
   const enqueueMessage = useMutation(api.agentTaskChatWorkflow.enqueueMessage);
 
-  return async (display: string, full: string) => {
-    const accountId = resolveAccountId(providerAccountId);
-    const reasoningLevel = displayTraits.effortLevel;
-    if (isExecuting) {
-      await enqueueMessage({
+  return annotationSender({
+    isExecuting,
+    enqueue: (display, full) =>
+      enqueueMessage({
         taskId,
         message: full,
         displayContent: display,
         model,
         ...executionTraits,
-        reasoningLevel: reasoningLevel ?? executionTraits.reasoningLevel,
-        providerAccountId: accountId,
-      });
-      return;
-    }
-    await Promise.all([
-      addMessage({
-        taskId,
-        content: display,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel,
+        reasoningLevel:
+          displayTraits.effortLevel ?? executionTraits.reasoningLevel,
+        providerAccountId: resolveAccountId(providerAccountId),
       }),
-      startExecute({
-        taskId,
-        message: full,
-        model,
-        ...executionTraits,
-        providerAccountId: accountId,
-      }),
-    ]).catch(async (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send annotation";
-      await addMessage({
-        taskId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
-      });
-    });
-  };
+    send: async (display, full) => {
+      const accountId = resolveAccountId(providerAccountId);
+      await Promise.all([
+        addMessage({
+          taskId,
+          content: display,
+          providerAccountId: accountId,
+          model,
+          reasoningLevel: displayTraits.effortLevel,
+        }),
+        startExecute({
+          taskId,
+          message: full,
+          model,
+          ...executionTraits,
+          providerAccountId: accountId,
+        }),
+      ]);
+    },
+    postError: (content) => addMessage({ taskId, role: "assistant", content }),
+  });
 }

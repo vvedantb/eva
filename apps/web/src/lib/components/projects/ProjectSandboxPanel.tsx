@@ -62,7 +62,7 @@ interface ProjectSandboxPanelProps {
   collapsed?: boolean;
   onToggle?: () => void;
   /** Mini-player title; Expand returns to this project's Preview tab. */
-  title?: string;
+  title: string;
 }
 
 export function ProjectSandboxPanel({
@@ -265,7 +265,7 @@ export function ProjectSandboxPanel({
               presenceEnabled={!collapsed}
               // A collapsed rail keeps its preview parked.
               miniPlayer={
-                projectPathSegment && title !== undefined && !collapsed
+                projectPathSegment && !collapsed
                   ? {
                       owner: { kind: "project", projectId },
                       returnTo: `${basePath}/projects/${projectPathSegment}/sandbox/preview`,
