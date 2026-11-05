@@ -12,6 +12,10 @@ import {
   openChatTurnOptimistically,
 } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
+import {
+  annotationSender,
+  type AnnotationSubmit,
+} from "@/lib/components/sandbox/annotationSend";
 
 /**
  * Sends an annotation as chat display text + rich agent prompt into the
@@ -22,7 +26,7 @@ export function useSessionAnnotationSend(
   sessionId: Id<"sessions">,
   chatId: Id<"sessionChats">,
   isRouteActive = true,
-): (display: string, full: string) => Promise<void> {
+): AnnotationSubmit {
   const { repo } = useRepo();
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // Model + traits + account are owned by Convex.
@@ -40,8 +44,10 @@ export function useSessionAnnotationSend(
     });
   // Owner-scoped, matching the composer picker — resolving against the
   // viewer's own accounts would drop the sticky account to Team.
-  const { resolveId: resolveAccountId } =
-    useSessionOwnerProviderAccounts(sessionId, isRouteActive);
+  const { resolveId: resolveAccountId } = useSessionOwnerProviderAccounts(
+    sessionId,
+    isRouteActive,
+  );
 
   const messages = useHeldQuery(
     api.messages.listByParent,
@@ -64,46 +70,40 @@ export function useSessionAnnotationSend(
     messages,
   });
 
-  return async (display: string, full: string) => {
-    const accountId = resolveAccountId(providerAccountId);
-    const reasoningLevel = displayTraits.effortLevel;
-    if (isExecuting) {
-      await enqueueMessage({
+  return annotationSender({
+    isExecuting,
+    enqueue: (display, full) =>
+      enqueueMessage({
         chatId,
         message: full,
         displayContent: display,
         model,
         ...executionTraits,
-        reasoningLevel,
-        providerAccountId: accountId,
-      });
-      return;
-    }
-    await Promise.all([
-      addMessage({
-        chatId,
-        role: "user",
-        content: display,
-        providerAccountId: accountId,
-        model,
-        reasoningLevel,
+        reasoningLevel: displayTraits.effortLevel,
+        providerAccountId: resolveAccountId(providerAccountId),
       }),
-      startExecution({
-        chatId,
-        message: full,
-        model,
-        ...executionTraits,
-        reasoningLevel,
-        providerAccountId: accountId,
-      }),
-    ]).catch(async (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to send annotation";
-      await addMessage({
-        chatId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
-      });
-    });
-  };
+    send: async (display, full) => {
+      const accountId = resolveAccountId(providerAccountId);
+      const reasoningLevel = displayTraits.effortLevel;
+      await Promise.all([
+        addMessage({
+          chatId,
+          role: "user",
+          content: display,
+          providerAccountId: accountId,
+          model,
+          reasoningLevel,
+        }),
+        startExecution({
+          chatId,
+          message: full,
+          model,
+          ...executionTraits,
+          reasoningLevel,
+          providerAccountId: accountId,
+        }),
+      ]);
+    },
+    postError: (content) => addMessage({ chatId, role: "assistant", content }),
+  });
 }

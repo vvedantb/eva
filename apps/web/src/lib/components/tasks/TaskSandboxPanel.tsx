@@ -18,6 +18,7 @@ import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useTaskAnnotationSend } from "./useTaskAnnotationSend";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -61,6 +62,8 @@ interface TaskSandboxPanelProps {
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
+  miniPlayer: { returnTo: string; title: string } | undefined;
 }
 
 /**
@@ -90,9 +93,11 @@ export function TaskSandboxPanel({
   autoWakeEligible,
   collapsed = false,
   onToggle,
+  miniPlayer,
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
   const taskIdStr = String(taskId);
+  const submitAnnotation = useTaskAnnotationSend(taskId);
 
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
   // panel already subscribes to (same entity ids).
@@ -235,8 +240,15 @@ export function TaskSandboxPanel({
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
             autoWakeEligible={autoWakeEligible}
+            onAnnotationSubmit={submitAnnotation}
             // A collapsed rail is not on screen: no presence beacon, no auto-wake.
             presenceEnabled={!collapsed}
+            // A collapsed rail keeps its preview parked.
+            miniPlayer={
+              miniPlayer !== undefined && !collapsed
+                ? { ...miniPlayer, owner: { kind: "task", taskId } }
+                : undefined
+            }
             stickyPreviewPath={viewState?.previewPath}
             onStickyPreviewPathChange={(path) => {
               void setPreviewPath({ owner, path });

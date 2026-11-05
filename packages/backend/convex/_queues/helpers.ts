@@ -798,7 +798,7 @@ const projectChatQueueConfig: ChatQueueConfig<
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
-      content: next.content,
+      content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
@@ -912,7 +912,7 @@ const taskChatQueueConfig: ChatQueueConfig<
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
-      content: next.content,
+      content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,

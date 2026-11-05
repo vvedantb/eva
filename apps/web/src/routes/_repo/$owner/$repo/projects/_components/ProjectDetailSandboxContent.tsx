@@ -76,6 +76,7 @@ export function ProjectDetailSandboxContent({
       <ProjectSandboxPanel
         projectId={projectId}
         projectNumId={projectNumId}
+        title={project.title}
         sandboxId={projectSandboxId}
         isActive={isSandboxActive}
         repoId={repoId}

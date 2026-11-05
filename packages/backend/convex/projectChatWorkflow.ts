@@ -609,6 +609,8 @@ export const enqueueMessage = authMutation({
   args: {
     projectId: v.id("projects"),
     message: v.string(),
+    /** Compact chat-display text when `message` is a rich agent prompt. */
+    displayContent: v.optional(v.string()),
     model: aiModelValidator,
     reasoningLevel: v.optional(reasoningLevelValidator),
     thinkingEnabled: v.optional(v.boolean()),
@@ -621,6 +623,7 @@ export const enqueueMessage = authMutation({
   handler: async (ctx, args) => {
     const content = args.message.trim();
     if (!content) return null;
+    const displayContent = args.displayContent?.trim() || undefined;
 
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
@@ -645,7 +648,7 @@ export const enqueueMessage = authMutation({
     });
 
     await notifyChatMentions(ctx, {
-      content,
+      content: displayContent ?? content,
       authorUserId: ctx.userId,
       surface: { kind: "project", project },
     });
@@ -653,6 +656,7 @@ export const enqueueMessage = authMutation({
     await enqueueProjectChatMessage(ctx, project, {
       ...args,
       message: content,
+      displayContent,
       userId: ctx.userId,
       resolvedProviderAccountId: providerAccountId,
     });
@@ -666,6 +670,7 @@ async function enqueueProjectChatMessage(
   project: Doc<"projects">,
   args: {
     message: string;
+    displayContent?: string;
     userId: Id<"users">;
     model: Infer<typeof aiModelValidator>;
     reasoningLevel?: Doc<"queuedMessages">["reasoningLevel"];
@@ -680,6 +685,7 @@ async function enqueueProjectChatMessage(
   await ctx.db.insert("queuedMessages", {
     parentId: project._id,
     content: args.message,
+    displayContent: args.displayContent,
     createdAt: Date.now(),
     order: Date.now(),
     userId: args.userId,

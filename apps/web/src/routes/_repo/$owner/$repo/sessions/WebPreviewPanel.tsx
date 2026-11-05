@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { Spinner, Button, WebPreview, useMediaQuery } from "@vvedantb/ui";
 import { useSessionStorage } from "usehooks-ts";
@@ -24,7 +23,9 @@ import {
   closePreviewMiniPlayer,
   openPreviewMiniPlayer,
   usePreviewMiniPlayer,
+  type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -76,19 +77,15 @@ interface WebPreviewPanelProps {
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
-   * Session-only: submit compact display + rich agent prompt for a preview
-   * annotation. When absent, the select-element toggle is hidden.
+   * Submit compact display + rich agent prompt for a preview annotation into
+   * the owner's chat. When absent, the select-element toggle is hidden.
    */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
+  onAnnotationSubmit?: AnnotationSubmit;
   /**
-   * Session-only, set while this pane is the visible preview: lets it float
-   * into the mini-player when the user leaves the sessions area or pops it out.
+   * Set while this pane is the visible preview: lets it float into the
+   * mini-player when the user leaves the preview or pops it out.
    */
-  miniPlayer?: {
-    sessionId: Id<"sessions">;
-    returnTo: string;
-    title: string;
-  };
+  miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
   /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
 }

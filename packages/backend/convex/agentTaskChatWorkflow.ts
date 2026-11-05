@@ -633,6 +633,8 @@ export const enqueueMessage = authMutation({
   args: {
     taskId: v.id("agentTasks"),
     message: v.string(),
+    /** Compact chat-display text when `message` is a rich agent prompt. */
+    displayContent: v.optional(v.string()),
     model: aiModelValidator,
     reasoningLevel: v.optional(reasoningLevelValidator),
     thinkingEnabled: v.optional(v.boolean()),
@@ -647,6 +649,7 @@ export const enqueueMessage = authMutation({
   handler: async (ctx, args) => {
     const content = args.message.trim();
     if (!content) return null;
+    const displayContent = args.displayContent?.trim() || undefined;
 
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
@@ -674,7 +677,7 @@ export const enqueueMessage = authMutation({
     });
 
     await notifyChatMentions(ctx, {
-      content,
+      content: displayContent ?? content,
       authorUserId: ctx.userId,
       surface: { kind: "task", task },
     });
@@ -682,6 +685,7 @@ export const enqueueMessage = authMutation({
     await enqueueTaskChatMessage(ctx, task, {
       ...args,
       message: content,
+      displayContent,
       userId: ctx.userId,
       resolvedProviderAccountId: providerAccountId,
     });
@@ -695,6 +699,7 @@ async function enqueueTaskChatMessage(
   task: Doc<"agentTasks">,
   args: {
     message: string;
+    displayContent?: string;
     userId: Id<"users">;
     model: Infer<typeof aiModelValidator>;
     reasoningLevel?: Doc<"queuedMessages">["reasoningLevel"];
@@ -710,6 +715,7 @@ async function enqueueTaskChatMessage(
   await ctx.db.insert("queuedMessages", {
     parentId: task._id,
     content: args.message,
+    displayContent: args.displayContent,
     createdAt: Date.now(),
     order: Date.now(),
     userId: args.userId,

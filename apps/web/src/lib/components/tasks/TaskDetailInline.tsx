@@ -7,7 +7,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { Badge, Spinner, tokenTransition, useRequestConfirm } from "@vvedantb/ui";
+import {
+  Badge,
+  Spinner,
+  tokenTransition,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
@@ -54,6 +59,7 @@ import type { UseTaskDetailRouting } from "./useTaskDetailControls";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useRepo } from "@/lib/contexts/RepoContext";
 
 interface TaskDetailInlineProps {
   onClose: () => void;
@@ -68,6 +74,7 @@ export function TaskDetailInline({
   routing,
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
+  const { basePath } = useRepo();
   const [embeddedSandboxTab, setEmbeddedSandboxTab] =
     useState<SandboxTab>("preview");
   /** Which detail pane is on screen below `md`; both show at `md` and up. */
@@ -292,6 +299,14 @@ export function TaskDetailInline({
         }
         collapsed={collapsed}
         onToggle={onToggle}
+        miniPlayer={
+          isQuickTask && task.numId !== undefined
+            ? {
+                returnTo: `${basePath}/quick-tasks/${task.numId}/sandbox/preview`,
+                title: task.title,
+              }
+            : undefined
+        }
       />
     ) : (
       <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
