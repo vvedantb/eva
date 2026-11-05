@@ -11,7 +11,7 @@ import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
 const HELPER_SCRIPT_PATH = "/home/eva/.local/bin/git-credential-eva";
 const HELPER_CONFIG_DIR = "/home/eva/.config/eva";
-const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
+export const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
 
 // Repositories that may have a URL-embedded GitHub token in `.git/config` from
 // either a legacy clone or a baked snapshot. We scrub each on every helper
@@ -28,7 +28,7 @@ const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 // owner can reach in eva. A short file cache, keyed by repository so tokens
 // never cross installations, trims duplicate mints during a single git
 // operation (clone/fetch/push fan out into several helper invocations).
-const HELPER_SCRIPT = `#!/usr/bin/env bash
+export const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
 
 if [ "\${1:-}" != "get" ]; then
