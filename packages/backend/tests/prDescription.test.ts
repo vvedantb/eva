@@ -4,6 +4,7 @@ import {
   PR_DESCRIPTION_END,
   PR_DESCRIPTION_START,
   buildPrDescriptionPrompt,
+  PR_AUTHORSHIP_LINE,
   cleanPrDescription,
   insertPrDescription,
   stripPrDescription,
@@ -70,14 +71,20 @@ test("stripPrDescription removes the block and leaves the static body", () => {
 
 test("cleanPrDescription unwraps a whole-answer fence and bounds length", () => {
   expect(cleanPrDescription("```markdown\n### Why\nx\n```")).toBe(
-    "### Why\nx",
+    `${PR_AUTHORSHIP_LINE}\n\n### Why\nx`,
   );
   expect(cleanPrDescription("  ### Why\nx  ")).toBe(
-    "### Why\nx",
+    `${PR_AUTHORSHIP_LINE}\n\n### Why\nx`,
   );
   const long = cleanPrDescription("a".repeat(10_000));
-  expect(long.length).toBeLessThan(6_100);
+  expect(long.length).toBeLessThan(6_200);
   expect(long.endsWith("_Description truncated._")).toBe(true);
+});
+
+test("cleanPrDescription leads with the authorship line and keeps empty answers empty", () => {
+  expect(cleanPrDescription("### Why\nx").startsWith(PR_AUTHORSHIP_LINE)).toBe(true);
+  expect(cleanPrDescription("  ")).toBe("");
+  expect(cleanPrDescription("```\n\n```")).toBe("");
 });
 
 test("buildPrDescriptionPrompt asks for the template sections and forbids invention", () => {
@@ -91,9 +98,12 @@ test("buildPrDescriptionPrompt asks for the template sections and forbids invent
     truncated: true,
   });
 
-  for (const heading of ["Why", "Scope", "Tradeoffs", "Blast radius", "Verification"]) {
-    expect(prompt).toContain(`### ${heading}`);
-  }
+  // Order matters: reviewers stop early, so evidence comes before details.
+  const headings = ["Why", "Scope", "Verification", "Tradeoffs", "Blast radius", "ELI5"];
+  const positions = headings.map((heading) => prompt.indexOf(`### ${heading}`));
+  expect(positions.every((position) => position >= 0)).toBe(true);
+  expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  expect(prompt).toContain("**Not checked:**");
   expect(prompt).toContain("Never invent names");
   expect(prompt).toContain("diff truncated");
   expect(prompt).toContain("## Intent (from Eva)\n## Task\nShip the toggle");
