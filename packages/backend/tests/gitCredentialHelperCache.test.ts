@@ -14,6 +14,7 @@ import {
   HELPER_CONFIG_PATH,
   HELPER_SCRIPT,
 } from "../convex/_sandbox_runtime/gitCredentials";
+import { toSandboxGitCredential } from "../convex/githubAuth";
 
 /**
  * PR #1084. The in-sandbox git credential helper cached every token for a
@@ -150,6 +151,24 @@ bashDescribe("git credential helper caches to the token's real expiry", () => {
 
     expect(runHelper()).toContain("password=ghs_new");
     expect(curlCalls()).toBe(1);
+  });
+
+  test("the backend's credential shape drives the helper's cache", () => {
+    // GitHub sends an ISO expiry; the helper compares unix seconds. A backend
+    // that sent milliseconds would make a near-dead token look valid for ages.
+    const isoIn = (seconds: number) =>
+      new Date((nowSeconds() + seconds) * 1000).toISOString();
+
+    respond(toSandboxGitCredential({ token: "ghs_old", expiresAt: isoIn(240) }));
+    expect(runHelper()).toContain("password=ghs_old");
+    expect(existsSync(cacheFile())).toBe(false);
+
+    respond(
+      toSandboxGitCredential({ token: "ghs_fresh", expiresAt: isoIn(3600) }),
+    );
+    expect(runHelper()).toContain("password=ghs_fresh");
+    expect(runHelper()).toContain("password=ghs_fresh");
+    expect(curlCalls()).toBe(2);
   });
 
   test("a response without expiresAt is not cached", () => {
