@@ -8,6 +8,7 @@ Same rules as `CLAUDE.md`. Domain details live in the two docs below — read th
 - If already on main and the user asks to ship: commit and push directly to main.
 - Prefer `/preflight` occasionally over husky commit/push gates (hooks under `.husky/` are commented out).
 - Plans: final step is `/ship` unless the user says not to.
+- Before you open a PR or write its description, load the `pr-writing` skill and follow it.
 
 ## Always
 

@@ -265,6 +265,13 @@
       "skillPath": "skills/pick-ui-library/SKILL.md",
       "computedHash": "1a0a6819d13fb5361cf5cdc923f46a1effc37cb61ecb908419eedb0e11f428fe"
     },
+    "pr-writing": {
+      "source": "hugorcd.com",
+      "sourceUrl": "https://hugorcd.com",
+      "sourceType": "well-known",
+      "computedHash": "3a50e00dae141dfd1c6122ef1ed72e0923b13658f427ade2c8f797e93490f0b0",
+      "wellKnownDigest": "sha256:e601463391c7b82e8e53045c5b812616db5521e61e2bf3b9c507fbaabc5e7f85"
+    },
     "prototype": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
