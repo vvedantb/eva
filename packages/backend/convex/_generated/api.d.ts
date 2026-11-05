@@ -142,6 +142,7 @@ import type * as _harnessSkills_report from "../_harnessSkills/report.js";
 import type * as _jev_answers from "../_jev/answers.js";
 import type * as _jev_client from "../_jev/client.js";
 import type * as _jev_jsonValue from "../_jev/jsonValue.js";
+import type * as _loadTest_seed from "../_loadTest/seed.js";
 import type * as _logs_resolveProjectId from "../_logs/resolveProjectId.js";
 import type * as _logs_usage from "../_logs/usage.js";
 import type * as _logs_usageSummary from "../_logs/usageSummary.js";
@@ -699,6 +700,7 @@ declare const fullApi: ApiFromModules<{
   "_jev/answers": typeof _jev_answers;
   "_jev/client": typeof _jev_client;
   "_jev/jsonValue": typeof _jev_jsonValue;
+  "_loadTest/seed": typeof _loadTest_seed;
   "_logs/resolveProjectId": typeof _logs_resolveProjectId;
   "_logs/usage": typeof _logs_usage;
   "_logs/usageSummary": typeof _logs_usageSummary;
