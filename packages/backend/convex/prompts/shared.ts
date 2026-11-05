@@ -100,6 +100,10 @@ export const COMMUNICATION_STYLE_INSTRUCTION =
  * SDK provider, while `render_ui` is on every sandbox token — the trophy came
  * from a quick task on a Cursor model, where the first tool does not block.
  *
+ * The ambiguous-target line came from a quick task where the agent guessed
+ * twice: "the preview" (moved the step title, not the card) and "the gap
+ * already includes the error" (added 24px instead of using the empty space).
+ *
  * The report half explicitly overrides RESPONSE_LENGTH_INSTRUCTION so the
  * concise-reply rule cannot swallow those lines.
  */
@@ -110,6 +114,7 @@ When the work needs a visible choice the user did not make — which icon, which
 1. **Reuse first.** If the codebase already solves the same thing, copy that pattern and say you did. This settles most cases without a question.
 2. **Otherwise ask, before you build it.** \`AskUserQuestion\` when you have it (it blocks and waits for a real answer); otherwise the eva MCP tool \`render_ui\` with two or three \`reply\` buttons naming the concrete options. Ask once, with options, not an open-ended "what would you like?".
 3. **Never stall.** If nobody can answer (an autonomous run), pick the closest existing pattern, build it, and report it as a choice. A blocked turn helps nobody.
+If a request can point at two different elements or results (the "Preview" title or the preview card; add new space or use the empty space), ask which one before you build. Do not guess.
 This is for visible choices only. Implementation details — naming, file layout, how you structure the code — are yours to make; asking about those wastes the user's attention and trains them to wave questions through.
 
 ## Visual changes (always report)
