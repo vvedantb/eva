@@ -2,10 +2,13 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { CenteredSpinner } from "@vvedantb/ui";
 import { PageWrapper } from "@/lib/components/PageWrapper";
+import { LoadingSkeleton } from "@/lib/components/LoadingSkeleton";
 import { ArtifactList } from "@/lib/components/artifacts/ArtifactList";
 import { ArtifactUploadDialog } from "@/lib/components/artifacts/ArtifactUploadDialog";
+
+const EMPTY_DESCRIPTION =
+  "Upload a Cowork artifact HTML file to host it here. It runs live against the Eva MCP read-only tools.";
 
 /** Global Artifacts page: every artifact across the teams the user belongs to. */
 export function ArtifactsGlobalClient() {
@@ -24,14 +27,19 @@ export function ArtifactsGlobalClient() {
         </p>
         <ArtifactUploadDialog />
       </div>
-      {artifacts === undefined ? (
-        <CenteredSpinner label="Loading artifacts" className="min-h-80" />
-      ) : (
-        <ArtifactList
-          artifacts={artifacts}
-          emptyDescription="Upload a Cowork artifact HTML file to host it here. It runs live against the Eva MCP read-only tools."
-        />
-      )}
+      <LoadingSkeleton
+        id="artifacts-global"
+        data={artifacts}
+        label="Loading artifacts"
+        spinnerClassName="min-h-80"
+        empty={
+          <ArtifactList artifacts={[]} emptyDescription={EMPTY_DESCRIPTION} />
+        }
+      >
+        {(rows) => (
+          <ArtifactList artifacts={rows} emptyDescription={EMPTY_DESCRIPTION} />
+        )}
+      </LoadingSkeleton>
     </PageWrapper>
   );
 }
