@@ -1,0 +1,22 @@
+{
+  "envFile": ".env.local",
+  "network": "live",
+  "blockConvexWrites": true,
+  "hooks": "redline.hooks.mjs",
+  "seeds": [
+    "/vvedantb/eva/sessions",
+    "/vvedantb/eva/quick-tasks",
+    "/vvedantb/eva/projects"
+  ],
+  "hide": [
+    "[data-agentation-root]"
+  ],
+  "dataSnapshot": {
+    "file": ".redline/convex-snapshot.zip",
+    "convexDir": "../../packages/backend"
+  },
+  "exclude": [
+    "/agent-callback",
+    "/preview-auth"
+  ]
+}
