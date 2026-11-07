@@ -103,6 +103,50 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
 });
 
 /**
+ * Sessions 417 and 419: a turn held its sandbox for 2 hours waiting on an
+ * answer, then the cap killed it and the question was lost. Past the wait the
+ * poll releases the question instead; `release` still returns an answer that
+ * landed at the deadline.
+ */
+describe("pollForAnswer releases the question after the wait", () => {
+  async function pollWith(releaseAnswer: string | null) {
+    vi.resetModules();
+    const client = await import("../http/convexClient.js");
+    const calls: string[] = [];
+    // With no wait left the poll makes exactly one call: the release.
+    vi.mocked(client.callConvexWithRetry).mockImplementationOnce(
+      async (_type, path) => {
+        calls.push(path);
+        return {
+          status: "success",
+          value: {
+            answer: path === "pendingQuestions:release" ? releaseAnswer : null,
+          },
+        };
+      },
+    );
+    const { pollForAnswer } = await import("../runtime/pendingQuestion.js");
+    const outcome = await pollForAnswer(
+      "toolu_q",
+      new AbortController().signal,
+      0,
+    );
+    return { outcome, calls };
+  }
+
+  test("an unanswered question is released", async () => {
+    const { outcome, calls } = await pollWith(null);
+    expect(outcome).toEqual({ kind: "released" });
+    expect(calls).toEqual(["pendingQuestions:release"]);
+  });
+
+  test("an answer that lands at the deadline is still taken", async () => {
+    const { outcome } = await pollWith('{"Which?":"A"}');
+    expect(outcome).toEqual({ kind: "answered", answer: '{"Which?":"A"}' });
+  });
+});
+
+/**
  * Regression: task and project chats could not call any `mcp__eva__*` tool,
  * read-only ones included.
  *
