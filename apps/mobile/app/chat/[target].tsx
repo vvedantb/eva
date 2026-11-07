@@ -87,7 +87,8 @@ export default function ChatScreen() {
               )
               .map((message) => (
                 <Message key={message._id} from={message.role}>
-                  <MessageContent>
+                  {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. */}
+                  <MessageContent bubble="tint">
                     {message.role === "user" ? (
                       message.content
                     ) : (
