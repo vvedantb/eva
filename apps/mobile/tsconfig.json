@@ -1,11 +1,11 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": ["expo/tsconfig.base", "@vvedantb/config/tsconfig/react-native.json"],
   "compilerOptions": {
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    // Not the root base: its noUnused* flags also check native-ui, which
-    // ships TypeScript source. Unused code here is caught by oxlint instead.
+    // The shared @vvedantb/config preset with two backend-driven overrides:
+    // `api` types pull in packages/backend source, which uses ESNext + DOM
+    // APIs (Expo's own default lib) and is not written for unchecked indexes.
+    "lib": ["DOM", "ESNext"],
+    "noUncheckedIndexedAccess": false,
     "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]

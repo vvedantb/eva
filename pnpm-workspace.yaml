@@ -11,6 +11,7 @@ minimumReleaseAgeExclude:
   - "@vvedantb/ui"
   # Owner's React Native kit for apps/mobile (same as vmem).
   - "@vvedantb/native-ui"
+  - "@vvedantb/config"
   # @vvedantb/ui 0.17 imports @vvedantb/server (0.7.1, 2026-10-23) from its root.
   # Backend code mode also runs scripts in the shared sandbox from it.
   - "@vvedantb/server"
