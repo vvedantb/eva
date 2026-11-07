@@ -5,6 +5,7 @@ import type { TurnLane, TurnState } from "../validators";
 import {
   canTransitionTurn,
   isTerminalTurnState,
+  turnDeadline,
   turnExceededAbsoluteLimit,
   shouldWriteTurnLeaseRenewal,
   turnLeaseDurationMs,
@@ -42,6 +43,9 @@ export type CompletionTurnResolution =
   | { status: "current"; turn: Doc<"turns"> }
   | { status: "legacy" }
   | { status: "stale" };
+
+/** Turn error when the work cap closes it; question wait does not count. */
+const TURN_TIMEOUT_ERROR = "Turn exceeded the 2-hour limit";
 
 /** Every durable turn owner. The id's table picks the surface. */
 export type TurnEntityId = Doc<"turns">["entityId"];
@@ -81,6 +85,74 @@ export async function findOpenTurn(
       q.eq("entityId", entityId).eq("lane", lane).eq("open", true),
     )
     .first();
+}
+
+/**
+ * Time a chat turn spent paused on blocking questions: the answered waits
+ * already folded into the turn, plus the question still on the entity (up to
+ * its answer). Laned turns share the chat row but never own its question.
+ */
+export async function turnQuestionWaitMs(
+  ctx: QueryCtx,
+  turn: Doc<"turns">,
+  now: number,
+): Promise<number> {
+  let waitMs = turn.questionWaitMs ?? 0;
+  if (turn.lane !== undefined) return waitMs;
+  const rows = await ctx.db
+    .query("pendingQuestions")
+    .withIndex("by_entity", (q) => q.eq("entityId", turn.entityId))
+    .collect();
+  for (const row of rows) {
+    if (row.createdAt < turn.turnStartedAt) continue;
+    waitMs += (row.answeredAt ?? now) - row.createdAt;
+  }
+  return waitMs;
+}
+
+/**
+ * Folds one answered question's wait into the entity's open chat turn, before
+ * `pendingQuestions.claimAnswer` deletes the row that held its timestamps.
+ */
+export async function recordTurnQuestionWait(
+  ctx: MutationCtx,
+  entityId: string,
+  question: { createdAt: number; answeredAt?: number },
+  now: number,
+): Promise<void> {
+  const chatEntityId =
+    ctx.db.normalizeId("sessionChats", entityId) ??
+    ctx.db.normalizeId("agentTasks", entityId) ??
+    ctx.db.normalizeId("projects", entityId) ??
+    ctx.db.normalizeId("sessions", entityId);
+  if (!chatEntityId) return;
+  const turn = await findOpenTurn(ctx, chatEntityId);
+  if (!turn || question.createdAt < turn.turnStartedAt) return;
+  const waitMs = (question.answeredAt ?? now) - question.createdAt;
+  await ctx.db.patch(turn._id, {
+    questionWaitMs: (turn.questionWaitMs ?? 0) + Math.max(waitMs, 0),
+  });
+}
+
+/**
+ * Milliseconds left before the open turn bound to `workflowId` reaches its
+ * cap, question wait excluded. 0 when the cap has passed or no turn is open,
+ * so the 2-hour workflow backstop tears down only turns that used their work
+ * budget, and re-arms for a turn that spent part of it waiting on the user.
+ */
+export async function turnBackstopRemainingMs(
+  ctx: QueryCtx,
+  workflowId: string,
+  now: number,
+): Promise<number> {
+  const turn = await ctx.db
+    .query("turns")
+    .withIndex("by_workflow", (q) => q.eq("workflowId", workflowId))
+    .filter((q) => q.eq(q.field("open"), true))
+    .first();
+  if (!turn) return 0;
+  const waitMs = await turnQuestionWaitMs(ctx, turn, now);
+  return Math.max(turnDeadline(turn.turnStartedAt, waitMs) - now, 0);
 }
 
 export async function findOpenSessionTurn(
@@ -233,6 +305,7 @@ export async function advanceTurn(
     leaseExpiresAt: turnLeaseExpiry({
       state,
       turnStartedAt: turn.turnStartedAt,
+      questionWaitMs: turn.questionWaitMs,
       now,
     }),
     ...(patch.sandboxId !== undefined ? { sandboxId: patch.sandboxId } : {}),
@@ -254,6 +327,7 @@ export async function acquireTurnLease(
     leaseExpiresAt: turnLeaseExpiry({
       state,
       turnStartedAt: turn.turnStartedAt,
+      questionWaitMs: turn.questionWaitMs,
       now,
     }),
     ...(patch.sandboxId !== undefined ? { sandboxId: patch.sandboxId } : {}),
@@ -293,10 +367,9 @@ export async function renewTurnLease(
     return { status: "terminal", reason: "superseded" };
   }
   const now = Date.now();
-  if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
-    await closeTurn(ctx, turn, "error", {
-      error: "Turn exceeded the 2-hour limit",
-    });
+  const questionWaitMs = await turnQuestionWaitMs(ctx, turn, now);
+  if (turnExceededAbsoluteLimit(turn.turnStartedAt, now, questionWaitMs)) {
+    await closeTurn(ctx, turn, "error", { error: TURN_TIMEOUT_ERROR });
     return { status: "terminal", reason: "timeout" };
   }
   const state = turn.state === "finalizing" ? "finalizing" : "running";
@@ -323,6 +396,7 @@ export async function renewTurnLease(
   const leaseExpiresAt = turnLeaseExpiry({
     state,
     turnStartedAt: turn.turnStartedAt,
+    questionWaitMs,
     now,
   });
   await ctx.db.patch(turn._id, {
@@ -348,7 +422,7 @@ export async function renewTurnLease(
  * Extends an expired lease for a turn whose sandbox process the watchdog can
  * still see running. Stamps `silentSince` on the first grace cycle so the
  * reconciler can bound how long it keeps waiting; later cycles keep the
- * original stamp. The absolute 2-hour limit is enforced exactly as
+ * original stamp. The absolute cap (`turnDeadline`) is enforced exactly as
  * `renewTurnLease` does.
  */
 export async function graceExpiredTurnLease(
@@ -357,16 +431,16 @@ export async function graceExpiredTurnLease(
   now: number,
 ): Promise<void> {
   if (!turn.open || isTerminalTurnState(turn.state)) return;
-  if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
-    await closeTurn(ctx, turn, "error", {
-      error: "Turn exceeded the 2-hour limit",
-    });
+  const questionWaitMs = await turnQuestionWaitMs(ctx, turn, now);
+  if (turnExceededAbsoluteLimit(turn.turnStartedAt, now, questionWaitMs)) {
+    await closeTurn(ctx, turn, "error", { error: TURN_TIMEOUT_ERROR });
     return;
   }
   await ctx.db.patch(turn._id, {
     leaseExpiresAt: turnLeaseExpiry({
       state: turn.state,
       turnStartedAt: turn.turnStartedAt,
+      questionWaitMs,
       now,
     }),
     silentSince: turn.silentSince ?? now,

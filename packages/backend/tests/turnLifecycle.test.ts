@@ -3,12 +3,14 @@ import {
   TURN_FINALIZING_LEASE_MS,
   TURN_RUNNING_LEASE_MS,
   TURN_SILENT_ALIVE_GRACE_MS,
+  TURN_QUESTION_WAIT_CAP_MS,
   TURN_STARTUP_LEASE_MS,
   canTransitionTurn,
   expiredTurnLeaseDecision,
   isStreamingActivityStale,
   isTerminalTurnState,
   shouldWriteTurnLeaseRenewal,
+  turnDeadline,
   turnExceededAbsoluteLimit,
   turnLeaseDurationMs,
   turnLeaseExpiry,
@@ -63,6 +65,19 @@ describe("durable turn lifecycle", () => {
     expect(
       turnExceededAbsoluteLimit(STARTED_AT, STARTED_AT + RUN_TIMEOUT_MS),
     ).toBe(true);
+  });
+
+  test("question wait moves the deadline out, up to its cap", () => {
+    const hour = 60 * 60 * 1000;
+    expect(turnDeadline(STARTED_AT, hour)).toBe(
+      STARTED_AT + RUN_TIMEOUT_MS + hour,
+    );
+    expect(turnDeadline(STARTED_AT, 100 * hour)).toBe(
+      STARTED_AT + RUN_TIMEOUT_MS + TURN_QUESTION_WAIT_CAP_MS,
+    );
+    expect(
+      turnExceededAbsoluteLimit(STARTED_AT, STARTED_AT + RUN_TIMEOUT_MS, hour),
+    ).toBe(false);
   });
 
   test("skips lease writes while more than half the phase remains", () => {

@@ -7,8 +7,10 @@ import {
   graceExpiredTurnLease,
   openSessionChatTurn,
   openTurn,
+  recordTurnQuestionWait,
   renewTurnLease,
   findOpenTurn,
+  turnBackstopRemainingMs,
 } from "../convex/_chat/turnStore";
 import {
   TASK_CHAT_STREAM_PREFIX,
@@ -356,6 +358,61 @@ describe("turn lifecycle integration", () => {
     expect(turn?.error).toContain("2-hour limit");
     // No silent marker on a closed turn: nothing is waiting for it any more.
     expect(turn?.silentSince).toBeUndefined();
+  });
+
+  /**
+   * Sessions 417 and 419 lost turns that asked a question in their first
+   * minutes and then waited for the user until the 2-hour cap. Waiting on the
+   * user is not work: the open question and the answered ones both push the
+   * cap out, so neither the lease nor the workflow backstop closes the turn.
+   */
+  test("question wait does not count toward the 2-hour limit", async () => {
+    const { t, chatId, turnId } = await createSessionFixture();
+    const result = await t.run(async (ctx) => {
+      const now = Date.now();
+      const startedAt = now - RUN_TIMEOUT_MS - 60_000;
+      await ctx.db.patch(turnId, {
+        state: "running",
+        turnStartedAt: startedAt,
+        leaseExpiresAt: now - 1,
+        workflowId: "wf-question",
+        questionWaitMs: 30 * 60_000,
+      });
+      // Still waiting: asked 90 minutes ago.
+      await ctx.db.insert("pendingQuestions", {
+        entityId: String(chatId),
+        toolUseId: "toolu_wait",
+        payload: "{}",
+        createdAt: now - 90 * 60_000,
+      });
+      const turn = await ctx.db.get(turnId);
+      if (!turn) throw new Error("missing turn");
+      await graceExpiredTurnLease(ctx, turn, now);
+      return {
+        remainingMs: await turnBackstopRemainingMs(ctx, "wf-question", now),
+        turn: await ctx.db.get(turnId),
+      };
+    });
+
+    expect(result.turn?.open).toBe(true);
+    // 2h work + 30m answered + 90m open wait, started 2h01m ago.
+    expect(result.remainingMs).toBe(119 * 60_000);
+  });
+
+  test("an answered question's wait is folded into the open turn", async () => {
+    const { t, chatId, turnId } = await createSessionFixture();
+    const turn = await t.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.patch(turnId, { turnStartedAt: now - 20 * 60_000 });
+      await recordTurnQuestionWait(
+        ctx,
+        String(chatId),
+        { createdAt: now - 10 * 60_000, answeredAt: now - 60_000 },
+        now,
+      );
+      return await ctx.db.get(turnId);
+    });
+    expect(turn?.questionWaitMs).toBe(9 * 60_000);
   });
 
   /**

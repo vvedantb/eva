@@ -12,7 +12,7 @@ export const TURN_FINALIZING_LEASE_MS = 10 * 60 * 1000;
  * the agent process alive (or the probe itself is unreachable) before the turn
  * is finalised anyway. A frozen-but-alive daemon — a VM swapping hard under
  * parallel sub agents — used to lose its turn the moment its 2-minute lease
- * lapsed. The absolute 2h `RUN_TIMEOUT_MS` cap still applies via
+ * lapsed. The absolute `turnDeadline` cap still applies via
  * `turnLeaseExpiry`, so grace can never extend a turn past it.
  */
 export const TURN_SILENT_ALIVE_GRACE_MS = 10 * 60 * 1000;
@@ -108,22 +108,48 @@ export function turnLeaseDurationMs(state: TurnState): number {
   }
 }
 
+/**
+ * Most question wait a turn may exclude from its work cap. A blocking
+ * AskUserQuestion holds the sandbox up while it waits; this bound ends a
+ * forgotten question well inside Vercel's 24h session ceiling, so the VM is
+ * never hard-killed (no snapshot) under a still-open turn.
+ */
+export const TURN_QUESTION_WAIT_CAP_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * When a turn's absolute cap fires: `RUN_TIMEOUT_MS` of work, plus the time it
+ * spent paused on a blocking question (bounded by `TURN_QUESTION_WAIT_CAP_MS`).
+ * Waiting on the user is not runaway work, so it must not eat the work budget.
+ */
+export function turnDeadline(
+  turnStartedAt: number,
+  questionWaitMs: number = 0,
+): number {
+  return (
+    turnStartedAt +
+    RUN_TIMEOUT_MS +
+    Math.min(Math.max(questionWaitMs, 0), TURN_QUESTION_WAIT_CAP_MS)
+  );
+}
+
 export function turnLeaseExpiry(input: {
   state: TurnState;
   turnStartedAt: number;
+  questionWaitMs?: number;
   now: number;
 }): number {
   return Math.min(
     input.now + turnLeaseDurationMs(input.state),
-    input.turnStartedAt + RUN_TIMEOUT_MS,
+    turnDeadline(input.turnStartedAt, input.questionWaitMs),
   );
 }
 
 export function turnExceededAbsoluteLimit(
   turnStartedAt: number,
   now: number,
+  questionWaitMs: number = 0,
 ): boolean {
-  return now >= turnStartedAt + RUN_TIMEOUT_MS;
+  return now >= turnDeadline(turnStartedAt, questionWaitMs);
 }
 
 /** Heartbeat row is missing or older than the running-turn lease. */

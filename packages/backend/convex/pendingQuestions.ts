@@ -5,6 +5,7 @@ import type { DatabaseWriter } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
 import { recordAnsweredQuestion } from "./chatLog";
+import { recordTurnQuestionWait } from "./_chat/turnStore";
 
 /**
  * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
@@ -197,7 +198,9 @@ export const claimAnswer = authMutation({
       return { answer: null };
     }
     const claimed = existing.answer;
-    // The row is deleted next; the Log keeps the question and answer.
+    // The row is deleted next: keep its wait off the turn's work cap, and
+    // the Log keeps the question and answer.
+    await recordTurnQuestionWait(ctx, args.entityId, existing, Date.now());
     await recordAnsweredQuestion(
       ctx,
       args.entityId,
