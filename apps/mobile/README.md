@@ -28,6 +28,10 @@ Push (see `packages/backend/convex/push.ts`) goes out for:
 
 The app uses native modules (notifications, secure store), so Expo Go cannot run it. Use a debug build.
 
+### Web preview (screenshots)
+
+The sandbox has no emulator, so screens are checked in a browser build: `pnpm --filter @eva/mobile web:export` writes a static site (`web.output: "single"`), which any static server with an index.html fallback can serve. Push is off on web (`src/push/push.web.ts`): expo-notifications has no web version of `useLastNotificationResponse`.
+
 ### Push (one-time, owner only)
 
 Push works only after these steps. Until then the app runs normally and does not register for push.

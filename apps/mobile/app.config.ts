@@ -30,7 +30,9 @@ export default (_context: ConfigContext): ExpoConfig => ({
   // The web app icon, so both apps share one file.
   icon: "../web/public/icon.png",
   userInterfaceStyle: "automatic",
-  platforms: ["android"],
+  // Web is only for previews and screenshots in the sandbox (no emulator).
+  platforms: ["android", "web"],
+  web: { output: "single", bundler: "metro" },
   android: {
     package: "com.vis1.eva",
     versionCode: versionCode(),

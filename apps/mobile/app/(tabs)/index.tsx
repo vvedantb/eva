@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { Linking } from "react-native";
 import { WEB_URL } from "@/config";
-import { timeAgo } from "@/ui/format";
+import { RowTime } from "@/ui/RowTime";
 import { TabScreen } from "@/ui/TabScreen";
 
 /** The web inbox (api.notifications.list), newest first. Tap opens the chat. */
@@ -28,8 +28,8 @@ export default function InboxScreen() {
             <ListRow
               key={notification._id}
               title={notification.title}
-              detail={notification.contextLabel ?? notification.message}
-              meta={timeAgo(notification.createdAt)}
+              meta={notification.contextLabel ?? notification.message}
+              titleEnd={<RowTime at={notification.createdAt} />}
               leading={notification.read ? undefined : <StatusDot tone="info" size="md" />}
               onPress={() => {
                 if (!notification.read) void markAsRead({ id: notification._id });

@@ -4,7 +4,7 @@ import { PageHeader, ScreenContainer } from "@vvedantb/native-ui/layout";
 import { CenteredSpinner, EmptyState, ListRow, StatusDot } from "@vvedantb/native-ui/primitives";
 import { useQuery } from "convex/react";
 import { useRouter } from "expo-router";
-import { timeAgo } from "@/ui/format";
+import { RowTime } from "@/ui/RowTime";
 import { TabScreen } from "@/ui/TabScreen";
 
 /** Recent open sessions across every repo the user can access (api.mobile.listChats). */
@@ -25,8 +25,8 @@ export default function SessionsScreen() {
             <ListRow
               key={session.sessionId}
               title={session.title}
-              detail={session.repoLabel}
-              meta={timeAgo(session.updatedAt)}
+              meta={session.repoLabel}
+              titleEnd={<RowTime at={session.updatedAt} />}
               // Green while the sandbox runs, as the web sidebar shows a live session.
               leading={<StatusDot tone={session.status === "active" ? "active" : "neutral"} size="md" />}
               onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
