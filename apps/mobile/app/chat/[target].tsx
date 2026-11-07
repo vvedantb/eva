@@ -2,6 +2,7 @@ import { api, DEFAULT_AI_MODEL } from "@eva/backend";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconExternalLink, IconMessageCircle } from "@tabler/icons-react-native";
 import {
+  ChoiceQuestion,
   Conversation,
   ConversationContent,
   ConversationEmptyState,
@@ -18,7 +19,6 @@ import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
-import { QuestionDock } from "@/chat/QuestionDock";
 import { WEB_URL } from "@/config";
 import { textColor, useScheme } from "@/ui/theme";
 
@@ -103,9 +103,11 @@ export default function ChatScreen() {
         <ConversationScrollButton />
       </Conversation>
       {pending && questions ? (
-        <QuestionDock
-          key={pending.toolUseId}
-          questions={questions}
+        // The web dock: p-3 around the card, in place of the composer.
+        <View className="p-3">
+          <ChoiceQuestion
+            key={pending.toolUseId}
+            questions={questions}
           onSubmit={async (answers) => {
             try {
               await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
@@ -113,7 +115,8 @@ export default function ChatScreen() {
               toast.error("Couldn't submit answer");
             }
           }}
-        />
+          />
+        </View>
       ) : replyChatId ? (
         // Always "ready": a send during a turn queues behind it, as on the web.
         <PromptInput onSubmit={handleSend} placeholder={working ? "Add a follow-up..." : "Message Eva"} />
