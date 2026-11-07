@@ -165,4 +165,36 @@ describe("mobile push", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "listChats marks a session whose open turn waits on a question",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const before = await asUser.query(api.mobile.listChats, {});
+      expect(before[0]?.isAwaitingAnswer).toBe(false);
+      await t.run(async (ctx) => {
+        await ctx.db.insert("turns", {
+          entityId: ids.chatId,
+          sessionId: ids.sessionId,
+          streamingEntityId: String(ids.chatId),
+          state: "running",
+          open: true,
+          turnStartedAt: Date.now(),
+          leaseExpiresAt: Date.now() + 60_000,
+          leaseGeneration: 1,
+          model: "claude:sonnet",
+          repoId: ids.repoId,
+        });
+        await ctx.db.insert("pendingQuestions", {
+          entityId: ids.chatId,
+          toolUseId: "tool-2",
+          payload: "{}",
+          createdAt: Date.now(),
+        });
+      });
+      const after = await asUser.query(api.mobile.listChats, {});
+      expect(after[0]).toMatchObject({ sessionId: ids.sessionId, isAwaitingAnswer: true });
+    },
+    TIMEOUT_MS,
+  );
 });

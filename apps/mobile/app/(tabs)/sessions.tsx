@@ -1,9 +1,10 @@
 import { api } from "@eva/backend";
 import { IconTerminal2 } from "@tabler/icons-react-native";
 import { PageHeader, ScreenContainer } from "@vvedantb/native-ui/layout";
-import { CenteredSpinner, EmptyState, ListRow, StatusDot } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, ListRow } from "@vvedantb/native-ui/primitives";
 import { useQuery } from "convex/react";
 import { useRouter } from "expo-router";
+import { RowStatus } from "@/ui/RowStatus";
 import { RowTime } from "@/ui/RowTime";
 import { TabScreen } from "@/ui/TabScreen";
 
@@ -27,8 +28,10 @@ export default function SessionsScreen() {
               title={session.title}
               meta={session.repoLabel}
               titleEnd={<RowTime at={session.updatedAt} />}
-              // Green while the sandbox runs, as the web sidebar shows a live session.
-              leading={<StatusDot tone={session.status === "active" ? "active" : "neutral"} size="md" />}
+              // The question mark wins over the status dot, as on the web sidebar.
+              leading={
+                <RowStatus awaitingAnswer={session.isAwaitingAnswer} tone={session.status === "active" ? "active" : "neutral"} />
+              }
               onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
             />
           ))}

@@ -11,7 +11,7 @@ Android companion app for Eva. It tells you when an agent needs your input or so
 | Screen | Data |
 | --- | --- |
 | Inbox | `notifications.list`. Tap opens the chat (`chatTarget`), or the web page for docs and comments. |
-| Sessions | `mobile.listChats`: recent open sessions across every repo you can access. |
+| Sessions | `mobile.listChats`: recent open sessions across every repo you can access. A help-circle marks a session waiting on your answer. |
 | Chat | `mobile.getChat`, `messages.listByParent`, `turns.getChatStatus`, `pendingQuestions.getActive`. Agent questions dock in place of the composer. Session chats reply with `sessionWorkflow.enqueueMessage`; quick tasks and projects are read-only, with "Open on web". |
 | Settings | Account and sign out. Sign-out removes this phone's push token. |
 
@@ -54,4 +54,4 @@ The redirect is `eva://sso-callback`. If Google sign-in fails with a redirect er
 
 ## Not in v1
 
-Starting sessions or tasks, replies to quick tasks and projects, markdown and tool steps in the transcript, terminal, diffs and PR review.
+Starting sessions or tasks, replies to quick tasks and projects, terminal, diffs and PR review.

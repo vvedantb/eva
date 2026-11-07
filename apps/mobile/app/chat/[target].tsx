@@ -9,7 +9,6 @@ import {
   Message,
   MessageContent,
   PromptInput,
-  ResponseText,
   Shimmer,
 } from "@vvedantb/native-ui/ai";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
@@ -18,6 +17,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, View } from "react-native";
+import { AssistantMessage } from "@/chat/AssistantMessage";
 import { QuestionDock } from "@/chat/QuestionDock";
 import { WEB_URL } from "@/config";
 import { textColor, useScheme } from "@/ui/theme";
@@ -80,11 +80,19 @@ export default function ChatScreen() {
             <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
           ) : (
             messages
-              .filter((message) => message.isSystemAlert !== true && message.content.trim() !== "")
+              .filter(
+                (message) =>
+                  message.isSystemAlert !== true &&
+                  (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog)),
+              )
               .map((message) => (
                 <Message key={message._id} from={message.role}>
                   <MessageContent>
-                    {message.role === "user" ? message.content : <ResponseText>{message.content}</ResponseText>}
+                    {message.role === "user" ? (
+                      message.content
+                    ) : (
+                      <AssistantMessage content={message.content} activityLog={message.activityLog} />
+                    )}
                   </MessageContent>
                 </Message>
               ))

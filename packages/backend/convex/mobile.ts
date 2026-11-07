@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { authQuery, hasRepoAccess } from "./functions";
+import { awaitingAnswerEntityIdsForRepo } from "./_chat/turnProjection";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import { findMainChat, loadSessionChat } from "./_sessionChats/helpers";
 import { getRepoHref } from "./notifications";
@@ -140,6 +141,8 @@ export const listChats = authQuery({
       repoLabel: v.string(),
       status: sessionStatusValidator,
       updatedAt: v.number(),
+      /** An agent in one of its chats waits on your answer (as the web sidebar shows). */
+      isAwaitingAnswer: v.boolean(),
     }),
   ),
   handler: async (ctx) => {
@@ -147,23 +150,27 @@ export const listChats = authQuery({
     const perRepo = await Promise.all(
       repos.map(async (repo) => {
         // Open sessions store `archived` as undefined or false; read both.
-        const groups = await Promise.all(
-          [undefined, false].map((archived) =>
-            ctx.db
-              .query("sessions")
-              .withIndex("by_repo_archived_and_deleted", (q) =>
-                q.eq("repoId", repo._id).eq("archived", archived).eq("deletedAt", undefined),
-              )
-              .order("desc")
-              .take(SESSIONS_PER_REPO),
-          ),
-        );
+        const readOpenSessions = (archived: false | undefined) =>
+          ctx.db
+            .query("sessions")
+            .withIndex("by_repo_archived_and_deleted", (q) =>
+              q.eq("repoId", repo._id).eq("archived", archived).eq("deletedAt", undefined),
+            )
+            .order("desc")
+            .take(SESSIONS_PER_REPO);
+        const [awaitingAnswerIds, unset, unarchived] = await Promise.all([
+          awaitingAnswerEntityIdsForRepo(ctx.db, repo._id),
+          readOpenSessions(undefined),
+          readOpenSessions(false),
+        ]);
+        const groups = [unset, unarchived];
         return groups.flat().map((session) => ({
           sessionId: session._id,
           title: session.title,
           repoLabel: repoLabel(repo),
           status: session.status,
           updatedAt: session.updatedAt ?? session._creationTime,
+          isAwaitingAnswer: awaitingAnswerIds.has(String(session._id)),
         }));
       }),
     );
