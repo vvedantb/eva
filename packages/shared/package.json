@@ -13,6 +13,7 @@
     "./htmlRender": "./src/htmlRender.ts",
     "./modelPricing": "./src/modelPricing.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
+    "./pendingQuestion": "./src/pendingQuestion.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
     "./user-initials": "./src/components/user-initials.tsx"

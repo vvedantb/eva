@@ -12,6 +12,7 @@ import {
   withCommentAnchor,
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
+import { schedulePush } from "./push";
 
 /** Max unread notifications shown per user in the daily digest email. */
 const DIGEST_NOTIFICATION_LIMIT = 50;
@@ -38,6 +39,15 @@ const EMAIL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
 const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
+  "routed_question",
+]);
+
+/**
+ * Notification types that also push to the mobile app: someone needs the
+ * user. Agent questions push from pendingQuestions.post, not from here.
+ */
+const PUSH_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  "mention",
   "routed_question",
 ]);
 
@@ -81,7 +91,7 @@ const DIGEST_EXCLUDED_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /** Builds a URL path for a repo, including app name for monorepo sub-apps. */
-function getRepoHref(
+export function getRepoHref(
   owner: string,
   name: string,
   rootDirectory?: string,
@@ -168,6 +178,8 @@ export async function createNotification(
       contextLabel = session.title;
     }
   }
+  // Most specific chat first: a project task's own chat, not the project's.
+  const chatTarget = task?._id ?? session?._id ?? project?._id;
   const notificationId = await ctx.db.insert("notifications", {
     userId: params.userId,
     type,
@@ -177,9 +189,19 @@ export async function createNotification(
     repoId: params.repoId,
     contextLabel,
     commentId: params.commentId,
+    chatTarget,
     read: false,
     createdAt: Date.now(),
   });
+
+  if (PUSH_NOTIFICATION_TYPES.has(type)) {
+    await schedulePush(ctx, {
+      userId: params.userId,
+      title: params.title,
+      body: params.message ?? contextLabel,
+      target: chatTarget,
+    });
+  }
 
   // High-signal types get an instant email after a short debounce. The send is
   // skipped if the user reads it in-app first (see notificationEmail.ts).
@@ -210,6 +232,7 @@ const notificationValidator = v.object({
   emailedAt: v.optional(v.number()),
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
+  chatTarget: v.optional(v.string()),
   // Undefined = not yet routed (a mention whose routing action has not landed)
   // or legacy; treated as normal everywhere it is read.
   urgency: v.optional(notificationUrgencyValidator),

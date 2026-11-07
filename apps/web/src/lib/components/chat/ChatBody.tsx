@@ -99,7 +99,6 @@ import {
   firstNameFromUser,
   isOtherUserChatMessage,
   otherUserIdsInChat,
-  parsePendingQuestion,
   SANDBOX_CHAT_COPY,
   TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
@@ -108,6 +107,7 @@ import {
   type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
+import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
   ChatLinkedMessageScroll,
