@@ -118,8 +118,7 @@ export function stalledAlert(
 /** Alert text shared by every surface for the 2-hour workflow-timeout backstop. */
 const timeoutAlert: ChatAlert = {
   text: "Execution timed out.",
-  detail:
-    "Turn exceeded the 2-hour work limit. Time spent waiting on a question does not count.",
+  detail: "Turn exceeded the 2-hour workflow limit.",
 };
 
 const sessionChatAdapter: ChatSurfaceAdapter<

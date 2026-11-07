@@ -331,12 +331,6 @@ export const turnFields = {
    * lease renewal. Bounds how long a silent-but-alive turn is tolerated.
    */
   silentSince: v.optional(v.number()),
-  /**
-   * Time this turn already spent paused on answered blocking questions. It
-   * moves the turn's work-cap deadline out (`turnDeadline`); the question
-   * still waiting is added live from `pendingQuestions`.
-   */
-  questionWaitMs: v.optional(v.number()),
 };
 
 export const pendingTurnFields = {

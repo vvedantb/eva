@@ -28,7 +28,6 @@ import {
   finalizeStaleChatTurn,
 } from "./_chat/stallWatchdog";
 import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
-import { turnBackstopRemainingMs } from "./_chat/turnStore";
 import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
 import { ensureMainChat } from "./_sessionChats/helpers";
 
@@ -187,19 +186,6 @@ export const handleStaleSessionChat = internalMutation({
     ) {
       return null;
     }
-    const remainingMs = await turnBackstopRemainingMs(
-      ctx,
-      args.workflowId,
-      Date.now(),
-    );
-    if (remainingMs > 0) {
-      await ctx.scheduler.runAfter(
-        remainingMs,
-        internal.workflowWatchdog.handleStaleSessionChat,
-        args,
-      );
-      return null;
-    }
     await finalizeStaleChatTurn(
       ctx,
       sessionChatAdapter,
@@ -334,19 +320,6 @@ export const handleStaleProjectChat = internalMutation({
       projectChatAdapter.activeWorkflowId(project) !== args.workflowId
     )
       return null;
-    const remainingMs = await turnBackstopRemainingMs(
-      ctx,
-      args.workflowId,
-      Date.now(),
-    );
-    if (remainingMs > 0) {
-      await ctx.scheduler.runAfter(
-        remainingMs,
-        internal.workflowWatchdog.handleStaleProjectChat,
-        args,
-      );
-      return null;
-    }
 
     await finalizeStaleChatTurn(
       ctx,
@@ -374,19 +347,6 @@ export const handleStaleAgentTaskChat = internalMutation({
     const task = await taskChatAdapter.getEntity(ctx, args.taskId);
     if (!task || taskChatAdapter.activeWorkflowId(task) !== args.workflowId)
       return null;
-    const remainingMs = await turnBackstopRemainingMs(
-      ctx,
-      args.workflowId,
-      Date.now(),
-    );
-    if (remainingMs > 0) {
-      await ctx.scheduler.runAfter(
-        remainingMs,
-        internal.workflowWatchdog.handleStaleAgentTaskChat,
-        args,
-      );
-      return null;
-    }
 
     await finalizeStaleChatTurn(
       ctx,
