@@ -131,9 +131,13 @@ export const getChat = authQuery({
   },
 });
 
-/** Recent open sessions across every repo the user can access, newest first. */
+/**
+ * Recent sessions across every repo the user can access, newest first: open
+ * ones by default, archived ones with `archived: true` (the web Active and
+ * Archived tabs).
+ */
 export const listChats = authQuery({
-  args: {},
+  args: { archived: v.optional(v.boolean()) },
   returns: v.array(
     v.object({
       sessionId: v.id("sessions"),
@@ -145,12 +149,12 @@ export const listChats = authQuery({
       isAwaitingAnswer: v.boolean(),
     }),
   ),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
     const perRepo = await Promise.all(
       repos.map(async (repo) => {
         // Open sessions store `archived` as undefined or false; read both.
-        const readOpenSessions = (archived: false | undefined) =>
+        const readSessions = (archived: boolean | undefined) =>
           ctx.db
             .query("sessions")
             .withIndex("by_repo_archived_and_deleted", (q) =>
@@ -160,8 +164,8 @@ export const listChats = authQuery({
             .take(SESSIONS_PER_REPO);
         const [awaitingAnswerIds, unset, unarchived] = await Promise.all([
           awaitingAnswerEntityIdsForRepo(ctx.db, repo._id),
-          readOpenSessions(undefined),
-          readOpenSessions(false),
+          args.archived === true ? readSessions(true) : readSessions(undefined),
+          args.archived === true ? Promise.resolve([]) : readSessions(false),
         ]);
         const groups = [unset, unarchived];
         return groups.flat().map((session) => ({
