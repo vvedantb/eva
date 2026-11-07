@@ -8,6 +8,7 @@
     "./activityTrace": "./src/activityTrace.ts",
     "./chatLog": "./src/chatLog.ts",
     "./dates": "./src/utils/dates.ts",
+    "./dayLabel": "./src/utils/dayLabel.ts",
     "./duration": "./src/utils/duration.ts",
     "./generativeUi": "./src/generativeUi/index.ts",
     "./gitDefaults": "./src/gitDefaults.ts",

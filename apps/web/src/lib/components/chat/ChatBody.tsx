@@ -88,7 +88,6 @@ import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildMessageHistory,
   buildPrecedingUserTurns,
-  findDayBoundaryIds,
   findNewMessageIds,
   type ChatParentId,
   findHandoffBoundaryIds,
@@ -107,6 +106,7 @@ import {
   type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
+import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {

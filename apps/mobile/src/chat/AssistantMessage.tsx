@@ -19,6 +19,7 @@ import {
   AgentTraceCollapsible,
   AgentTraceCollapsibleContent,
   AgentTraceCollapsibleTrigger,
+  AgentTraceFold,
   AgentTraceIcon,
   AgentTraceLine,
   AgentTraceTitle,
@@ -42,14 +43,35 @@ const STEP_ICONS: Record<ToolStepType, ComponentType<IconProps>> = {
 };
 
 /**
- * A finished agent reply: its tool steps folded behind one summary line, as
- * the web does, then the reply as markdown (native-ui `/markdown`, the web `markdown.css` scale).
+ * An agent reply: a finished turn's steps fold behind "Worked for …" (an
+ * unfinished one behind a summary of the kinds of work), as the web does, then
+ * the reply as markdown (native-ui `/markdown`, the web `markdown.css` scale).
  */
-export function AssistantMessage({ content, activityLog }: { content: string; activityLog?: string }) {
+export function AssistantMessage({
+  content,
+  activityLog,
+  seconds,
+}: {
+  content: string;
+  activityLog?: string;
+  /** How long the turn ran, once it finished. Folds the steps behind "Worked for …", as the web does. */
+  seconds?: number;
+}) {
   const steps = parseToolSteps(activityLog);
+  const stepRows = steps.map((step, index) => (
+    <ActivityStep
+      key={index}
+      icon={STEP_ICONS[step.type]}
+      label={step.label}
+      description={step.detail}
+      status={step.status === "complete" ? "complete" : "running"}
+    />
+  ));
   return (
     <>
-      {steps.length > 0 ? (
+      {steps.length === 0 ? null : seconds !== undefined ? (
+        <AgentTraceFold seconds={seconds}>{stepRows}</AgentTraceFold>
+      ) : (
         <AgentTraceCollapsible>
           <AgentTraceCollapsibleTrigger>
             <AgentTraceLine>
@@ -58,20 +80,10 @@ export function AssistantMessage({ content, activityLog }: { content: string; ac
             </AgentTraceLine>
           </AgentTraceCollapsibleTrigger>
           <AgentTraceCollapsibleContent>
-            <AgentTrace>
-              {steps.map((step, index) => (
-                <ActivityStep
-                  key={index}
-                  icon={STEP_ICONS[step.type]}
-                  label={step.label}
-                  description={step.detail}
-                  status={step.status === "complete" ? "complete" : "running"}
-                />
-              ))}
-            </AgentTrace>
+            <AgentTrace>{stepRows}</AgentTrace>
           </AgentTraceCollapsibleContent>
         </AgentTraceCollapsible>
-      ) : null}
+      )}
       {content.trim() !== "" ? <Markdown>{content}</Markdown> : null}
     </>
   );
