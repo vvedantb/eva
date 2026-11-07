@@ -26,7 +26,7 @@ import {
   NotificationStatusIcon,
   type Notification,
 } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 /**

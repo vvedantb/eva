@@ -14,6 +14,7 @@
     "./gitDefaults": "./src/gitDefaults.ts",
     "./htmlRender": "./src/htmlRender.ts",
     "./modelPricing": "./src/modelPricing.ts",
+    "./notificationTitle": "./src/notificationTitle.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",
     "./resultEvent": "./src/resultEvent.ts",
