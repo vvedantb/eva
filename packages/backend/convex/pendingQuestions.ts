@@ -5,6 +5,9 @@ import type { DatabaseWriter } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
 import { recordAnsweredQuestion } from "./chatLog";
+import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { resolveMobileChat } from "./mobile";
+import { schedulePush } from "./push";
 
 /**
  * Blocking AskUserQuestion round-trip. A sandbox turn paused inside canUseTool
@@ -114,6 +117,7 @@ export const post = authMutation({
       .query("pendingQuestions")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
       .collect();
+    const isRepost = stale.some((row) => row.toolUseId === args.toolUseId);
     for (const row of stale) {
       await ctx.db.delete(row._id);
     }
@@ -123,6 +127,19 @@ export const post = authMutation({
       payload: args.payload,
       createdAt: Date.now(),
     });
+    // The sandbox posts as the user who launched the turn: tell their phone.
+    // A re-post of the same question (a retried call) does not push again.
+    if (!isRepost) {
+      const resolved = await resolveMobileChat(ctx.db, args.entityId);
+      if (resolved) {
+        await schedulePush(ctx, {
+          userId: ctx.userId,
+          title: resolved.chat.title,
+          body: parsePendingQuestion(args.payload)?.[0]?.question,
+          target: args.entityId,
+        });
+      }
+    }
     return null;
   },
 });

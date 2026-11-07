@@ -20,3 +20,6 @@ apps/web/.tanstack/
 
 # Redline local baseline pin
 .redline/
+
+# Android release signing for apps/mobile (see apps/mobile/plugins/withReleaseSigning.js).
+keystore.properties
