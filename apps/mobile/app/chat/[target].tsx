@@ -184,6 +184,8 @@ export default function ChatScreen() {
       ) : replyChatId ? (
         // Always "ready": a send during a turn queues behind it, as on the web.
         <PromptInput
+          // Eva's web composer is the one-row pill (`Composer layout="inline"`).
+          layout="inline"
           onSubmit={handleSend}
           placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
         />

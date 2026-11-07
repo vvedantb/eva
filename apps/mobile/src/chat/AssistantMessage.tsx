@@ -25,7 +25,13 @@ import {
   AgentTraceTitle,
 } from "@vvedantb/native-ui/ai";
 import { Markdown } from "@vvedantb/native-ui/markdown";
+import * as Clipboard from "expo-clipboard";
 import type { ComponentType } from "react";
+
+/** The code block's copy button, as the web code header. */
+const copyCode = async (code: string) => {
+  await Clipboard.setStringAsync(code);
+};
 
 /** Same icon per step type as the web trace (`activity-shared.tsx` in @vvedantb/ui). */
 const STEP_ICONS: Record<ToolStepType, ComponentType<IconProps>> = {
@@ -84,7 +90,7 @@ export function AssistantMessage({
           </AgentTraceCollapsibleContent>
         </AgentTraceCollapsible>
       )}
-      {content.trim() !== "" ? <Markdown>{content}</Markdown> : null}
+      {content.trim() !== "" ? <Markdown onCopyCode={copyCode}>{content}</Markdown> : null}
     </>
   );
 }
