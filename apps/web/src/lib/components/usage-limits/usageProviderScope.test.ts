@@ -34,13 +34,9 @@ describe("plan-usage is one shared indicator", () => {
     const session = readSource(
       "routes/_repo/$owner/$repo/sessions/ChatPanel.tsx",
     );
-    const project = readSource(
-      "lib/components/projects/ProjectSandboxChatPanel.tsx",
-    );
-    const task = readSource("lib/components/tasks/TaskSandboxChatPanel.tsx");
+    const sandboxChat = readSource("lib/components/chat/SandboxChatPanel.tsx");
     expect(session).not.toContain("claudeUsageAccountScope");
-    expect(project).not.toContain("claudeUsageAccountScope");
-    expect(task).not.toContain("claudeUsageAccountScope");
+    expect(sandboxChat).not.toContain("claudeUsageAccountScope");
   });
 
   test("the indicator scopes the chip but always passes every account to the popover", () => {

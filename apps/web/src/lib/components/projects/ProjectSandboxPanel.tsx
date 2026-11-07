@@ -26,7 +26,8 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { useProjectAnnotationSend } from "./useProjectAnnotationSend";
+import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { useProjectChatBinding } from "./ProjectSandboxChatPanel";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -91,7 +92,9 @@ export function ProjectSandboxPanel({
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const projectIdStr = String(projectId);
-  const submitAnnotation = useProjectAnnotationSend(projectId);
+  const submitAnnotation = useSandboxAnnotationSend(
+    useProjectChatBinding(projectId),
+  );
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
