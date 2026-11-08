@@ -585,6 +585,36 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(rows.messages.at(-1)?.pendingQuestion).toBe(payload);
   });
 
+  test("a turn torn down without a question still posts its alert", async () => {
+    // The question case skips the alert; that skip must not swallow the only
+    // sign a normal turn died.
+    const { t, taskId, turnId, placeholderMessageId } =
+      await createTaskChatFixture();
+    const messages = await t.run(async (ctx) => {
+      await ctx.db.patch(placeholderMessageId, { content: "Working on it" });
+      await ctx.db.patch(turnId, { workflowId: "chat-workflow" });
+      await ctx.db.patch(taskId, { activeChatWorkflowId: "chat-workflow" });
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new Error("missing task");
+      await finalizeStaleChatTurn(
+        ctx,
+        taskChatAdapter,
+        taskId,
+        task,
+        "chat-workflow",
+        { text: "Execution timed out." },
+        { sandboxStopped: true },
+      );
+      return await ctx.db
+        .query("messages")
+        .withIndex("by_parent", (q) => q.eq("parentId", taskId))
+        .collect();
+    });
+    const last = messages.at(-1);
+    expect(last?.isSystemAlert).toBe(true);
+    expect(last?.content).toBe("Execution timed out.");
+  });
+
   test("an open task turn makes the task busy, synthetic or not", async () => {
     const { t, repoId, taskId } = await createTaskChatFixture();
     const busy = await t.run(async (ctx) => {
