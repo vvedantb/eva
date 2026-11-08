@@ -1,4 +1,7 @@
 import { convexTest } from "convex-test";
+import { defineTable } from "convex/server";
+import { v } from "convex/values";
+import { pushTokensFields, pushTokensTable } from "@vvedantb/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
@@ -60,6 +63,17 @@ async function scheduledPushes(t: Awaited<ReturnType<typeof fixture>>["t"]) {
   });
 }
 
+describe("pushTokens schema", () => {
+  // schema.ts cannot import the package (NoImportModuleInSchema), so the table
+  // is local. It is deployed: this test stops it drifting from the package.
+  test("matches the @vvedantb/server table", () => {
+    const local = schema.tables.pushTokens;
+    const shared = pushTokensTable(defineTable, v, v.id("users"));
+    expect(local.validator).toEqual(v.object(pushTokensFields(v, v.id("users"))));
+    expect(local[" indexes"]()).toEqual(shared[" indexes"]());
+  });
+});
+
 describe("mobile push", () => {
   // Keep scheduled `push.send` jobs queued: they would call the Expo API.
   beforeEach(() => {
@@ -104,7 +118,7 @@ describe("mobile push", () => {
       });
       const pushes = await scheduledPushes(t);
       expect(pushes).toEqual([
-        expect.objectContaining({ title: "Grace mentioned you in a session chat", target: ids.sessionId }),
+        expect.objectContaining({ title: "Grace mentioned you in a session chat", data: { target: ids.sessionId } }),
       ]);
       const mention = await t.run((ctx) =>
         ctx.db
@@ -147,8 +161,8 @@ describe("mobile push", () => {
       await t.mutation(internal.notifications.scheduleLegacyMentionEmail, { notificationId: fallback });
       expect(await scheduledPushes(t)).toEqual([
         expect.objectContaining({ title: "question" }),
-        expect.objectContaining({ title: "normal", target: ids.sessionId }),
-        expect.objectContaining({ title: "fallback", target: ids.sessionId }),
+        expect.objectContaining({ title: "normal", data: { target: ids.sessionId } }),
+        expect.objectContaining({ title: "fallback", data: { target: ids.sessionId } }),
       ]);
     },
     TIMEOUT_MS,
@@ -181,7 +195,7 @@ describe("mobile push", () => {
       // A retried post of the same question must not push again.
       await asUser.mutation(api.pendingQuestions.post, post);
       expect(await scheduledPushes(t)).toEqual([
-        expect.objectContaining({ title: "Fix the login bug", body: "Which colour?", target: ids.chatId }),
+        expect.objectContaining({ title: "Fix the login bug", body: "Which colour?", data: { target: ids.chatId } }),
       ]);
     },
     TIMEOUT_MS,

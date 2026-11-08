@@ -228,7 +228,7 @@ async function pushNotification(
     userId: notification.userId,
     title: notification.title,
     body: notification.message ?? notification.contextLabel,
-    target: notification.chatTarget,
+    data: notification.chatTarget ? { target: notification.chatTarget } : undefined,
   });
 }
 
