@@ -174,7 +174,7 @@ export const post = authMutation({
           userId: ctx.userId,
           title: resolved.chat.title,
           body: parsePendingQuestion(args.payload)?.[0]?.question,
-          target: args.entityId,
+          data: { target: args.entityId },
         });
       }
     }
