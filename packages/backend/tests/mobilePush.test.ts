@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { createNotification } from "../convex/notifications";
 
@@ -83,7 +83,7 @@ describe("mobile push", () => {
   );
 
   test(
-    "a mention pushes with its chat; a task completion does not push",
+    "an unrouted (comment) mention pushes with its chat; a task completion does not push",
     async () => {
       const { t, ids, asUser } = await fixture();
       await asUser.mutation(api.push.register, { token: TOKEN, platform: "android" });
@@ -113,6 +113,43 @@ describe("mobile push", () => {
           .first(),
       );
       expect(mention?.chatTarget).toBe(ids.sessionId);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a routed chat mention pushes once routing says it is not low",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await asUser.mutation(api.push.register, { token: TOKEN, platform: "android" });
+      const mention = (title: string) =>
+        t.run((ctx) =>
+          createNotification(ctx, {
+            userId: ids.userId,
+            type: "mention",
+            title,
+            repoId: ids.repoId,
+            sessionId: ids.sessionId,
+            routesUrgency: true,
+          }),
+        );
+      const low = await mention("low");
+      const normal = await mention("normal");
+      const fallback = await mention("fallback");
+      await t.run((ctx) =>
+        createNotification(ctx, { userId: ids.userId, type: "routed_question", title: "question", sessionId: ids.sessionId }),
+      );
+      // Routing has not answered yet: only the routed question pushed.
+      expect((await scheduledPushes(t)).map((push) => push.title)).toEqual(["question"]);
+
+      await t.mutation(internal.notifications.setUrgency, { notificationId: low, urgency: "low" });
+      await t.mutation(internal.notifications.setUrgency, { notificationId: normal, urgency: "normal" });
+      await t.mutation(internal.notifications.scheduleLegacyMentionEmail, { notificationId: fallback });
+      expect(await scheduledPushes(t)).toEqual([
+        expect.objectContaining({ title: "question" }),
+        expect.objectContaining({ title: "normal", target: ids.sessionId }),
+        expect.objectContaining({ title: "fallback", target: ids.sessionId }),
+      ]);
     },
     TIMEOUT_MS,
   );
@@ -159,7 +196,7 @@ describe("mobile push", () => {
         kind: "session",
         title: "Fix the login bug",
         parentId: ids.chatId,
-        replyChatId: ids.chatId,
+        canReply: true,
         webPath: "/vvedantb/eva/sessions/42",
       });
     },

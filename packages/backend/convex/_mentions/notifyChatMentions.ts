@@ -121,6 +121,7 @@ export async function notifyChatMentions(
       title,
       message,
       ...target,
+      routesUrgency: true,
     });
     const mentioned = await ctx.db.get(userId);
     routed.push({

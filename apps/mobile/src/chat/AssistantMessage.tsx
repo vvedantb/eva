@@ -1,4 +1,4 @@
-import { parseToolSteps, summariseToolSteps, type ToolStepType } from "@eva/shared/activityTrace";
+import { hasStepDetail, parseToolSteps, summariseToolSteps, type ToolStepType } from "@eva/shared/activityTrace";
 import {
   IconBook2,
   IconFilePlus,
@@ -19,6 +19,7 @@ import {
   AgentTraceCollapsible,
   AgentTraceCollapsibleContent,
   AgentTraceCollapsibleTrigger,
+  AgentTraceDescription,
   AgentTraceFold,
   AgentTraceIcon,
   AgentTraceLine,
@@ -27,6 +28,7 @@ import {
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import * as Clipboard from "expo-clipboard";
 import type { ComponentType } from "react";
+import { StepDetail } from "./StepDetail";
 
 /** The code block's copy button, as the web code header. */
 const copyCode = async (code: string) => {
@@ -54,25 +56,44 @@ const STEP_ICONS: Record<ToolStepType, ComponentType<IconProps>> = {
  * the reply as markdown (native-ui `/markdown`, the web `markdown.css` scale).
  */
 export function AssistantMessage({
+  messageId,
   content,
   activityLog,
   seconds,
 }: {
+  /** For loading a trimmed step's full detail. */
+  messageId: string;
   content: string;
   activityLog?: string;
   /** How long the turn ran, once it finished. Folds the steps behind "Worked for …", as the web does. */
   seconds?: number;
 }) {
   const steps = parseToolSteps(activityLog);
-  const stepRows = steps.map((step, index) => (
-    <ActivityStep
-      key={index}
-      icon={STEP_ICONS[step.type]}
-      label={step.label}
-      description={step.detail}
-      status={step.status === "complete" ? "complete" : "running"}
-    />
-  ));
+  // A step with a command, output or edits opens to them, as the web rows do.
+  const stepRows = steps.map((step, index) =>
+    hasStepDetail(step) ? (
+      <AgentTraceCollapsible key={index}>
+        <AgentTraceCollapsibleTrigger>
+          <AgentTraceLine>
+            <AgentTraceIcon icon={STEP_ICONS[step.type]} />
+            <AgentTraceTitle>{step.label}</AgentTraceTitle>
+            {step.detail ? <AgentTraceDescription>{step.detail}</AgentTraceDescription> : null}
+          </AgentTraceLine>
+        </AgentTraceCollapsibleTrigger>
+        <AgentTraceCollapsibleContent>
+          <StepDetail step={step} index={index} messageId={messageId} />
+        </AgentTraceCollapsibleContent>
+      </AgentTraceCollapsible>
+    ) : (
+      <ActivityStep
+        key={index}
+        icon={STEP_ICONS[step.type]}
+        label={step.label}
+        description={step.detail}
+        status={step.status === "complete" ? "complete" : "running"}
+      />
+    ),
+  );
   return (
     <>
       {steps.length === 0 ? null : seconds !== undefined ? (

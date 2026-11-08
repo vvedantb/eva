@@ -1,123 +1,30 @@
 import { v } from "convex/values";
-import type { GenericDatabaseReader } from "convex/server";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authQuery, hasRepoAccess } from "./functions";
+import type { Doc, Id } from "./_generated/dataModel";
+import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { awaitingAnswerEntityIdsForRepo } from "./_chat/turnProjection";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
-import { findMainChat, loadSessionChat } from "./_sessionChats/helpers";
-import { getRepoHref } from "./notifications";
-import { aiModelValidator, sessionStatusValidator } from "./validators";
+import {
+  mobileChatValidator,
+  repoLabel,
+  resolveMobileChat,
+} from "./_mobile/chatTarget";
+import { cancelChatExecution, sendSessionChatMessage } from "./_sessions/execution";
+import { createSession, type AuthMutationCtx } from "./_sessions/mutations";
+import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
+import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
+import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
+import { launchTraitsFromStored, normalizeAIModel, sessionStatusValidator } from "./validators";
 
 /**
- * Read models for the Eva mobile app (apps/mobile). The app opens every chat
- * by one string `target`: a session chat, session, quick task or project id,
- * the same id push notifications and `notifications.chatTarget` carry.
+ * API for the Eva mobile app (apps/mobile). The app opens every chat by one
+ * string `target` (see `_mobile/chatTarget.ts`). Writes reuse the web's server
+ * paths, so a phone send or stop behaves like the web composer's.
  */
 
-/** Sessions shown per repo; the list is "what is going on now", not history. */
-const SESSIONS_PER_REPO = 25;
+/** Sessions read per repo; the list is "what is going on now", not history. */
+const SESSIONS_PER_REPO = 15;
 /** Rows in the whole chat list. */
 const CHAT_LIST_LIMIT = 60;
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
-const mobileChatValidator = v.object({
-  kind: chatKindValidator,
-  title: v.string(),
-  repoLabel: v.string(),
-  /** The chat's id for `messages.listByParent`, `turns` and `pendingQuestions`. */
-  parentId: v.union(v.id("sessionChats"), v.id("projects"), v.id("agentTasks")),
-  /** Set when the app can reply; quick tasks and projects are read-only in v1. */
-  replyChatId: v.optional(v.id("sessionChats")),
-  /** The chat's sticky model, for the reply. */
-  model: v.optional(aiModelValidator),
-  /** Path on the web app, for "Open on web". */
-  webPath: v.string(),
-});
-
-export type MobileChat = typeof mobileChatValidator.type;
-
-function repoLabel(repo: Doc<"githubRepos">): string {
-  return repo.label ?? repo.name;
-}
-
-/**
- * Resolves a mobile chat target, or null when the id names nothing the app
- * can open. Access is the caller's job: `repoId` is returned for that check.
- */
-export async function resolveMobileChat(
-  db: GenericDatabaseReader<DataModel>,
-  target: string,
-): Promise<{ chat: MobileChat; repoId: Id<"githubRepos"> } | null> {
-  const sessionChatId = db.normalizeId("sessionChats", target);
-  const sessionId = db.normalizeId("sessions", target);
-  if (sessionChatId || sessionId) {
-    const chatId = sessionChatId ?? (sessionId ? (await findMainChat(db, sessionId))?._id : undefined);
-    const context = chatId ? await loadSessionChat(db, chatId) : null;
-    if (!context) return null;
-    const { chat, session } = context;
-    const repo = await db.get(session.repoId);
-    if (!repo) return null;
-    const base = `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions/${session.numId ?? ""}`;
-    return {
-      repoId: repo._id,
-      chat: {
-        kind: "session",
-        title: chat.isMain ? session.title : `${session.title} · ${chat.title}`,
-        repoLabel: repoLabel(repo),
-        parentId: chat._id,
-        replyChatId: chat.archived === true ? undefined : chat._id,
-        model: chat.lastModel ?? session.lastModel,
-        webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
-      },
-    };
-  }
-
-  const taskId = db.normalizeId("agentTasks", target);
-  if (taskId) {
-    const task = await db.get(taskId);
-    const project = task?.projectId ? await db.get(task.projectId) : null;
-    const repoId = task?.repoId ?? project?.repoId;
-    const repo = repoId ? await db.get(repoId) : null;
-    if (!task || !repo) return null;
-    const base = getRepoHref(repo.owner, repo.name, repo.rootDirectory);
-    return {
-      repoId: repo._id,
-      chat: {
-        kind: "task",
-        title: task.title,
-        repoLabel: repoLabel(repo),
-        parentId: task._id,
-        webPath:
-          project?.numId !== undefined
-            ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
-            : `${base}/quick-tasks/${task.numId ?? ""}`,
-      },
-    };
-  }
-
-  const projectId = db.normalizeId("projects", target);
-  if (projectId) {
-    const project = await db.get(projectId);
-    const repo = project ? await db.get(project.repoId) : null;
-    if (!project || !repo) return null;
-    return {
-      repoId: repo._id,
-      chat: {
-        kind: "project",
-        title: project.title,
-        repoLabel: repoLabel(repo),
-        parentId: project._id,
-        webPath: `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/projects/${project.numId ?? ""}`,
-      },
-    };
-  }
-  return null;
-}
 
 /** One chat by target, for the chat screen. Null when missing or not allowed. */
 export const getChat = authQuery({
@@ -128,6 +35,142 @@ export const getChat = authQuery({
     if (!resolved) return null;
     if (!(await hasRepoAccess(ctx.db, resolved.repoId, ctx.userId))) return null;
     return resolved.chat;
+  },
+});
+
+/** Resolves a target the caller may write to, or throws. */
+async function resolveWritableChat(ctx: AuthMutationCtx, target: string) {
+  const resolved = await resolveMobileChat(ctx.db, target);
+  if (!resolved) throw new Error("Chat not found");
+  if (!(await hasRepoAccess(ctx.db, resolved.repoId, ctx.userId))) throw new Error("Not authorized");
+  return resolved;
+}
+
+/** The sticky composer traits a phone reply carries (the app has no traits menu). */
+function storedTraits(
+  model: string,
+  row: Pick<Doc<"sessionChats">, "lastReasoningLevel" | "lastThinkingEnabled" | "lastUse1mContext" | "lastFastMode">,
+) {
+  return launchTraitsFromStored(model, {
+    reasoningLevel: row.lastReasoningLevel,
+    thinkingEnabled: row.lastThinkingEnabled,
+    use1mContext: row.lastUse1mContext,
+    fastMode: row.lastFastMode,
+  });
+}
+
+/**
+ * Replies in any chat the app opens (session chat, quick task, project) with
+ * the chat's sticky model and traits. Sends at once when the chat is idle and
+ * queues behind a running turn otherwise, like the web composer.
+ * `attachmentStorageIds` come from `messages.generateUploadUrl` uploads.
+ */
+export const sendMessage = authMutation({
+  args: {
+    target: v.string(),
+    message: v.string(),
+    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const message = args.message.trim();
+    if (!message) return null;
+    const { chat, entity } = await resolveWritableChat(ctx, args.target);
+    if (!chat.canReply) throw new Error("This chat is closed");
+    const model = normalizeAIModel(chat.model);
+    const { attachmentStorageIds } = args;
+    switch (entity.kind) {
+      case "session":
+        await sendSessionChatMessage(ctx, {
+          context: entity.context,
+          userId: ctx.userId,
+          content: message,
+          settings: {
+            model,
+            ...storedTraits(model, entity.context.chat),
+            providerAccountId: entity.context.chat.providerAccountId,
+            attachmentStorageIds,
+          },
+        });
+        return null;
+      case "task":
+        await sendTaskChatMessage(ctx, entity.task, {
+          message,
+          userId: ctx.userId,
+          model,
+          ...storedTraits(model, entity.task),
+          attachmentStorageIds,
+        });
+        return null;
+      case "project":
+        await sendProjectChatMessage(ctx, entity.project, {
+          message,
+          userId: ctx.userId,
+          model,
+          ...storedTraits(model, entity.project),
+          attachmentStorageIds,
+        });
+        return null;
+    }
+  },
+});
+
+/** The Stop button: cancels the chat's running turn and starts its queue. */
+export const stopTurn = authMutation({
+  args: { target: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { entity } = await resolveWritableChat(ctx, args.target);
+    switch (entity.kind) {
+      case "session":
+        await cancelChatExecution(ctx, entity.context);
+        return null;
+      case "task": {
+        const { task } = entity;
+        // A quick task's first run is an agent run, not a chat turn: the web
+        // Stop calls `taskWorkflow.cancelExecution` for it.
+        const isFirstRun =
+          task.projectId === undefined &&
+          task.activeWorkflowId !== undefined &&
+          task.activeChatWorkflowId === undefined &&
+          task.pendingTurn === undefined;
+        if (isFirstRun) await cancelTaskRun(ctx, task);
+        else await cancelTaskChatExecution(ctx, task);
+        return null;
+      }
+      case "project":
+        await cancelProjectChatExecution(ctx, entity.project);
+        return null;
+    }
+  },
+});
+
+/**
+ * Starts a session from the phone, as the web sessions landing composer does:
+ * the repo's default model, traits and base branch, with `prompt` as the
+ * first message. Open the returned `sessionId` as the chat target.
+ */
+export const startSession = authMutation({
+  args: {
+    repoId: v.id("githubRepos"),
+    prompt: v.string(),
+    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+  },
+  returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
+  handler: async (ctx, args) => {
+    const prompt = args.prompt.trim();
+    if (!prompt) throw new Error("Write a prompt first");
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) throw new Error("Not authorized");
+    const repo = await ctx.db.get(args.repoId);
+    if (!repo) throw new Error("Repository not found");
+    return await createSession(ctx, {
+      repoId: args.repoId,
+      message: prompt,
+      // `createSession` needs a model to queue the first message; the web
+      // composer sends the same normalised repo default.
+      model: normalizeAIModel(repo.defaultModel),
+      attachmentStorageIds: args.attachmentStorageIds,
+    });
   },
 });
 
@@ -162,25 +205,36 @@ export const listChats = authQuery({
             )
             .order("desc")
             .take(SESSIONS_PER_REPO);
-        const [awaitingAnswerIds, unset, unarchived] = await Promise.all([
-          awaitingAnswerEntityIdsForRepo(ctx.db, repo._id),
-          args.archived === true ? readSessions(true) : readSessions(undefined),
-          args.archived === true ? Promise.resolve([]) : readSessions(false),
-        ]);
-        const groups = [unset, unarchived];
-        return groups.flat().map((session) => ({
-          sessionId: session._id,
-          title: session.title,
-          repoLabel: repoLabel(repo),
-          status: session.status,
-          updatedAt: session.updatedAt ?? session._creationTime,
-          isAwaitingAnswer: awaitingAnswerIds.has(String(session._id)),
-        }));
+        const groups = await Promise.all(
+          args.archived === true ? [readSessions(true)] : [readSessions(undefined), readSessions(false)],
+        );
+        return groups.flat().map((session) => ({ session, repo }));
       }),
     );
-    return perRepo
+    const rows = perRepo
       .flat()
+      .map((row) => ({ ...row, updatedAt: row.session.updatedAt ?? row.session._creationTime }))
       .toSorted((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, CHAT_LIST_LIMIT);
+    // Question state only for repos that made the list, not every repo read.
+    const listedRepoIds = [...new Set(rows.map((row) => row.repo._id))];
+    const awaiting = new Map(
+      await Promise.all(
+        listedRepoIds.map(
+          async (repoId): Promise<[Id<"githubRepos">, ReadonlySet<string>]> => [
+            repoId,
+            await awaitingAnswerEntityIdsForRepo(ctx.db, repoId),
+          ],
+        ),
+      ),
+    );
+    return rows.map(({ session, repo, updatedAt }) => ({
+      sessionId: session._id,
+      title: session.title,
+      repoLabel: repoLabel(repo),
+      status: session.status,
+      updatedAt,
+      isAwaitingAnswer: awaiting.get(repo._id)?.has(String(session._id)) === true,
+    }));
   },
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseToolSteps, summariseToolSteps } from "@eva/shared/activityTrace";
+import { hasStepDetail, parseToolSteps, summariseToolSteps } from "@eva/shared/activityTrace";
 
 /** The mobile chat's tool trace reads `messages.activityLog` with no web types. */
 describe("activity trace", () => {
@@ -24,5 +24,19 @@ describe("activity trace", () => {
     expect(parseToolSteps("Ran the tests")).toEqual([]);
     expect(parseToolSteps("[]")).toEqual([]);
     expect(parseToolSteps(undefined)).toEqual([]);
+  });
+
+  test("keeps step detail (command, output, edits) and flags trimmed detail", () => {
+    const steps = parseToolSteps(
+      JSON.stringify([
+        { type: "bash", label: "Ran command", status: "complete", command: "pnpm test", output: { text: "ok", exitCode: 0 } },
+        { type: "edit", label: "Edited file", status: "complete", edits: [{ oldText: "a", newText: "b" }] },
+        { type: "read", label: "Read file", status: "complete", hasHiddenDetail: true },
+        { type: "read", label: "Read file", status: "complete" },
+      ]),
+    );
+    expect(steps[0]?.output).toEqual({ text: "ok", exitCode: 0 });
+    expect(steps[1]?.edits).toEqual([{ oldText: "a", newText: "b" }]);
+    expect(steps.map(hasStepDetail)).toEqual([true, true, true, false]);
   });
 });

@@ -133,6 +133,7 @@ export default function ChatScreen() {
                       message.content
                     ) : (
                       <AssistantMessage
+                        messageId={message._id}
                         content={message.content}
                         activityLog={message.activityLog}
                         seconds={

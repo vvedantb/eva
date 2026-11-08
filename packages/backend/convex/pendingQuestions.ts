@@ -6,7 +6,7 @@ import { internalMutation } from "./_generated/server";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
 import { recordAnsweredQuestion } from "./chatLog";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { resolveMobileChat } from "./mobile";
+import { resolveMobileChat } from "./_mobile/chatTarget";
 import { schedulePush } from "./push";
 
 /**

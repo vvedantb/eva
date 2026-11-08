@@ -1,17 +1,27 @@
 import { api } from "@eva/backend";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Button } from "@vvedantb/native-ui/button";
-import { PageHeader, ScreenContainer, SettingsSection } from "@vvedantb/native-ui/layout";
-import { ConfirmDialog } from "@vvedantb/native-ui/primitives";
-import { useMutation } from "convex/react";
+import { PageHeader, ScreenContainer, SettingsSection, SettingsToggleRow } from "@vvedantb/native-ui/layout";
+import { ConfirmDialog, Switch } from "@vvedantb/native-ui/primitives";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { getPushToken } from "@/push/push";
+import { AppearanceTiles } from "@/settings/AppearanceTiles";
 import { TabScreen } from "@/ui/TabScreen";
 
+/**
+ * The web settings a phone needs, with the web section names and copy:
+ * Appearance (Theme), Email notifications (Notifications), phone pushes in
+ * place of the web's desktop pop-ups, and the account.
+ */
 export default function SettingsScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const unregister = useMutation(api.push.unregister);
+  const emailEnabled = useQuery(api.auth.getEmailNotificationsEnabled, {});
+  const setEmailEnabled = useMutation(api.auth.setEmailNotificationsEnabled).withOptimisticUpdate((store, args) => {
+    store.setQuery(api.auth.getEmailNotificationsEnabled, {}, args.enabled);
+  });
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   // Drop this phone's push token first, so the next account on it does not
@@ -26,8 +36,25 @@ export default function SettingsScreen() {
     <TabScreen>
       <PageHeader title="Settings" />
       <ScreenContainer reserveTabBar>
+        <SettingsSection title="Appearance" description="Choose light, dark, or system.">
+          <AppearanceTiles />
+        </SettingsSection>
+        <SettingsSection title="Email notifications" description="How Eva reaches you outside the app.">
+          <SettingsToggleRow
+            title="Send summary and changelog"
+            description="Receive a daily summary of unread notifications and the weekly changelog by email."
+            action={
+              <Switch
+                checked={emailEnabled ?? false}
+                disabled={emailEnabled === undefined}
+                onCheckedChange={(enabled: boolean) => void setEmailEnabled({ enabled })}
+                accessibilityLabel="Email notifications"
+              />
+            }
+          />
+        </SettingsSection>
         <SettingsSection
-          title="Notifications"
+          title="Phone notifications"
           description="Eva notifies this phone when an agent needs your input or someone mentions you. Turn them off in Android settings."
         />
         <SettingsSection title="Account" description={user?.primaryEmailAddress?.emailAddress ?? "Signed in"}>

@@ -185,6 +185,7 @@ import type * as _migrations_removeProjectIdField from "../_migrations/removePro
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
 import type * as _migrations_repoSkills from "../_migrations/repoSkills.js";
+import type * as _mobile_chatTarget from "../_mobile/chatTarget.js";
 import type * as _prRecapWorkflow_finalizeOutcome from "../_prRecapWorkflow/finalizeOutcome.js";
 import type * as _prRecapWorkflow_prompts from "../_prRecapWorkflow/prompts.js";
 import type * as _prRecapWorkflow_recapState from "../_prRecapWorkflow/recapState.js";
@@ -744,6 +745,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
   "_migrations/repoSkills": typeof _migrations_repoSkills;
+  "_mobile/chatTarget": typeof _mobile_chatTarget;
   "_prRecapWorkflow/finalizeOutcome": typeof _prRecapWorkflow_finalizeOutcome;
   "_prRecapWorkflow/prompts": typeof _prRecapWorkflow_prompts;
   "_prRecapWorkflow/recapState": typeof _prRecapWorkflow_recapState;

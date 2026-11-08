@@ -15,7 +15,11 @@ import { ConvexReactClient } from "convex/react";
 import { Slot, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
+import { restoreColorSchemeChoice } from "@/settings/colorScheme";
 import { navigationTheme, useScheme } from "@/ui/theme";
+
+// The saved light / dark / system choice, applied before the first screen.
+void restoreColorSchemeChoice();
 
 /** One client for the app's life, outside render (it holds the socket). */
 const convex = new ConvexReactClient(CONVEX_URL, { unsavedChangesWarning: false });

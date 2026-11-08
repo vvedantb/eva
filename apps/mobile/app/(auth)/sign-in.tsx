@@ -1,12 +1,15 @@
 import { SignInScreen } from "@vvedantb/native-ui/auth";
 import { SSO_PATH, SSO_SCHEME } from "@/config";
+import { EvaMark } from "@/ui/EvaMark";
 
+/** The web sign-in (Clerk's modal on the landing page): the Eva mark and its copy. */
 export default function SignIn() {
   return (
     <SignInScreen
-      title="Welcome back"
-      subtitle="Sign in to your account"
-      googleLabel="Sign in with Google"
+      header={<EvaMark size={40} />}
+      title="Sign in to Eva"
+      subtitle="Welcome back! Please sign in to continue"
+      googleLabel="Continue with Google"
       signUpHref="/sign-up"
       errorDisplay="inline"
       scheme={SSO_SCHEME}

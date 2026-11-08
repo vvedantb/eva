@@ -2,7 +2,8 @@ import { z } from "zod";
 
 /**
  * The tool steps of a finished assistant message (`messages.activityLog`), in
- * the fields a compact trace shows: type, label, detail and status. A
+ * the fields a compact trace shows: type, label, detail and status, plus the
+ * step detail when present (command, output, edits). A
  * platform-free reader for the mobile app; the web reads the full step
  * (`parseActivitySteps`, typed by `@vvedantb/ui`).
  *
@@ -31,6 +32,14 @@ const toolStepSchema = z.object({
   label: z.string(),
   detail: z.string().optional(),
   status: z.enum(["complete", "active", "pending"]),
+  /** Bash command, fuller than `detail`. */
+  command: z.string().optional(),
+  /** Tool result transcript (tail-capped by the writer). */
+  output: z.object({ text: z.string(), exitCode: z.number().optional(), truncated: z.boolean().optional() }).optional(),
+  /** Edit before/after snippets. */
+  edits: z.array(z.object({ oldText: z.string(), newText: z.string() })).optional(),
+  /** The transcript copy dropped `output`/`edits`; fetch the full log (`messages.activityLogById`) to show them. */
+  hasHiddenDetail: z.boolean().optional(),
 });
 
 export type ToolStep = z.infer<typeof toolStepSchema>;
@@ -74,4 +83,9 @@ export function summariseToolSteps(steps: ReadonlyArray<ToolStep>): string {
   const phrases = [...new Set(steps.map((step) => GROUP_PHRASES[step.type]))];
   const joined = phrases.join(", ");
   return joined ? `${joined.charAt(0).toUpperCase()}${joined.slice(1)}` : "Worked";
+}
+
+/** Whether a step has detail to open: a command, output or edits, or detail the transcript trimmed. */
+export function hasStepDetail(step: ToolStep): boolean {
+  return Boolean(step.command || step.output || (step.edits && step.edits.length > 0) || step.hasHiddenDetail);
 }

@@ -1,6 +1,7 @@
 import type { Doc } from "@eva/backend";
 import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { IconCheck } from "@tabler/icons-react-native";
+import { Checkbox } from "@vvedantb/native-ui/primitives";
 import { palette, tokens } from "@vvedantb/native-ui/theme";
 import { Pressable, Text, View } from "react-native";
 import { timeAgo } from "@/ui/format";
@@ -18,11 +19,14 @@ export function NotificationRow({
   repoLabel,
   onPress,
   onMarkRead,
+  selection,
 }: {
   notification: Doc<"notifications">;
   repoLabel: string | undefined;
   onPress: () => void;
   onMarkRead: () => void;
+  /** Select mode, as the web: a checkbox leads the row, a press toggles it, and Mark read hides. */
+  selection?: { checked: boolean; onToggle: () => void };
 }) {
   const scheme = useScheme();
   const muted = tokens.color.muted[scheme];
@@ -41,10 +45,17 @@ export function NotificationRow({
   };
   return (
     <View className="flex-row items-center gap-3 px-4">
+      {selection ? (
+        <Checkbox
+          checked={selection.checked}
+          onCheckedChange={selection.onToggle}
+          accessibilityLabel={`Select ${subject}`}
+        />
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={subject}
-        onPress={onPress}
+        onPress={selection ? selection.onToggle : onPress}
         className="min-w-0 flex-1 flex-row items-center gap-3 py-3 active:opacity-70"
       >
         <View className="w-1.5 items-center">
@@ -77,7 +88,7 @@ export function NotificationRow({
         {timeAgo(notification.createdAt)}
       </Text>
       <Glyph size={16} color={toneColor[appearance.tone]} accessibilityLabel={appearance.label} />
-      {unread ? (
+      {unread && !selection ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Mark as read"
