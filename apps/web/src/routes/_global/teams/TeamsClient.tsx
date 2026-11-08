@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  CenteredSpinner,
   useRequestConfirm,
   ListEnter,
   userFacingErrorMessage,
@@ -22,6 +21,7 @@ import {
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";
+import { LoadingSkeleton } from "@/lib/components/LoadingSkeleton";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export function TeamsClient() {
@@ -122,41 +122,46 @@ export function TeamsClient() {
         </Button>
       }
     >
-      {teams === undefined ? (
-        <CenteredSpinner label="Loading teams" />
-      ) : teams.length === 0 ? (
-        <EmptyState.Root>
-          <EmptyState.Icon icon={IconUsers} size={24} />
-          <EmptyState.Title>No teams yet</EmptyState.Title>
-          <EmptyState.Description>
-            Create a team to collaborate on codebases.
-          </EmptyState.Description>
-          <EmptyState.Actions>
-            <Button size="sm" onClick={openCreate} className="mt-6">
-              <IconPlus size={16} />
-              Create Team
-            </Button>
-          </EmptyState.Actions>
-        </EmptyState.Root>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {teams.map((team, index) => (
-            <ListEnter key={team._id} index={index}>
-              <TeamCard
-                team={team}
-                onDelete={(target) =>
-                  requestConfirm(
-                    () => setDeleteTarget(target),
-                    () => {
-                      void handleDelete(target);
-                    },
-                  )
-                }
-              />
-            </ListEnter>
-          ))}
-        </div>
-      )}
+      <LoadingSkeleton
+        id="teams-list"
+        data={teams}
+        label="Loading teams"
+        empty={
+          <EmptyState.Root>
+            <EmptyState.Icon icon={IconUsers} size={24} />
+            <EmptyState.Title>No teams yet</EmptyState.Title>
+            <EmptyState.Description>
+              Create a team to collaborate on codebases.
+            </EmptyState.Description>
+            <EmptyState.Actions>
+              <Button size="sm" onClick={openCreate} className="mt-6">
+                <IconPlus size={16} />
+                Create Team
+              </Button>
+            </EmptyState.Actions>
+          </EmptyState.Root>
+        }
+      >
+        {(rows) => (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {rows.map((team, index) => (
+              <ListEnter key={team._id} index={index}>
+                <TeamCard
+                  team={team}
+                  onDelete={(target) =>
+                    requestConfirm(
+                      () => setDeleteTarget(target),
+                      () => {
+                        void handleDelete(target);
+                      },
+                    )
+                  }
+                />
+              </ListEnter>
+            ))}
+          </div>
+        )}
+      </LoadingSkeleton>
 
       <Dialog open={createDialog.open} onOpenChange={handleOpenChange}>
         <DialogContent>
