@@ -144,6 +144,54 @@ describe("pollForAnswer releases the question after the wait", () => {
     const { outcome } = await pollWith('{"Which?":"A"}');
     expect(outcome).toEqual({ kind: "answered", answer: '{"Which?":"A"}' });
   });
+
+  test("a released question is saved for the turn's message, not lost", async () => {
+    // `release` deletes the row, so `pendingQuestionData` is the only copy
+    // left: without it the turn ends and the card never renders.
+    process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
+    process.env.ENTITY_ID_FIELD = "sessionId";
+    vi.resetModules();
+    const client = await import("../http/convexClient.js");
+    const { buildCanUseTool, QUESTION_RELEASED_MESSAGE, QUESTION_WAIT_MS } =
+      await import("../runtime/pendingQuestion.js");
+    const { callbackState } = await import("../runtime/state.js");
+    const realNow = Date.now.bind(Date);
+    let skippedMs = 0;
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockImplementation(() => realNow() + skippedMs);
+    const calls: string[] = [];
+    // The first unanswered poll jumps the clock past the wait, so the next
+    // poll is the release.
+    vi.mocked(client.callConvexWithRetry).mockImplementation(
+      async (_type, path) => {
+        calls.push(path);
+        if (path === "pendingQuestions:claimAnswer") {
+          skippedMs = QUESTION_WAIT_MS;
+        }
+        return { status: "success", value: { answer: null } };
+      },
+    );
+    const input = {
+      questions: [{ question: "Which?", options: [{ label: "A" }] }],
+    };
+    try {
+      const result = await buildCanUseTool()("AskUserQuestion", input, {
+        toolUseID: "toolu_q",
+        signal: new AbortController().signal,
+      });
+      expect(result).toEqual({
+        behavior: "deny",
+        message: QUESTION_RELEASED_MESSAGE,
+      });
+      expect(calls.at(-1)).toBe("pendingQuestions:release");
+      expect(callbackState.pendingQuestionData).toBe(JSON.stringify(input));
+      expect(callbackState.awaitingQuestionAnswer).toBe(false);
+    } finally {
+      clock.mockRestore();
+      callbackState.pendingQuestionData = "";
+    }
+  });
 });
 
 /**
