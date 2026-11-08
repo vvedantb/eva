@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "@eva/backend";
+import type { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
   ActivityTasks,

@@ -1,3 +1,4 @@
+"use no memo"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import './stage.css'
 import { checkSeam, createAct, Stopped, type Script } from './act'
@@ -292,7 +293,7 @@ export function Stage<S extends object>({
   const place = useCallback((p: Point) => {
     if (loopAt.current && !moved.current && Math.hypot(p.x - pos.current.x, p.y - pos.current.y) > 0.5) {
       moved.current = true
-      firstMove.current ??= performance.now() - loopAt.current
+      if (firstMove.current === null) firstMove.current = performance.now() - loopAt.current
     }
     pos.current = p
     active.current = performance.now()

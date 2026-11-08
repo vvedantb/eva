@@ -1,7 +1,7 @@
 import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
-import {
+import type {
   prOriginValidator,
   prOwnerValidator,
   prStateValidator,
