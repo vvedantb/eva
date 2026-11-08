@@ -1,4 +1,4 @@
-import { formatClockTime, formatDayLabel } from "@eva/shared/dayLabel";
+import dayjs, { formatDayLabel } from "@eva/shared/dates";
 
 /**
  * iMessage-style date label heading the first turn of each day: the day in
@@ -7,7 +7,7 @@ import { formatClockTime, formatDayLabel } from "@eva/shared/dayLabel";
  */
 export function ChatDayDivider({ timestamp }: { timestamp: number }) {
   const day = formatDayLabel(timestamp);
-  const time = formatClockTime(timestamp);
+  const time = dayjs(timestamp).format("h:mm A");
   return (
     <div
       role="separator"

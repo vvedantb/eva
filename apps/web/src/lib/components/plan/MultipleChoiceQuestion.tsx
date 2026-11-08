@@ -18,10 +18,6 @@ import {
   IconArrowRight,
   IconArrowLeft,
 } from "@tabler/icons-react";
-import {
-  buildStructuredAnswer,
-  type ParsedQuestion,
-} from "@eva/shared/pendingQuestion";
 
 /**
  * The pressable surface of an option card. A stretched native `<button>` rather
@@ -33,8 +29,17 @@ import {
 const OPTION_OVERLAY_CLASS =
   "absolute inset-0 z-1 cursor-pointer rounded-surface focus-visible:outline-hidden";
 
-type QuestionItem = ParsedQuestion;
-type OptionItem = ParsedQuestion["options"][number];
+interface OptionItem {
+  label: string;
+  description: string;
+}
+
+interface QuestionItem {
+  question: string;
+  header: string;
+  options: OptionItem[];
+  multiSelect: boolean;
+}
 
 interface MultipleChoiceQuestionProps {
   question?: string;
@@ -122,19 +127,29 @@ export function MultipleChoiceQuestion({
       .join("\n\n");
   };
 
-  // Structured answer keyed by question text; shape shared with mobile.
-  const buildAnswer = () =>
-    buildStructuredAnswer(resolvedQuestions, (_, idx) =>
-      otherActive[idx]
-        ? [(customAnswers[idx] ?? "").trim()]
-        : (answers[idx] ?? []),
-    );
+  // Structured answer keyed by question text → selected label (or free-text
+  // "Other"). Multi-select is a comma-separated string — the shape AskUserQuestion
+  // expects in updatedInput.answers.
+  const buildStructuredAnswer = (): Record<string, string> => {
+    const result: Record<string, string> = {};
+    resolvedQuestions.forEach((rq, idx) => {
+      if (otherActive[idx]) {
+        result[rq.question] = (customAnswers[idx] ?? "").trim();
+        return;
+      }
+      const selected = answers[idx] ?? [];
+      result[rq.question] = rq.multiSelect
+        ? selected.join(", ")
+        : (selected[0] ?? "");
+    });
+    return result;
+  };
 
   const handleNext = () => {
     if (!currentHasAnswer || isLoading) return;
     if (isLastStep) {
       if (onAnswerStructured) {
-        onAnswerStructured(buildAnswer());
+        onAnswerStructured(buildStructuredAnswer());
       } else {
         onAnswer(formatAnswer());
       }

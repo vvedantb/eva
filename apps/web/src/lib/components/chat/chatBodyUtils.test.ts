@@ -7,6 +7,7 @@ import {
   buildPrecedingUserTurns,
   collectQuestionSteps,
   findTurnWindowStart,
+  findDayBoundaryIds,
   findHandoffBoundaryIds,
   findNewMessageIds,
   findStreamingTargetMessage,
@@ -21,7 +22,6 @@ import {
   turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
-import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 
 type TestMessage = {
   role: "user" | "assistant";

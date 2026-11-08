@@ -1,7 +1,7 @@
 "use client";
 
 import { MultipleChoiceQuestion } from "@/lib/components/plan/MultipleChoiceQuestion";
-import type { ParsedQuestion } from "@eva/shared/pendingQuestion";
+import type { ParsedQuestion } from "@/lib/components/chat/chatBodyUtils";
 
 interface ChatQuestionDockProps {
   questions: ParsedQuestion[];

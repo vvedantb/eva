@@ -17,7 +17,7 @@ import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
 } from "@/lib/components/chat/_components/AgentSpawnCtaRow";
-import { formatClockTime } from "@eva/shared/dayLabel";
+import dayjs from "@eva/shared/dates";
 import { formatDuration } from "@eva/shared/duration";
 import {
   findAIModelOption,
@@ -31,7 +31,7 @@ import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUse
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
-import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
+import type { FeedbackSentiment } from "@/lib/components/chat/feedback/feedbackRows";
 import { ChatMessageContextMenu } from "@/lib/components/chat/ChatMessageContextMenu";
 import {
   useTurnCheckpointActions,
@@ -898,7 +898,7 @@ function AssistantTurnMeta({
               {/* The turn's clock time is when Eva finished, not
                   when it started — the duration next to it already
                   says how long the reply took. */}
-              {formatClockTime(message.finishedAt)} ·{" "}
+              {dayjs(message.finishedAt).format("h:mm A")} ·{" "}
               {formatDuration(message.timestamp, message.finishedAt)}
             </span>
           ) : null}
@@ -994,7 +994,7 @@ function UserMessageMeta({
       ) : null}
       {timestamp ? (
         <span className="text-2xs text-muted-foreground/60">
-          {formatClockTime(timestamp)}
+          {dayjs(timestamp).format("h:mm A")}
         </span>
       ) : null}
     </div>
