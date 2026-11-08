@@ -19,7 +19,7 @@ import {
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { normalizeAIModel } from "../validators";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
@@ -450,8 +450,8 @@ export async function requestProjectSandboxStop(
   );
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
-  // never be claimed — clear it or it hides the composer forever.
-  await clearPendingQuestionsForEntity(ctx.db, String(projectId));
+  // never be claimed — move it onto the chat message so the card stays.
+  await detachPendingQuestions(ctx.db, String(projectId));
   await clearPreviewToolCallsForParent(ctx.db, projectId);
 
   // Keep sandboxId so we can resume the stopped sandbox later.

@@ -545,6 +545,46 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(turn?.error).toBe(STALL_ALERT_TEXT);
   });
 
+  test("a turn torn down while asking keeps the question and posts no alert", async () => {
+    // The question card renders only on the last message, so an alert after
+    // it would hide the question the user still has to answer.
+    const { t, taskId, turnId, placeholderMessageId } =
+      await createTaskChatFixture();
+    const payload = JSON.stringify({ questions: [{ question: "Which?" }] });
+    const rows = await t.run(async (ctx) => {
+      await ctx.db.patch(placeholderMessageId, { content: "Which one?" });
+      await ctx.db.patch(turnId, { workflowId: "chat-workflow" });
+      await ctx.db.patch(taskId, { activeChatWorkflowId: "chat-workflow" });
+      await ctx.db.insert("pendingQuestions", {
+        entityId: String(taskId),
+        toolUseId: "toolu_q",
+        payload,
+        createdAt: Date.now(),
+      });
+      const task = await ctx.db.get(taskId);
+      if (!task) throw new Error("missing task");
+      await finalizeStaleChatTurn(
+        ctx,
+        taskChatAdapter,
+        taskId,
+        task,
+        "chat-workflow",
+        { text: "Execution timed out." },
+        { sandboxStopped: true },
+      );
+      return {
+        messages: await ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", taskId))
+          .collect(),
+        questions: await ctx.db.query("pendingQuestions").collect(),
+      };
+    });
+    expect(rows.questions).toHaveLength(0);
+    expect(rows.messages.some((m) => m.isSystemAlert === true)).toBe(false);
+    expect(rows.messages.at(-1)?.pendingQuestion).toBe(payload);
+  });
+
   test("an open task turn makes the task busy, synthetic or not", async () => {
     const { t, repoId, taskId } = await createTaskChatFixture();
     const busy = await t.run(async (ctx) => {

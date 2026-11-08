@@ -16,7 +16,7 @@ import {
 import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
-import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import {
@@ -232,10 +232,10 @@ export async function requestSessionSandboxStop(
   const { stopReason } = options;
 
   // Stopping kills every chat's paused turn, so a blocking AskUserQuestion
-  // can never be claimed — clear them or they hide the composer forever.
+  // can never be claimed — move them onto the chat message so the card stays.
   const chats = await listLiveSessionChats(ctx.db, sessionId);
   for (const chat of chats) {
-    await clearPendingQuestionsForEntity(
+    await detachPendingQuestions(
       ctx.db,
       sessionChatStreamingEntityId(chat._id),
     );
