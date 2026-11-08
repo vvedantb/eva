@@ -1,3 +1,4 @@
+"use no memo"
 import { useEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import './Popover.css'
 

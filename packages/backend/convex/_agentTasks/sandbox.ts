@@ -6,8 +6,10 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+import {
+  scheduleDrainAfterStopSettles,
+  STUCK_STOPPING_RECOVER_MS,
+} from "../_sandbox/stopRecovery";
 import { authMutation, hasRepoAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
@@ -15,7 +17,7 @@ import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
-import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import {
   stopAlertText,
@@ -403,8 +405,8 @@ export async function requestTaskSandboxStop(
   await clearSandboxStartupActivity(ctx.db, `task-sandbox-startup-${taskId}`);
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
-  // never be claimed — clear it or it hides the composer forever.
-  await clearPendingQuestionsForEntity(ctx.db, String(taskId));
+  // never be claimed — move it onto the chat message so the card stays.
+  await detachPendingQuestions(ctx.db, String(taskId));
   await clearPreviewToolCallsForParent(ctx.db, taskId);
 
   // Keep sandboxId so we can resume the stopped sandbox later.

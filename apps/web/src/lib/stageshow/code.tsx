@@ -1,3 +1,4 @@
+"use no memo"
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import './code.css'
 

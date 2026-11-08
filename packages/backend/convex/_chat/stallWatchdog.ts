@@ -5,6 +5,7 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
 import { closeTurnForWorkflow } from "./turnStore";
+import { detachPendingQuestions } from "../pendingQuestions";
 
 /**
  * Cancels a workflow by ID and clears streaming activity for associated
@@ -82,14 +83,31 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     await finalizeCancelledAssistantMessage(ctx, last, streaming);
   }
 
-  await ctx.db.insert("messages", {
-    parentId: id,
-    role: "assistant",
-    content: alert.text,
-    timestamp: Date.now(),
-    isSystemAlert: true,
-    ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
-  });
+  // A turn that died waiting on a question keeps it: the card moves onto the
+  // chat message, and the answer resumes the agent as a normal message. The
+  // card renders only on the last message, so no alert goes after it — the
+  // turn was waiting on the user, not failing.
+  await detachPendingQuestions(ctx.db, String(id));
+  const tail = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", id))
+    .order("desc")
+    .first();
+  const questionLeftForUser =
+    tail !== null &&
+    tail.role === "assistant" &&
+    tail.isSystemAlert !== true &&
+    tail.pendingQuestion !== undefined;
+  if (!questionLeftForUser) {
+    await ctx.db.insert("messages", {
+      parentId: id,
+      role: "assistant",
+      content: alert.text,
+      timestamp: Date.now(),
+      isSystemAlert: true,
+      ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
+    });
+  }
 
   // A stale heartbeat usually means the agent process is dead, but a merely
   // wedged one must not keep mutating the sandbox after the turn moves on to
