@@ -276,7 +276,7 @@ export function SandboxIframeService({
     }
   };
 
-  /* eslint-disable no-effect/no-adjust-state-on-prop-change --
+  /* eslint-disable no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler, no-effect/no-chain-state-updates, no-effect/no-pass-data-to-parent --
      Reads sessionStorage and kicks off a readiness poll against the sandbox;
      the sandbox can also go down without any local event. */
   // Hydrate from sessionStorage cache when the sandbox is up; clear on stop.
@@ -320,7 +320,7 @@ export function SandboxIframeService({
     start,
     autoStartKey,
   ]);
-  /* eslint-enable no-effect/no-adjust-state-on-prop-change */
+  /* eslint-enable no-effect/no-adjust-state-on-prop-change, no-effect/no-event-handler, no-effect/no-chain-state-updates, no-effect/no-pass-data-to-parent */
 
   // A poll belongs to one sandbox. Cancel it only when the sandbox goes away
   // or the panel unmounts — not whenever a callback prop changes identity,

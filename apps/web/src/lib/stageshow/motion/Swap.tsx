@@ -1,3 +1,4 @@
+"use no memo"
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useStill } from '../reduced-motion'
 import './Swap.css'

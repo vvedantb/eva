@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import type * as StallWatchdog from "../convex/_chat/stallWatchdog";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -18,7 +19,7 @@ const poison = vi.hoisted(() => ({
 // unbounded `backgroundAgents` array) on exactly one turn.
 vi.mock("../convex/_chat/stallWatchdog", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../convex/_chat/stallWatchdog")>();
+    await importOriginal<typeof StallWatchdog>();
   return {
     ...actual,
     finalizeStaleChatTurn: async (

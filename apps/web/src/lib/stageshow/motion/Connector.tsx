@@ -101,6 +101,7 @@ export function Connector({ from, to, route = 'h', show, radius = 8, dots, arrow
       <svg className={`ss-connector${className ? ` ${className}` : ''}`} data-show={show || undefined} data-arrived={show && arrived || undefined} data-dashed={dashed || undefined} aria-hidden>
         {/* The reveal has its own normalized path. The visible dashed line
             keeps real dash spacing while its tip travels toward the target. */}
+        {/* design-check-ignore-next-line — SVG mask must use opaque white */}
         {dashed && <defs><mask id={revealId} maskUnits="userSpaceOnUse"><path ref={reveal} className="ss-connector__reveal" d={d} pathLength="1" style={{ fill: 'none', stroke: '#fff', strokeWidth: 8 }} /></mask></defs>}
         <path ref={line} className="ss-connector__line" d={d} pathLength={dashed ? undefined : 1} mask={dashed ? `url(#${revealId})` : undefined} />
         {arrow && directionLength > .001 && <path d={head} className="ss-connector__arrow" />}

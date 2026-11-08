@@ -1,3 +1,4 @@
+"use no memo"
 import { useLayoutEffect, useEffect, useRef, useState, type HTMLAttributes } from 'react'
 import { useStill } from '../reduced-motion'
 import './Count.css'

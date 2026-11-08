@@ -9,7 +9,6 @@ import {
   collectChangedFiles,
   type ChangedFile,
 } from "@/lib/components/chat/ChangedFilesCard";
-import { z } from "zod";
 
 /**
  * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
@@ -70,23 +69,6 @@ export function findHandoffBoundaryIds(
       boundaries.add(message._id);
     }
     previousProvider = provider;
-  }
-  return boundaries;
-}
-
-/**
- * Turns that open a new local calendar day — the first turn of the transcript
- * included — so ChatBody can head each day with an iMessage-style date label.
- */
-export function findDayBoundaryIds(
-  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
-): Set<string> {
-  const boundaries = new Set<string>();
-  let previousDay: string | undefined;
-  for (const message of messages) {
-    const day = new Date(message.timestamp).toDateString();
-    if (day !== previousDay) boundaries.add(message._id);
-    previousDay = day;
   }
   return boundaries;
 }
@@ -162,36 +144,6 @@ export function visibleChatMessages<
     (hideSystemAlerts && message.isSystemAlert === true);
   if (!messages.some(hidden)) return messages;
   return messages.filter((message) => !hidden(message));
-}
-
-// Boundary schema for the pending-question JSON emitted by the agent. A
-// question with any malformed field (or option) is dropped via
-// `.catch(null)` + filter, matching the previous per-item guard behaviour.
-const questionSchema = z.object({
-  question: z.string(),
-  header: z.string(),
-  multiSelect: z.boolean(),
-  options: z.array(z.object({ label: z.string(), description: z.string() })),
-});
-
-export type ParsedQuestion = z.infer<typeof questionSchema>;
-
-const pendingQuestionSchema = z.object({
-  questions: z.array(questionSchema.nullable().catch(null)),
-});
-
-export function parsePendingQuestion(
-  raw: string | undefined | null,
-): ParsedQuestion[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = pendingQuestionSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success) return null;
-    const questions = parsed.data.questions.flatMap((q) => (q ? [q] : []));
-    return questions.length > 0 ? questions : null;
-  } catch {
-    return null;
-  }
 }
 
 /** First name for chat labels; falls back to the first word of full name. */

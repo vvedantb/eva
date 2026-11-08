@@ -103,6 +103,98 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
 });
 
 /**
+ * Sessions 417 and 419: a turn held its sandbox for 2 hours waiting on an
+ * answer, then the cap killed it and the question was lost. Past the wait the
+ * poll releases the question instead; `release` still returns an answer that
+ * landed at the deadline.
+ */
+describe("pollForAnswer releases the question after the wait", () => {
+  async function pollWith(releaseAnswer: string | null) {
+    vi.resetModules();
+    const client = await import("../http/convexClient.js");
+    const calls: string[] = [];
+    // With no wait left the poll makes exactly one call: the release.
+    vi.mocked(client.callConvexWithRetry).mockImplementationOnce(
+      async (_type, path) => {
+        calls.push(path);
+        return {
+          status: "success",
+          value: {
+            answer: path === "pendingQuestions:release" ? releaseAnswer : null,
+          },
+        };
+      },
+    );
+    const { pollForAnswer } = await import("../runtime/pendingQuestion.js");
+    const outcome = await pollForAnswer(
+      "toolu_q",
+      new AbortController().signal,
+      0,
+    );
+    return { outcome, calls };
+  }
+
+  test("an unanswered question is released", async () => {
+    const { outcome, calls } = await pollWith(null);
+    expect(outcome).toEqual({ kind: "released" });
+    expect(calls).toEqual(["pendingQuestions:release"]);
+  });
+
+  test("an answer that lands at the deadline is still taken", async () => {
+    const { outcome } = await pollWith('{"Which?":"A"}');
+    expect(outcome).toEqual({ kind: "answered", answer: '{"Which?":"A"}' });
+  });
+
+  test("a released question is saved for the turn's message, not lost", async () => {
+    // `release` deletes the row, so `pendingQuestionData` is the only copy
+    // left: without it the turn ends and the card never renders.
+    process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
+    process.env.ENTITY_ID_FIELD = "sessionId";
+    vi.resetModules();
+    const client = await import("../http/convexClient.js");
+    const { buildCanUseTool, QUESTION_RELEASED_MESSAGE, QUESTION_WAIT_MS } =
+      await import("../runtime/pendingQuestion.js");
+    const { callbackState } = await import("../runtime/state.js");
+    const realNow = Date.now.bind(Date);
+    let skippedMs = 0;
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockImplementation(() => realNow() + skippedMs);
+    const calls: string[] = [];
+    // The first unanswered poll jumps the clock past the wait, so the next
+    // poll is the release.
+    vi.mocked(client.callConvexWithRetry).mockImplementation(
+      async (_type, path) => {
+        calls.push(path);
+        if (path === "pendingQuestions:claimAnswer") {
+          skippedMs = QUESTION_WAIT_MS;
+        }
+        return { status: "success", value: { answer: null } };
+      },
+    );
+    const input = {
+      questions: [{ question: "Which?", options: [{ label: "A" }] }],
+    };
+    try {
+      const result = await buildCanUseTool()("AskUserQuestion", input, {
+        toolUseID: "toolu_q",
+        signal: new AbortController().signal,
+      });
+      expect(result).toEqual({
+        behavior: "deny",
+        message: QUESTION_RELEASED_MESSAGE,
+      });
+      expect(calls.at(-1)).toBe("pendingQuestions:release");
+      expect(callbackState.pendingQuestionData).toBe(JSON.stringify(input));
+      expect(callbackState.awaitingQuestionAnswer).toBe(false);
+    } finally {
+      clock.mockRestore();
+      callbackState.pendingQuestionData = "";
+    }
+  });
+});
+
+/**
  * Regression: task and project chats could not call any `mcp__eva__*` tool,
  * read-only ones included.
  *
