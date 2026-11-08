@@ -1,3 +1,4 @@
+"use no memo"
 import { useId, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { useStill } from './reduced-motion'
 import './chart.css'

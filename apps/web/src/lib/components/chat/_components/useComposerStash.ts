@@ -148,7 +148,7 @@ export function useComposerStash({
       });
 
       // Only the stashed files: ones added during the upload stay attached.
-      for (const file of filesSnapshot) attachments.remove(file.id);
+      filesSnapshot.forEach((file) => attachments.remove(file.id));
 
       if (result.evicted) {
         toast.message("Oldest stash removed (limit 20 per app).");

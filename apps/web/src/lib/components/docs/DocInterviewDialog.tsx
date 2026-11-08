@@ -198,7 +198,7 @@ export function DocInterviewDialog({
     ).catch(() => setIsLoading(false));
   };
 
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-derived-state --
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-derived-state, no-effect/no-adjust-state-on-prop-change --
      The dialog can be opened from several call sites (and from a route), so the
      "ask the first question" kick-off belongs to the open transition, not to any
      one trigger's click handler. */
@@ -214,7 +214,7 @@ export function DocInterviewDialog({
       askQuestion([]);
     }
   }, [open]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-derived-state */
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-derived-state, no-effect/no-adjust-state-on-prop-change */
 
   const handleAnswer = async (answer: string) => {
     const lastAssistantMsg = [...messages]

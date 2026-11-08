@@ -24,8 +24,10 @@ import {
   listLiveSessionChats,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
-import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+import {
+  scheduleDrainAfterStopSettles,
+  STUCK_STOPPING_RECOVER_MS,
+} from "../_sandbox/stopRecovery";
 import {
   stopAlertText,
   stopReasonValidator,

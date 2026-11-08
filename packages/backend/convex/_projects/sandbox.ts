@@ -8,8 +8,10 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+import {
+  scheduleDrainAfterStopSettles,
+  STUCK_STOPPING_RECOVER_MS,
+} from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
 import { workflow } from "../workflowManager";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";

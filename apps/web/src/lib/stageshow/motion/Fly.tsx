@@ -1,3 +1,4 @@
+"use no memo"
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useStill } from '../reduced-motion'
 import type { Rect } from '../measure'
