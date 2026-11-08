@@ -31,7 +31,7 @@ import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUse
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
-import type { FeedbackSentiment } from "@/lib/components/chat/feedback/feedbackRows";
+import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
 import { ChatMessageContextMenu } from "@/lib/components/chat/ChatMessageContextMenu";
 import {
   useTurnCheckpointActions,

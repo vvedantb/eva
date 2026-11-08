@@ -16,7 +16,11 @@ import { Slot, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
 import { restoreColorSchemeChoice } from "@/settings/colorScheme";
+import { applyEvaTheme } from "@/ui/evaTheme";
 import { navigationTheme, useScheme } from "@/ui/theme";
+
+// Eva's web colours for every native-ui part, before anything renders.
+applyEvaTheme();
 
 // The saved light / dark / system choice, applied before the first screen.
 void restoreColorSchemeChoice();

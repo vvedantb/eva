@@ -154,6 +154,8 @@ export const startSession = authMutation({
   args: {
     repoId: v.id("githubRepos"),
     prompt: v.string(),
+    /** The session title; a fork passes `forkThreadTitle`. Default: generated from the prompt, as on the web. */
+    title: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
@@ -165,6 +167,7 @@ export const startSession = authMutation({
     if (!repo) throw new Error("Repository not found");
     return await createSession(ctx, {
       repoId: args.repoId,
+      title: args.title,
       message: prompt,
       // `createSession` needs a model to queue the first message; the web
       // composer sends the same normalised repo default.

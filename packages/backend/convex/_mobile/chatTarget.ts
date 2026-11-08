@@ -28,6 +28,8 @@ export const mobileChatValidator = v.object({
   kind: chatKindValidator,
   title: v.string(),
   repoLabel: v.string(),
+  /** The chat's repo, for starting a session from it (fork). */
+  repoId: v.id("githubRepos"),
   /** The chat's id for `messages.listByParent`, `turns` and `pendingQuestions`. */
   parentId: v.union(v.id("sessionChats"), v.id("projects"), v.id("agentTasks")),
   /**
@@ -83,6 +85,7 @@ export async function resolveMobileChat(
         kind: "session",
         title: chat.isMain ? session.title : `${session.title} · ${chat.title}`,
         repoLabel: repoLabel(repo),
+        repoId: repo._id,
         parentId: chat._id,
         canReply: chat.archived !== true && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
@@ -106,6 +109,7 @@ export async function resolveMobileChat(
         kind: "task",
         title: task.title,
         repoLabel: repoLabel(repo),
+        repoId: repo._id,
         parentId: task._id,
         canReply: task.deletedAt === undefined,
         model: task.lastChatModel ?? task.model,
@@ -129,6 +133,7 @@ export async function resolveMobileChat(
         kind: "project",
         title: project.title,
         repoLabel: repoLabel(repo),
+        repoId: repo._id,
         parentId: project._id,
         canReply: project.deletedAt === undefined,
         model: project.lastChatModel ?? project.model,

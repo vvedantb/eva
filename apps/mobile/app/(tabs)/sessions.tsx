@@ -1,8 +1,8 @@
 import { api } from "@eva/backend";
-import { IconTerminal2 } from "@tabler/icons-react-native";
+import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
-import { CenteredSpinner, EmptyState, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, IconButton, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
 import { palette, tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useRouter } from "expo-router";
@@ -38,7 +38,10 @@ export default function SessionsScreen() {
 
   return (
     <TabScreen>
-      <PageHeader title="Sessions" />
+      <PageHeader
+        title="Sessions"
+        action={<IconButton icon={IconPlus} label="New session" size="sm" onPress={() => router.push("/session/new")} />}
+      />
       <View className="px-4 pb-2">
         <Tabs value={tab} onValueChange={(value: string) => setTab(value === "archived" ? "archived" : "active")}>
           <TabsList variant="segmented" className="self-stretch">
