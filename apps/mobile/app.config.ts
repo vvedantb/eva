@@ -7,7 +7,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * push, so it is off. See README.md.
  *
  * Push needs two things that only the owner can create:
- * - `google-services.json` from a Firebase project (Android push runs on FCM).
+ * - `google-services.json` for `com.vis1.eva` from the Velth Firebase project (Android push runs on FCM).
  * - `EAS_PROJECT_ID` from `eas init` (Expo push tokens are per Expo project).
  * Without them the app builds and works; it just does not register for push.
  */

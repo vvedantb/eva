@@ -5,6 +5,7 @@ screenshots
 .env
 .env.local
 .env*
+!.env.example
 dist
 tsconfig.buildinfo
 packages/backend/callback-src/.build

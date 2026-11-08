@@ -2,8 +2,8 @@
 
 Android companion app for Eva. It tells you when an agent needs your input or someone mentions you, and lets you answer and reply from your phone. It is not a copy of the web app.
 
-- Android only. Distribution is by sideloaded APK, as vmem does. The code is cross-platform; iOS needs a paid Apple developer account for installs and push.
-- Expo SDK 57 (React Native 0.86), Expo Router, NativeWind, Clerk. UI from `@vvedantb/native-ui` 0.8: `/auth` (sign-in), `/tab-bar` (floating tabs), `/ai` (chat parts), `/layout`, `/primitives`, `/toast`.
+- Android only. Distribution is by sideloaded APK from GitHub Releases (see [RELEASE.md](RELEASE.md)). Eva is not in V Store. The code is cross-platform; iOS needs a paid Apple developer account for installs and push.
+- Expo SDK 57 (React Native 0.86), Expo Router, NativeWind, Clerk. UI from `@vvedantb/native-ui` (pinned to a git commit, see below): `/auth` (sign-in), `/tab-bar` (floating tabs), `/ai` (chat parts), `/layout`, `/primitives`, `/toast`.
 - Data comes live from the same Convex deployment as the web app, through `api` from `@eva/backend`.
 
 ## What it does
@@ -36,9 +36,14 @@ The sandbox has no emulator, so screens are checked in a browser build: `pnpm --
 
 Push works only after these steps. Until then the app runs normally and does not register for push.
 
-1. Create a Firebase project, add an Android app with package `com.vis1.eva`, and save `google-services.json` in this folder. It is picked up automatically.
-2. Run `eas init` to create the Expo project, and set `EAS_PROJECT_ID` in `.env.local`.
-3. Upload the FCM V1 service account key to Expo (`eas credentials`), so Expo's push service can send through FCM.
+Eva uses the same push path as Velth: the app asks Expo for a push token, Convex sends through the Expo push service (`packages/backend/convex/push.ts`), and Expo delivers through Firebase Cloud Messaging (FCM) v1. Convex does not call FCM directly.
+
+1. Use the **Velth Firebase project**. Do not create a new one. In its console, add an Android app with package `com.vis1.eva` and download `google-services.json`.
+2. Save the file as `apps/mobile/google-services.json`. `app.config.ts` picks it up when it exists. Commit it once it is the real file for `com.vis1.eva`, as Velth does. It holds no secret: it has the public client keys only. This repository does not hold a placeholder, because a fake file builds an app that cannot get a token.
+3. Run `eas init` in this folder to create the Expo project. Set `EAS_PROJECT_ID` in `.env.local` for local builds, and as the `EAS_PROJECT_ID` repository variable for release builds.
+4. Create a service account key for the Velth Firebase project (Project settings, Service accounts) and upload it to Expo with `eas credentials` (Android, the Google Service Account Key for Push Notifications, FCM V1). Expo then sends through FCM for `com.vis1.eva`. Do not commit the service account key.
+
+Without `google-services.json`, `getExpoPushTokenAsync` fails and the app skips registration. Without `EAS_PROJECT_ID`, it skips registration before that call.
 
 ### Google sign-in
 
@@ -47,6 +52,12 @@ The redirect is `eva://sso-callback`. If Google sign-in fails with a redirect er
 ### Release APK
 
 `plugins/withReleaseSigning.js` signs `assembleRelease` with the keys in `keystore.properties` at the repository root (gitignored) or the `ANDROID_KEY*` environment variables. Debug builds need none.
+
+GitHub Actions builds and publishes the signed APK. See [RELEASE.md](RELEASE.md) for the secrets, the variables, the tag prefix (`eva-apk-`) and how to build locally.
+
+### UI kit pin
+
+`@vvedantb/native-ui` is pinned to a git commit in `package.json`. npm 0.8.0 (the latest published on 8 November 2026) does not export what the app uses: `DropdownMenu*`, `ChoiceQuestion`, `AgentTraceFold`, `MessageMeta`, `ActivityStepDetail`, `DividedList`, `BulkActionBar`, `configureTheme`, `/markdown`, and newer `PromptInput` and `MessageContent` props. Typecheck fails with 27 errors against 0.8.0. Move to an npm version when one ships these.
 
 ## Changing the package name
 

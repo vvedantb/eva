@@ -1,5 +1,5 @@
 import { formatClockTime, formatDayLabel } from "@eva/shared/dayLabel";
-import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { Text, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
