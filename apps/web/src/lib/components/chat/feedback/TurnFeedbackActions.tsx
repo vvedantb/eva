@@ -19,7 +19,7 @@ import {
   IconThumbUp,
   IconThumbUpFilled,
 } from "@tabler/icons-react";
-import type { FeedbackSentiment } from "./feedbackRows";
+import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
 
 const PROMPTS: Record<FeedbackSentiment, string> = {
   positive: "What went well? (optional)",

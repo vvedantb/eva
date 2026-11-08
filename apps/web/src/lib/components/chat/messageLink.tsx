@@ -4,19 +4,15 @@ import { useRef } from "react";
 import { useQueryState } from "nuqs";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import { toast } from "@vvedantb/ui";
+import { MESSAGE_LINK_PARAM, messageLinkHref } from "@eva/shared/messageLink";
 import { messageLinkParser } from "@/lib/search-params";
-
-/** `?message=<id>`: the chat message a shared link points at. */
-const MESSAGE_LINK_PARAM = "message";
 
 /**
  * The current page URL aimed at one message. The rest of the URL stays
  * (`?chat=2`, `?subagent=…`), so the link opens the same chat it came from.
  */
 export function messageLinkUrl(messageId: string): string {
-  const url = new URL(window.location.href);
-  url.searchParams.set(MESSAGE_LINK_PARAM, messageId);
-  return url.href;
+  return messageLinkHref(window.location.href, messageId);
 }
 
 export function copyMessageLink(messageId: string) {
