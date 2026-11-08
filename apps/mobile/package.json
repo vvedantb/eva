@@ -63,6 +63,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@babel/plugin-transform-react-jsx": "^7.29.7",
     "@types/node": "^22.18.5",
     "@types/react": "19.3.0",
     "@vvedantb/config": "^0.4.0",
