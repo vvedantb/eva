@@ -617,19 +617,8 @@ export const enqueueMessage = authMutation({
     const displayContent = args.displayContent?.trim();
 
     const context = await getSessionChatOrThrow(ctx.db, args.chatId);
-    const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    await touchUserActivity(ctx, sessionActivityRef(session), {
-      source: "chat",
-      userId: ctx.userId,
-    });
-
-    await notifyChatMentions(ctx, {
-      content: displayContent || content,
-      authorUserId: ctx.userId,
-      surface: { kind: "session", session },
-    });
 
     const {
       chatId,
@@ -641,7 +630,7 @@ export const enqueueMessage = authMutation({
     void chatId;
     void message;
     void omittedDisplay;
-    await enqueueChatMessage(ctx, {
+    await sendSessionChatMessage(ctx, {
       context,
       userId: ctx.userId,
       content,
@@ -649,14 +638,43 @@ export const enqueueMessage = authMutation({
       settings,
       sentViaOrchestrator,
     });
-    // Sends at once when the chat is idle. Otherwise the queue waits: behind
-    // the running turn, for a usage-limit reset, for a free parallel-chat
-    // slot, or for Eva to wake — a sleeping sandbox is woken here and its
-    // ready drain sends the message.
-    await drainChatQueueQuietly(ctx, chat._id);
     return null;
   },
 });
+
+/**
+ * Queues a user message on a session chat and sends it at once when the chat
+ * is idle. The caller checks repo access. Shared by `enqueueMessage` and the
+ * mobile app (`mobile.sendMessage`).
+ */
+export async function sendSessionChatMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    displayContent?: string;
+    settings: TurnSettings;
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  const { chat, session } = params.context;
+  await touchUserActivity(ctx, sessionActivityRef(session), {
+    source: "chat",
+    userId: params.userId,
+  });
+  await notifyChatMentions(ctx, {
+    content: params.displayContent ?? params.content,
+    authorUserId: params.userId,
+    surface: { kind: "session", session },
+  });
+  await enqueueChatMessage(ctx, params);
+  // Sends at once when the chat is idle. Otherwise the queue waits: behind
+  // the running turn, for a usage-limit reset, for a free parallel-chat
+  // slot, or for Eva to wake — a sleeping sandbox is woken here and its
+  // ready drain sends the message.
+  await drainChatQueueQuietly(ctx, chat._id);
+}
 
 /**
  * Cancels one chat's active turn and starts its queued messages. For a
