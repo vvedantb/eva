@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Id } from "@eva/backend";
 
 // The cowork-artifact-meta manifest embedded in a Cowork artifact's HTML. Extra
 // keys (schemaVersion, mcpServerNames, …) are ignored by the non-strict schema.
@@ -37,16 +36,4 @@ export function parseArtifactMeta(
   }
 }
 
-/**
- * Extracts the storage ID from Convex's upload-URL response body. Mirrors the
- * helper in SnapshotsClient: `response.storageId` is already the branded id, so
- * returning it needs no `as` cast.
- */
-export function parseStorageId(text: string): Id<"_storage"> | null {
-  try {
-    const response = JSON.parse(text);
-    return typeof response.storageId === "string" ? response.storageId : null;
-  } catch {
-    return null;
-  }
-}
+export { parseStorageId } from "@eva/shared/storageUpload";

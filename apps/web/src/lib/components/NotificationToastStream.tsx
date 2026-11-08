@@ -23,7 +23,7 @@ import {
   getNotificationAppearance,
   type Notification,
 } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
 import {
   isDesktopNotificationsEnabled,
