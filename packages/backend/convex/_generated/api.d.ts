@@ -35,6 +35,7 @@ import type * as _automationWorkflow_deliverable from "../_automationWorkflow/de
 import type * as _automationWorkflow_findings from "../_automationWorkflow/findings.js";
 import type * as _automationWorkflow_prompts from "../_automationWorkflow/prompts.js";
 import type * as _automations_crud from "../_automations/crud.js";
+import type * as _automations_email from "../_automations/email.js";
 import type * as _automations_findings from "../_automations/findings.js";
 import type * as _automations_helpers from "../_automations/helpers.js";
 import type * as _automations_prompts_addTestCoverage from "../_automations/prompts/addTestCoverage.js";
@@ -595,6 +596,7 @@ declare const fullApi: ApiFromModules<{
   "_automationWorkflow/findings": typeof _automationWorkflow_findings;
   "_automationWorkflow/prompts": typeof _automationWorkflow_prompts;
   "_automations/crud": typeof _automations_crud;
+  "_automations/email": typeof _automations_email;
   "_automations/findings": typeof _automations_findings;
   "_automations/helpers": typeof _automations_helpers;
   "_automations/prompts/addTestCoverage": typeof _automations_prompts_addTestCoverage;

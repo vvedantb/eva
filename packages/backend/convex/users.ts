@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { internalQuery } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import { internalQuery, type DatabaseReader } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { roleUserValidator } from "./validators";
 import { authQuery } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
@@ -81,21 +81,26 @@ export const listEmailRecipients = internalQuery({
       name: v.optional(v.string()),
     }),
   ),
-  handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
-    const recipients = [];
-    for (const user of users) {
-      if (!user.email) continue;
-      if (user.emailNotificationsEnabled !== true) continue;
-      recipients.push({
-        userId: user._id,
-        email: user.email,
-        name: user.firstName ?? user.fullName,
-      });
-    }
-    return recipients;
-  },
+  handler: async (ctx) => await collectEmailRecipients(ctx.db),
 });
+
+/** Every user with an email address and email notifications enabled. */
+export async function collectEmailRecipients(
+  db: DatabaseReader,
+): Promise<Array<{ userId: Id<"users">; email: string; name?: string }>> {
+  const users = await db.query("users").collect();
+  const recipients = [];
+  for (const user of users) {
+    if (!user.email) continue;
+    if (user.emailNotificationsEnabled !== true) continue;
+    recipients.push({
+      userId: user._id,
+      email: user.email,
+      name: user.firstName ?? user.fullName,
+    });
+  }
+  return recipients;
+}
 
 /**
  * Email and display name for one user, the recipient lookup for the MCP
