@@ -120,6 +120,33 @@ describe("a blocking question outlives its turn", () => {
   );
 
   test(
+    "detach keeps the newest of several open questions",
+    async () => {
+      // The newest row sits in the middle of index order, so taking the
+      // first or last row instead of the newest fails here.
+      const f = await fixture();
+      const newest = JSON.stringify({
+        questions: [{ question: "Newest?", options: [{ label: "B" }] }],
+      });
+      const message = await f.t.run(async (ctx) => {
+        const entityId = String(f.chatId);
+        const rows = [
+          { toolUseId: "tool-1", payload: PAYLOAD, createdAt: 1_000 },
+          { toolUseId: "tool-2", payload: newest, createdAt: 3_000 },
+          { toolUseId: "tool-3", payload: PAYLOAD, createdAt: 2_000 },
+        ];
+        for (const row of rows) {
+          await ctx.db.insert("pendingQuestions", { entityId, ...row });
+        }
+        await detachPendingQuestions(ctx.db, entityId);
+        return await ctx.db.get(f.messageId);
+      });
+      expect(message?.pendingQuestion).toBe(newest);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "detach drops the question once the user has written since",
     async () => {
       const f = await fixture();
