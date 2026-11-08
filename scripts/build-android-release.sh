@@ -76,6 +76,9 @@ export PATH="$(dirname "$SDKMANAGER"):$PATH"
 pnpm install --frozen-lockfile --filter '@eva/mobile...' --filter '{.}'
 
 cd "$MOBILE"
+# Fail in seconds, not after Gradle, if a Babel plugin is not linked here.
+pnpm run test:babel
+
 if [ "${SKIP_PREBUILD:-}" != "1" ]; then
   npx expo prebuild --platform android --clean --no-install
 fi
