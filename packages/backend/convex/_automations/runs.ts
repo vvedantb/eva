@@ -28,29 +28,14 @@ import {
   resolveSandboxRepoId,
 } from "../_githubRepos/helpers";
 import { automationAction, resolveAutomationDoc } from "./systemAutomations";
-
-/** Loads a run and its automation, throwing unless the user can access the repo. */
-async function loadRunWithAccess(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  runId: Id<"automationRuns">,
-): Promise<{ run: Doc<"automationRuns">; automation: Doc<"automations"> }> {
-  const run = await db.get(runId);
-  if (!run) throw new Error("Run not found");
-  const automation = await db.get(run.automationId);
-  if (!automation) throw new Error("Automation not found");
-  if (!(await hasRepoAccess(db, automation.repoId, userId))) {
-    throw new Error("Not authorized");
-  }
-  return { run, automation };
-}
+import { queueRunEmail } from "./email";
 import { taskCompleteEvent } from "../_taskWorkflow/events";
 import {
   clearStreamingActivity,
   recordCompletionLog,
   sendCompletionEvent,
 } from "../_taskWorkflow/helpers";
-import { listAutomationsForRepo } from "./helpers";
+import { listAutomationsForRepo, loadRunWithAccess } from "./helpers";
 import { automationRunStreamingEntityId } from "../_chat/agentStreamIds";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
@@ -164,44 +149,6 @@ export const getAutomationData = internalQuery({
   },
 });
 
-/**
- * Returns a successful run's summary for emailing: its markdown content, finish
- * time, edition number (this automation's count of successful runs, this one
- * included), and the automation title used for the subject and heading. Returns
- * null if the run is not a completed success. Internal use only.
- */
-export const getRunForEmail = internalQuery({
-  args: { runId: v.id("automationRuns") },
-  returns: v.union(
-    v.object({
-      content: v.string(),
-      publishedAt: v.number(),
-      runNumber: v.number(),
-      automationTitle: v.string(),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.status !== "success") return null;
-    if (!run.resultSummary || !run.finishedAt) return null;
-    const automation = await ctx.db.get(run.automationId);
-    if (!automation) return null;
-    const successfulRuns = await ctx.db
-      .query("automationRuns")
-      .withIndex("by_automation_and_status", (q) =>
-        q.eq("automationId", automation._id).eq("status", "success"),
-      )
-      .collect();
-    return {
-      content: run.resultSummary,
-      publishedAt: run.finishedAt,
-      runNumber: successfulRuns.length,
-      automationTitle: resolveAutomationDoc(automation).title,
-    };
-  },
-});
-
 /** Updates an automation run's status and optional metadata fields (sandbox, error, PR URL, etc). */
 export const updateRunStatus = internalMutation({
   args: {
@@ -249,22 +196,19 @@ export const updateRunStatus = internalMutation({
       );
     }
 
-    // When a run succeeds and the automation opts into email, broadcast its
-    // result summary to all users with email notifications enabled.
+    // When a run succeeds and the automation opts into email, draft (or, with
+    // auto-send, send) its result summary for every email recipient.
     if (args.status === "success") {
       const run = await ctx.db.get(args.runId);
       const automation = run ? await ctx.db.get(run.automationId) : null;
       // Event presets settle through `settleEventRun` and never email; this
       // guards a preset row reaching here by any other path.
       if (
+        run &&
         automation?.sendEmail === true &&
         automationAction(automation) === "run"
       ) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.automationEmail.sendAutomationEmail,
-          { runId: args.runId },
-        );
+        await queueRunEmail(ctx, run, automation);
       }
     }
     return null;
