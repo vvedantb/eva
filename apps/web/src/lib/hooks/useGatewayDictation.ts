@@ -303,9 +303,12 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           // Close this start's own audio only: a newer start may already own
           // `sessionRef`, and `cleanup()` would close that one instead.
           closeAudio();
-          if (sessionRef.current?.audioContext === audioContext) {
-            sessionRef.current = null;
-            streamReaderCancelRef.current = null;
+          const currentSession = sessionRef.current;
+          if (currentSession) {
+            if (currentSession.audioContext === audioContext) {
+              sessionRef.current = null;
+              streamReaderCancelRef.current = null;
+            }
           }
           return;
         }

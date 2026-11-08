@@ -1,0 +1,215 @@
+import { api } from "@eva/backend";
+import { groupChatFeedback } from "@eva/shared/chatFeedback";
+import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import { collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
+import { messageLinkHref } from "@eva/shared/messageLink";
+import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { IconMessageCircle, IconPlayerStopFilled, IconPlus } from "@tabler/icons-react-native";
+import {
+  Attachment,
+  Attachments,
+  ChoiceQuestion,
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+  Message,
+  MessageContent,
+  PromptInput,
+  PromptInputButton,
+  Shimmer,
+} from "@vvedantb/native-ui/ai";
+import { StackPageHeader } from "@vvedantb/native-ui/layout";
+import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitives";
+import { toast } from "@vvedantb/native-ui/toast";
+import { useMutation, useQuery } from "convex/react";
+import * as Clipboard from "expo-clipboard";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Fragment } from "react";
+import { Linking, View } from "react-native";
+import { AssistantMessage } from "@/chat/AssistantMessage";
+import { ChatHeader } from "@/chat/ChatHeader";
+import { DayDivider } from "@/chat/DayDivider";
+import { MessageFooter } from "@/chat/MessageFooter";
+import { useAttachments } from "@/chat/useAttachments";
+import { WEB_URL } from "@/config";
+import { textColor, useScheme } from "@/ui/theme";
+
+/**
+ * One chat (session, quick task or project): the transcript with the web
+ * message actions, the agent's question when it asks one, and the composer
+ * (attachments, Stop beside Send while the agent works).
+ */
+export default function ChatScreen() {
+  const { target } = useLocalSearchParams<{ target: string }>();
+  const router = useRouter();
+  const scheme = useScheme();
+  const chat = useQuery(api.mobile.getChat, { target });
+  const parentId = chat?.parentId;
+  const messages = useQuery(api.messages.listByParent, parentId ? { parentId } : "skip");
+  const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
+  const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
+  const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
+  const me = useQuery(api.auth.me, {});
+  const send = useMutation(api.mobile.sendMessage);
+  const stop = useMutation(api.mobile.stopTurn);
+  const startSession = useMutation(api.mobile.startSession);
+  const rate = useMutation(api.feedback.rateTurn);
+  const answer = useMutation(api.pendingQuestions.answer);
+  const attachments = useAttachments();
+
+  if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
+  if (chat === null) {
+    return (
+      <View className="flex-1">
+        <StackPageHeader title="Chat" onBack={() => router.back()} />
+        <EmptyState icon={IconMessageCircle} title="Chat not found" description="It was deleted, or you no longer have access." />
+      </View>
+    );
+  }
+
+  const working = turn !== undefined && turn !== null;
+  const visible = (messages ?? []).filter(
+    (message) =>
+      message.isSystemAlert !== true &&
+      (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog)),
+  );
+  const dayStarts = findDayBoundaryIds(visible);
+  const questions = pending ? parsePendingQuestion(pending.payload) : null;
+  const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
+  const webUrl = (path: string) => `${WEB_URL}${path}`;
+
+  const handleSend = (text: string) => {
+    if (attachments.uploading) {
+      toast.error("Wait for the attachments to upload");
+      return;
+    }
+    const attachmentStorageIds = attachments.storageIds;
+    attachments.clear();
+    send({ target: chat.parentId, message: text, attachmentStorageIds }).catch(() => {
+      toast.error("Couldn't send your message");
+    });
+  };
+
+  const handleStop = () => {
+    stop({ target: chat.parentId }).catch(() => toast.error("Couldn't stop Eva"));
+  };
+
+  // Fork: a new session that starts from the transcript up to this message, as the web.
+  const handleFork = async (messageId: string) => {
+    const prefix = collectForkPrefix(
+      visible.map((message) => ({ id: message._id, role: message.role, content: message.content, isSystemAlert: message.isSystemAlert })),
+      messageId,
+    );
+    if (!prefix) return;
+    try {
+      const { sessionId } = await startSession({ repoId: chat.repoId, prompt: formatForkPrompt(prefix), title: forkThreadTitle(prefix) });
+      router.push({ pathname: "/chat/[target]", params: { target: sessionId } });
+    } catch {
+      toast.error("Couldn't fork the chat");
+    }
+  };
+
+  return (
+    <View className="flex-1">
+      <ChatHeader
+        repoLabel={chat.repoLabel}
+        title={chat.title}
+        onBack={() => router.back()}
+        onOpenWeb={() => void Linking.openURL(webUrl(chat.webPath))}
+        onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
+        onStop={working ? handleStop : undefined}
+      />
+      <Conversation>
+        <ConversationContent>
+          {messages === undefined ? (
+            <CenteredSpinner label="Loading messages" />
+          ) : messages.length === 0 ? (
+            <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
+          ) : (
+            visible.map((message) => (
+              <Fragment key={message._id}>
+                {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
+                <Message from={message.role}>
+                  {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. */}
+                  <MessageContent bubble="tint">
+                    {message.role === "user" ? (
+                      message.content
+                    ) : (
+                      <AssistantMessage
+                        messageId={message._id}
+                        content={message.content}
+                        activityLog={message.activityLog}
+                        seconds={message.finishedAt ? (message.finishedAt - message.timestamp) / 1000 : undefined}
+                      />
+                    )}
+                  </MessageContent>
+                  {message.content.trim() !== "" ? (
+                    <MessageFooter
+                      text={message.content}
+                      at={message.timestamp}
+                      finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
+                      link={webUrl(messageLinkHref(chat.webPath, message._id))}
+                      onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
+                      rating={
+                        message.role === "assistant"
+                          ? {
+                              sentiment: mine.get(message._id)?.sentiment,
+                              onRate: (sentiment) => {
+                                rate({ messageId: message._id, sentiment }).catch(() => toast.error("Couldn't save your rating"));
+                              },
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                </Message>
+              </Fragment>
+            ))
+          )}
+          {working && questions === null ? <Shimmer>Working…</Shimmer> : null}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+      {pending && questions ? (
+        // The web dock: p-3 around the card, in place of the composer.
+        <View className="p-3">
+          <ChoiceQuestion
+            key={pending.toolUseId}
+            questions={questions}
+            onSubmit={async (answers) => {
+              try {
+                await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+              } catch {
+                toast.error("Couldn't submit answer");
+              }
+            }}
+          />
+        </View>
+      ) : chat.canReply ? (
+        // Send stays ready during a turn (a send queues behind it) and Stop sits beside it,
+        // as the web composer's `stopMode="alongside"`.
+        <PromptInput
+          layout="inline"
+          onSubmit={handleSend}
+          placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
+          leading={<PromptInputButton icon={IconPlus} label="Add attachment" onPress={() => void attachments.pick()} />}
+          header={
+            attachments.items.length > 0 ? (
+              <Attachments>
+                {attachments.items.map((item) => (
+                  <Attachment key={item.id} data={item} onRemove={() => attachments.remove(item.id)} />
+                ))}
+              </Attachments>
+            ) : null
+          }
+          toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
+        />
+      ) : (
+        <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
+          This chat is closed.
+        </Text>
+      )}
+    </View>
+  );
+}
