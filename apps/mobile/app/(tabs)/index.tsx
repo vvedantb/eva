@@ -7,9 +7,11 @@ import { CenteredSpinner, DividedList, EmptyState } from "@vvedantb/native-ui/pr
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WEB_URL } from "@/config";
+import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions";
 import { NotificationRow } from "@/inbox/NotificationRow";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
@@ -28,7 +30,12 @@ function groupByDay(notifications: ReadonlyArray<Doc<"notifications">>) {
 
 /** The web inbox (api.notifications.list) at phone width. Tap opens the chat. */
 export default function InboxScreen() {
-  const notifications = useQuery(api.notifications.list, {});
+  const [filter, setFilter] = useState<InboxFilter>("all");
+  const listed = useQuery(api.notifications.list, { archived: filter === "archived" });
+  const unreadCount = useQuery(api.notifications.countUnread, {}) ?? 0;
+  const markAllAsRead = useMutation(api.notifications.markAllAsRead);
+  // The web Unread filter: the inbox list, unread rows only.
+  const notifications = filter === "unread" ? listed?.filter((notification) => !notification.read) : listed;
   const repos = useQuery(api.githubRepos.list, {});
   const markAsRead = useMutation(api.notifications.markAsRead);
   const router = useRouter();
@@ -50,11 +57,25 @@ export default function InboxScreen() {
   const groups = groupByDay(notifications ?? []);
   return (
     <TabScreen>
-      <PageHeader title="Inbox" />
+      <PageHeader
+        title="Inbox"
+        action={
+          <InboxHeaderActions
+            filter={filter}
+            onFilterChange={setFilter}
+            unreadCount={unreadCount}
+            onMarkAllRead={() => void markAllAsRead({})}
+          />
+        }
+      />
       {notifications === undefined ? (
         <CenteredSpinner label="Loading notifications" />
       ) : notifications.length === 0 ? (
-        <EmptyState icon={IconInbox} title="No notifications" description="Mentions and agent questions show up here." />
+        <EmptyState
+          icon={IconInbox}
+          title={filter === "all" ? "No notifications" : `No ${filter} notifications`}
+          description={filter === "all" ? "Mentions and agent questions show up here." : undefined}
+        />
       ) : (
         <ScrollView
           // Each day header sticks while its rows scroll, as the web `sticky top-0` header.
