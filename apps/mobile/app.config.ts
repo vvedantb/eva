@@ -7,7 +7,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  * push, so it is off. See README.md.
  *
  * Push needs two things that only the owner can create:
- * - `google-services.json` for `com.vis1.eva` from the Velth Firebase project (Android push runs on FCM).
+ * - `google-services.json` for `com.projectvdotuk.eva` from the Velth Firebase project (Android push runs on FCM).
  * - `EAS_PROJECT_ID` from `eas init` (Expo push tokens are per Expo project).
  * Without them the app builds and works; it just does not register for push.
  */
@@ -24,6 +24,8 @@ function versionCode(): number {
 export default (_context: ConfigContext): ExpoConfig => ({
   name: "Eva",
   slug: "eva-mobile",
+  // Same Expo account as Velth and the other Project V apps.
+  owner: "projectvdotuk",
   version: process.env["VERSION_NAME"] || DEFAULT_VERSION_NAME,
   orientation: "portrait",
   scheme: "eva",
@@ -34,7 +36,7 @@ export default (_context: ConfigContext): ExpoConfig => ({
   platforms: ["android", "web"],
   web: { output: "single", bundler: "metro" },
   android: {
-    package: "com.vis1.eva",
+    package: "com.projectvdotuk.eva",
     versionCode: versionCode(),
     ...(existsSync(GOOGLE_SERVICES_FILE)
       ? { googleServicesFile: GOOGLE_SERVICES_FILE }

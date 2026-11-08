@@ -52,7 +52,7 @@ jobs:
       app_name: eva
       release_title: Eva
       apk_basename: eva
-      package_id: com.vis1.eva
+      package_id: com.projectvdotuk.eva
       # Not V Store: its catalog sync reads mobile-apk-* tags.
       tag_prefix: eva-apk-
       mark_as_latest: false

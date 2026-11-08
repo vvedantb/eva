@@ -15,7 +15,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MOBILE="$ROOT/apps/mobile"
-PACKAGE_ID="com.vis1.eva"
+PACKAGE_ID="com.projectvdotuk.eva"
 cd "$ROOT"
 
 if ! [[ "${VERSION_NAME:-}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then

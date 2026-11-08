@@ -50,7 +50,7 @@ Set these under Settings, Secrets and variables, Actions, Variables. They are pu
 | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | `VITE_CLERK_PUBLISHABLE_KEY` |
 | `EXPO_PUBLIC_CONVEX_URL` | Yes | `VITE_CONVEX_URL` |
 | `EXPO_PUBLIC_WEB_URL` | Yes | The web app origin |
-| `EAS_PROJECT_ID` | For push | The project id from `eas init` |
+| `EAS_PROJECT_ID` | For push | The project id from `eas init` (see below) |
 
 `apps/mobile/src/config.ts` has no production defaults. The workflow step `pre_build_command` and the build script both stop with a clear error if one of the three required values is empty. An empty `EAS_PROJECT_ID` is allowed: the app builds and does not register for push.
 
@@ -58,8 +58,8 @@ Set these under Settings, Secrets and variables, Actions, Variables. They are pu
 
 Push needs two owner steps, covered in the [README](README.md#push-one-time-owner-only):
 
-1. `apps/mobile/google-services.json` for package `com.vis1.eva`, from the Velth Firebase project. Commit the real file once it exists. The build picks it up automatically (`app.config.ts`). This repository does not hold a placeholder, because a fake file would build an app that cannot get a push token.
-2. `EAS_PROJECT_ID` as a repository variable, and the FCM V1 service account key uploaded to Expo.
+1. `apps/mobile/google-services.json` for package `com.projectvdotuk.eva`, from the Velth Firebase project. Commit the real file once it exists. The build picks it up automatically (`app.config.ts`). This repository does not hold a placeholder, because a fake file would build an app that cannot get a push token.
+2. `EAS_PROJECT_ID` as a repository variable (create the project first, see "Expo project" below), and the FCM V1 service account key uploaded to Expo.
 
 Until both exist, the release APK works and shows no push.
 
@@ -83,3 +83,16 @@ VERSION_NAME=0.1.1 VERSION_CODE=1000 ./scripts/build-android-release.sh
 ```
 
 This needs Linux or WSL2, Java 21 and the Android SDK (`ANDROID_SDK_ROOT` or `ANDROID_HOME`). Set `SKIP_PREBUILD=1` to reuse `android/` when it was generated with the same `VERSION_CODE`.
+
+## Expo project
+
+`app.config.ts` sets `owner: "projectvdotuk"`, the Expo account that owns Velth and the other Project V apps. Create the project under that account:
+
+```sh
+cd apps/mobile
+# Must be logged into Expo as a member of @projectvdotuk
+# app.config.ts already has owner: "projectvdotuk", so the project is created under that account
+npx eas-cli@latest init
+```
+
+Copy the printed project id into `EAS_PROJECT_ID` in `.env.local` and set it as the `EAS_PROJECT_ID` repository variable. Do not commit the id or add it to `eas.json`.
