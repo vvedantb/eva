@@ -2,6 +2,7 @@
 
 import type { SandboxHandle } from "../_sandbox/provider";
 import { workspaceDirShell } from "../_sandbox_runtime/helpers";
+import { writeSandboxFile } from "../_sandbox_runtime/sandboxFiles";
 import { ensureSwapFile } from "../_sandbox_runtime/swap";
 import {
   PACKAGE_HELPER_SCRIPT,
@@ -93,7 +94,7 @@ export async function launchDevServerInVercelConsole(
     devCommand,
   ].join("\n");
   const scriptPath = consoleLaunchScriptPath(sessionName);
-  await handle.writeFile(scriptPath, script);
+  await writeSandboxFile(handle, scriptPath, script);
   await handle.exec(`chmod +x ${scriptPath}`, {
     cwd: "/",
     timeoutSeconds: 5,

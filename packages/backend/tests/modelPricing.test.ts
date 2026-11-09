@@ -35,6 +35,11 @@ describe("resolveModelPricing", () => {
     expect(resolveModelPricing("claude-fable-5-1-20260801")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5-1"],
     );
+    // fable-5-2 is cheaper than fable-5-1; a miss would bill it at 5.1 rates.
+    expect(resolveModelPricing("claude-fable-5-2")).toBe(
+      CLAUDE_PRICING_PER_MILLION["claude-fable-5-2"],
+    );
+    expect(resolveModelPricing("claude-fable-5-2")?.inputPerMillion).toBe(8);
     expect(resolveModelPricing("claude-fable-5")).toBe(
       CLAUDE_PRICING_PER_MILLION["claude-fable-5"],
     );

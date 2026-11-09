@@ -15,7 +15,7 @@ The workflow is a thin caller of the shared workflow `vvedantb/packages/.github/
 
 Other pushes to `main` that touch APK inputs build nothing. The shared workflow default `release_on: feat` skips them. To release a fix, put `[release]` in the pull request title.
 
-APK inputs (the `paths` filter) are the files Metro bundles: `apps/mobile/**` (not Markdown or `.env.example`), `packages/shared/**`, `packages/backend/index.ts`, `packages/backend/convex/**`, `packages/backend/package.json`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `patches/**` and `scripts/build-android-release.sh`. The backend folder is broad because `@eva/backend` re-exports runtime code from `convex/`. Keep the filter equal to the real import closure.
+APK inputs (the `paths` filter) are the files Metro bundles: `apps/mobile/**` (not Markdown or `.env.example`), `packages/shared/**`, `packages/backend/index.ts`, `packages/backend/convex/**`, `packages/backend/package.json`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `patches/**`, `scripts/build-android-release.sh` and `scripts/check-clerk-native-api.sh`. The backend folder is broad because `@eva/backend` re-exports runtime code from `convex/`. Keep the filter equal to the real import closure.
 
 ## Versions
 
@@ -53,6 +53,12 @@ Set these under Settings, Secrets and variables, Actions, Variables. They are pu
 | `EAS_PROJECT_ID` | For push | The project id from `eas init` (see below) |
 
 `apps/mobile/src/config.ts` has no production defaults. The workflow step `pre_build_command` and the build script both stop with a clear error if one of the three required values is empty. An empty `EAS_PROJECT_ID` is allowed: the app builds and does not register for push.
+
+## Clerk Native API (owner step)
+
+The app signs in through Clerk's Native API. If it is off for the Eva instance, the app cannot start and shows "Could not start Eva" (older builds showed a blank screen). Logcat shows `The Native API is disabled for this instance`.
+
+Before a release, the owner must enable it: Clerk Dashboard, select the Eva production instance, Configure, Native applications, turn on the Native API. `scripts/check-clerk-native-api.sh` reads `https://<clerk-frontend-api>/v1/environment` and stops the release with an `::error::` if `auth_config.native_settings.api_enabled` is not `true`. The workflow `pre_build_command` and `scripts/build-android-release.sh` both run it. The frontend API host comes from the publishable key. A network failure also stops the release: run it again.
 
 ## Push in the release build
 

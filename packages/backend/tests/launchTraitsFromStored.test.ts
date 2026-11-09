@@ -24,7 +24,7 @@ describe("launchTraitsFromStored", () => {
 
     // Fable's reasoning default is "high"; it has no thinkingToggle and no
     // fastMode trait, and 1M context is opt-in.
-    expect(launchTraitsFromStored("claude:claude-fable-5-1", stored)).toEqual(
+    expect(launchTraitsFromStored("claude:claude-fable-5-2", stored)).toEqual(
       {},
     );
 
@@ -33,13 +33,13 @@ describe("launchTraitsFromStored", () => {
     // Sending the defaults must launch identically to omitting them — otherwise
     // the turn prewarm's opts sig has `|high|` where the page-open prewarm has
     // `||`, and the second prewarm kills the daemon the first just booted.
-    expect(launchTraitsFromStored("claude:claude-fable-5-1", stored)).toEqual(
-      launchTraitsFromStored("claude:claude-fable-5-1", {}),
+    expect(launchTraitsFromStored("claude:claude-fable-5-2", stored)).toEqual(
+      launchTraitsFromStored("claude:claude-fable-5-2", {}),
     );
   });
 
   test("matches the composer payload for the same traits", () => {
-    const model = "claude:claude-fable-5-1";
+    const model = "claude:claude-fable-5-2";
     const stored = {
       reasoningLevel: "high",
       thinkingEnabled: true,
@@ -77,7 +77,7 @@ describe("launchTraitsFromStored", () => {
 
   test("preserves non-default reasoning and a disabled thinking toggle", () => {
     expect(
-      launchTraitsFromStored("claude:claude-fable-5-1", {
+      launchTraitsFromStored("claude:claude-fable-5-2", {
         reasoningLevel: "low",
       }),
     ).toEqual({ reasoningLevel: "low" });
