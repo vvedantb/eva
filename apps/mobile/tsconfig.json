@@ -14,6 +14,8 @@
   "include": [
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
     "app.config.ts",
