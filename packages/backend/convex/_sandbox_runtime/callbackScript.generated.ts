@@ -119,9 +119,9 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
   return useRoot && workspaceRoot ? workspaceRoot : workDir;
 }
 
-// ../../../repo/packages/shared/src/modelPricing.ts
+// ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
+var ANTHROPIC_PRICING_AS_OF = "2026-11-09";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
   return {
     inputPerMillion,
@@ -133,6 +133,8 @@ function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion
   };
 }
 var CLAUDE_PRICING_PER_MILLION = {
+  "claude-fable-5-2": anthropicRow(8, 0.2, 10, 40),
+  "claude-mythos-5-2": anthropicRow(8, 0.2, 10, 40),
   "claude-fable-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
@@ -230,6 +232,7 @@ var AGENT_CWD = resolveAgentCwd(
 var NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000"
 );
+var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000"
 );
@@ -4450,7 +4453,7 @@ function measureTickStallMs(input) {
   return lateBy > input.toleranceMs ? lateBy : 0;
 }
 
-// ../../../repo/packages/shared/src/gitDefaults.ts
+// ../shared/src/gitDefaults.ts
 var AUTO_PUBLISH_BRANCH_GIT_CONFIG = "eva.autoPublishBranch";
 var COMMIT_EXCLUDE_PATHSPECS = [
   ":!*.png",
@@ -6623,7 +6626,6 @@ function trackClaudeGoalFrame(message) {
 var daemonPaths = resolveDaemonPaths();
 var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
 var turnActive = false;
@@ -7596,7 +7598,7 @@ async function runSdkDaemon() {
 import { spawn as spawn2 } from "child_process";
 import { createInterface } from "readline";
 
-// ../../../repo/node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
+// ../../node_modules/.pnpm/@openai+codex-sdk@0.146.0/node_modules/@openai/codex-sdk/dist/index.js
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
@@ -8387,7 +8389,6 @@ var CodexAppServerClient = class {
 // callback-src/providers/codexAppServerDaemon.ts
 var IDLE_EXIT_MS2 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var NO_EVENT_TIMEOUT_MS = 5 * 60 * 1e3;
 var paths = resolveDaemonPaths();
 var supervisor2 = new DaemonSupervisor();
 var activeTurnStartedAt = 0;
@@ -8665,11 +8666,14 @@ async function runCodexAppServerDaemon() {
         await startTurn(client, next);
       }
       const now = Date.now();
+      if (callbackState.inFlightToolUses > 0) {
+        lastEventAt = now;
+      }
       if (supervisor2.currentTurn !== null && now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS) {
         await failActiveTurn(
           "The assistant exceeded the maximum turn runtime."
         );
-      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_EVENT_TIMEOUT_MS) {
+      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_MESSAGE_TIMEOUT_MS) {
         await failActiveTurn(
           "The assistant stopped responding. Please try again."
         );

@@ -25,6 +25,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   discardUntrackedSandbox,
@@ -131,7 +132,10 @@ export async function requestTaskSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `task-sandbox-startup-${task._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "task", taskId: task._id }),
+  );
   const reusableSandboxId = task.sandboxId;
   console.log(
     `[tasks] startTaskSandbox taskId=${task._id} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -402,7 +406,10 @@ export async function requestTaskSandboxStop(
   });
 
   // Clear leftover start steps so stop does not re-show startup activity.
-  await clearSandboxStartupActivity(ctx.db, `task-sandbox-startup-${taskId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "task", taskId }),
+  );
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
   // never be claimed — move it onto the chat message so the card stays.

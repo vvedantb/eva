@@ -556,18 +556,20 @@ test("usage-limit retries share selectUsageLimitRetryUserMessage", () => {
   }
 });
 
-test("synthetic-turn completions share assistantReplyContent", () => {
+test("synthetic-turn completions share syntheticTurnCompletionPatch", () => {
   const helper = read("convex/_sessions/resultTarget.ts");
   expect(helper).toContain("export function assistantReplyContent(");
+  const chatResult = read("convex/_chat/chatResult.ts");
+  expect(chatResult).toContain("export function syntheticTurnCompletionPatch(");
+  expect(chatResult).toContain("assistantReplyContent(");
   for (const path of [
     "convex/_chat/taskChatDaemon.ts",
     "convex/_chat/projectChatDaemon.ts",
     "convex/_sessions/workflow.ts",
-    "convex/_chat/chatResult.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should format via the shared helper`).toContain(
-      "assistantReplyContent(",
+    expect(source, `${path} should build via the shared patch`).toContain(
+      "syntheticTurnCompletionPatch(args)",
     );
     expect(source, `${path} re-inlined the empty-success fallback`).not.toContain(
       "I couldn't process your message.",
@@ -650,17 +652,19 @@ test("composer last-* patches share composerTraitFields", () => {
   }
 });
 
-test("cancel races share detectCancelSupersession", () => {
+test("cancel races share cancelChatTurn", () => {
   const helper = read("convex/_chat/cancelRace.ts");
   expect(helper).toContain("export function detectCancelSupersession(");
+  expect(helper).toContain("export async function cancelChatTurn<");
+  expect(helper).toContain("detectCancelSupersession({");
   for (const path of [
     "convex/_sessions/execution.ts",
     "convex/projectChatWorkflow.ts",
     "convex/agentTaskChatWorkflow.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should classify via the shared helper`).toContain(
-      "detectCancelSupersession(",
+    expect(source, `${path} should cancel via the shared helper`).toContain(
+      "cancelChatTurn(",
     );
     expect(source, `${path} re-inlined the staged-turn race`).not.toContain(
       "latest.pendingTurn.requestedAt !==",

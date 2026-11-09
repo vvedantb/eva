@@ -10,6 +10,9 @@
     "prebuild": "expo prebuild --platform android --clean",
     "typecheck": "tsc -p tsconfig.json",
     "test:babel": "node --test babel.config.test.mjs",
+    "test:logging": "node --test src/logging/unhandledRejections.test.mjs",
+    "test:hermes-apis": "node --test src/hermesApis.test.mjs",
+    "test": "pnpm test:logging && pnpm test:hermes-apis && pnpm test:babel",
     "web:export": "expo export --platform web"
   },
   "dependencies": {
@@ -23,7 +26,7 @@
     "@rn-primitives/slot": "^1.5.2",
     "@rn-primitives/switch": "^1.5.2",
     "@tabler/icons-react-native": "^3.49.0",
-    "@vvedantb/native-ui": "^0.9.0",
+    "@vvedantb/native-ui": "^0.11.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.40.0",

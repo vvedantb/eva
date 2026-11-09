@@ -88,7 +88,7 @@ export function selectTagsByProbability(
   }
 
   return scored
-    .toSorted((a, b) => b.probability - a.probability)
+    .sort((a, b) => b.probability - a.probability)
     .slice(0, max)
     .map((entry) => entry.tag);
 }

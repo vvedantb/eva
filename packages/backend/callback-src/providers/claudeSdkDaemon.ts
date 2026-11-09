@@ -8,7 +8,7 @@ import {
   HARNESS_CATALOG_TOKEN,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
-  NO_OUTPUT_TIMEOUT_MS,
+  NO_MESSAGE_TIMEOUT_MS,
   OPEN_SYNTHETIC_TURN_MUTATION,
   UPDATE_BACKGROUND_AGENTS_MUTATION,
   WORK_DIR,
@@ -130,7 +130,7 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 // tool run, so a long bash call would otherwise be killed as a hang (seen in
 // prod). On a fire we send a failure completion (resolving awaitEvent) and exit
 // so the next turn respawns a clean daemon rather than reusing a wedged query.
-const NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
+// Silence limit: NO_MESSAGE_TIMEOUT_MS (config.ts).
 const WATCHDOG_TICK_MS = 5000;
 
 // Safety net for a cancel whose interrupted `result` never arrives (SDK

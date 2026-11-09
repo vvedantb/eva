@@ -177,3 +177,21 @@ function stripComments(source: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^[^\S\n]*\/\/.*$/gm, "");
 }
+
+/**
+ * App Server emits nothing while a tool runs. The silence watchdog uses the
+ * shared warm-daemon limit and restarts its clock while a tool is in flight,
+ * like the Claude daemon; only the hard runtime cap applies to a long tool.
+ */
+describe("the codex silence watchdog spares in-flight tools", () => {
+  test.each(surfaces)("silence is exempt while a tool runs (%s)", (_l, source) => {
+    expect(source).toMatch(/inFlightToolUses > 0\) \{\s*lastEventAt = now;/);
+    expect(source).toContain("now - lastEventAt > NO_MESSAGE_TIMEOUT_MS");
+    expect(source).not.toContain("NO_EVENT_TIMEOUT_MS");
+  });
+
+  test("the limit is the shared config constant", () => {
+    expect(codexDaemonSource).toMatch(/NO_MESSAGE_TIMEOUT_MS,[\s\S]*from "\.\.\/config\.js"/);
+    expect(claudeDaemonSource).not.toMatch(/const NO_MESSAGE_TIMEOUT_MS\b/);
+  });
+});

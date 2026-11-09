@@ -8,6 +8,7 @@ import {
   CLAIM_MUTATION,
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
+  NO_MESSAGE_TIMEOUT_MS,
   SYSTEM_PROMPT,
   WORK_DIR,
   codexReasoningEffort,
@@ -67,7 +68,6 @@ import { resolveDaemonPaths } from "./daemonPaths.js";
 
 const IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 const POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-const NO_EVENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 type CodexDaemonTurn = { providerTurnId: string };
 
@@ -441,6 +441,14 @@ export async function runCodexAppServerDaemon(): Promise<void> {
       }
 
       const now = Date.now();
+      // App Server emits nothing while a tool runs, so a long silent tool call
+      // is indistinguishable from a hang by event silence alone: while a tool
+      // is in flight only the hard runtime cap applies, and the silence clock
+      // restarts once the tool result lands. `resetTurnState` zeroes the
+      // in-flight count at every turn start.
+      if (S.inFlightToolUses > 0) {
+        lastEventAt = now;
+      }
       if (
         supervisor.currentTurn !== null &&
         now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS
@@ -450,7 +458,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         );
       } else if (
         supervisor.currentTurn !== null &&
-        now - lastEventAt > NO_EVENT_TIMEOUT_MS
+        now - lastEventAt > NO_MESSAGE_TIMEOUT_MS
       ) {
         await failActiveTurn(
           "The assistant stopped responding. Please try again.",

@@ -27,6 +27,14 @@ export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
 /** Streaming entityId prefix for agent task chat workflows. */
 export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
 
+export function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
+  return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
+}
+
+export function projectChatStreamEntityId(projectId: Id<"projects">): string {
+  return `${PROJECT_CHAT_STREAM_PREFIX}${String(projectId)}`;
+}
+
 /** A standalone system-alert message surfaced when a stale turn is torn down. */
 export type ChatAlert = { text: string; detail?: string };
 
