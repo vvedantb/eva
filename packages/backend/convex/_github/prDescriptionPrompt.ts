@@ -12,8 +12,10 @@ const MAX_DESCRIPTION_CHARS = 6_000;
 
 /**
  * Builds the prompt for the reviewer-facing PR description. The sections match
- * `.github/pull_request_template.md` (Why, Scope, Tradeoffs, Blast radius,
- * Verification) so generated and hand-written PRs read the same way.
+ * `.github/pull_request_template.md` (Why, Scope, Verification, Tradeoffs,
+ * Blast radius, ELI5) so generated and hand-written PRs read the same way.
+ * The call sees only the diff and has no tools, so it cannot capture evidence
+ * and must say what is unchecked.
  *
  * Scope leads on visible changes the Intent did not ask for. This is
  * the only such check a quick task **run** gets: a run stamps no turn diff
@@ -47,10 +49,10 @@ Stats: +${params.additions} -${params.deletions} across ${params.changedFiles} f
 ${context}
 ## Output format
 
-Write GitHub-flavoured markdown with these sections, in this order. Drop Tradeoffs when there are none.
+Write GitHub-flavoured markdown with these sections, in this order. Most reviewers stop early, so what matters comes first. Drop Tradeoffs when there are none.
 
 ### Why
-The intent, and why this approach fits. One to three sentences.
+The problem: what was wrong or missing, for whom, and how it showed up. Then why this approach fits. One short paragraph. Use real numbers only when the Intent or diff gives them.
 
 ### Scope
 Bullets, in this order:
@@ -58,20 +60,27 @@ Bullets, in this order:
 2. Then the facts of the change: real symbols, paths and user-facing routes. Name both sides of a rename. State what is in and out when the boundary matters.
 Judge (1) against the Intent above; when no Intent is given, skip (1) rather than guessing at what was asked for.
 
+### Verification
+Two parts:
+- **Checked:** what the diff shows was checked: tests added or changed, and what they assert. A new API or helper: the call a user would write, when the diff shows it. If the diff contains no tests or checks, write "Not verified in this diff."
+- **Not checked:** what a reviewer must check by hand, from the evidence this kind of change needs. UI: before and after screenshots at the same viewport. Bug fix: the input and result before and after. Performance: measured numbers on both sides. CLI or build: the real command output before and after.
+Never claim a check ran that the diff does not show. You cannot see screenshots, logs or test runs, so never describe one.
+
 ### Tradeoffs
 Real choices only: what was picked over what, and why. Omit the section entirely when there are none.
 
 ### Blast radius
 Who and what the change touches, and why it is safe or risky. Name callers, data or schema it affects.
 
-### Verification
-What the diff shows was checked: tests added or changed, and what they assert. If the diff contains no tests or checks, write "Not verified in this diff." Never claim a check ran that the diff does not show.
+### ELI5
+Two or three plain sentences that someone outside the project would follow. No file paths or identifiers.
 
 ## Rules
-- Only use file paths, identifiers, routes and props that appear in the diff. Never invent names.
+- Only use file paths, identifiers, routes and props that appear in the diff. Never invent names, numbers or results.
 - Plain, direct sentences. No filler, no praise, no "this PR".
 - Do not repeat the diff line by line.
-- No headings other than the five above. No "Summary" or "Test plan". No preamble and no closing remarks.
+- No headings other than the six above. No "Summary" or "Test plan". No preamble and no closing remarks.
+- Do not write an authorship line or a "Generated with" footer.
 - Output only the markdown. Do not wrap the whole answer in a code fence.
 
 ## Diff
