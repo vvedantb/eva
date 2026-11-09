@@ -96,7 +96,7 @@ function reduceTodoState(name: string, input: JsonObject): TodoItem[] {
     const raw = Array.isArray(input.todos) ? input.todos : [];
     S.todoState.length = 0;
     for (const item of raw) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const content = typeof item.content === "string" ? item.content : "";
       if (!content) continue;
       S.todoState.push({ content, status: normalizeTodoStatus(item.status) });

@@ -174,7 +174,9 @@ export const list = authQuery({
       siblingIds.map((siblingId) =>
         ctx.db
           .query("docs")
-          .withIndex("by_repo", (q) => q.eq("repoId", siblingId))
+          .withIndex("by_repo_and_deleted", (q) =>
+            q.eq("repoId", siblingId).eq("deletedAt", undefined),
+          )
           .collect(),
       ),
     );
@@ -193,7 +195,6 @@ export const list = authQuery({
         ) {
           continue;
         }
-        if (isEntityDeleted(doc)) continue;
         seen.add(doc._id);
         docs.push(doc);
       }

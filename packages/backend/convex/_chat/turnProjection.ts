@@ -63,7 +63,35 @@ export async function awaitingAnswerEntityIdsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<ReadonlySet<string>> {
-  const turns = await openChatTurnsForRepo(db, repoId);
+  return awaitingAnswerIdsOf(db, await openChatTurnsForRepo(db, repoId));
+}
+
+/**
+ * Both list flags (open turn, awaiting an answer) across the given repos, from
+ * one open-turn read per repo instead of one per flag.
+ */
+export async function chatTurnFlagsForRepos(
+  db: DatabaseReader,
+  repoIds: Iterable<Id<"githubRepos">>,
+): Promise<{
+  openIds: ReadonlySet<string>;
+  awaitingAnswerIds: ReadonlySet<string>;
+}> {
+  const turns = (
+    await Promise.all(
+      [...new Set(repoIds)].map((repoId) => openChatTurnsForRepo(db, repoId)),
+    )
+  ).flat();
+  return {
+    openIds: idsOfTurns(turns),
+    awaitingAnswerIds: await awaitingAnswerIdsOf(db, turns),
+  };
+}
+
+async function awaitingAnswerIdsOf(
+  db: DatabaseReader,
+  turns: ReadonlyArray<Doc<"turns">>,
+): Promise<ReadonlySet<string>> {
   const asking = await Promise.all(
     turns.map(async (turn) => {
       const rows = await db

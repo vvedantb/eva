@@ -1,6 +1,13 @@
-import type { JsonObject, ProgressStep } from "../types.js";
-import { shortenPath } from "../utils.js";
+import type { JsonObject, JsonValue, ProgressStep } from "../types.js";
+import {
+  asJsonObject,
+  isJsonObject,
+  readStringField,
+  shortenPath,
+  trimmedString,
+} from "../utils.js";
 import { parseQuestionInput } from "./questionInput.js";
+import { STEP_FIELD_CAPS } from "./stepBudget.js";
 import {
   capCommand,
   capContentPreview,
@@ -9,134 +16,128 @@ import {
   pickToolCallId,
 } from "./toolResultCapture.js";
 
+// Shared step builders. Every mapper below (Claude, Codex, Cursor, OpenCode)
+// returns one of these, so a step kind has one shape and one label.
+
+type StepExtra = Partial<Omit<ProgressStep, "type" | "label" | "status">>;
+
+function stringOrUndefined(value: JsonValue | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** File step: the display detail is the shortened path, `path` the raw one. */
+function fileStep(
+  type: "read" | "write" | "edit",
+  label: string,
+  rawPath: string,
+  extra: StepExtra = {},
+): ProgressStep {
+  return {
+    type,
+    label,
+    detail: rawPath ? shortenPath(rawPath) : undefined,
+    path: rawPath || undefined,
+    status: "active",
+    ...extra,
+  };
+}
+
+/** Bash step: a one-line `detail` capped for the row, the full command capped for `command`. */
+function bashStep(
+  command: string,
+  label = "Running command...",
+  fallbackDetail?: string,
+): ProgressStep {
+  return {
+    type: "bash",
+    label,
+    detail: command
+      ? command.slice(0, STEP_FIELD_CAPS.commandDetail)
+      : fallbackDetail,
+    command: command ? capCommand(command) : undefined,
+    status: "active",
+  };
+}
+
+function searchStep(
+  kind: "files" | "code",
+  detail: string | undefined,
+): ProgressStep {
+  return kind === "files"
+    ? { type: "search_files", label: "Searching files...", detail, status: "active" }
+    : { type: "search_code", label: "Searching code...", detail, status: "active" };
+}
+
+function webStep(
+  kind: "fetch" | "search",
+  detail: string | undefined,
+): ProgressStep {
+  return kind === "fetch"
+    ? { type: "web_fetch", label: "Fetching URL...", detail, status: "active" }
+    : { type: "web_search", label: "Searching web...", detail, status: "active" };
+}
+
+function subtaskStep(detail: string | undefined): ProgressStep {
+  return { type: "subtask", label: "Running agent...", detail, status: "active" };
+}
+
+function toolStep(label: string, detail?: string): ProgressStep {
+  return { type: "tool", label, detail, status: "active" };
+}
+
+function tasksStep(): ProgressStep {
+  return toolStep("Updating tasks...");
+}
+
+function opencodeStepFor(
+  tool: string,
+  input: JsonObject,
+  rawPath: string,
+): ProgressStep {
+  switch (tool) {
+    case "read":
+      return fileStep("read", "Reading file...", rawPath);
+    case "glob":
+      return searchStep("files", stringOrUndefined(input.pattern));
+    case "grep":
+      return searchStep("code", stringOrUndefined(input.pattern));
+    case "write": {
+      const content = stringOrUndefined(input.content);
+      return fileStep("write", "Creating file...", rawPath, {
+        contentPreview: content ? capContentPreview(content) : undefined,
+      });
+    }
+    case "edit":
+      return fileStep("edit", "Editing file...", rawPath, {
+        edits: extractClaudeEdits(input),
+      });
+    case "bash":
+      return bashStep(stringOrUndefined(input.command) ?? "");
+    case "webfetch":
+      return webStep("fetch", stringOrUndefined(input.url));
+    case "websearch":
+      return webStep("search", stringOrUndefined(input.query));
+    case "task":
+      return subtaskStep(stringOrUndefined(input.description));
+    case "todowrite":
+    case "todoread":
+      return tasksStep();
+    default:
+      return toolStep("Using " + tool + "...");
+  }
+}
+
 /** Converts an opencode tool call event part into a UI progress step object. */
 export function opencodeToolToStep(part: JsonObject): ProgressStep {
   const tool = typeof part.tool === "string" ? part.tool : "tool";
-  const stateObj =
-    part.state && typeof part.state === "object" && !Array.isArray(part.state)
-      ? part.state
-      : null;
-  const input =
-    stateObj &&
-    "input" in stateObj &&
-    stateObj.input &&
-    typeof stateObj.input === "object" &&
-    !Array.isArray(stateObj.input)
-      ? stateObj.input
-      : {};
+  const input = asJsonObject(asJsonObject(part.state).input);
   const rawPath =
-    typeof input.filePath === "string"
-      ? input.filePath
-      : typeof input.file_path === "string"
-        ? input.file_path
-        : typeof input.path === "string"
-          ? input.path
-          : "";
-  const path = rawPath ? shortenPath(rawPath) : "";
-  const toolUseId =
-    pickToolCallId(part) ??
-    (typeof part.callID === "string" && part.callID.trim()
-      ? part.callID.trim()
-      : undefined);
-
-  let step: ProgressStep;
-  switch (tool) {
-    case "read":
-      step = {
-        type: "read",
-        label: "Reading file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        status: "active",
-      };
-      break;
-    case "glob":
-      step = {
-        type: "search_files",
-        label: "Searching files...",
-        detail: typeof input.pattern === "string" ? input.pattern : undefined,
-        status: "active",
-      };
-      break;
-    case "grep":
-      step = {
-        type: "search_code",
-        label: "Searching code...",
-        detail: typeof input.pattern === "string" ? input.pattern : undefined,
-        status: "active",
-      };
-      break;
-    case "write": {
-      const content =
-        typeof input.content === "string" ? input.content : undefined;
-      step = {
-        type: "write",
-        label: "Creating file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        contentPreview: content ? capContentPreview(content) : undefined,
-        status: "active",
-      };
-      break;
-    }
-    case "edit":
-      step = {
-        type: "edit",
-        label: "Editing file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        edits: extractClaudeEdits(input),
-        status: "active",
-      };
-      break;
-    case "bash": {
-      const rawCommand = typeof input.command === "string" ? input.command : "";
-      step = {
-        type: "bash",
-        label: "Running command...",
-        detail: rawCommand ? rawCommand.slice(0, 300) : undefined,
-        command: rawCommand ? capCommand(rawCommand) : undefined,
-        status: "active",
-      };
-      break;
-    }
-    case "webfetch":
-      step = {
-        type: "web_fetch",
-        label: "Fetching URL...",
-        detail: typeof input.url === "string" ? input.url : undefined,
-        status: "active",
-      };
-      break;
-    case "websearch":
-      step = {
-        type: "web_search",
-        label: "Searching web...",
-        detail: typeof input.query === "string" ? input.query : undefined,
-        status: "active",
-      };
-      break;
-    case "task":
-      step = {
-        type: "subtask",
-        label: "Running agent...",
-        detail:
-          typeof input.description === "string" ? input.description : undefined,
-        status: "active",
-      };
-      break;
-    case "todowrite":
-    case "todoread":
-      step = { type: "tool", label: "Updating tasks...", status: "active" };
-      break;
-    default:
-      step = {
-        type: "tool",
-        label: "Using " + tool + "...",
-        status: "active",
-      };
-      break;
-  }
+    stringOrUndefined(input.filePath) ??
+    stringOrUndefined(input.file_path) ??
+    stringOrUndefined(input.path) ??
+    "";
+  const toolUseId = pickToolCallId(part) ?? trimmedString(part.callID);
+  const step = opencodeStepFor(tool, input, rawPath);
   if (toolUseId) {
     step.toolUseId = toolUseId;
   }
@@ -156,18 +157,8 @@ type CursorToolFields = {
   query: string;
 };
 
-function pickCursorString(args: JsonObject, keys: string[]): string {
-  for (const key of keys) {
-    const value = args[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
-}
-
 function getCursorToolFields(args: JsonObject): CursorToolFields {
-  const rawPath = pickCursorString(args, [
+  const rawPath = readStringField(args, [
     "path",
     "file_path",
     "filePath",
@@ -180,8 +171,8 @@ function getCursorToolFields(args: JsonObject): CursorToolFields {
     args,
     rawPath,
     path: rawPath ? shortenPath(rawPath) : "",
-    command: pickCursorString(args, ["command", "cmd"]),
-    query: pickCursorString(args, [
+    command: readStringField(args, ["command", "cmd"]),
+    query: readStringField(args, [
       "query",
       "pattern",
       "url",
@@ -191,63 +182,33 @@ function getCursorToolFields(args: JsonObject): CursorToolFields {
   };
 }
 
-/** Active step with a display path and the raw path it came from. */
-function pathStep(
-  type: string,
-  label: string,
-  detail: string,
-  rawPath: string,
-): ProgressStep {
-  return {
-    type,
-    label,
-    detail: detail || undefined,
-    path: rawPath || undefined,
-    status: "active",
-  };
-}
-
-/** Active step with only a detail line. */
-function detailStep(type: string, label: string, detail: string): ProgressStep {
-  return { type, label, detail: detail || undefined, status: "active" };
-}
-
 function cursorShellStep(fields: CursorToolFields): ProgressStep {
-  const { command } = fields;
-  return {
-    type: "bash",
-    label: "Running command...",
-    detail: command ? command.slice(0, 300) : undefined,
-    command: command ? capCommand(command) : undefined,
-    status: "active",
-  };
+  return bashStep(fields.command);
 }
 
-function cursorTasksStep(): ProgressStep {
-  return { type: "tool", label: "Updating tasks...", status: "active" };
+function cursorEditStep(fields: CursorToolFields): ProgressStep {
+  return fileStep("edit", "Editing file...", fields.rawPath, {
+    edits: extractClaudeEdits(fields.args),
+  });
+}
+
+function cursorDeleteStep(fields: CursorToolFields): ProgressStep {
+  return fileStep("edit", "Deleting file...", fields.rawPath);
 }
 
 function cursorMcpStep(fields: CursorToolFields): ProgressStep {
-  const server = pickCursorString(fields.args, [
+  const server = readStringField(fields.args, [
     "server",
     "serverName",
     "server_name",
     "toolName",
     "tool_name",
   ]);
-  return {
-    type: "tool",
-    label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-    status: "active",
-  };
+  return toolStep(server ? "Using MCP " + server + "..." : "Using MCP tool...");
 }
 
 function cursorSearchCodeStep(fields: CursorToolFields): ProgressStep {
-  return detailStep(
-    "search_code",
-    "Searching code...",
-    fields.query || fields.path,
-  );
+  return searchStep("code", fields.query || fields.path || undefined);
 }
 
 /** Known Cursor SDK tool kinds, matched by exact name. */
@@ -255,57 +216,35 @@ const CURSOR_KNOWN_TOOL_STEPS = new Map<
   string,
   (fields: CursorToolFields) => ProgressStep
 >([
-  ["read", (f) => pathStep("read", "Reading file...", f.path, f.rawPath)],
+  ["read", (f) => fileStep("read", "Reading file...", f.rawPath)],
   [
     "write",
     (f) => {
-      const fileText = pickCursorString(f.args, [
+      const fileText = readStringField(f.args, [
         "fileText",
         "file_text",
         "content",
         "contents",
       ]);
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: f.path || undefined,
-        path: f.rawPath || undefined,
+      return fileStep("write", "Creating file...", f.rawPath, {
         contentPreview: fileText ? capContentPreview(fileText) : undefined,
-        status: "active",
-      };
+      });
     },
   ],
-  [
-    "edit",
-    (f) => ({
-      type: "edit",
-      label: "Editing file...",
-      detail: f.path || undefined,
-      path: f.rawPath || undefined,
-      edits: extractClaudeEdits(f.args),
-      status: "active",
-    }),
-  ],
-  ["delete", (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)],
-  [
-    "glob",
-    (f) => detailStep("search_files", "Searching files...", f.query || f.path),
-  ],
-  ["ls", (f) => detailStep("search_files", "Searching files...", f.path)],
+  ["edit", cursorEditStep],
+  ["delete", cursorDeleteStep],
+  ["glob", (f) => searchStep("files", f.query || f.path || undefined)],
+  ["ls", (f) => searchStep("files", f.path || undefined)],
   ["grep", cursorSearchCodeStep],
   ["semSearch", cursorSearchCodeStep],
   ["shell", cursorShellStep],
   [
     "task",
     (f) =>
-      detailStep(
-        "subtask",
-        "Running agent...",
-        pickCursorString(f.args, ["description", "prompt"]),
-      ),
+      subtaskStep(readStringField(f.args, ["description", "prompt"]) || undefined),
   ],
-  ["createPlan", cursorTasksStep],
-  ["updateTodos", cursorTasksStep],
+  ["createPlan", tasksStep],
+  ["updateTodos", tasksStep],
   ["mcp", cursorMcpStep],
 ]);
 
@@ -313,11 +252,11 @@ const CURSOR_KNOWN_TOOL_STEPS = new Map<
 const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
   {
     matches: (tool) => tool.includes("read"),
-    toStep: (f) => pathStep("read", "Reading file...", f.path, f.rawPath),
+    toStep: (f) => fileStep("read", "Reading file...", f.rawPath),
   },
   {
     matches: (tool) => tool.includes("write") || tool.includes("create"),
-    toStep: (f) => pathStep("write", "Creating file...", f.path, f.rawPath),
+    toStep: (f) => fileStep("write", "Creating file...", f.rawPath),
   },
   {
     matches: (tool) =>
@@ -325,33 +264,28 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
       tool.includes("patch") ||
       tool.includes("apply") ||
       tool.includes("replace"),
-    toStep: (f) => ({
-      ...pathStep("edit", "Editing file...", f.path, f.rawPath),
-      edits: extractClaudeEdits(f.args),
-    }),
+    toStep: cursorEditStep,
   },
   {
     matches: (tool) => tool.includes("delete") || tool.includes("remove"),
-    toStep: (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath),
+    toStep: cursorDeleteStep,
   },
   {
     matches: (tool) => tool.includes("glob") || tool.includes("list"),
-    toStep: (f) =>
-      detailStep("search_files", "Searching files...", f.query || f.path),
+    toStep: (f) => searchStep("files", f.query || f.path || undefined),
   },
   // Before grep/search: every web-search name also contains "search".
   {
     matches: (tool) =>
       tool.includes("websearch") || tool.includes("web_search"),
-    toStep: (f) => detailStep("web_search", "Searching web...", f.query),
+    toStep: (f) => webStep("search", f.query || undefined),
   },
   {
     matches: (tool) => tool.includes("grep") || tool.includes("search"),
     toStep: (f, tool) =>
-      detailStep(
-        tool.includes("file") ? "search_files" : "search_code",
-        tool.includes("file") ? "Searching files..." : "Searching code...",
-        f.query || f.path,
+      searchStep(
+        tool.includes("file") ? "files" : "code",
+        f.query || f.path || undefined,
       ),
   },
   {
@@ -368,11 +302,11 @@ const CURSOR_HEURISTIC_TOOL_STEPS: ToolStepRule<CursorToolFields>[] = [
       tool.includes("webfetch") ||
       tool.includes("web_fetch") ||
       (tool.includes("fetch") && !tool.includes("search")),
-    toStep: (f) => detailStep("web_fetch", "Fetching URL...", f.query),
+    toStep: (f) => webStep("fetch", f.query || undefined),
   },
   {
     matches: (tool) => tool.includes("todo") || tool.includes("plan"),
-    toStep: cursorTasksStep,
+    toStep: tasksStep,
   },
   {
     matches: (tool) => tool.includes("mcp"),
@@ -399,157 +333,81 @@ export function cursorSdkToolToStep(
   if (rule) {
     return rule.toStep(fields, tool);
   }
-  return {
-    type: "tool",
-    label: "Using " + (name || "tool") + "...",
-    status: "active",
-  };
+  return toolStep("Using " + (name || "tool") + "...");
 }
 
 /** Converts a Claude tool call into a UI progress step object. */
 export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
-  const rawPath =
-    typeof input.file_path === "string" ? String(input.file_path) : "";
-  const path = rawPath ? shortenPath(rawPath) : "";
+  const rawPath = stringOrUndefined(input.file_path) ?? "";
   switch (name) {
     case "Read":
-      return {
-        type: "read",
-        label: "Reading file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        status: "active",
-      };
+      return fileStep("read", "Reading file...", rawPath);
     case "Glob":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail:
-          typeof input.pattern === "string" ? String(input.pattern) : undefined,
-        status: "active",
-      };
+      return searchStep("files", stringOrUndefined(input.pattern));
     case "Grep":
-      return {
-        type: "search_code",
-        label: "Searching code...",
-        detail:
-          typeof input.pattern === "string" ? String(input.pattern) : undefined,
-        status: "active",
-      };
+      return searchStep("code", stringOrUndefined(input.pattern));
     case "Write": {
-      const content =
-        typeof input.content === "string" ? input.content : undefined;
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
+      const content = stringOrUndefined(input.content);
+      return fileStep("write", "Creating file...", rawPath, {
         contentPreview: content ? capContentPreview(content) : undefined,
-        status: "active",
-      };
+      });
     }
-    case "Edit": {
-      const edits = extractClaudeEdits(input);
-      return {
-        type: "edit",
-        label: "Editing file...",
-        detail: path || undefined,
-        path: rawPath || undefined,
-        edits,
-        status: "active",
-      };
-    }
+    case "Edit":
+      return fileStep("edit", "Editing file...", rawPath, {
+        edits: extractClaudeEdits(input),
+      });
     case "Bash":
-    case "bash": {
-      const rawCommand =
-        typeof input.command === "string" ? String(input.command) : "";
-      return {
-        type: "bash",
-        label:
-          input.run_in_background === true
-            ? "Running in background..."
-            : "Running command...",
-        detail: rawCommand ? rawCommand.slice(0, 300) : undefined,
-        command: rawCommand ? capCommand(rawCommand) : undefined,
-        status: "active",
-      };
-    }
+    case "bash":
+      return bashStep(
+        stringOrUndefined(input.command) ?? "",
+        input.run_in_background === true
+          ? "Running in background..."
+          : "Running command...",
+      );
     case "KillShell":
-      return {
-        type: "bash",
-        label: "Stopping background process...",
-        detail:
-          typeof input.shell_id === "string"
-            ? String(input.shell_id)
-            : typeof input.shellId === "string"
-              ? String(input.shellId)
-              : undefined,
-        status: "active",
-      };
+      return bashStep(
+        "",
+        "Stopping background process...",
+        stringOrUndefined(input.shell_id) ?? stringOrUndefined(input.shellId),
+      );
     case "Skill":
-      return {
-        type: "tool",
-        label: "Using Skill...",
-        detail:
-          typeof input.skill === "string" ? String(input.skill) : undefined,
-        status: "active",
-      };
+      return toolStep("Using Skill...", stringOrUndefined(input.skill));
     case "WebFetch":
-      return {
-        type: "web_fetch",
-        label: "Fetching URL...",
-        detail: typeof input.url === "string" ? String(input.url) : undefined,
-        status: "active",
-      };
+      return webStep("fetch", stringOrUndefined(input.url));
     case "WebSearch":
-      return {
-        type: "web_search",
-        label: "Searching web...",
-        detail:
-          typeof input.query === "string" ? String(input.query) : undefined,
-        status: "active",
-      };
-    case "NotebookEdit":
+      return webStep("search", stringOrUndefined(input.query));
+    case "NotebookEdit": {
+      const notebookPath = stringOrUndefined(input.notebook_path);
       return {
         type: "notebook",
         label: "Editing notebook...",
         detail:
-          typeof input.notebook_path === "string"
-            ? shortenPath(String(input.notebook_path))
-            : undefined,
-        path:
-          typeof input.notebook_path === "string"
-            ? String(input.notebook_path)
-            : undefined,
+          notebookPath !== undefined ? shortenPath(notebookPath) : undefined,
+        path: notebookPath,
         status: "active",
       };
+    }
     // Subagent spawn. Named `Agent` since claude-code v2.1.63; older CLIs emit
     // `Task`. Match both so subagent runs are always recognised (a bare `Task`
     // previously fell through to the generic "Using Task..." row).
     case "Agent":
-    case "Task":
+    case "Task": {
+      // The prompt the subagent was spawned with: the opening message of its
+      // child thread view. Trimmed from the chat transcript query like any
+      // other preview, so it costs nothing until a reader opens it.
+      const prompt = trimmedString(input.prompt);
       return {
-        type: "subtask",
-        label: "Running agent...",
-        detail:
-          typeof input.description === "string"
-            ? String(input.description)
-            : typeof input.subagent_type === "string"
-              ? String(input.subagent_type)
-              : undefined,
-        // The prompt the subagent was spawned with: the opening message of
-        // its child thread view. Trimmed from the chat transcript query like
-        // any other preview, so it costs nothing until a reader opens it.
-        contentPreview:
-          typeof input.prompt === "string" && input.prompt.trim()
-            ? capContentPreview(input.prompt.trim())
-            : undefined,
-        status: "active",
+        ...subtaskStep(
+          stringOrUndefined(input.description) ??
+            stringOrUndefined(input.subagent_type),
+        ),
+        contentPreview: prompt ? capContentPreview(prompt) : undefined,
       };
+    }
     case "TodoWrite":
-      return { type: "tool", label: "Updating tasks...", status: "active" };
+      return tasksStep();
     case "TodoRead":
-      return { type: "tool", label: "Reading tasks...", status: "active" };
+      return toolStep("Reading tasks...");
     case "AskUserQuestion": {
       const questions = parseQuestionInput(input);
       return {
@@ -561,47 +419,23 @@ export function toolCallToStep(name: string, input: JsonObject): ProgressStep {
       };
     }
     default:
-      return {
-        type: "tool",
-        label: "Using " + name + "...",
-        status: "active",
-      };
+      return toolStep("Using " + name + "...");
   }
 }
 
 function getCodexFieldValue(item: JsonObject, keys: string[]): string {
-  const sources: JsonObject[] = [item];
-  if (
-    item.input &&
-    typeof item.input === "object" &&
-    !Array.isArray(item.input)
-  ) {
-    sources.push(item.input);
-  }
-  for (const source of sources) {
-    for (const key of keys) {
-      if (typeof source[key] === "string" && source[key].trim()) {
-        return source[key].trim();
-      }
-    }
-  }
-  return "";
+  return (
+    readStringField(item, keys).trim() ||
+    readStringField(asJsonObject(item.input), keys).trim()
+  );
 }
 
 export function getCodexThreadId(event: JsonObject): string {
-  if (typeof event.thread_id === "string" && event.thread_id.trim()) {
-    return event.thread_id.trim();
-  }
-  if (
-    event.thread &&
-    typeof event.thread === "object" &&
-    !Array.isArray(event.thread) &&
-    typeof event.thread.id === "string" &&
-    event.thread.id.trim()
-  ) {
-    return event.thread.id.trim();
-  }
-  return "";
+  return (
+    trimmedString(event.thread_id) ??
+    trimmedString(asJsonObject(event.thread).id) ??
+    ""
+  );
 }
 
 export function getCodexAgentMessageText(item: JsonObject): string {
@@ -616,7 +450,7 @@ export function getCodexAgentMessageText(item: JsonObject): string {
   }
   const parts: string[] = [];
   for (const block of item.content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    if (!isJsonObject(block)) continue;
     if (typeof block.text === "string" && block.text) {
       parts.push(block.text);
       continue;
@@ -639,10 +473,7 @@ type CodexItemFields = {
 };
 
 function getCodexItemFields(item: JsonObject): CodexItemFields {
-  const itemType =
-    item && typeof item.type === "string" && item.type.trim()
-      ? item.type.trim()
-      : "tool";
+  const itemType = trimmedString(item.type) ?? "tool";
   const pathValue = getCodexFieldValue(item, [
     "file_path",
     "path",
@@ -662,36 +493,37 @@ function getCodexItemFields(item: JsonObject): CodexItemFields {
       "tool",
       "skill",
     ]),
-    pathDetail: pathValue ? shortenPath(String(pathValue)) : "",
+    pathDetail: pathValue ? shortenPath(pathValue) : "",
   };
 }
 
 function codexFileChangeStep(fields: CodexItemFields): ProgressStep {
   const files = extractFilePaths(fields.item);
-  return {
-    type: "edit",
-    label: "Editing file...",
-    detail: files[0] ? shortenPath(files[0]) : fields.pathDetail || undefined,
-    path: files[0] || fields.pathValue || undefined,
+  return fileStep("edit", "Editing file...", files[0] || fields.pathValue, {
     files: files.length > 0 ? files : undefined,
-    status: "active",
-  };
+  });
 }
 
 function codexMcpToolStep(fields: CodexItemFields): ProgressStep {
   const { descriptionValue } = fields;
   const normalizedDescription = descriptionValue.toLowerCase();
+  // Codex MCP calls keep their own labels: the detail is the tool name, not a path.
   if (normalizedDescription.includes("fetch_file")) {
-    return detailStep("read", "Reading file...", descriptionValue);
+    return {
+      type: "read",
+      label: "Reading file...",
+      detail: descriptionValue || undefined,
+      status: "active",
+    };
   }
   if (
     normalizedDescription.includes("search") ||
     normalizedDescription.includes("list_repositories") ||
     normalizedDescription.includes("list_mcp_resources")
   ) {
-    return detailStep("search_code", "Searching code...", descriptionValue);
+    return searchStep("code", descriptionValue || undefined);
   }
-  return detailStep("tool", "Using MCP...", descriptionValue);
+  return toolStep("Using MCP...", descriptionValue || undefined);
 }
 
 /** Codex item kinds, checked in order against the lowercased item type. */
@@ -707,45 +539,36 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
   {
     matches: (type) => type.includes("web"),
     toStep: (f, type) =>
-      detailStep(
-        type.includes("search") ? "web_search" : "web_fetch",
-        type.includes("search") ? "Searching web..." : "Fetching URL...",
-        f.queryValue || f.pathDetail,
+      webStep(
+        type.includes("search") ? "search" : "fetch",
+        f.queryValue || f.pathDetail || undefined,
       ),
   },
   {
     matches: (type) => type.includes("read"),
-    toStep: (f) =>
-      pathStep("read", "Reading file...", f.pathDetail, f.pathValue),
+    toStep: (f) => fileStep("read", "Reading file...", f.pathValue),
   },
   {
     matches: (type) => type.includes("grep") || type.includes("search"),
     toStep: (f, type) =>
-      detailStep(
-        type.includes("file") ? "search_files" : "search_code",
-        type.includes("file") ? "Searching files..." : "Searching code...",
-        f.queryValue || f.pathDetail,
+      searchStep(
+        type.includes("file") ? "files" : "code",
+        f.queryValue || f.pathDetail || undefined,
       ),
   },
   {
     matches: (type) => type.includes("glob") || type.includes("list"),
     toStep: (f) =>
-      detailStep(
-        "search_files",
-        "Searching files...",
-        f.queryValue || f.pathDetail,
-      ),
+      searchStep("files", f.queryValue || f.pathDetail || undefined),
   },
   {
     matches: (type) => type.includes("write") || type.includes("create"),
-    toStep: (f) =>
-      pathStep("write", "Creating file...", f.pathDetail, f.pathValue),
+    toStep: (f) => fileStep("write", "Creating file...", f.pathValue),
   },
   {
     matches: (type) =>
       type.includes("edit") || type.includes("patch") || type.includes("apply"),
-    toStep: (f) =>
-      pathStep("edit", "Editing file...", f.pathDetail, f.pathValue),
+    toStep: (f) => fileStep("edit", "Editing file...", f.pathValue),
   },
   {
     matches: (type) =>
@@ -753,39 +576,34 @@ const CODEX_ITEM_STEPS: ToolStepRule<CodexItemFields>[] = [
       type.includes("shell") ||
       type.includes("bash") ||
       type.includes("exec"),
-    toStep: (f) => ({
-      type: "bash",
-      label: "Running command...",
-      detail: f.commandValue || f.descriptionValue || undefined,
-      command: f.commandValue ? capCommand(f.commandValue) : undefined,
-      status: "active",
-    }),
+    // The row detail is capped like every other provider's bash step.
+    toStep: (f) =>
+      bashStep(
+        f.commandValue,
+        "Running command...",
+        f.descriptionValue || undefined,
+      ),
   },
   {
     matches: (type) => type.includes("agent") || type === "collabtoolcall",
-    toStep: (f) =>
-      detailStep("subtask", "Running agent...", f.descriptionValue),
+    toStep: (f) => subtaskStep(f.descriptionValue || undefined),
   },
 ];
 
 export function codexItemToStep(item: JsonObject): ProgressStep {
   const fields = getCodexItemFields(item);
   const normalizedType = fields.itemType.toLowerCase();
-  const itemId =
-    typeof item.id === "string" && item.id.trim() ? item.id.trim() : undefined;
+  const itemId = trimmedString(item.id);
   const rule = CODEX_ITEM_STEPS.find((r) => r.matches(normalizedType));
   const step: ProgressStep = rule
     ? rule.toStep(fields, normalizedType)
-    : {
-        type: "tool",
-        label: "Using " + fields.itemType + "...",
-        detail:
-          fields.descriptionValue ||
+    : toolStep(
+        "Using " + fields.itemType + "...",
+        fields.descriptionValue ||
           fields.pathDetail ||
           fields.queryValue ||
           undefined,
-        status: "active",
-      };
+      );
   if (itemId) step.toolUseId = itemId;
   return step;
 }

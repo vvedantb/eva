@@ -5,6 +5,7 @@ import type {
   StepOutput,
   ToolCompleteResult,
 } from "../types.js";
+import { isJsonObject, readStringField } from "../utils.js";
 import { headCap, STEP_FIELD_CAPS, tailCap } from "./stepBudget.js";
 
 /** Caps a command string for ProgressStep.command. */
@@ -56,7 +57,7 @@ export function extractClaudeEdits(input: JsonObject): StepEdit[] | undefined {
   if (Array.isArray(input.edits)) {
     for (const item of input.edits) {
       if (edits.length >= STEP_FIELD_CAPS.editsMax) break;
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const oldText =
         typeof item.old_string === "string"
           ? item.old_string
@@ -80,16 +81,6 @@ export function extractClaudeEdits(input: JsonObject): StepEdit[] | undefined {
   }
 
   return edits.length > 0 ? edits : undefined;
-}
-
-function readStringField(obj: JsonObject, keys: string[]): string {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
 }
 
 function readNumberField(obj: JsonObject, keys: string[]): number | undefined {
@@ -214,7 +205,7 @@ export function extractFilePaths(obj: JsonObject): string[] {
 
   if (Array.isArray(obj.changes)) {
     for (const change of obj.changes) {
-      if (!change || typeof change !== "object" || Array.isArray(change)) {
+      if (!isJsonObject(change)) {
         continue;
       }
       if (typeof change.path === "string") add(change.path);

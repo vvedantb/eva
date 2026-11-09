@@ -16,8 +16,6 @@ type PrepareSandboxArgs = {
   attachRunId?: Id<"agentRuns">;
   baseBranch?: string;
   branchName?: string;
-  sessionPersistenceId?: Id<"sessions"> | Id<"projects">;
-  sessionPersistenceKind?: "sessions" | "projects";
   createRetry?: { maxAttempts: number; initialBackoffMs: number; base: number };
   /** Skip repo startup + background commands (read-only ephemeral agent runs). */
   skipStartupCommands?: boolean;
@@ -109,8 +107,6 @@ export async function prepareSandboxSteps(
       ephemeral: args.ephemeral,
       repoId: args.repoId,
       attachRunId: args.attachRunId,
-      sessionPersistenceId: args.sessionPersistenceId,
-      sessionPersistenceKind: args.sessionPersistenceKind,
       streamingEntityId: args.streamingEntityId,
     },
     args.createRetry ? { retry: args.createRetry } : undefined,

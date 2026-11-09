@@ -89,7 +89,11 @@ describe("daemon marker files are only removed by their owner", () => {
       claim,
       "the rival predicate must default to the argv identity check, not pidAlive",
     ).toContain("params.isRival ?? isCallbackRunnerPid");
-    expect(daemonSource).toContain("claimDaemonPidfileBoot(");
+    // Daemons claim through the shared boot, which claims before anything else.
+    expect(daemonSource).toContain("bootWarmDaemon(");
+    expect(
+      functionBody(helperSource, "export async function bootWarmDaemon("),
+    ).toContain("claimDaemonPidfileBoot(");
   });
 });
 

@@ -40,8 +40,8 @@ import {
   resolveIdleThresholds,
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
+import { chatEntityKindValidator } from "./_validators/enums";
 import {
-  sandboxActivityKindValidator,
   sandboxActivitySourceValidator,
   sandboxIdlePauseModeValidator,
 } from "./_validators/tableFields";
@@ -121,7 +121,7 @@ export const setSandboxIdlePauseSettings = authMutation({
 const AWAKE_PER_REPO_LIMIT = 64;
 
 const awakeSandboxValidator = v.object({
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
   title: v.string(),
   repoLabel: v.string(),
