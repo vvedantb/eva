@@ -659,39 +659,56 @@ export const enqueueMessage = authMutation({
     ) {
       throw new Error("Not authorized");
     }
-    await touchUserActivity(
-      ctx,
-      { kind: "task", entityId: String(args.taskId) },
-      { source: "chat", userId: ctx.userId },
-    );
-
-    const normalizedModel = normalizeAIModel(args.model);
-    const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
-      requestedAccountId: args.providerAccountId,
-      ownerUserId: task.createdBy,
-      currentAccountId: task.providerAccountId,
-      model: normalizedModel,
-      senderUserId: ctx.userId,
-      changePolicy: "owner-only",
-      ownerNoun: "task owner",
-    });
-
-    await notifyChatMentions(ctx, {
-      content: displayContent ?? content,
-      authorUserId: ctx.userId,
-      surface: { kind: "task", task },
-    });
-
-    await enqueueTaskChatMessage(ctx, task, {
+    await sendTaskChatMessage(ctx, task, {
       ...args,
       message: content,
       displayContent,
       userId: ctx.userId,
-      resolvedProviderAccountId: providerAccountId,
     });
     return null;
   },
 });
+
+/**
+ * Queues a user message on a task chat and sends it at once when the chat is
+ * idle. The caller checks repo access and trims `message`. Shared by
+ * `enqueueMessage` and the mobile app (`mobile.sendMessage`).
+ */
+export async function sendTaskChatMessage(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  args: Omit<
+    Parameters<typeof enqueueTaskChatMessage>[2],
+    "resolvedProviderAccountId"
+  >,
+): Promise<void> {
+  await touchUserActivity(
+    ctx,
+    { kind: "task", entityId: String(task._id) },
+    { source: "chat", userId: args.userId },
+  );
+
+  const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
+    requestedAccountId: args.providerAccountId,
+    ownerUserId: task.createdBy,
+    currentAccountId: task.providerAccountId,
+    model: normalizeAIModel(args.model),
+    senderUserId: args.userId,
+    changePolicy: "owner-only",
+    ownerNoun: "task owner",
+  });
+
+  await notifyChatMentions(ctx, {
+    content: args.displayContent ?? args.message,
+    authorUserId: args.userId,
+    surface: { kind: "task", task },
+  });
+
+  await enqueueTaskChatMessage(ctx, task, {
+    ...args,
+    resolvedProviderAccountId: providerAccountId,
+  });
+}
 
 /** Parks a message on the task's chat queue; shared by enqueue and a busy send. */
 async function enqueueTaskChatMessage(

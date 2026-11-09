@@ -28,12 +28,13 @@ export function DocRecapRegenerateButton({
 
   const regenerate = async () => {
     setBusy(true);
+    const model = normalizeAIModel(doc.prRecapModel ?? DEFAULT_AI_MODEL);
     try {
       await withMutationToast(
         generatePrRecap({
           repoId,
           prUrl,
-          model: normalizeAIModel(doc.prRecapModel ?? DEFAULT_AI_MODEL),
+          model,
           ...toRunTraitArgs(storedRunTraits(doc)),
         }),
         "Recap regeneration started",

@@ -31,6 +31,7 @@ import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { AutomationDeleteDialog } from "./_components/AutomationDeleteDialog";
 import { SystemAutomationSettings } from "./_components/SystemAutomationSettings";
+import { EmailSettingsRows } from "./_components/EmailSettingsRows";
 import { TriggerSection } from "./_components/TriggerSection";
 import { automationTriggerOf } from "./_components/trigger";
 import { LatestRun, RunHistory } from "./_components/RunAccordion";
@@ -370,17 +371,7 @@ function SettingsForm({
             }
           />
         ) : null}
-        <SettingsToggleRow
-          title="Send email"
-          description="Email this automation's run summary to all users when a run succeeds."
-          action={
-            <Switch
-              checked={automation.sendEmail === true}
-              onCheckedChange={(next) => commit({ sendEmail: next })}
-              aria-label="Send email"
-            />
-          }
-        />
+        <EmailSettingsRows automation={automation} commit={commit} />
       </SettingsSection>
 
       <SettingsSection title="Model">

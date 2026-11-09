@@ -35,11 +35,21 @@ beforeAll(async () => {
 function renderComposerState(stored: string) {
   storage.set(`eva:new-session-composer:${repoId}`, stored);
   let result: ReturnType<typeof UseComposerState> | undefined;
-  function Probe() {
-    result = useComposerState(repoId, "claude:opus", { fastMode: false });
+  function Probe({
+    onResult,
+  }: {
+    onResult: (value: ReturnType<typeof UseComposerState>) => void;
+  }) {
+    onResult(useComposerState(repoId, "claude:opus", { fastMode: false }));
     return null;
   }
-  renderToString(createElement(Probe));
+  renderToString(
+    createElement(Probe, {
+      onResult: (value) => {
+        result = value;
+      },
+    }),
+  );
   if (!result) throw new Error("hook did not render");
   return result;
 }

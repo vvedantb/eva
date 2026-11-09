@@ -178,52 +178,62 @@ export const cancelExecution = authMutation({
     if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Not authorized");
     }
-
-    await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
-
-    const run = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
-
-    if (run) {
-      await closeOpenTurn(ctx, run._id, "cancelled");
-      await ctx.db.patch(run._id, {
-        status: "cancelled",
-        finalizingAt: undefined,
-        finishedAt: Date.now(),
-      });
-      await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
-      // The cancelled status is written here, not through finalizeRunStatus, so
-      // this is the one terminal transition that hook cannot see.
-      await scheduleTaskOrchestratorNotify(ctx, args.taskId, "cancelled");
-
-      // workflow.cancel() aborts execution before the workflow's own sandbox
-      // cleanup step runs, so we stop the execution sandbox here.
-      if (run.sandboxId && run.repoId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
-          sandboxId: run.sandboxId,
-          repoId: run.repoId,
-        });
-      }
-    }
-
-    await clearStreamingActivity(ctx, String(args.taskId));
-
-    await ctx.db.patch(args.taskId, {
-      // Same rule as run completion: only the run's own `in_progress` resets.
-      ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
-      activeWorkflowId: undefined,
-      updatedAt: Date.now(),
-    });
-
+    await cancelTaskRun(ctx, task);
     return null;
   },
 });
+
+/**
+ * Stops a task's agent run (a quick task's first run). Shared by
+ * `cancelExecution` and the mobile app (`mobile.stopTurn`); the caller checks
+ * access.
+ */
+export async function cancelTaskRun(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+
+  const run = await ctx.db
+    .query("agentRuns")
+    .withIndex("by_task", (q) => q.eq("taskId", task._id))
+    .filter((q) =>
+      q.or(
+        q.eq(q.field("status"), "queued"),
+        q.eq(q.field("status"), "running"),
+      ),
+    )
+    .first();
+
+  if (run) {
+    await closeOpenTurn(ctx, run._id, "cancelled");
+    await ctx.db.patch(run._id, {
+      status: "cancelled",
+      finalizingAt: undefined,
+      finishedAt: Date.now(),
+    });
+    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
+    // The cancelled status is written here, not through finalizeRunStatus, so
+    // this is the one terminal transition that hook cannot see.
+    await scheduleTaskOrchestratorNotify(ctx, task._id, "cancelled");
+
+    // workflow.cancel() aborts execution before the workflow's own sandbox
+    // cleanup step runs, so we stop the execution sandbox here.
+    if (run.sandboxId && run.repoId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+        sandboxId: run.sandboxId,
+        repoId: run.repoId,
+      });
+    }
+  }
+
+  await clearStreamingActivity(ctx, String(task._id));
+
+  await ctx.db.patch(task._id, {
+    // Same rule as run completion: only the run's own `in_progress` resets.
+    ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
+    activeWorkflowId: undefined,
+    updatedAt: Date.now(),
+  });
+}
 

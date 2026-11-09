@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction } from "convex/react";
 import { useState } from "react";
+import { useLocalStorage } from "usehooks-ts";
 import { AnimatePresence } from "motion/react";
 import { api } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -50,28 +51,12 @@ export function ReposClient() {
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
-  const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
-    // Sync read avoids banner mount/unmount flash after hydration (CLS).
-    // Only the storage read is wrapped: React Compiler bails on the whole file
-    // when a logical expression sits inside a try/catch.
-    let raw: string | null = null;
-    try {
-      raw = localStorage.getItem(WELCOME_STORAGE_KEY);
-    } catch {
-      return false;
-    }
-    if (raw === null) return false;
-    // usehooks-ts previously JSON-serialized booleans as "true"/"false".
-    return raw === "true" || raw === '"true"';
-  });
-  const handleDismissWelcome = () => {
-    setWelcomeDismissed(true);
-    try {
-      localStorage.setItem(WELCOME_STORAGE_KEY, "true");
-    } catch {
-      // Ignore quota / private mode failures.
-    }
-  };
+  // Reads storage in the first render (initializeWithValue), so no banner flash.
+  const [welcomeDismissed, setWelcomeDismissed] = useLocalStorage(
+    WELCOME_STORAGE_KEY,
+    false,
+  );
+  const handleDismissWelcome = () => setWelcomeDismissed(true);
 
   const handleSync = async () => {
     setSyncing(true);

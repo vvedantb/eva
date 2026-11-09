@@ -5675,6 +5675,8 @@ import { dirname } from "path";
 
 // callback-src/runtime/pendingQuestion.ts
 var POLL_INTERVAL_MS2 = 300;
+var QUESTION_WAIT_MS = 10 * 60 * 1e3;
+var QUESTION_RELEASED_MESSAGE = "The user has not answered yet. Eva keeps this question on screen after your turn and sends their answer as their next message. End your turn now with one short line: do not ask again and do no further work.";
 function readClaimedAnswer(result) {
   const payload = unwrapConvexMutationPayload(result);
   if (!payload) return null;
@@ -5688,18 +5690,22 @@ async function postQuestion(toolUseId, payload) {
     payload
   });
 }
-async function pollForAnswer(toolUseId, signal) {
+async function pollForAnswer(toolUseId, signal, waitMs = QUESTION_WAIT_MS) {
+  const args = { entityId: ENTITY_ID ?? "", toolUseId };
+  const deadline = Date.now() + waitMs;
   while (!signal.aborted) {
+    const timedOut = Date.now() >= deadline;
     const result = await callConvexWithRetry(
       "mutation",
-      "pendingQuestions:claimAnswer",
-      { entityId: ENTITY_ID ?? "", toolUseId }
+      timedOut ? "pendingQuestions:release" : "pendingQuestions:claimAnswer",
+      args
     );
     const answer = readClaimedAnswer(result);
-    if (answer !== null) return answer;
+    if (answer !== null) return { kind: "answered", answer };
+    if (timedOut) return { kind: "released" };
     await sleep(POLL_INTERVAL_MS2);
   }
-  return null;
+  return { kind: "cancelled" };
 }
 function parseAnswers(answerJson) {
   try {
@@ -5726,12 +5732,17 @@ function buildCanUseTool() {
     callbackState.awaitingQuestionAnswer = true;
     log("canUseTool: AskUserQuestion \\u2014 posting question, awaiting user answer");
     try {
-      await postQuestion(toolUseId, JSON.stringify(input));
-      const answerJson = await pollForAnswer(toolUseId, options.signal);
-      if (answerJson === null) {
+      const payload = JSON.stringify(input);
+      await postQuestion(toolUseId, payload);
+      const outcome = await pollForAnswer(toolUseId, options.signal);
+      if (outcome.kind === "cancelled") {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      const answers = parseAnswers(answerJson);
+      if (outcome.kind === "released") {
+        callbackState.pendingQuestionData = payload;
+        return { behavior: "deny", message: QUESTION_RELEASED_MESSAGE };
+      }
+      const answers = parseAnswers(outcome.answer);
       if (toolUseId) {
         const stringAnswers = {};
         for (const [question, answer] of Object.entries(answers)) {

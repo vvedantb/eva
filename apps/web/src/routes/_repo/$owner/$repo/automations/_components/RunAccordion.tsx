@@ -29,6 +29,7 @@ import { formatDuration } from "@eva/shared/duration";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { FindingsList } from "./FindingsList";
+import { RunEmailPanel } from "./RunEmailPanel";
 
 export function LatestRun({
   run,
@@ -211,6 +212,9 @@ function RunAccordion({
           />
         )}
         <Badge variant={badgeVariant}>{run.status}</Badge>
+        {run.email?.status === "draft" ? (
+          <Badge variant="secondary">email draft</Badge>
+        ) : null}
         <span className="text-xs text-muted-foreground sm:text-sm">
           {dayjs(run.startedAt).format("DD/MM HH:mm")}
         </span>
@@ -339,6 +343,7 @@ function RunAccordion({
                 )}
               </>
             )}
+            {run.email && <RunEmailPanel runId={run._id} email={run.email} />}
             {run.error && (
               <div>
                 <p className="text-xs font-medium text-destructive mb-1">

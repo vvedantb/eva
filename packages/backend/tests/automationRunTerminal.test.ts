@@ -78,7 +78,10 @@ describe("automation run terminal states", () => {
         status: "success",
         resultSummary: "done",
       });
-      expect((await f.read())?.status).toBe("cancelled");
+      const run = await f.read();
+      expect(run?.status).toBe("cancelled");
+      // Review is the default, so a regression would leave a draft, not a send.
+      expect(run?.email).toBeUndefined();
       expect(await f.scheduled()).not.toContain(
         "automationEmail:sendAutomationEmail",
       );
