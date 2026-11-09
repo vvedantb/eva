@@ -8,11 +8,8 @@ import {
   authQuery,
 } from "../functions";
 import { envVarRequestFields, messageFields } from "../validators";
-import {
-  chatEntityKindValidator,
-  latestChatMessageId,
-  resolveChatParent,
-} from "../_chat/chatParent";
+import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
+import { chatEntityKindValidator } from "../_validators/enums";
 import { declinedReply } from "./replies";
 
 const requestValidator = v.object({

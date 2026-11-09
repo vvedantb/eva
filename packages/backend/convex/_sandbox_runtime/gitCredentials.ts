@@ -226,3 +226,19 @@ export async function ensureGitCredentialHelper(
     20,
   );
 }
+
+/**
+ * Best-effort teardown of a sandbox eva created and no longer wants: delete
+ * the VM, then the credential-helper row keyed by its id (no-op if absent).
+ */
+export async function deleteSandboxAndCredentials(
+  ctx: GenericActionCtx<DataModel>,
+  sandbox: SandboxHandle,
+): Promise<void> {
+  try {
+    await sandbox.delete();
+  } catch {}
+  await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
+    sandboxId: sandbox.id,
+  });
+}

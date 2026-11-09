@@ -48,8 +48,6 @@ function fakeStep(failOn: string, opts: { deleteFails?: boolean } = {}): Fake {
               sandboxId: args.existingSandboxId ?? FRESH_SANDBOX,
               resumeFellBack: false,
             };
-          case "sandbox:getSandboxProviderKind":
-            return "vercel";
           case "sandbox:startupCommandsMarkerExists":
             return true;
           case "sandbox:runBackgroundCommands":

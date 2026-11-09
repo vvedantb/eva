@@ -20,7 +20,11 @@ import { requireCurrentUserId } from "./_auth/currentUser";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
-import { buildProjectBranchName } from "./_git/branchNames";
+import {
+  buildTaskBranchName,
+  resolveProjectBranchName,
+} from "./_git/branchNames";
+import { cancelScheduledFunction } from "./_scheduling/helpers";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -327,25 +331,36 @@ export async function getProjectWithAccess(
   return project;
 }
 
-/** Returns true if the given task has any queued or running agent runs. */
-export async function hasActiveRun(
+/**
+ * The task's queued or running agent run, or null. Prefers a queued run over a
+ * running one; every agentRuns insert is guarded by an active-run check, so a
+ * task has at most one active run and the order does not matter.
+ */
+export async function getActiveTaskRun(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
-): Promise<boolean> {
+): Promise<Doc<"agentRuns"> | null> {
   const queued = await db
     .query("agentRuns")
     .withIndex("by_task_and_status", (q) =>
       q.eq("taskId", taskId).eq("status", "queued"),
     )
     .first();
-  if (queued) return true;
-  const running = await db
+  if (queued) return queued;
+  return await db
     .query("agentRuns")
     .withIndex("by_task_and_status", (q) =>
       q.eq("taskId", taskId).eq("status", "running"),
     )
     .first();
-  return running !== null;
+}
+
+/** Returns true if the given task has any queued or running agent runs. */
+export async function hasActiveRun(
+  db: GenericDatabaseReader<DataModel>,
+  taskId: Id<"agentTasks">,
+): Promise<boolean> {
+  return (await getActiveTaskRun(db, taskId)) !== null;
 }
 
 /** True when a later-started run exists on the same task (stale workflow completion). */
@@ -381,9 +396,7 @@ export async function isFirstTaskOnBranch(
   if (projectId) {
     const project = await db.get(projectId);
     if (!project) return true;
-    const branch =
-      project.branchName ??
-      buildProjectBranchName(project._id, project.branchVersion);
+    const branch = resolveProjectBranchName(project._id, project);
     return (
       (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
     );
@@ -394,7 +407,7 @@ export async function isFirstTaskOnBranch(
     (await findLivePullRequestOnBranch(
       db,
       task.repoId,
-      `eva/task-${taskId}`,
+      buildTaskBranchName(taskId),
     )) === null
   );
 }
@@ -405,13 +418,7 @@ export async function deleteTaskRelatedData(
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (task?.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
+  await cancelScheduledFunction(ctx, task?.scheduledFunctionId);
   // Quick tasks persist a sandbox; clean it up so we don't leak compute.
   // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
   if (task && !task.projectId && task.sandboxId && task.repoId) {
@@ -467,13 +474,7 @@ export async function softDeleteAgentTask(
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || isEntityDeleted(task)) return;
-  if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
+  await cancelScheduledFunction(ctx, task.scheduledFunctionId);
   if (!task.projectId && task.sandboxId && task.repoId) {
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
       sandboxId: task.sandboxId,

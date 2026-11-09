@@ -40,6 +40,8 @@ for name in EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC
   fi
   export "$name"
 done
+# Clerk's Native API must be on for this key, else the APK opens blank.
+bash "$ROOT/scripts/check-clerk-native-api.sh"
 # Optional: Expo project id for push tokens (see apps/mobile/README.md).
 export EAS_PROJECT_ID="${EAS_PROJECT_ID:-}"
 

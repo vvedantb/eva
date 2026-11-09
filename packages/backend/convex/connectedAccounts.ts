@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { findTeamEnvVarDoc } from "./_envVars/documentStore";
 import { authAction, authMutation, authQuery } from "./functions";
 import {
   connectorActorValidator,
@@ -62,10 +63,7 @@ async function envFallbackForUser(
     .collect();
   const keys = CONNECTOR_ENV_KEYS[provider];
   for (const membership of memberships) {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, membership.teamId);
     const hit = doc?.vars.find((entry) => keys.includes(entry.key));
     if (!hit) continue;
     const team = await ctx.db.get(membership.teamId);
