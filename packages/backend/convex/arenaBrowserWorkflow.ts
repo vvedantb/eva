@@ -17,6 +17,7 @@ import {
   buildBrowserRunPrompt,
   scheduleArenaCheckCompletion,
 } from "./_arena/browserRun";
+import { findReposByOwnerAndName } from "./_githubRepos/helpers";
 
 const scenarioSnapshotValidator = v.object({
   id: v.id("arenaScenarios"),
@@ -439,12 +440,7 @@ export const startPrRuns = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     // Monorepos have one githubRepos row per app, each with its own docs.
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, args);
 
     for (const repo of repos) {
       if (repo.connected === false) continue;

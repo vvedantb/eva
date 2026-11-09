@@ -87,23 +87,21 @@ export async function buildSessionPrompt(
     branchName: row.branchName,
     baseBranch: row.baseBranch,
   }));
-  let prompt = buildEditPrompt(
-    {
+  let prompt = buildEditPrompt({
+    repo: {
       owner: repo.owner,
       name: repo.name,
       baseBranch: resolveSessionBaseBranch(session, repo),
     },
     branchName,
-    "",
-    resolvedMessage,
+    message: resolvedMessage,
     rootDirectory,
     customInstructionsBlock,
-    repo.systemPrompt,
-    session.devPort ?? repo.devPort,
-    [],
+    systemPrompt: repo.systemPrompt,
+    devPort: session.devPort ?? repo.devPort,
     readableRepos,
     linkedRepos,
-    {
+    runtime: {
       ownerKey: `session-${session._id}`,
       prUrl: session.prUrl,
       devCommand: session.devCommand ?? repo.devCommand,
@@ -113,7 +111,7 @@ export async function buildSessionPrompt(
       askTeammatesEnabled: resolveExperimentalFlags(user).askTeammates,
       prWatchEnabled: resolveExperimentalFlags(user).prWatch,
     },
-  );
+  });
   prompt = `${prompt}${parallelNote}`;
   if (prefixBlock) {
     prompt = `${prefixBlock}\n\n${prompt}`;

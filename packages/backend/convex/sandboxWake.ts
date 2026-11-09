@@ -8,7 +8,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
-import { sandboxActivityKindValidator } from "./_validators/tableFields";
+import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
 
 /**
@@ -48,7 +48,7 @@ function resolveWakeTarget(
 
 /** Internal: typed ids for the action below (actions have no `normalizeId`). */
 export const resolveTarget = internalQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(wakeTargetValidator, v.null()),
   handler: async (ctx, args) => resolveWakeTarget(ctx, args.kind, args.id),
 });
@@ -59,7 +59,7 @@ export const resolveTarget = internalQuery({
  * entity is gone, or the caller may not see it.
  */
 export const getWakeTarget = authQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(
     v.object({
       status: v.string(),
@@ -155,7 +155,7 @@ const sleep = (ms: number) =>
  * a saved link follows the Start button's path, including stop/start races.
  */
 export const ensureEntitySandboxActive = action({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.object({ startRequested: v.boolean() }),
   // Explicit types: the action calls a query from its own module, and Convex's
   // inferred `internal` type would otherwise be circular (and cascade `any`).

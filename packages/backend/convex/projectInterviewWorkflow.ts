@@ -8,6 +8,7 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation, getProjectWithAccess } from "./functions";
 import {
+  completionCallbackArgs,
   turnCheckpointArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
@@ -27,6 +28,7 @@ import {
   setProjectGeneratedSpec,
 } from "./_projects/helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
 
 const projectInterviewCompleteEvent = defineEvent({
   name: "projectInterviewComplete",
@@ -242,8 +244,7 @@ export const getProjectData = internalQuery({
     // to the repo's default branch — the sandbox just needs a valid checkout.
     const branchName =
       project.branchName ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-    const baseBranch =
-      project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
+    const baseBranch = resolveProjectBaseBranch(project, repo);
 
     return {
       sandboxId: project.sandboxId,
@@ -391,12 +392,7 @@ export const startSpecWorkflowInternal = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     projectId: v.id("projects"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
