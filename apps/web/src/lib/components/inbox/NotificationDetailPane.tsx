@@ -5,7 +5,7 @@ import { Button, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconArrowUpRight, IconInbox } from "@tabler/icons-react";
 import { type Notification } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { embedReadyMessage } from "@/lib/embed/embedded";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";

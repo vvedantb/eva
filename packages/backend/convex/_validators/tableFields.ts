@@ -1207,9 +1207,12 @@ export const automationFields = {
   readOnly: v.optional(v.boolean()),
   actionsEnabled: v.optional(v.boolean()),
   shared: v.optional(v.boolean()),
-  // When true, a successful run broadcasts its result summary by email to every
-  // user with email notifications enabled (see automationEmail.sendAutomationEmail).
+  // When true, a successful run emails its result summary to every user with
+  // email notifications enabled (see _automations/email.ts).
   sendEmail: v.optional(v.boolean()),
+  // True skips review and sends straight away. Missing means each email waits
+  // on its run as a draft until someone sends it, so review is the default.
+  emailAutoSend: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
   // Set when this row is a per-repo install of a hardcoded system automation
   // (see _automations/systemAutomations.ts). Content fields hold placeholders;
@@ -1220,6 +1223,21 @@ export const automationFields = {
   createdAt: v.number(),
   updatedAt: v.number(),
 };
+
+/**
+ * The email a successful run produces. A `draft` waits for review and can be
+ * edited; `sent` and `discarded` are final, so an email never sends twice.
+ */
+export const automationRunEmailValidator = v.object({
+  status: v.union(
+    v.literal("draft"),
+    v.literal("sent"),
+    v.literal("discarded"),
+  ),
+  subject: v.string(),
+  /** Markdown, or the changelog's JSON; rendered by `renderAutomationEmail`. */
+  body: v.string(),
+});
 
 export const automationRunFields = {
   automationId: v.id("automations"),
@@ -1235,6 +1253,8 @@ export const automationRunFields = {
   activeWorkflowId: v.optional(v.string()),
   activityLog: v.optional(v.string()),
   findings: v.optional(v.array(automationFindingValidator)),
+  // Set when the automation emails its result; see automationRunEmailValidator.
+  email: v.optional(automationRunEmailValidator),
   // Event-triggered runs only. `eventKey` dedupes a burst of webhooks into one
   // run; `targetUrl` is the PR or issue the event was about.
   eventKind: v.optional(repoEventKindValidator),

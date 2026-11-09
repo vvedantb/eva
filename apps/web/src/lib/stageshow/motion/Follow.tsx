@@ -1,3 +1,4 @@
+"use no memo"
 import { useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import type { Rect } from '../measure'
 import { useStill } from '../reduced-motion'

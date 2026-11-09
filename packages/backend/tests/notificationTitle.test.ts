@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { splitNotificationTitle } from "./notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 
 /**
  * Every case below is a title format the Convex backend actually writes, so a

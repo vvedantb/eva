@@ -39,13 +39,15 @@ describe("sentViaOrchestrator survives queueing", () => {
     }
     expect(taskChat).toContain("sentViaOrchestrator: args.sentViaOrchestrator");
     // Session chats enqueue through one shared helper: the mutation threads
-    // the flag into it and the helper writes it onto the queued row.
+    // the flag into `sendSessionChatMessage`, which hands its params on to
+    // the helper that writes it onto the queued row.
     const enqueue = sessionExecution.slice(
       sessionExecution.indexOf("export const enqueueMessage ="),
     );
     expect(enqueue).toContain("sentViaOrchestrator,\n      ...settings");
-    expect(enqueue).toContain("enqueueChatMessage(ctx, {");
+    expect(enqueue).toContain("sendSessionChatMessage(ctx, {");
     expect(enqueue).toContain("sentViaOrchestrator,\n    });");
+    expect(enqueue).toContain("enqueueChatMessage(ctx, params)");
     const helper = sessionExecution.slice(
       sessionExecution.indexOf("async function enqueueChatMessage("),
       sessionExecution.indexOf("export const retryEmptyStalledSessionTurn ="),

@@ -1,5 +1,3 @@
-> Written by <!-- you, or "an AI agent on behalf of @handle" -->. <!-- Say whether a human has reviewed it. -->
-
 ## Why
 
 <!-- The problem: what was wrong or missing, for whom. Then why this approach fits. -->

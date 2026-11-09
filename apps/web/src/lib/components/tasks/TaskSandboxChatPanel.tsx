@@ -477,7 +477,7 @@ function useFirstRunMediaQueries(
 
 // Model + account stay on the task doc (shared with activity composer).
 // Traits are sticky on Convex like sessions (no localStorage).
-function useTaskChatModelSettings(
+export function useTaskChatModelSettings(
   taskId: Id<"agentTasks">,
   task: TaskChatTask,
   repo: ReturnType<typeof useRepo>["repo"],

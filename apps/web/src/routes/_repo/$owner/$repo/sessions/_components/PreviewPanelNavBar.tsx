@@ -86,7 +86,7 @@ export function PreviewPanelNavBar({
   showAnnotationToggle: boolean;
   /** Set where a composer can take the sketch image; omit to hide Sketch. */
   sketch?: { active: boolean; onToggle: () => void };
-  /** Sessions on desktop only: toggles the floating mini-player. */
+  /** Sessions and quick tasks on desktop only: toggles the floating mini-player. */
   popOut?: { active: boolean; onToggle: () => void };
   /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
@@ -176,15 +176,13 @@ export function PreviewPanelNavBar({
             onSelect={() => onAnnotationModeChange(!annotationMode)}
           />
         ) : null}
-        {showAnnotationToggle ? (
-          <PreviewToolItem
-            icon={<IconPlayerPause className="size-3.5" />}
-            label="Freeze animations"
-            active={freeze.frozen}
-            disabled={frame === null}
-            onSelect={freeze.toggle}
-          />
-        ) : null}
+        <PreviewToolItem
+          icon={<IconPlayerPause className="size-3.5" />}
+          label="Freeze animations"
+          active={freeze.frozen}
+          disabled={frame === null}
+          onSelect={freeze.toggle}
+        />
         {sketch ? (
           <PreviewToolItem
             icon={<IconPencil className="size-3.5" />}

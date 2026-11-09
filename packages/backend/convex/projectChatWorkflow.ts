@@ -609,6 +609,8 @@ export const enqueueMessage = authMutation({
   args: {
     projectId: v.id("projects"),
     message: v.string(),
+    /** Compact chat-display text when `message` is a rich agent prompt. */
+    displayContent: v.optional(v.string()),
     model: aiModelValidator,
     reasoningLevel: v.optional(reasoningLevelValidator),
     thinkingEnabled: v.optional(v.boolean()),
@@ -621,44 +623,63 @@ export const enqueueMessage = authMutation({
   handler: async (ctx, args) => {
     const content = args.message.trim();
     if (!content) return null;
+    const displayContent = args.displayContent?.trim() || undefined;
 
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    await touchUserActivity(
-      ctx,
-      { kind: "project", entityId: String(args.projectId) },
-      { source: "chat", userId: ctx.userId },
-    );
-
-    const normalizedModel = normalizeAIModel(args.model);
-    const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
-      requestedAccountId: args.providerAccountId,
-      ownerUserId: project.userId,
-      currentAccountId: project.providerAccountId,
-      model: normalizedModel,
-      senderUserId: ctx.userId,
-      changePolicy: "owner-only",
-      ownerNoun: "project owner",
-    });
-
-    await notifyChatMentions(ctx, {
-      content,
-      authorUserId: ctx.userId,
-      surface: { kind: "project", project },
-    });
-
-    await enqueueProjectChatMessage(ctx, project, {
+    await sendProjectChatMessage(ctx, project, {
       ...args,
       message: content,
+      displayContent,
       userId: ctx.userId,
-      resolvedProviderAccountId: providerAccountId,
     });
     return null;
   },
 });
+
+/**
+ * Queues a user message on a project chat and sends it at once when the chat
+ * is idle. The caller checks repo access and trims `message`. Shared by
+ * `enqueueMessage` and the mobile app (`mobile.sendMessage`).
+ */
+export async function sendProjectChatMessage(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+  args: Omit<
+    Parameters<typeof enqueueProjectChatMessage>[2],
+    "resolvedProviderAccountId"
+  >,
+): Promise<void> {
+  await touchUserActivity(
+    ctx,
+    { kind: "project", entityId: String(project._id) },
+    { source: "chat", userId: args.userId },
+  );
+
+  const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
+    requestedAccountId: args.providerAccountId,
+    ownerUserId: project.userId,
+    currentAccountId: project.providerAccountId,
+    model: normalizeAIModel(args.model),
+    senderUserId: args.userId,
+    changePolicy: "owner-only",
+    ownerNoun: "project owner",
+  });
+
+  await notifyChatMentions(ctx, {
+    content: args.displayContent ?? args.message,
+    authorUserId: args.userId,
+    surface: { kind: "project", project },
+  });
+
+  await enqueueProjectChatMessage(ctx, project, {
+    ...args,
+    resolvedProviderAccountId: providerAccountId,
+  });
+}
 
 /** Parks a message on the project's chat queue; shared by enqueue and a busy send. */
 async function enqueueProjectChatMessage(
@@ -666,6 +687,7 @@ async function enqueueProjectChatMessage(
   project: Doc<"projects">,
   args: {
     message: string;
+    displayContent?: string;
     userId: Id<"users">;
     model: Infer<typeof aiModelValidator>;
     reasoningLevel?: Doc<"queuedMessages">["reasoningLevel"];
@@ -680,6 +702,7 @@ async function enqueueProjectChatMessage(
   await ctx.db.insert("queuedMessages", {
     parentId: project._id,
     content: args.message,
+    displayContent: args.displayContent,
     createdAt: Date.now(),
     order: Date.now(),
     userId: args.userId,

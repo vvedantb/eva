@@ -55,3 +55,4 @@ export {
   type ForkTranscriptPrefix,
   type ForkTranscriptTurn,
 } from "./messageFork";
+export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";

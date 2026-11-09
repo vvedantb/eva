@@ -161,10 +161,14 @@ describe("session chat provider account handoff", () => {
   });
 
   test("queued turns persist the validated account onto the chat", () => {
-    // The enqueue mutation delegates to the shared queue helper, which is
-    // where the account is resolved and written to the queued row and chat.
+    // The enqueue mutation (and the mobile send) delegates through
+    // `sendSessionChatMessage` to the shared queue helper, which is where the
+    // account is resolved and written to the queued row and chat.
     const enqueueMessage = exportBody(sessionExecutionSource, "enqueueMessage");
-    expect(enqueueMessage).toContain("enqueueChatMessage(ctx, {");
+    expect(enqueueMessage).toContain("sendSessionChatMessage(ctx, {");
+    expect(functionBody(sessionExecutionSource, "sendSessionChatMessage")).toContain(
+      "enqueueChatMessage(ctx, params)",
+    );
     const helper = functionBody(sessionExecutionSource, "enqueueChatMessage");
     expect(helper).toContain("resolveTurnProviderAccountId(");
     expect(helper).toContain("requestedAccountId: settings.providerAccountId");

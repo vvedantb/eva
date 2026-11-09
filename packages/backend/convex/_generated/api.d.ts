@@ -35,6 +35,7 @@ import type * as _automationWorkflow_deliverable from "../_automationWorkflow/de
 import type * as _automationWorkflow_findings from "../_automationWorkflow/findings.js";
 import type * as _automationWorkflow_prompts from "../_automationWorkflow/prompts.js";
 import type * as _automations_crud from "../_automations/crud.js";
+import type * as _automations_email from "../_automations/email.js";
 import type * as _automations_findings from "../_automations/findings.js";
 import type * as _automations_helpers from "../_automations/helpers.js";
 import type * as _automations_prompts_addTestCoverage from "../_automations/prompts/addTestCoverage.js";
@@ -185,6 +186,7 @@ import type * as _migrations_removeProjectIdField from "../_migrations/removePro
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
 import type * as _migrations_repoSkills from "../_migrations/repoSkills.js";
+import type * as _mobile_chatTarget from "../_mobile/chatTarget.js";
 import type * as _prRecapWorkflow_finalizeOutcome from "../_prRecapWorkflow/finalizeOutcome.js";
 import type * as _prRecapWorkflow_prompts from "../_prRecapWorkflow/prompts.js";
 import type * as _prRecapWorkflow_recapState from "../_prRecapWorkflow/recapState.js";
@@ -463,6 +465,7 @@ import type * as mentionRouting from "../mentionRouting.js";
 import type * as mentions from "../mentions.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
+import type * as mobile from "../mobile.js";
 import type * as notificationDigest from "../notificationDigest.js";
 import type * as notificationEmail from "../notificationEmail.js";
 import type * as notifications from "../notifications.js";
@@ -491,6 +494,7 @@ import type * as proposedPlans from "../proposedPlans.js";
 import type * as prosemirrorSync from "../prosemirrorSync.js";
 import type * as pty from "../pty.js";
 import type * as pullRequests from "../pullRequests.js";
+import type * as push from "../push.js";
 import type * as queuedMessages from "../queuedMessages.js";
 import type * as repoEnvVars from "../repoEnvVars.js";
 import type * as repoEnvVarsActions from "../repoEnvVarsActions.js";
@@ -592,6 +596,7 @@ declare const fullApi: ApiFromModules<{
   "_automationWorkflow/findings": typeof _automationWorkflow_findings;
   "_automationWorkflow/prompts": typeof _automationWorkflow_prompts;
   "_automations/crud": typeof _automations_crud;
+  "_automations/email": typeof _automations_email;
   "_automations/findings": typeof _automations_findings;
   "_automations/helpers": typeof _automations_helpers;
   "_automations/prompts/addTestCoverage": typeof _automations_prompts_addTestCoverage;
@@ -742,6 +747,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
   "_migrations/repoSkills": typeof _migrations_repoSkills;
+  "_mobile/chatTarget": typeof _mobile_chatTarget;
   "_prRecapWorkflow/finalizeOutcome": typeof _prRecapWorkflow_finalizeOutcome;
   "_prRecapWorkflow/prompts": typeof _prRecapWorkflow_prompts;
   "_prRecapWorkflow/recapState": typeof _prRecapWorkflow_recapState;
@@ -1020,6 +1026,7 @@ declare const fullApi: ApiFromModules<{
   mentions: typeof mentions;
   messages: typeof messages;
   migrations: typeof migrations;
+  mobile: typeof mobile;
   notificationDigest: typeof notificationDigest;
   notificationEmail: typeof notificationEmail;
   notifications: typeof notifications;
@@ -1048,6 +1055,7 @@ declare const fullApi: ApiFromModules<{
   prosemirrorSync: typeof prosemirrorSync;
   pty: typeof pty;
   pullRequests: typeof pullRequests;
+  push: typeof push;
   queuedMessages: typeof queuedMessages;
   repoEnvVars: typeof repoEnvVars;
   repoEnvVarsActions: typeof repoEnvVarsActions;

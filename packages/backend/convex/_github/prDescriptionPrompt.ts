@@ -10,20 +10,17 @@ export const PR_DESCRIPTION_END = "<!-- /eva-pr-description -->";
  * prose, which is exactly what the sectioned format exists to avoid. */
 const MAX_DESCRIPTION_CHARS = 6_000;
 
-/** First line of every generated block, from the `pr-writing` skill: it tells
- * the reviewer how much a human is behind the change. Written by code, not the
- * model, so it never drifts. The block is written when the work is offered for
- * review, which is before any human has reviewed it. */
-export const PR_AUTHORSHIP_LINE =
-  "> Written by an AI agent in Eva. No human has reviewed it yet.";
+/** First line of every generated block: tells the reviewer an agent wrote the
+ * change. Written by code, not the model, so it never drifts. It makes no claim
+ * about review, because nothing updates the block after a human reviews. */
+export const PR_AUTHORSHIP_LINE = "> Written by an AI agent in Eva.";
 
 /**
  * Builds the prompt for the reviewer-facing PR description. The sections match
  * `.github/pull_request_template.md` (Why, Scope, Verification, Tradeoffs,
  * Blast radius, ELI5) so generated and hand-written PRs read the same way.
- * Order and honesty rules follow the `pr-writing` skill
- * (`.agents/skills/pr-writing`), cut down to what a diff-only call can do: it
- * has no tools, so it cannot capture evidence and must say what is unchecked.
+ * The call sees only the diff and has no tools, so it cannot capture evidence
+ * and must say what is unchecked.
  *
  * Scope leads on visible changes the Intent did not ask for. This is
  * the only such check a quick task **run** gets: a run stamps no turn diff

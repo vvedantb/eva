@@ -100,7 +100,7 @@ interface SandboxPanelProps {
   collapsed?: boolean;
   onToggle?: () => void;
   /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
-  miniPlayer?: { returnTo: string; title: string };
+  miniPlayer: { returnTo: string; title: string } | undefined;
 }
 export function SandboxPanel({
   sessionId,
@@ -432,7 +432,7 @@ export function SandboxPanel({
             // collapsed rail keep their preview parked.
             miniPlayer={
               miniPlayer !== undefined && isRouteActive && !collapsed
-                ? { ...miniPlayer, sessionId }
+                ? { ...miniPlayer, owner: { kind: "session", sessionId } }
                 : undefined
             }
             stickyPreviewPath={viewState?.previewPath}

@@ -116,7 +116,7 @@ const sandboxGitCredentialValidator = v.object({
   expiresAt: v.number(),
 });
 
-function toSandboxGitCredential(auth: { token: string; expiresAt: string }) {
+export function toSandboxGitCredential(auth: { token: string; expiresAt: string }) {
   return {
     token: auth.token,
     expiresAt: Math.floor(Date.parse(auth.expiresAt) / 1000),

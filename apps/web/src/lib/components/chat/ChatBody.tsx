@@ -69,7 +69,7 @@ import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarReque
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
-import { groupChatFeedback } from "@/lib/components/chat/feedback/feedbackRows";
+import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
   startTransition,
   useDeferredValue,
@@ -88,7 +88,6 @@ import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildMessageHistory,
   buildPrecedingUserTurns,
-  findDayBoundaryIds,
   findNewMessageIds,
   type ChatParentId,
   findHandoffBoundaryIds,
@@ -99,7 +98,6 @@ import {
   firstNameFromUser,
   isOtherUserChatMessage,
   otherUserIdsInChat,
-  parsePendingQuestion,
   SANDBOX_CHAT_COPY,
   TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
@@ -108,6 +106,8 @@ import {
   type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
+import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
   ChatLinkedMessageScroll,

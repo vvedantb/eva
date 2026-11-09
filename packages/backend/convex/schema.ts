@@ -429,10 +429,22 @@ const schema = defineSchema({
     // digest only, low = inbox only. Undefined means not yet routed (a mention
     // whose routing action has not landed) or legacy; treated as normal.
     urgency: v.optional(notificationUrgencyValidator),
+    // The chat this notification is about (session, quick task or project id),
+    // so the mobile inbox can open it without parsing `href`.
+    chatTarget: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
     .index("by_repo", ["repoId"]),
+  // Expo push tokens for the mobile app (see push.ts). One row per device.
+  pushTokens: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    platform: v.union(v.literal("android"), v.literal("ios")),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_token", ["token"]),
   repoEnvVars: defineTable({
     repoId: v.id("githubRepos"),
     vars: v.array(

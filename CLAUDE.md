@@ -7,7 +7,6 @@ FOLLOW ALL OF THESE RULES
 - Prefer `/preflight` occasionally over husky commit/push gates (hooks under `.husky/` are commented out).
 - Before reporting no GitHub access, push via `http.extraheader` with `$GH_TOKEN`; if it 401s, `git credential fill` for vvedantb/eva gives a fresh token for every installed repo.
 - Plans: final step is `/ship` unless the user says not to.
-- Before you open a PR or write its description, load the `pr-writing` skill and follow it.
 
 ## Always
 
