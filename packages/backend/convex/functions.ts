@@ -16,7 +16,7 @@ import {
 } from "./_generated/server";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { getCurrentUserId } from "./_auth/currentUser";
+import { requireCurrentUserId } from "./_auth/currentUser";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
@@ -34,15 +34,7 @@ export async function userCanAccessRepo(
   userId: Id<"users">,
 ): Promise<boolean> {
   if (repo.connectedBy === userId) return true;
-  const teamId = repo.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
+  return repo.teamId !== undefined && hasTeamAccess(db, repo.teamId, userId);
 }
 
 /** Checks if a user has access to a repo — either as the connector or via team membership. */
@@ -104,19 +96,40 @@ export async function assertActionTeamAccess(
   if (!team) throw new Error("Not authorized to access this team");
 }
 
+/** Fetches a user's membership row for a team, or null if they aren't a member. */
+export function getTeamMembership(
+  db: GenericDatabaseReader<DataModel>,
+  teamId: Id<"teams">,
+  userId: Id<"users">,
+): Promise<Doc<"teamMembers"> | null> {
+  return db
+    .query("teamMembers")
+    .withIndex("by_team_and_user", (q) =>
+      q.eq("teamId", teamId).eq("userId", userId),
+    )
+    .first();
+}
+
 /** Checks if a user has access to a team — i.e. is a member of it. */
 export async function hasTeamAccess(
   db: GenericDatabaseReader<DataModel>,
   teamId: Id<"teams">,
   userId: Id<"users">,
 ): Promise<boolean> {
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
+  return (await getTeamMembership(db, teamId, userId)) !== null;
+}
+
+/** Throws with the given message unless the user is an owner of the team. */
+export async function requireTeamOwner(
+  db: GenericDatabaseReader<DataModel>,
+  teamId: Id<"teams">,
+  userId: Id<"users">,
+  errorMessage: string,
+): Promise<void> {
+  const membership = await getTeamMembership(db, teamId, userId);
+  if (!membership || membership.role !== "owner") {
+    throw new Error(errorMessage);
+  }
 }
 
 /** Checks if a user can access a task by verifying access to its parent repo or project. */
@@ -298,20 +311,6 @@ export async function recomputeProjectPhase(
   if (allDone) {
     await applyPhaseTransition(ctx, project, "completed");
   }
-}
-
-/** Fetches a doc by ID, throwing if not found or the user lacks repo access. */
-export async function getDocWithAccess(
-  db: GenericDatabaseReader<DataModel>,
-  docId: Id<"docs">,
-  userId: Id<"users">,
-): Promise<Doc<"docs">> {
-  const doc = await db.get(docId);
-  if (!doc) throw new Error("Doc not found");
-  if (!(await hasRepoAccess(db, doc.repoId, userId))) {
-    throw new Error("Not authorized");
-  }
-  return doc;
 }
 
 /** Fetches a project by ID, throwing if not found or the user lacks access. */
@@ -505,25 +504,13 @@ export async function softDeleteAgentTask(
 /** Authenticated query wrapper — injects userId into context, throws if not authenticated. */
 export const authQuery = customQuery(
   query,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
+  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
 );
 
 /** Authenticated mutation wrapper — injects userId into context, throws if not authenticated. */
 export const authMutation = customMutation(
   mutation,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
+  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
 );
 
 const getUserIdFromIdentityRef = makeFunctionReference<
@@ -544,41 +531,27 @@ async function resolveActionUserId(ctx: ActionCtx): Promise<Id<"users">> {
 /** Authenticated action wrapper — injects userId into context via a query roundtrip. */
 export const authAction = customAction(
   action,
-  customCtx(async (ctx: ActionCtx) => {
-    const userId = await resolveActionUserId(ctx);
-    return { userId };
-  }),
+  customCtx(async (ctx: ActionCtx) => ({
+    userId: await resolveActionUserId(ctx),
+  })),
 );
 
 /** Internal authenticated query — same as authQuery but for internal-only queries. */
 export const internalAuthQuery = customQuery(
   internalQuery,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
+  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
 );
 
 /** Internal authenticated mutation — same as authMutation but for internal-only mutations. */
 export const internalAuthMutation = customMutation(
   internalMutation,
-  customCtx(async (ctx) => {
-    const userId = await getCurrentUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-    return { userId };
-  }),
+  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
 );
 
 /** Internal authenticated action — same as authAction but for internal-only actions. */
 export const internalAuthAction = customAction(
   internalAction,
-  customCtx(async (ctx: ActionCtx) => {
-    const userId = await resolveActionUserId(ctx);
-    return { userId };
-  }),
+  customCtx(async (ctx: ActionCtx) => ({
+    userId: await resolveActionUserId(ctx),
+  })),
 );
