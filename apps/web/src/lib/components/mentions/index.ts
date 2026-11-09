@@ -7,8 +7,6 @@ export type {
 export { MentionText } from "./MentionText";
 export { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
 export { UserMentionChip } from "./UserMentionChip";
-export { LinkChip } from "./LinkChip";
-export { isChipLinkUrl } from "./linkChipUtils";
 export { isEditorValueEmpty } from "./mentionEditorUtils";
 export { DataMentionChip } from "./DataMentionChip";
 export { SkillMentionChip } from "./SkillMentionChip";

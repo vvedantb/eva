@@ -17,10 +17,8 @@ import {
   DataMentionChip,
   SkillMentionChip,
   UserMentionChip,
-  LinkChip,
   isSkillTokenId,
   isHarnessSkillTokenId,
-  isChipLinkUrl,
   MENTION_CHIP_CLASS,
   SKILL_CHIP_CLASS,
 } from "@/lib/components/mentions";
@@ -183,9 +181,6 @@ export function MarkdownMentionText({
             typeof href === "string" ? href.match(MENTION_HREF_REGEX) : null;
 
           if (!match) {
-            if (typeof href === "string" && isChipLinkUrl(href)) {
-              return <LinkChip url={href} />;
-            }
             return <MarkdownLink href={href}>{children}</MarkdownLink>;
           }
 
