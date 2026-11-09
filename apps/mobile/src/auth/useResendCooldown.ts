@@ -1,3 +1,4 @@
+// useEffect: the 1 s tick while a resend cooldown is live (interval, not derived state).
 import { useEffect, useState } from "react";
 
 /**

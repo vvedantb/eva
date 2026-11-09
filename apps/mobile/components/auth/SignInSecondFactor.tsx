@@ -1,6 +1,7 @@
 // The Clerk-aware second step of sign-in. It picks the factor, sends the SMS or
 // email code when needed, and wires Verify, Resend and Back into `SecondFactorScreen`,
 // which stays free of Clerk imports.
+// useEffect: one mount send for SMS/email — no user event starts that prepare.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   needsPrepare,
@@ -41,13 +42,16 @@ export function SignInSecondFactor({ signIn, setActive, onDone, onBack, header }
     else setError(result.error);
   };
 
-  // Needed: the first code goes out when the step opens, and no user event starts it.
+  /* eslint-disable no-effect/no-event-handler --
+     Opening the second-factor step is the trigger: SMS/email must send once with
+     no user tap. Resend stays a real button handler below. */
   useEffect(() => {
     if (!factor || !needsPrepare(factor) || preparedFor.current === signIn.id) return;
     preparedFor.current = signIn.id;
     void send();
-    // eslint-disable-next-line react/exhaustive-deps
+    // eslint-disable-next-line react/exhaustive-deps -- first send is keyed on attempt id only
   }, [signIn.id]);
+  /* eslint-enable no-effect/no-event-handler */
 
   if (!factor) {
     return (
