@@ -585,7 +585,7 @@ Output ONLY valid JSON.`;
           entityId: args.projectId,
           prompt,
           userId: args.userId,
-          completionMutation: "projectInterviewWorkflow:handleSpecCompletion",
+          completionMutation: "projectInterviewWorkflow:handleCompletion",
           entityIdField: "projectId",
           model: "sonnet",
           allowedTools: "Read,Glob,Grep",
@@ -617,60 +617,6 @@ Output ONLY valid JSON.`;
       });
       throw error;
     }
-  },
-});
-
-/** Receives sandbox spec completion callback and forwards the event to the active workflow. */
-export const handleSpecCompletion = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !project.activeWorkflowId) return null;
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.projectId,
-        lane: "interview",
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(
-      ctx,
-      projectInterviewCompleteEvent,
-      project.activeWorkflowId,
-      {
-        success: args.success,
-        result: args.result,
-        error: args.error,
-        activityLog: args.activityLog,
-      },
-    );
-
-    await recordCompletionLog(ctx, {
-      entityType: "project",
-      entityId: String(args.projectId),
-      entityTitle: project.title,
-      repoId: project.repoId,
-      rawResultEvent: args.rawResultEvent,
-      projectId: args.projectId,
-    });
-
-    return null;
   },
 });
 

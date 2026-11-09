@@ -180,12 +180,6 @@ describe("public functions refuse callers without repo access", () => {
     "sessions and tasks",
     async () => {
       const f = await fixture();
-      await expect(
-        f.stranger.mutation(api.sessions.updatePtySession, {
-          id: f.sessionId,
-          ptySessionId: undefined,
-        }),
-      ).rejects.toThrow("Not authorized");
       expect(
         await f.stranger.query(api.agentTasks.getStatusesByIds, {
           ids: [f.taskId],

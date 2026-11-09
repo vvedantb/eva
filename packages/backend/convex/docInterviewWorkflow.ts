@@ -432,7 +432,7 @@ Output ONLY valid JSON.`;
         entityId: args.docId,
         prompt,
         userId: args.userId,
-        completionMutation: "docInterviewWorkflow:handleGenerateCompletion",
+        completionMutation: "docInterviewWorkflow:handleCompletion",
         entityIdField: "docId",
         model: "sonnet",
         allowedTools: "Read,Glob,Grep",
@@ -451,59 +451,6 @@ Output ONLY valid JSON.`;
       result: result.result,
       activityLog: result.activityLog,
     });
-  },
-});
-
-/** Receives sandbox completion callback for the generate phase and forwards the event. */
-export const handleGenerateCompletion = authMutation({
-  args: {
-    docId: v.id("docs"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
-    ...turnLeaseFenceArgs,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.docId);
-    if (!doc || !doc.activeWorkflowId) return null;
-    if (
-      !(await settleAgentTurnCompletion(ctx, {
-        entityId: args.docId,
-        turnId: args.turnId,
-        leaseGeneration: args.leaseGeneration,
-        success: args.success,
-        error: args.error,
-      }))
-    ) {
-      return null;
-    }
-
-    await sendCompletionEvent(
-      ctx,
-      docInterviewCompleteEvent,
-      doc.activeWorkflowId,
-      {
-        success: args.success,
-        result: args.result,
-        error: args.error,
-        activityLog: args.activityLog,
-      },
-    );
-
-    await ctx.db.insert("logs", {
-      entityType: "doc",
-      entityId: String(args.docId),
-      entityTitle: doc.title,
-      rawResultEvent: args.rawResultEvent,
-      repoId: doc.repoId,
-      createdAt: Date.now(),
-    });
-
-    return null;
   },
 });
 
