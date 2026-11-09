@@ -48,6 +48,11 @@ export function stackVerdict(stack: PrStack): StackVerdict {
   if (stackBlockingReason(stack) !== null) {
     return { tone: "failure", label: "Stack needs attention" };
   }
+  // Branch protection (reviews, required checks) holds the merge on GitHub's
+  // side, so the popover must not promise what the header says is blocked.
+  if (targets.some((entry) => entry.mergeableState === "blocked")) {
+    return { tone: "failure", label: "Merge blocked" };
+  }
   if (targets.some((entry) => entry.mergeable === null)) {
     return { tone: "pending", label: "Merge status pending" };
   }
