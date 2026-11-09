@@ -39,7 +39,12 @@ import {
 } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
-import { sandboxOwnerKey, type SandboxOwner } from "../_sandbox/owner";
+import {
+  sandboxOwnerKey,
+  sandboxStartupEntityId,
+  type SandboxOwner,
+} from "../_sandbox/owner";
+import type { ProgressStep } from "./startupProgress";
 import { isSupersededStart } from "../_sandbox/transitions";
 import {
   detectPackageManager,
@@ -715,8 +720,6 @@ type PreparedSessionSandbox = {
   /** The Vercel sandbox id (Vercel is the only sandbox provider). */
 };
 
-type ProgressStep = { type: string; label: string; status: string };
-
 /** Emits progress steps to a streaming entity for UI updates. */
 async function emitProgress(
   ctx: GenericActionCtx<DataModel>,
@@ -724,7 +727,7 @@ async function emitProgress(
   completedSteps: ProgressStep[],
   activeLabel: string,
 ): Promise<void> {
-  const steps = [
+  const steps: ProgressStep[] = [
     ...completedSteps,
     { type: "tool", label: activeLabel, status: "active" },
   ];
@@ -754,7 +757,7 @@ function emitSessionProgress(
 ): Promise<void> {
   return emitProgress(
     ctx,
-    `session-startup-${sessionId}`,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
     completedSteps,
     activeLabel,
   );
@@ -765,7 +768,10 @@ function completeSessionProgress(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
 ): Promise<void> {
-  return clearProgress(ctx, `session-startup-${sessionId}`);
+  return clearProgress(
+    ctx,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
+  );
 }
 
 /** Emits task sandbox startup progress steps to streaming for UI updates. */
@@ -777,7 +783,7 @@ function emitTaskProgress(
 ): Promise<void> {
   return emitProgress(
     ctx,
-    `task-sandbox-startup-${taskId}`,
+    sandboxStartupEntityId({ kind: "task", taskId }),
     completedSteps,
     activeLabel,
   );
@@ -788,7 +794,7 @@ function completeTaskProgress(
   ctx: GenericActionCtx<DataModel>,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
-  return clearProgress(ctx, `task-sandbox-startup-${taskId}`);
+  return clearProgress(ctx, sandboxStartupEntityId({ kind: "task", taskId }));
 }
 
 /** Emits project sandbox startup progress steps to streaming for UI updates. */
@@ -800,7 +806,7 @@ function emitProjectProgress(
 ): Promise<void> {
   return emitProgress(
     ctx,
-    `project-sandbox-startup-${projectId}`,
+    sandboxStartupEntityId({ kind: "project", projectId }),
     completedSteps,
     activeLabel,
   );
@@ -811,7 +817,10 @@ function completeProjectProgress(
   ctx: GenericActionCtx<DataModel>,
   projectId: Id<"projects">,
 ): Promise<void> {
-  return clearProgress(ctx, `project-sandbox-startup-${projectId}`);
+  return clearProgress(
+    ctx,
+    sandboxStartupEntityId({ kind: "project", projectId }),
+  );
 }
 
 /** Core logic for preparing a session sandbox: reuses existing or creates new, syncs refs, and starts services. */

@@ -20,7 +20,7 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import {
   CLAUDE_CLI_INSTALL_DIR,
   CODEX_CLI_INSTALL_DIR,
-  EVA_ENV_FILE,
+  EVA_ENV_SOURCE_CMD,
 } from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
@@ -645,7 +645,7 @@ export async function launchScript(
   const runnerLaunchScript = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
-    `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`,
+    EVA_ENV_SOURCE_CMD,
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/eva-mcp.json",
     ...exportLines,
     // The script carries per-launch credentials, so unlink it once this shell
