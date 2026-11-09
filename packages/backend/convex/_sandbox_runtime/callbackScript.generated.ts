@@ -121,7 +121,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
 
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
+var ANTHROPIC_PRICING_AS_OF = "2026-11-09";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
   return {
     inputPerMillion,
@@ -133,6 +133,8 @@ function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion
   };
 }
 var CLAUDE_PRICING_PER_MILLION = {
+  "claude-fable-5-2": anthropicRow(8, 0.2, 10, 40),
+  "claude-mythos-5-2": anthropicRow(8, 0.2, 10, 40),
   "claude-fable-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
@@ -230,6 +232,7 @@ var AGENT_CWD = resolveAgentCwd(
 var NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000"
 );
+var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000"
 );
@@ -6567,7 +6570,6 @@ var DAEMON_PID_FILE = daemonPaths.pid;
 var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
 var turnActive = false;
@@ -8396,7 +8398,6 @@ var CodexAppServerClient = class {
 var IDLE_EXIT_MS2 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 var FENCE_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
-var NO_EVENT_TIMEOUT_MS = 5 * 60 * 1e3;
 var paths = resolveDaemonPaths();
 var supervisor2 = new DaemonSupervisor();
 var activeTurnStartedAt = 0;
@@ -8734,11 +8735,14 @@ async function runCodexAppServerDaemon() {
         await startTurn(client, next);
       }
       const now = Date.now();
+      if (callbackState.inFlightToolUses > 0) {
+        lastEventAt = now;
+      }
       if (supervisor2.currentTurn !== null && now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS) {
         await failActiveTurn(
           "The assistant exceeded the maximum turn runtime."
         );
-      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_EVENT_TIMEOUT_MS) {
+      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_MESSAGE_TIMEOUT_MS) {
         await failActiveTurn(
           "The assistant stopped responding. Please try again."
         );

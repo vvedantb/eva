@@ -112,7 +112,14 @@ export function usePresentationSync({
   const stopSharing = async () => {
     if (!sessionCode || !hostKey) return;
     await stopSharingMut({ code: sessionCode, hostKey }).catch(() => undefined);
-    setHostKeys(({ [sessionCode]: _stopped, ...rest }) => rest);
+    // Avoid computed ObjectPattern keys: React Compiler bails on them (BuildHIR).
+    setHostKeys((keys) => {
+      const next: Record<string, string> = {};
+      for (const [code, key] of Object.entries(keys)) {
+        if (code !== sessionCode) next[code] = key;
+      }
+      return next;
+    });
     updateSearch({ session: undefined });
   };
 
