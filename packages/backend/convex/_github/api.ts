@@ -29,10 +29,6 @@ export const getInstallationTokenAction = action({
   args: { repoId: v.id("githubRepos") },
   returns: v.object({ token: v.string() }),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
     const token = await getInstallationToken(repo.installationId);
     return { token };
@@ -44,10 +40,6 @@ export const listBranches = action({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(v.object({ name: v.string(), protected: v.boolean() })),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
     const octokit = await getInstallationOctokit(repo.installationId);
     const allBranches = await octokit.paginate(

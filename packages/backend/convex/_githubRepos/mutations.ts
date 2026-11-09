@@ -6,7 +6,7 @@ import type { DatabaseWriter } from "../_generated/server";
 import { authMutation, getRepoWithAccess, hasTeamAccess } from "../functions";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
-import { findAllSiblingRepoIds } from "./helpers";
+import { findAllSiblingRepoIds, findReposByOwnerAndName } from "./helpers";
 
 /** Throws unless the user connected the repo or shares its team. */
 async function assertRepoWriteAccess(
@@ -128,12 +128,7 @@ async function insertRepo(
     }
   }
 
-  const candidates = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", args.owner).eq("name", args.name),
-    )
-    .collect();
+  const candidates = await findReposByOwnerAndName(ctx.db, args);
 
   const duplicate = candidates.find(
     (r) => (r.rootDirectory ?? undefined) === (normalizedRoot ?? undefined),
