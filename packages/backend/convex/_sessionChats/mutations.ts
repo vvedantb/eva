@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalMutation } from "../_generated/server";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation, getSessionWithAccess } from "../functions";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 import {
   assertProviderAccountUsableBy,
@@ -11,7 +11,7 @@ import { cancelChatExecution } from "../_sessions/execution";
 import {
   createSessionChat,
   ensureMainChat,
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
   moveLegacyTranscriptPage,
   sessionChatValidator,
 } from "./helpers";
@@ -49,11 +49,11 @@ export const ensureMain = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: sessionChatValidator,
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     return await ensureMainChat(ctx, session);
   },
 });
@@ -68,11 +68,11 @@ export const create = authMutation({
   },
   returns: sessionChatValidator,
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     if (session.archived === true) {
       throw new Error("This session is archived");
     }
@@ -94,10 +94,11 @@ export const rename = authMutation({
   args: { chatId: v.id("sessionChats"), title: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const { chat } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });
@@ -113,11 +114,12 @@ export const archive = authMutation({
   args: { chatId: v.id("sessionChats") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
     if (chat.isMain) throw new Error("The Main chat cannot be closed");
     if (chat.archived === true) return null;
     await cancelChatExecution(ctx, context);
@@ -151,10 +153,11 @@ export const setModel = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const { chat, session } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const providerAccountId = await reconcileProviderAccountForModel(
       ctx.db,
       session.createdBy ?? session.userId,
@@ -182,10 +185,11 @@ export const setProviderAccountId = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const { chat, session } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const providerAccountId = await assertProviderAccountUsableBy(
       ctx.db,
       args.providerAccountId,
@@ -211,10 +215,11 @@ export const setTraits = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const { chat } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     if (
       args.reasoningLevel === undefined &&
       args.thinkingEnabled === undefined &&
