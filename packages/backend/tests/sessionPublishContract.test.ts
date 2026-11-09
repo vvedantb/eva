@@ -117,7 +117,7 @@ describe("a failed turn still publishes its work", () => {
   test("the one-shot fatal-error completion persists first", () => {
     assertPersistsFirst(
       blockAt(oneShotRunner, "} catch (err) {"),
-      'callConvexWithRetry("mutation", COMPLETION_MUTATION',
+      'sendTurnCompletion(COMPLETION_MUTATION',
       "the one-shot fatal-error handler",
     );
   });
@@ -380,7 +380,7 @@ describe("session branch publication reconciles concurrent remote work", () => {
   });
 
   test("the pre-completion durability push follows the same protocol", () => {
-    const syncAt = turnPersist.indexOf("synchronizeForPush(branch.out)");
+    const syncAt = turnPersist.indexOf("synchronizeForPush(branch)");
     const gateAt = turnPersist.indexOf("tipAlreadyPublished(exclusion)");
     const pushAt = turnPersist.indexOf('git(["push", "origin", refspec]');
     expect(turnPersist).toContain('"fetch",\n      "--no-tags"');
@@ -547,7 +547,7 @@ describe("a callback-published session still opens its first pull request", () =
    */
   test("both push paths push a fully-qualified refspec", () => {
     expect(turnPersist).toContain(
-      "const refspec = `refs/heads/${branch.out}:refs/heads/${branch.out}`",
+      "const refspec = `refs/heads/${branch}:refs/heads/${branch}`",
     );
     const body = functionBody(
       sandboxGit,

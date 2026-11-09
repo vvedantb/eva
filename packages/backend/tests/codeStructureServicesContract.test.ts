@@ -9,6 +9,15 @@ function read(relative: string): string {
   return readFileSync(join(backendDir, relative), "utf8");
 }
 
+/** Shared warm-daemon boot (pidfile claim, fence, preflight, token refresh). */
+function bootWarmDaemonBody(): string {
+  const source = read("callback-src/runtime/daemonProcess.ts");
+  const startAt = source.indexOf("export async function bootWarmDaemon(");
+  expect(startAt, "bootWarmDaemon moved or was renamed").toBeGreaterThan(-1);
+  const endAt = source.indexOf("\n}\n", startAt);
+  return source.slice(startAt, endAt < 0 ? undefined : endAt);
+}
+
 test("installation-token refresh lives only in githubToken.ts", () => {
   const service = read("callback-src/providers/githubToken.ts");
   expect(service).toContain("async function fetchInstallationToken(");
@@ -18,14 +27,18 @@ test("installation-token refresh lives only in githubToken.ts", () => {
     "export async function refreshDaemonGithubTokenFromEnv(",
   );
   expect(read("callback-src/index.ts")).toContain("ensureGithubToken(");
+  expect(
+    bootWarmDaemonBody(),
+    "warm-daemon boot should call the shared helper",
+  ).toContain("refreshDaemonGithubTokenFromEnv(");
   for (const path of [
     "callback-src/providers/claudeSdkDaemon.ts",
     "callback-src/providers/cursorSdkDaemon.ts",
     "callback-src/providers/codexAppServerDaemon.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should call the shared helper`).toContain(
-      "refreshDaemonGithubTokenFromEnv(",
+    expect(source, `${path} should boot via bootWarmDaemon`).toContain(
+      "bootWarmDaemon(",
     );
     expect(source, `${path} re-inlined the Convex token action`).not.toContain(
       "github:getInstallationTokenAction",
@@ -245,23 +258,34 @@ test("callback daemons share sleep/pidAlive/stale-bundle checks", () => {
   }
 });
 
-test("callback daemons share pidfile claim, marker cleanup, and mutation args", () => {
+test("callback daemons share boot, marker cleanup, and mutation args", () => {
   const service = read("callback-src/runtime/daemonProcess.ts");
   expect(service).toContain("export function claimDaemonPidfileBoot(");
   expect(service).toContain("export function cleanOwnedDaemonMarkers(");
   expect(service).toContain("export function buildEntityMutationArgs(");
   expect(service).toContain("export function readPidFromFile(");
+  expect(service).toContain("export async function bootWarmDaemon(");
+  expect(service).toContain("export function cleanOwnedMarkers(");
+  expect(service).toContain("export function entityMutationArgs(");
+  expect(service).toContain("export function callbackScriptWentStale(");
+  const boot = bootWarmDaemonBody();
+  expect(boot).toContain("claimDaemonPidfileBoot(");
+  expect(boot).toContain("startDaemonDepositionFence(");
+  expect(boot).toContain("runPreflightHeartbeat(");
   for (const path of [
     "callback-src/providers/claudeSdkDaemon.ts",
     "callback-src/providers/cursorSdkDaemon.ts",
     "callback-src/providers/codexAppServerDaemon.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should claim via the shared helper`).toContain(
-      "claimDaemonPidfileBoot(",
+    expect(source, `${path} should boot via the shared helper`).toContain(
+      "bootWarmDaemon(",
     );
     expect(source, `${path} should clean markers via the shared helper`).toContain(
-      "cleanOwnedDaemonMarkers(",
+      "cleanOwnedMarkers(",
+    );
+    expect(source, `${path} re-declared a shared daemon wrapper`).not.toMatch(
+      /function (entityMutationArgs|cleanOwnedMarkers|refreshGithubToken|callbackScriptWentStale\w*)\(/,
     );
     expect(source, `${path} re-inlined pidfile writes`).not.toContain(
       "writeFileSync(DAEMON_PID_FILE",
@@ -277,14 +301,15 @@ test("callback daemons share GitHub token refresh from env", () => {
   expect(service).toContain(
     "export async function refreshDaemonGithubTokenFromEnv(",
   );
+  expect(bootWarmDaemonBody()).toContain("refreshDaemonGithubTokenFromEnv(");
   for (const path of [
     "callback-src/providers/claudeSdkDaemon.ts",
     "callback-src/providers/cursorSdkDaemon.ts",
     "callback-src/providers/codexAppServerDaemon.ts",
   ] as const) {
     const source = read(path);
-    expect(source, `${path} should call the shared refresh`).toContain(
-      "refreshDaemonGithubTokenFromEnv(",
+    expect(source, `${path} should refresh via bootWarmDaemon`).toContain(
+      "bootWarmDaemon(",
     );
     expect(source, `${path} re-inlined ensureGithubToken args`).not.toContain(
       "convexUrl: CONVEX_URL",
@@ -427,13 +452,10 @@ test("claimed-turn failures share postClaimedTurnFailureCompletion", () => {
   );
 });
 
-test("Cursor refresh uses decideCallbackRefresh", () => {
-  expect(read("callback-src/providers/callbackRefresh.ts")).toContain(
-    "export function decideCallbackRefresh(",
-  );
-  expect(read("callback-src/providers/cursorSdkDaemon.ts")).toContain(
-    "decideCallbackRefresh(",
-  );
+test("Cursor refresh uses the shared DaemonSupervisor decision", () => {
+  const daemon = read("callback-src/providers/cursorSdkDaemon.ts");
+  expect(daemon).toContain("supervisor.decideRefresh(");
+  expect(daemon).not.toContain("decideCallbackRefresh(");
 });
 
 test("turn finalize shares drain and persist helpers", () => {
