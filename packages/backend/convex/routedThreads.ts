@@ -677,14 +677,21 @@ export const countWaitingForMe = authQuery({
         q.eq("userId", ctx.userId).eq("needsReply", true),
       )
       .collect();
-    const visible = await Promise.all(
-      rows.map(async (row) => {
-        const thread = await ctx.db.get(row.threadId);
-        if (!thread || !OPEN_STATUSES.has(thread.status)) return false;
-        return await hasTeamAccess(ctx.db, thread.teamId, ctx.userId);
-      }),
+    const threads = await Promise.all(
+      rows.map((row) => ctx.db.get(row.threadId)),
     );
-    return visible.filter(Boolean).length;
+    const openThreads = threads.filter(
+      (thread): thread is Doc<"routedThreads"> =>
+        thread !== null && OPEN_STATUSES.has(thread.status),
+    );
+    // Team access once per team, not once per thread.
+    const teamIds = [...new Set(openThreads.map((thread) => thread.teamId))];
+    const access = await Promise.all(
+      teamIds.map((teamId) => hasTeamAccess(ctx.db, teamId, ctx.userId)),
+    );
+    const accessibleTeams = new Set(teamIds.filter((_, i) => access[i]));
+    return openThreads.filter((thread) => accessibleTeams.has(thread.teamId))
+      .length;
   },
 });
 
