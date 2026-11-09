@@ -185,8 +185,6 @@ function wrapQueryHandler(handlerBody: string): string {
 }
 
 // In-memory caches (reset on action cold starts)
-let cachedDeployKey: { value: string; expiresAt: number } | null = null;
-const userIdCache = new Map<string, { userId: string; expiresAt: number }>();
 const repoCredentialsCache = new Map<
   string,
   { convexUrl: string; deployKey: string; expiresAt: number }
@@ -213,30 +211,6 @@ function getEvaConvexCloudUrl(): string {
   );
 }
 
-/** Deployed web app origin, used to build hosted artifact view links. */
-async function getDeployKey(): Promise<string> {
-  if (cachedDeployKey && cachedDeployKey.expiresAt > Date.now()) {
-    return cachedDeployKey.value;
-  }
-  const response = await fetch(
-    `${requiredEnv("CONVEX_SITE_URL")}/api/mcp/bootstrap`,
-    {
-      headers: {
-        Authorization: `MCPBootstrap ${requiredEnv("MCP_BOOTSTRAP_SECRET")}`,
-      },
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to bootstrap deploy key: HTTP ${response.status}`);
-  }
-  const body = z.object({ deployKey: z.string() }).parse(await response.json());
-  cachedDeployKey = {
-    value: body.deployKey,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  };
-  return body.deployKey;
-}
-
 async function runTestQueryRemote(
   convexUrl: string,
   deployKey: string,
@@ -258,31 +232,6 @@ async function runTestQueryRemote(
   const json = await response.json();
   const result = parseConvexResponse(jsonValue.parse(json));
   return { value: result.value, logLines: result.logLines ?? [] };
-}
-
-async function resolveUserByClerkId(
-  deployKey: string,
-  clerkUserId: string,
-): Promise<string | null> {
-  const cached = userIdCache.get(clerkUserId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.userId;
-  }
-
-  const convexUrl = getEvaConvexCloudUrl();
-  const source = wrapQueryHandler(
-    `const user = await ctx.db.query("users").withIndex("by_clerk_id", q => q.eq("clerkId", ${JSON.stringify(clerkUserId)})).first();
-    return user ? user._id : null;`,
-  );
-  const result = await runTestQueryRemote(convexUrl, deployKey, source);
-  if (typeof result.value === "string") {
-    userIdCache.set(clerkUserId, {
-      userId: result.value,
-      expiresAt: Date.now() + CACHE_TTL_MS,
-    });
-    return result.value;
-  }
-  return null;
 }
 
 async function signUserJwt(clerkUserId: string): Promise<string> {
@@ -434,58 +383,14 @@ async function ensureUserExists(
 
 export const getContext = internalAction({
   args: { clerkUserId: v.string() },
-  returns: v.object({ deployKey: v.string(), userId: v.string() }),
-  handler: async (_ctx, { clerkUserId }) => {
-    const deployKey = await getDeployKey();
-    let userId = await resolveUserByClerkId(deployKey, clerkUserId);
-    if (!userId) {
-      const convexUrl = getEvaConvexCloudUrl();
-      userId = await ensureUserExists(convexUrl, clerkUserId);
-    }
-    return { deployKey, userId };
-  },
-});
-
-const repoSchema = z.object({
-  id: z.string(),
-  owner: z.string(),
-  name: z.string(),
-  rootDirectory: z.string().nullable(),
-  mcpRootPrompt: z.string().nullable(),
-});
-
-export const listUserRepos = internalAction({
-  args: { userId: v.string() },
-  returns: v.array(
-    v.object({
-      id: v.string(),
-      owner: v.string(),
-      name: v.string(),
-      rootDirectory: v.union(v.string(), v.null()),
-      mcpRootPrompt: v.union(v.string(), v.null()),
-    }),
-  ),
-  handler: async (_ctx, { userId }) => {
-    const deployKey = await getDeployKey();
-    const convexUrl = getEvaConvexCloudUrl();
-
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const toEntry = (r) => ({ id: r._id, owner: r.owner, name: r.name, rootDirectory: r.rootDirectory ?? null, mcpRootPrompt: r.mcpRootPrompt ?? null });
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teamRepoResults = await Promise.all(memberships.map(m => ctx.db.query("githubRepos").withIndex("by_team", q => q.eq("teamId", m.teamId)).collect()));
-      const connectedRepos = await ctx.db.query("githubRepos").withIndex("by_connected_by", q => q.eq("connectedBy", userId)).collect();
-      const seen = new Set();
-      const result = [];
-      for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        result.push(toEntry(repo));
-      }
-      return result;`,
-    );
-    const result = await runTestQueryRemote(convexUrl, deployKey, source);
-    return z.array(repoSchema).parse(result.value);
+  returns: v.object({ userId: v.string() }),
+  handler: async (ctx, { clerkUserId }): Promise<{ userId: string }> => {
+    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+      clerkId: clerkUserId,
+    });
+    const userId =
+      user?._id ?? (await ensureUserExists(getEvaConvexCloudUrl(), clerkUserId));
+    return { userId };
   },
 });
 
@@ -904,28 +809,6 @@ export const updateEvaDoc = internalAction({
 // ─────────────────────────────────────────────────────────────────────────────
 // Team + artifact actions
 // ─────────────────────────────────────────────────────────────────────────────
-
-const teamSchema = z.object({ id: z.string(), name: z.string() });
-
-export const listUserTeams = internalAction({
-  args: { userId: v.string() },
-  returns: v.array(v.object({ id: v.string(), name: v.string() })),
-  handler: async (_ctx, { userId }) => {
-    const deployKey = await getDeployKey();
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teams = await Promise.all(memberships.map(m => ctx.db.get(m.teamId)));
-      return teams.filter(Boolean).map(t => ({ id: t._id, name: t.name }));`,
-    );
-    const result = await runTestQueryRemote(
-      getEvaConvexCloudUrl(),
-      deployKey,
-      source,
-    );
-    return z.array(teamSchema).parse(result.value);
-  },
-});
 
 export const createArtifact = internalAction({
   args: {
@@ -2222,31 +2105,16 @@ export const resolveSupabaseToken = internalAction({
       return cached.token;
     }
 
-    const deployKey = await getDeployKey();
-    const userId = await resolveUserByClerkId(deployKey, clerkUserId);
-    if (!userId) return null;
-
-    // Get repos and search for SUPABASE_ACCESS_TOKEN
-    const convexUrl = getEvaConvexCloudUrl();
-    const source = wrapQueryHandler(
-      `const userId = ${JSON.stringify(userId)};
-      const memberships = await ctx.db.query("teamMembers").withIndex("by_user", q => q.eq("userId", userId)).collect();
-      const teamRepoResults = await Promise.all(memberships.map(m => ctx.db.query("githubRepos").withIndex("by_team", q => q.eq("teamId", m.teamId)).collect()));
-      const connectedRepos = await ctx.db.query("githubRepos").withIndex("by_connected_by", q => q.eq("connectedBy", userId)).collect();
-      const seen = new Set();
-      const result = [];
-      for (const repo of [...connectedRepos, ...teamRepoResults.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        result.push(repo._id);
-      }
-      return result;`,
-    );
-    const result = await runTestQueryRemote(convexUrl, deployKey, source);
-    const repoIds = z.array(z.string()).parse(result.value);
+    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+      clerkId: clerkUserId,
+    });
+    if (!user) return null;
+    const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
+      userId: user._id,
+    });
 
     // Search for Supabase token in each repo's env vars
-    for (const repoId of repoIds) {
+    for (const { id: repoId } of repos) {
       try {
         const vars: EnvVar[] = await ctx.runAction(
           internal.mcp.routes.getDecryptedRepoEnvVars,
