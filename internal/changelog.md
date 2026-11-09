@@ -8,6 +8,8 @@ WHY: Dropdown menus (chat ⋯, inbox filter, repo picker) opened under other lay
 
 Architectural: `apps/mobile` now depends on `^0.12.1`. Removed `patches/@vvedantb__native-ui@0.11.2.patch`, its `pnpm.patchedDependencies` entry and `apps/mobile/UPSTREAM-NATIVE-UI.md`. `DropdownMenu` uses a full-size `pointerEvents="box-none"` Modal host. `PromptInput` grows from `onContentSizeChange` and no longer sets `numberOfLines={1}`. Call sites are unchanged. Guard test: `pnpm --filter @eva/mobile test:native-ui` checks the installed version, the upstream fixes and that call sites import the package components.
 
+Typecheck: 0.12.1 still imports `Router` from `expo-router`, which Expo Router 57 renamed to `ImperativeRouter`. `apps/mobile/expo-router-router.d.ts` re-exports the old name as a type alias. Delete it when native-ui updates the import.
+
 ## Mobile: native-ui 0.11.2 drops the typecheck auth shim
 
 Date: 2026-11-09

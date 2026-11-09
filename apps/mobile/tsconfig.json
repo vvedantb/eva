@@ -17,7 +17,8 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "app.config.ts",
-    "nativewind-env.d.ts"
+    "nativewind-env.d.ts",
+    "expo-router-router.d.ts"
   ],
   "exclude": ["node_modules", "android"]
 }
