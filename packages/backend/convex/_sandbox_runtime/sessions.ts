@@ -24,14 +24,19 @@ import {
   createSandboxAndPrepareRepo,
   fetchBranchRefs,
   forcePushBranchToOrigin,
+  isRetryableSessionStepError,
   isUnresolvedGitIndexError,
   recoverUnresolvedGitIndex,
+  retryGitNetworkOperation,
   copySandboxConfigFilesToWorkspace,
   dependencyInstallCommand,
   SESSION_LIFECYCLE,
 } from "./git";
 import { SandboxGoneError, isSandboxGoneError } from "./sandboxErrors";
-import { ensureGitCredentialHelper } from "./gitCredentials";
+import {
+  deleteSandboxAndCredentials,
+  ensureGitCredentialHelper,
+} from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
 import { isSupersededStart } from "../_sandbox/transitions";
@@ -162,31 +167,6 @@ async function runLoggedSessionStep<T>(
   }
 }
 
-/** Checks whether a git error message indicates a transient/retryable failure. */
-function isRetryableSessionGitError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    (lower.includes("sandbox exec") && lower.includes("timed out")) ||
-    lower.includes("command execution timeout") ||
-    lower.includes("fetch failed") ||
-    lower.includes("econnreset") ||
-    lower.includes("econnrefused") ||
-    lower.includes("etimedout") ||
-    lower.includes("socket hang up") ||
-    lower.includes("network") ||
-    lower.includes("status code 502") ||
-    lower.includes("status code 503") ||
-    lower.includes("status code 504") ||
-    lower.includes("gnutls recv error") ||
-    lower.includes("tls connection was non-properly terminated") ||
-    lower.includes("remote end hung up unexpectedly") ||
-    lower.includes("http/2 stream") ||
-    lower.includes("early eof") ||
-    lower.includes("connection reset by peer") ||
-    lower.includes("rpc failed")
-  );
-}
-
 /** Checks out a session branch with automatic retry on transient git errors. */
 async function checkoutSessionBranchWithRetry(
   sandbox: SandboxHandle,
@@ -230,7 +210,7 @@ async function checkoutSessionBranchWithRetry(
         continue;
       }
       const canRetry =
-        attempt < maxAttempts && isRetryableSessionGitError(message);
+        attempt < maxAttempts && isRetryableSessionStepError(message);
       if (!canRetry) {
         throw error;
       }
@@ -483,7 +463,6 @@ async function installSnapshotDependenciesWithRetry(
   sandbox: SandboxHandle,
   rootDir: string,
 ): Promise<void> {
-  const maxAttempts = 3;
   const pm = await detectPackageManager(sandbox, rootDir);
   const workspaceRoot = workspaceDirShell();
   const dir = rootDir ? `${workspaceRoot}/${rootDir}` : workspaceRoot;
@@ -493,29 +472,12 @@ async function installSnapshotDependenciesWithRetry(
   const installCommand = dependencyInstallCommand(pm, installCwd);
   const timeoutSeconds = pm === "pnpm" ? 240 : 180;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      await execHandle(sandbox, installCommand, timeoutSeconds);
-      if (attempt > 1) {
-        logSession(
-          `installSnapshotDependenciesWithRetry recovered on retry ${attempt}/${maxAttempts} (rootDir=${rootDir || "."}, pm=${pm})`,
-        );
-      }
-      return;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const canRetry =
-        attempt < maxAttempts && isRetryableSessionGitError(message);
-      if (!canRetry) {
-        throw error;
-      }
-      const delayMs = 1000 * attempt;
-      logSession(
-        `installSnapshotDependenciesWithRetry retrying after ${delayMs}ms (attempt ${attempt}/${maxAttempts}, rootDir=${rootDir || "."}, pm=${pm}): ${message}`,
-      );
-      await sleep(delayMs);
-    }
-  }
+  await retryGitNetworkOperation(
+    "installSnapshotDependencies",
+    `rootDir=${rootDir || "."}, pm=${pm}`,
+    () => execHandle(sandbox, installCommand, timeoutSeconds),
+    { isRetryable: isRetryableSessionStepError },
+  );
 }
 
 /**
@@ -1590,12 +1552,7 @@ async function prepareSessionSandboxInternal(
     console.warn(
       `[sandbox][sessions] deleting failed new session sandbox ${handle.id}: ${setupMessage}`,
     );
-    try {
-      await handle.delete();
-    } catch {}
-    await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-      sandboxId: handle.id,
-    });
+    await deleteSandboxAndCredentials(ctx, handle);
     throw setupError;
   }
 }
@@ -2334,12 +2291,7 @@ async function prepareTaskPreviewSandboxInternal(
     console.warn(
       `[sandbox][sessions] deleting failed new task sandbox ${handle.id}: ${errorMessage(setupError, "setup failed")}`,
     );
-    try {
-      await handle.delete();
-    } catch {}
-    await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-      sandboxId: handle.id,
-    });
+    await deleteSandboxAndCredentials(ctx, handle);
     throw setupError;
   }
 }
