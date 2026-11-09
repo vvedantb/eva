@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { buildTaskBranchName } from "../_git/branchNames";
 import {
   buildTraitsExecutionPayload,
   reasoningLevelValidator,
@@ -228,7 +229,7 @@ export const getTaskData = internalQuery({
       }),
     );
 
-    const branchName = args.branchName || `eva/task-${args.taskId}`;
+    const branchName = args.branchName || buildTaskBranchName(args.taskId);
 
     const rootDirectory = repo.rootDirectory ?? "";
 
@@ -344,7 +345,7 @@ export const getTaskPrCreationData = internalQuery({
       installationId: repo.installationId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: `eva/task-${args.taskId}`,
+      branchName: buildTaskBranchName(args.taskId),
       baseBranch: await resolveTaskWorkflowBaseBranchForTask(
         ctx.db,
         task,

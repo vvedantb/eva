@@ -36,10 +36,8 @@ import {
 } from "./workflowWatchdog";
 import { buildProjectChatPrompt } from "./_projects/chatPrompt";
 import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
-import {
-  buildProjectBranchName,
-  getProjectGeneratedSpec,
-} from "./_projects/helpers";
+import { getProjectGeneratedSpec } from "./_projects/helpers";
+import { resolveProjectBranchName } from "./_git/branchNames";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
 import { resolveMessageTokens } from "./_mentions/resolveMessageTokens";
@@ -128,9 +126,7 @@ async function buildProjectChatTurnPrompt(
     };
   }
 
-  const branchName =
-    project.branchName ??
-    buildProjectBranchName(args.projectId, project.branchVersion);
+  const branchName = resolveProjectBranchName(args.projectId, project);
 
   // Sibling repositories this sandbox's git credentials can read (owner is the
   // project owner, whose access the credential helper mints tokens against).
@@ -1139,9 +1135,7 @@ export const getChatData = internalQuery({
       },
     );
 
-    const branchName =
-      project.branchName ??
-      buildProjectBranchName(args.projectId, project.branchVersion);
+    const branchName = resolveProjectBranchName(args.projectId, project);
 
     return {
       sandboxId: project.sandboxId,

@@ -15,6 +15,7 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
 
 /** Converts a finalized project spec into tasks with dependencies and sets the project to business_review. */
@@ -38,10 +39,10 @@ export const startDevelopment = authMutation({
     }
     const spec = parseSpec(generatedSpec);
     const branchName = buildProjectBranchName(args.projectId);
-    const projectBaseBranch =
-      project.baseBranch ??
-      (await ctx.db.get(project.repoId))?.defaultBaseBranch ??
-      FALLBACK_GIT_BASE_BRANCH;
+    const projectBaseBranch = resolveProjectBaseBranch(
+      project,
+      await ctx.db.get(project.repoId),
+    );
     const taskIdMap = new Map<number, Id<"agentTasks">>();
     const now = Date.now();
     for (let i = 0; i < spec.tasks.length; i++) {

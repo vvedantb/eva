@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
+import { startTaskRun } from "../_taskWorkflow/startRun";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { authMutation, hasRepoAccess } from "../functions";
@@ -8,12 +8,7 @@ import { ensureSubscribed } from "../taskSubscribers";
 import type { Doc, Id } from "../_generated/dataModel";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { normalizeAIModel } from "../validators";
-import {
-  createTaskRunSummary,
-  setTaskLastRunStartedAt,
-} from "../_agentTasks/runSummary";
+import { createTaskRunSummary } from "../_agentTasks/runSummary";
 
 /**
  * Inserts a `todo` quick task on the automation's repo, as the automation's
@@ -145,57 +140,22 @@ export const autoStartTask = internalMutation({
       return null;
     }
 
-    const startedAt = Date.now();
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: args.taskId,
-      status: "queued",
-      logs: [],
-      startedAt,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        task.providerAccountId,
-        task.createdBy,
-      ),
-      model: normalizeAIModel(task.model),
-    });
-    await setTaskLastRunStartedAt(ctx, args.taskId, task.repoId, startedAt);
-
-    await ctx.db.patch(args.taskId, {
-      status: "in_progress",
-      updatedAt: Date.now(),
-    });
-
     try {
-      await startTaskRunWorkflow(ctx, {
-        runId,
-        taskId: args.taskId,
-        repoId: task.repoId,
-        installationId: repo.installationId,
+      await startTaskRun(ctx, {
+        task,
+        repo,
+        userId: args.userId,
         baseBranch: await resolveTaskWorkflowBaseBranchForTask(
           ctx.db,
           task,
           repo,
         ),
         isFirstTaskOnBranch: true,
-        model: task.model ?? repo.defaultModel,
-        providerAccountId: task.providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: args.userId,
+        clearPendingChangeRequest: false,
+        rollbackStatus: "todo",
       });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to start workflow";
-      await ctx.db.patch(runId, {
-        status: "error",
-        error: message,
-        finishedAt: Date.now(),
-        exitReason: "workflow_start_failed",
-      });
-      await ctx.db.patch(args.taskId, {
-        status: "todo",
-        activeWorkflowId: undefined,
-        updatedAt: Date.now(),
-      });
+    } catch {
+      // startTaskRun recorded the failure on the run and rolled the task back.
     }
 
     return null;

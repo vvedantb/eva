@@ -27,6 +27,7 @@ import {
   resolveTaskBranchName,
 } from "./_taskWorkflow/helpers";
 import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
+import { buildTaskBranchName } from "./_git/branchNames";
 import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
 import { finalizeCancelledAssistantMessage } from "./streaming";
 import {
@@ -940,7 +941,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
             installationId: data.installationId,
             repoOwner: data.repoOwner,
             repoName: data.repoName,
-            branchName: `eva/task-${args.taskId}`,
+            branchName: buildTaskBranchName(args.taskId),
             baseBranch: data.baseBranch,
             repoId: data.repoId,
           });
