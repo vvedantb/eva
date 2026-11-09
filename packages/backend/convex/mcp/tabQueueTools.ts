@@ -157,8 +157,12 @@ export function tabQueueTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  const { assertUserRepoAccess, resolveRepoRef, resolveEntityTarget } =
-    entityAccess(ctx, credentials);
+  const {
+    assertUserRepoAccess,
+    resolveRepoRef,
+    resolveEntityTarget,
+    resolveChat,
+  } = entityAccess(ctx, credentials);
 
   async function listQueue(target: EntityTarget): Promise<QueuedMessageRow[]> {
     return mcpCallAsUser(
@@ -242,11 +246,7 @@ The queue drains as turns finish, so a message listed here can start running at 
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
 
@@ -282,11 +282,7 @@ If the chat dequeued the message since you listed it, it is already running and 
           .describe("The full replacement text."),
       },
       handler: async ({ queuedMessageId, content, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
 
@@ -364,11 +360,7 @@ If a message starts running between your list and this call, the reorder fails; 
           );
         }
 
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const resolved = await resolveEntityTarget(
-          withSelfDefault(ref, credentials),
-          userId,
-        );
+        const resolved = await resolveChat(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
 
