@@ -108,7 +108,7 @@ const MODEL_ALIASES: Record<string, string> = {
   opus: "claude:opus",
   sonnet: "claude:sonnet",
   haiku: "claude:haiku",
-  fable: "claude:claude-fable-5-1",
+  fable: "claude:claude-fable-5-2",
 };
 const MODEL_IDS: string[] = AI_MODEL_OPTIONS.map((option) => option.id);
 
