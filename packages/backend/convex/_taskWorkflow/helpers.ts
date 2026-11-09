@@ -4,7 +4,10 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { Infer, Validator } from "convex/values";
 import { LlmJson } from "@solvers-hub/llm-json";
 import { toWorkflowId, workflow } from "../workflowManager";
-import { buildProjectBranchName } from "../_projects/helpers";
+import {
+  buildTaskBranchName,
+  resolveProjectBranchName,
+} from "../_git/branchNames";
 import {
   findPullRequestByUrl,
   recordPullRequest,
@@ -24,13 +27,12 @@ export async function resolveTaskBranchName(
   task: Doc<"agentTasks">,
 ): Promise<string> {
   if (task.projectId) {
-    const project = await db.get(task.projectId);
-    return (
-      project?.branchName ??
-      buildProjectBranchName(task.projectId, project?.branchVersion)
+    return resolveProjectBranchName(
+      task.projectId,
+      await db.get(task.projectId),
     );
   }
-  return `eva/task-${String(task._id)}`;
+  return buildTaskBranchName(task._id);
 }
 
 /** Resolves the sandbox id to use for a task run (push). */
@@ -243,9 +245,7 @@ export async function recordRunPullRequest(
       state: existing?.state ?? args.state ?? "draft",
       primary: true,
       origin: "eva",
-      headBranch:
-        project.branchName ??
-        buildProjectBranchName(project._id, project.branchVersion),
+      headBranch: resolveProjectBranchName(project._id, project),
       baseBranch: project.baseBranch,
       title: project.title,
     });
@@ -263,7 +263,7 @@ export async function recordRunPullRequest(
     state: existing?.state ?? args.state ?? "draft",
     primary: true,
     origin: "eva",
-    headBranch: `eva/task-${task._id}`,
+    headBranch: buildTaskBranchName(task._id),
     baseBranch: task.baseBranch,
     title: task.title,
   });

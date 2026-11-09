@@ -20,7 +20,11 @@ import { requireCurrentUserId } from "./_auth/currentUser";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
-import { buildProjectBranchName } from "./_git/branchNames";
+import {
+  buildTaskBranchName,
+  resolveProjectBranchName,
+} from "./_git/branchNames";
+import { cancelScheduledFunction } from "./_scheduling/helpers";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -392,9 +396,7 @@ export async function isFirstTaskOnBranch(
   if (projectId) {
     const project = await db.get(projectId);
     if (!project) return true;
-    const branch =
-      project.branchName ??
-      buildProjectBranchName(project._id, project.branchVersion);
+    const branch = resolveProjectBranchName(project._id, project);
     return (
       (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
     );
@@ -405,7 +407,7 @@ export async function isFirstTaskOnBranch(
     (await findLivePullRequestOnBranch(
       db,
       task.repoId,
-      `eva/task-${taskId}`,
+      buildTaskBranchName(taskId),
     )) === null
   );
 }
@@ -416,13 +418,7 @@ export async function deleteTaskRelatedData(
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (task?.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
+  await cancelScheduledFunction(ctx, task?.scheduledFunctionId);
   // Quick tasks persist a sandbox; clean it up so we don't leak compute.
   // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
   if (task && !task.projectId && task.sandboxId && task.repoId) {
@@ -478,13 +474,7 @@ export async function softDeleteAgentTask(
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || isEntityDeleted(task)) return;
-  if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
+  await cancelScheduledFunction(ctx, task.scheduledFunctionId);
   if (!task.projectId && task.sandboxId && task.repoId) {
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
       sandboxId: task.sandboxId,
