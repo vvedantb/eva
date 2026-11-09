@@ -133,6 +133,11 @@ export const AGENT_CWD = resolveAgentCwd(
 export const NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000",
 );
+/**
+ * Warm-daemon per-turn silence kill: fail a turn that emits no provider event
+ * for this long (in-flight tool calls are exempt; the runtime cap still applies).
+ */
+export const NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 export const FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000",
 );
