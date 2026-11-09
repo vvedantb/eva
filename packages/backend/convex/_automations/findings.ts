@@ -2,7 +2,8 @@ import { v } from "convex/values";
 import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { authMutation, hasRepoAccess } from "../functions";
+import { authMutation } from "../functions";
+import { loadRunWithAccess } from "./helpers";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -64,15 +65,12 @@ export const createTasksFromFindings = authMutation({
   },
   returns: v.array(v.id("agentTasks")),
   handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run) throw new Error("Run not found");
+    const { run, automation } = await loadRunWithAccess(
+      ctx.db,
+      ctx.userId,
+      args.runId,
+    );
     if (!run.findings) throw new Error("Run has no findings");
-
-    const automation = await ctx.db.get(run.automationId);
-    if (!automation) throw new Error("Automation not found");
-    if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
 
     const repo = await ctx.db.get(automation.repoId);
     if (!repo) throw new Error("Repo not found");
