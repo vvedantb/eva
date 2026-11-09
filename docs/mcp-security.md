@@ -37,7 +37,6 @@ Every MCP tool resolves the Clerk user ID to a Convex user, then checks that the
 | Secret                 | Purpose                                               |
 | ---------------------- | ----------------------------------------------------- |
 | `MCP_INTERNAL_SECRET`  | Signs and checks sandbox (`mcp-internal`) tokens      |
-| `MCP_BOOTSTRAP_SECRET` | Authenticates the bootstrap call that returns the key |
 | `CLERK_SECRET_KEY`     | Lets Eva verify Clerk tokens                          |
 
 Sandbox signing (`SANDBOX_JWT_*`, `/.well-known/openid-configuration`, `/.well-known/jwks.json`) is separate and unchanged.
@@ -54,10 +53,10 @@ Tools that put user input into Convex query code (`get_document`, `count_table`)
 | `CLERK_SECRET_KEY`        | Clerk opaque-token verification                                               |
 | `CLERK_PUBLISHABLE_KEY`   | Clerk opaque-token verification (`authenticateRequest` needs it with the secret key) |
 | `MCP_INTERNAL_SECRET`     | Sandbox token signing and checking                                            |
-| `MCP_BOOTSTRAP_SECRET`    | Bootstrap endpoint auth                                                       |
+| `EVA_DEPLOY_KEY`          | Auth for `/api/mcp/env-vars`                                                  |
 | `WEB_APP_URL`             | `resource_documentation` in the protected resource metadata                   |
 
-`MCP_JWT_SECRET` is no longer read. Remove it from Convex env when convenient.
+`MCP_JWT_SECRET` and `MCP_BOOTSTRAP_SECRET` are no longer read. Remove them from Convex env when convenient. MCP tools read Eva's own database through typed internal queries, not `run_test_function` with an admin key.
 
 ## Known Limitations
 
