@@ -84,6 +84,7 @@ import type * as _connectors_resolve from "../_connectors/resolve.js";
 import type * as _connectors_tokens from "../_connectors/tokens.js";
 import type * as _deployment_vercel from "../_deployment/vercel.js";
 import type * as _docEditor_markdown from "../_docEditor/markdown.js";
+import type * as _docs_access from "../_docs/access.js";
 import type * as _drafts_helpers from "../_drafts/helpers.js";
 import type * as _drafts_mutations from "../_drafts/mutations.js";
 import type * as _drafts_queries from "../_drafts/queries.js";
@@ -645,6 +646,7 @@ declare const fullApi: ApiFromModules<{
   "_connectors/tokens": typeof _connectors_tokens;
   "_deployment/vercel": typeof _deployment_vercel;
   "_docEditor/markdown": typeof _docEditor_markdown;
+  "_docs/access": typeof _docs_access;
   "_drafts/helpers": typeof _drafts_helpers;
   "_drafts/mutations": typeof _drafts_mutations;
   "_drafts/queries": typeof _drafts_queries;
