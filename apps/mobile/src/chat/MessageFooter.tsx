@@ -43,7 +43,7 @@ export function MessageFooter({
   const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatDuration(at, finishedAt)}` : formatClockTime(at);
   return (
     <MessageActionsBar className={rating ? "mt-0.5 gap-2" : "gap-3"}>
-      <MessageActionsBar className="gap-0.5">
+      <MessageActionsBar className={rating ? "ml-0.5 gap-0.5" : "gap-0.5"}>
         <MessageAction
           kind="copy"
           size="xs"
