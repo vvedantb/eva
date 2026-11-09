@@ -10,6 +10,7 @@ function readSource(relative: string): string {
 }
 
 const chatResult = readSource("_chat/chatResult.ts");
+const cancelRace = readSource("_chat/cancelRace.ts");
 const sessionWorkflow = readSource("_sessions/workflow.ts");
 const sessionExecution = readSource("_sessions/execution.ts");
 const taskChatWorkflow = readSource("agentTaskChatWorkflow.ts");
@@ -47,16 +48,19 @@ test("the three cancel paths share finalizeOpenSyntheticTurnOnCancel", () => {
   expect(chatResult).toContain(
     "export async function finalizeOpenSyntheticTurnOnCancel(",
   );
+  expect(cancelRace, "cancelChatTurn lost the shared cancel helper").toContain(
+    "finalizeOpenSyntheticTurnOnCancel(",
+  );
   for (const [label, source] of [
     ["session", sessionExecution],
     ["task chat", taskChatWorkflow],
     ["project chat", projectChatWorkflow],
   ] as const) {
-    expect(source, `${label} lost the shared cancel helper`).toContain(
-      "finalizeOpenSyntheticTurnOnCancel(",
+    expect(source, `${label} lost the shared cancelChatTurn`).toContain(
+      "cancelChatTurn(",
     );
-    expect(source, `${label} grew a local copy of the helper`).not.toMatch(
-      /async function finalizeOpenSyntheticTurnOnCancel\(/,
+    expect(source, `${label} re-inlined the cancel finalize`).not.toContain(
+      "finalizeOpenSyntheticTurnOnCancel(",
     );
   }
 });

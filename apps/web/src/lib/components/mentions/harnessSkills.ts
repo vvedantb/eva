@@ -5,7 +5,7 @@ import type { FunctionReturnType } from "convex/server";
  * Built-in skills each CLI harness ships with, surfaced in the `/` picker so
  * users can invoke them like repo skills. The harness executes them natively —
  * the backend strips the chip token down to the literal `/name` (see
- * `convex/_mentions/resolveSkillMentions.ts`), so nothing is materialized in
+ * `convex/_mentions/skillToken.ts`), so nothing is materialized in
  * the sandbox and no content sync is needed.
  *
  * This static list is the FALLBACK. The live catalog is reported by every

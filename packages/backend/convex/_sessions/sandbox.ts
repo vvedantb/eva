@@ -34,6 +34,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   discardUntrackedSandbox,
@@ -113,7 +114,10 @@ export async function requestSessionSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `session-startup-${session._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId: session._id }),
+  );
   const reusableSandboxId = session.sandboxId;
   console.log(
     `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -286,7 +290,10 @@ export async function requestSessionSandboxStop(
 
   // Clear leftover start steps so the chat does not re-show "Starting
   // sandbox..." / cold-storage copy while status is stopping.
-  await clearSandboxStartupActivity(ctx.db, `session-startup-${sessionId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
+  );
 
   for (const chat of chats) {
     if (!chat.syntheticTurnMessageId) continue;

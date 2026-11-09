@@ -31,6 +31,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   canStartActionMarkStarting,
@@ -108,7 +109,7 @@ async function requestProjectSandboxStart(
   // the random "Eva is inferring…" spinner while the workflow schedules.
   await seedSandboxStartupActivity(
     ctx.db,
-    `project-sandbox-startup-${project._id}`,
+    sandboxStartupEntityId({ kind: "project", projectId: project._id }),
   );
   const reusableSandboxId = project.sandboxId;
   console.log(
@@ -448,7 +449,7 @@ export async function requestProjectSandboxStop(
   // Clear leftover start steps so stop does not re-show startup activity.
   await clearSandboxStartupActivity(
     ctx.db,
-    `project-sandbox-startup-${projectId}`,
+    sandboxStartupEntityId({ kind: "project", projectId }),
   );
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
