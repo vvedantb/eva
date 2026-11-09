@@ -1,10 +1,17 @@
 # AI SDK Harness Layer: Migration Evaluation
 
-Last reviewed: 07 October 2026. Figures are from npm and ai-sdk.dev on 06–07 October 2026.
+Last reviewed: 09 November 2026. Figures are from npm, ai-sdk.dev and `origin/main` on 09 November 2026 unless a section says otherwise.
 
 ## Verdict
 
 Migration is possible, now and later. It is not worth it yet. The cost is high and the net code saving is small.
+
+## Review history
+
+| Date | Verdict | What changed |
+|---|---|---|
+| 07 October 2026 | Not yet | First full review. |
+| 09 November 2026 | Not yet | `@ai-sdk/harness` 1.0.177, 208 releases (33 in October), still experimental. Adapters gained image input (all ✓). OpenCode filtering is now native. fx moved to host process. Tool approval for Codex, Cursor, Grok Build and Copilot is still ✗. History access is still ✗ for every adapter. No new Vercel changelog entries about the harness. Our runtime grew to about 24,900 lines; most growth is Eva-specific core and tests, so the share the harness can replace went down. Credential brokering is still not adopted. |
 
 ## What the harness layer is
 
@@ -21,19 +28,21 @@ Migration is possible, now and later. It is not worth it yet. The cost is high a
    - Codex, Cursor, Grok Build and GitHub Copilot have no built-in tool approval.
    - Cursor (ACP v1) has no per-step usage and no structured output.
 3. **Features we would rebuild on top:** blocking AskUserQuestion, subagent-nested tool steps and todo lists, raw usage and cost capture, usage-limit capture, Eva MCP injection, warm daemon with turn claiming, turn lease and heartbeats, media capture.
-4. **Maturity.** Docs still mark harness packages experimental. `@ai-sdk/harness` had 170 releases from 04 June to 05 October 2026 (38 in September).
+4. **Maturity.** Docs still mark harness packages experimental. `@ai-sdk/harness` had 208 releases from 04 June to 09 November 2026 (38 in September, 33 in October).
 
 ## Code size: what would actually change
 
-Sandbox runtime (`packages/backend/callback-src`) is about 20,000 lines in total, but most of it stays.
+Sandbox runtime (`packages/backend/callback-src`) is about 24,900 lines in total, but most of it stays.
 
-| Area | Lines (approx.) | With the harness |
-|---|---|---|
-| Per-agent code (Claude, Codex, Cursor, OpenCode) | 8,500 | Mostly replaced |
-| Event parsing into chat UI | 1,900 | Partly replaced |
-| Runtime core (heartbeats, lease, usage, questions, media, git) | 3,200 | Stays |
-| Entry, config, Convex client, Eva MCP | 2,150 | Mostly stays |
-| Tests | 4,500 | Mostly rewritten |
+| Area | Lines, 07 Oct 2026 | Lines, 09 Nov 2026 | With the harness |
+|---|---|---|---|
+| Per-agent code (`providers/`, `session/`) | 8,500 | 8,600 | Mostly replaced |
+| Event parsing into chat UI (`parse/`) | 1,900 | 2,150 | Partly replaced |
+| Runtime core (`runtime/`: heartbeats, lease, usage, questions, media, git, queue, steer) | 3,200 | 4,350 | Stays |
+| Entry, config, Convex client, Eva MCP | 2,150 | about 1,900 | Mostly stays |
+| Tests | 4,500 | 7,950 | Mostly rewritten |
+
+The November figures are line counts of `.ts` files per folder on `origin/main`. The "entry" row is the remainder, so it is an estimate.
 
 - Removed: about 8,000–10,000 lines.
 - Added: host service, plus rebuilt questions, usage capture and Cursor cost tracking.
