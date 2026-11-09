@@ -15,11 +15,11 @@ import {
   projectListItemValidator,
   resolveProjectPlanningMode,
   getProjectDetails,
-  buildProjectBranchName,
 } from "./helpers";
+import { resolveProjectBranchName } from "../_git/branchNames";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { unreadLookupForRepo } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
@@ -205,9 +205,7 @@ export const getProjectPrCreationData = internalQuery({
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const branchName =
-      project.branchName ??
-      buildProjectBranchName(args.projectId, project.branchVersion);
+    const branchName = resolveProjectBranchName(args.projectId, project);
 
     const tasks = filterActiveEntities(
       await ctx.db
@@ -231,10 +229,7 @@ export const getProjectPrCreationData = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
-      baseBranch:
-        project.baseBranch ??
-        repo.defaultBaseBranch ??
-        FALLBACK_GIT_BASE_BRANCH,
+      baseBranch: resolveProjectBaseBranch(project, repo),
       projectTitle: project.title,
       projectDescription: project.description,
       rootDirectory: repo.rootDirectory ?? "",

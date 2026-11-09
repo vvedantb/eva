@@ -1,20 +1,22 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./_taskWorkflow/startRun";
+import { startTaskRun } from "./_taskWorkflow/startRun";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import {
   authMutation,
+  getActiveTaskRun,
   hasRepoAccess,
   recomputeProjectPhase,
 } from "./functions";
 import { buildTaskDoneEvent } from "./taskWorkflow";
 import { trackProjectBuildWorkflow } from "./workflowWatchdog";
-import { buildProjectBranchName } from "./_projects/helpers";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { resolveCredentialSourceLabel } from "./_userProviderAccounts/credentialSource";
-import { normalizeAIModel } from "./validators";
-import { setTaskLastRunStartedAt } from "./_agentTasks/runSummary";
+import { resolveProjectBranchName } from "./_git/branchNames";
+import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
+import {
+  cancelScheduledFunction,
+  scheduleProjectBuildAt,
+} from "./_scheduling/helpers";
 
 // --- Workflow ---
 
@@ -144,50 +146,20 @@ export const startTaskForBuild = internalMutation({
     }
     const isFirstTaskOnBranch = !hasSuccessfulRun;
 
-    // Create the run. When this build picks up a task a reviewer sent back via
-    // "Make changes", link the parked change-request comment so the timeline
-    // labels this run "made changes" rather than a bare "success".
-    const startedAt = Date.now();
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: args.taskId,
-      status: "queued",
-      logs: [],
-      startedAt,
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        task.providerAccountId,
-        task.createdBy,
-      ),
-      model: normalizeAIModel(task.model),
-    });
-    await setTaskLastRunStartedAt(ctx, args.taskId, task.repoId, startedAt);
-
-    await ctx.db.patch(args.taskId, {
-      status: "in_progress",
-      updatedAt: Date.now(),
-      pendingChangeRequestCommentId: undefined,
-    });
-
-    // Start the task execution workflow
-    await startTaskRunWorkflow(ctx, {
-      runId,
-      taskId: args.taskId,
-      repoId: task.repoId,
-      installationId: args.installationId,
-      projectId: args.projectId,
-      branchName:
-        project.branchName ??
-        buildProjectBranchName(args.projectId, project.branchVersion),
-      baseBranch:
-        project.baseBranch ??
-        repo.defaultBaseBranch ??
-        FALLBACK_GIT_BASE_BRANCH,
-      isFirstTaskOnBranch,
-      model: task.model ?? repo.defaultModel,
-      providerAccountId: task.providerAccountId,
-      credentialOwnerUserId: task.createdBy,
+    // When this build picks up a task a reviewer sent back via "Make
+    // changes", link the parked change-request comment so the timeline labels
+    // this run "made changes" rather than a bare "success".
+    await startTaskRun(ctx, {
+      task,
+      repo,
       userId: args.userId,
+      baseBranch: resolveProjectBaseBranch(project, repo),
+      isFirstTaskOnBranch,
+      branchName: resolveProjectBranchName(args.projectId, project),
+      projectId: args.projectId,
+      triggeringCommentId: task.pendingChangeRequestCommentId,
+      clearPendingChangeRequest: true,
+      rollbackStatus: "todo",
     });
 
     return null;
@@ -326,15 +298,7 @@ export const scheduleBuild = authMutation({
     if (args.scheduledAt <= Date.now())
       throw new Error("Scheduled time must be in the future");
 
-    const functionId = await ctx.scheduler.runAt(
-      args.scheduledAt,
-      internal.buildWorkflow.executeScheduledBuild,
-      { projectId: args.projectId, scheduledAt: args.scheduledAt },
-    );
-    await ctx.db.patch(args.projectId, {
-      scheduledBuildAt: args.scheduledAt,
-      scheduledBuildFunctionId: functionId,
-    });
+    await scheduleProjectBuildAt(ctx, args.projectId, args.scheduledAt);
     return null;
   },
 });
@@ -350,11 +314,7 @@ export const cancelScheduledBuild = authMutation({
     if (!project.scheduledBuildFunctionId)
       throw new Error("Project has no scheduled build");
 
-    try {
-      await ctx.scheduler.cancel(project.scheduledBuildFunctionId);
-    } catch {
-      // may have already fired
-    }
+    await cancelScheduledFunction(ctx, project.scheduledBuildFunctionId);
     await ctx.db.patch(args.projectId, {
       scheduledBuildAt: undefined,
       scheduledBuildFunctionId: undefined,
@@ -388,16 +348,7 @@ export const cancelBuild = authMutation({
 
       await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
 
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .filter((q) =>
-          q.or(
-            q.eq(q.field("status"), "queued"),
-            q.eq(q.field("status"), "running"),
-          ),
-        )
-        .first();
+      const run = await getActiveTaskRun(ctx.db, task._id);
 
       if (run) {
         await ctx.db.patch(run._id, {
@@ -438,23 +389,8 @@ export const updateScheduledBuild = authMutation({
     if (args.scheduledAt <= Date.now())
       throw new Error("Scheduled time must be in the future");
 
-    if (project.scheduledBuildFunctionId) {
-      try {
-        await ctx.scheduler.cancel(project.scheduledBuildFunctionId);
-      } catch {
-        // may have already fired
-      }
-    }
-
-    const functionId = await ctx.scheduler.runAt(
-      args.scheduledAt,
-      internal.buildWorkflow.executeScheduledBuild,
-      { projectId: args.projectId, scheduledAt: args.scheduledAt },
-    );
-    await ctx.db.patch(args.projectId, {
-      scheduledBuildAt: args.scheduledAt,
-      scheduledBuildFunctionId: functionId,
-    });
+    await cancelScheduledFunction(ctx, project.scheduledBuildFunctionId);
+    await scheduleProjectBuildAt(ctx, args.projectId, args.scheduledAt);
     return null;
   },
 });

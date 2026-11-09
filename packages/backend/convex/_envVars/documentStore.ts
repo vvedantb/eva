@@ -1,5 +1,30 @@
+import type { GenericDatabaseReader } from "convex/server";
+import type { DataModel, Id } from "../_generated/dataModel";
+
 /** Masked bullet string shown for secret env var values in the UI. */
 export const MASKED_ENV_VAR_VALUE = "••••••";
+
+/** Loads the single env var document for a repo, or null if none exists. */
+export function findRepoEnvVarDoc(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+) {
+  return db
+    .query("repoEnvVars")
+    .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+    .first();
+}
+
+/** Loads the single env var document for a team, or null if none exists. */
+export function findTeamEnvVarDoc(
+  db: GenericDatabaseReader<DataModel>,
+  teamId: Id<"teams">,
+) {
+  return db
+    .query("teamEnvVars")
+    .withIndex("by_team", (q) => q.eq("teamId", teamId))
+    .first();
+}
 
 export type EnvVarEntry = {
   key: string;

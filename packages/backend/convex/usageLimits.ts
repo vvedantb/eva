@@ -19,6 +19,10 @@ import {
   type UsageLimitProvider,
   type UsageLimitRowKey,
 } from "./_usageLimits/rows";
+import {
+  findRepoEnvVarDoc,
+  findTeamEnvVarDoc,
+} from "./_envVars/documentStore";
 
 /**
  * Agent plan usage limits. A sandbox turn captures how much of the provider's
@@ -269,14 +273,8 @@ async function hasSharedClaudeCredential(
 ): Promise<boolean> {
   const key = PROVIDER_PRIMARY_AUTH_KEY[USAGE_LIMIT_PROVIDER];
   const [teamVars, repoVars] = await Promise.all([
-    db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", teamId))
-      .first(),
-    db
-      .query("repoEnvVars")
-      .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-      .first(),
+    findTeamEnvVarDoc(db, teamId),
+    findRepoEnvVarDoc(db, repoId),
   ]);
   return [teamVars, repoVars].some(
     (row) => row?.vars.some((entry) => entry.key === key) === true,

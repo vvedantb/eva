@@ -60,13 +60,10 @@ test("every run holds a turn and keeps its journal", () => {
     "internal.taskWorkflowActions.createTaskPullRequest",
     "internal.taskWorkflowActions.refreshTaskPullRequestBody",
     "internal.taskWorkflowActions.createTaskPullRequest",
-    "internal.taskWorkflow.finalizeRunStreamingPhase",
     "internal.taskWorkflow.completeRun",
     "internal.github.generatePrDescription",
-    "internal.taskWorkflow.maybeScheduleQuickTaskRetry",
-    "internal.sandbox.stopSandbox",
-    "internal.taskWorkflow.markTaskSandboxStopped",
-    "internal.taskWorkflow.finalizeRunStreamingPhase",
+    // One terminal tail for success and failure: completeRun only when the
+    // try did not reach it.
     "internal.taskWorkflow.completeRun",
     "internal.taskWorkflow.maybeScheduleQuickTaskRetry",
     "internal.sandbox.stopSandbox",

@@ -41,8 +41,9 @@ function completionReceivers(): { where: string; args: string }[] {
       const end = text.indexOf("\n  },\n", start);
       const args = text.slice(start, end < 0 ? undefined : end);
       if (
-        args.includes("success: v.boolean()") &&
-        args.includes("activityLog: v.union(v.string(), v.null())")
+        args.includes("...completionCallbackArgs") ||
+        (args.includes("success: v.boolean()") &&
+          args.includes("activityLog: v.union(v.string(), v.null())"))
       ) {
         receivers.push({
           where: `${relative(convexDir, file)}:${match[1]}`,
@@ -77,6 +78,10 @@ describe("turn checkpoint shas ride on every sandbox completion", () => {
     const eventStart = shapes.indexOf("export const workflowCompleteValidator");
     const eventBody = shapes.slice(eventStart, shapes.indexOf("});", eventStart));
     expect(eventBody).toContain("...turnCheckpointArgs");
+    const argsStart = shapes.indexOf("export const completionCallbackArgs = {");
+    expect(argsStart).toBeGreaterThan(-1);
+    const argsBody = shapes.slice(argsStart, shapes.indexOf("};", argsStart));
+    expect(argsBody).toContain("...turnCheckpointArgs");
   });
 
   test("every sandbox-facing completion receiver accepts the shas", () => {
@@ -94,7 +99,11 @@ describe("turn checkpoint shas ride on every sandbox completion", () => {
     expect(names).toContain("_taskWorkflow/publicMutations.ts:handleCompletion");
     expect(names.length).toBeGreaterThanOrEqual(15);
     for (const { where, args } of receivers) {
-      expect(args, where).toContain("...turnCheckpointArgs");
+      expect(
+        args.includes("...turnCheckpointArgs") ||
+          args.includes("...completionCallbackArgs"),
+        `${where} accepts the turn checkpoint shas`,
+      ).toBe(true);
       expect(args, `${where} duplicates the shared shape`).not.toContain(
         "beforeSha:",
       );

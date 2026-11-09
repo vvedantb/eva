@@ -15,7 +15,7 @@ import {
   OPENCODE_SERVER_PORT,
   opencodeCommand,
 } from "../config.js";
-import { log, tryParseJson } from "../utils.js";
+import { log, tryParseJsonObject } from "../utils.js";
 import { pidAlive, sleep, writeOomScoreAdj } from "../runtime/daemonProcess.js";
 
 /**
@@ -91,10 +91,8 @@ async function probeHealth(
 
 function readRecordedPid(): number {
   try {
-    const parsed = tryParseJson(readFileSync(SERVER_STATE_FILE, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return 0;
-    }
+    const parsed = tryParseJsonObject(readFileSync(SERVER_STATE_FILE, "utf8"));
+    if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
     return 0;
