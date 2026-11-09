@@ -41,6 +41,7 @@ const BASE_OVERVIEW: PrOverview = {
   checksTruncated: false,
   comments: [],
   commentsTruncated: false,
+  stack: null,
 };
 
 export function overview(partial: Partial<PrOverview>): PrOverview {

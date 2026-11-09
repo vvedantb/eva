@@ -30,6 +30,7 @@ import {
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
+import { mergeButtonLabel, stackMergeTargets } from "./prStack";
 import type { PrOverview } from "./prOverviewMeta";
 import {
   ConfirmSkipHint,
@@ -93,8 +94,13 @@ function MergeAction({
   const [merging, setMerging] = useState(false);
   const altHeld = useAltHeld();
 
-  const canMerge = !overview.draft && overview.mergeable === true;
-  const blocked = mergeBlocker(overview)?.detail ?? null;
+  const blocker = mergeBlocker(overview);
+  const canMerge =
+    !overview.draft && overview.mergeable === true && blocker?.kind !== "stack";
+  const blocked = blocker?.detail ?? null;
+  const buttonLabel = mergeButtonLabel(overview);
+  // Only a stack that lands more than this PR needs listing in the dialog.
+  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
   const methodLabel =
     MERGE_METHODS.find((entry) => entry.value === method)?.label ?? "Merge";
 
@@ -142,7 +148,7 @@ function MergeAction({
           title={blocked ?? skipConfirmTitle(methodLabel)}
         >
           <IconGitMerge size={14} aria-hidden />
-          Merge
+          {buttonLabel}
           <ConfirmSkipHint />
         </Button>
         <DropdownMenu>
@@ -178,12 +184,33 @@ function MergeAction({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{methodLabel}?</DialogTitle>
-            <DialogDescription>
-              This merges <span className="font-mono">{overview.headRef}</span>{" "}
-              into <span className="font-mono">{overview.baseRef}</span> on
-              GitHub. It cannot be undone from Eva.
-            </DialogDescription>
+            {stackTargets.length > 1 && overview.stack !== null ? (
+              <DialogDescription>
+                This merges {stackTargets.length} stacked pull requests into{" "}
+                <span className="font-mono">{overview.stack.baseRef}</span> on
+                GitHub, in this order. It cannot be undone from Eva.
+              </DialogDescription>
+            ) : (
+              <DialogDescription>
+                This merges{" "}
+                <span className="font-mono">{overview.headRef}</span> into{" "}
+                <span className="font-mono">{overview.baseRef}</span> on
+                GitHub. It cannot be undone from Eva.
+              </DialogDescription>
+            )}
           </DialogHeader>
+          {stackTargets.length > 1 ? (
+            <ol className="space-y-1 rounded-surface bg-muted/50 px-3 py-2 text-sm">
+              {stackTargets.map((entry) => (
+                <li key={entry.number} className="flex min-w-0 gap-2">
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    #{entry.number}
+                  </span>
+                  <span className="truncate">{entry.title}</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
           <DialogFooter>
             <Button
               variant="ghost"
