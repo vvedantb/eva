@@ -6,7 +6,8 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { isTrackedWorkflowRunning, workflow } from "./workflowManager";
-import { authMutation, getDocWithAccess } from "./functions";
+import { authMutation } from "./functions";
+import { getDocWithAccess } from "./_docs/access";
 import {
   turnCheckpointArgs,
   turnLeaseFenceArgs,
