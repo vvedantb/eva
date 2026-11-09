@@ -165,6 +165,13 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     expect(source("messages.ts")).toContain("export const activityLogById");
   });
 
+  test("listByParent's tail reads only the newest messages", () => {
+    // A chat opens from the tail, so its read must not grow with the chat:
+    // the full list of a 400-message chat reads 5.6 MB (load test).
+    expect(definitionBody("messages.ts", "listByParent")).toContain("args.tail");
+    expect(source("messages.ts")).toContain('.order("desc").take(tail)');
+  });
+
   test("users.getMany reads only the requested docs", () => {
     const body = definitionBody("users.ts", "getMany");
     expect(body).toContain("ctx.db.get(id)");

@@ -68,6 +68,27 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("sessions.listRepos", "session header", api.sessions.listRepos, (r) => ({ sessionId: r.sessionId })),
   q("sessionChats.listExtraForRepo", "sessions sidebar", api.sessionChats.listExtraForRepo, (r) => ({ repoId: r.repoId })),
   q("messages.listByParent", "chat transcript", api.messages.listByParent, (r) => ({ parentId: r.mainChatId })),
+  // Opening a session: what `SessionDetailClient`, `ChatPanel` and `ChatBody`
+  // subscribe to for the focal (heavy) chat.
+  q("sessions.getByNumId", "session open", api.sessions.getByNumId, (r) => ({ repoId: r.repoId, numId: 1 })),
+  q("sessions.get", "session open", api.sessions.get, (r) => ({ id: r.sessionId })),
+  q("sessionChats.listForSession", "session open", api.sessionChats.listForSession, (r) => ({ sessionId: r.sessionId })),
+  q("sessionChats.resolveForSession", "session open", api.sessionChats.resolveForSession, (r) => ({ sessionId: r.sessionId })),
+  q("turns.listSessionChatStatuses", "session open", api.turns.listSessionChatStatuses, (r) => ({ sessionId: r.sessionId })),
+  q("turns.getChatStatus", "session open", api.turns.getChatStatus, (r) => ({ entityId: r.mainChatId })),
+  q("queuedMessages.listByParent", "session open", api.queuedMessages.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("streaming.get", "session open", api.streaming.get, (r) => ({ entityId: r.mainChatId })),
+  q("chatUi.listByParent", "session open", api.chatUi.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("chatHtml.listByParent", "session open", api.chatHtml.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("envVarRequests.listByParent", "session open", api.envVarRequests.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("artifacts.listForChat", "session open", api.artifacts.listForChat, (r) => ({ parentId: r.mainChatId })),
+  q("feedback.listForChat", "session open", api.feedback.listForChat, (r) => ({ parentId: r.mainChatId })),
+  q("pendingQuestions.getActive", "session open", api.pendingQuestions.getActive, (r) => ({ entityId: r.mainChatId })),
+  q("proposedPlans.listBySession", "session open", api.proposedPlans.listBySession, (r) => ({ sessionId: r.sessionId })),
+  q("chatReads.isUnread", "session open", api.chatReads.isUnread, (r) => ({ parentId: r.mainChatId })),
+  // What a chat paints from first: `TRANSCRIPT_TAIL_MESSAGES` (30) in the web
+  // app's `useChatTranscript`. Compare with `messages.listByParent` above.
+  q("messages.listByParent.tail", "session open", api.messages.listByParent, (r) => ({ parentId: r.mainChatId, tail: 30 })),
   q("pullRequests.listForOwner", "session PR chrome", api.pullRequests.listForOwner, (r) => ({ owner: sessionOwner(r.sessionId) })),
   q("projects.list", "projects page", api.projects.list, (r) => ({ repoId: r.repoId })),
   q("projects.listTaskProgress", "projects page", api.projects.listTaskProgress, (r) => ({ repoId: r.repoId })),

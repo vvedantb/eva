@@ -1,6 +1,7 @@
 import { api } from "@eva/backend";
 import type { FunctionReference, FunctionArgs } from "convex/server";
 import { convex } from "@/lib/convex";
+import { transcriptTailArgs } from "@/lib/hooks/useChatTranscript";
 import { parseRouteNumId } from "@/lib/numId";
 import { decodeRepoParam } from "@/lib/utils/repoUrl";
 
@@ -56,7 +57,12 @@ export async function prefetchSession(params: {
     sessionId,
   });
   if (!chat) return;
-  prewarm(api.messages.listByParent, { parentId: chat._id });
   prewarm(api.queuedMessages.listByParent, { parentId: chat._id });
   prewarm(api.streaming.get, { entityId: chat._id });
+  // Tail first, then the full list, in the order `useChatTranscript` asks for
+  // them: sent together, the small tail would wait for the full list.
+  const tailArgs = transcriptTailArgs(chat._id);
+  prewarm(api.messages.listByParent, tailArgs);
+  await convex.query(api.messages.listByParent, tailArgs);
+  prewarm(api.messages.listByParent, { parentId: chat._id });
 }
