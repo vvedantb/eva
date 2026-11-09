@@ -1,5 +1,13 @@
 # Changelog
 
+## Security: redact tokens from sandbox logs and lock the File Viewer to the workspace
+
+Date: 2026-11-09
+
+WHY: Failed clones, startup commands, runner log tails and turn completions could carry GitHub tokens, API keys or URL credentials into Convex logs and chat. The File Viewer could read or write any sandbox path, including the git credential helper config and `.eva-env.sh`, and a symlink could hop out of the repo. Ported from the stale security PR #767.
+
+Architectural: one `redactSecrets` in `@eva/shared/redactSecrets`, used by the callback bundle and Convex. Callback: `log()`, `buildStepOutput` and `sendTurnCompletion` (`result`, `error`, `rawResultEvent`). Convex: `execHandle` failure text, git exec logs, startup and background command logs, Convex readiness tail, runner log tail (redacted before clipping), watchdog diagnostics (`readKillDiagnostics`). File Viewer reads and writes only under `/tmp/repo`, `/workspace/repo` and `/tmp/workspace`, never a `.git`, `.eva-env.sh` or `git-credentials.env` segment, and resolves symlinks in the sandbox before the same check (`isValidSandboxViewerPath`, `resolveViewerPathScript`). Media harvest uploads only plain single-link files in a real folder. Claude session ids that are not a safe path segment are dropped.
+
 ## Mobile: native-ui 0.11.2 drops the typecheck auth shim
 
 Date: 2026-11-09

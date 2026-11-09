@@ -13,6 +13,7 @@ import { callbackState as S } from "../runtime/state.js";
 import type { SessionMode, StartupStep } from "../types.js";
 import {
   buildClaudeTranscriptPath,
+  isSafeClaudeSessionId,
   copyBaseClaudeConfig,
   copyFileIfPresent,
   log,
@@ -67,7 +68,7 @@ function readClaudeSessionState(): { resumeSessionId: string } | null {
     typeof parsed.resumeSessionId === "string"
       ? parsed.resumeSessionId.trim()
       : "";
-  if (!resumeSessionId) {
+  if (!isSafeClaudeSessionId(resumeSessionId)) {
     return null;
   }
   return { resumeSessionId };
@@ -117,7 +118,7 @@ function collectClaudeTranscriptSessionIds(): string[] {
   if (currentSessionId) {
     sessionIds.add(currentSessionId);
   }
-  return Array.from(sessionIds);
+  return Array.from(sessionIds).filter(isSafeClaudeSessionId);
 }
 
 function hydratePersistedClaudeState(): void {

@@ -40,8 +40,10 @@ import {
   readResponseJson,
   tryParseJsonObject,
 } from "../utils.js";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -683,14 +685,26 @@ async function attachRunMediaIfAny(
   );
 }
 
+/** Completion fields that carry agent/CLI text into chat and Convex logs. */
+const REDACTED_COMPLETION_FIELDS: readonly string[] = [
+  "result",
+  "error",
+  "rawResultEvent",
+];
+
 /**
  * The one send sequence for every turn-closing mutation. The payload must
- * already carry the lease.
+ * already carry the lease. Redacts token shapes from the text fields here so
+ * no completion path can skip it.
  */
 export async function sendTurnCompletion(
   mutation: string,
   args: JsonObject,
 ): Promise<void> {
+  for (const field of REDACTED_COMPLETION_FIELDS) {
+    const value = args[field];
+    if (typeof value === "string") args[field] = redactSecrets(value);
+  }
   // Every caller runs persistTurnWork() before this, so the checkpoint's
   // afterSha is the pushed turn-end tip.
   appendTurnCheckpoint(args);
@@ -738,6 +752,24 @@ export async function deliverCompletionWithMedia(
  * attachMedia patches it.
  */
 /**
+ * Path of a harvest entry that is safe to upload, else null. The agent (or a
+ * prompt injection) controls these folders, so a symlinked folder, a symlink
+ * or a hard link could otherwise post a secret file (git credentials, env)
+ * to chat. Only plain single-link files directly in a real folder pass.
+ */
+function harvestableFile(dir: string, file: string): string | null {
+  if (file === "." || file === ".." || file.includes("/")) return null;
+  try {
+    if (!lstatSync(dir).isDirectory()) return null;
+    const fp = dir + "/" + file;
+    const st = lstatSync(fp);
+    return st.isFile() && st.nlink === 1 ? fp : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Moves a posted deliverable into `<dir>/.posted/`. Same-name files
  * overwrite, so a re-posted capture keeps only its latest copy. The `.posted`
  * entry itself never matches the harvest's extension filters, so archived
@@ -773,7 +805,8 @@ export async function uploadAndAttachSandboxMedia(
     if (!existsSync(recDir)) continue;
     for (const file of readdirSync(recDir)) {
       if (!/\.(webm|mp4|mov|avi)$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
+      const fp = harvestableFile(recDir, file);
+      if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
       try {
         if (!isDuplicate(fp)) {
@@ -798,7 +831,8 @@ export async function uploadAndAttachSandboxMedia(
     if (!existsSync(ssDir)) continue;
     for (const file of readdirSync(ssDir)) {
       if (!/\.(png|jpg|jpeg|gif|webp)$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
+      const fp = harvestableFile(ssDir, file);
+      if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
       const mimeType = mimeMap[ext] || "image/png";
       try {

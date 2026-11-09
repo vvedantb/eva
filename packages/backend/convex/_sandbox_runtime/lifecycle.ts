@@ -1,6 +1,9 @@
 "use node";
 
 import { v } from "convex/values";
+import type { GenericActionCtx } from "convex/server";
+import { redactSecrets } from "@eva/shared/redactSecrets";
+import type { DataModel, Id } from "../_generated/dataModel";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
@@ -296,6 +299,23 @@ const KILL_DIAGNOSTICS_COMMAND = [
 ].join("; ");
 
 /**
+ * Runs KILL_DIAGNOSTICS_COMMAND and returns its capped, redacted output (the
+ * process list and callback log can carry tokens). Throws when the sandbox is
+ * not running: an exec on a stopped VM resumes it, and a parallel kill/stop
+ * can then leave it running.
+ */
+async function readKillDiagnostics(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  sandboxId: string,
+): Promise<string> {
+  const sandbox = await getRunningSandboxHandle(ctx, repoId, sandboxId);
+  if (!sandbox) throw new Error("sandbox not running");
+  const diagnostics = await execHandle(sandbox, KILL_DIAGNOSTICS_COMMAND, 15);
+  return redactSecrets(diagnostics.trim()).slice(0, 4000);
+}
+
+/**
  * Read-only post-mortem for a session turn whose lease expired on a sandbox
  * that is still running. The sandbox is left running — this only reads
  * evidence (OOM lines, memory/swap, load, top processes, callback log) so the
@@ -310,20 +330,7 @@ export const captureStalledTurnDiagnostics = internalAction({
   returns: v.string(),
   handler: async (ctx, args) => {
     try {
-      // Diagnostics only from a live VM: an exec on a stopped one resumes it,
-      // and a parallel kill/stop can then leave it running.
-      const sandbox = await getRunningSandboxHandle(
-        ctx,
-        args.repoId,
-        args.sandboxId,
-      );
-      if (!sandbox) throw new Error("sandbox not running");
-      const diagnostics = await execHandle(
-        sandbox,
-        KILL_DIAGNOSTICS_COMMAND,
-        15,
-      );
-      return diagnostics.trim().slice(0, 4000);
+      return await readKillDiagnostics(ctx, args.repoId, args.sandboxId);
     } catch (error) {
       return `diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -346,20 +353,11 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      // Diagnostics only from a live VM: an exec on a stopped one resumes it,
-      // and a parallel kill/stop can then leave it running.
-      const sandbox = await getRunningSandboxHandle(
+      const trimmed = await readKillDiagnostics(
         ctx,
         args.repoId,
         args.sandboxId,
       );
-      if (!sandbox) throw new Error("sandbox not running");
-      const diagnostics = await execHandle(
-        sandbox,
-        KILL_DIAGNOSTICS_COMMAND,
-        15,
-      );
-      const trimmed = diagnostics.trim().slice(0, 4000);
       console.log(
         `[watchdog][diagnostics] runId=${args.runId} sandboxId=${args.sandboxId}\n${trimmed}`,
       );

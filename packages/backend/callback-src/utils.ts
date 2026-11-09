@@ -18,6 +18,7 @@ import {
   SYSTEM_PROMPT,
   WORK_DIR,
 } from "./config.js";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import { isJsonObject } from "./jsonGuards.js";
 import { git } from "./runtime/gitExec.js";
 import { callbackState as S } from "./runtime/state.js";
@@ -73,7 +74,8 @@ function narrowJsonValue(
 
 /** Logs a timestamped debug message to stderr and the debug log file. */
 export function log(msg: string): void {
-  const line = "[callback " + new Date().toISOString() + "] " + msg + "\n";
+  const line =
+    "[callback " + new Date().toISOString() + "] " + redactSecrets(msg) + "\n";
   console.error(line.trim());
   try {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
@@ -275,10 +277,18 @@ export function copyBaseClaudeConfig(): void {
   );
 }
 
+/**
+ * A session id becomes a transcript path segment, so it may not hold a
+ * separator or be `.`/`..` (a crafted state file must not escape the dir).
+ */
+export function isSafeClaudeSessionId(sessionId: string): boolean {
+  return /^[A-Za-z0-9._-]+$/.test(sessionId) && !/^\.+$/.test(sessionId);
+}
+
 /** Logs byte size and line count of a Claude transcript file for diagnostics. */
 export function logTranscriptStats(sessionId: string, label: string): void {
-  if (!sessionId) {
-    log(label + ": no session id");
+  if (!isSafeClaudeSessionId(sessionId)) {
+    log(label + ": no valid session id");
     return;
   }
   const transcriptPath = buildClaudeTranscriptPath(
@@ -312,6 +322,9 @@ export function buildClaudeTranscriptPath(
   projectDir: string,
   sessionId: string,
 ): string {
+  if (!isSafeClaudeSessionId(sessionId)) {
+    throw new Error("Invalid Claude session id");
+  }
   return projectDir + "/" + sessionId + ".jsonl";
 }
 

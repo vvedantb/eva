@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { isValidSandboxWritePath } from "../convex/_sandbox_runtime/services";
+import {
+  isValidSandboxViewerPath,
+  isValidSandboxWritePath,
+} from "../convex/_sandbox_runtime/services";
 
 const backendDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -26,6 +29,25 @@ test("write paths must be absolute, clean and file-shaped", () => {
   expect(isValidSandboxWritePath("/tmp/repo/../../etc/passwd")).toBe(false);
   expect(isValidSandboxWritePath("/../etc/passwd")).toBe(false);
   expect(isValidSandboxWritePath("/tmp/repo/..")).toBe(false);
+});
+
+test("file viewer paths stay inside the workspace and off secrets", () => {
+  expect(isValidSandboxViewerPath("/tmp/repo/src/a.ts")).toBe(true);
+  expect(isValidSandboxViewerPath("/workspace/repo/src/a.ts")).toBe(true);
+  expect(isValidSandboxViewerPath("/tmp/workspace/linked/src/a.ts")).toBe(true);
+
+  expect(
+    isValidSandboxViewerPath("/home/eva/.config/eva/git-credentials.env"),
+  ).toBe(false);
+  expect(isValidSandboxViewerPath("/vercel/sandbox/.eva-env.sh")).toBe(false);
+  expect(isValidSandboxViewerPath("/tmp/repo/.eva-env.sh")).toBe(false);
+  expect(isValidSandboxViewerPath("/tmp/repo/a/git-credentials.env")).toBe(
+    false,
+  );
+  expect(isValidSandboxViewerPath("/tmp/repo/.git/config")).toBe(false);
+  expect(isValidSandboxViewerPath("/tmp/repo/../../etc/passwd")).toBe(false);
+  expect(isValidSandboxViewerPath("/tmp/repository/a.ts")).toBe(false);
+  expect(isValidSandboxViewerPath("/tmp/repo")).toBe(false);
 });
 
 test("writeSandboxFile rejects oversized content before touching the sandbox", () => {
@@ -56,10 +78,12 @@ test("writeSandboxFile never interpolates content into a shell command", () => {
   );
   const handler = action.slice(0, action.indexOf("\n});"));
 
-  expect(handler).toContain(
-    "writeFileToSandbox(handle, args.path, args.content)",
+  expect(handler).toContain("writeFileToSandbox(handle, target, args.content)");
+  // The symlink probe carries only the path, never the content.
+  const probe = handler.slice(handler.indexOf("const probe"));
+  expect(probe.slice(0, probe.indexOf("writeFileToSandbox"))).not.toContain(
+    "args.content",
   );
-  expect(handler).not.toContain("execHandle(");
 });
 
 test("sandbox.ts re-exports writeSandboxFile", () => {
