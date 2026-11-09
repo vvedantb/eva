@@ -94,6 +94,9 @@ describe("stack blockers", () => {
     expect(
       stackVerdict(stack(2, [entry(1), entry(2, { mergeableState: "blocked" })])).label,
     ).toBe("Merge blocked");
+    expect(
+      stackVerdict(stack(1, [entry(1, { status: "merged" }), entry(2), entry(3)])).label,
+    ).toBe("Merged · 2 PRs above still open");
     expect(stackVerdict(stack(2, [entry(1), entry(2)])).label).toBe("Ready to merge");
   });
 });

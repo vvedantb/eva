@@ -44,7 +44,17 @@ export interface StackVerdict {
 /** The popover's headline: one sentence about the stack as a whole. */
 export function stackVerdict(stack: PrStack): StackVerdict {
   const targets = stackMergeTargets(stack);
-  if (targets.length === 0) return { tone: "success", label: "Stack merged" };
+  if (targets.length === 0) {
+    // This PR is merged, but entries above it may still be open.
+    const openAbove = stack.entries.filter(
+      (entry) => entry.status === "open",
+    ).length;
+    if (openAbove === 0) return { tone: "success", label: "Stack merged" };
+    return {
+      tone: "neutral",
+      label: `Merged · ${openAbove} ${openAbove === 1 ? "PR" : "PRs"} above still open`,
+    };
+  }
   if (stackBlockingReason(stack) !== null) {
     return { tone: "failure", label: "Stack needs attention" };
   }
