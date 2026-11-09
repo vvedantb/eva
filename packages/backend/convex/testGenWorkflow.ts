@@ -9,7 +9,8 @@ import {
   cancelTrackedWorkflow,
   isTrackedWorkflowRunning,
 } from "./workflowManager";
-import { authMutation, getDocWithAccess } from "./functions";
+import { authMutation } from "./functions";
+import { getDocWithAccess } from "./_docs/access";
 import {
   turnCheckpointArgs,
   turnLeaseFenceArgs,
