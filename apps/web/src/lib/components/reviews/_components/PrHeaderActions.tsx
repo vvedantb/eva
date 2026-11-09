@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAction } from "convex/react";
-import { useNavigate } from "@tanstack/react-router";
-import { api, type Id } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import {
   Button,
   DropdownMenu,
@@ -27,8 +25,8 @@ import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
 import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
-import { useRepo } from "@/lib/contexts/RepoContext";
-import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { useClosePullRequest } from "@/lib/components/pr-menu/useClosePullRequest";
+import { useStackNewSession } from "@/lib/components/pr-menu/useStackNewSession";
 
 /**
  * The header's right-hand cluster, in t3code's order: the one filled button that
@@ -54,35 +52,19 @@ export function PrHeaderActions({
   /** Re-reads the overview after something on GitHub changed. */
   onChanged: () => void;
 }) {
-  const update = useAction(api.github.updatePullRequest);
-  const [closing, setClosing] = useState(false);
+  const { close: closePullRequest, closing } = useClosePullRequest();
   const [confirmingClose, setConfirmingClose] = useState(false);
   const altHeld = useAltHeld();
-  const navigate = useNavigate();
-  const { basePath } = useRepo();
+  const { stack } = useStackNewSession();
 
-  // Opens the new-session composer on this PR's head branch; the session's PR
-  // then joins this PR's GitHub stack (`linkSessionPrToStack`).
-  const stackNewSession = () => {
-    void navigate({
-      to: toInternalRepoHref(`${basePath}/sessions`),
-      search: { stackOn: overview.number, stackBase: overview.headRef },
-    });
-  };
+  const stackNewSession = () =>
+    stack({ repoId, prNumber: overview.number, headRef: overview.headRef });
 
   const close = async () => {
-    setClosing(true);
-    try {
-      await update({ repoId, prNumber: overview.number, state: "closed" });
-      setConfirmingClose(false);
-      toast.success("Pull request closed");
-      onChanged();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not close the branch",
-      );
-    }
-    setClosing(false);
+    const closed = await closePullRequest({ repoId, prNumber: overview.number });
+    if (!closed) return;
+    setConfirmingClose(false);
+    onChanged();
   };
 
   const copyLink = () => {

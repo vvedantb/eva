@@ -22,6 +22,8 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
 export interface SessionMenuSession {
   _id: Id<"sessions">;
@@ -84,6 +86,7 @@ export function SessionMenuItems({
   const simpleView = useSimpleView();
   const branchName = simpleView ? undefined : session.branchName;
   const prUrl = simpleView ? undefined : session.prUrl;
+  const prs = useOwnerPullRequests({ kind: "session", sessionId: session._id });
   const forkBlockedReason =
     session.sandboxId === undefined
       ? "No sandbox"
@@ -175,7 +178,9 @@ export function SessionMenuItems({
           Copy branch name
         </ContextMenuItem>
       ) : null}
-      {prUrl ? (
+      <PrActionsSubmenus variant="context" prs={prs} />
+      {/* A session whose PR predates the `pullRequests` rows has only a URL. */}
+      {prs.length === 0 && prUrl ? (
         <ContextMenuItem
           onSelect={() => {
             window.open(prUrl, "_blank", "noopener,noreferrer");

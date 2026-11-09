@@ -170,6 +170,7 @@ export function ProjectCard({
   const hiddenCount = allAvatarIds.length - MAX_AVATARS;
 
   const menuProps = {
+    projectId,
     title,
     phase,
     projectLead,
