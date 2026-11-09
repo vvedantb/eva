@@ -9,7 +9,6 @@ import {
   MAX_TOTAL_RUNTIME_MS,
   MODEL,
   NO_MESSAGE_TIMEOUT_MS,
-  SYSTEM_PROMPT,
   WORK_DIR,
   codexReasoningEffort,
   normalizedCodexModel,
@@ -41,7 +40,11 @@ import {
   writeCodexSessionState,
 } from "../session/codexSession.js";
 import type { JsonObject, JsonValue, SessionMode } from "../types.js";
-import { asJsonObject, log } from "../utils.js";
+import {
+  asJsonObject,
+  log,
+  withSystemPrompt,
+} from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   bootWarmDaemon,
@@ -289,9 +292,7 @@ async function startTurn(
   }
   startClaimedTurn(turn);
   await materializeTurnAttachments(turn);
-  const text = SYSTEM_PROMPT
-    ? SYSTEM_PROMPT + "\n\n" + turn.prompt
-    : turn.prompt;
+  const text = withSystemPrompt(turn.prompt);
   activeTurnStartedAt = Date.now();
   lastEventAt = activeTurnStartedAt;
   // Snapshot before the request: tokenUsage notifications for this turn can

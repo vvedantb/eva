@@ -71,7 +71,7 @@ import {
   beginTurnOwnership,
   endTurnOwnership,
 } from "../runtime/turnLease.js";
-import { log } from "../utils.js";
+import { isJsonObject, log, trimmedString } from "../utils.js";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   bootWarmDaemon,
@@ -467,28 +467,12 @@ function readSyntheticTurnMessageId(result: JsonValue): string | null {
   return typeof messageId === "string" ? messageId : null;
 }
 
-function readParentToolUseId(message: DaemonMessage): string | null {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-
-function readStringField(
-  message: DaemonMessage,
-  field: string,
-): string | undefined {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
 function recogniseSubagentToolUses(message: DaemonMessage): void {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -496,7 +480,7 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -514,7 +498,7 @@ function recogniseSubagentToolUses(message: DaemonMessage): void {
 }
 
 function shouldDropSubagentMessage(message: DaemonMessage): boolean {
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -532,7 +516,7 @@ function shouldMintSyntheticTurn(message: DaemonMessage): boolean {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -728,7 +712,7 @@ function noteHarnessInitMessage(
 ): void {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField(message, "claude_code_version");
+  const cliVersion = trimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -796,7 +780,7 @@ function handleBackgroundTasksChanged(message: DaemonMessage): void {
   }
   const taskIds: string[] = [];
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
     const taskIdField = task.task_id;
@@ -824,19 +808,19 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField(message, "tool_use_id");
+  const toolUseId = trimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
     // Shell commands also arrive as tasks. They are not subagents: background
     // shells have their own registry (`backgroundShells`), and a dev server
     // run in the background never ends, so as an entry it held the chat queue
     // for the full 2-hour cap.
-    if (readStringField(message, "task_type") === "local_bash") {
+    if (trimmedString(message.task_type) === "local_bash") {
       return;
     }
     const entry: BackgroundAgentEntry = {
       toolUseId,
-      taskId: readStringField(message, "task_id"),
-      description: readStringField(message, "description"),
+      taskId: trimmedString(message.task_id),
+      description: trimmedString(message.description),
       status: "running",
       startedAt: Date.now(),
     };
@@ -851,7 +835,7 @@ function handleSystemTaskMessage(message: DaemonMessage): void {
     (subtype === "task_updated" || subtype === "task_notification") &&
     toolUseId
   ) {
-    const status = readStringField(message, "status");
+    const status = trimmedString(message.status);
     const terminal =
       status === "completed" ||
       status === "failed" ||

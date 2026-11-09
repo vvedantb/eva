@@ -79,9 +79,17 @@ var evaMcpServers = consumed.servers;
 var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
 var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
 
+// callback-src/jsonGuards.ts
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function trimmedString(value) {
+  return typeof value === "string" ? value.trim() || void 0 : void 0;
+}
+
 // callback-src/linkedRepos.ts
 function isLinkedRepo(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return false;
   }
   return typeof value.owner === "string" && typeof value.name === "string" && typeof value.path === "string" && typeof value.branchName === "string" && typeof value.baseBranch === "string";
@@ -216,6 +224,7 @@ var CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
 ) ? parsedCursorWorkerLeaseGeneration : 0;
 var IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 var SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
+var PROMPT_FILE = "/tmp/design-prompt.txt";
 var WORK_DIR = existsSync("/tmp/repo") ? "/tmp/repo" : existsSync("/workspace/repo") ? "/workspace/repo" : "/tmp/repo";
 var WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
 var LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
@@ -478,14 +487,6 @@ import {
   writeFileSync
 } from "fs";
 
-// callback-src/jsonGuards.ts
-function isJsonObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function trimmedString(value) {
-  return typeof value === "string" ? value.trim() || void 0 : void 0;
-}
-
 // callback-src/runtime/gitExec.ts
 import { spawnSync } from "child_process";
 var GIT_STEP_TIMEOUT_MS = 2e4;
@@ -512,7 +513,7 @@ function parseQuestionOptions(value) {
   if (!Array.isArray(value)) return [];
   const options = [];
   for (const raw of value) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     if (typeof raw.label !== "string" || !raw.label) continue;
     options.push({
       label: raw.label,
@@ -525,7 +526,7 @@ function parseQuestionInput(input) {
   if (!Array.isArray(input.questions)) return void 0;
   const questions = [];
   for (const raw of input.questions) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     if (typeof raw.question !== "string" || !raw.question) continue;
     questions.push({
       question: raw.question,
@@ -813,6 +814,23 @@ function tryParseJson(text) {
     return null;
   }
 }
+function tryParseJsonObject(text) {
+  const parsed = tryParseJson(text);
+  return isJsonObject(parsed) ? parsed : null;
+}
+function readStringField(obj, keys) {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+function readTurnPrompt() {
+  return readFileSync(PROMPT_FILE, "utf8");
+}
+function withSystemPrompt(prompt) {
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
+}
 async function readResponseJson(res) {
   const parsed = await res.json();
   if (parsed === null || typeof parsed === "string" || typeof parsed === "number" || typeof parsed === "boolean" || typeof parsed === "object") {
@@ -996,13 +1014,13 @@ function noteHeartbeatResponse(response, sentUnder) {
   } else {
     parsed = response;
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isJsonObject(parsed)) {
     return false;
   }
   const responseValue = parsed.value;
   const payload = typeof responseValue === "object" && responseValue !== null && !Array.isArray(responseValue) ? responseValue : parsed;
   const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
+  if (!isJsonObject(lease)) {
     return false;
   }
   if (lease.status !== "terminal") return false;
@@ -1220,6 +1238,8 @@ async function callStreamingHeartbeatTouch(entityId) {
 // callback-src/parse/stepBudget.ts
 var STEP_FIELD_CAPS = {
   command: 600,
+  /** One-line bash \`detail\` on the step row (the full text rides \`command\`). */
+  commandDetail: 300,
   output: 1200,
   editSide: 1e3,
   editsMax: 4,
@@ -1342,7 +1362,7 @@ function extractClaudeEdits(input) {
   if (Array.isArray(input.edits)) {
     for (const item of input.edits) {
       if (edits.length >= STEP_FIELD_CAPS.editsMax) break;
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const oldText = typeof item.old_string === "string" ? item.old_string : typeof item.oldText === "string" ? item.oldText : typeof item.old_text === "string" ? item.old_text : "";
       const newText = typeof item.new_string === "string" ? item.new_string : typeof item.newText === "string" ? item.newText : typeof item.new_text === "string" ? item.new_text : "";
       if (oldText || newText) {
@@ -1351,15 +1371,6 @@ function extractClaudeEdits(input) {
     }
   }
   return edits.length > 0 ? edits : void 0;
-}
-function readStringField(obj, keys) {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
 }
 function readNumberField(obj, keys) {
   for (const key of keys) {
@@ -1447,7 +1458,7 @@ function extractFilePaths(obj) {
   }
   if (Array.isArray(obj.changes)) {
     for (const change of obj.changes) {
-      if (!change || typeof change !== "object" || Array.isArray(change)) {
+      if (!isJsonObject(change)) {
         continue;
       }
       if (typeof change.path === "string") add(change.path);
@@ -1493,125 +1504,89 @@ function probeOpencodeStateResult(state) {
 }
 
 // callback-src/parse/toolSteps.ts
-function opencodeToolToStep(part) {
-  const tool = typeof part.tool === "string" ? part.tool : "tool";
-  const stateObj = part.state && typeof part.state === "object" && !Array.isArray(part.state) ? part.state : null;
-  const input = stateObj && "input" in stateObj && stateObj.input && typeof stateObj.input === "object" && !Array.isArray(stateObj.input) ? stateObj.input : {};
-  const rawPath = typeof input.filePath === "string" ? input.filePath : typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : "";
-  const path3 = rawPath ? shortenPath(rawPath) : "";
-  const toolUseId = pickToolCallId(part) ?? (typeof part.callID === "string" && part.callID.trim() ? part.callID.trim() : void 0);
-  let step;
+function stringOrUndefined(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function fileStep(type, label, rawPath, extra = {}) {
+  return {
+    type,
+    label,
+    detail: rawPath ? shortenPath(rawPath) : void 0,
+    path: rawPath || void 0,
+    status: "active",
+    ...extra
+  };
+}
+function bashStep(command, label = "Running command...", fallbackDetail) {
+  return {
+    type: "bash",
+    label,
+    detail: command ? command.slice(0, STEP_FIELD_CAPS.commandDetail) : fallbackDetail,
+    command: command ? capCommand(command) : void 0,
+    status: "active"
+  };
+}
+function searchStep(kind, detail) {
+  return kind === "files" ? { type: "search_files", label: "Searching files...", detail, status: "active" } : { type: "search_code", label: "Searching code...", detail, status: "active" };
+}
+function webStep(kind, detail) {
+  return kind === "fetch" ? { type: "web_fetch", label: "Fetching URL...", detail, status: "active" } : { type: "web_search", label: "Searching web...", detail, status: "active" };
+}
+function subtaskStep(detail) {
+  return { type: "subtask", label: "Running agent...", detail, status: "active" };
+}
+function toolStep(label, detail) {
+  return { type: "tool", label, detail, status: "active" };
+}
+function tasksStep() {
+  return toolStep("Updating tasks...");
+}
+function opencodeStepFor(tool, input, rawPath) {
   switch (tool) {
     case "read":
-      step = {
-        type: "read",
-        label: "Reading file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
-      break;
+      return fileStep("read", "Reading file...", rawPath);
     case "glob":
-      step = {
-        type: "search_files",
-        label: "Searching files...",
-        detail: typeof input.pattern === "string" ? input.pattern : void 0,
-        status: "active"
-      };
-      break;
+      return searchStep("files", stringOrUndefined(input.pattern));
     case "grep":
-      step = {
-        type: "search_code",
-        label: "Searching code...",
-        detail: typeof input.pattern === "string" ? input.pattern : void 0,
-        status: "active"
-      };
-      break;
+      return searchStep("code", stringOrUndefined(input.pattern));
     case "write": {
-      const content = typeof input.content === "string" ? input.content : void 0;
-      step = {
-        type: "write",
-        label: "Creating file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        contentPreview: content ? capContentPreview(content) : void 0,
-        status: "active"
-      };
-      break;
+      const content = stringOrUndefined(input.content);
+      return fileStep("write", "Creating file...", rawPath, {
+        contentPreview: content ? capContentPreview(content) : void 0
+      });
     }
     case "edit":
-      step = {
-        type: "edit",
-        label: "Editing file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        edits: extractClaudeEdits(input),
-        status: "active"
-      };
-      break;
-    case "bash": {
-      const rawCommand = typeof input.command === "string" ? input.command : "";
-      step = {
-        type: "bash",
-        label: "Running command...",
-        detail: rawCommand ? rawCommand.slice(0, 300) : void 0,
-        command: rawCommand ? capCommand(rawCommand) : void 0,
-        status: "active"
-      };
-      break;
-    }
+      return fileStep("edit", "Editing file...", rawPath, {
+        edits: extractClaudeEdits(input)
+      });
+    case "bash":
+      return bashStep(stringOrUndefined(input.command) ?? "");
     case "webfetch":
-      step = {
-        type: "web_fetch",
-        label: "Fetching URL...",
-        detail: typeof input.url === "string" ? input.url : void 0,
-        status: "active"
-      };
-      break;
+      return webStep("fetch", stringOrUndefined(input.url));
     case "websearch":
-      step = {
-        type: "web_search",
-        label: "Searching web...",
-        detail: typeof input.query === "string" ? input.query : void 0,
-        status: "active"
-      };
-      break;
+      return webStep("search", stringOrUndefined(input.query));
     case "task":
-      step = {
-        type: "subtask",
-        label: "Running agent...",
-        detail: typeof input.description === "string" ? input.description : void 0,
-        status: "active"
-      };
-      break;
+      return subtaskStep(stringOrUndefined(input.description));
     case "todowrite":
     case "todoread":
-      step = { type: "tool", label: "Updating tasks...", status: "active" };
-      break;
+      return tasksStep();
     default:
-      step = {
-        type: "tool",
-        label: "Using " + tool + "...",
-        status: "active"
-      };
-      break;
+      return toolStep("Using " + tool + "...");
   }
+}
+function opencodeToolToStep(part) {
+  const tool = typeof part.tool === "string" ? part.tool : "tool";
+  const input = asJsonObject(asJsonObject(part.state).input);
+  const rawPath = stringOrUndefined(input.filePath) ?? stringOrUndefined(input.file_path) ?? stringOrUndefined(input.path) ?? "";
+  const toolUseId = pickToolCallId(part) ?? trimmedString(part.callID);
+  const step = opencodeStepFor(tool, input, rawPath);
   if (toolUseId) {
     step.toolUseId = toolUseId;
   }
   return step;
 }
-function pickCursorString(args, keys) {
-  for (const key of keys) {
-    const value = args[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
-}
 function getCursorToolFields(args) {
-  const rawPath = pickCursorString(args, [
+  const rawPath = readStringField(args, [
     "path",
     "file_path",
     "filePath",
@@ -1624,8 +1599,8 @@ function getCursorToolFields(args) {
     args,
     rawPath,
     path: rawPath ? shortenPath(rawPath) : "",
-    command: pickCursorString(args, ["command", "cmd"]),
-    query: pickCursorString(args, [
+    command: readStringField(args, ["command", "cmd"]),
+    query: readStringField(args, [
       "query",
       "pattern",
       "url",
@@ -1634,140 +1609,92 @@ function getCursorToolFields(args) {
     ])
   };
 }
-function pathStep(type, label, detail, rawPath) {
-  return {
-    type,
-    label,
-    detail: detail || void 0,
-    path: rawPath || void 0,
-    status: "active"
-  };
-}
-function detailStep(type, label, detail) {
-  return { type, label, detail: detail || void 0, status: "active" };
-}
 function cursorShellStep(fields) {
-  const { command } = fields;
-  return {
-    type: "bash",
-    label: "Running command...",
-    detail: command ? command.slice(0, 300) : void 0,
-    command: command ? capCommand(command) : void 0,
-    status: "active"
-  };
+  return bashStep(fields.command);
 }
-function cursorTasksStep() {
-  return { type: "tool", label: "Updating tasks...", status: "active" };
+function cursorEditStep(fields) {
+  return fileStep("edit", "Editing file...", fields.rawPath, {
+    edits: extractClaudeEdits(fields.args)
+  });
+}
+function cursorDeleteStep(fields) {
+  return fileStep("edit", "Deleting file...", fields.rawPath);
 }
 function cursorMcpStep(fields) {
-  const server = pickCursorString(fields.args, [
+  const server = readStringField(fields.args, [
     "server",
     "serverName",
     "server_name",
     "toolName",
     "tool_name"
   ]);
-  return {
-    type: "tool",
-    label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-    status: "active"
-  };
+  return toolStep(server ? "Using MCP " + server + "..." : "Using MCP tool...");
 }
 function cursorSearchCodeStep(fields) {
-  return detailStep(
-    "search_code",
-    "Searching code...",
-    fields.query || fields.path
-  );
+  return searchStep("code", fields.query || fields.path || void 0);
 }
 var CURSOR_KNOWN_TOOL_STEPS = /* @__PURE__ */ new Map([
-  ["read", (f) => pathStep("read", "Reading file...", f.path, f.rawPath)],
+  ["read", (f) => fileStep("read", "Reading file...", f.rawPath)],
   [
     "write",
     (f) => {
-      const fileText = pickCursorString(f.args, [
+      const fileText = readStringField(f.args, [
         "fileText",
         "file_text",
         "content",
         "contents"
       ]);
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: f.path || void 0,
-        path: f.rawPath || void 0,
-        contentPreview: fileText ? capContentPreview(fileText) : void 0,
-        status: "active"
-      };
+      return fileStep("write", "Creating file...", f.rawPath, {
+        contentPreview: fileText ? capContentPreview(fileText) : void 0
+      });
     }
   ],
-  [
-    "edit",
-    (f) => ({
-      type: "edit",
-      label: "Editing file...",
-      detail: f.path || void 0,
-      path: f.rawPath || void 0,
-      edits: extractClaudeEdits(f.args),
-      status: "active"
-    })
-  ],
-  ["delete", (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)],
-  [
-    "glob",
-    (f) => detailStep("search_files", "Searching files...", f.query || f.path)
-  ],
-  ["ls", (f) => detailStep("search_files", "Searching files...", f.path)],
+  ["edit", cursorEditStep],
+  ["delete", cursorDeleteStep],
+  ["glob", (f) => searchStep("files", f.query || f.path || void 0)],
+  ["ls", (f) => searchStep("files", f.path || void 0)],
   ["grep", cursorSearchCodeStep],
   ["semSearch", cursorSearchCodeStep],
   ["shell", cursorShellStep],
   [
     "task",
-    (f) => detailStep(
-      "subtask",
-      "Running agent...",
-      pickCursorString(f.args, ["description", "prompt"])
-    )
+    (f) => subtaskStep(readStringField(f.args, ["description", "prompt"]) || void 0)
   ],
-  ["createPlan", cursorTasksStep],
-  ["updateTodos", cursorTasksStep],
+  ["createPlan", tasksStep],
+  ["updateTodos", tasksStep],
   ["mcp", cursorMcpStep]
 ]);
 var CURSOR_HEURISTIC_TOOL_STEPS = [
   {
     matches: (tool) => tool.includes("read"),
-    toStep: (f) => pathStep("read", "Reading file...", f.path, f.rawPath)
+    toStep: (f) => fileStep("read", "Reading file...", f.rawPath)
   },
   {
     matches: (tool) => tool.includes("write") || tool.includes("create"),
-    toStep: (f) => pathStep("write", "Creating file...", f.path, f.rawPath)
+    toStep: (f) => fileStep("write", "Creating file...", f.rawPath)
   },
   {
     matches: (tool) => tool.includes("edit") || tool.includes("patch") || tool.includes("apply") || tool.includes("replace"),
-    toStep: (f) => ({
-      ...pathStep("edit", "Editing file...", f.path, f.rawPath),
-      edits: extractClaudeEdits(f.args)
-    })
+    toStep: cursorEditStep
   },
   {
     matches: (tool) => tool.includes("delete") || tool.includes("remove"),
-    toStep: (f) => pathStep("edit", "Deleting file...", f.path, f.rawPath)
+    toStep: cursorDeleteStep
   },
   {
     matches: (tool) => tool.includes("glob") || tool.includes("list"),
-    toStep: (f) => detailStep("search_files", "Searching files...", f.query || f.path)
+    toStep: (f) => searchStep("files", f.query || f.path || void 0)
   },
   // Before grep/search: every web-search name also contains "search".
   {
     matches: (tool) => tool.includes("websearch") || tool.includes("web_search"),
-    toStep: (f) => detailStep("web_search", "Searching web...", f.query)
+    toStep: (f) => webStep("search", f.query || void 0)
   },
   {
     matches: (tool) => tool.includes("grep") || tool.includes("search"),
-    toStep: (f, tool) => detailStep(
-      tool.includes("file") ? "search_files" : "search_code",
-      tool.includes("file") ? "Searching files..." : "Searching code...",
-      f.query || f.path
+    toStep: (f, tool) => searchStep(
+      tool.includes("file") ? "files" : "code",
+      f.query || f.path || void 0
     )
   },
   {
@@ -1776,11 +1703,11 @@ var CURSOR_HEURISTIC_TOOL_STEPS = [
   },
   {
     matches: (tool) => tool.includes("webfetch") || tool.includes("web_fetch") || tool.includes("fetch") && !tool.includes("search"),
-    toStep: (f) => detailStep("web_fetch", "Fetching URL...", f.query)
+    toStep: (f) => webStep("fetch", f.query || void 0)
   },
   {
     matches: (tool) => tool.includes("todo") || tool.includes("plan"),
-    toStep: cursorTasksStep
+    toStep: tasksStep
   },
   {
     matches: (tool) => tool.includes("mcp"),
@@ -1798,126 +1725,72 @@ function cursorSdkToolToStep(name, args) {
   if (rule) {
     return rule.toStep(fields, tool);
   }
-  return {
-    type: "tool",
-    label: "Using " + (name || "tool") + "...",
-    status: "active"
-  };
+  return toolStep("Using " + (name || "tool") + "...");
 }
 function toolCallToStep(name, input) {
-  const rawPath = typeof input.file_path === "string" ? String(input.file_path) : "";
-  const path3 = rawPath ? shortenPath(rawPath) : "";
+  const rawPath = stringOrUndefined(input.file_path) ?? "";
   switch (name) {
     case "Read":
-      return {
-        type: "read",
-        label: "Reading file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
+      return fileStep("read", "Reading file...", rawPath);
     case "Glob":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: typeof input.pattern === "string" ? String(input.pattern) : void 0,
-        status: "active"
-      };
+      return searchStep("files", stringOrUndefined(input.pattern));
     case "Grep":
-      return {
-        type: "search_code",
-        label: "Searching code...",
-        detail: typeof input.pattern === "string" ? String(input.pattern) : void 0,
-        status: "active"
-      };
+      return searchStep("code", stringOrUndefined(input.pattern));
     case "Write": {
-      const content = typeof input.content === "string" ? input.content : void 0;
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        contentPreview: content ? capContentPreview(content) : void 0,
-        status: "active"
-      };
+      const content = stringOrUndefined(input.content);
+      return fileStep("write", "Creating file...", rawPath, {
+        contentPreview: content ? capContentPreview(content) : void 0
+      });
     }
-    case "Edit": {
-      const edits = extractClaudeEdits(input);
-      return {
-        type: "edit",
-        label: "Editing file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        edits,
-        status: "active"
-      };
-    }
+    case "Edit":
+      return fileStep("edit", "Editing file...", rawPath, {
+        edits: extractClaudeEdits(input)
+      });
     case "Bash":
-    case "bash": {
-      const rawCommand = typeof input.command === "string" ? String(input.command) : "";
-      return {
-        type: "bash",
-        label: input.run_in_background === true ? "Running in background..." : "Running command...",
-        detail: rawCommand ? rawCommand.slice(0, 300) : void 0,
-        command: rawCommand ? capCommand(rawCommand) : void 0,
-        status: "active"
-      };
-    }
+    case "bash":
+      return bashStep(
+        stringOrUndefined(input.command) ?? "",
+        input.run_in_background === true ? "Running in background..." : "Running command..."
+      );
     case "KillShell":
-      return {
-        type: "bash",
-        label: "Stopping background process...",
-        detail: typeof input.shell_id === "string" ? String(input.shell_id) : typeof input.shellId === "string" ? String(input.shellId) : void 0,
-        status: "active"
-      };
+      return bashStep(
+        "",
+        "Stopping background process...",
+        stringOrUndefined(input.shell_id) ?? stringOrUndefined(input.shellId)
+      );
     case "Skill":
-      return {
-        type: "tool",
-        label: "Using Skill...",
-        detail: typeof input.skill === "string" ? String(input.skill) : void 0,
-        status: "active"
-      };
+      return toolStep("Using Skill...", stringOrUndefined(input.skill));
     case "WebFetch":
-      return {
-        type: "web_fetch",
-        label: "Fetching URL...",
-        detail: typeof input.url === "string" ? String(input.url) : void 0,
-        status: "active"
-      };
+      return webStep("fetch", stringOrUndefined(input.url));
     case "WebSearch":
-      return {
-        type: "web_search",
-        label: "Searching web...",
-        detail: typeof input.query === "string" ? String(input.query) : void 0,
-        status: "active"
-      };
-    case "NotebookEdit":
+      return webStep("search", stringOrUndefined(input.query));
+    case "NotebookEdit": {
+      const notebookPath = stringOrUndefined(input.notebook_path);
       return {
         type: "notebook",
         label: "Editing notebook...",
-        detail: typeof input.notebook_path === "string" ? shortenPath(String(input.notebook_path)) : void 0,
-        path: typeof input.notebook_path === "string" ? String(input.notebook_path) : void 0,
+        detail: notebookPath !== void 0 ? shortenPath(notebookPath) : void 0,
+        path: notebookPath,
         status: "active"
       };
+    }
     // Subagent spawn. Named \`Agent\` since claude-code v2.1.63; older CLIs emit
     // \`Task\`. Match both so subagent runs are always recognised (a bare \`Task\`
     // previously fell through to the generic "Using Task..." row).
     case "Agent":
-    case "Task":
+    case "Task": {
+      const prompt = trimmedString(input.prompt);
       return {
-        type: "subtask",
-        label: "Running agent...",
-        detail: typeof input.description === "string" ? String(input.description) : typeof input.subagent_type === "string" ? String(input.subagent_type) : void 0,
-        // The prompt the subagent was spawned with: the opening message of
-        // its child thread view. Trimmed from the chat transcript query like
-        // any other preview, so it costs nothing until a reader opens it.
-        contentPreview: typeof input.prompt === "string" && input.prompt.trim() ? capContentPreview(input.prompt.trim()) : void 0,
-        status: "active"
+        ...subtaskStep(
+          stringOrUndefined(input.description) ?? stringOrUndefined(input.subagent_type)
+        ),
+        contentPreview: prompt ? capContentPreview(prompt) : void 0
       };
+    }
     case "TodoWrite":
-      return { type: "tool", label: "Updating tasks...", status: "active" };
+      return tasksStep();
     case "TodoRead":
-      return { type: "tool", label: "Reading tasks...", status: "active" };
+      return toolStep("Reading tasks...");
     case "AskUserQuestion": {
       const questions = parseQuestionInput(input);
       return {
@@ -1929,35 +1802,14 @@ function toolCallToStep(name, input) {
       };
     }
     default:
-      return {
-        type: "tool",
-        label: "Using " + name + "...",
-        status: "active"
-      };
+      return toolStep("Using " + name + "...");
   }
 }
 function getCodexFieldValue(item, keys) {
-  const sources = [item];
-  if (item.input && typeof item.input === "object" && !Array.isArray(item.input)) {
-    sources.push(item.input);
-  }
-  for (const source of sources) {
-    for (const key of keys) {
-      if (typeof source[key] === "string" && source[key].trim()) {
-        return source[key].trim();
-      }
-    }
-  }
-  return "";
+  return readStringField(item, keys).trim() || readStringField(asJsonObject(item.input), keys).trim();
 }
 function getCodexThreadId(event) {
-  if (typeof event.thread_id === "string" && event.thread_id.trim()) {
-    return event.thread_id.trim();
-  }
-  if (event.thread && typeof event.thread === "object" && !Array.isArray(event.thread) && typeof event.thread.id === "string" && event.thread.id.trim()) {
-    return event.thread.id.trim();
-  }
-  return "";
+  return trimmedString(event.thread_id) ?? trimmedString(asJsonObject(event.thread).id) ?? "";
 }
 function getCodexAgentMessageText(item) {
   if (item.type !== "agent_message" && item.type !== "agentMessage") {
@@ -1971,7 +1823,7 @@ function getCodexAgentMessageText(item) {
   }
   const parts = [];
   for (const block of item.content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    if (!isJsonObject(block)) continue;
     if (typeof block.text === "string" && block.text) {
       parts.push(block.text);
       continue;
@@ -1983,7 +1835,7 @@ function getCodexAgentMessageText(item) {
   return parts.join("");
 }
 function getCodexItemFields(item) {
-  const itemType = item && typeof item.type === "string" && item.type.trim() ? item.type.trim() : "tool";
+  const itemType = trimmedString(item.type) ?? "tool";
   const pathValue = getCodexFieldValue(item, [
     "file_path",
     "path",
@@ -2003,30 +1855,30 @@ function getCodexItemFields(item) {
       "tool",
       "skill"
     ]),
-    pathDetail: pathValue ? shortenPath(String(pathValue)) : ""
+    pathDetail: pathValue ? shortenPath(pathValue) : ""
   };
 }
 function codexFileChangeStep(fields) {
   const files = extractFilePaths(fields.item);
-  return {
-    type: "edit",
-    label: "Editing file...",
-    detail: files[0] ? shortenPath(files[0]) : fields.pathDetail || void 0,
-    path: files[0] || fields.pathValue || void 0,
-    files: files.length > 0 ? files : void 0,
-    status: "active"
-  };
+  return fileStep("edit", "Editing file...", files[0] || fields.pathValue, {
+    files: files.length > 0 ? files : void 0
+  });
 }
 function codexMcpToolStep(fields) {
   const { descriptionValue } = fields;
   const normalizedDescription = descriptionValue.toLowerCase();
   if (normalizedDescription.includes("fetch_file")) {
-    return detailStep("read", "Reading file...", descriptionValue);
+    return {
+      type: "read",
+      label: "Reading file...",
+      detail: descriptionValue || void 0,
+      status: "active"
+    };
   }
   if (normalizedDescription.includes("search") || normalizedDescription.includes("list_repositories") || normalizedDescription.includes("list_mcp_resources")) {
-    return detailStep("search_code", "Searching code...", descriptionValue);
+    return searchStep("code", descriptionValue || void 0);
   }
-  return detailStep("tool", "Using MCP...", descriptionValue);
+  return toolStep("Using MCP...", descriptionValue || void 0);
 }
 var CODEX_ITEM_STEPS = [
   {
@@ -2039,66 +1891,57 @@ var CODEX_ITEM_STEPS = [
   },
   {
     matches: (type) => type.includes("web"),
-    toStep: (f, type) => detailStep(
-      type.includes("search") ? "web_search" : "web_fetch",
-      type.includes("search") ? "Searching web..." : "Fetching URL...",
-      f.queryValue || f.pathDetail
+    toStep: (f, type) => webStep(
+      type.includes("search") ? "search" : "fetch",
+      f.queryValue || f.pathDetail || void 0
     )
   },
   {
     matches: (type) => type.includes("read"),
-    toStep: (f) => pathStep("read", "Reading file...", f.pathDetail, f.pathValue)
+    toStep: (f) => fileStep("read", "Reading file...", f.pathValue)
   },
   {
     matches: (type) => type.includes("grep") || type.includes("search"),
-    toStep: (f, type) => detailStep(
-      type.includes("file") ? "search_files" : "search_code",
-      type.includes("file") ? "Searching files..." : "Searching code...",
-      f.queryValue || f.pathDetail
+    toStep: (f, type) => searchStep(
+      type.includes("file") ? "files" : "code",
+      f.queryValue || f.pathDetail || void 0
     )
   },
   {
     matches: (type) => type.includes("glob") || type.includes("list"),
-    toStep: (f) => detailStep(
-      "search_files",
-      "Searching files...",
-      f.queryValue || f.pathDetail
-    )
+    toStep: (f) => searchStep("files", f.queryValue || f.pathDetail || void 0)
   },
   {
     matches: (type) => type.includes("write") || type.includes("create"),
-    toStep: (f) => pathStep("write", "Creating file...", f.pathDetail, f.pathValue)
+    toStep: (f) => fileStep("write", "Creating file...", f.pathValue)
   },
   {
     matches: (type) => type.includes("edit") || type.includes("patch") || type.includes("apply"),
-    toStep: (f) => pathStep("edit", "Editing file...", f.pathDetail, f.pathValue)
+    toStep: (f) => fileStep("edit", "Editing file...", f.pathValue)
   },
   {
     matches: (type) => type.includes("command") || type.includes("shell") || type.includes("bash") || type.includes("exec"),
-    toStep: (f) => ({
-      type: "bash",
-      label: "Running command...",
-      detail: f.commandValue || f.descriptionValue || void 0,
-      command: f.commandValue ? capCommand(f.commandValue) : void 0,
-      status: "active"
-    })
+    // The row detail is capped like every other provider's bash step.
+    toStep: (f) => bashStep(
+      f.commandValue,
+      "Running command...",
+      f.descriptionValue || void 0
+    )
   },
   {
     matches: (type) => type.includes("agent") || type === "collabtoolcall",
-    toStep: (f) => detailStep("subtask", "Running agent...", f.descriptionValue)
+    toStep: (f) => subtaskStep(f.descriptionValue || void 0)
   }
 ];
 function codexItemToStep(item) {
   const fields = getCodexItemFields(item);
   const normalizedType = fields.itemType.toLowerCase();
-  const itemId = typeof item.id === "string" && item.id.trim() ? item.id.trim() : void 0;
+  const itemId = trimmedString(item.id);
   const rule = CODEX_ITEM_STEPS.find((r) => r.matches(normalizedType));
-  const step = rule ? rule.toStep(fields, normalizedType) : {
-    type: "tool",
-    label: "Using " + fields.itemType + "...",
-    detail: fields.descriptionValue || fields.pathDetail || fields.queryValue || void 0,
-    status: "active"
-  };
+  const step = rule ? rule.toStep(fields, normalizedType) : toolStep(
+    "Using " + fields.itemType + "...",
+    fields.descriptionValue || fields.pathDetail || fields.queryValue || void 0
+  );
   if (itemId) step.toolUseId = itemId;
   return step;
 }
@@ -2264,11 +2107,11 @@ import { readFileSync as readFileSync4, unlinkSync, writeFileSync as writeFileSy
 
 // callback-src/providers/githubToken.ts
 function tokenFromActionResponse(data) {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+  if (!isJsonObject(data)) {
     return null;
   }
   const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
   return typeof value.token === "string" ? value.token : null;
@@ -2352,10 +2195,10 @@ function readClaudeSessionState() {
   if (!existsSync3(CLAUDE_LOCAL_STATE_FILE)) {
     return null;
   }
-  const parsed = tryParseJson(readFileSync2(CLAUDE_LOCAL_STATE_FILE, "utf8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(
+    readFileSync2(CLAUDE_LOCAL_STATE_FILE, "utf8")
+  );
+  if (!parsed) return null;
   const resumeSessionId = typeof parsed.resumeSessionId === "string" ? parsed.resumeSessionId.trim() : "";
   if (!resumeSessionId) {
     return null;
@@ -2433,8 +2276,8 @@ function hydratePersistedClaudeState() {
 function ensureClaudeWorkspaceTrust() {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  const parsed = existsSync3(configPath) ? tryParseJson(readFileSync2(configPath, "utf8")) : null;
-  const config = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? { ...parsed } : {};
+  const parsed = existsSync3(configPath) ? tryParseJsonObject(readFileSync2(configPath, "utf8")) : null;
+  const config = parsed ? { ...parsed } : {};
   const rawProjects = config.projects;
   const projects = rawProjects && typeof rawProjects === "object" && !Array.isArray(rawProjects) ? { ...rawProjects } : {};
   const rawProject = projects[WORK_DIR];
@@ -2663,14 +2506,11 @@ var CLAUDE_WINDOW_LABELS = {
 function readFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
-function readNonEmptyString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function readStatus(value) {
   return value === "allowed" || value === "allowed_warning" || value === "rejected" ? value : void 0;
 }
 function readIsoMs(value) {
-  const text = readNonEmptyString(value);
+  const text = trimmedString(value);
   if (!text) return void 0;
   const ms = Date.parse(text);
   return Number.isFinite(ms) ? ms : void 0;
@@ -2713,9 +2553,9 @@ function labelForWindowKey(key) {
 }
 function mergeClaudeRateLimitEvent(event) {
   const info = event.rate_limit_info;
-  if (typeof info !== "object" || info === null || Array.isArray(info)) return;
+  if (!isJsonObject(info)) return;
   const status = readStatus(info.status);
-  const rawKey = readNonEmptyString(info.rateLimitType);
+  const rawKey = trimmedString(info.rateLimitType);
   if (!status && !rawKey) return;
   const snapshot = ensureSnapshot();
   snapshot.completeness = "partial";
@@ -2762,7 +2602,7 @@ function readClaudeUsageWindows(response) {
     limits.seven_day_overage_included
   );
   for (const entry of limits.model_scoped ?? []) {
-    const name = readNonEmptyString(entry.display_name);
+    const name = trimmedString(entry.display_name);
     if (!name) continue;
     pushUsageWindow(windows, "model_scoped:" + name, entry, \`Weekly (\${name})\`);
   }
@@ -2836,7 +2676,7 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
       return false;
     }
     const snapshot = { completeness: "complete" };
-    const subscriptionType = readNonEmptyString(payload.subscription_type);
+    const subscriptionType = trimmedString(payload.subscription_type);
     if (subscriptionType) snapshot.subscriptionType = subscriptionType;
     snapshot.windows = readClaudeUsageWindows(payload);
     callbackState.usageLimitSnapshot = snapshot;
@@ -2952,14 +2792,11 @@ async function waitForPendingClaudeUsageReport() {
 // callback-src/parse/sdkTaxonomy.ts
 var loggedUnknownKinds = /* @__PURE__ */ new Set();
 var knownBackgroundTaskIds = /* @__PURE__ */ new Set();
-function readString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function readStringArray(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
   for (const item of value) {
-    const s = readString(item);
+    const s = trimmedString(item);
     if (s) out.push(s);
   }
   return out;
@@ -3024,10 +2861,10 @@ function readFileNamesFromPersisted(event) {
   if (!Array.isArray(filesField)) return "";
   const names = [];
   for (const entry of filesField) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    if (!isJsonObject(entry)) {
       continue;
     }
-    const filename = readString(entry.filename);
+    const filename = trimmedString(entry.filename);
     if (filename) names.push(filename);
   }
   return names.join(", ");
@@ -3037,10 +2874,10 @@ function readBackgroundTaskIds(event) {
   if (!Array.isArray(tasksField)) return [];
   const ids = [];
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
+    const taskId = trimmedString(task.task_id);
     if (taskId) ids.push(taskId);
   }
   return ids;
@@ -3050,11 +2887,11 @@ function readBackgroundTaskDescriptions(event) {
   const descriptions = /* @__PURE__ */ new Map();
   if (!Array.isArray(tasksField)) return descriptions;
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
-    const description = readString(task.description);
+    const taskId = trimmedString(task.task_id);
+    const description = trimmedString(task.description);
     if (taskId && description) {
       descriptions.set(taskId, description);
     }
@@ -3079,13 +2916,13 @@ function logUnknownSdkKind(kind) {
   log("unhandled sdk kind: " + kind);
 }
 function parseModelReroute(event) {
-  const subtype = readString(event.subtype);
+  const subtype = trimmedString(event.subtype);
   if (subtype === "model_reroute" || subtype === "model_fallback") {
-    const reason = readString(event.reason) ?? readString(event.message) ?? readString(event.content);
+    const reason = trimmedString(event.reason) ?? trimmedString(event.message) ?? trimmedString(event.content);
     return pushNoticeStep("Model rerouted", reason);
   }
   if (subtype === "informational") {
-    const content = readString(event.content);
+    const content = trimmedString(event.content);
     if (content && (content.toLowerCase().includes("rerouted") || content.toLowerCase().includes("fallback model"))) {
       return pushNoticeStep("Model rerouted", content);
     }
@@ -3109,7 +2946,7 @@ function consumesClaudeSdkTaxonomyMessage(event) {
   return true;
 }
 function parseClaudeSdkTaxonomy(event) {
-  const messageType = readString(event.type);
+  const messageType = trimmedString(event.type);
   if (!messageType) return [];
   if (messageType !== "system" && messageType !== "tool_progress" && messageType !== "tool_use_summary" && messageType !== "auth_status" && messageType !== "rate_limit_event") {
     return [];
@@ -3123,7 +2960,7 @@ function parseClaudeSdkTaxonomy(event) {
   }
   if (messageType === "tool_progress") {
     completeActiveStatusStep();
-    const toolUseId = readString(event.tool_use_id);
+    const toolUseId = trimmedString(event.tool_use_id);
     const elapsed = event.elapsed_time_seconds;
     if (toolUseId && typeof elapsed === "number" && Number.isFinite(elapsed)) {
       const seconds = Math.max(0, Math.floor(elapsed));
@@ -3133,14 +2970,14 @@ function parseClaudeSdkTaxonomy(event) {
   }
   if (messageType === "tool_use_summary") {
     completeActiveStatusStep();
-    const summary = readString(event.summary);
+    const summary = trimmedString(event.summary);
     const ids = readStringArray(event.preceding_tool_use_ids);
     if (summary && ids.length > 0) {
       patchStepsWithSummary(ids, summary);
     }
     return [];
   }
-  const subtype = readString(event.subtype);
+  const subtype = trimmedString(event.subtype);
   if (!subtype) {
     logUnknownSdkKind(\`\${messageType}:?\`);
     return [];
@@ -3176,8 +3013,8 @@ function parseClaudeSdkTaxonomy(event) {
     );
   }
   if (subtype === "hook_started") {
-    const hookId = readString(event.hook_id);
-    const hookName = readString(event.hook_name) ?? "Hook";
+    const hookId = trimmedString(event.hook_id);
+    const hookName = trimmedString(event.hook_name) ?? "Hook";
     if (!hookId) return [];
     return [
       { kind: "mark_last_complete" },
@@ -3194,15 +3031,15 @@ function parseClaudeSdkTaxonomy(event) {
     ];
   }
   if (subtype === "hook_progress") {
-    const hookId = readString(event.hook_id);
-    const output = readString(event.output) ?? readString(event.stdout) ?? readString(event.stderr);
+    const hookId = trimmedString(event.hook_id);
+    const output = trimmedString(event.output) ?? trimmedString(event.stdout) ?? trimmedString(event.stderr);
     if (hookId && output) {
       appendHookDetail(hookId, output);
     }
     return [];
   }
   if (subtype === "hook_response") {
-    const hookId = readString(event.hook_id);
+    const hookId = trimmedString(event.hook_id);
     if (!hookId) return [];
     return [{ kind: "complete_tool", trackingId: hookId }];
   }
@@ -3229,7 +3066,7 @@ function parseClaudeSdkTaxonomy(event) {
   return [];
 }
 function completeStatusOnNonStatusMessage(event) {
-  const messageType = readString(event.type);
+  const messageType = trimmedString(event.type);
   if (messageType === "system" && event.subtype === "status") {
     return;
   }
@@ -3279,7 +3116,7 @@ function reduceTodoState(name, input) {
     const raw = Array.isArray(input.todos) ? input.todos : [];
     callbackState.todoState.length = 0;
     for (const item of raw) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const content = typeof item.content === "string" ? item.content : "";
       if (!content) continue;
       callbackState.todoState.push({ content, status: normalizeTodoStatus(item.status) });
@@ -3514,7 +3351,7 @@ function createSessionStore(config) {
     }
     try {
       const parsed = JSON.parse(readFileSync3(statePath, "utf8"));
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (!isJsonObject(parsed)) {
         return null;
       }
       const value = parsed[config.resumeField];
@@ -4407,10 +4244,8 @@ function applyCanonicalEvents(events) {
   return true;
 }
 function parseStreamEvent(line) {
-  const event = tryParseJson(line);
-  if (!event || typeof event !== "object" || Array.isArray(event)) {
-    return false;
-  }
+  const event = tryParseJsonObject(line);
+  if (!event) return false;
   try {
     completeStatusOnNonStatusMessage(event);
     if (consumesClaudeSdkTaxonomyMessage(event)) {
@@ -5242,13 +5077,6 @@ import {
   writeFileSync as writeFileSync8
 } from "fs";
 import { createHash } from "crypto";
-function parseJsonObject(line) {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
 function writeDoneFile(status, extras) {
   if (callbackState.doneFileWritten) return;
   callbackState.doneFileWritten = true;
@@ -5335,7 +5163,7 @@ function readSyntheticResult(output) {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         found.sawResult = true;
@@ -5415,7 +5243,7 @@ function extractResultEvent(output) {
       const clean = line.trim();
       if (!clean) continue;
       try {
-        const parsed = parseJsonObject(clean);
+        const parsed = tryParseJsonObject(clean);
         if (!parsed) continue;
         if (parsed.type === "item.completed" && parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item) && parsed.item.type === "agent_message") {
           const messageText = getCodexAgentMessageText(parsed.item);
@@ -5457,7 +5285,7 @@ function extractResultEvent(output) {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         const r = parsed.result ?? "";
@@ -5787,10 +5615,8 @@ function processRealtimeStdoutChunk(text) {
   }
 }
 function handleRealtimeStreamLine(line) {
-  const parsed = tryParseJson(line);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return;
-  }
+  const parsed = tryParseJsonObject(line);
+  if (!parsed) return;
   getProviderAdapter(PROVIDER).onStreamLine(line, parsed);
 }
 
@@ -5886,6 +5712,27 @@ function buildCanUseTool() {
 }
 
 // callback-src/providers/attemptResult.ts
+function beginSdkAttempt(name, sessionMode, startupStep) {
+  resetAttemptState();
+  callbackState.activeAttemptStartedAt = Date.now();
+  const step = startupStep();
+  updateThinkingStep(step.label, step.detail);
+  log(
+    name + " started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  );
+}
+function finishSdkAttempt(p) {
+  const code = p.sawResult && !p.resultIsError && !p.timedOutForMaxRuntime && !p.timedOutForNoOutput ? 0 : 1;
+  log(
+    p.name + " finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + p.sawResult + ", resultIsError=" + p.resultIsError + ", timedOutForNoOutput=" + p.timedOutForNoOutput + ", timedOutForMaxRuntime=" + p.timedOutForMaxRuntime + ", outputBytes=" + p.output.length + (p.errorMessage ? ", " + p.errorLabel + "=" + p.errorMessage : "") + ")"
+  );
+  return buildStandardSdkAttemptResult({
+    code,
+    output: p.output,
+    timedOutForNoOutput: p.timedOutForNoOutput,
+    timedOutForMaxRuntime: p.timedOutForMaxRuntime
+  });
+}
 function buildStandardSdkAttemptResult(params) {
   return {
     code: params.code,
@@ -5987,11 +5834,7 @@ function resolvePinnedSdkEntry(pin) {
   return localRoot + pin.entryRelPath;
 }
 function sdkMessageJson(serialized) {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
+  return tryParseJsonObject(serialized);
 }
 async function loadSdk() {
   const mod = await import(resolvePinnedSdkEntry({
@@ -6046,9 +5889,6 @@ function claudeExecutablePath() {
     pinnedVersion: process.env.CLAUDE_CLI_PINNED_VERSION || null,
     fallbackBinPath: process.env.CLAUDE_BIN_PATH || ""
   });
-}
-function readPromptText() {
-  return readFileSync6("/tmp/design-prompt.txt", "utf8");
 }
 function buildSdkOptions(sessionMode) {
   const extraArgs = { settings: settingsJson };
@@ -6129,13 +5969,7 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
   };
 }
 async function runClaudeSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupStep = buildClaudeStartupStep();
-  updateThinkingStep(startupStep.label, startupStep.detail);
-  log(
-    "runClaudeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
   let attemptOutput = "";
   let lastMessageAt = Date.now();
   let timedOutForNoOutput = false;
@@ -6148,7 +5982,7 @@ async function runClaudeSdkAttempt(sessionMode) {
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
   let q = sdk.query({
-    prompt: readPromptText(),
+    prompt: readTurnPrompt(),
     options: buildSdkOptions(effectiveMode)
   });
   const interrupt = async () => {
@@ -6210,7 +6044,7 @@ async function runClaudeSdkAttempt(sessionMode) {
         );
         sawZeroWorkTaskNotification = false;
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode)
         });
         await consumeQuery();
@@ -6226,7 +6060,7 @@ async function runClaudeSdkAttempt(sessionMode) {
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode)
         });
         await consumeQuery();
@@ -6246,15 +6080,15 @@ async function runClaudeSdkAttempt(sessionMode) {
     readUsage: () => readSdkPlanUsage(q),
     error: resultErrorMessage || queryErrorMessage || void 0
   });
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runClaudeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runClaudeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "queryError",
+    errorMessage: queryErrorMessage
   });
 }
 
@@ -6318,7 +6152,7 @@ function readSteers(result) {
   if (!Array.isArray(field)) return [];
   const steers = [];
   for (const item of field) {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+    if (!isJsonObject(item)) {
       continue;
     }
     const { id, text } = item;
@@ -6483,14 +6317,14 @@ function isRootFrame(message) {
 }
 function assistantModel(message) {
   const inner = message.message;
-  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+  if (!isJsonObject(inner)) {
     return void 0;
   }
   return typeof inner.model === "string" ? inner.model : void 0;
 }
 function messageContent(message) {
   const inner = message.message;
-  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+  if (!isJsonObject(inner)) {
     return void 0;
   }
   return inner.content;
@@ -6801,23 +6635,12 @@ function readSyntheticTurnMessageId(result) {
   const messageId = payload.messageId;
   return typeof messageId === "string" ? messageId : null;
 }
-function readParentToolUseId(message) {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-function readStringField2(message, field) {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function recogniseSubagentToolUses(message) {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -6825,7 +6648,7 @@ function recogniseSubagentToolUses(message) {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -6842,7 +6665,7 @@ function recogniseSubagentToolUses(message) {
   }
 }
 function shouldDropSubagentMessage(message) {
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -6852,7 +6675,7 @@ function shouldMintSyntheticTurn(message) {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -6991,7 +6814,7 @@ async function reportHarnessSkillCatalog(cliVersion, query) {
 function noteHarnessInitMessage(message, query) {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField2(message, "claude_code_version");
+  const cliVersion = trimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -7049,7 +6872,7 @@ function handleBackgroundTasksChanged(message) {
   }
   const taskIds = [];
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
     const taskIdField = task.task_id;
@@ -7068,15 +6891,15 @@ function handleSystemTaskMessage(message) {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField2(message, "tool_use_id");
+  const toolUseId = trimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
-    if (readStringField2(message, "task_type") === "local_bash") {
+    if (trimmedString(message.task_type) === "local_bash") {
       return;
     }
     const entry = {
       toolUseId,
-      taskId: readStringField2(message, "task_id"),
-      description: readStringField2(message, "description"),
+      taskId: trimmedString(message.task_id),
+      description: trimmedString(message.description),
       status: "running",
       startedAt: Date.now()
     };
@@ -7088,7 +6911,7 @@ function handleSystemTaskMessage(message) {
     return;
   }
   if ((subtype === "task_updated" || subtype === "task_notification") && toolUseId) {
-    const status = readStringField2(message, "status");
+    const status = trimmedString(message.status);
     const terminal = status === "completed" || status === "failed" || status === "killed" || status === "stopped" || subtype === "task_notification";
     if (terminal) {
       settleSubagent(toolUseId, status ?? "completed");
@@ -8128,7 +7951,6 @@ var Codex = class {
 };
 
 // callback-src/providers/codexSdk.ts
-import { readFileSync as readFileSync7 } from "fs";
 var CODEX_CLI_PACKAGE = "@openai/codex";
 function codexExecutablePath() {
   return resolvePinnedCliBinary({
@@ -8137,10 +7959,6 @@ function codexExecutablePath() {
     pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
     fallbackBinPath: CODEX_BIN_PATH
   });
-}
-function readPromptText2() {
-  const prompt = readFileSync7("/tmp/design-prompt.txt", "utf8");
-  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
 }
 function codexEnvironment() {
   const env = {};
@@ -8170,15 +7988,10 @@ function agentMessageDelta(event, priorTextByItem) {
   return current.startsWith(previous) ? current.slice(previous.length) : current;
 }
 async function runCodexSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Codex SDK...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
-  );
-  log(
-    "runCodexSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runCodexSdkAttempt", sessionMode, () => ({
+    label: "Starting Codex SDK...",
+    detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
+  }));
   let attemptOutput = "";
   let lastEventAt2 = Date.now();
   let timedOutForNoOutput = false;
@@ -8221,7 +8034,7 @@ async function runCodexSdkAttempt(sessionMode) {
     attemptOutput = trimBufferHead(attemptOutput + line);
   };
   try {
-    const streamed = await thread.runStreamed(readPromptText2(), {
+    const streamed = await thread.runStreamed(withSystemPrompt(readTurnPrompt()), {
       signal: abortController.signal
     });
     for await (const event of streamed.events) {
@@ -8257,15 +8070,15 @@ async function runCodexSdkAttempt(sessionMode) {
   if (attemptErrorMessage) {
     recordSdkAttemptFailure(attemptErrorMessage);
   }
-  const code = sawCompletedTurn && !turnFailed && !attemptErrorMessage && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCodexSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawCompletedTurn=" + sawCompletedTurn + ", turnFailed=" + turnFailed + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runCodexSdkAttempt",
+    sawResult: sawCompletedTurn,
+    resultIsError: turnFailed || Boolean(attemptErrorMessage),
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "error",
+    errorMessage: attemptErrorMessage
   });
 }
 
@@ -8344,9 +8157,8 @@ var CodexAppServerClient = class {
     this.child.stdin.write(JSON.stringify(message) + "\\n");
   }
   handleLine(line) {
-    const parsed = tryParseJson(line);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-    const message = parsed;
+    const message = tryParseJsonObject(line);
+    if (!message) return;
     if (typeof message.id === "number" && typeof message.method !== "string") {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -8549,7 +8361,7 @@ async function startTurn(client, turn) {
   }
   startClaimedTurn(turn);
   await materializeTurnAttachments(turn);
-  const text = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + turn.prompt : turn.prompt;
+  const text = withSystemPrompt(turn.prompt);
   activeTurnStartedAt = Date.now();
   lastEventAt = activeTurnStartedAt;
   turnStartUsage = threadTotalUsage;
@@ -8696,12 +8508,12 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
+import { readFileSync as readFileSync8, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
 
 // callback-src/providers/cursorSdk.ts
 import {
   mkdirSync as mkdirSync7,
-  readFileSync as readFileSync8,
+  readFileSync as readFileSync7,
   renameSync as renameSync2,
   statSync as statSync4,
   writeFileSync as writeFileSync10
@@ -8846,9 +8658,6 @@ function preloadCursorSdk() {
   } catch {
   }
 }
-function readPromptText3() {
-  return readFileSync8("/tmp/design-prompt.txt", "utf8");
-}
 function cursorModelCatalogJson(models) {
   if (models.length === 0) return null;
   const valid = models.every(
@@ -8876,9 +8685,9 @@ function readCachedCursorModelResolution() {
     const ageMs = Date.now() - statSync4(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
     if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
     const cached = JSON.parse(
-      readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
+      readFileSync7(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
     );
-    if (!cached || typeof cached !== "object" || Array.isArray(cached)) {
+    if (!isJsonObject(cached)) {
       return null;
     }
     const selection = cached.selection;
@@ -8887,7 +8696,7 @@ function readCachedCursorModelResolution() {
     }
     const params = [];
     for (const param of Array.isArray(selection.params) ? selection.params : []) {
-      if (!param || typeof param !== "object" || Array.isArray(param)) continue;
+      if (!isJsonObject(param)) continue;
       if (typeof param.id !== "string" || typeof param.value !== "string") {
         continue;
       }
@@ -9121,12 +8930,10 @@ function readUsageTokens(value) {
   };
 }
 async function runCursorSdkAttempt(sessionMode, overrides = {}) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupActivity = cursorAgentStartupActivity(sessionMode);
-  updateThinkingStep(startupActivity.label, startupActivity.detail);
-  log(
-    "runCursorSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  beginSdkAttempt(
+    "runCursorSdkAttempt",
+    sessionMode,
+    () => cursorAgentStartupActivity(sessionMode)
   );
   let attemptOutput = "";
   let lastMessageAt = Date.now();
@@ -9246,8 +9053,9 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   } else {
     agent = await createFreshAgent();
   }
-  const promptText = overrides.promptText ?? readPromptText3();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
+  const combinedPrompt = withSystemPrompt(
+    overrides.promptText ?? readTurnPrompt()
+  );
   const healthTimer = setInterval(() => {
     const now = Date.now();
     if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
@@ -9473,15 +9281,15 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     } catch {
     }
   }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCursorSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runCursorSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "runError",
+    errorMessage: attemptErrorMessage
   });
 }
 function cursorAgentStartupActivity(sessionMode) {
@@ -9523,7 +9331,7 @@ function readCursorTurnWorkerClaim() {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
   }
-  const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
+  const prompt = readFileSync8(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
   if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
@@ -9864,7 +9672,7 @@ import {
   existsSync as existsSync7,
   mkdirSync as mkdirSync8,
   readdirSync as readdirSync4,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync9,
   rmSync,
   writeFileSync as writeFileSync12
 } from "fs";
@@ -9875,15 +9683,13 @@ var EXCLUDE_END = "# <<< eva-system-skills <<<";
 var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}\$/;
 var SKILL_ROOTS = [".agents/skills", ".claude/skills"];
 function parseSystemSkillsFile(raw) {
-  const parsed = tryParseJson(raw);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(raw);
+  if (!parsed) return null;
   const skills = parsed.skills;
   if (!Array.isArray(skills)) return null;
   const result = [];
   for (const entry of skills) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    if (!isJsonObject(entry)) {
       continue;
     }
     const name = entry.name;
@@ -9928,7 +9734,7 @@ function isEvaStub(directory) {
   const skillFile = \`\${directory}/SKILL.md\`;
   if (!existsSync7(skillFile)) return false;
   try {
-    return readFileSync10(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync9(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
@@ -9970,7 +9776,7 @@ function updateGitExclude(names) {
   if (!existsSync7(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync7(excludeFile) ? readFileSync10(excludeFile, "utf8") : "";
+  const existing = existsSync7(excludeFile) ? readFileSync9(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
@@ -9999,7 +9805,7 @@ function materializeSystemSkills() {
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync10(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync9(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
@@ -10011,9 +9817,6 @@ function materializeSystemSkills() {
   }
 }
 
-// callback-src/providers/opencodeSdk.ts
-import { readFileSync as readFileSync12 } from "fs";
-
 // callback-src/providers/opencodeServer.ts
 import { spawn as spawn4 } from "child_process";
 import {
@@ -10021,7 +9824,7 @@ import {
   existsSync as existsSync8,
   mkdirSync as mkdirSync9,
   openSync,
-  readFileSync as readFileSync11,
+  readFileSync as readFileSync10,
   rmSync as rmSync2,
   statSync as statSync5,
   writeFileSync as writeFileSync13
@@ -10038,7 +9841,7 @@ var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
   try {
-    const contents = readFileSync11(SERVER_LOG_FILE, "utf8");
+    const contents = readFileSync10(SERVER_LOG_FILE, "utf8");
     return contents.length > maxBytes ? contents.slice(-maxBytes) : contents;
   } catch {
     return "";
@@ -10056,10 +9859,8 @@ async function probeHealth(timeoutMs = HEALTH_PROBE_TIMEOUT_MS) {
 }
 function readRecordedPid() {
   try {
-    const parsed = tryParseJson(readFileSync11(SERVER_STATE_FILE, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return 0;
-    }
+    const parsed = tryParseJsonObject(readFileSync10(SERVER_STATE_FILE, "utf8"));
+    if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
     return 0;
@@ -10070,7 +9871,7 @@ function killRecordedServer() {
   if (!pid) return;
   let cmdline = "";
   try {
-    cmdline = readFileSync11("/proc/" + String(pid) + "/cmdline", "utf8");
+    cmdline = readFileSync10("/proc/" + String(pid) + "/cmdline", "utf8");
   } catch {
     return;
   }
@@ -10205,9 +10006,6 @@ async function loadOpencodeSdk() {
   }));
   return mod;
 }
-function readPromptText4() {
-  return readFileSync12("/tmp/design-prompt.txt", "utf8");
-}
 function splitOpencodeModel(raw) {
   const separator = raw.indexOf("/");
   if (separator <= 0 || separator === raw.length - 1) {
@@ -10329,15 +10127,10 @@ function requireData(result, what) {
   return result.data;
 }
 async function runOpencodeSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Opencode agent...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
-  );
-  log(
-    "runOpencodeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runOpencodeSdkAttempt", sessionMode, () => ({
+    label: "Starting Opencode agent...",
+    detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
+  }));
   let attemptOutput = "";
   let lastEventAt2 = Date.now();
   let watchdogClock = Date.now();
@@ -10395,8 +10188,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
   } else {
     sessionId = await createFreshSession();
   }
-  const promptText = readPromptText4();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
+  const combinedPrompt = withSystemPrompt(readTurnPrompt());
   const model = splitOpencodeModel(normalizedOpencodeModel);
   const emitState = createPartEmitState();
   const streamAbort = new AbortController();
@@ -10576,15 +10368,15 @@ async function runOpencodeSdkAttempt(sessionMode) {
     markTerminal();
     streamAbort.abort();
   }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runOpencodeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runOpencodeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "turnError",
+    errorMessage: attemptErrorMessage
   });
 }
 
