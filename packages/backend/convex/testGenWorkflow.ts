@@ -24,6 +24,7 @@ import {
 import { buildPrBody } from "./prBody";
 import { buildTestGenBranchName } from "./_git/branchNames";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { errorMessage } from "@vvedantb/server";
 
 const testGenCompleteEvent = defineEvent({
   name: "testGenComplete",
@@ -166,7 +167,7 @@ export const testGenWorkflow = workflow.define({
           }
         } catch (error) {
           workflowSuccess = false;
-          workflowError = `Test generation completed locally, but Eva could not publish the branch or create a PR. ${error instanceof Error ? error.message : String(error)}`;
+          workflowError = `Test generation completed locally, but Eva could not publish the branch or create a PR. ${errorMessage(error)}`;
         }
       }
 

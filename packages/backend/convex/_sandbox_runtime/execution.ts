@@ -127,6 +127,7 @@ import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { createHmac } from "node:crypto";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
+import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
 
 /**
  * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
@@ -1035,7 +1036,7 @@ async function buildPreviewUrl(
           publicKeyJwk: previewPublicJwk,
           sandboxId: args.sandboxId,
           repoId: args.repoId,
-          webAppUrl: process.env.WEB_APP_URL ?? "",
+          webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort ?? args.port,
