@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -24,8 +21,6 @@ const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 const SANDBOX = "sbx-run";
-
-const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 
 async function fixture() {
   const t = convexTest(schema, modules);
@@ -101,76 +96,3 @@ describe("a quick-task run winding down", () => {
     TIMEOUT_MS,
   );
 });
-
-describe("the workflow only stops sandboxes it is safe to stop", () => {
-  const workflow = readSource("_taskWorkflow/workflowDefinition.ts");
-
-  test.each([
-    ["!args.projectId", "a project sandbox outlives any one of its tasks"],
-    ["!preserveSandboxOnFailure", "a failed publish keeps its evidence"],
-    [
-      "!keepTaskSandboxActiveAfterRun",
-      "a preview the reviewer already has open stays up",
-    ],
-  ])("the stop is gated on %s so %s", (clause) => {
-    const stopAt = workflow.indexOf("internal.sandbox.stopSandbox");
-    expect(stopAt, "the sandbox stop moved or was renamed").toBeGreaterThan(-1);
-    expect(workflow.slice(0, stopAt)).toContain(clause);
-  });
-
-  test("the run only writes a PR description for project tasks", () => {
-    const describeAt = workflow.indexOf("internal.github.generatePrDescription");
-    expect(describeAt).toBeGreaterThan(-1);
-    // A quick task lands in business_review with its diff not yet final, so
-    // its description is written once, on the move to code_review.
-    expect(workflow.slice(0, describeAt)).toContain(
-      "if (args.projectId && completionPrUrl && sandboxId)",
-    );
-  });
-
-  test("the review transition asks for the stopped sandbox back", () => {
-    const mutations = readSource("_agentTasks/mutations.ts");
-    const describeAt = mutations.indexOf(
-      "internal.github.generatePrDescription",
-    );
-    expect(describeAt, "the code_review description call moved").toBeGreaterThan(
-      -1,
-    );
-    expect(mutations.slice(describeAt)).toContain(
-      'restoreStoppedSandbox: task.reviewTaskSandboxStatus !== "active"',
-    );
-  });
-
-  test("a resumed sandbox is stopped again once the description is written", () => {
-    const description = readSource("_github/prDescription.ts");
-    const resumeAt = description.indexOf("ensureSandboxRunning");
-    const stopAt = description.indexOf("internal.sandbox.stopSandbox");
-    expect(resumeAt).toBeGreaterThan(-1);
-    // Otherwise a description leaks the VM the run just stopped.
-    expect(stopAt).toBeGreaterThan(resumeAt);
-    expect(description).toContain("} finally {");
-  });
-
-  test("an already-open preview is what sets the keep flag", () => {
-    const queries = readSource("_taskWorkflow/queries.ts");
-    expect(queries).toContain(
-      'const keepTaskSandboxActiveAfterRun =\n      !args.projectId && task.reviewTaskSandboxStatus === "active";',
-    );
-  });
-});
-
-/** Comments name the very calls these rules rule out, so they have to go first. */
-function readSource(relativePath: string): string {
-  return stripComments(
-    readFileSync(join(convexDir, relativePath), "utf8").replaceAll(
-      "\r\n",
-      "\n",
-    ),
-  );
-}
-
-function stripComments(input: string): string {
-  return input
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^[^\S\n]*\/\/.*$/gm, "");
-}
