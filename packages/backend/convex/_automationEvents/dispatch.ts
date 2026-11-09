@@ -29,6 +29,7 @@ import {
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
 import { isTerminalRunStatus } from "../_automations/runStatus";
+import { chatEntityKindValidator } from "../_validators/enums";
 
 /** Every run an automation made for one PR or issue. */
 async function runsForTarget(
@@ -262,7 +263,7 @@ export const settleEventRun = internalMutation({
 });
 
 const prChatValidator = v.object({
-  kind: v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
 });

@@ -11,7 +11,7 @@ import {
 } from "./workflowManager";
 import { authMutation, getDocWithAccess } from "./functions";
 import {
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
 } from "./validators";
@@ -342,12 +342,7 @@ export const savePrUrl = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     docId: v.id("docs"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
