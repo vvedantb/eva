@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
   resolveNewTaskBaseBranch,
+  resolveProjectBaseBranch,
   resolveTaskWorkflowBaseBranch,
 } from "../convex/_taskWorkflow/resolveBaseBranch";
 import { resolveSessionBaseBranch } from "../convex/_sessions/baseBranch";
@@ -81,6 +82,21 @@ test("resolveSessionBaseBranch falls back to repo default then constant", () => 
     ),
   ).toBe("staging");
   expect(resolveSessionBaseBranch({ baseBranch: "  " }, null)).toBe(
+    FALLBACK_GIT_BASE_BRANCH,
+  );
+});
+
+test("resolveProjectBaseBranch treats a blank project base as missing", () => {
+  expect(
+    resolveProjectBaseBranch(
+      { baseBranch: "release/x" },
+      { defaultBaseBranch: "main" },
+    ),
+  ).toBe("release/x");
+  expect(
+    resolveProjectBaseBranch({ baseBranch: "  " }, { defaultBaseBranch: "main" }),
+  ).toBe("main");
+  expect(resolveProjectBaseBranch({ baseBranch: "" }, null)).toBe(
     FALLBACK_GIT_BASE_BRANCH,
   );
 });

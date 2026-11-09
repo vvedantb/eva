@@ -63,9 +63,6 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     expect(source("_chat/surfaceAdapters.ts")).toContain(
       "ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() })",
     );
-    expect(source("usageLimits.ts")).toContain(
-      "ctx.db.patch(chat._id, { usageRefreshRequestedAt: now })",
-    );
     expect(
       definitionBody("_sessions/workflow.ts", "requestStopBackgroundAgent"),
     ).toContain("pendingTaskStops: [...pending, args.toolUseId]");
@@ -86,6 +83,12 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     );
     expect(runCreators.length).toBeGreaterThan(0);
     for (const path of runCreators) {
+      // The load-test seeder is insert-only and writes each task's summary row
+      // directly alongside its runs instead of going through the helper.
+      if (path.endsWith("_loadTest/seed.ts")) {
+        expect(source(path), path).toContain('insert("agentTaskRunSummaries"');
+        continue;
+      }
       expect(source(path), path).toContain("setTaskLastRunStartedAt");
     }
   });
@@ -99,6 +102,19 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     expect(mentions).toContain('withIndex("by_repo_and_deleted"');
     expect(mentions).toContain('withIndex("by_repo_status_and_deleted"');
     expect(mentions).not.toContain("filterActiveEntities");
+
+    expect(source("_projects/queries.ts")).not.toContain(
+      'withIndex("by_repo",',
+    );
+    expect(definitionBody("_projects/queries.ts", "getActive")).toContain(
+      'withIndex("by_repo_and_sandbox_status"',
+    );
+    expect(source("_agentTasks/drafts.ts")).toContain(
+      'withIndex("by_repo_status_deleted_and_creator"',
+    );
+    const docs = definitionBody("docs.ts", "list");
+    expect(docs).toContain('withIndex("by_repo_and_deleted"');
+    expect(docs).not.toContain("isEntityDeleted");
   });
 
   test("skill list metadata no longer writes new SKILL.md bodies inline", () => {

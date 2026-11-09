@@ -16,13 +16,11 @@ test("session lists derive execution from open Turns with a versioned rollout br
   // leaf now, so the MCP entity tools answer "is it running" the same way the
   // sidebar does instead of keying off `activeWorkflowId` on their own.
   expect(queries).toContain("sessionIsExecuting(session, openSessionIds)");
-  // Called directly, or handed to the per-repo helper that also covers linked
-  // sessions (#916, #964); either way it reads the open-Turn set from the
-  // database for one repo at a time.
-  expect(queries).toMatch(
-    /openChatEntityIdsForRepo\(\s*(?:ctx\.)?db,|turnIdsIncludingLinked\(\s*db,\s*repoId,\s*linked,\s*openChatEntityIdsForRepo,?\s*\)/,
-  );
-  expect(queries).toContain("idsForRepo(db, id)");
+  // The repo and the repos of linked sessions (#916, #964) each get one
+  // open-Turn read, shared by the open and awaiting-answer flags.
+  expect(queries).toContain("chatTurnFlagsForRepos(db, [");
+  expect(queries).toContain("...linked.map((row) => row.session.repoId)");
+  expect(projection).toContain("openChatTurnsForRepo(db, repoId)");
   expect(projection).toContain('.withIndex("by_repo_open"');
   expect(projection).toContain('q.eq("repoId", repoId).eq("open", true)');
   expect(projection).toContain("isLegacySessionExecuting(session)");

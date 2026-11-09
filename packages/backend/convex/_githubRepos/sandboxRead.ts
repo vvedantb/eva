@@ -1,7 +1,7 @@
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { userCanAccessRepo } from "../functions";
-import { gatherAccessibleRepos } from "./helpers";
+import { findReposByOwnerAndName, gatherAccessibleRepos } from "./helpers";
 
 /**
  * A GitHub repository a sandbox may mint a sibling (contents read/write) token
@@ -45,14 +45,7 @@ async function collectGroupRows(
     pairs.set(`${row.owner}/${row.name}`, { owner: row.owner, name: row.name });
   }
   const siblingGroups = await Promise.all(
-    [...pairs.values()].map(({ owner, name }) =>
-      db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", owner).eq("name", name),
-        )
-        .collect(),
-    ),
+    [...pairs.values()].map((pair) => findReposByOwnerAndName(db, pair)),
   );
   for (const sibling of siblingGroups.flat()) {
     byId.set(String(sibling._id), sibling);

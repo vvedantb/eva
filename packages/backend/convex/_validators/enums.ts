@@ -416,3 +416,16 @@ export const notificationUrgencyValidator = v.union(
   v.literal("normal"),
   v.literal("high"),
 );
+
+/** The chat surface a sandbox MCP token or activity row names. */
+export const chatEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+export type ChatEntityKind = Infer<typeof chatEntityKindValidator>;
+
+export const presentationStatusValidator = v.union(
+  v.literal("live"),
+  v.literal("ended"),
+);
