@@ -405,20 +405,6 @@ export const update = authMutation({
   },
 });
 
-/** Updates the summary bullet points on a session. */
-export const updateSummary = authMutation({
-  args: {
-    id: v.id("sessions"),
-    summary: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { summary: args.summary });
-    return null;
-  },
-});
-
 /**
  * Archives a session: sandbox to cold storage, every open/draft PR it holds
  * closed (merged PRs are left alone), row flagged so the active list drops it.
@@ -496,35 +482,6 @@ export const updatePlanContent = authMutation({
       planContent: args.planContent,
       updatedAt: Date.now(),
     });
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the most recent message in a chat. */
-export const updateLastMessage = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (!last) return null;
-    const patch: { content?: string; activityLog?: string } = {};
-    if (args.content !== undefined) patch.content = args.content;
-    if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
-    await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(chat._id, { updatedAt: Date.now() });
     return null;
   },
 });

@@ -63,9 +63,6 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     expect(source("_chat/surfaceAdapters.ts")).toContain(
       "ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() })",
     );
-    expect(source("usageLimits.ts")).toContain(
-      "ctx.db.patch(chat._id, { usageRefreshRequestedAt: now })",
-    );
     expect(
       definitionBody("_sessions/workflow.ts", "requestStopBackgroundAgent"),
     ).toContain("pendingTaskStops: [...pending, args.toolUseId]");

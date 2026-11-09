@@ -62,11 +62,8 @@ describe("a superseded start gives up instead of running on the live VM", () => 
   });
 });
 
-const START_ACTIONS = [
-  "startSessionSandbox",
-  "startTaskPreviewSandbox",
-  "startProjectPreviewSandbox",
-] as const;
+// Task and project preview starts share `runPreviewStart`.
+const START_ACTIONS = ["startSessionSandbox", "runPreviewStart"] as const;
 
 describe("a superseded start leaves the VM to the newer start", () => {
   test.each(START_ACTIONS)(

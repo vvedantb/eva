@@ -71,15 +71,6 @@ function sanitizeBuildForReturn(build: Doc<"snapshotBuilds">) {
   };
 }
 
-/**
- * Provider for display: persisted on the build when possible. Legacy rows and
- * builds still running infer from log markers (env vars are encrypted and
- * cannot be read in query handlers).
- */
-function resolveBuildProvider(_build: Doc<"snapshotBuilds">): "vercel" {
-  return "vercel";
-}
-
 /** Persists the sandbox provider at workflow start (requires action to decrypt env). */
 export const setBuildProvider = internalMutation({
   args: {
@@ -112,7 +103,7 @@ export const listBuilds = authQuery({
       .take(20);
     return builds.map((build) => ({
       ...sanitizeBuildForReturn(build),
-      provider: resolveBuildProvider(build),
+      provider: build.provider ?? "vercel",
     }));
   },
 });
@@ -131,19 +122,8 @@ export const getBuild = authQuery({
     await getRepoWithAccess(ctx.db, config.repoId, ctx.userId);
     return {
       ...sanitizeBuildForReturn(build),
-      provider: resolveBuildProvider(build),
+      provider: build.provider ?? "vercel",
     };
-  },
-});
-
-/** Returns just the build status, used by the safety-net poller to avoid double-completing. */
-export const getBuildStatus = internalQuery({
-  args: { buildId: v.id("snapshotBuilds") },
-  returns: v.union(snapshotBuildStatusValidator, v.null()),
-  handler: async (ctx, args) => {
-    const build = await ctx.db.get(args.buildId);
-    if (!build) return null;
-    return build.status;
   },
 });
 
@@ -155,7 +135,6 @@ export const triggerScheduledBuild = internalMutation({
     // the build as manual so completeBuild does not enqueue cron retries.
     disableRetries: v.optional(v.boolean()),
     forceImageRebuild: v.optional(v.boolean()),
-    forceBaseSeed: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -190,7 +169,6 @@ export const triggerScheduledBuild = internalMutation({
         buildId,
         repoSnapshotId: args.repoSnapshotId,
         forceImageRebuild: args.forceImageRebuild,
-        forceBaseSeed: args.forceBaseSeed,
       },
     );
     await ctx.db.patch(buildId, { workflowId });

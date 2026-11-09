@@ -20,16 +20,13 @@ export {
 } from "./_sandbox_runtime/bulkSnapshotRetention";
 
 export {
-  runSandboxCommand,
   restoreSeededRuntimeState,
   runStartupCommands,
   startupCommandsMarkerExists,
   runBackgroundCommands,
   watchConvexReadiness,
-  runStopCommands,
   getPreviewUrl,
   previewUrlForAuthorizedSandbox,
-  prepareSandbox,
   createOrResumeSandbox,
   fetchBaseBranch,
   checkoutBaseBranch,

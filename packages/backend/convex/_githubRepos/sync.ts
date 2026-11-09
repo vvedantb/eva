@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
 import { hasRepoReferences, normalizePath } from "../repoUtils";
+import { findReposByOwnerAndName } from "./helpers";
 
 /** Inserts or updates a GitHub repo entry, matching by GitHub ID or owner/name. */
 export const upsert = internalMutation({
@@ -34,12 +35,7 @@ export const upsert = internalMutation({
     }
 
     if (!existing) {
-      const byOwnerName = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", args.owner).eq("name", args.name),
-        )
-        .collect();
+      const byOwnerName = await findReposByOwnerAndName(ctx.db, args);
       existing = byOwnerName.find(matchesRoot);
     }
 
@@ -129,12 +125,7 @@ export const cleanupStaleSubApps = internalMutation({
           .filter((p): p is string => p !== undefined),
       );
 
-      const rows = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", entry.owner).eq("name", entry.name),
-        )
-        .collect();
+      const rows = await findReposByOwnerAndName(ctx.db, entry);
 
       const subAppRows = rows.filter((r) => r.rootDirectory !== undefined);
 
@@ -170,12 +161,7 @@ export const cleanupMonorepoRoots = internalMutation({
     let deletedCount = 0;
 
     for (const entry of args.monorepos) {
-      const rows = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", entry.owner).eq("name", entry.name),
-        )
-        .collect();
+      const rows = await findReposByOwnerAndName(ctx.db, entry);
 
       const rootRow = rows.find((r) => r.rootDirectory === undefined);
       if (!rootRow) continue;

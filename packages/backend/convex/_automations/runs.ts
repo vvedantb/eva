@@ -16,7 +16,7 @@ import {
   automationFindingValidator,
   findingTriageValidator,
   runStatusValidator,
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
@@ -343,12 +343,7 @@ export const handleCompletion = authMutation({
   args: {
     automationRunId: v.id("automationRuns"),
     runId: v.optional(v.string()),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
