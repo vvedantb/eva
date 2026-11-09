@@ -9,6 +9,7 @@ import {
 } from "./_envVars/encryptedEntries";
 import { aiProviderValidator } from "./validators";
 import type { Id } from "./_generated/dataModel";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 const credentialInputValidator = v.object({
   key: v.string(),
@@ -30,6 +31,7 @@ export const upsert = authAction({
   },
   returns: v.id("userProviderAccounts"),
   handler: async (ctx, args): Promise<Id<"userProviderAccounts">> => {
+    await rejectSandboxCaller(ctx);
     const { userId } = ctx;
     const user = await ctx.runQuery(internal.users.getDisplayNameInternal, {
       userId,
@@ -70,6 +72,7 @@ export const revealValue = authAction({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args): Promise<string | null> => {
+    await rejectSandboxCaller(ctx);
     const { userId } = ctx;
     const account = await ctx.runQuery(
       internal.userProviderAccounts.getByIdInternal,

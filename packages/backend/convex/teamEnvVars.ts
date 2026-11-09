@@ -13,6 +13,7 @@ import {
   envVarEntryValidator,
   maskedEnvVarEntryValidator,
 } from "./_validators/shapes";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Lists team env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
@@ -90,6 +91,7 @@ export const removeVar = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) {
       throw new Error("Not a team member");
     }
@@ -113,6 +115,7 @@ export const toggleSandboxExclude = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) {
       throw new Error("Not a team member");
     }

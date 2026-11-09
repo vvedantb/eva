@@ -22,6 +22,7 @@ import {
   PR_WATCH_TOOL_NAMES,
 } from "./tools";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
+import { EVA_MCP_CLAIM } from "../_auth/sandboxIdentity";
 import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
@@ -241,7 +242,9 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");
 
-  const jwt = await new SignJWT({ sub: clerkUserId })
+  // EVA_MCP_CLAIM tells this token apart from the VM's CONVEX_TOKEN, which has
+  // the same issuer and audience (see _auth/sandboxIdentity.ts).
+  const jwt = await new SignJWT({ sub: clerkUserId, [EVA_MCP_CLAIM]: true })
     .setProtectedHeader({ alg: "ES256", kid })
     .setIssuer(issuer)
     .setAudience("convex")

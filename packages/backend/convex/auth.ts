@@ -14,6 +14,7 @@ import { authQuery, authMutation } from "./functions";
 import { getCurrentUserId } from "./_auth/currentUser";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import type { ExperimentalFlagKey } from "./_auth/experimentalFlags";
+import type { Doc } from "./_generated/dataModel";
 
 /** Returns the Clerk ID for a given user, or null if the user doesn't exist. */
 export const getUserClerkId = internalQuery({
@@ -63,6 +64,14 @@ export const me = authQuery({
   },
 });
 
+type ProfileField = "email" | "firstName" | "lastName" | "fullName";
+const PROFILE_FIELDS: ReadonlyArray<ProfileField> = [
+  "email",
+  "firstName",
+  "lastName",
+  "fullName",
+];
+
 /**
  * Resolves the current Clerk identity to a user record, creating one only as a
  * last resort. Lookup order: Clerk ID, then email (rebinding that record's
@@ -87,12 +96,18 @@ export const ensureUserExists = mutation({
       throw new Error("Clerk user ID is required");
     }
 
-    const firstName =
-      typeof identity.firstName === "string" ? identity.firstName : undefined;
-    const lastName =
-      typeof identity.lastName === "string" ? identity.lastName : undefined;
-    const fullName =
-      typeof identity.name === "string" ? identity.name : undefined;
+    // Only the claims the token carries. Sandbox VM and MCP tokens hold `sub`
+    // alone, so an absent claim must never overwrite a stored email or name.
+    const profile: Partial<Pick<Doc<"users">, ProfileField>> = {
+      ...(email ? { email } : {}),
+      ...(typeof identity.firstName === "string"
+        ? { firstName: identity.firstName }
+        : {}),
+      ...(typeof identity.lastName === "string"
+        ? { lastName: identity.lastName }
+        : {}),
+      ...(typeof identity.name === "string" ? { fullName: identity.name } : {}),
+    };
 
     const existingUser = await ctx.db
       .query("users")
@@ -100,19 +115,13 @@ export const ensureUserExists = mutation({
       .first();
 
     if (existingUser) {
-      const needsUpdate =
-        existingUser.email !== (email || undefined) ||
-        existingUser.firstName !== firstName ||
-        existingUser.lastName !== lastName ||
-        existingUser.fullName !== fullName;
-
+      const needsUpdate = PROFILE_FIELDS.some(
+        (field) =>
+          profile[field] !== undefined &&
+          profile[field] !== existingUser[field],
+      );
       if (needsUpdate) {
-        await ctx.db.patch(existingUser._id, {
-          email: email || undefined,
-          firstName,
-          lastName,
-          fullName,
-        });
+        await ctx.db.patch(existingUser._id, profile);
       }
 
       return {
@@ -143,10 +152,8 @@ export const ensureUserExists = mutation({
         );
 
         await ctx.db.patch(userWithSameEmail._id, {
+          ...profile,
           clerkId: clerkUserId,
-          firstName,
-          lastName,
-          fullName,
         });
 
         return {
@@ -157,11 +164,8 @@ export const ensureUserExists = mutation({
     }
 
     const userId = await ctx.db.insert("users", {
+      ...profile,
       clerkId: clerkUserId,
-      email: email || undefined,
-      firstName,
-      lastName,
-      fullName,
     });
 
     return {
