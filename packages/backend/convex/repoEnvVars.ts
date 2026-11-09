@@ -9,17 +9,15 @@ import {
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "./_envVars/documentStore";
+import {
+  envVarEntryValidator,
+  maskedEnvVarEntryValidator,
+} from "./_validators/shapes";
 
 /** Lists repo env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
   args: { repoId: v.id("githubRepos") },
-  returns: v.array(
-    v.object({
-      key: v.string(),
-      value: v.string(),
-      sandboxExclude: v.boolean(),
-    }),
-  ),
+  returns: v.array(maskedEnvVarEntryValidator),
   handler: async (ctx, args) => {
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findRepoEnvVarDoc(ctx.db, args.repoId);
@@ -31,13 +29,7 @@ export const list = authQuery({
 /** Returns all repo env vars with raw encrypted values (internal use only). */
 export const getAllInternal = internalQuery({
   args: { repoId: v.id("githubRepos") },
-  returns: v.array(
-    v.object({
-      key: v.string(),
-      value: v.string(),
-      sandboxExclude: v.optional(v.boolean()),
-    }),
-  ),
+  returns: v.array(envVarEntryValidator),
   handler: async (ctx, args) => {
     const doc = await findRepoEnvVarDoc(ctx.db, args.repoId);
     if (!doc) return [];

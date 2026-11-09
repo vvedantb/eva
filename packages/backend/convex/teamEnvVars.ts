@@ -9,17 +9,15 @@ import {
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "./_envVars/documentStore";
+import {
+  envVarEntryValidator,
+  maskedEnvVarEntryValidator,
+} from "./_validators/shapes";
 
 /** Lists team env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
   args: { teamId: v.id("teams") },
-  returns: v.array(
-    v.object({
-      key: v.string(),
-      value: v.string(),
-      sandboxExclude: v.boolean(),
-    }),
-  ),
+  returns: v.array(maskedEnvVarEntryValidator),
   handler: async (ctx, args) => {
     if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
 
@@ -33,13 +31,7 @@ export const list = authQuery({
 /** Returns all team env vars with raw encrypted values (internal use only). */
 export const getAllInternal = internalQuery({
   args: { teamId: v.id("teams") },
-  returns: v.array(
-    v.object({
-      key: v.string(),
-      value: v.string(),
-      sandboxExclude: v.optional(v.boolean()),
-    }),
-  ),
+  returns: v.array(envVarEntryValidator),
   handler: async (ctx, args) => {
     const doc = await findTeamEnvVarDoc(ctx.db, args.teamId);
     if (!doc) return [];

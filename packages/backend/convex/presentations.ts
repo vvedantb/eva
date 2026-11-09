@@ -7,6 +7,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { presentationStatusValidator } from "./_validators/enums";
 
 /**
  * Live sharing for the `/slides` deck — "follow the presenter" (Teams-style),
@@ -118,7 +119,7 @@ export const getSession = query({
   returns: v.union(
     v.object({
       slide: v.number(),
-      status: v.union(v.literal("live"), v.literal("ended")),
+      status: presentationStatusValidator,
     }),
     v.null(),
   ),
