@@ -131,6 +131,24 @@ export async function snapshotStreamingActivityToLog(
   }
 }
 
+/**
+ * Clears a task run's streaming rows (run stream and task stream), optionally
+ * snapshotting the run stream into its activity log first.
+ */
+export async function clearTaskRunStreaming(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+  runId: Id<"agentRuns">,
+  opts?: { snapshot?: boolean },
+): Promise<void> {
+  const entityId = getTaskRunStreamingEntityId(runId);
+  if (opts?.snapshot) {
+    await snapshotStreamingActivityToLog(ctx, entityId, runId);
+  }
+  await clearStreamingActivity(ctx, entityId);
+  await clearStreamingActivity(ctx, String(taskId));
+}
+
 /** Builds a human-readable summary string for a completed run result. */
 export function buildRunResultSummary(
   success: boolean,
@@ -200,9 +218,8 @@ export async function finalizeRunStatus(
     entityId: String(run.taskId),
   });
 
-  // Single terminal-status choke point for a run, and it is guarded above
-  // against re-finalizing — so a watched task's master is woken exactly once
-  // whether the run ended via finalizeRunStreamingPhase or completeRun.
+  // Single terminal-status choke point for a run, guarded above against
+  // re-finalizing, so a watched task's master is woken exactly once.
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,
