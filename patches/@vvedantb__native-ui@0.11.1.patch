@@ -1,0 +1,21 @@
+diff --git a/src/auth/totp.ts b/src/auth/totp.ts
+index 90593c66352ee6035ea7c83a4394782ed67ce75f..a12cd6c99cc9827902a17986bbfb4294e2599047 100644
+--- a/src/auth/totp.ts
++++ b/src/auth/totp.ts
+@@ -173,11 +173,11 @@ export type FirstFactor = {
+ /** The part of the sign-in resource that a first-factor code needs. Tests pass a mock. */
+ export type FirstFactorSignIn = {
+   supportedFirstFactors?: FirstFactor[] | null;
+-  prepareFirstFactor?(params: {
+-    strategy: FirstFactorStrategy;
+-    phoneNumberId?: string;
+-    emailAddressId?: string;
+-  }): Promise<unknown>;
++  prepareFirstFactor?(
++    params:
++      | { strategy: "email_code"; emailAddressId: string; phoneNumberId?: string }
++      | { strategy: "phone_code"; phoneNumberId: string; emailAddressId?: string },
++  ): Promise<unknown>;
+   attemptFirstFactor(params: { strategy: FirstFactorStrategy; code: string }): Promise<AttemptResult>;
+ };
+ 
