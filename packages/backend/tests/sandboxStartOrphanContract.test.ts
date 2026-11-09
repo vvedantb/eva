@@ -7,6 +7,7 @@ const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
 const sessions = readSource("_sandbox_runtime/sessions.ts");
 
 const CREATE = "createSandboxAndPrepareRepo(";
+const TEARDOWN = "deleteSandboxAndCredentials(";
 
 /**
  * Every start path creates a sandbox, then runs setup that can throw: ref sync,
@@ -26,23 +27,17 @@ describe("a start that fails does not leak its new sandbox", () => {
     ]);
   });
 
+  /**
+   * The shared teardown deletes the VM and its credential row; a deleted VM
+   * whose credential row survives leaves a dangling secret.
+   */
   test.each([
     "prepareSessionSandboxInternal",
     "preparePreviewSandboxInternal",
-  ])("%s deletes the sandbox it created", (name) => {
+  ])("%s deletes the sandbox it created and its credentials", (name) => {
     const handler = catchBodyOf(owners, name);
-    expect(handler, `${name} no longer deletes on failure`).toMatch(
-      /await \w+\.delete\(\)/,
-    );
-  });
-
-  /** A deleted VM whose credential row survives leaves a dangling secret. */
-  test.each([
-    "prepareSessionSandboxInternal",
-    "preparePreviewSandboxInternal",
-  ])("%s drops the sandbox git credentials too", (name) => {
-    expect(catchBodyOf(owners, name)).toContain(
-      "internal.sandboxGitCredentials.deleteBySandboxId",
+    expect(handler, `${name} no longer deletes on failure`).toContain(
+      TEARDOWN,
     );
   });
 
@@ -85,7 +80,7 @@ describe("a start that fails does not leak its new sandbox", () => {
     const handler = catchBodyOf(owners, "prepareSessionSandboxInternal");
     const guardAt = handler.indexOf("if (earlyReadyEmitted) {");
     expect(guardAt, "the keep-alive guard moved").toBeGreaterThan(-1);
-    const deleteAt = handler.search(/await \w+\.delete\(\)/);
+    const deleteAt = handler.indexOf(TEARDOWN);
     expect(deleteAt, "the delete moved").toBeGreaterThan(-1);
     expect(guardAt, "the guard must come first").toBeLessThan(deleteAt);
     expect(

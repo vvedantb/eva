@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, hasTaskAccess } from "../functions";
+import { authMutation, getActiveTaskRun, hasTaskAccess } from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
@@ -194,16 +194,7 @@ export async function cancelTaskRun(
 ): Promise<void> {
   await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
 
-  const run = await ctx.db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", task._id))
-    .filter((q) =>
-      q.or(
-        q.eq(q.field("status"), "queued"),
-        q.eq(q.field("status"), "running"),
-      ),
-    )
-    .first();
+  const run = await getActiveTaskRun(ctx.db, task._id);
 
   if (run) {
     await closeOpenTurn(ctx, run._id, "cancelled");

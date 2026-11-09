@@ -24,17 +24,27 @@ import {
   createSandboxAndPrepareRepo,
   fetchBranchRefs,
   forcePushBranchToOrigin,
+  isRetryableSessionStepError,
   isUnresolvedGitIndexError,
   recoverUnresolvedGitIndex,
+  retryGitNetworkOperation,
   copySandboxConfigFilesToWorkspace,
   dependencyInstallCommand,
   SESSION_LIFECYCLE,
 } from "./git";
 import { SandboxGoneError, isSandboxGoneError } from "./sandboxErrors";
-import { ensureGitCredentialHelper } from "./gitCredentials";
+import {
+  deleteSandboxAndCredentials,
+  ensureGitCredentialHelper,
+} from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
-import { sandboxOwnerKey, type SandboxOwner } from "../_sandbox/owner";
+import {
+  sandboxOwnerKey,
+  sandboxStartupEntityId,
+  type SandboxOwner,
+} from "../_sandbox/owner";
+import type { ProgressStep } from "./startupProgress";
 import { isSupersededStart } from "../_sandbox/transitions";
 import {
   detectPackageManager,
@@ -216,31 +226,6 @@ async function runStartupCommandsStep(
   });
 }
 
-/** Checks whether a git error message indicates a transient/retryable failure. */
-function isRetryableSessionGitError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    (lower.includes("sandbox exec") && lower.includes("timed out")) ||
-    lower.includes("command execution timeout") ||
-    lower.includes("fetch failed") ||
-    lower.includes("econnreset") ||
-    lower.includes("econnrefused") ||
-    lower.includes("etimedout") ||
-    lower.includes("socket hang up") ||
-    lower.includes("network") ||
-    lower.includes("status code 502") ||
-    lower.includes("status code 503") ||
-    lower.includes("status code 504") ||
-    lower.includes("gnutls recv error") ||
-    lower.includes("tls connection was non-properly terminated") ||
-    lower.includes("remote end hung up unexpectedly") ||
-    lower.includes("http/2 stream") ||
-    lower.includes("early eof") ||
-    lower.includes("connection reset by peer") ||
-    lower.includes("rpc failed")
-  );
-}
-
 /** Checks out a session branch with automatic retry on transient git errors. */
 async function checkoutSessionBranchWithRetry(
   sandbox: SandboxHandle,
@@ -284,7 +269,7 @@ async function checkoutSessionBranchWithRetry(
         continue;
       }
       const canRetry =
-        attempt < maxAttempts && isRetryableSessionGitError(message);
+        attempt < maxAttempts && isRetryableSessionStepError(message);
       if (!canRetry) {
         throw error;
       }
@@ -537,7 +522,6 @@ async function installSnapshotDependenciesWithRetry(
   sandbox: SandboxHandle,
   rootDir: string,
 ): Promise<void> {
-  const maxAttempts = 3;
   const pm = await detectPackageManager(sandbox, rootDir);
   const workspaceRoot = workspaceDirShell();
   const dir = rootDir ? `${workspaceRoot}/${rootDir}` : workspaceRoot;
@@ -547,29 +531,12 @@ async function installSnapshotDependenciesWithRetry(
   const installCommand = dependencyInstallCommand(pm, installCwd);
   const timeoutSeconds = pm === "pnpm" ? 240 : 180;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      await execHandle(sandbox, installCommand, timeoutSeconds);
-      if (attempt > 1) {
-        logSession(
-          `installSnapshotDependenciesWithRetry recovered on retry ${attempt}/${maxAttempts} (rootDir=${rootDir || "."}, pm=${pm})`,
-        );
-      }
-      return;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const canRetry =
-        attempt < maxAttempts && isRetryableSessionGitError(message);
-      if (!canRetry) {
-        throw error;
-      }
-      const delayMs = 1000 * attempt;
-      logSession(
-        `installSnapshotDependenciesWithRetry retrying after ${delayMs}ms (attempt ${attempt}/${maxAttempts}, rootDir=${rootDir || "."}, pm=${pm}): ${message}`,
-      );
-      await sleep(delayMs);
-    }
-  }
+  await retryGitNetworkOperation(
+    "installSnapshotDependencies",
+    `rootDir=${rootDir || "."}, pm=${pm}`,
+    () => execHandle(sandbox, installCommand, timeoutSeconds),
+    { isRetryable: isRetryableSessionStepError },
+  );
 }
 
 /**
@@ -753,8 +720,6 @@ type PreparedSessionSandbox = {
   /** The Vercel sandbox id (Vercel is the only sandbox provider). */
 };
 
-type ProgressStep = { type: string; label: string; status: string };
-
 /** Emits progress steps to a streaming entity for UI updates. */
 async function emitProgress(
   ctx: GenericActionCtx<DataModel>,
@@ -762,7 +727,7 @@ async function emitProgress(
   completedSteps: ProgressStep[],
   activeLabel: string,
 ): Promise<void> {
-  const steps = [
+  const steps: ProgressStep[] = [
     ...completedSteps,
     { type: "tool", label: activeLabel, status: "active" },
   ];
@@ -792,7 +757,7 @@ function emitSessionProgress(
 ): Promise<void> {
   return emitProgress(
     ctx,
-    `session-startup-${sessionId}`,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
     completedSteps,
     activeLabel,
   );
@@ -803,7 +768,10 @@ function completeSessionProgress(
   ctx: GenericActionCtx<DataModel>,
   sessionId: Id<"sessions">,
 ): Promise<void> {
-  return clearProgress(ctx, `session-startup-${sessionId}`);
+  return clearProgress(
+    ctx,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
+  );
 }
 
 /** Emits task sandbox startup progress steps to streaming for UI updates. */
@@ -815,7 +783,7 @@ function emitTaskProgress(
 ): Promise<void> {
   return emitProgress(
     ctx,
-    `task-sandbox-startup-${taskId}`,
+    sandboxStartupEntityId({ kind: "task", taskId }),
     completedSteps,
     activeLabel,
   );
@@ -826,7 +794,7 @@ function completeTaskProgress(
   ctx: GenericActionCtx<DataModel>,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
-  return clearProgress(ctx, `task-sandbox-startup-${taskId}`);
+  return clearProgress(ctx, sandboxStartupEntityId({ kind: "task", taskId }));
 }
 
 /** Emits project sandbox startup progress steps to streaming for UI updates. */
@@ -838,7 +806,7 @@ function emitProjectProgress(
 ): Promise<void> {
   return emitProgress(
     ctx,
-    `project-sandbox-startup-${projectId}`,
+    sandboxStartupEntityId({ kind: "project", projectId }),
     completedSteps,
     activeLabel,
   );
@@ -849,7 +817,10 @@ function completeProjectProgress(
   ctx: GenericActionCtx<DataModel>,
   projectId: Id<"projects">,
 ): Promise<void> {
-  return clearProgress(ctx, `project-sandbox-startup-${projectId}`);
+  return clearProgress(
+    ctx,
+    sandboxStartupEntityId({ kind: "project", projectId }),
+  );
 }
 
 /** Core logic for preparing a session sandbox: reuses existing or creates new, syncs refs, and starts services. */
@@ -1605,12 +1576,7 @@ async function prepareSessionSandboxInternal(
     console.warn(
       `[sandbox][sessions] deleting failed new session sandbox ${handle.id}: ${setupMessage}`,
     );
-    try {
-      await handle.delete();
-    } catch {}
-    await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-      sandboxId: handle.id,
-    });
+    await deleteSandboxAndCredentials(ctx, handle);
     throw setupError;
   }
 }
@@ -2326,12 +2292,7 @@ async function preparePreviewSandboxInternal(
       console.warn(
         `[sandbox][sessions] deleting failed new ${args.owner.kind} sandbox ${handle.id}: ${errorMessage(setupError, "setup failed")}`,
       );
-      try {
-        await handle.delete();
-      } catch {}
-      await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-        sandboxId: handle.id,
-      });
+      await deleteSandboxAndCredentials(ctx, handle);
     }
     throw setupError;
   }
