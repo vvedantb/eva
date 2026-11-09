@@ -124,3 +124,37 @@ assertValid(
   "no-value-block-in-try",
   inHook(`try { fn(() => { throw new Error("x"); }); } catch {}`),
 );
+
+// no-source-text-in-tests — tests must import code, not regex its source.
+const inTest = { filename: "thing.test.ts" };
+assertInvalid(
+  "no-source-text-in-tests",
+  `const s = readFileSync(join(dir, "convex/mcp/tools.ts"), "utf8");\n`,
+  inTest,
+);
+assertInvalid(
+  "no-source-text-in-tests",
+  `const s = readSource("ThemeContext.tsx");\n`,
+  inTest,
+);
+assertInvalid(
+  "no-source-text-in-tests",
+  "expect(read(`${dir}/app.css`)).toContain('x');\n",
+  inTest,
+);
+assertInvalid("no-source-text-in-tests", `source("../index.html");\n`, inTest);
+// File paths as plain test data stay allowed.
+assertValid(
+  "no-source-text-in-tests",
+  `expect(toPath("src/app.tsx")).toBe("app");\n`,
+  inTest,
+);
+assertValid("no-source-text-in-tests", `import { a } from "./a.ts";\n`, inTest);
+assertValid("no-source-text-in-tests", `vi.mock("../config.ts");\n`, inTest);
+assertValid(
+  "no-source-text-in-tests",
+  `readFileSync(join(dir, "fixture.json"), "utf8");\n`,
+  inTest,
+);
+// Only test files are checked.
+assertValid("no-source-text-in-tests", `readSource("convex/mcp/tools.ts");\n`);

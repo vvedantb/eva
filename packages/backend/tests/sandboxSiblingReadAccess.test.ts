@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -16,7 +13,6 @@ import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const testsDir = dirname(fileURLToPath(import.meta.url));
 
 const SECRET = "sandbox-secret-abc";
 const SANDBOX_ID = "sbx_home";
@@ -441,29 +437,5 @@ describe("listReadableSiblingRepos", () => {
     );
     expect(strangerRepoId).toBeDefined();
     expect(readable.some((repo) => repo.owner === "stranger")).toBe(false);
-  });
-});
-
-describe("in-sandbox credential helper contract", () => {
-  const source = readFileSync(
-    join(testsDir, "../convex/_sandbox_runtime/gitCredentials.ts"),
-    "utf8",
-  );
-
-  test("git is configured to send the repository path", () => {
-    expect(source).toContain("useHttpPath true");
-  });
-
-  test("the token cache is keyed per requested path", () => {
-    expect(source).toContain("git-cred-cache-");
-  });
-
-  test("the requested path is posted as JSON built by jq", () => {
-    expect(source).toContain("{path:$p}");
-  });
-
-  test("the install pins the sandbox's home repository on the row", () => {
-    expect(source).toContain("repoOwner: homeRepo.owner");
-    expect(source).toContain("repoName: homeRepo.name");
   });
 });
