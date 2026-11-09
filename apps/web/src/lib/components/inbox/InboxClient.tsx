@@ -20,6 +20,7 @@ import { useInboxActions } from "@/lib/components/inbox/useInboxActions";
 import { useInboxSelection } from "@/lib/components/inbox/useInboxSelection";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 /**
@@ -103,7 +104,9 @@ export function InboxClient() {
   const handleOpen = (n: Notification) => {
     // Split rather than passed whole: a comment notification's href carries
     // `?comment=<id>`, and the router resolves `to` as a pathname only.
-    if (n.href) navigate(hrefToNavigateOptions(n.href));
+    if (n.href && isInternalAppHref(n.href)) {
+      navigate(hrefToNavigateOptions(n.href));
+    }
   };
 
   // Linear-style keys: arrows step the list, Enter opens the linked entity,

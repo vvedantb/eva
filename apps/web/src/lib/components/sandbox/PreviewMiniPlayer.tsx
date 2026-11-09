@@ -3,6 +3,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "@eva/ui";
 import { springTransition, useMediaQuery } from "@vvedantb/ui";
@@ -50,6 +51,7 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
   const stale = useOwnerSandboxStale(entry);
 
   const expand = () => {
+    if (!isInternalAppHref(entry.returnTo)) return;
     closePreviewMiniPlayer();
     void navigate({ to: entry.returnTo });
   };

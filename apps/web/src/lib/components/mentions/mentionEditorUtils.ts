@@ -1,3 +1,4 @@
+import { escapeHtml } from "@eva/shared/escapeHtml";
 import { EDITOR_CHIP_CLICKABLE_CLASS } from "./mentionChipStyles";
 import { LINK_URL_SOURCE, linkLabel, linkProvider } from "./linkChipUtils";
 import { linkProviderIconHtml } from "./linkProviderIcons";
@@ -73,10 +74,6 @@ function parseEditorChipSegments(
     segments.push({ type: "text", value: value.slice(lastIndex) });
   }
   return segments;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function chipLabelFromToken(token: string): string {
