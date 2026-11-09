@@ -4,10 +4,10 @@ import { isHttpUrl, isInternalAppHref } from "@eva/shared/safeUrl";
 import { buildNotificationDigestHtml } from "../convex/emailTemplates";
 
 describe("isHttpUrl", () => {
-  test("accepts http(s) and relative links", () => {
+  test("accepts absolute http(s) only", () => {
     expect(isHttpUrl("https://example.com/a")).toBe(true);
     expect(isHttpUrl("http://example.com")).toBe(true);
-    expect(isHttpUrl("/owner/repo")).toBe(true);
+    expect(isHttpUrl("/owner/repo")).toBe(false);
   });
 
   test("rejects script and data schemes, however they are disguised", () => {

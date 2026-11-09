@@ -4,12 +4,12 @@
  */
 
 /**
- * True only for http(s). `javascript:` and `data:` would run script in the
- * app's origin. A relative URL resolves against an https base, so it passes.
+ * True only for an absolute http(s) URL. `javascript:` and `data:` would run
+ * script in the app's origin.
  */
 export function isHttpUrl(url: string): boolean {
   try {
-    const { protocol } = new URL(url, "https://eva.invalid");
+    const { protocol } = new URL(url);
     return protocol === "https:" || protocol === "http:";
   } catch {
     return false;
