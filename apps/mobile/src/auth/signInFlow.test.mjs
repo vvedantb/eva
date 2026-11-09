@@ -2,7 +2,7 @@
 // and no real sign-in.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import {
   failureMessage,
   nextStep,
