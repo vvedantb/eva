@@ -4,7 +4,6 @@ import {
   PR_DESCRIPTION_END,
   PR_DESCRIPTION_START,
   buildPrDescriptionPrompt,
-  PR_AUTHORSHIP_LINE,
   cleanPrDescription,
   insertPrDescription,
   stripPrDescription,
@@ -71,18 +70,17 @@ test("stripPrDescription removes the block and leaves the static body", () => {
 
 test("cleanPrDescription unwraps a whole-answer fence and bounds length", () => {
   expect(cleanPrDescription("```markdown\n### Why\nx\n```")).toBe(
-    `${PR_AUTHORSHIP_LINE}\n\n### Why\nx`,
+    "### Why\nx",
   );
   expect(cleanPrDescription("  ### Why\nx  ")).toBe(
-    `${PR_AUTHORSHIP_LINE}\n\n### Why\nx`,
+    "### Why\nx",
   );
   const long = cleanPrDescription("a".repeat(10_000));
-  expect(long.length).toBeLessThan(6_200);
+  expect(long.length).toBeLessThan(6_100);
   expect(long.endsWith("_Description truncated._")).toBe(true);
 });
 
-test("cleanPrDescription leads with the authorship line and keeps empty answers empty", () => {
-  expect(cleanPrDescription("### Why\nx").startsWith(PR_AUTHORSHIP_LINE)).toBe(true);
+test("cleanPrDescription keeps empty answers empty", () => {
   expect(cleanPrDescription("  ")).toBe("");
   expect(cleanPrDescription("```\n\n```")).toBe("");
 });

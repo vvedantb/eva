@@ -10,11 +10,6 @@ export const PR_DESCRIPTION_END = "<!-- /eva-pr-description -->";
  * prose, which is exactly what the sectioned format exists to avoid. */
 const MAX_DESCRIPTION_CHARS = 6_000;
 
-/** First line of every generated block: tells the reviewer an agent wrote the
- * change. Written by code, not the model, so it never drifts. It makes no claim
- * about review, because nothing updates the block after a human reviews. */
-export const PR_AUTHORSHIP_LINE = "> Written by an AI agent in Eva.";
-
 /**
  * Builds the prompt for the reviewer-facing PR description. The sections match
  * `.github/pull_request_template.md` (Why, Scope, Verification, Tradeoffs,
@@ -85,27 +80,25 @@ Two or three plain sentences that someone outside the project would follow. No f
 - Plain, direct sentences. No filler, no praise, no "this PR".
 - Do not repeat the diff line by line.
 - No headings other than the six above. No "Summary" or "Test plan". No preamble and no closing remarks.
-- Do not write an authorship line or a "Generated with" footer. Eva adds the authorship line.
+- Do not write an authorship line or a "Generated with" footer.
 - Output only the markdown. Do not wrap the whole answer in a code fence.
 
 ## Diff
 ${params.diffText}`;
 }
 
-/** Strips a whole-answer code fence the model sometimes adds, bounds the
- * length so a runaway answer cannot flood the PR body, and puts the authorship
- * line first. Returns "" for an empty answer so the caller can skip the write. */
+/** Strips a whole-answer code fence the model sometimes adds, then bounds the
+ * length so a runaway answer cannot flood the PR body. */
 export function cleanPrDescription(raw: string): string {
   let text = raw.trim();
   const fence = text.match(/^```[a-z]*\n([\s\S]*?)\n```$/);
   if (fence?.[1] !== undefined) {
     text = fence[1].trim();
   }
-  if (text.length === 0) return "";
   if (text.length > MAX_DESCRIPTION_CHARS) {
     text = `${text.slice(0, MAX_DESCRIPTION_CHARS).trimEnd()}\n\n_Description truncated._`;
   }
-  return `${PR_AUTHORSHIP_LINE}\n\n${text}`;
+  return text;
 }
 
 /** Returns the body with the generated block removed, so the static sections
