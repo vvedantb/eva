@@ -25,10 +25,53 @@ const READ_ONLY_SUPABASE_TOOLS = new Set([
   "list_edge_functions",
   "list_extensions",
   "list_migrations",
-  "list_projects",
   "list_tables",
   "search_docs",
 ]);
+
+/** Tools with no project argument. Every other tool must take `project_id`. */
+const PROJECT_FREE_TOOLS = new Set(["search_docs"]);
+
+/**
+ * The repo's Supabase project ref: `SUPABASE_PROJECT_ID`, else the subdomain
+ * of `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL` (`<ref>.supabase.co`).
+ */
+export function supabaseProjectRef(
+  vars: Array<{ key: string; value: string }>,
+): string | null {
+  const value = (key: string) =>
+    vars.find((entry) => entry.key === key)?.value.trim();
+  const explicit = value("SUPABASE_PROJECT_ID");
+  if (explicit) return explicit;
+  for (const key of ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]) {
+    let hostname: string;
+    try {
+      hostname = new URL(value(key) ?? "").hostname;
+    } catch {
+      continue;
+    }
+    const ref = /^([a-z0-9]+)\.supabase\.co$/.exec(hostname)?.[1];
+    if (ref) return ref;
+  }
+  return null;
+}
+
+/**
+ * Forces a tool call onto the repo's project. A `project_id` for any other
+ * project is rejected rather than silently rewritten.
+ */
+export function bindSupabaseProject(
+  args: Record<string, unknown>,
+  projectRef: string,
+): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {
+  if (args.project_id !== undefined && args.project_id !== projectRef) {
+    return {
+      ok: false,
+      error: `project_id must be this repo's Supabase project (${projectRef}).`,
+    };
+  }
+  return { ok: true, args: { ...args, project_id: projectRef } };
+}
 
 // In-memory cache (reset on action cold starts)
 const toolDefinitionCache = new Map<
@@ -177,27 +220,32 @@ export async function supabaseTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
 ): Promise<EvaTool[]> {
-  const { clerkUserId } = credentials;
+  // Only repo-scoped (sandbox) MCP sessions get Supabase tools: the token and
+  // project come from that repo, so there is no project to bind without one.
+  const repoId = credentials.scopedRepoId;
+  if (repoId === undefined) return [];
 
-  // Try to resolve Supabase token
-  let token: string | null;
+  let supabase: { token: string; projectRef: string } | null;
   try {
-    token = await ctx.runAction(internal.mcp.nodeActions.resolveSupabaseToken, {
-      clerkUserId,
-    });
+    supabase = await ctx.runAction(
+      internal.mcp.nodeActions.resolveSupabaseCredentials,
+      { repoId },
+    );
   } catch (err) {
-    console.error("Supabase: failed to resolve token:", err);
+    console.error("Supabase: failed to resolve credentials:", err);
     return [];
   }
 
-  if (!token) {
-    console.log("Supabase: no SUPABASE_ACCESS_TOKEN found, skipping");
+  if (!supabase) {
+    console.log(
+      "Supabase: no SUPABASE_ACCESS_TOKEN plus SUPABASE_PROJECT_ID/SUPABASE_URL, skipping",
+    );
     return [];
   }
 
   let tools: Tool[];
   try {
-    tools = await discoverTools(token);
+    tools = await discoverTools(supabase.token);
   } catch (err) {
     console.error("Supabase: failed to discover tools:", err);
     return [];
@@ -208,8 +256,11 @@ export async function supabaseTools(
     return [];
   }
 
-  const visibleTools = tools.filter((tool) =>
-    READ_ONLY_SUPABASE_TOOLS.has(tool.name),
+  const visibleTools = tools.filter(
+    (tool) =>
+      READ_ONLY_SUPABASE_TOOLS.has(tool.name) &&
+      (PROJECT_FREE_TOOLS.has(tool.name) ||
+        "project_id" in (tool.inputSchema.properties ?? {})),
   );
 
   if (visibleTools.length === 0) {
@@ -220,7 +271,16 @@ export async function supabaseTools(
   const evaTools: EvaTool[] = [];
   for (const tool of visibleTools) {
     const prefixedName = `${SUPABASE_PREFIX}${tool.name}`;
+    const bindsProject = !PROJECT_FREE_TOOLS.has(tool.name);
     const zodShape = toolSchemaToZodShape(tool.inputSchema);
+    if (bindsProject) {
+      zodShape.project_id = z
+        .string()
+        .optional()
+        .describe(
+          `Always this repo's Supabase project (${supabase.projectRef}); may be omitted.`,
+        );
+    }
 
     evaTools.push(
       defineTool({
@@ -229,22 +289,29 @@ export async function supabaseTools(
         mutating: false,
         input: zodShape,
         handler: async (args: Record<string, unknown>) => {
-          // Re-resolve token in case it expired
-          const currentToken = await ctx.runAction(
-            internal.mcp.nodeActions.resolveSupabaseToken,
-            { clerkUserId },
+          // Re-resolve in case the token expired or the env changed.
+          const current = await ctx.runAction(
+            internal.mcp.nodeActions.resolveSupabaseCredentials,
+            { repoId },
           );
-          if (!currentToken) {
+          if (!current) {
             return toolErrorResult(
-              "SUPABASE_ACCESS_TOKEN is no longer available.",
+              "SUPABASE_ACCESS_TOKEN or the Supabase project is no longer configured for this repo.",
             );
           }
+          let callArgs = args;
+          if (bindsProject) {
+            const bound = bindSupabaseProject(args, current.projectRef);
+            if (!bound.ok) return toolErrorResult(bound.error);
+            callArgs = bound.args;
+          }
+          const currentToken = current.token;
 
           try {
             const client = await connectClient(currentToken);
             try {
               const result = await withTimeout(
-                client.callTool({ name: tool.name, arguments: args }),
+                client.callTool({ name: tool.name, arguments: callArgs }),
                 CALL_TIMEOUT_MS,
                 `Supabase tool ${tool.name}`,
               );
