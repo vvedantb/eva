@@ -1,5 +1,13 @@
 # Changelog
 
+## Mobile: native-ui 0.10.0 owns sign-in (second factor, client trust, keyboard)
+
+Date: 2026-11-09
+
+WHY: `@vvedantb/native-ui@0.10.0` ships what Eva carried as temporary local code: `SignInScreen` handles `needs_second_factor`, `needs_client_trust` and `needs_new_password`, `SecondFactorScreen` is exported from `@vvedantb/native-ui/auth`, and `AuthScreen` uses `KeyboardAvoidingView` behavior `padding`. Two copies of the same flow are a maintenance cost.
+
+Architectural: `apps/mobile` now depends on `^0.10.0` (only mobile declares it). Removed `patches/@vvedantb__native-ui@0.9.0.patch` and its `pnpm.patchedDependencies` entry, `components/auth/SecondFactorScreen.tsx`, `src/auth/signInFlow.ts` with its tests, the `test:mfa` script and the `components/` entry in `tsconfig.json`. `app/(auth)/sign-in.tsx` is `SignInScreen` again with Eva chrome only: `EvaMark` header, copy, Google scheme and path, `signUpHref`, `errorDisplay="inline"`. native-ui owns incomplete statuses and warns on unhandled ones. Eva's `needs_first_factor` email and phone code step is dropped, so those accounts get the package web-fallback message. Temporary types patch: `patches/@vvedantb__native-ui@0.10.0.patch` (listed in `pnpm.patchedDependencies`) widens `attempt.status` to `string | null` in `SignInScreen.onSignIn`. native-ui exports `.tsx` source, and Clerk's `SignInStatus` (`@clerk/types` via `@clerk/clerk-expo` 2.20.2) lacks `needs_client_trust`, so Eva's `tsc` failed with TS2367 inside the package. Behaviour is unchanged. Drop the patch when native-ui publishes a types fix. The better failure logging and `failureMessage` from #1134 lived in the deleted `signInFlow`. Package `authErrorMessage` still falls back to "Invalid email or password" for non-credential throws that name the provider, so the #1134 behaviour is not preserved in this cut. Track it as an upstream native-ui follow-up; Eva does not reintroduce a local sign-in flow for it.
+
 ## Mobile sign-in: stop masking real failures as "Invalid email or password."
 
 Date: 2026-11-09

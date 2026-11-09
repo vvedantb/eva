@@ -1,0 +1,24 @@
+diff --git a/src/auth/SignInScreen.tsx b/src/auth/SignInScreen.tsx
+index cde694832325eb02d08e97af5fdeed94d5dd37af..1a5fc1f0336112b110385c8b50eabe6bb2c1b593 100644
+--- a/src/auth/SignInScreen.tsx
++++ b/src/auth/SignInScreen.tsx
+@@ -262,13 +262,15 @@ export function SignInScreen({
+     setError("");
+     try {
+       const attempt = await signIn.create({ identifier: email, password });
+-      if (attempt.status === "complete" && attempt.createdSessionId) {
++      // Temporary: Clerk's SignInStatus type omits "needs_client_trust".
++      const status: string | null = attempt.status;
++      if (status === "complete" && attempt.createdSessionId) {
+         await setActive({ session: attempt.createdSessionId });
+         done();
+-      } else if (attempt.status === "needs_new_password") {
++      } else if (status === "needs_new_password") {
+         setPendingNewPassword(true);
+-      } else if (attempt.status === "needs_second_factor" || attempt.status === "needs_client_trust") {
+-        await startSecondFactor(attempt, attempt.status === "needs_client_trust");
++      } else if (status === "needs_second_factor" || status === "needs_client_trust") {
++        await startSecondFactor(attempt, status === "needs_client_trust");
+       } else {
+         unhandled(attempt);
+       }
