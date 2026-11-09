@@ -111,6 +111,7 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
     .index("by_repo_and_numId", ["repoId", "numId"])
+    .index("by_repo_and_build_workflow", ["repoId", "activeBuildWorkflowId"])
     .index("by_repo_and_sandbox_status", [
       "repoId",
       "reviewProjectSandboxStatus",
@@ -126,6 +127,12 @@ const schema = defineSchema({
     .index("by_repo", ["repoId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_repo_status_and_deleted", ["repoId", "status", "deletedAt"])
+    .index("by_repo_status_deleted_and_creator", [
+      "repoId",
+      "status",
+      "deletedAt",
+      "createdBy",
+    ])
     .index("by_repo_and_updatedAt", ["repoId", "updatedAt"])
     .index("by_project", ["projectId"])
     .index("by_project_and_status", ["projectId", "status"])

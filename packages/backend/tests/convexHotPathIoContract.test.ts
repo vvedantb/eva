@@ -96,6 +96,19 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     expect(mentions).toContain('withIndex("by_repo_and_deleted"');
     expect(mentions).toContain('withIndex("by_repo_status_and_deleted"');
     expect(mentions).not.toContain("filterActiveEntities");
+
+    expect(source("_projects/queries.ts")).not.toContain(
+      'withIndex("by_repo",',
+    );
+    expect(definitionBody("_projects/queries.ts", "getActive")).toContain(
+      'withIndex("by_repo_and_sandbox_status"',
+    );
+    expect(source("_agentTasks/drafts.ts")).toContain(
+      'withIndex("by_repo_status_deleted_and_creator"',
+    );
+    const docs = definitionBody("docs.ts", "list");
+    expect(docs).toContain('withIndex("by_repo_and_deleted"');
+    expect(docs).not.toContain("isEntityDeleted");
   });
 
   test("skill list metadata no longer writes new SKILL.md bodies inline", () => {
