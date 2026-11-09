@@ -497,7 +497,8 @@ var SECRET_PATTERNS = [
   [/(?<=\\bBearer\\s+)[A-Za-z0-9._~+/=-]{20,}/gi, "***"],
   [/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9._-]+/g, "***"],
   // URL userinfo: \`https://user:secret@host\` keeps the user, drops the secret.
-  [/\\/\\/([^/\\s:@]+):[^@\\s]+@/g, "//\$1:***@"]
+  // The secret stops at \`/\`, so \`//localhost:5173/@fs/x\` is not userinfo.
+  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//\$1:***@"]
 ];
 function redactSecrets(text) {
   let out = text;

@@ -30,4 +30,6 @@ test("leaves ordinary text alone", () => {
   const text =
     "git push origin eva/branch failed: https://github.com/a/b (the bearer of bad news)";
   expect(redactSecrets(text)).toBe(text);
+  const viteUrl = "GET http://localhost:5173/@fs/tmp/repo/src/main.tsx 200";
+  expect(redactSecrets(viteUrl)).toBe(viteUrl);
 });
