@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
-import { authQuery, authMutation } from "./functions";
+import { authQuery, authMutation, hasTeamAccess } from "./functions";
 import {
   maskEnvVarEntries,
   removeEnvVarEntry,
@@ -20,14 +20,7 @@ export const list = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) return [];
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
 
     const doc = await ctx.db
       .query("teamEnvVars")
@@ -116,14 +109,9 @@ export const removeVar = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) throw new Error("Not a team member");
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) {
+      throw new Error("Not a team member");
+    }
 
     const doc = await ctx.db
       .query("teamEnvVars")
@@ -147,14 +135,9 @@ export const toggleSandboxExclude = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) throw new Error("Not a team member");
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) {
+      throw new Error("Not a team member");
+    }
 
     const doc = await ctx.db
       .query("teamEnvVars")
