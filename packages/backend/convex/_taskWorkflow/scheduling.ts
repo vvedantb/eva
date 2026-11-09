@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { startTaskRunWorkflow } from "./startRun";
 import { internalMutation } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { hasActiveRun, isFirstTaskOnBranch } from "../functions";
+import {
+  getActiveTaskRun,
+  hasActiveRun,
+  isFirstTaskOnBranch,
+} from "../functions";
 import { isDaytonaNetworkIssue, buildQuickTaskRetryDelayMs } from "./recovery";
 import { buildProjectBranchName } from "../_projects/helpers";
 import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
@@ -201,16 +205,7 @@ export const clearActiveWorkflow = internalMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
 
-    const activeRun = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
+    const activeRun = await getActiveTaskRun(ctx.db, args.taskId);
 
     if (!activeRun) {
       await ctx.db.patch(args.taskId, { activeWorkflowId: undefined });

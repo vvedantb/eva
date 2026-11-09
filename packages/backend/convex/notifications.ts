@@ -232,6 +232,34 @@ async function pushNotification(
   });
 }
 
+/**
+ * Fans one notification out to `userIds`, skipping the actor and anyone in
+ * `alreadyNotified` (e.g. reached by a higher-signal mention). Returns the
+ * running set of notified ids so callers can chain their own dedup set.
+ */
+export async function notifyUsers(
+  ctx: MutationCtx,
+  userIds: Iterable<Id<"users">>,
+  notification: Omit<Parameters<typeof createNotification>[1], "userId">,
+  opts: { actorId?: Id<"users">; alreadyNotified?: Set<string> } = {},
+): Promise<Set<string>> {
+  const notified = opts.alreadyNotified ?? new Set<string>();
+  for (const userId of userIds) {
+    if (opts.actorId && userId === opts.actorId) continue;
+    if (notified.has(userId)) continue;
+    await createNotification(ctx, { ...notification, userId });
+    notified.add(userId);
+  }
+  return notified;
+}
+
+/** Trims and truncates comment text for a notification message, or null if empty. */
+export function truncateNotificationText(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
+}
+
 const notificationValidator = v.object({
   _id: v.id("notifications"),
   _creationTime: v.number(),
