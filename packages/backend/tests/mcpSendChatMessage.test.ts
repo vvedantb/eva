@@ -894,14 +894,14 @@ describe("user MCP accepts fable on per-turn sends and runs it as Eva's Fable mo
   });
 
   test("send_chat_message canonicalizes fable", () => {
-    expect(normalizeAIModel("fable")).toBe("claude:claude-fable-5-1");
+    expect(normalizeAIModel("fable")).toBe("claude:claude-fable-5-2");
     expect(
       resolveAgentDelivery({
         isBusy: false,
         requestedModel: "fable",
         storedModel: "cursor:grok-4.6",
       }).model,
-    ).toBe("claude:claude-fable-5-1");
+    ).toBe("claude:claude-fable-5-2");
   });
 });
 

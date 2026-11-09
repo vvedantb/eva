@@ -1,7 +1,7 @@
 import { v, type Infer } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { createNotification } from "./notifications";
+import { notifyUsers } from "./notifications";
 import { authQuery, authMutation, hasTaskAccess } from "./functions";
 import {
   taskSubscriberFields,
@@ -64,17 +64,14 @@ export async function notifySubscribers(
     alreadyNotified?: Set<string>;
   },
 ): Promise<Set<string>> {
-  const notified = params.alreadyNotified ?? new Set<string>();
   const subscribers = await ctx.db
     .query("taskSubscribers")
     .withIndex("by_task", (q) => q.eq("taskId", params.taskId))
     .collect();
-  for (const sub of subscribers) {
-    if (!sub.subscribed) continue;
-    if (params.actorId && sub.userId === params.actorId) continue;
-    if (notified.has(sub.userId)) continue;
-    await createNotification(ctx, {
-      userId: sub.userId,
+  return notifyUsers(
+    ctx,
+    subscribers.filter((sub) => sub.subscribed).map((sub) => sub.userId),
+    {
       type: params.type,
       title: params.title,
       message: params.message,
@@ -82,10 +79,9 @@ export async function notifySubscribers(
       projectId: params.projectId,
       taskId: params.taskId,
       commentId: params.commentId,
-    });
-    notified.add(sub.userId);
-  }
-  return notified;
+    },
+    { actorId: params.actorId, alreadyNotified: params.alreadyNotified },
+  );
 }
 
 /**
@@ -110,26 +106,23 @@ export async function notifyProjectSubscribers(
     .withIndex("by_project", (q) => q.eq("projectId", params.projectId))
     .collect();
 
-  const notified = new Set<string>();
+  const subscriberIds = new Set<Id<"users">>();
   for (const task of tasks) {
     const subscribers = await ctx.db
       .query("taskSubscribers")
       .withIndex("by_task", (q) => q.eq("taskId", task._id))
       .collect();
     for (const sub of subscribers) {
-      if (!sub.subscribed) continue;
-      if (notified.has(sub.userId)) continue;
-      await createNotification(ctx, {
-        userId: sub.userId,
-        type: params.type,
-        title: params.title,
-        message: params.message,
-        repoId: params.repoId,
-        projectId: params.projectId,
-      });
-      notified.add(sub.userId);
+      if (sub.subscribed) subscriberIds.add(sub.userId);
     }
   }
+  await notifyUsers(ctx, subscriberIds, {
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    repoId: params.repoId,
+    projectId: params.projectId,
+  });
 }
 
 /** Lists the active subscribers (subscribed = true) of a task for the UI. */

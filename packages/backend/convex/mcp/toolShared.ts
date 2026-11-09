@@ -12,7 +12,7 @@ import type { JsonValue } from "../_jev/jsonValue";
 
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
- * (`claude:claude-fable-5-1`); opus/sonnet/haiku keep their existing aliases.
+ * (`claude:claude-fable-5-2`); opus/sonnet/haiku keep their existing aliases.
  * Kept as a tuple so every tool schema stays in lockstep.
  */
 export const MCP_CLAUDE_MODELS = ["opus", "sonnet", "haiku", "fable"] as const;

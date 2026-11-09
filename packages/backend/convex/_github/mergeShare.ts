@@ -4,7 +4,7 @@ import { ActionCache } from "@convex-dev/action-cache";
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
-import { getInstallationOctokit } from "../githubAuth";
+import { getRepoOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 
 /** 30 pages of 100 closed PRs covers a busy repo's 90 days; older buckets go blank. */
@@ -48,12 +48,7 @@ export const fetchMergedPrs = internalAction({
   },
   returns: mergedPrsResultValidator,
   handler: async (ctx, args): Promise<MergedPrsResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const prs: MergedPrsResult["prs"] = [];
     for (let page = 1; page <= MAX_CLOSED_PR_PAGES; page++) {
       const { data } = await octokit.rest.pulls.list({
@@ -124,8 +119,6 @@ export const getEvaMergeShare = action({
     }),
   ),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const [merged, evaPrNumbers] = await Promise.all([

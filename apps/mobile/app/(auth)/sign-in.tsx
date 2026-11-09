@@ -2,7 +2,7 @@ import { SignInScreen } from "@vvedantb/native-ui/auth";
 import { SSO_PATH, SSO_SCHEME } from "@/config";
 import { EvaMark } from "@/ui/EvaMark";
 
-/** The web sign-in (Clerk's modal on the landing page): the Eva mark and its copy. */
+/** The web sign-in (Clerk's modal on the landing page): the Eva mark and its copy. native-ui owns every incomplete status. */
 export default function SignIn() {
   return (
     <SignInScreen
