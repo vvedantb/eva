@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  clerkErrorMessage,
+  failureMessage,
   nextStep,
   sendCode,
   SIGN_IN_MESSAGES,
@@ -165,27 +165,123 @@ test("startSignIn: unsupported status warns and returns the unsupported step", a
   assert.equal(logged.length, 1);
 });
 
-test("startSignIn: a Clerk error gives its message; other errors give the fallback", async () => {
-  const { setActive } = recorder();
-  const wrong = mockSignIn();
-  wrong.create = async () => {
-    throw { errors: [{ longMessage: "Password is incorrect." }] };
-  };
-  assert.deepEqual(await startSignIn({ signIn: wrong, setActive, identifier: "a", password: "b" }), {
-    ok: false,
-    error: "Password is incorrect.",
+/** Runs `fn` with console.error captured. */
+async function captureErrors(fn) {
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => logged.push(args);
+  try {
+    return { result: await fn(), logged };
+  } finally {
+    console.error = original;
+  }
+}
+
+const PASSWORD = "s3cret-pw-value";
+
+async function signInWith(create, setActive = recorder().setActive) {
+  const signIn = mockSignIn();
+  signIn.create = create;
+  return captureErrors(() => startSignIn({ signIn, setActive, identifier: "a@b.test", password: PASSWORD }));
+}
+
+test("startSignIn: form_password_incorrect gives invalid credentials", async () => {
+  const { result, logged } = await signInWith(async () => {
+    throw { status: 422, clerkTraceId: "trace_1", errors: [{ code: "form_password_incorrect", message: "Password incorrect", meta: { paramName: "password" } }] };
   });
-  const network = mockSignIn();
-  network.create = async () => Promise.reject(new Error("fetch failed"));
-  assert.deepEqual(await startSignIn({ signIn: network, setActive, identifier: "a", password: "b" }), {
-    ok: false,
-    error: SIGN_IN_MESSAGES.signInFailed,
-  });
+  assert.deepEqual(result, { ok: false, error: SIGN_IN_MESSAGES.signInFailed });
+  assert.equal(logged.length, 1);
+  const log = logged[0][1];
+  assert.equal(log.stage, "create");
+  assert.equal(log.status, 422);
+  assert.equal(log.clerkTraceId, "trace_1");
+  assert.deepEqual(log.clerkErrors, [
+    { code: "form_password_incorrect", message: "Password incorrect", longMessage: undefined, paramName: "password" },
+  ]);
 });
 
-test("clerkErrorMessage never shows a message that names the provider", () => {
-  assert.equal(clerkErrorMessage({ errors: [{ longMessage: "Clerk could not verify" }] }, "fallback"), "fallback");
-  assert.equal(clerkErrorMessage(undefined, "fallback"), "fallback");
+test("startSignIn: form_identifier_not_found gives invalid credentials", async () => {
+  const { result } = await signInWith(async () => {
+    throw { errors: [{ code: "form_identifier_not_found", message: "Not found" }] };
+  });
+  assert.deepEqual(result, { ok: false, error: SIGN_IN_MESSAGES.signInFailed });
+});
+
+test("startSignIn: form_param_format_invalid is invalid credentials only on the identifier", async () => {
+  const onParam = (paramName) => async () => {
+    throw { errors: [{ code: "form_param_format_invalid", message: "Bad format", meta: { paramName } }] };
+  };
+  assert.deepEqual((await signInWith(onParam("email_address"))).result, { ok: false, error: SIGN_IN_MESSAGES.signInFailed });
+  assert.deepEqual((await signInWith(onParam("password"))).result, { ok: false, error: "Bad format (code: form_param_format_invalid)" });
+});
+
+test("startSignIn: another Clerk code shows its message and the code", async () => {
+  const { result } = await signInWith(async () => {
+    throw { errors: [{ code: "captcha_invalid", longMessage: "Captcha failed. Clerk could not verify you." }] };
+  });
+  assert.deepEqual(result, {
+    ok: false,
+    error: "Captcha failed. the sign-in service could not verify you. (code: captcha_invalid)",
+  });
+  const bare = await signInWith(async () => {
+    throw { errors: [{ code: "captcha_invalid" }] };
+  });
+  assert.deepEqual(bare.result, { ok: false, error: "Couldn't sign you in. (code: captcha_invalid)" });
+});
+
+test("startSignIn: a network error gives the network message, not invalid credentials", async () => {
+  for (const caught of [new TypeError("Network request failed"), new TypeError("fetch failed"), new Error("Network request failed")]) {
+    const { result } = await signInWith(async () => Promise.reject(caught));
+    assert.deepEqual(result, { ok: false, error: SIGN_IN_MESSAGES.network });
+  }
+});
+
+test("startSignIn: a setActive failure gives the session message and logs stage setActive", async () => {
+  const signIn = mockSignIn({}, complete);
+  const { result, logged } = await captureErrors(() =>
+    startSignIn({
+      signIn,
+      setActive: async () => {
+        throw new Error("session boom");
+      },
+      identifier: "a@b.test",
+      password: PASSWORD,
+    }),
+  );
+  assert.deepEqual(result, { ok: false, error: SIGN_IN_MESSAGES.sessionFailed });
+  assert.equal(logged[0][1].stage, "setActive");
+});
+
+test("startSignIn: a non-Clerk throw gives an unknown message with a short reason", async () => {
+  const { result, logged } = await signInWith(async () => {
+    throw new Error("boom ".repeat(40));
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /^Couldn't sign you in\. \(boom boom/);
+  assert.ok(result.error.length < 120);
+  assert.equal(logged[0][1].errorName, "Error");
+});
+
+test("sign-in failure logs never contain the password or the code", async () => {
+  const failures = [
+    new Error(`boom`),
+    { errors: [{ code: "captcha_invalid", message: "No" }] },
+    new TypeError("Network request failed"),
+  ];
+  const all = [];
+  for (const caught of failures) all.push(...(await signInWith(async () => Promise.reject(caught))).logged);
+  const signIn = mockSignIn();
+  signIn.attemptSecondFactor = async () => Promise.reject(new Error("bad"));
+  all.push(...(await captureErrors(() => submitCode({ signIn, setActive: recorder().setActive, phase: "second", strategy: "totp", code: "987654" }))).logged);
+  assert.ok(all.length >= 4);
+  const text = JSON.stringify(all);
+  assert.ok(!text.includes(PASSWORD));
+  assert.ok(!text.includes("987654"));
+});
+
+test("failureMessage: a Clerk message is kept, rephrased and tagged with its code", () => {
+  assert.equal(failureMessage({ errors: [{ message: "Too many requests" }] }, { fallback: "f" }), "Too many requests");
+  assert.equal(failureMessage(undefined, { fallback: "f" }), "f (undefined)");
 });
 
 test("sendCode: second-factor email and phone call prepareSecondFactor with the factor id", async () => {
@@ -265,16 +361,20 @@ test("submitCode: a wrong code returns the mapped message and sets no session", 
     throw { errors: [{ code: "form_code_incorrect", longMessage: "Incorrect code" }] };
   };
   const outcome = await submitCode({ signIn, setActive, phase: "second", strategy: "totp", code: "000000" });
-  assert.deepEqual(outcome, { ok: false, error: "Incorrect code" });
+  assert.deepEqual(outcome, { ok: false, error: "Incorrect code (code: form_code_incorrect)" });
   assert.deepEqual(activated, []);
 });
 
-test("submitCode: an unknown failure gives the generic message", async () => {
+test("submitCode: an unknown failure gives the code message with a reason; a network failure says so", async () => {
   const { setActive } = recorder();
   const signIn = mockSignIn();
-  signIn.attemptSecondFactor = async () => Promise.reject(new Error("fetch failed"));
-  const outcome = await submitCode({ signIn, setActive, phase: "second", strategy: "totp", code: "1" });
-  assert.deepEqual(outcome, { ok: false, error: SIGN_IN_MESSAGES.invalidCode });
+  signIn.attemptSecondFactor = async () => Promise.reject(new Error("boom"));
+  const { result, logged } = await captureErrors(() => submitCode({ signIn, setActive, phase: "second", strategy: "totp", code: "1" }));
+  assert.deepEqual(result, { ok: false, error: `${SIGN_IN_MESSAGES.invalidCode} (boom)` });
+  assert.equal(logged[0][1].stage, "attemptSecondFactor");
+  signIn.attemptSecondFactor = async () => Promise.reject(new TypeError("Network request failed"));
+  const net = await captureErrors(() => submitCode({ signIn, setActive, phase: "second", strategy: "totp", code: "1" }));
+  assert.deepEqual(net.result, { ok: false, error: SIGN_IN_MESSAGES.network });
 });
 
 test("submitNewPassword: resetPassword then session", async () => {
