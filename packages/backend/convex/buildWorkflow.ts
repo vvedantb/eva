@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import {
   authMutation,
+  getActiveTaskRun,
   hasRepoAccess,
   recomputeProjectPhase,
 } from "./functions";
@@ -347,16 +348,7 @@ export const cancelBuild = authMutation({
 
       await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
 
-      const run = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", task._id))
-        .filter((q) =>
-          q.or(
-            q.eq(q.field("status"), "queued"),
-            q.eq(q.field("status"), "running"),
-          ),
-        )
-        .first();
+      const run = await getActiveTaskRun(ctx.db, task._id);
 
       if (run) {
         await ctx.db.patch(run._id, {
