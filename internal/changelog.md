@@ -7,6 +7,7 @@ Date: 2026-11-09
 WHY: Repo env vars choose where Eva connects with secrets. A repo could point `POSTGRES_READ_REPLICA_URL` at loopback, private or cloud-metadata addresses, point its Convex URL at any host and receive the deploy key, or use a Supabase token to query any project in that Supabase account.
 
 Architectural: `_mcp/postgresSsrfGuard.ts` gives pg a socket whose DNS lookup refuses blocked ranges (loopback, RFC1918, link-local, CGNAT, ULA, NAT64, multicast); the socket connects to the checked addresses, so there is no rebinding window. `customerConvexOrigin` in `_env/publicConvexUrls.ts` requires an https `*.convex.cloud` URL in `getRepoConvexCredentials`. Supabase tools now exist only in repo-scoped (sandbox) MCP sessions; `resolveSupabaseCredentials` reads the token and project ref from that repo only, `project_id` is forced to it, a different `project_id` is rejected, and `list_projects` plus tools without `project_id` (except `search_docs`) are hidden.
+
 ## Web: composer links look like chat links (underline + favicon), not chips
 
 Date: 2026-11-09
