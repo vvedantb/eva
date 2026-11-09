@@ -121,7 +121,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
 
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
+var ANTHROPIC_PRICING_AS_OF = "2026-11-09";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
   return {
     inputPerMillion,
@@ -133,6 +133,8 @@ function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion
   };
 }
 var CLAUDE_PRICING_PER_MILLION = {
+  "claude-fable-5-2": anthropicRow(8, 0.2, 10, 40),
+  "claude-mythos-5-2": anthropicRow(8, 0.2, 10, 40),
   "claude-fable-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
