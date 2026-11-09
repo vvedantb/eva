@@ -233,6 +233,55 @@ describe("app-wide sandbox settings", () => {
 });
 
 describe("presence", () => {
+  const heartbeat = (roomId: string, userId: string) => ({
+    roomId,
+    userId,
+    sessionId: `session-${roomId}`,
+    interval: 10_000,
+  });
+
+  test(
+    "doc and typing rooms of another team are refused; own rooms work",
+    async () => {
+      const f = await fixture();
+      for (const roomId of [
+        `doc:${f.docZ}`,
+        `typing:task:${f.taskZ}`,
+        `typing:chat:${f.taskZ}`,
+        `typing:chat:new-session-${f.repoZ}`,
+        "typing:unknown:x",
+      ]) {
+        await expect(
+          f.asBen.mutation(api.presence.heartbeat, heartbeat(roomId, f.ben)),
+          roomId,
+        ).rejects.toThrow();
+      }
+      await expect(
+        f.asBen.mutation(api.presence.updateTyping, {
+          roomId: `doc:${f.docZ}`,
+          isTyping: true,
+        }),
+      ).rejects.toThrow("Not authorized");
+
+      for (const roomId of [
+        `doc:${f.docZ}`,
+        `typing:task:${f.taskZ}`,
+        `typing:chat:${f.taskZ}`,
+        "platform",
+      ]) {
+        await f.asZed.mutation(
+          api.presence.heartbeat,
+          heartbeat(roomId, f.zed),
+        );
+      }
+      await f.asBen.mutation(
+        api.presence.heartbeat,
+        heartbeat(`typing:chat:new-session-${f.repoA}`, f.ben),
+      );
+    },
+    TIMEOUT_MS,
+  );
+
   test(
     "updatePath accepts app paths and refuses anything a follower could be sent off-app by",
     async () => {

@@ -2,8 +2,17 @@ import { components } from "./_generated/api";
 import { v } from "convex/values";
 import { mutation, type QueryCtx } from "./_generated/server";
 import { Presence } from "@convex-dev/presence";
-import { authQuery, authMutation } from "./functions";
+import type { GenericDatabaseReader } from "convex/server";
+import type { DataModel, Id } from "./_generated/dataModel";
+import {
+  authQuery,
+  authMutation,
+  assertMessageParentAccess,
+  getTaskWithAccess,
+  hasRepoAccess,
+} from "./functions";
 import { getCurrentUserId } from "./_auth/currentUser";
+import { findDocWithAccess } from "./_docs/access";
 import {
   getUserPresenceRow,
   shouldWriteLastSeenAt,
@@ -27,6 +36,76 @@ export async function firstPresentUserInRoom(
 
 /** Must match ClientProvider's usePresence room — the only heartbeat that owns lastSeenAt. */
 const LAST_SEEN_ROOM_ID = "platform";
+
+/**
+ * Throws unless the user may join a `doc:` or `typing:` room: those rooms show
+ * who is present and typing on one entity, so they follow that entity's access
+ * rule. Room ids are built by the web app (`DocPresenceFacepile`,
+ * `ChatComposer`, `TaskActivityComposerForm`, `CommentReplyComposer`). Other
+ * rooms (`platform`, `sandbox:`, `cursor:`) are not checked here.
+ */
+async function assertPresenceRoomAccess(
+  db: GenericDatabaseReader<DataModel>,
+  roomId: string,
+  userId: Id<"users">,
+): Promise<void> {
+  const [kind, ...rest] = roomId.split(":");
+  const key = rest.join(":");
+  if (kind === "doc") {
+    const docId = db.normalizeId("docs", key);
+    if (docId && (await findDocWithAccess(db, docId, userId))) return;
+    throw new Error("Not authorized");
+  }
+  if (kind !== "typing") return;
+
+  const [target, ...idParts] = rest;
+  const id = idParts.join(":");
+  if (target === "task") {
+    const taskId = db.normalizeId("agentTasks", id);
+    if (!taskId) throw new Error("Not authorized");
+    await getTaskWithAccess(db, taskId, userId);
+    return;
+  }
+  if (target === "task-comment") {
+    const commentId = db.normalizeId("taskComments", id);
+    const comment = commentId ? await db.get(commentId) : null;
+    if (!comment) throw new Error("Not authorized");
+    await getTaskWithAccess(db, comment.taskId, userId);
+    return;
+  }
+  if (target === "chat") {
+    await assertChatRoomAccess(db, id, userId);
+    return;
+  }
+  throw new Error("Not authorized");
+}
+
+/** `typing:chat:<conversationId>`, where the id is whatever `ChatBody` keys the chat on. */
+async function assertChatRoomAccess(
+  db: GenericDatabaseReader<DataModel>,
+  conversationId: string,
+  userId: Id<"users">,
+): Promise<void> {
+  // A fresh Ave chat before its thread exists (useAveChat). Ave is per user.
+  if (conversationId === "ave") return;
+  const NEW_SESSION_PREFIX = "new-session-";
+  if (conversationId.startsWith(NEW_SESSION_PREFIX)) {
+    const repoId = db.normalizeId(
+      "githubRepos",
+      conversationId.slice(NEW_SESSION_PREFIX.length),
+    );
+    if (repoId && (await hasRepoAccess(db, repoId, userId))) return;
+    throw new Error("Not authorized");
+  }
+  const threadId = db.normalizeId("aveThreads", conversationId);
+  if (threadId) {
+    const thread = await db.get(threadId);
+    if (thread?.userId === userId) return;
+    throw new Error("Not authorized");
+  }
+  // Session chats, task chats and project chats.
+  await assertMessageParentAccess(db, conversationId, userId);
+}
 
 /**
  * True for an app-internal path: starts with one `/`, no backslash, no control
@@ -55,6 +134,7 @@ export const heartbeat = authMutation({
     if (userId !== ctx.userId) {
       throw new Error("Cannot send heartbeat for another user");
     }
+    await assertPresenceRoomAccess(ctx.db, roomId, ctx.userId);
     const result = await presence.heartbeat(
       ctx,
       roomId,
@@ -142,6 +222,7 @@ export const updateTyping = authMutation({
     isTyping: v.boolean(),
   },
   handler: async (ctx, { roomId, isTyping }) => {
+    await assertPresenceRoomAccess(ctx.db, roomId, ctx.userId);
     const user = await ctx.db.get(ctx.userId);
     if (!user) return;
     await presence.updateRoomUser(ctx, roomId, ctx.userId, {

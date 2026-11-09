@@ -189,17 +189,15 @@ export async function getSessionWithAccess(
   return session;
 }
 
-/** Verifies access to a message parent regardless of its entity kind. */
+/**
+ * Verifies access to a message parent regardless of its entity kind: a session
+ * chat, session, project or task id. Any other id is refused.
+ */
 export async function assertMessageParentAccess(
   db: GenericDatabaseReader<DataModel>,
-  parentId:
-    | Id<"sessionChats">
-    | Id<"sessions">
-    | Id<"projects">
-    | Id<"agentTasks">,
+  rawId: string,
   userId: Id<"users">,
 ): Promise<void> {
-  const rawId = String(parentId);
   const chatId = db.normalizeId("sessionChats", rawId);
   if (chatId) {
     const chat = await db.get(chatId);
