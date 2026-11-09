@@ -7,6 +7,8 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { codeModeTools } from "../convex/_mcp/codeModeTools";
 import {
   EVALUATE_MODEL,
+  MAX_IMAGES,
+  MAX_LONG_STATE_CHARS,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   MAX_STATE_CHARS,
@@ -67,6 +69,57 @@ const manyOptions = (count: number) =>
   );
 
 describe("evaluate input schema", () => {
+  test("raises the state cap only with longContext", () => {
+    const state = "x".repeat(MAX_STATE_CHARS + 1);
+    const questions = { q: booleanQ };
+    expect(evaluateInput.safeParse({ state, questions }).success).toBe(false);
+    expect(
+      evaluateInput.safeParse({ state, questions, longContext: true }).success,
+    ).toBe(true);
+    expect(
+      evaluateInput.safeParse({
+        state: "x".repeat(MAX_LONG_STATE_CHARS + 1),
+        questions,
+        longContext: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("accepts named images up to the cap, with unique names", () => {
+    const image = (name: string) => ({ name, storageId: `kg2${name}` });
+    const questions = { q: booleanQ };
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: [image("before"), image("after")],
+      }).success,
+    ).toBe(true);
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: [image("shot"), image("shot")],
+      }).success,
+    ).toBe(false);
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: Array.from({ length: MAX_IMAGES + 1 }, (_, index) =>
+          image(`s${index}`),
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: [image("has space")],
+      }).success,
+    ).toBe(false);
+  });
+
   test("accepts every question type with string state", () => {
     const parsed = evaluateInput.safeParse({
       state: "fix: null deref in checkout",
@@ -368,7 +421,9 @@ describe("evaluate wiring contract", () => {
     // The one place the gateway is called, for every Jev caller.
     const client = convexSource("_jev/client.ts");
     expect(client.startsWith('"use node";')).toBe(true);
-    expect(client).toContain("experimental_evaluate");
+    // `experimental_evaluate` drops image parts and the long-context option.
+    expect(client).toContain("experimental_decide");
+    expect(client).not.toContain("experimental_evaluate as");
     expect(client).toContain("zeroDataRetention: true");
     expect(client).toContain("AI_GATEWAY_API_KEY");
     expect(client).toContain("tags: [options.tag]");

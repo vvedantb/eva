@@ -13,6 +13,8 @@ import type { z } from "zod";
 import { defineTool, type EvaTool } from "../mcp/registry";
 import { errorResult, textResult } from "../mcp/toolShared";
 import {
+  MAX_IMAGES,
+  MAX_LONG_STATE_CHARS,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   MAX_STATE_CHARS,
@@ -29,7 +31,9 @@ export {
   MAX_STATE_CHARS,
   MAX_QUESTIONS,
   MAX_OPTIONS,
+  MAX_IMAGES,
   MAX_INSTRUCTION_CHARS,
+  MAX_LONG_STATE_CHARS,
   evaluateInput,
   evaluateInputShape,
 } from "../_jev/schema";
@@ -69,9 +73,13 @@ instructions and criteria descriptions are strings or JSON. Write the rubric per
 
 Example: { "state": "fix: null deref in checkout when cart is empty", "questions": { "isBug": { "type": "boolean", "instructions": "Does this commit message describe a bug fix?" }, "area": { "type": "choice", "instructions": "Which area does it touch?", "criteria": { "frontend": null, "backend": null, "infra": null } }, "severity": { "type": "score", "instructions": "How severe is the underlying issue?", "criteria": ["cosmetic", "minor", "major", "critical"] } } }
 
+Images (experimental): pass up to ${MAX_IMAGES} PNG or JPEG files as "images": [{ "name": "after", "storageId": "..." }], getting each storageId from upload_media, and name them in backticks in instructions: { "type": "boolean", "instructions": "Does \`after\` show the new Export button in the toolbar?" }. Eva resizes them to fit Jev's limits. Jev is weaker on images than on text: ask small, literal questions about what is visible, one fact per question.
+
+Long state: set "longContext": true to raise Jev's limit to 262k tokens (state up to ${MAX_LONG_STATE_CHARS.toLocaleString("en-GB")} characters). Only use it when a normal call fails with max_tokens_exceeded; TypeSafe reports it makes answers less reliable.
+
 Limits: state up to ${MAX_STATE_CHARS.toLocaleString("en-GB")} characters serialised, up to ${MAX_QUESTIONS} questions per call, one state per call. To judge many items, loop inside \`execute\` with a constant questions object: for (const item of items) await tools.evaluate({ state: item, questions }). Returns { model, answers, usage, warnings?, metadata? }; when present, metadata.typesafe.confidence carries Jev's confidence for choice and score answers.
 
-Data: text and JSON only, sent to Vercel AI Gateway with zero data retention requested. Do not pass secrets or personal data you would not put in a prompt.`;
+Data: sent to Vercel AI Gateway with zero data retention requested. Do not pass secrets, or text or images with personal data you would not put in a prompt.`;
 
 /**
  * Builds the tool over an injected provider call. `tools.ts` passes the Convex

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
 import { internalMutation, internalQuery } from "../_generated/server";
 
 // Agent-facing media hosting for the MCP `upload_media` / `get_media_url`
@@ -41,5 +42,33 @@ export const getUrl = internalQuery({
       contentType: meta.contentType ?? null,
       size: meta.size,
     };
+  },
+});
+
+/**
+ * Parses agent-supplied storage ids for the `evaluate` tool's images. Ids that
+ * do not name a stored file are dropped by name, so the tool can say which
+ * image it could not find instead of failing the whole call.
+ */
+export const resolveImageRefs = internalQuery({
+  args: {
+    refs: v.array(v.object({ name: v.string(), storageId: v.string() })),
+  },
+  returns: v.object({
+    found: v.array(v.object({ name: v.string(), storageId: v.id("_storage") })),
+    missing: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const found: { name: string; storageId: Id<"_storage"> }[] = [];
+    const missing: string[] = [];
+    for (const ref of args.refs) {
+      const storageId = ctx.db.system.normalizeId("_storage", ref.storageId);
+      const meta = storageId
+        ? await ctx.db.system.get("_storage", storageId)
+        : null;
+      if (storageId && meta) found.push({ name: ref.name, storageId });
+      else missing.push(ref.name);
+    }
+    return { found, missing };
   },
 });

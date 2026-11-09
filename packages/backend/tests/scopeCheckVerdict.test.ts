@@ -6,6 +6,7 @@ import {
   HUNK_QUESTIONS,
   MAX_FLAGGED_HUNKS,
   MAX_OVERALL_DIFF_CHARS,
+  STANDARD_DIFF_CHARS,
   MAX_PROMPT_CHARS,
   MENTION_THRESHOLD,
   OVERALL_QUESTION,
@@ -16,6 +17,7 @@ import {
   type JudgedHunk,
 } from "../convex/_scopeCheck/verdict";
 import type { DiffHunk } from "../convex/_scopeCheck/hunks";
+import { MAX_LONG_STATE_CHARS } from "../convex/_jev/schema";
 
 function hunk(
   requested: number,
@@ -106,6 +108,29 @@ describe("summariseScopeCheck", () => {
     expect(verdict.unrequestedProbability).toBe(0.8);
     expect(verdict.evaluatedAt).toBe(base.evaluatedAt);
     expect(verdict.partial).toBe(false);
+  });
+
+  it("stores the screenshot pass and each row's visibility", () => {
+    const flaggedHunk = hunk(0.05, 0.1, "src/a.ts");
+    const verdict = summariseScopeCheck({
+      ...base,
+      unrequestedProbability: 0.8,
+      judged: [flaggedHunk, hunk(0.3, 0.2, "src/b.ts")],
+      visible: new Map([[hunkKey(flaggedHunk), 0.9]]),
+      screenshots: { checked: 2, showsRequest: 0.2 },
+    });
+    expect(verdict.screenshots).toEqual({ checked: 2, showsRequest: 0.2 });
+    expect(verdict.flagged.map((row) => row.visible)).toEqual([0.9, undefined]);
+  });
+
+  it("leaves the screenshot fields off when there was no screenshot pass", () => {
+    const verdict = summariseScopeCheck({
+      ...base,
+      unrequestedProbability: 0.8,
+      judged: [hunk(0.05, 0.1, "src/a.ts")],
+    });
+    expect("screenshots" in verdict).toBe(false);
+    expect("visible" in verdict.flagged[0]).toBe(false);
   });
 
   it("caps the stored flags", () => {
@@ -258,13 +283,17 @@ describe("buildOverallDiff", () => {
   });
 
   it("returns nothing for an empty hunk list", () => {
-    expect(buildOverallDiff([])).toEqual({ text: "", clipped: false });
+    expect(buildOverallDiff([])).toEqual({
+      text: "",
+      clipped: false,
+      longContext: false,
+    });
   });
 
   it("clips on a line boundary at the cap", () => {
     const body = "+".padEnd(100, "y");
     const header = "@@ -1,4 +1,4 @@";
-    const hunks = Array.from({ length: 400 }, () =>
+    const hunks = Array.from({ length: 2_000 }, () =>
       diffHunk("src/a.ts", header, body),
     );
     const result = buildOverallDiff(hunks);
@@ -276,9 +305,29 @@ describe("buildOverallDiff", () => {
     }
   });
 
-  it("keeps the whole-diff budget inside what the gateway actually serves", () => {
-    // 41k answered, 77k returned 503 repeatably. Leave headroom for the prompt
-    // and JSON escaping on top of the diff text.
-    expect(MAX_OVERALL_DIFF_CHARS).toBeLessThanOrEqual(50_000);
+  it("keeps a standard-size diff on Jev's default context", () => {
+    // 41k answered, 77k failed repeatably at the default ~32k tokens.
+    expect(STANDARD_DIFF_CHARS).toBeLessThanOrEqual(41_000);
+    const small = buildOverallDiff([
+      diffHunk("src/a.ts", "@@ -1 +1 @@", "+one"),
+    ]);
+    expect(small.longContext).toBe(false);
+  });
+
+  it("asks for long context only past the standard budget", () => {
+    const body = "+".padEnd(100, "y");
+    const hunks = Array.from({ length: 400 }, () =>
+      diffHunk("src/a.ts", "@@ -1,4 +1,4 @@", body),
+    );
+    const result = buildOverallDiff(hunks);
+    expect(result.text.length).toBeGreaterThan(STANDARD_DIFF_CHARS);
+    expect(result.longContext).toBe(true);
+  });
+
+  it("keeps the long-context budget inside the long-state schema cap", () => {
+    // The prompt and JSON escaping ride on top of the diff text.
+    expect(MAX_OVERALL_DIFF_CHARS * 1.5).toBeLessThanOrEqual(
+      MAX_LONG_STATE_CHARS,
+    );
   });
 });
