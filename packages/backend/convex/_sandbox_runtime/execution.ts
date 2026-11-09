@@ -64,18 +64,8 @@ import {
   type DaemonTurnSnapshot,
 } from "../_chat/daemonClaimPause";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
-
-/** True if anything is LISTEN on `port` (Vercel images often lack `ss`). */
-function portListenProbeCmd(port: number): string {
-  const hex = port.toString(16).toUpperCase().padStart(4, "0");
-  return [
-    `if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q ":${port} " && echo yes && exit 0; fi`,
-    `if command -v lsof >/dev/null 2>&1; then lsof -iTCP:${port} -sTCP:LISTEN >/dev/null 2>&1 && echo yes && exit 0; fi`,
-    // /proc/net/tcp{,6} local_address port is hex, big-endian (13000 → 32C8).
-    `if grep -Eiq ":${hex}[[:space:]]" /proc/net/tcp /proc/net/tcp6 2>/dev/null; then echo yes; exit 0; fi`,
-    "echo no",
-  ].join("; ");
-}
+import { buildPortListenProbeCommand } from "./httpReadyProbe";
+import type { ProgressStep } from "./startupProgress";
 
 async function probePreviewReady(
   handle: SandboxHandle,
@@ -86,7 +76,7 @@ async function probePreviewReady(
     // finishes compiling. A short HTTP curl times out mid-compile and used to
     // trigger remount → kill → relaunch loops (session 41 / CarePulse web).
     const listening = (
-      await execHandle(handle, portListenProbeCmd(port), 5)
+      await execHandle(handle, buildPortListenProbeCommand(port), 5)
     ).trim();
     if (listening === "yes") return true;
 
@@ -107,12 +97,14 @@ import {
   checkoutFetchedBaseBranch,
   createSandboxAndPrepareRepo,
   getOrCreateSandbox,
+  isTransientTransportError,
   pushBranchToOrigin,
   commitAndPushCheckedOutBranch,
   writeAutoPublishPolicy,
   EPHEMERAL_LIFECYCLE,
   SESSION_LIFECYCLE,
 } from "./git";
+import { deleteSandboxAndCredentials } from "./gitCredentials";
 import { startDesktopWithChrome } from "./desktop";
 import {
   ensurePreviewNavigationProxy,
@@ -1129,31 +1121,15 @@ const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
-  if (isDaytonaNetworkIssue(message)) {
-    return true;
-  }
-  const lowered = message.toLowerCase();
-  const gitNetworkMarkers = [
-    "status code 502",
-    "status code 503",
-    "status code 504",
-    "fetch failed",
-    "gnutls recv error",
-    "tls connection was non-properly terminated",
-    "remote end hung up unexpectedly",
-    "http/2 stream",
-    "early eof",
-    "connection reset by peer",
-    "rpc failed",
-  ];
   return (
-    (lowered.includes("sandbox exec") && lowered.includes("timed out")) ||
-    lowered.includes("command execution timeout") ||
+    isDaytonaNetworkIssue(message) ||
+    // Transport only: setup deletes and recreates the VM, so a permanent auth
+    // failure or a bare "network" substring must not trigger it.
+    isTransientTransportError(message) ||
     // Exit code -1 typically means the command was terminated abnormally
     // (sandbox not yet accepting commands, transport error, killed mid-exec) —
     // this is transient, unlike non-zero exit codes from real command failures.
-    lowered.includes("sandbox command failed with exit code -1") ||
-    gitNetworkMarkers.some((marker) => lowered.includes(marker))
+    message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
 
@@ -1281,14 +1257,7 @@ export const prepareSandbox = internalAction({
           console.warn(
             `[sandbox] prepareSandbox: deleting failed sandbox ${sandbox.id}`,
           );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
+          await deleteSandboxAndCredentials(ctx, sandbox);
         }
 
         const message = errorMessage(error, "Sandbox setup failed");
@@ -1341,12 +1310,8 @@ export const createOrResumeSandbox = internalAction({
     installationId: v.number(),
     repoOwner: v.string(),
     repoName: v.string(),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
     ephemeral: v.optional(v.boolean()),
     repoId: v.id("githubRepos"),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    sessionPersistenceKind: v.optional(sessionPersistenceKindValidator),
     attachRunId: v.optional(v.id("agentRuns")),
     streamingEntityId: v.optional(v.string()),
   },
@@ -1355,14 +1320,10 @@ export const createOrResumeSandbox = internalAction({
     resumeFellBack: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const completedSteps: Array<{
-      type: string;
-      label: string;
-      status: string;
-    }> = [];
+    const completedSteps: ProgressStep[] = [];
     const emitProgress = async (label: string): Promise<void> => {
       if (!args.streamingEntityId) return;
-      const steps = [
+      const steps: ProgressStep[] = [
         ...completedSteps,
         { type: "tool", label, status: "active" },
       ];
@@ -1452,14 +1413,7 @@ export const createOrResumeSandbox = internalAction({
           console.warn(
             `[sandbox] createOrResumeSandbox: deleting failed sandbox ${sandbox.id}`,
           );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
+          await deleteSandboxAndCredentials(ctx, sandbox);
         }
 
         const message = errorMessage(error, "Sandbox setup failed");

@@ -22,6 +22,7 @@ import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
 import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
+import { writeSandboxFile } from "./_sandbox_runtime/sandboxFiles";
 import {
   COREPACK_SANDBOX_ENV,
   renderEvaEnvFile,
@@ -567,7 +568,7 @@ export const launchSeedRun = internalAction({
         "rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh",
         30,
       );
-      await sandbox.writeFile("/tmp/seedrun.sh", script);
+      await writeSandboxFile(sandbox, "/tmp/seedrun.sh", script);
       await execHandle(sandbox, "chmod +x /tmp/seedrun.sh", 30);
       const wrote = await execHandle(
         sandbox,

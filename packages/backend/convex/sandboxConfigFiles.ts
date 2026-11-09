@@ -6,6 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { findReposByOwnerAndName } from "./_githubRepos/helpers";
 
 /** Regex for safe filenames: alphanumeric, dash, underscore, dot only. */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -39,12 +40,7 @@ async function collectSiblingConfigFiles(
 ): Promise<Array<Doc<"sandboxConfigFiles">>> {
   const anchorRepo = await ctx.db.get(repoId);
   if (!anchorRepo) return [];
-  const siblings = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", anchorRepo.owner).eq("name", anchorRepo.name),
-    )
-    .collect();
+  const siblings = await findReposByOwnerAndName(ctx.db, anchorRepo);
   const files: Array<Doc<"sandboxConfigFiles">> = [];
   for (const sibling of siblings) {
     const siblingFiles = await ctx.db

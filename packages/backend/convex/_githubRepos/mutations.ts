@@ -10,7 +10,7 @@ import {
 } from "../functions";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
-import { findAllSiblingRepoIds } from "./helpers";
+import { findAllSiblingRepoIds, findReposByOwnerAndName } from "./helpers";
 
 /** Assigns a repository to a team (team owner only). */
 export const assignToTeam = authMutation({
@@ -106,12 +106,7 @@ async function insertRepo(
     }
   }
 
-  const candidates = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", args.owner).eq("name", args.name),
-    )
-    .collect();
+  const candidates = await findReposByOwnerAndName(ctx.db, args);
 
   const duplicate = candidates.find(
     (r) => (r.rootDirectory ?? undefined) === (normalizedRoot ?? undefined),
