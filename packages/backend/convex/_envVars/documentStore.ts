@@ -1,6 +1,8 @@
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
-import { MASKED_ENV_VAR_VALUE } from "./listDisplay";
+
+/** Masked bullet string shown for secret env var values in the UI. */
+export const MASKED_ENV_VAR_VALUE = "••••••";
 
 /** Loads the single env var document for a repo, or null if none exists. */
 export function findRepoEnvVarDoc(

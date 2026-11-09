@@ -7,7 +7,6 @@ import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
   getAIModelProvider,
   normalizeAIModel,
@@ -105,7 +104,6 @@ import {
   SESSION_LIFECYCLE,
 } from "./git";
 import { deleteSandboxAndCredentials } from "./gitCredentials";
-import { startDesktopWithChrome } from "./desktop";
 import {
   ensurePreviewNavigationProxy,
   PREVIEW_TAB_PREFIX,
@@ -139,13 +137,6 @@ function previewActivityParams(sandboxId: string): {
       .digest("hex"),
   };
 }
-
-const sessionPersistenceKindValidator = v.union(
-  v.literal("sessionChats"),
-  v.literal("sessions"),
-  v.literal("projects"),
-  v.literal("agentTasks"),
-);
 
 // A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
@@ -204,23 +195,6 @@ export const validateSandbox = internalAction({
       console.error("Sandbox validation failed:", e);
       return { healthy: false };
     }
-  },
-});
-
-/** Executes a shell command on a sandbox and returns the output. */
-export const runSandboxCommand = internalAction({
-  args: {
-    sandboxId: v.string(),
-    command: v.string(),
-    timeoutSeconds: v.optional(v.number()),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.string(),
-  handler: async (ctx, args) => {
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    return (
-      await execHandle(handle, args.command, args.timeoutSeconds ?? 30)
-    ).trim();
   },
 });
 
@@ -816,58 +790,6 @@ export const watchConvexReadiness = internalAction({
   },
 });
 
-/**
- * Runs a repo's clean-stop commands (e.g. `supabase stop`, `pkill convex dev`)
- * sequentially, foreground, so on-disk volumes flush before a filesystem
- * snapshot. Used only by the seeded-snapshot build; never on normal starts.
- * Non-fatal per command so a partial stop still lets the snapshot proceed.
- */
-export const runStopCommands = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.object({
-    ran: v.boolean(),
-    commandCount: v.number(),
-    errors: v.array(v.string()),
-  }),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> => {
-    const commands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStopCommands,
-      { repoId: args.repoId },
-    );
-
-    if (!commands || commands.length === 0) {
-      return { ran: false, commandCount: 0, errors: [] };
-    }
-
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
-    console.log(
-      `[sandbox] runStopCommands: running ${commands.length} stop command(s)`,
-    );
-
-    const errors: string[] = [];
-    for (const command of commands) {
-      console.log(`[sandbox] runStopCommands: running: ${command}`);
-      try {
-        await execHandle(handle, command, 300);
-        console.log(`[sandbox] runStopCommands: completed: ${command}`);
-      } catch (e) {
-        const msg = errorMessage(e, "command failed");
-        console.error(`[sandbox] runStopCommands: failed: ${command}`, msg);
-        errors.push(`${command}: ${msg}`);
-      }
-    }
-
-    return { ran: true, commandCount: commands.length, errors };
-  },
-});
-
 const previewUrlArgs = {
   sandboxId: v.string(),
   port: v.number(),
@@ -1132,176 +1054,6 @@ function isSandboxSetupRetryable(message: string): boolean {
     message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
-
-/** Creates or resumes a sandbox with local branch setup, desktop, and retry logic. */
-export const prepareSandbox = internalAction({
-  args: {
-    existingSandboxId: v.optional(v.string()),
-    installationId: v.number(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    ephemeral: v.optional(v.boolean()),
-    repoId: v.id("githubRepos"),
-    attachRunId: v.optional(v.id("agentRuns")),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    sessionPersistenceKind: v.optional(sessionPersistenceKindValidator),
-    startDesktop: v.optional(v.boolean()),
-    streamingEntityId: v.optional(v.string()),
-  },
-  returns: v.object({
-    sandboxId: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    const completedSteps: Array<{
-      type: string;
-      label: string;
-      status: string;
-    }> = [];
-    const emitProgress = async (label: string): Promise<void> => {
-      if (!args.streamingEntityId) return;
-      const steps = [
-        ...completedSteps,
-        { type: "tool", label, status: "active" },
-      ];
-      await ctx.runMutation(internal.streaming.internalSet, {
-        entityId: args.streamingEntityId,
-        currentActivity: JSON.stringify(steps),
-      });
-      completedSteps.push({ type: "tool", label, status: "complete" });
-    };
-
-    const setupStartedAt = Date.now();
-    console.log(
-      `[sandbox] prepareSandbox: resolving context for repo=${args.repoOwner}/${args.repoName} repoId=${args.repoId} ephemeral=${args.ephemeral ?? false}`,
-    );
-    const { client, sandboxEnvVars, snapshotName } =
-      await resolveSandboxContext(ctx, args.repoId);
-    const existingSandboxId = args.existingSandboxId;
-    console.log(
-      `[sandbox] prepareSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
-    );
-    let sandbox: SandboxHandle | undefined;
-    let deleteSandboxOnFailure = false;
-    let attempt = 1;
-    const maxSetupAttempts = 3;
-    const attachRunSandbox = async (
-      sandboxToAttach: SandboxHandle,
-    ): Promise<void> => {
-      if (!args.attachRunId) {
-        return;
-      }
-      await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-        runId: args.attachRunId,
-        sandboxId: sandboxToAttach.id,
-      });
-    };
-
-    while (true) {
-      try {
-        if (args.ephemeral) {
-          const prepared = await createSandboxAndPrepareRepo(
-            ctx,
-            client,
-            args.installationId,
-            args.repoOwner,
-            args.repoName,
-            sandboxEnvVars,
-            EPHEMERAL_LIFECYCLE,
-            snapshotName,
-            attachRunSandbox,
-            emitProgress,
-            { mode: "none" },
-          );
-          sandbox = prepared.sandbox;
-          deleteSandboxOnFailure = true;
-        } else {
-          const prepared = await getOrCreateSandbox(
-            ctx,
-            client,
-            existingSandboxId,
-            args.installationId,
-            args.repoOwner,
-            args.repoName,
-            sandboxEnvVars,
-            SESSION_LIFECYCLE,
-            snapshotName,
-            emitProgress,
-            { mode: "none" },
-          );
-          sandbox = prepared.sandbox;
-          deleteSandboxOnFailure = prepared.isNew;
-        }
-
-        if (args.branchName) {
-          await emitProgress("Setting up branch...");
-          await setupBranch(
-            sandbox,
-            args.branchName,
-            args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-          );
-        } else if (args.baseBranch) {
-          await emitProgress("Checking out base branch...");
-          await checkoutFetchedBaseBranch(sandbox, args.baseBranch);
-        }
-
-        if (args.startDesktop) {
-          await emitProgress("Starting desktop...");
-          await startDesktopWithChrome(sandbox);
-        }
-
-        break;
-      } catch (error) {
-        if (deleteSandboxOnFailure && sandbox) {
-          console.warn(
-            `[sandbox] prepareSandbox: deleting failed sandbox ${sandbox.id}`,
-          );
-          await deleteSandboxAndCredentials(ctx, sandbox);
-        }
-
-        const message = errorMessage(error, "Sandbox setup failed");
-        const elapsed = Date.now() - setupStartedAt;
-        const retryable = isSandboxSetupRetryable(message);
-        const withinTimeLimit = elapsed < MAX_SETUP_ELAPSED_MS;
-        const shouldRetry = retryable && withinTimeLimit;
-
-        console.warn(
-          `[sandbox] prepareSandbox: attempt ${attempt}/${maxSetupAttempts} failed after ${elapsed}ms — retryable=${retryable}, withinTimeLimit=${withinTimeLimit}, shouldRetry=${shouldRetry}: ${message}`,
-        );
-
-        if (!shouldRetry || attempt >= maxSetupAttempts) {
-          console.error(
-            `[sandbox] prepareSandbox: giving up after ${attempt} attempt(s), total elapsed=${elapsed}ms: ${message}`,
-          );
-          throw error;
-        }
-
-        const delayMs =
-          2500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[sandbox] prepareSandbox: retrying in ${delayMs}ms`);
-        await sleep(delayMs);
-        completedSteps.length = 0;
-        await emitProgress("Retrying sandbox setup...");
-        attempt += 1;
-        sandbox = undefined;
-        deleteSandboxOnFailure = false;
-      }
-    }
-
-    if (!sandbox) {
-      throw new Error("Sandbox setup failed");
-    }
-
-    const totalElapsed = Date.now() - setupStartedAt;
-    console.log(
-      `[sandbox] prepareSandbox: success in ${totalElapsed}ms, sandboxId=${sandbox.id}, attempts=${attempt}`,
-    );
-    return {
-      sandboxId: sandbox.id,
-    };
-  },
-});
 
 /** Creates or resumes a sandbox without performing repo sync. */
 export const createOrResumeSandbox = internalAction({

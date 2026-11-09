@@ -95,7 +95,6 @@ import type * as _envVarRequests_replies from "../_envVarRequests/replies.js";
 import type * as _envVarRequests_requests from "../_envVarRequests/requests.js";
 import type * as _envVars_documentStore from "../_envVars/documentStore.js";
 import type * as _envVars_encryptedEntries from "../_envVars/encryptedEntries.js";
-import type * as _envVars_listDisplay from "../_envVars/listDisplay.js";
 import type * as _envVars_vercelCredentials from "../_envVars/vercelCredentials.js";
 import type * as _generativeHtml_renders from "../_generativeHtml/renders.js";
 import type * as _generativeUi_candidates from "../_generativeUi/candidates.js";
@@ -318,7 +317,6 @@ import type * as _sessions_pendingTurnRecovery from "../_sessions/pendingTurnRec
 import type * as _sessions_prArchive from "../_sessions/prArchive.js";
 import type * as _sessions_prompts from "../_sessions/prompts.js";
 import type * as _sessions_proposedPlans from "../_sessions/proposedPlans.js";
-import type * as _sessions_pty from "../_sessions/pty.js";
 import type * as _sessions_queries from "../_sessions/queries.js";
 import type * as _sessions_repos from "../_sessions/repos.js";
 import type * as _sessions_resultTarget from "../_sessions/resultTarget.js";
@@ -418,7 +416,6 @@ import type * as evaluationReports from "../evaluationReports.js";
 import type * as evaluationWorkflow from "../evaluationWorkflow.js";
 import type * as extensionReleases from "../extensionReleases.js";
 import type * as feedback from "../feedback.js";
-import type * as fixEnvVars from "../fixEnvVars.js";
 import type * as functions from "../functions.js";
 import type * as github from "../github.js";
 import type * as githubAuth from "../githubAuth.js";
@@ -659,7 +656,6 @@ declare const fullApi: ApiFromModules<{
   "_envVarRequests/requests": typeof _envVarRequests_requests;
   "_envVars/documentStore": typeof _envVars_documentStore;
   "_envVars/encryptedEntries": typeof _envVars_encryptedEntries;
-  "_envVars/listDisplay": typeof _envVars_listDisplay;
   "_envVars/vercelCredentials": typeof _envVars_vercelCredentials;
   "_generativeHtml/renders": typeof _generativeHtml_renders;
   "_generativeUi/candidates": typeof _generativeUi_candidates;
@@ -882,7 +878,6 @@ declare const fullApi: ApiFromModules<{
   "_sessions/prArchive": typeof _sessions_prArchive;
   "_sessions/prompts": typeof _sessions_prompts;
   "_sessions/proposedPlans": typeof _sessions_proposedPlans;
-  "_sessions/pty": typeof _sessions_pty;
   "_sessions/queries": typeof _sessions_queries;
   "_sessions/repos": typeof _sessions_repos;
   "_sessions/resultTarget": typeof _sessions_resultTarget;
@@ -982,7 +977,6 @@ declare const fullApi: ApiFromModules<{
   evaluationWorkflow: typeof evaluationWorkflow;
   extensionReleases: typeof extensionReleases;
   feedback: typeof feedback;
-  fixEnvVars: typeof fixEnvVars;
   functions: typeof functions;
   github: typeof github;
   githubAuth: typeof githubAuth;

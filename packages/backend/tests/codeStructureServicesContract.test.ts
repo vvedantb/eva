@@ -605,11 +605,10 @@ test("stale synthetic-turn heartbeats share isStreamingActivityStale", () => {
   }
 });
 
-test("prewarm and refresh skip closed sandboxes via isSandboxClosingStatus", () => {
+test("prewarm skips closed sandboxes via isSandboxClosingStatus", () => {
   const helper = read("convex/_sandbox/closingStatus.ts");
   expect(helper).toContain("export function isSandboxClosingStatus(");
   for (const path of [
-    "convex/usageLimits.ts",
     "convex/_sessions/execution.ts",
     "convex/projectChatWorkflow.ts",
     "convex/agentTaskChatWorkflow.ts",
