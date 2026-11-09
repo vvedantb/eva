@@ -240,8 +240,8 @@ importers:
         specifier: ^3.49.0
         version: 3.50.0(react-native-svg@15.15.4(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3))(react@19.2.3)
       '@vvedantb/native-ui':
-        specifier: ^0.11.1
-        version: 0.11.1(4d25185096d952a4172281651705dd89)
+        specifier: ^0.11.2
+        version: 0.11.2(4d25185096d952a4172281651705dd89)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -6187,8 +6187,8 @@ packages:
       '@electron/asar':
         optional: true
 
-  '@vvedantb/native-ui@0.11.1':
-    resolution: {integrity: sha512-jXEZN7RBHTeX/G1ORIpSNMv3+dVm/KDlZmWmxvoihNcRAk45Mtvhl/bwh8vV2T8xO2vv9r+wJQxyFDRDL36yKg==}
+  '@vvedantb/native-ui@0.11.2':
+    resolution: {integrity: sha512-UyPtVB+jy9gr5cyJKNNaFpep9yLXOzuuMPdekioE6AqRWe1lxLnlIWmiq0aLbGC9fhGx5CzP75FEQ1/Q0ralWw==}
     peerDependencies:
       '@clerk/clerk-expo': '*'
       '@expo/vector-icons': '*'
@@ -17382,7 +17382,7 @@ snapshots:
 
   '@vvedantb/config@0.4.0': {}
 
-  '@vvedantb/native-ui@0.11.1(4d25185096d952a4172281651705dd89)':
+  '@vvedantb/native-ui@0.11.2(4d25185096d952a4172281651705dd89)':
     dependencies:
       '@expo/vector-icons': 15.1.1(expo-font@57.0.4)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
       '@rn-primitives/select': 1.5.2(@rn-primitives/portal@1.5.3(@types/react@19.3.0)(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
