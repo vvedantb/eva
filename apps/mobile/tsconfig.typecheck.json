@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@vvedantb/native-ui/auth": ["./typecheck/native-ui-auth.d.ts"]
+    }
+  }
+}
