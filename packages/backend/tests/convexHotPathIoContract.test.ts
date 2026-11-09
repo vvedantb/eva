@@ -83,6 +83,12 @@ describe("measured Convex I/O hot paths stay on compact reads", () => {
     );
     expect(runCreators.length).toBeGreaterThan(0);
     for (const path of runCreators) {
+      // The load-test seeder is insert-only and writes each task's summary row
+      // directly alongside its runs instead of going through the helper.
+      if (path.endsWith("_loadTest/seed.ts")) {
+        expect(source(path), path).toContain('insert("agentTaskRunSummaries"');
+        continue;
+      }
       expect(source(path), path).toContain("setTaskLastRunStartedAt");
     }
   });
