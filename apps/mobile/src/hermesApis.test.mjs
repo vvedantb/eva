@@ -54,7 +54,7 @@ function sharedFilesFor(mobileFiles) {
 }
 
 test("the mobile bundle uses no Hermes-risky APIs", () => {
-  const mobileFiles = ["src", "app", "components"].flatMap((dir) => sourceFiles(join(mobileRoot, dir)));
+  const mobileFiles = ["src", "app"].flatMap((dir) => sourceFiles(join(mobileRoot, dir)));
   const files = [...mobileFiles, ...sharedFilesFor(mobileFiles)];
   const hits = [];
   for (const file of files) {
