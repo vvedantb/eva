@@ -157,11 +157,11 @@ import type * as _mentions_bareHarnessCommand from "../_mentions/bareHarnessComm
 import type * as _mentions_dataKinds from "../_mentions/dataKinds.js";
 import type * as _mentions_extractMentionedUserIds from "../_mentions/extractMentionedUserIds.js";
 import type * as _mentions_listData from "../_mentions/listData.js";
+import type * as _mentions_mentionRecipients from "../_mentions/mentionRecipients.js";
 import type * as _mentions_mentionToken from "../_mentions/mentionToken.js";
 import type * as _mentions_notifyChatMentions from "../_mentions/notifyChatMentions.js";
 import type * as _mentions_resolveDocMentions from "../_mentions/resolveDocMentions.js";
 import type * as _mentions_resolveMessageTokens from "../_mentions/resolveMessageTokens.js";
-import type * as _mentions_resolveSkillMentions from "../_mentions/resolveSkillMentions.js";
 import type * as _mentions_routingUrgency from "../_mentions/routingUrgency.js";
 import type * as _mentions_skillToken from "../_mentions/skillToken.js";
 import type * as _messages_activityLog from "../_messages/activityLog.js";
@@ -718,11 +718,11 @@ declare const fullApi: ApiFromModules<{
   "_mentions/dataKinds": typeof _mentions_dataKinds;
   "_mentions/extractMentionedUserIds": typeof _mentions_extractMentionedUserIds;
   "_mentions/listData": typeof _mentions_listData;
+  "_mentions/mentionRecipients": typeof _mentions_mentionRecipients;
   "_mentions/mentionToken": typeof _mentions_mentionToken;
   "_mentions/notifyChatMentions": typeof _mentions_notifyChatMentions;
   "_mentions/resolveDocMentions": typeof _mentions_resolveDocMentions;
   "_mentions/resolveMessageTokens": typeof _mentions_resolveMessageTokens;
-  "_mentions/resolveSkillMentions": typeof _mentions_resolveSkillMentions;
   "_mentions/routingUrgency": typeof _mentions_routingUrgency;
   "_mentions/skillToken": typeof _mentions_skillToken;
   "_messages/activityLog": typeof _messages_activityLog;
