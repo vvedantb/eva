@@ -9,95 +9,54 @@ import {
   DEFAULT_AI_MODEL,
   normalizeAIModel,
   resolveTraitsForDisplay,
-  type AIModel,
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import { composerTraitFields, storedComposerTraits } from "@eva/shared";
-import { toast } from "@vvedantb/ui";
 import { toRunTraitArgs } from "@/lib/utils/runTraits";
-import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { ChatBody, type ChatSendOptions } from "@/lib/components/chat/ChatBody";
+import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
 import {
-  openChatTurnOptimistically,
-  useChatTurnOpen,
-} from "@/lib/components/chat/useChatTurnOpen";
-import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
-import {
-  isChatTurnExecuting,
-  readableSendError,
-  sandboxComposerState,
-  SANDBOX_CHAT_COPY,
-} from "@/lib/components/chat/chatBodyUtils";
+  SandboxChatPanel,
+  type SandboxChatPanelProps,
+} from "@/lib/components/chat/SandboxChatPanel";
+import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
 import {
   buildFirstRunChatTurn,
   findFirstRunChatTurnRun,
   isRunInProgress,
   taskRunStreamingEntityId,
 } from "@/lib/components/tasks/firstRunChatTurn";
-import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
-import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
-import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
-import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
-import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
-import {
-  buildSandboxChatSurface,
-  startSandboxHandler,
-} from "@/lib/components/chat/sandboxChatSurface";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
-import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
-
-interface TaskSandboxChatPanelProps {
-  taskId: Id<"agentTasks">;
-  isSandboxActive: boolean;
-  isSandboxToggling?: boolean;
-  /** Startup steps while the preview sandbox wakes; undefined otherwise. */
-  sandboxStartupActivity?: string;
-  /** Opens the Files tab and loads this sandbox path in the file viewer. */
-  onOpenFile?: (path: string) => void;
-  /** Opens Review diffs; optional repo-relative path scrolls to that file. */
-  onViewDiff?: (repoRelativePath?: string) => void;
-  /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
-  onOpenAgentsTab?: () => void;
-  onSandboxToggle?: (action: "start" | "stop") => void;
-}
 
 type TaskChatTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 type TaskChatRun =
   | FunctionReturnType<typeof api.agentRuns.listByTask>[number]
   | undefined;
-type TaskChatStreaming =
-  | FunctionReturnType<typeof api.streaming.get>
-  | undefined;
 
 export function TaskSandboxChatPanel({
   taskId,
-  isSandboxActive,
-  isSandboxToggling = false,
-  sandboxStartupActivity,
-  onOpenFile,
-  onViewDiff,
-  onOpenAgentsTab,
-  onSandboxToggle,
-}: TaskSandboxChatPanelProps) {
-  const { repo, basePath } = useRepo();
-  const task = useQuery(api.agentTasks.get, { id: taskId });
-  const chatTurnOpen = useChatTurnOpen(taskId);
-  const messages = useQuery(api.messages.listByParent, { parentId: taskId });
-  const queuedMessages = useQuery(api.queuedMessages.listByParent, {
-    parentId: taskId,
-  });
-  const streaming = useQuery(api.streaming.get, {
-    entityId: `task-chat-${taskId}`,
-  });
+  ...panel
+}: SandboxChatPanelProps & { taskId: Id<"agentTasks"> }) {
+  const binding = useTaskChatBinding(taskId);
+  return <SandboxChatPanel binding={binding} {...panel} />;
+}
 
-  const { isFirstRunInProgress, firstRunStreaming, firstRunTurn } =
-    useTaskFirstRunChatTurn(taskId, task);
+/**
+ * The task side of the sandbox chat. Model, account and traits stay on the
+ * task doc (shared with the activity composer); traits are sticky on Convex
+ * like sessions. A quick task also brings its first run as the opening turn.
+ */
+export function useTaskChatBinding(
+  taskId: Id<"agentTasks">,
+): SandboxChatBinding {
+  const { repo } = useRepo();
+  const task = useQuery(api.agentTasks.get, { id: taskId });
+  const firstRun = useTaskFirstRunChatTurn(taskId, task);
 
   const addMessage = useMutation(api.agentTaskChatWorkflow.addMessage);
   const startExecute = useMutation(
@@ -112,296 +71,66 @@ export function TaskSandboxChatPanel({
   // The first run is its own workflow, not a chat turn, so Stop has to reach
   // the task workflow while it owns the bubble.
   const cancelFirstRun = useMutation(api.taskWorkflow.cancelExecution);
-  const updateTask = useMutation(api.agentTasks.update);
-  const setDraft = useMutation(api.drafts.set);
   const prewarmChatDaemonNow = useAction(
     api.agentTaskChatWorkflow.prewarmChatDaemonNow,
   );
-  const { isSwitchingAccount, switchProviderAccount } =
-    useProviderAccountHandoff({
-      persist: (providerAccountId) =>
-        updateTask({ id: taskId, providerAccountId }),
-      prewarm: () => prewarmChatDaemonNow({ taskId }),
-    });
-  const setTraitsMutation = useMutation(
-    api.agentTasks.setTraits,
-  ).withOptimisticUpdate((localStore, args) => {
-    patchLoadedQuery(
-      localStore,
-      api.agentTasks.get,
-      { id: args.id },
-      (cur) => cur && { ...cur, ...composerTraitFields(args) },
-    );
-  });
-
-  const {
-    model,
-    displayTraits,
-    executionTraits,
-    providerAccountId,
-    modelOptions,
-    accounts,
-    resolveAccountId,
-    isOwner,
-    usageAccountLabel,
-  } = useTaskChatModelSettings(taskId, task, repo);
-
-  const { draftBundle, isDraftLoading } = useSandboxChatDraft({
-    kind: "taskChat",
-    taskId,
-  });
-
-  const { blockingQuestion, handleAnswerBlockingQuestion } =
-    useTaskBlockingQuestion(taskId);
-
-  const setModel = (next: AIModel) => {
-    void updateTask({ id: taskId, model: normalizeAIModel(next) });
-  };
-
-  const onTraitsChange = (partial: Partial<StoredModelTraits>) => {
-    void setTraitsMutation({
-      id: taskId,
-      ...toRunTraitArgs(partial),
-    });
-  };
-
-  const setProviderAccountId = async (next: string | null) => {
-    if (!isOwner || !task) return;
-    await switchProviderAccount(resolveAccountId(next) ?? null);
-  };
-
-  // Same rule as every chat (`isChatTurnExecuting`). The first run counts
-  // too: its bubble is on screen here, so the composer shows Working and Stop
-  // for it like any other turn.
-  const isExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpen,
-    messages,
-    isFirstRunInProgress,
-  });
-
-  const queueGate = useChatQueueGate({
-    parentId: taskId,
-    messages: messages ?? [],
-    queuedMessages: queuedMessages ?? [],
-    model,
-    accountId: providerAccountId,
-    accounts,
-    resolveAccountId,
-    isSandboxActive,
-    setModel,
-    setAccount: setProviderAccountId,
-  });
-  const composer = sandboxComposerState({
-    isSandboxActive,
-    isSwitchingAccount,
-    isExecuting,
-    isUsageLimitHeld: queueGate.isUsageLimitHeld,
-  });
-
-  // A thrown send rolls the whole turn back (no placeholder, no workflow) and
-  // the composer has already cleared, so the prompt only exists here. The toast
-  // owns the failure and hands the text back through the same `drafts` row the
-  // composer reads (same contract as useChatSend).
-  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
-    toast.error("Couldn't send your message", {
-      id: "task-chat-send",
-      description: readableSendError(errorMessage),
-      action: {
-        label: "Restore draft",
-        onClick: () => {
-          void setDraft({
-            target: { kind: "taskChat", taskId },
-            content: draftContent,
-          });
-        },
-      },
-    });
-  };
-
-  const handleSend = async (
-    content: string,
-    attachmentStorageIds?: Id<"_storage">[],
-    options?: ChatSendOptions,
-  ) => {
-    // What the user typed. A ChatBody send has already appended its citation /
-    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
-    // re-edit, so the restore has to use the pre-append text.
-    const draftContent = options?.draftContent ?? content;
-    // Hoisted out of the `try`: React Compiler bails on the whole file when it
-    // meets expression-level control flow inside one (eva/no-value-block-in-try).
-    const enqueueReasoningLevel =
-      displayTraits.effortLevel ?? executionTraits.reasoningLevel;
-    if (isExecuting || composer.queuesSends) {
-      try {
-        await enqueueMessage({
-          taskId,
-          message: content,
-          model,
-          ...executionTraits,
-          reasoningLevel: enqueueReasoningLevel,
-          providerAccountId: resolveAccountId(providerAccountId),
-          attachmentStorageIds,
-        });
-      } catch (error) {
-        raiseSendFailure(
-          error instanceof Error ? error.message : "",
-          draftContent,
-        );
-        // Rethrow: the caller tells a delivered send from a failed one by
-        // whether this settles, and keeps its pending chips on a failure.
-        throw error;
-      }
-      return;
-    }
-    const accountId = resolveAccountId(providerAccountId);
-    try {
-      // Fired together, not one after the other: `startExecute`'s optimistic
-      // status must apply at once, so a second send before the server answers
-      // queues. Convex runs one client's mutations in order, so the user row
-      // still lands first.
-      await Promise.all([
-        addMessage({
-          taskId,
-          content,
-          attachmentStorageIds,
-          providerAccountId: accountId,
-          model,
-          reasoningLevel: displayTraits.effortLevel,
-        }),
-        startExecute({
-          taskId,
-          message: content,
-          model,
-          ...executionTraits,
-          providerAccountId: accountId,
-        }),
-      ]);
-    } catch (error) {
-      raiseSendFailure(
-        error instanceof Error ? error.message : "",
-        draftContent,
+  const updateTask = useMutation(api.agentTasks.update);
+  const setTraits = useMutation(api.agentTasks.setTraits).withOptimisticUpdate(
+    (localStore, args) => {
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.get,
+        { id: args.id },
+        (cur) => cur && { ...cur, ...composerTraitFields(args) },
       );
-      // Rethrow: the caller tells a delivered send from a failed one by whether
-      // this settles, and keeps its pending chips on a failure.
-      throw error;
-    }
-  };
+    },
+  );
 
-  const handleCancel = async () => {
-    if (isFirstRunInProgress) {
-      await cancelFirstRun({ taskId });
-      return;
-    }
-    await cancelExecution({ taskId });
-  };
+  const model = normalizeAIModel(
+    task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
+  );
+  const storedTraits: StoredModelTraits = storedComposerTraits(task);
+  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
+  const { options: accounts, resolveId: resolveAccountId } =
+    useTaskOwnerProviderAccounts(taskId);
+  const currentUserId = useQuery(api.auth.me);
+  const isOwner =
+    currentUserId !== undefined &&
+    task?.createdBy !== undefined &&
+    currentUserId === task.createdBy;
 
-  const chatSurface = buildSandboxChatSurface({
+  return {
     entity: { kind: "task", taskId },
-    repoId: repo._id,
-    model,
-    isExecuting,
     doc: task,
-    isOwner,
-    messages,
+    model,
+    setModel: (next) => {
+      void updateTask({ id: taskId, model: normalizeAIModel(next) });
+    },
+    modelOptions,
+    displayTraits: resolveTraitsForDisplay(model, storedTraits),
+    executionTraits: buildTraitsExecutionPayload(model, storedTraits),
+    onTraitsChange: (partial) => {
+      void setTraits({ id: taskId, ...toRunTraitArgs(partial) });
+    },
+    providerAccountId: task?.providerAccountId ?? null,
     accounts,
+    pickerAccounts: accounts,
     resolveAccountId,
-    switchProviderAccount,
-    isSandboxActive,
-    sendCommand: (command) => handleSend(command),
-  });
-
-  const chatMessages = [...firstRunTurn, ...(messages ?? [])];
-  const streamingFields = pickTaskChatStreaming(
-    isFirstRunInProgress,
-    firstRunStreaming,
-    streaming,
-  );
-
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <SandboxChatHeaderActions
-        repoId={repo._id}
-        model={model}
-        providerAccountId={providerAccountId}
-        usageAccountLabel={usageAccountLabel}
-      />
-      <SubagentThreadLayer
-        surface={chatSurface}
-        parentTitle={task?.title ?? "Task"}
-        messages={chatMessages}
-        streamingActivity={streamingFields.streamingActivity}
-        sandboxRunning={isSandboxActive}
-        onOpenFile={onOpenFile}
-      >
-        <ChatBody
-          repo={{ id: repo._id, basePath }}
-          conversationId={taskId}
-          chatParentId={taskId}
-          messages={chatMessages}
-          isLoadingMessages={messages === undefined}
-          queuedMessages={queuedMessages ?? []}
-          queueLabel={queueGate.queueLabel(isExecuting)}
-          streamingActivity={streamingFields.streamingActivity}
-          streamingContent={streamingFields.streamingContent}
-          streamingPendingQuestion={streamingFields.streamingPendingQuestion}
-          blockingQuestion={blockingQuestion}
-          onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
-          isExecuting={isExecuting}
-          isInputDisabled={composer.isInputDisabled}
-          placeholder={composer.placeholder}
-          emptyStateTitle={
-            isSandboxActive
-              ? "Ask Eva anything about this task's running sandbox."
-              : SANDBOX_CHAT_COPY.asleepTitle
-          }
-          emptyStateDescription={
-            isSandboxActive
-              ? SANDBOX_CHAT_COPY.activeDescription
-              : SANDBOX_CHAT_COPY.asleepDescription
-          }
-          disabledReason={composer.disabledReason}
-          onStartSandbox={startSandboxHandler(
-            isSandboxActive,
-            isSandboxToggling,
-            onSandboxToggle,
-          )}
-          modelPicker={{
-            model,
-            setModel: queueGate.setModel,
-            modelOptions,
-            accounts,
-            accountId: providerAccountId,
-            onAccountChange: queueGate.setAccount,
-            displayTraits,
-            onTraitsChange,
-          }}
-          onSend={handleSend}
-          onCancel={handleCancel}
-          preInputContent={<SandboxChatPreInput surface={chatSurface} />}
-          underCardLeading={
-            <SandboxBranchChip
-              branch={task?.sandboxBranch}
-              isSandboxActive={isSandboxActive}
-            />
-          }
-          draft={draftBundle}
-          isDraftLoading={isDraftLoading}
-          onOpenFile={onOpenFile}
-          onViewDiff={onViewDiff}
-          onOpenAgentsTab={onOpenAgentsTab}
-          backgroundAgents={task?.backgroundAgents}
-          sandboxRunning={isSandboxActive}
-          transcriptTail={sandboxStartupTail(
-            sandboxStartupActivity,
-            sandboxStartupActivity !== undefined &&
-              !isSandboxActive &&
-              !isExecuting,
-          )}
-        />
-      </SubagentThreadLayer>
-      {queueGate.switchDialog}
-    </div>
-  );
+    isOwner,
+    persistAccount: (providerAccountId) =>
+      updateTask({ id: taskId, providerAccountId }),
+    prewarm: () => prewarmChatDaemonNow({ taskId }),
+    ports: {
+      add: (args) => addMessage({ taskId, ...args }),
+      start: (args) => startExecute({ taskId, ...args }),
+      enqueue: (args) => enqueueMessage({ taskId, ...args }),
+    },
+    cancel: () =>
+      firstRun.isInProgress
+        ? cancelFirstRun({ taskId })
+        : cancelExecution({ taskId }),
+    firstRun,
+  };
 }
 
 // Quick tasks open the chat with the first run rendered as a normal turn:
@@ -409,24 +138,27 @@ export function TaskSandboxChatPanel({
 // the assistant reply. From the moment the run starts, so its steps stream
 // here rather than into a timeline accordion on the task page (see
 // firstRunChatTurn.ts).
-function useTaskFirstRunChatTurn(taskId: Id<"agentTasks">, task: TaskChatTask) {
+function useTaskFirstRunChatTurn(
+  taskId: Id<"agentTasks">,
+  task: TaskChatTask,
+): NonNullable<SandboxChatBinding["firstRun"]> {
   const isQuickTask = task != null && task.projectId === undefined;
   const runs = useQuery(
     api.agentRuns.listByTask,
     isQuickTask ? { taskId } : "skip",
   );
   const firstRun = findFirstRunChatTurnRun(runs);
-  const isFirstRunInProgress =
+  const isInProgress =
     firstRun !== undefined && isRunInProgress(firstRun.status);
   // The log row is only written when the run completes, so an in-flight run
   // reads its live activity off the streaming row instead.
-  const firstRunActivityLog = useQuery(
+  const activityLog = useQuery(
     api.agentRuns.getActivityLog,
-    firstRun && !isFirstRunInProgress ? { id: firstRun._id } : "skip",
+    firstRun && !isInProgress ? { id: firstRun._id } : "skip",
   );
-  const firstRunStreaming = useQuery(
+  const streaming = useQuery(
     api.streaming.get,
-    firstRun && isFirstRunInProgress
+    firstRun && isInProgress
       ? { entityId: taskRunStreamingEntityId(firstRun._id) }
       : "skip",
   );
@@ -435,21 +167,19 @@ function useTaskFirstRunChatTurn(taskId: Id<"agentTasks">, task: TaskChatTask) {
     task,
     firstRun,
   );
-  const firstRunTurn =
-    task &&
-    firstRun &&
-    (isFirstRunInProgress || firstRunActivityLog !== undefined)
+  const turn =
+    task && firstRun && (isInProgress || activityLog !== undefined)
       ? buildFirstRunChatTurn({
           task,
           run: firstRun,
-          activityLog: firstRunActivityLog ?? null,
+          activityLog: activityLog ?? null,
           ...(taskAttachments !== undefined
             ? { attachments: taskAttachments }
             : {}),
           ...(firstRunMedia !== undefined ? { media: firstRunMedia } : {}),
         })
       : [];
-  return { isFirstRunInProgress, firstRunStreaming, firstRunTurn };
+  return { isInProgress, streaming, turn };
 }
 
 function useFirstRunMediaQueries(
@@ -473,84 +203,4 @@ function useFirstRunMediaQueries(
       : "skip",
   );
   return { taskAttachments, firstRunMedia };
-}
-
-// Model + account stay on the task doc (shared with activity composer).
-// Traits are sticky on Convex like sessions (no localStorage).
-export function useTaskChatModelSettings(
-  taskId: Id<"agentTasks">,
-  task: TaskChatTask,
-  repo: ReturnType<typeof useRepo>["repo"],
-) {
-  const model = normalizeAIModel(
-    task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
-  );
-  const storedTraits: StoredModelTraits = storedComposerTraits(task);
-  const displayTraits = resolveTraitsForDisplay(model, storedTraits);
-  const executionTraits = buildTraitsExecutionPayload(model, storedTraits);
-  const providerAccountId = task?.providerAccountId ?? null;
-  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(taskId);
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner =
-    currentUserId !== undefined &&
-    task?.createdBy !== undefined &&
-    currentUserId === task.createdBy;
-  const usageAccountLabel =
-    providerAccountId === null
-      ? "Team"
-      : (accounts.find((account) => account.id === providerAccountId)?.label ??
-        "Selected account");
-  return {
-    model,
-    displayTraits,
-    executionTraits,
-    providerAccountId,
-    modelOptions,
-    accounts,
-    resolveAccountId,
-    isOwner,
-    usageAccountLabel,
-  };
-}
-
-function useTaskBlockingQuestion(taskId: Id<"agentTasks">) {
-  // Same entityId the task-chat sandbox posts with (task id, not stream prefix).
-  const activeQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: taskId,
-  });
-  const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
-  const handleAnswerBlockingQuestion = async (
-    toolUseId: string,
-    answers: Record<string, string>,
-  ) => {
-    await answerPendingQuestion({
-      entityId: taskId,
-      toolUseId,
-      answer: JSON.stringify(answers),
-    });
-  };
-  return {
-    blockingQuestion: activeQuestion ?? undefined,
-    handleAnswerBlockingQuestion,
-  };
-}
-
-function pickTaskChatStreaming(
-  isFirstRunInProgress: boolean,
-  firstRunStreaming: TaskChatStreaming,
-  streaming: TaskChatStreaming,
-) {
-  return {
-    streamingActivity: isFirstRunInProgress
-      ? firstRunStreaming?.currentActivity
-      : streaming?.currentActivity,
-    streamingContent: isFirstRunInProgress
-      ? firstRunStreaming?.currentContent
-      : streaming?.currentContent,
-    streamingPendingQuestion: isFirstRunInProgress
-      ? firstRunStreaming?.pendingQuestion
-      : streaming?.pendingQuestion,
-  };
 }

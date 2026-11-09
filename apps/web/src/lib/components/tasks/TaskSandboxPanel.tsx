@@ -18,7 +18,8 @@ import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { useTaskAnnotationSend } from "./useTaskAnnotationSend";
+import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { useTaskChatBinding } from "./TaskSandboxChatPanel";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -97,7 +98,9 @@ export function TaskSandboxPanel({
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
   const taskIdStr = String(taskId);
-  const submitAnnotation = useTaskAnnotationSend(taskId);
+  const submitAnnotation = useSandboxAnnotationSend(
+    useTaskChatBinding(taskId),
+  );
 
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
   // panel already subscribes to (same entity ids).

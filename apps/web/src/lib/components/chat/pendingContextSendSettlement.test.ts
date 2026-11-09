@@ -9,13 +9,16 @@ function sourceOf(relativePath: string): string {
   return readFileSync(join(here, relativePath), "utf8");
 }
 
+// [surface, path, failure paths]. Sessions toast both the enqueue and the
+// start-execution failure; task/project chat sends both through one
+// `sendSandboxTurn` call (its own rejection is tested in sandboxChatTurn.test).
 const SEND_HANDLERS = [
   [
     "session",
     "../../../routes/_repo/$owner/$repo/sessions/_components/useChatSend.ts",
+    2,
   ],
-  ["task", "../tasks/TaskSandboxChatPanel.tsx"],
-  ["project", "../projects/ProjectSandboxChatPanel.tsx"],
+  ["task/project", "SandboxChatPanel.tsx", 1],
 ] as const;
 
 /**
@@ -60,7 +63,7 @@ describe("chat sends report settlement honestly", () => {
     expect(onRejected).not.toContain("remove(");
   });
 
-  for (const [surface, path] of SEND_HANDLERS) {
+  for (const [surface, path, failurePaths] of SEND_HANDLERS) {
     test(`the ${surface} send rejects on failure and restores the typed text`, () => {
       const source = sourceOf(path);
       // Never fired and forgotten: the caller cannot tell a delivered send from
@@ -70,9 +73,11 @@ describe("chat sends report settlement honestly", () => {
         "const draftContent = options?.draftContent ?? content;",
       );
       expect(source).toContain("content: draftContent,");
-      // Both failure paths (enqueue and start-execution) toast and rethrow.
-      expect(source.match(/raiseSendFailure\(\n/g) ?? []).toHaveLength(2);
-      expect(source.match(/throw error;/g) ?? []).toHaveLength(2);
+      // Every failure path toasts and rethrows.
+      expect(source.match(/raiseSendFailure\(\n/g) ?? []).toHaveLength(
+        failurePaths,
+      );
+      expect(source.match(/throw error;/g) ?? []).toHaveLength(failurePaths);
     });
   }
 });
