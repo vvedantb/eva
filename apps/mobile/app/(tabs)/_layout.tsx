@@ -1,5 +1,6 @@
 import { useAuth } from "@clerk/clerk-expo";
 import {
+  IconChecklist,
   IconInbox,
   IconSettings,
   IconTerminal2,
@@ -24,12 +25,15 @@ const iconColor = (color: ColorValue) =>
 const renderTabBar = (props: FloatingTabBarProps) => (
   <FloatingTabBar {...props} />
 );
-// Same icons as the web rail: inbox arrow, terminal for Sessions, gear.
+// Same icons as the web rail: inbox arrow, terminal for Sessions, checklist for Quick tasks, gear.
 const inboxIcon = ({ color, size }: TabIconProps) => (
   <IconInbox color={iconColor(color)} size={size} />
 );
 const sessionsIcon = ({ color, size }: TabIconProps) => (
   <IconTerminal2 color={iconColor(color)} size={size} />
+);
+const quickTasksIcon = ({ color, size }: TabIconProps) => (
+  <IconChecklist color={iconColor(color)} size={size} />
 );
 const settingsIcon = ({ color, size }: TabIconProps) => (
   <IconSettings color={iconColor(color)} size={size} />
@@ -57,6 +61,10 @@ export default function TabsLayout() {
           <Tabs.Screen
             name="sessions"
             options={{ title: "Sessions", tabBarIcon: sessionsIcon }}
+          />
+          <Tabs.Screen
+            name="quick-tasks"
+            options={{ title: "Quick tasks", tabBarIcon: quickTasksIcon }}
           />
           <Tabs.Screen
             name="settings"

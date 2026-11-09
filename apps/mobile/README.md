@@ -12,6 +12,7 @@ Android companion app for Eva. It tells you when an agent needs your input or so
 | --- | --- |
 | Inbox | `notifications.list`. Tap opens the chat (`chatTarget`), or the web page for docs and comments. |
 | Sessions | `mobile.listChats`: recent open sessions across every repo you can access. A help-circle marks a session waiting on your answer. |
+| Quick tasks | `mobile.listQuickTasks`: quick tasks (no project) across every repo you can access, list view only, with Active and Done tabs. The row checkbox completes a task (`agentTasks.updateStatus`). `+` opens `/task/new` (`agentTasks.createQuickTask`, then `startExecution`). Tap opens the chat. |
 | Chat | `mobile.getChat`, `messages.listByParent`, `turns.getChatStatus`, `pendingQuestions.getActive`. Agent questions dock in place of the composer. Session chats reply with `sessionWorkflow.enqueueMessage`; quick tasks and projects are read-only, with "Open on web". |
 | Settings | Account and sign out. Sign-out removes this phone's push token. |
 

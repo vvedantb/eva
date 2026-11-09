@@ -242,4 +242,50 @@ describe("mobile api", () => {
     );
     expect(messageLinkHref("https://eva.dev/a?message=old", "m2")).toBe("https://eva.dev/a?message=m2");
   });
+
+  test(
+    "listQuickTasks lists only your quick tasks, split into Active and Done",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const now = Date.now();
+      const base = { repoId: ids.repoId, createdAt: now, updatedAt: now, createdBy: ids.userId };
+      await t.run(async (ctx) => {
+        await ctx.db.insert("agentTasks", { ...base, title: "Project task", status: "todo", projectId: ids.projectId });
+        await ctx.db.insert("agentTasks", { ...base, title: "Deleted", status: "todo", deletedAt: now });
+        await ctx.db.insert("agentTasks", { ...base, title: "A draft", status: "draft" });
+        await ctx.db.insert("agentTasks", { ...base, title: "Shipped", status: "done" });
+        await ctx.db.insert("agentTasks", { ...base, title: "Dropped", status: "cancelled" });
+      });
+      const active = await asUser.query(api.mobile.listQuickTasks, {});
+      expect(active).toEqual([
+        {
+          taskId: ids.taskId,
+          title: "Bump the deps",
+          repoLabel: "eva",
+          status: "code_review",
+          updatedAt: expect.any(Number),
+          isAwaitingAnswer: false,
+        },
+      ]);
+      const done = await asUser.query(api.mobile.listQuickTasks, { closed: true });
+      expect(done.map((row) => row.title).toSorted()).toEqual(["Dropped", "Shipped"]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "createQuickTask then updateStatus moves a task from Active to Done",
+    async () => {
+      const { ids, asUser } = await fixture();
+      const id = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, title: "From the phone" });
+      const before = await asUser.query(api.mobile.listQuickTasks, {});
+      expect(before.find((row) => row.taskId === id)).toMatchObject({ status: "todo", title: "From the phone" });
+      await asUser.mutation(api.agentTasks.updateStatus, { id, status: "done" });
+      const after = await asUser.query(api.mobile.listQuickTasks, {});
+      expect(after.some((row) => row.taskId === id)).toBe(false);
+      const done = await asUser.query(api.mobile.listQuickTasks, { closed: true });
+      expect(done.find((row) => row.taskId === id)).toMatchObject({ status: "done" });
+    },
+    TIMEOUT_MS,
+  );
 });

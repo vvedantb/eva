@@ -13,7 +13,7 @@ import { createSession, type AuthMutationCtx } from "./_sessions/mutations";
 import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
 import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
-import { launchTraitsFromStored, normalizeAIModel, sessionStatusValidator } from "./validators";
+import { launchTraitsFromStored, normalizeAIModel, sessionStatusValidator, taskStatusValidator } from "./validators";
 
 /**
  * API for the Eva mobile app (apps/mobile). The app opens every chat by one
@@ -238,6 +238,82 @@ export const listChats = authQuery({
       status: session.status,
       updatedAt,
       isAwaitingAnswer: awaiting.get(repo._id)?.has(String(session._id)) === true,
+    }));
+  },
+});
+
+/** Quick tasks read per repo and status; the list is "what is going on now". */
+const QUICK_TASKS_PER_STATUS = 20;
+/** Rows in the whole quick task list. */
+const QUICK_TASK_LIST_LIMIT = 60;
+/** Web board statuses: Active is the work columns, Done is the closed ones. */
+const ACTIVE_TASK_STATUSES = ["todo", "in_progress", "code_review", "business_review"] as const;
+const DONE_TASK_STATUSES = ["done", "cancelled"] as const;
+
+/**
+ * Quick tasks (tasks with no project) across every repo the user can access,
+ * most recently updated first: the work statuses by default, `done` and
+ * `cancelled` with `closed: true` (the Active and Done tabs). Drafts and
+ * deleted tasks are left out, as on the web list view.
+ */
+export const listQuickTasks = authQuery({
+  args: { closed: v.optional(v.boolean()) },
+  returns: v.array(
+    v.object({
+      taskId: v.id("agentTasks"),
+      title: v.string(),
+      repoLabel: v.string(),
+      status: taskStatusValidator,
+      updatedAt: v.number(),
+      /** An agent in this task's chat waits on your answer. */
+      isAwaitingAnswer: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const statuses = args.closed === true ? DONE_TASK_STATUSES : ACTIVE_TASK_STATUSES;
+    const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
+    const perRepo = await Promise.all(
+      repos.map(async (repo) => {
+        const groups = await Promise.all(
+          statuses.map((status) =>
+            ctx.db
+              .query("agentTasks")
+              .withIndex("by_repo_status_and_deleted", (q) =>
+                q.eq("repoId", repo._id).eq("status", status).eq("deletedAt", undefined),
+              )
+              .order("desc")
+              .take(QUICK_TASKS_PER_STATUS),
+          ),
+        );
+        // Project tasks have a `projectId`; a quick task has none.
+        return groups
+          .flat()
+          .filter((task) => task.projectId === undefined)
+          .map((task) => ({ task, repo }));
+      }),
+    );
+    const rows = perRepo
+      .flat()
+      .toSorted((a, b) => b.task.updatedAt - a.task.updatedAt)
+      .slice(0, QUICK_TASK_LIST_LIMIT);
+    const listedRepoIds = [...new Set(rows.map((row) => row.repo._id))];
+    const awaiting = new Map(
+      await Promise.all(
+        listedRepoIds.map(
+          async (repoId): Promise<[Id<"githubRepos">, ReadonlySet<string>]> => [
+            repoId,
+            await awaitingAnswerEntityIdsForRepo(ctx.db, repoId),
+          ],
+        ),
+      ),
+    );
+    return rows.map(({ task, repo }) => ({
+      taskId: task._id,
+      title: task.title,
+      repoLabel: repoLabel(repo),
+      status: task.status,
+      updatedAt: task.updatedAt,
+      isAwaitingAnswer: awaiting.get(repo._id)?.has(String(task._id)) === true,
     }));
   },
 });

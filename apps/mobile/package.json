@@ -12,7 +12,8 @@
     "test:babel": "node --test babel.config.test.mjs",
     "test:logging": "node --test src/logging/unhandledRejections.test.mjs",
     "test:hermes-apis": "node --test src/hermesApis.test.mjs",
-    "test": "pnpm test:logging && pnpm test:hermes-apis && pnpm test:babel",
+    "test:quick-tasks": "node --test src/tasks/quickTasks.test.mjs",
+    "test": "pnpm test:logging && pnpm test:hermes-apis && pnpm test:babel && pnpm test:quick-tasks",
     "web:export": "expo export --platform web"
   },
   "dependencies": {

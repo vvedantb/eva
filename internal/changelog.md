@@ -1,5 +1,13 @@
 # Changelog
 
+## Mobile: Quick tasks tab (list view)
+
+Date: 2026-11-09
+
+WHY: Vedant asked for a Quick tasks tab on mobile, in list view only. The phone app had no task screen, so a quick task could not be opened, created or completed there.
+
+Architectural: new bottom tab `app/(tabs)/quick-tasks.tsx` (Active and Done tabs, repo groups, checkbox to complete) and `app/task/new.tsx` (repo picker and `PromptInput`; the first line is the title). Backend adds `mobile.listQuickTasks`, a slim cross-repo read of tasks with no `projectId` (`by_repo_status_and_deleted`, non-draft, non-deleted); Done holds `done` and `cancelled`. Create and complete reuse `agentTasks.createQuickTask`, `startExecution` and `updateStatus`, so access and side effects match the web. Pure helpers and tests: `src/tasks/quickTasks.ts`, `pnpm --filter @eva/mobile test:quick-tasks`. No kanban. native-ui gap: none found; rows reuse `Checkbox`, `RowStatus` and `StatusDot`, as Sessions does.
+
 ## Mobile: native-ui 0.11.2 drops the typecheck auth shim
 
 Date: 2026-11-09
