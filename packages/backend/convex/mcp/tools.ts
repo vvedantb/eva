@@ -82,7 +82,7 @@ export function buildTools(
   const { assertRepoAccess, resolveRepoRef, resolveEntityTarget } =
     entityAccess(ctx, credentials);
 
-  async function getContext(): Promise<{ deployKey: string; userId: string }> {
+  async function getContext(): Promise<{ userId: string }> {
     return mcpGetContext(ctx, clerkUserId);
   }
 
@@ -92,7 +92,6 @@ export function buildTools(
 
   async function resolveTargetWithAccess(
     repoId: string,
-    _deployKey: string,
     userId: string,
     environment: "staging" | "prod",
   ): Promise<RepoCredentials> {
@@ -213,12 +212,11 @@ export function buildTools(
         environment: environmentArg,
       },
       handler: async ({ repoId, repoName, app, environment }) => {
-        const { deployKey, userId } = await getContext();
+        const { userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
         if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
-          deployKey,
           userId,
           environment,
         );
@@ -274,12 +272,11 @@ export function buildTools(
         app,
         environment,
       }) => {
-        const { deployKey, userId } = await getContext();
+        const { userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
         if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
-          deployKey,
           userId,
           environment,
         );
@@ -328,12 +325,11 @@ export function buildTools(
             "Invalid document ID format. IDs should be alphanumeric.",
           );
         }
-        const { deployKey, userId } = await getContext();
+        const { userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
         if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
-          deployKey,
           userId,
           environment,
         );
@@ -385,12 +381,11 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
         environment: environmentArg,
       },
       handler: async ({ code, repoId, repoName, app, environment }) => {
-        const { deployKey, userId } = await getContext();
+        const { userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
         if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
-          deployKey,
           userId,
           environment,
         );
@@ -437,12 +432,11 @@ Example: "const users = await ctx.db.query('users').collect(); return users.filt
             "Invalid table name. Use alphanumeric characters and underscores.",
           );
         }
-        const { deployKey, userId } = await getContext();
+        const { userId } = await getContext();
         const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
         if ("content" in ref) return ref;
         const target = await resolveTargetWithAccess(
           ref.repoId,
-          deployKey,
           userId,
           environment,
         );
@@ -1178,7 +1172,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
   async function getUserTeams(
     userId: string,
   ): Promise<{ id: string; name: string }[]> {
-    return ctx.runAction(internal.mcp.nodeActions.listUserTeams, { userId });
+    return ctx.runQuery(internal.mcp.queries.listUserTeams, { userId });
   }
 
   async function resolveTeam(

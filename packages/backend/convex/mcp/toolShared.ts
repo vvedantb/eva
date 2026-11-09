@@ -134,7 +134,7 @@ export const confirmedDeleteArg = z
 export async function mcpGetContext(
   ctx: ActionCtx,
   clerkUserId: string,
-): Promise<{ deployKey: string; userId: string }> {
+): Promise<{ userId: string }> {
   return ctx.runAction(internal.mcp.nodeActions.getContext, { clerkUserId });
 }
 
@@ -162,7 +162,7 @@ export async function mcpListUserRepos(
   ctx: ActionCtx,
   userId: string,
 ): Promise<RepoInfo[]> {
-  return ctx.runAction(internal.mcp.nodeActions.listUserRepos, { userId });
+  return ctx.runQuery(internal.mcp.queries.listUserRepos, { userId });
 }
 
 /** `owner/name` for a plain repo, `owner/name/app` for one app of a monorepo. */
