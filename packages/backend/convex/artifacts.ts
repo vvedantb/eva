@@ -484,7 +484,7 @@ export const callTool = authAction({
             name: string;
             rootDirectory: string | null;
             mcpRootPrompt: string | null;
-          }> = await ctx.runAction(internal.mcp.nodeActions.listUserRepos, {
+          }> = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
             userId,
           });
           const replicaIds = new Set(
