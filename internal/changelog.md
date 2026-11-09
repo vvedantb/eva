@@ -1,5 +1,13 @@
 # Changelog
 
+## Mobile: dropdown menus stay on top and the composer grows
+
+Date: 2026-11-09
+
+WHY: Dropdown menus (chat ⋯, inbox filter, repo picker) opened under other layers and taps missed items. The chat composer stayed one line for multi-line text. Both bugs are in `@vvedantb/native-ui@0.11.2` (unchanged in 0.12.0), so a version bump does not fix them.
+
+Architectural: pnpm patch `patches/@vvedantb__native-ui@0.11.2.patch`, registered in `pnpm.patchedDependencies`. `DropdownMenuContent` now wraps its backdrop and menu in a full-size `pointerEvents="box-none"` host inside the `Modal`, as the package `OverlayModal` does. `PromptInput` drops `numberOfLines={1}` (it locks the line count on Android), grows from `onContentSizeChange` up to 160 px (240 px with larger text), then scrolls, and shrinks on send or clear. No `PortalHost` is added: Eva does not use `Select`. Call sites are unchanged. Guard test: `pnpm --filter @eva/mobile test:native-ui-patch`. Upstream details for the packages engineer: `apps/mobile/UPSTREAM-NATIVE-UI.md`. Delete the patch when native-ui ships the fixes.
+
 ## Mobile: native-ui 0.11.2 drops the typecheck auth shim
 
 Date: 2026-11-09

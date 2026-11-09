@@ -41,6 +41,9 @@ patchedDependencies:
   '@vercel/sandbox':
     hash: fa921e07e5f53281f9079d36cf2a9fdd25ea4986ee518790819e1bbe70c3a9f1
     path: patches/@vercel__sandbox.patch
+  '@vvedantb/native-ui@0.11.2':
+    hash: a476cbedc471a4a808f83d4ffa0b6db4895fef96d87aab67ced220c58e2eb99a
+    path: patches/@vvedantb__native-ui@0.11.2.patch
 
 importers:
 
@@ -241,7 +244,7 @@ importers:
         version: 3.50.0(react-native-svg@15.15.4(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3))(react@19.2.3)
       '@vvedantb/native-ui':
         specifier: ^0.11.2
-        version: 0.11.2(4d25185096d952a4172281651705dd89)
+        version: 0.11.2(patch_hash=a476cbedc471a4a808f83d4ffa0b6db4895fef96d87aab67ced220c58e2eb99a)(4d25185096d952a4172281651705dd89)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -17382,7 +17385,7 @@ snapshots:
 
   '@vvedantb/config@0.4.0': {}
 
-  '@vvedantb/native-ui@0.11.2(4d25185096d952a4172281651705dd89)':
+  '@vvedantb/native-ui@0.11.2(patch_hash=a476cbedc471a4a808f83d4ffa0b6db4895fef96d87aab67ced220c58e2eb99a)(4d25185096d952a4172281651705dd89)':
     dependencies:
       '@expo/vector-icons': 15.1.1(expo-font@57.0.4)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
       '@rn-primitives/select': 1.5.2(@rn-primitives/portal@1.5.3(@types/react@19.3.0)(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6))(react@19.2.3)
