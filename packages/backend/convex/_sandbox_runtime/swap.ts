@@ -34,13 +34,10 @@
  * (free − reserve), and skip entirely when that leaves too little to matter.
  */
 import type { SandboxHandle } from "../_sandbox/provider";
-import { writeSandboxFile } from "./sandboxFiles";
+import { MAX_INLINE_EXEC_CONTENT_BYTES } from "./sandboxFiles";
 
 /** Swapfile location. On `/`, which is a real fs (fallocate-capable). */
 export const SWAP_FILE_PATH = "/swapfile";
-
-const ENSURE_SCRIPT_PATH = "/tmp/eva-ensure-swap.sh";
-const RELEASE_SCRIPT_PATH = "/tmp/eva-release-swap.sh";
 
 /** Every status line the script prints, so callers can log one line. */
 const MARKER_PREFIX = "eva-swap:";
@@ -115,11 +112,14 @@ export function buildEnsureSwapScript(config: SwapConfig): string {
     "",
     // A swapfile baked into the snapshot restores as a plain file with swap
     // off. Reuse it (no new disk cost) unless it breaks the current policy —
-    // an oversized leftover is what filled the disk to 100% before.
+    // an oversized leftover is what filled the disk to 100% before. On a disk
+    // already under the reserve, drop it: those GBs are what writes need
+    // (session 47, 2026-11-09: a full disk failed every upload and git lock).
     'if [ -f "$SWAP" ]; then',
     "  existing=$(file_mib)",
-    '  if [ "$existing" -gt "$WANT" ] || [ "$existing" -lt "$MIN" ]; then',
-    `    echo "${MARKER_PREFIX}resizing existing=\${existing}MiB want=\${WANT}MiB"`,
+    "  free_now=$(avail_mib)",
+    '  if [ "$existing" -gt "$WANT" ] || [ "$existing" -lt "$MIN" ] || [ "${free_now:-0}" -lt "$RESERVE" ]; then',
+    `    echo "${MARKER_PREFIX}resizing existing=\${existing}MiB want=\${WANT}MiB free_disk=\${free_now:-?}MiB"`,
     '    sudo -n swapoff "$SWAP" >/dev/null 2>&1 || true',
     '    sudo -n rm -f "$SWAP" || true',
     "  else",
@@ -213,6 +213,22 @@ export function buildReleaseSwapScript(): string {
 }
 
 /**
+ * The exec that runs a swap script, with the script inline (base64 piped into
+ * bash). No file upload: on a full disk Vercel rejects every `writeFiles`
+ * ("tarball could not be extracted"), and these scripts are the ones that
+ * free the disk — a swapfile they cannot reach stays there forever.
+ */
+export function buildInlineSwapCommand(script: string): string {
+  const encoded = Buffer.from(script, "utf8").toString("base64");
+  if (encoded.length > MAX_INLINE_EXEC_CONTENT_BYTES) {
+    throw new Error(
+      `swap script is ${encoded.length} bytes base64; inline limit is ${MAX_INLINE_EXEC_CONTENT_BYTES}`,
+    );
+  }
+  return `echo ${encoded} | base64 -d | bash`;
+}
+
+/**
  * Runs one swap script in the sandbox and returns its status line.
  *
  * Fail-open by design: swap is an optimisation, so every failure degrades to an
@@ -221,13 +237,13 @@ export function buildReleaseSwapScript(): string {
 async function runSwapScript(
   sandbox: SandboxHandle,
   label: string,
-  path: string,
   script: string,
   timeoutSeconds: number,
 ): Promise<string> {
   try {
-    await writeSandboxFile(sandbox, path, script);
-    const result = await sandbox.exec(`bash ${path}`, { timeoutSeconds });
+    const result = await sandbox.exec(buildInlineSwapCommand(script), {
+      timeoutSeconds,
+    });
     const status =
       result.output
         .split("\n")
@@ -256,7 +272,6 @@ export async function ensureSwapFile(sandbox: SandboxHandle): Promise<string> {
   return await runSwapScript(
     sandbox,
     "ensureSwapFile",
-    ENSURE_SCRIPT_PATH,
     buildEnsureSwapScript(resolveSwapConfig()),
     180,
   );
@@ -274,7 +289,6 @@ export async function releaseSwapFile(sandbox: SandboxHandle): Promise<string> {
   return await runSwapScript(
     sandbox,
     "releaseSwapFile",
-    RELEASE_SCRIPT_PATH,
     buildReleaseSwapScript(),
     120,
   );

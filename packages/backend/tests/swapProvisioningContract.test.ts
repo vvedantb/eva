@@ -1,9 +1,11 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   buildEnsureSwapScript,
+  buildInlineSwapCommand,
   buildReleaseSwapScript,
   DEFAULT_SWAP_MIN_MIB,
   DEFAULT_SWAP_RESERVE_MIB,
@@ -295,6 +297,42 @@ describe("the swapfile never enters a snapshot", () => {
     expect(release).not.toContain("exit 1");
     expect(release).toContain("eva-swap:release-noop");
     expect(release).toContain('rm -f "$SWAP"');
+  });
+});
+
+/**
+ * Session 47 (2026-11-09): the disk filled, so Vercel rejected every
+ * `writeFiles` upload. The swap scripts shipped as uploads, so the one step
+ * that could free ~6GB never ran, and the sandbox stayed broken on every start.
+ */
+describe("swap scripts still run on a full disk", () => {
+  test("scripts run inline, with no file upload", () => {
+    const swap = readSource("convex/_sandbox_runtime/swap.ts");
+    expect(swap).not.toContain("writeSandboxFile");
+    expect(swap).not.toContain(".writeFile(");
+  });
+
+  test("the inline command runs the exact script in bash", () => {
+    const script = 'set -u\nX="a $ b"\necho "eva-swap:ok $X"\nexit 0';
+    const output = execFileSync("bash", ["-c", buildInlineSwapCommand(script)], {
+      encoding: "utf8",
+    });
+    expect(output.trim()).toBe("eva-swap:ok a $ b");
+  });
+
+  test("both real scripts fit the inline exec budget", () => {
+    expect(() =>
+      buildInlineSwapCommand(buildEnsureSwapScript(resolveSwapConfig())),
+    ).not.toThrow();
+    expect(() => buildInlineSwapCommand(buildReleaseSwapScript())).not.toThrow();
+  });
+
+  test("an inactive swapfile is dropped when free disk is under the reserve", () => {
+    const script = buildEnsureSwapScript(resolveSwapConfig());
+    const dropAt = script.indexOf('[ "${free_now:-0}" -lt "$RESERVE" ]');
+    const reuseAt = script.indexOf("eva-swap:reused");
+    expect(dropAt, "the low-disk drop moved").toBeGreaterThan(-1);
+    expect(dropAt).toBeLessThan(reuseAt);
   });
 });
 
