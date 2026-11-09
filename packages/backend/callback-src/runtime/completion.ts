@@ -35,7 +35,11 @@ import type {
   ProviderAttemptResult,
   ResultEvent,
 } from "../types.js";
-import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
+import {
+  attemptElapsedMs,
+  readResponseJson,
+  tryParseJsonObject,
+} from "../utils.js";
 import {
   existsSync,
   mkdirSync,
@@ -45,14 +49,6 @@ import {
   writeFileSync,
 } from "fs";
 import { createHash } from "crypto";
-
-function parseJsonObject(line: string): JsonObject | null {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
 
 /** Idempotent done-file writer. */
 export function writeDoneFile(
@@ -171,7 +167,7 @@ function readSyntheticResult(output: string): SyntheticResult {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         found.sawResult = true;
@@ -275,7 +271,7 @@ export function extractResultEvent(output: string): ResultEvent | null {
       const clean = line.trim();
       if (!clean) continue;
       try {
-        const parsed = parseJsonObject(clean);
+        const parsed = tryParseJsonObject(clean);
         if (!parsed) continue;
         if (
           parsed.type === "item.completed" &&
@@ -340,7 +336,7 @@ export function extractResultEvent(output: string): ResultEvent | null {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         const r = parsed.result ?? "";

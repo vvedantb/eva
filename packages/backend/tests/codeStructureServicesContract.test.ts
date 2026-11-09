@@ -495,9 +495,11 @@ test("turn completions share buildTurnCompletionPayload", () => {
   }
 });
 
-test("SDK attempts share buildStandardSdkAttemptResult", () => {
+test("SDK attempts share beginSdkAttempt and finishSdkAttempt", () => {
   const helper = read("callback-src/providers/attemptResult.ts");
-  expect(helper).toContain("export function buildStandardSdkAttemptResult(");
+  expect(helper).toContain("export function beginSdkAttempt(");
+  expect(helper).toContain("export function finishSdkAttempt(");
+  expect(helper).toContain("function buildStandardSdkAttemptResult(");
   expect(helper).toContain("timedOutForZombie: false");
   for (const path of [
     "callback-src/providers/claudeSdk.ts",
@@ -506,11 +508,20 @@ test("SDK attempts share buildStandardSdkAttemptResult", () => {
     "callback-src/providers/opencodeSdk.ts",
   ] as const) {
     const source = read(path);
+    expect(source, `${path} should start via the shared helper`).toContain(
+      "beginSdkAttempt(",
+    );
     expect(source, `${path} should return via the shared helper`).toContain(
-      "buildStandardSdkAttemptResult(",
+      "return finishSdkAttempt(",
     );
     expect(source, `${path} re-inlined the attempt tail`).not.toContain(
       "timedOutForZombie: false",
+    );
+    expect(source, `${path} re-inlined the attempt reset`).not.toContain(
+      "resetAttemptState();",
+    );
+    expect(source, `${path} re-read the prompt file`).not.toContain(
+      "/tmp/design-prompt.txt",
     );
   }
 });

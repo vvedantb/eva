@@ -96,6 +96,8 @@ export const CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
   : 0;
 export const IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 export const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
+/** Turn prompt file. Mirrors the upload in convex/_sandbox_runtime/launch.ts. */
+export const PROMPT_FILE = "/tmp/design-prompt.txt";
 export const WORK_DIR = existsSync("/tmp/repo")
   ? "/tmp/repo"
   : existsSync("/workspace/repo")

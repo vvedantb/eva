@@ -14,6 +14,8 @@ import {
   CLAUDE_RUNTIME_CONFIG_DIR,
   CLAUDE_SYNC_PER_FILE_TIMEOUT_SECONDS,
   CLAUDE_SYNC_TIMEOUT_MS,
+  PROMPT_FILE,
+  SYSTEM_PROMPT,
   WORK_DIR,
 } from "./config.js";
 import { isJsonObject } from "./jsonGuards.js";
@@ -103,6 +105,37 @@ export function tryParseJson(text: string): JsonValue | null {
   } catch {
     return null;
   }
+}
+
+/** Parses JSON text and keeps it only when it is a plain object. */
+export function tryParseJsonObject(text: string): JsonObject | null {
+  const parsed = tryParseJson(text);
+  return isJsonObject(parsed) ? parsed : null;
+}
+
+/**
+ * Raw (untrimmed) value of the first key whose value is a string with
+ * non-blank content; "" when none match.
+ */
+export function readStringField(
+  obj: JsonObject,
+  keys: readonly string[],
+): string {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
+/** The turn prompt that launch.ts uploads to PROMPT_FILE. */
+export function readTurnPrompt(): string {
+  return readFileSync(PROMPT_FILE, "utf8");
+}
+
+/** Prepends SYSTEM_PROMPT for providers that have no system-prompt option. */
+export function withSystemPrompt(prompt: string): string {
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\n\n" + prompt : prompt;
 }
 
 /** Narrow a fetch Response.json() body; rejects non-JSON types without assertions. */

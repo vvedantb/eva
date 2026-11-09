@@ -32,7 +32,9 @@ describe("background shells do not hold the chat queue", () => {
         "function handleSystemTaskMessage(",
         "function failSyntheticTurn(",
       );
-      const skipAt = handler.indexOf('"task_type") === "local_bash"');
+      const skipAt = handler.indexOf(
+        'trimmedString(message.task_type) === "local_bash"',
+      );
       const returnAt = handler.indexOf("return;", skipAt);
       const storeAt = handler.indexOf("unsettledBackgroundAgents.set(");
       expect(skipAt).toBeGreaterThan(-1);
