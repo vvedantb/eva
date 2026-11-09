@@ -2,14 +2,16 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { CHANGELOG_AUTOMATION_TITLE } from "../convex/_changelog/entry";
 
 /**
  * A successful run's email waits as a draft for review (#1104). Guards:
  * - review is the default, so nothing is delivered until someone sends it;
  * - only a `sent` email is delivered, and only a `draft` can change, so a
  *   double click cannot send twice and a discarded draft never sends;
- * - recipients stay "every user with email notifications on", not just the
- *   automation's creator.
+ * - recipients are the opted-in members of the repo's team, not just the
+ *   automation's creator and never other tenants; only the weekly changelog
+ *   broadcasts to every opted-in user.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -28,7 +30,9 @@ afterEach(() => {
   else process.env.WEB_APP_URL = PREV_WEB_APP_URL;
 });
 
-async function succeededRun(opts: { emailAutoSend?: boolean } = {}) {
+async function succeededRun(
+  opts: { emailAutoSend?: boolean; title?: string } = {},
+) {
   const t = convexTest(schema, modules);
   const runId = await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", {
@@ -37,25 +41,45 @@ async function succeededRun(opts: { emailAutoSend?: boolean } = {}) {
       emailNotificationsEnabled: true,
       firstName: "Owner",
     });
-    await ctx.db.insert("users", {
+    const teammateId = await ctx.db.insert("users", {
       clerkId: "clerk|teammate",
       email: "teammate@example.com",
       emailNotificationsEnabled: true,
     });
-    await ctx.db.insert("users", {
+    const optedOutId = await ctx.db.insert("users", {
       clerkId: "clerk|opted-out",
       email: "opted-out@example.com",
       emailNotificationsEnabled: false,
     });
+    // Opted in, but on another tenant's team.
+    await ctx.db.insert("users", {
+      clerkId: "clerk|outsider",
+      email: "outsider@example.com",
+      emailNotificationsEnabled: true,
+    });
+    const teamId = await ctx.db.insert("teams", {
+      name: "Eva",
+      createdBy: userId,
+      createdAt: 0,
+    });
+    for (const memberId of [userId, teammateId, optedOutId]) {
+      await ctx.db.insert("teamMembers", {
+        teamId,
+        userId: memberId,
+        role: memberId === userId ? "owner" : "member",
+        joinedAt: 0,
+      });
+    }
     const repoId = await ctx.db.insert("githubRepos", {
       owner: "vvedantb",
       name: "eva",
       installationId: 1,
       connectedBy: userId,
+      teamId,
     });
     const automationId = await ctx.db.insert("automations", {
       repoId,
-      title: "Nightly audit",
+      title: opts.title ?? "Nightly audit",
       description: "Audit the repo",
       cronSchedule: "",
       enabled: true,
@@ -112,13 +136,63 @@ describe("automation run email", () => {
   );
 
   test(
-    "the draft goes to every opted-in user, not only the creator",
+    "a custom automation emails the opted-in members of its repo's team only",
     async () => {
-      const f = await succeededRun();
+      const f = await succeededRun({ emailAutoSend: true });
       const preview = await f.owner.query(api.automations.previewRunEmail, {
         runId: f.runId,
       });
       expect(preview?.recipientCount).toBe(2);
+      const delivery = await f.forDelivery();
+      expect(delivery?.recipients.map((r) => r.email).sort()).toEqual([
+        "owner@example.com",
+        "teammate@example.com",
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the weekly changelog still broadcasts to every opted-in user",
+    async () => {
+      const f = await succeededRun({
+        emailAutoSend: true,
+        title: CHANGELOG_AUTOMATION_TITLE,
+      });
+      const delivery = await f.forDelivery();
+      expect(delivery?.recipients.map((r) => r.email).sort()).toEqual([
+        "outsider@example.com",
+        "owner@example.com",
+        "teammate@example.com",
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the weekly changelog title is reserved for new and renamed automations",
+    async () => {
+      const f = await succeededRun();
+      const repoId = await f.t.run(
+        async (ctx) => (await ctx.db.get(f.runId))?.repoId,
+      );
+      if (!repoId) throw new Error("fixture repo missing");
+      await expect(
+        f.owner.mutation(api.automations.create, {
+          repoId,
+          title: ` ${CHANGELOG_AUTOMATION_TITLE} `,
+        }),
+      ).rejects.toThrow("reserved");
+      const id = await f.owner.mutation(api.automations.create, {
+        repoId,
+        title: "Weekly notes",
+      });
+      await expect(
+        f.owner.mutation(api.automations.update, {
+          id,
+          title: CHANGELOG_AUTOMATION_TITLE,
+        }),
+      ).rejects.toThrow("reserved");
     },
     TIMEOUT_MS,
   );

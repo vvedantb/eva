@@ -43,7 +43,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
             const isTop = index === 0;
             return (
               <m.div
-                key={entry.clerkId}
+                key={entry.userId}
                 className="space-y-2"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}

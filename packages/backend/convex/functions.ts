@@ -136,6 +136,17 @@ export async function requireTeamOwner(
   }
 }
 
+/** Throws unless the user is an Eva app admin (`users.isAdmin`). Gates app-wide settings. */
+export async function requireAppAdmin(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+): Promise<void> {
+  const user = await db.get(userId);
+  if (user?.isAdmin !== true) {
+    throw new Error("Only app admins can change app-wide settings");
+  }
+}
+
 /** Checks if a user can access a task by verifying access to its parent repo or project. */
 export async function hasTaskAccess(
   db: GenericDatabaseReader<DataModel>,
