@@ -1,5 +1,15 @@
 # Changelog
 
+## Mobile sign-in: strategy-aware second factor
+
+Date: 2026-11-09
+
+WHY: The TOTP-only step covered Eva's Clerk instance today (`totp` is the only enabled second factor; backup codes off; no phone second factor; email is first-factor only). It would break the day an owner enables backup codes or an SMS or email second factor, and the sign-in would stop at "needs another step". The step now follows `signIn.supportedSecondFactors`.
+
+Architectural: `src/auth/totp.ts` became `src/auth/secondFactor.ts`. `pickSecondFactor` parses the factor list with Zod and prefers `totp`, then Clerk's order (`backup_code`, `phone_code`, `email_code`); an empty list falls back to `totp`; `email_link` is skipped. `prepareSecondFactor` sends the SMS or email code (with `phoneNumberId` or `emailAddressId` from the factor); `submitSecondFactor` attempts the code and calls `setActive` on `complete`. Both return `{ ok } | { ok: false, error }`, never throw, and hide provider names. `useResendCooldown` (one 1 s timer effect) gives a 30 s Resend cooldown. `components/auth/SignInSecondFactor.tsx` holds the Clerk logic and sends the first code once per attempt in one effect (no user event starts it); `SecondFactorScreen` stays free of Clerk imports and gained `numeric`, `onResend` and `resendSeconds`. Tests: `pnpm --filter @eva/mobile test:mfa` (14 cases, mocked `signIn`).
+
+Not handled: `needs_client_trust`. In `@clerk/clerk-expo` 2.20.2, `SignInStatus` is `needs_identifier | needs_first_factor | needs_second_factor | needs_new_password | complete`. The status does not exist in this version, so there is no handler. Add one after a clerk-expo upgrade adds it. A note sits beside the gate in `app/(auth)/sign-in.tsx`. `signIn.secondFactor` is not read; `supportedSecondFactors` is enough.
+
 ## Mobile sign-in: TOTP second factor
 
 Date: 2026-11-09
