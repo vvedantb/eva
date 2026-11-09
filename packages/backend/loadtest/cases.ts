@@ -29,7 +29,7 @@ export const seedRefsSchema = z.object({
 export type SeedRefs = z.infer<typeof seedRefsSchema>;
 
 const DAY = 24 * 60 * 60 * 1000;
-const DAY_BUCKET: "day" = "day";
+const DAY_BUCKET = "day" as const;
 
 function sessionOwner(sessionId: Id<"sessions">): { kind: "session"; sessionId: Id<"sessions"> } {
   return { kind: "session", sessionId };
