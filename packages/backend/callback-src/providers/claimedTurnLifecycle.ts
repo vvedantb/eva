@@ -3,9 +3,11 @@ import type { JsonObject, JsonValue } from "../types.js";
 import {
   beginTurnOwnership,
   endTurnOwnership,
+  getCurrentTurnLease,
   getTurnOwnership,
   type TurnLeaseIdentity,
 } from "../runtime/turnLease.js";
+import { log } from "../utils.js";
 import { readTurnLeaseIdentity } from "./claimPendingTurnParse.js";
 import {
   beginTurnCheckpoint,
@@ -90,22 +92,52 @@ export function claimedTurnLifecycleStatus(): "idle" | "active" {
  * discard is only safe for a same-turn restage of the prompt already in flight.
  *
  * A follow-up send during post-completion bookkeeping is a different turn:
- * finishClaimedTurn has already dropped the old lease, the supervisor is still
- * "finalizing", and discarding leaves the new lease with nobody heartbeating
- * it. That is the session-65 stall (exactly 2 minutes, generation 1, no
- * result log).
+ * finishClaimedTurn has already dropped the old lease, so the lease mismatch
+ * parks it. Discarding it left the new lease with nobody heartbeating it: the
+ * session-65 stall (exactly 2 minutes, generation 1, no result log).
  */
 export function shouldParkClaimedTurn(input: {
   hasActiveRealTurn: boolean;
   isCancellationInFlight: boolean;
-  isFinalizing: boolean;
   currentLeaseTurnId: string | null;
   claimedLeaseTurnId: string | null;
 }): boolean {
   if (!input.hasActiveRealTurn || input.isCancellationInFlight) return true;
-  if (input.isFinalizing) return true;
   return (
     input.claimedLeaseTurnId !== null &&
     input.claimedLeaseTurnId !== input.currentLeaseTurnId
   );
+}
+
+/**
+ * Routes a just-claimed turn for every persistent daemon. claimPendingTurn
+ * already cleared the staged prompt server-side, so any branch that neither
+ * parks nor starts the claim loses that prompt. A cancel response can carry
+ * the next queued prompt, and a follow-up send is a different turn: both park.
+ * Only a same-turn restage of the prompt already running is discarded, because
+ * parking it replays the same prompt twice once the turn ends.
+ */
+export function routeClaimedTurn(input: {
+  turn: ClaimedTurn;
+  hasActiveRealTurn: boolean;
+  isCancellationInFlight: boolean;
+  /** Parks `turn` for the run loop; false when the park slot is taken. */
+  park: () => boolean;
+  logPrefix: string;
+}): "parked" | "duplicate" | "discarded" {
+  const shouldPark = shouldParkClaimedTurn({
+    hasActiveRealTurn: input.hasActiveRealTurn,
+    isCancellationInFlight: input.isCancellationInFlight,
+    currentLeaseTurnId: getCurrentTurnLease()?.turnId ?? null,
+    claimedLeaseTurnId: input.turn.turnLease.turnId,
+  });
+  if (!shouldPark) {
+    log(
+      `${input.logPrefix}: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)`,
+    );
+    return "discarded";
+  }
+  if (input.park()) return "parked";
+  log(`${input.logPrefix}: duplicate claimed turn ignored`);
+  return "duplicate";
 }
