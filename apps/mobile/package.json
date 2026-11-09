@@ -10,7 +10,7 @@
     "prebuild": "expo prebuild --platform android --clean",
     "typecheck": "tsc -p tsconfig.json",
     "test:babel": "node --test babel.config.test.mjs",
-    "test:mfa": "node --test src/auth/totp.test.mjs",
+    "test:mfa": "node --test src/auth/signInFlow.test.mjs",
     "web:export": "expo export --platform web"
   },
   "dependencies": {
