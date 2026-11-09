@@ -1,12 +1,14 @@
 // Unit tests for the sign-in flow. The Clerk `signIn` is a mock: no network
 // and no real sign-in.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   failureMessage,
   nextStep,
   sendCode,
   SIGN_IN_MESSAGES,
+  SIGN_IN_STAGE_TIMEOUT_MS,
   startSignIn,
   submitCode,
   submitNewPassword,
@@ -396,4 +398,90 @@ test("submitNewPassword: a failure returns the message", async () => {
     ok: false,
     error: "Password is too short.",
   });
+});
+
+const totpResource = resource({
+  status: "needs_second_factor",
+  supportedSecondFactors: [{ strategy: "totp" }],
+});
+
+test("startSignIn: needs_second_factor with totp returns the code step", async () => {
+  const { setActive, activated } = recorder();
+  const outcome = await startSignIn({ signIn: mockSignIn({}, totpResource), setActive, identifier: "a@b.co", password: "pw" });
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(outcome.step, { kind: "code", phase: "second", factors: [{ strategy: "totp" }] });
+  assert.deepEqual(activated, []);
+});
+
+test("startSignIn: works when Array.prototype.toSorted is missing (Hermes release)", async () => {
+  const saved = Array.prototype.toSorted;
+  delete Array.prototype.toSorted;
+  try {
+    const multi = resource({
+      status: "needs_second_factor",
+      supportedSecondFactors: [{ strategy: "backup_code" }, { strategy: "totp" }],
+    });
+    const outcome = await startSignIn({ signIn: mockSignIn({}, multi), setActive: recorder().setActive, identifier: "a@b.co", password: "pw" });
+    assert.equal(outcome.ok, true);
+    assert.deepEqual(outcome.step.factors.map((f) => f.strategy), ["totp", "backup_code"]);
+  } finally {
+    Array.prototype.toSorted = saved;
+  }
+});
+
+test("signInFlow.ts does not use toSorted", () => {
+  const source = readFileSync(new URL("./signInFlow.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\.toSorted\(/);
+});
+
+test("startSignIn: a throw while naming the next step is a failure, not an escape", async () => {
+  const broken = { ...totpResource, supportedSecondFactors: 5 };
+  const originalError = console.error;
+  console.error = () => undefined;
+  try {
+    const outcome = await startSignIn({ signIn: mockSignIn({}, broken), setActive: recorder().setActive, identifier: "a@b.co", password: "pw" });
+    assert.equal(outcome.ok, false);
+    assert.match(outcome.error, /code: nextStep/);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("startSignIn: a create that never settles times out as timeout_create", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const originalError = console.error;
+  console.error = () => undefined;
+  try {
+    const signIn = { ...mockSignIn(), create: () => new Promise(() => undefined) };
+    const pending = startSignIn({ signIn, setActive: recorder().setActive, identifier: "a@b.co", password: "pw" });
+    t.mock.timers.tick(SIGN_IN_STAGE_TIMEOUT_MS);
+    const outcome = await pending;
+    assert.equal(outcome.ok, false);
+    assert.match(outcome.error, /timed out at create \(code: timeout_create\)/);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("startSignIn: a setActive that never settles times out as timeout_setActive", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const originalError = console.error;
+  console.error = () => undefined;
+  try {
+    const pending = startSignIn({
+      signIn: mockSignIn({}, complete),
+      setActive: () => new Promise(() => undefined),
+      identifier: "a@b.co",
+      password: "pw",
+    });
+    // `create` resolves on a microtask: let it run, then reach the setActive timer.
+    await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(SIGN_IN_STAGE_TIMEOUT_MS);
+    const outcome = await pending;
+    assert.equal(outcome.ok, false);
+    assert.match(outcome.error, /timed out at setActive \(code: timeout_setActive\)/);
+  } finally {
+    console.error = originalError;
+  }
 });

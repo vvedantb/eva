@@ -1,4 +1,5 @@
 import "../global.css";
+import { installUnhandledRejectionLogging } from "@/logging/unhandledRejections";
 
 import { useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -25,6 +26,9 @@ import {
 import { applyEvaTheme } from "@/ui/evaTheme";
 import { StartupFailure } from "@/ui/StartupFailure";
 import { navigationTheme, useScheme } from "@/ui/theme";
+
+// Release builds swallow unhandled rejections: log them first.
+installUnhandledRejectionLogging();
 
 // Eva's web colours for every native-ui part, before anything renders.
 applyEvaTheme();
