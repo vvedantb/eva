@@ -104,6 +104,8 @@ Vercel provider includes hard-won delta workarounds: `resume:false` refresh (to 
 
 ## Evaluating the Vercel AI SDK Harness
 
+Latest re-evaluation, revisit triggers and the credential-brokering follow-up: `AI_SDK_HARNESS_EVALUATION.md`.
+
 In July 2026, Anthropic/Vercel released `@ai-sdk/harness-claude-code` (v1.0.37, experimental). It runs a bridge inside a sandbox and streams events to a **host-held WebSocket** for the entire turn. **Eva rejected adoption** for these reasons:
 
 ### Architectural Mismatch
