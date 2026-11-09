@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { z } from "zod";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
-import { getInstallationOctokit, getRepoOctokit } from "../githubAuth";
+import { type getInstallationOctokit, getRepoOctokit } from "../githubAuth";
 import { extractPrNumber } from "./helpers";
 import {
   decodeGitHubContent,
