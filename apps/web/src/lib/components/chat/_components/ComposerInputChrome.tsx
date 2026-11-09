@@ -87,6 +87,7 @@ export function ComposerInputChrome({
   messageHistory,
   allowEmptySubmit,
   predictionTarget,
+  warn = false,
   onDraftChange,
 }: {
   repo?: ChatRepo;
@@ -110,6 +111,8 @@ export function ComposerInputChrome({
   messageHistory: string[];
   allowEmptySubmit?: boolean;
   predictionTarget?: ComposerPredictionTarget;
+  /** Amber border while the draft-readiness nudge is up; it beats the focus border. */
+  warn?: boolean;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
@@ -260,6 +263,8 @@ export function ComposerInputChrome({
               compact
                 ? "h-12 items-center rounded-full py-1"
                 : "h-auto rounded-surface",
+              // `!`: the InputGroup focus state sets its own border and ring colour.
+              warn && "border-warning! ring-warning/40!",
             )}
           >
             <ChatAttachmentPreview />
