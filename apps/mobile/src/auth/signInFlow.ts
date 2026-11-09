@@ -269,6 +269,11 @@ export async function startSignIn(args: {
   return advance(created, args.setActive);
 }
 
+function missingFactorId(stage: FailureStage): { ok: false; error: string } {
+  console.error("[sign-in] failure", { stage, errorName: "MissingFactorId" });
+  return { ok: false, error: SIGN_IN_MESSAGES.sendFailed };
+}
+
 /** Sends the code. TOTP and backup codes need no send. Never throws. */
 export async function sendCode(args: { signIn: SignInLike; phase: Phase; factor: Factor }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { signIn, phase, factor } = args;
@@ -276,7 +281,7 @@ export async function sendCode(args: { signIn: SignInLike; phase: Phase; factor:
   try {
     if (factor.strategy === "email_code") {
       if (phase === "first") {
-        if (!factor.emailAddressId) return { ok: false, error: SIGN_IN_MESSAGES.sendFailed };
+        if (!factor.emailAddressId) return missingFactorId(stage);
         const { emailAddressId } = factor;
         await withTimeout(stage, () => signIn.prepareFirstFactor({ strategy: "email_code", emailAddressId }));
       } else {
@@ -285,7 +290,7 @@ export async function sendCode(args: { signIn: SignInLike; phase: Phase; factor:
       }
     } else if (factor.strategy === "phone_code") {
       if (phase === "first") {
-        if (!factor.phoneNumberId) return { ok: false, error: SIGN_IN_MESSAGES.sendFailed };
+        if (!factor.phoneNumberId) return missingFactorId(stage);
         const { phoneNumberId } = factor;
         await withTimeout(stage, () => signIn.prepareFirstFactor({ strategy: "phone_code", phoneNumberId }));
       } else {
@@ -317,6 +322,7 @@ export async function submitCode(args: {
     } else if (strategy === "email_code" || strategy === "phone_code") {
       attempt = await withTimeout(stage, () => signIn.attemptFirstFactor({ strategy, code }));
     } else {
+      console.error("[sign-in] failure", { stage, errorName: "UnsupportedStrategy" });
       return { ok: false, error: SIGN_IN_MESSAGES.invalidCode };
     }
   } catch (caught) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## Mobile: log unhandled promise rejections in release builds
+
+Date: 2026-11-09
+
+WHY: RN release builds swallow unhandled rejections, so the 0.1.4 sign-in hang left no logcat error.
+
+Architectural: `src/logging/unhandledRejections.ts` enables the Hermes rejection tracker and wraps the `ErrorUtils` global handler; both call `console.error("[uncaught]", ...)` with name, message and a short stack (no secrets). `_layout.tsx` installs it first. Sign-in submitters now catch, show "Couldn't sign you in." and log, then clear loading in `finally`. Code step uses `testIDPrefix="second-factor"` (screen id `second-factor-screen`). Missing factor ids and unsupported strategies now log. Test: `pnpm --filter @eva/mobile test:logging`.
+
 ## Mobile sign-in: endless spinner after a correct password (Hermes `toSorted`)
 
 Date: 2026-11-09

@@ -122,6 +122,9 @@ function PasswordForm({
     setError("");
     try {
       await onSubmit(email, password);
+    } catch (caught) {
+      console.error("[sign-in] submit threw", caught instanceof Error ? caught.name : typeof caught);
+      setError(SIGN_IN_MESSAGES.signInUnknown);
     } finally {
       setSubmitting(false);
     }
@@ -220,6 +223,8 @@ function CodeStep({
     // The key restarts the resend timer and clears the code when the method changes.
     <SecondFactorScreen
       key={factor.strategy}
+      // Stable e2e id: the screen is "second-factor-screen" (used by test-signin.sh).
+      testIDPrefix="second-factor"
       header={<EvaMark size={40} />}
       title={copy.title}
       description={copy.description}
@@ -233,6 +238,9 @@ function CodeStep({
           const outcome = await submitCode({ signIn, setActive, phase, strategy: factor.strategy, code });
           if (outcome.ok) onOutcome(outcome);
           else setError(outcome.error);
+        } catch (caught) {
+          console.error("[sign-in] code submit threw", caught instanceof Error ? caught.name : typeof caught);
+          setError(SIGN_IN_MESSAGES.signInUnknown);
         } finally {
           setLoading(false);
         }
@@ -277,6 +285,9 @@ function NewPasswordScreen({
       const outcome = await submitNewPassword({ signIn, setActive, password });
       if (outcome.ok) onOutcome(outcome);
       else setError(outcome.error);
+    } catch (caught) {
+      console.error("[sign-in] new password submit threw", caught instanceof Error ? caught.name : typeof caught);
+      setError(SIGN_IN_MESSAGES.signInUnknown);
     } finally {
       setLoading(false);
     }
