@@ -3,13 +3,12 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader, StorageReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
-import { authQuery } from "../functions";
+import { authQuery, hasTeamAccess, userCanAccessRepo } from "../functions";
 import {
   gatherAccessibleRepos,
   githubRepoValidator,
   githubRepoWithLogoValidator,
   pickDefaultVisibleAppRepo,
-  userCanAccessRepo,
 } from "./helpers";
 import {
   getAIProviderAvailability,
@@ -129,7 +128,7 @@ export const getLogoUrl = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
     if (!repo) return null;
-    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) return null;
+    if (!(await userCanAccessRepo(ctx.db, repo, ctx.userId))) return null;
     if (!repo.logoStorageId) return null;
     return await ctx.storage.getUrl(repo.logoStorageId);
   },
@@ -143,7 +142,7 @@ export const get = authQuery({
     const repo = await ctx.db.get(args.id);
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -158,7 +157,7 @@ export const getByIdString = authQuery({
     const repo = await ctx.db.get(id);
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -183,7 +182,7 @@ export const getProviderAvailability = authQuery({
       return unavailable;
     }
 
-    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) {
+    if (!(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
       return unavailable;
     }
 
@@ -262,7 +261,7 @@ export const getByOwnerAndName = authQuery({
 
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -286,14 +285,7 @@ export const listByTeam = authQuery({
   args: { teamId: v.id("teams") },
   returns: v.array(githubRepoWithLogoValidator),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) return [];
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
 
     const repos = await ctx.db
       .query("githubRepos")
@@ -413,7 +405,7 @@ export const getAccessibleForAction = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.id);
     if (!repo) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -436,7 +428,7 @@ export const getInstallationAccessState = authQuery({
     if (repos.length === 0) return "unclaimed";
     if (repos.some((repo) => repo.connectedBy === ctx.userId)) return "owner";
     for (const repo of repos) {
-      if (await userCanAccessRepo(ctx.db, ctx.userId, repo)) return "member";
+      if (await userCanAccessRepo(ctx.db, repo, ctx.userId)) return "member";
     }
     return "denied";
   },
