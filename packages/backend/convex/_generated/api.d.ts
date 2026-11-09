@@ -61,6 +61,7 @@ import type * as _chat_agentGoal from "../_chat/agentGoal.js";
 import type * as _chat_agentStreamIds from "../_chat/agentStreamIds.js";
 import type * as _chat_cancelRace from "../_chat/cancelRace.js";
 import type * as _chat_cancelledMessage from "../_chat/cancelledMessage.js";
+import type * as _chat_chatDaemonLaunch from "../_chat/chatDaemonLaunch.js";
 import type * as _chat_chatParent from "../_chat/chatParent.js";
 import type * as _chat_chatResult from "../_chat/chatResult.js";
 import type * as _chat_daemonClaimPause from "../_chat/daemonClaimPause.js";
@@ -623,6 +624,7 @@ declare const fullApi: ApiFromModules<{
   "_chat/agentStreamIds": typeof _chat_agentStreamIds;
   "_chat/cancelRace": typeof _chat_cancelRace;
   "_chat/cancelledMessage": typeof _chat_cancelledMessage;
+  "_chat/chatDaemonLaunch": typeof _chat_chatDaemonLaunch;
   "_chat/chatParent": typeof _chat_chatParent;
   "_chat/chatResult": typeof _chat_chatResult;
   "_chat/daemonClaimPause": typeof _chat_daemonClaimPause;
