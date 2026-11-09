@@ -120,8 +120,11 @@ function PasswordForm({
     if (!email || !password) return setError("Enter your email and password");
     setSubmitting(true);
     setError("");
-    await onSubmit(email, password);
-    setSubmitting(false);
+    try {
+      await onSubmit(email, password);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -226,10 +229,13 @@ function CodeStep({
       onSubmit={async (code) => {
         setLoading(true);
         setError("");
-        const outcome = await submitCode({ signIn, setActive, phase, strategy: factor.strategy, code });
-        setLoading(false);
-        if (outcome.ok) onOutcome(outcome);
-        else setError(outcome.error);
+        try {
+          const outcome = await submitCode({ signIn, setActive, phase, strategy: factor.strategy, code });
+          if (outcome.ok) onOutcome(outcome);
+          else setError(outcome.error);
+        } finally {
+          setLoading(false);
+        }
       }}
       onResend={sendsCode ? () => void send() : undefined}
       alternatives={factors.filter((f) => f !== factor).map((f) => ({ key: f.strategy, label: CODE_COPY[f.strategy].switchLabel }))}
@@ -267,10 +273,13 @@ function NewPasswordScreen({
     if (loading || !password) return;
     setLoading(true);
     setError("");
-    const outcome = await submitNewPassword({ signIn, setActive, password });
-    setLoading(false);
-    if (outcome.ok) onOutcome(outcome);
-    else setError(outcome.error);
+    try {
+      const outcome = await submitNewPassword({ signIn, setActive, password });
+      if (outcome.ok) onOutcome(outcome);
+      else setError(outcome.error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -66,7 +66,8 @@ function codeFactors(raw: readonly RawFactor[] | null): Factor[] {
       found.push({ ...factor, strategy: strategy.data });
     }
   }
-  return found.toSorted((a, b) => CODE_STRATEGIES.indexOf(a.strategy) - CODE_STRATEGIES.indexOf(b.strategy));
+  // Not `toSorted`: Hermes release builds can lack it (see `hermesApis.test.mjs`).
+  return found.sort((a, b) => CODE_STRATEGIES.indexOf(a.strategy) - CODE_STRATEGIES.indexOf(b.strategy));
 }
 
 /** Reads the resource and names the next step. Pure. */
@@ -124,7 +125,33 @@ export type FailureStage =
   | "attemptFirstFactor"
   | "attemptSecondFactor"
   | "setActive"
+  | "resetPassword"
+  | "nextStep"
   | "other";
+
+/** Milliseconds each Clerk call may take before Eva stops waiting. */
+export const SIGN_IN_STAGE_TIMEOUT_MS = 20_000;
+
+/** A call that did not settle within `SIGN_IN_STAGE_TIMEOUT_MS`. */
+export class StageTimeoutError extends Error {
+  readonly stage: FailureStage;
+  constructor(stage: FailureStage) {
+    super(`Sign-in timed out at ${stage} (code: timeout_${stage})`);
+    this.name = "StageTimeoutError";
+    this.stage = stage;
+  }
+}
+
+/** Runs `work`; rejects with `StageTimeoutError` when it takes too long. Clears its timer. */
+function withTimeout<Result>(stage: FailureStage, work: () => Promise<Result>): Promise<Result> {
+  return new Promise<Result>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new StageTimeoutError(stage)), SIGN_IN_STAGE_TIMEOUT_MS);
+    Promise.resolve()
+      .then(work)
+      .then(resolve, reject)
+      .finally(() => clearTimeout(timer));
+  });
+}
 
 /** Clerk codes that mean the credentials are wrong. */
 const CREDENTIAL_CODES = new Set(["form_password_incorrect", "form_identifier_not_found"]);
@@ -146,25 +173,29 @@ function rephrase(message: string): string {
   return message.replace(/\b(clerk|convex)\b/gi, "the sign-in service");
 }
 
-/** Logs the failure: stage, error name, Clerk codes. Never the password or a code. */
+/** Logs the failure: stage, error name, Clerk codes. Never the password or a code. Never throws. */
 function logFailure<Caught>(stage: FailureStage, caught: Caught) {
-  const clerk = clerkFailureSchema.safeParse(caught);
-  const trace = traceSchema.safeParse(caught);
-  console.error("[sign-in] failure", {
-    stage,
-    errorName: errorName(caught),
-    errorMessage: clerk.success ? undefined : errorText(caught).slice(0, 200) || undefined,
-    status: trace.success ? trace.data.status : undefined,
-    clerkTraceId: trace.success ? trace.data.clerkTraceId : undefined,
-    clerkErrors: clerk.success
-      ? clerk.data.errors.map((e) => ({
-          code: e.code,
-          message: e.message,
-          longMessage: e.longMessage,
-          paramName: e.meta?.paramName,
-        }))
-      : undefined,
-  });
+  try {
+    const clerk = clerkFailureSchema.safeParse(caught);
+    const trace = traceSchema.safeParse(caught);
+    console.error("[sign-in] failure", {
+      stage,
+      errorName: errorName(caught),
+      errorMessage: clerk.success ? undefined : errorText(caught).slice(0, 200) || undefined,
+      status: trace.success ? trace.data.status : undefined,
+      clerkTraceId: trace.success ? trace.data.clerkTraceId : undefined,
+      clerkErrors: clerk.success
+        ? clerk.data.errors.map((e) => ({
+            code: e.code,
+            message: e.message,
+            longMessage: e.longMessage,
+            paramName: e.meta?.paramName,
+          }))
+        : undefined,
+    });
+  } catch {
+    // A logger must never break sign-in.
+  }
 }
 
 /**
@@ -173,6 +204,7 @@ function logFailure<Caught>(stage: FailureStage, caught: Caught) {
  * "Invalid email or password.".
  */
 export function failureMessage<Caught>(caught: Caught, opts: { fallback: string; credentials?: boolean }): string {
+  if (caught instanceof StageTimeoutError) return caught.message;
   const clerk = clerkFailureSchema.safeParse(caught);
   if (clerk.success) {
     const first = clerk.data.errors[0];
@@ -199,19 +231,26 @@ function fail<Caught>(stage: FailureStage, caught: Caught, opts: { fallback: str
   return { ok: false, error: failureMessage(caught, opts) };
 }
 
-/** Names the next step and starts the session when the sign-in is complete. */
+/** Names the next step and starts the session when the sign-in is complete. Never throws. */
 async function advance(signIn: SignInLike, setActive: SetActive): Promise<Outcome> {
-  const step = nextStep(signIn);
-  if (step.kind === "complete") {
-    try {
-      await setActive({ session: step.sessionId });
-    } catch (caught) {
-      logFailure("setActive", caught);
-      return { ok: false, error: SIGN_IN_MESSAGES.sessionFailed };
+  try {
+    const step = nextStep(signIn);
+    if (step.kind === "complete") {
+      try {
+        await withTimeout("setActive", () => setActive({ session: step.sessionId }));
+      } catch (caught) {
+        if (caught instanceof StageTimeoutError) return fail("setActive", caught, { fallback: SIGN_IN_MESSAGES.sessionFailed });
+        logFailure("setActive", caught);
+        return { ok: false, error: SIGN_IN_MESSAGES.sessionFailed };
+      }
     }
+    if (step.kind === "unsupported") warnUnsupported(step);
+    return { ok: true, step, signIn };
+  } catch (caught) {
+    logFailure("nextStep", caught);
+    const reason = `${errorName(caught)}: ${errorText(caught)}`.slice(0, 80);
+    return { ok: false, error: `${SIGN_IN_MESSAGES.signInUnknown} (code: nextStep, ${reason})` };
   }
-  if (step.kind === "unsupported") warnUnsupported(step);
-  return { ok: true, step, signIn };
 }
 
 /** Email and password. Never throws: a failure is `{ ok: false, error }`. */
@@ -223,7 +262,7 @@ export async function startSignIn(args: {
 }): Promise<Outcome> {
   let created: SignInLike;
   try {
-    created = await args.signIn.create({ identifier: args.identifier, password: args.password });
+    created = await withTimeout("create", () => args.signIn.create({ identifier: args.identifier, password: args.password }));
   } catch (caught) {
     return fail("create", caught, { fallback: SIGN_IN_MESSAGES.signInUnknown, credentials: true });
   }
@@ -238,16 +277,20 @@ export async function sendCode(args: { signIn: SignInLike; phase: Phase; factor:
     if (factor.strategy === "email_code") {
       if (phase === "first") {
         if (!factor.emailAddressId) return { ok: false, error: SIGN_IN_MESSAGES.sendFailed };
-        await signIn.prepareFirstFactor({ strategy: "email_code", emailAddressId: factor.emailAddressId });
+        const { emailAddressId } = factor;
+        await withTimeout(stage, () => signIn.prepareFirstFactor({ strategy: "email_code", emailAddressId }));
       } else {
-        await signIn.prepareSecondFactor({ strategy: "email_code", emailAddressId: factor.emailAddressId });
+        const { emailAddressId } = factor;
+        await withTimeout(stage, () => signIn.prepareSecondFactor({ strategy: "email_code", emailAddressId }));
       }
     } else if (factor.strategy === "phone_code") {
       if (phase === "first") {
         if (!factor.phoneNumberId) return { ok: false, error: SIGN_IN_MESSAGES.sendFailed };
-        await signIn.prepareFirstFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
+        const { phoneNumberId } = factor;
+        await withTimeout(stage, () => signIn.prepareFirstFactor({ strategy: "phone_code", phoneNumberId }));
       } else {
-        await signIn.prepareSecondFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
+        const { phoneNumberId } = factor;
+        await withTimeout(stage, () => signIn.prepareSecondFactor({ strategy: "phone_code", phoneNumberId }));
       }
     }
     return { ok: true };
@@ -270,9 +313,9 @@ export async function submitCode(args: {
   let attempt: SignInLike;
   try {
     if (phase === "second") {
-      attempt = await signIn.attemptSecondFactor({ strategy, code });
+      attempt = await withTimeout(stage, () => signIn.attemptSecondFactor({ strategy, code }));
     } else if (strategy === "email_code" || strategy === "phone_code") {
-      attempt = await signIn.attemptFirstFactor({ strategy, code });
+      attempt = await withTimeout(stage, () => signIn.attemptFirstFactor({ strategy, code }));
     } else {
       return { ok: false, error: SIGN_IN_MESSAGES.invalidCode };
     }
@@ -286,9 +329,9 @@ export async function submitCode(args: {
 export async function submitNewPassword(args: { signIn: SignInLike; setActive: SetActive; password: string }): Promise<Outcome> {
   let reset: SignInLike;
   try {
-    reset = await args.signIn.resetPassword({ password: args.password });
+    reset = await withTimeout("resetPassword", () => args.signIn.resetPassword({ password: args.password }));
   } catch (caught) {
-    return fail("other", caught, { fallback: SIGN_IN_MESSAGES.passwordFailed });
+    return fail("resetPassword", caught, { fallback: SIGN_IN_MESSAGES.passwordFailed });
   }
   return advance(reset, args.setActive);
 }
