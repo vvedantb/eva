@@ -25,6 +25,7 @@ on:
       - "pnpm-workspace.yaml"
       - "patches/**"
       - "scripts/build-android-release.sh"
+      - "scripts/check-clerk-native-api.sh"
   workflow_dispatch:
     inputs:
       version:
@@ -72,7 +73,8 @@ jobs:
         EXPO_PUBLIC_CONVEX_URL=${{ vars.EXPO_PUBLIC_CONVEX_URL }}
         EXPO_PUBLIC_WEB_URL=${{ vars.EXPO_PUBLIC_WEB_URL }}
         EAS_PROJECT_ID=${{ vars.EAS_PROJECT_ID }}
-      # Fail early and clearly: apps/mobile/src/config.ts has no defaults.
+      # Fail early and clearly: apps/mobile/src/config.ts has no defaults, and
+      # Clerk must have the Native API on.
       pre_build_command: |
         missing=0
         for name in EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_WEB_URL; do
@@ -81,5 +83,7 @@ jobs:
             missing=1
           fi
         done
-        exit "$missing"
+        [ "$missing" -eq 0 ] || exit 1
+        # The APK is blank on launch if Clerk's Native API is off for this key.
+        bash scripts/check-clerk-native-api.sh
     secrets: inherit

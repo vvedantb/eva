@@ -107,8 +107,6 @@ export const taskExecutionWorkflow = workflow.define({
         branchName: data.branchName,
         createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
         skipStartupCommands,
-        sessionPersistenceId: args.projectId,
-        sessionPersistenceKind: args.projectId ? "projects" : undefined,
       }));
 
       await step.runMutation(internal.turns.markLaunching, {

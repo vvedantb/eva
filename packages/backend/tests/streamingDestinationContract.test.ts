@@ -10,6 +10,9 @@ const executionSource = readSource(
 );
 const taskChatSource = readSource("../convex/agentTaskChatWorkflow.ts");
 const projectChatSource = readSource("../convex/projectChatWorkflow.ts");
+const chatDaemonLaunchSource = readSource(
+  "../convex/_chat/chatDaemonLaunch.ts",
+);
 const streamRouterSource = readSource("../callback-src/parse/streamRouter.ts");
 const generatedCallbackSource = readSource(
   "../convex/_sandbox_runtime/callbackScript.generated.ts",
@@ -38,16 +41,28 @@ describe("warm daemons stream to the UI's entity key", () => {
   });
 
   test.each([
-    { name: "task chat", source: taskChatSource, expectedCalls: 4 },
-    { name: "project chat", source: projectChatSource, expectedCalls: 4 },
+    {
+      name: "task chat",
+      source: taskChatSource,
+      builder: "taskChatDaemonLaunchArgs",
+      streamId: "streamingEntityId: taskChatStreamEntityId(p.taskId)",
+    },
+    {
+      name: "project chat",
+      source: projectChatSource,
+      builder: "projectChatDaemonLaunchArgs",
+      streamId: "streamingEntityId: projectChatStreamEntityId(p.projectId)",
+    },
   ])(
     "every $name prewarm passes its prefixed stream id",
-    ({ source, expectedCalls }) => {
-      const calls = prewarmCalls(source);
-      expect(calls.length).toBe(expectedCalls);
-      for (const call of calls) {
-        expect(call).toContain("streamingEntityId");
-      }
+    ({ source, builder, streamId }) => {
+      const prewarms = source.match(/internal\.sandbox\.prewarmEntityDaemon,/g);
+      const built = source.match(
+        new RegExp(`internal\\.sandbox\\.prewarmEntityDaemon,\\s*${builder}\\(`, "g"),
+      );
+      expect(prewarms?.length).toBe(4);
+      expect(built?.length).toBe(4);
+      expect(chatDaemonLaunchSource).toContain(streamId);
     },
   );
 });
@@ -94,10 +109,3 @@ function functionBody(source: string, declaration: string): string {
   return declaration + (nextAt < 0 ? rest : rest.slice(0, nextAt));
 }
 
-function prewarmCalls(source: string): string[] {
-  return [
-    ...source.matchAll(
-      /internal\.sandbox\.prewarmEntityDaemon,\s*\{([\s\S]*?)\n\s*\}\);/g,
-    ),
-  ].map((match) => match[1] ?? "");
-}

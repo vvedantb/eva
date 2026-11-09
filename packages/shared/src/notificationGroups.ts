@@ -85,11 +85,11 @@ export function groupNotifications<N extends GroupableNotification>(
     }
     bucket.items.push(notification);
   }
-  // `toSorted` is stable, so an equal-urgency pair keeps the newest-first order it arrived in.
+  // `Array.prototype.sort` is stable (ES2019); `toSorted` is missing in some Hermes release builds, so an equal-urgency pair keeps the newest-first order it arrived in.
   const ordered = groups.map((bucket) => ({
     label: bucket.label,
-    items: bucket.items.toSorted((a, b) => URGENCY_RANK[urgencyOf(a)] - URGENCY_RANK[urgencyOf(b)]),
+    items: [...bucket.items].sort((a, b) => URGENCY_RANK[urgencyOf(a)] - URGENCY_RANK[urgencyOf(b)]),
   }));
   if (group !== "urgency") return ordered;
-  return ordered.toSorted((a, b) => URGENCY_LABEL_ORDER.indexOf(a.label) - URGENCY_LABEL_ORDER.indexOf(b.label));
+  return [...ordered].sort((a, b) => URGENCY_LABEL_ORDER.indexOf(a.label) - URGENCY_LABEL_ORDER.indexOf(b.label));
 }

@@ -24,9 +24,10 @@ export const aiModelValidator = v.union(
   v.literal("claude:opusplan"),
   v.literal("claude:claude-opus-4-5-20251101"),
   v.literal("claude:claude-opus-4-6"),
+  v.literal("claude:claude-fable-5-2"),
+  // Legacy Fable 5.1 and 5 — still accepted so existing sessions can load;
+  // normalizeAIModel maps them to claude-fable-5-2.
   v.literal("claude:claude-fable-5-1"),
-  // Legacy Fable 5 — still accepted so existing sessions can load;
-  // normalizeAIModel maps it to claude-fable-5-1.
   v.literal("claude:claude-fable-5"),
   v.literal("codex:gpt-6-astra"),
   v.literal("codex:gpt-5.6-sol"),
@@ -196,7 +197,7 @@ export type AIModel =
   | "claude:opusplan"
   | "claude:claude-opus-4-5-20251101"
   | "claude:claude-opus-4-6"
-  | "claude:claude-fable-5-1"
+  | "claude:claude-fable-5-2"
   | "codex:gpt-6-astra"
   | "codex:gpt-5.6-sol"
   | "codex:gpt-5.6-terra"
@@ -214,6 +215,7 @@ export type AIModel =
 export type PersistedAIModel =
   | AIModel
   | LegacyClaudeModel
+  | "claude:claude-fable-5-1"
   | "claude:claude-fable-5"
   | "codex:gpt-5.6"
   | "codex:gpt-5.5"
@@ -269,9 +271,9 @@ export const DEFAULT_AI_MODEL: AIModel = "claude:sonnet";
 
 export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
   {
-    id: "claude:claude-fable-5-1",
+    id: "claude:claude-fable-5-2",
     provider: "claude",
-    label: "Fable 5.1",
+    label: "Fable 5.2",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
@@ -506,7 +508,7 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
   ],
   ["claude:claude-opus-4-6", ["claude-opus-4-6", "claude:claude-opus-4-6"]],
   [
-    "claude:claude-fable-5-1",
+    "claude:claude-fable-5-2",
     [
       "fable",
       "claude:fable",
@@ -514,6 +516,8 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
       "claude:claude-fable-5",
       "claude-fable-5-1",
       "claude:claude-fable-5-1",
+      "claude-fable-5-2",
+      "claude:claude-fable-5-2",
     ],
   ],
   ["codex:gpt-6-astra", ["codex:gpt-6-astra"]],
@@ -879,7 +883,7 @@ export function getVisibleAIModelOptions(
  * Everything else stays selectable in the normal UI — this only trims the list.
  */
 const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
-  "claude:claude-fable-5-1",
+  "claude:claude-fable-5-2",
   "claude:opus",
   "claude:sonnet",
   "codex:gpt-6-astra",
@@ -902,7 +906,7 @@ export const SIMPLE_VIEW_MODEL_LADDER: ReadonlyArray<AIModel> = [
   "cursor:grok-4.5",
   "cursor:grok-4.7",
   "claude:opus",
-  "claude:claude-fable-5-1",
+  "claude:claude-fable-5-2",
 ];
 
 /**
@@ -914,7 +918,7 @@ export function snapToSimpleViewLadder(model: string): AIModel {
   for (const step of SIMPLE_VIEW_MODEL_LADDER) {
     if (step === normalized) return step;
   }
-  if (normalized.includes("fable")) return "claude:claude-fable-5-1";
+  if (normalized.includes("fable")) return "claude:claude-fable-5-2";
   if (getAIModelProvider(normalized) === "claude") return "claude:opus";
   if (normalized.includes("composer")) return "cursor:composer-2.5";
   if (normalized.includes("grok-4.5")) return "cursor:grok-4.5";

@@ -12,7 +12,7 @@ import type { JsonValue } from "../_jev/jsonValue";
 
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
- * (`claude:claude-fable-5-1`); opus/sonnet/haiku keep their existing aliases.
+ * (`claude:claude-fable-5-2`); opus/sonnet/haiku keep their existing aliases.
  * Kept as a tuple so every tool schema stays in lockstep.
  */
 export const MCP_CLAUDE_MODELS = ["opus", "sonnet", "haiku", "fable"] as const;
@@ -104,6 +104,19 @@ export async function mcpCallAsUser<T>(
     argsJson: JSON.stringify(call.args),
   });
   return schema.parse(JSON.parse(raw));
+}
+
+/**
+ * The `source` arg Eva's docs and artifacts mutations take to link a record to
+ * the chat (session, quick task or project) it came from.
+ */
+export function chatSourceArg(
+  kind: "session" | "task" | "project",
+  id: string,
+): Record<string, string> {
+  if (kind === "session") return { kind, sessionId: id };
+  if (kind === "task") return { kind, taskId: id };
+  return { kind, projectId: id };
 }
 
 /**

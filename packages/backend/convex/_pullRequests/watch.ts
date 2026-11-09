@@ -12,6 +12,7 @@ import {
   type PrOwnerRef,
 } from "./store";
 import { newPrWatch, PR_WATCH_DEBOUNCE_MS } from "./watchEvaluate";
+import { findReposByOwnerAndName } from "../_githubRepos/helpers";
 
 /**
  * The agent's PR watch (`watch_pull_request`). No polling: the GitHub webhook
@@ -105,12 +106,7 @@ export const noteBasePush = internalMutation({
   args: { owner: v.string(), name: v.string(), branch: v.string() },
   returns: v.null(),
   handler: async (ctx, { owner, name, branch }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", owner).eq("name", name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, { owner, name });
     for (const repo of repos) {
       const watched = await ctx.db
         .query("pullRequests")

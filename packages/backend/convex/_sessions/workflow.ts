@@ -30,13 +30,13 @@ import {
   scheduleQueueDrainAfterBackgroundAgents,
 } from "../_queues/helpers";
 import { z } from "zod";
-import {
-  assistantReplyContent,
-  formatDelayedPublishFailureError,
-} from "./resultTarget";
+import { formatDelayedPublishFailureError } from "./resultTarget";
 import {
   applyChatTurnResult,
   insertAssistantPlaceholderIfNeeded,
+  syntheticTurnCompletionPatch,
+  turnCheckpointPatch,
+  type AssistantTurnResultPatch,
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
 import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
@@ -47,7 +47,7 @@ import {
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
 import type { MutationCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
@@ -927,37 +927,20 @@ export const saveResult = internalMutation({
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
     const designParsed = args.success ? parseDesignResult(args.result) : null;
-    const extraPatch: {
-      isSystemAlert?: boolean;
-      errorDetail?: string;
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-      variations?: Array<{
-        label: string;
-        route?: string;
-        filePath?: string;
-      }>;
-    } = {
+    const extraPatch: Omit<AssistantTurnResultPatch, "content"> = {
       isSystemAlert: undefined,
       errorDetail: undefined,
+      ...(designParsed
+        ? {
+            variations: designParsed.variations.map((variation) => ({
+              label: variation.label,
+              route: variation.route,
+              filePath: variation.filePath,
+            })),
+          }
+        : {}),
+      ...turnCheckpointPatch(args),
     };
-    if (designParsed) {
-      extraPatch.variations = designParsed.variations.map((variation) => ({
-        label: variation.label,
-        route: variation.route,
-        filePath: variation.filePath,
-      }));
-    }
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      extraPatch.beforeSha = args.beforeSha;
-      extraPatch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      extraPatch.beforeShas = args.beforeShas;
-      extraPatch.afterShas = args.afterShas;
-    }
 
     const outcome = await applyChatTurnResult(ctx, {
       parentId: chat._id,
@@ -1510,42 +1493,7 @@ export const completeSyntheticTurn = authMutation({
       return null;
     }
 
-    const patch: {
-      content: string;
-      activityLog?: string;
-      finishedAt: number;
-      pendingQuestion?: string;
-      model?: Doc<"messages">["model"];
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-    } = {
-      content: assistantReplyContent({
-        success: args.success,
-        result: args.result,
-        error: args.error,
-      }),
-      finishedAt: Date.now(),
-    };
-    if (args.activityLog) {
-      patch.activityLog = args.activityLog;
-    }
-    if (args.pendingQuestion) {
-      patch.pendingQuestion = args.pendingQuestion;
-    }
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      patch.beforeSha = args.beforeSha;
-      patch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      patch.beforeShas = args.beforeShas;
-      patch.afterShas = args.afterShas;
-    }
-    // Drops the open-time stamp so a failed turn never becomes a checkpoint.
-    if (!args.success) {
-      patch.model = undefined;
-    }
+    const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
     // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {
