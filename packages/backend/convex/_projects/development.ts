@@ -3,7 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import {
   authMutation,
   getProjectWithAccess,
-  hasRepoAccess,
+  getRepoWithAccess,
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
@@ -102,11 +102,7 @@ export const createFromTasks = authMutation({
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     // Only this repo's tasks may join the project: a foreign id would move
     // another team's task under a project the caller owns.
     const tasks = await Promise.all(args.taskIds.map((id) => ctx.db.get(id)));
