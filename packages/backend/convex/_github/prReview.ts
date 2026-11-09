@@ -50,8 +50,6 @@ export const submitPrReview = action({
     ctx,
     args,
   ): Promise<{ reviewId: number; htmlUrl: string; state: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const body = args.body.trim();
@@ -100,8 +98,6 @@ export const addPrComment = action({
     htmlUrl: v.string(),
   }),
   handler: async (ctx, args): Promise<{ id: number; htmlUrl: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const body = args.body.trim();

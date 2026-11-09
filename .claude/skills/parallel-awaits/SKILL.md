@@ -27,7 +27,7 @@ The scanner sees only straight-line code. Read the real code for every hit befor
 
 Fix in this order:
 
-1. Action round trips: `ctx.runQuery`, `runMutation`, `runAction`, `runQueryAsUser`, sandbox `exec`, Vercel, GitHub, `fetch`. Each one costs a network round trip.
+1. Action round trips: `ctx.runQuery`, `runMutation`, `runAction`, `runAsUser`, sandbox `exec`, Vercel, GitHub, `fetch`. Each one costs a network round trip.
 2. Shared helpers that many callers use, for example `gatherAccessibleRepos`, `getSandboxHandle` and `resolveSandboxCredentials`.
 3. Reactive queries: lists, chat status, team members, users, usage limits.
 4. Chat-turn prompt builds and MCP tool handlers, because agents call them all the time.

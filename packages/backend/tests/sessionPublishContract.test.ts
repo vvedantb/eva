@@ -658,16 +658,24 @@ describe("a callback-published session still opens its first pull request", () =
       "Session branch could not be created",
     );
     expect(body, "generic copy lost").toContain("Sandbox startup unfinished");
+    const runtimeSessions = readSource("_sandbox_runtime/sessions.ts");
+    expect(runtimeSessions, "session checkout step label renamed").toContain(
+      "newSessionSandbox.checkoutSessionBranch",
+    );
+    // Task and project build their label from `new${hooks.label}Sandbox`.
+    expect(
+      functionBody(
+        runtimeSessions,
+        "async function preparePreviewSandboxInternal(",
+      ),
+      "preview checkout step label renamed",
+    ).toContain("Sandbox.checkoutBranch`");
     const stepLabels = [
       "newSessionSandbox.checkoutSessionBranch:",
       "newTaskSandbox.checkoutBranch:",
       "newProjectSandbox.checkoutBranch:",
     ];
-    const runtimeSessions = readSource("_sandbox_runtime/sessions.ts");
     for (const label of stepLabels) {
-      expect(runtimeSessions, `step label ${label} renamed`).toContain(
-        label.slice(0, -1),
-      );
       expect(
         /\.(checkoutSessionBranch|checkoutBranch):/.test(label),
         `routing regex no longer matches ${label}`,
