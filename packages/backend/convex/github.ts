@@ -13,6 +13,7 @@ export {
   createSessionPr,
   createDraftSessionPr,
   createDraftSessionRepoPr,
+  linkSessionPrToStack,
 } from "./_github/prFlow";
 
 export { generatePrDescription } from "./_github/prDescription";

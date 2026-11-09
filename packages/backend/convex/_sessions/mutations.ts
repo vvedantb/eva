@@ -71,6 +71,8 @@ const createSessionArgs = v.object({
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
   baseBranch: v.optional(v.string()),
+  /** "Stack a new session on this PR": the PR whose head is `baseBranch`. */
+  stackOnPrNumber: v.optional(v.number()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
@@ -168,6 +170,9 @@ export async function createSession(
     updatedAt: Date.now(),
     numId,
     baseBranch,
+    ...(args.stackOnPrNumber !== undefined
+      ? { stackOnPrNumber: args.stackOnPrNumber }
+      : {}),
     providerAccountId,
     // The provider the session started on. Informational only — the composer
     // may move the session onto another provider later.

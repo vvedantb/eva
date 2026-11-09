@@ -283,3 +283,51 @@ export async function mergeStackAsync(
   }
   throw new Error("GitHub's stack merge did not finish within five minutes.");
 }
+
+const remoteStackSchema = z.object({
+  number: z.number(),
+  pull_requests: z.array(z.object({ number: z.number() })),
+});
+
+/**
+ * Puts `child` on top of `parent` in GitHub's stack model. A PR whose base is
+ * another PR's head branch is only a chain of branches; GitHub counts it as a
+ * stack only after the Stacks API links the two (what `gh stack link` does).
+ *
+ * - `parent` already tops a stack: `child` is appended to it.
+ * - `parent` is in no stack: a new two-entry stack is created.
+ * - `parent` sits mid-stack: refused, since a stack is one line, not a tree.
+ *
+ * Returns the stack number. GitHub validates the base-to-head chain itself.
+ */
+export async function addPullRequestToStack(
+  octokit: InstallationOctokit,
+  target: { owner: string; repo: string },
+  parent: number,
+  child: number,
+): Promise<number> {
+  const base = `/repos/${target.owner}/${target.repo}/stacks`;
+  const found = z
+    .array(remoteStackSchema)
+    .parse((await octokit.request(`GET ${base}`, { pull_request: parent })).data);
+  const existing = found[0];
+
+  if (existing === undefined) {
+    const res = await octokit.request(`POST ${base}`, {
+      pull_requests: [parent, child],
+    });
+    return remoteStackSchema.parse(res.data).number;
+  }
+
+  const numbers = existing.pull_requests.map((pr) => pr.number);
+  if (numbers.includes(child)) return existing.number;
+  if (numbers.at(-1) !== parent) {
+    throw new Error(
+      `#${parent} is not the top of stack #${existing.number}, so #${child} cannot stack on it.`,
+    );
+  }
+  const res = await octokit.request(`POST ${base}/${existing.number}/add`, {
+    pull_requests: [child],
+  });
+  return remoteStackSchema.parse(res.data).number;
+}

@@ -648,6 +648,11 @@ export const sessionFields = {
   // restarts/restores rebuild the session branch from the same base instead of
   // silently falling back to the repo default.
   baseBranch: v.optional(v.string()),
+  /**
+   * Pull request this session stacks on. Its head branch is `baseBranch`, and
+   * the session's own PR joins that PR's GitHub stack once it opens.
+   */
+  stackOnPrNumber: v.optional(v.number()),
   /** Summary of the session's `pullRequests` rows (see `prSummaryFields`). */
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),

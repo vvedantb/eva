@@ -546,6 +546,12 @@ export const installDependenciesParser = parseAsStringLiteral(
   .withDefault("1")
   .withOptions(searchOptions);
 
+// "Stack a new session on this PR" (review header). The PR number and its head
+// branch, which becomes the new session's base; the session's own PR then joins
+// that PR's GitHub stack. Cleared by the navigation that follows a send.
+export const stackOnPrParser = parseAsInteger.withOptions(searchOptions);
+export const stackBaseParser = parseAsString.withOptions(searchOptions);
+
 // Session Files tab root selector (multi-repo sessions): "" is the primary
 // repo (/tmp/repo), otherwise a linked repo's sandbox path.
 export const filesRootParser = parseAsString

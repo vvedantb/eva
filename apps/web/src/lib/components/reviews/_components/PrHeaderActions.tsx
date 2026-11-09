@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAction } from "convex/react";
+import { useNavigate } from "@tanstack/react-router";
 import { api, type Id } from "@eva/backend";
 import {
   Button,
@@ -20,11 +21,14 @@ import {
   IconGitPullRequestClosed,
   IconLink,
   IconRefresh,
+  IconStack2,
 } from "@tabler/icons-react";
 import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
 import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
+import { useRepo } from "@/lib/contexts/RepoContext";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 /**
  * The header's right-hand cluster, in t3code's order: the one filled button that
@@ -54,6 +58,17 @@ export function PrHeaderActions({
   const [closing, setClosing] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
   const altHeld = useAltHeld();
+  const navigate = useNavigate();
+  const { basePath } = useRepo();
+
+  // Opens the new-session composer on this PR's head branch; the session's PR
+  // then joins this PR's GitHub stack (`linkSessionPrToStack`).
+  const stackNewSession = () => {
+    void navigate({
+      to: toInternalRepoHref(`${basePath}/sessions`),
+      search: { stackOn: overview.number, stackBase: overview.headRef },
+    });
+  };
 
   const close = async () => {
     setClosing(true);
@@ -118,6 +133,10 @@ export function PrHeaderActions({
           </DropdownMenuItem>
           {overview.status === "open" ? (
             <>
+              <DropdownMenuItem onSelect={stackNewSession}>
+                <IconStack2 size={14} aria-hidden />
+                Stack a new session
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {/* Closing notifies every reviewer and stops CI, so it asks
                   first. The Radix `onSelect` event carries no modifier, so only
