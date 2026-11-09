@@ -1,6 +1,6 @@
 import { api, type Id } from "@eva/backend";
 import { useUser } from "@clerk/clerk-expo";
-import { IconChevronDown, IconPlus } from "@tabler/icons-react-native";
+import { IconBrandGithub, IconChevronDown, IconPlus } from "@tabler/icons-react-native";
 import { Attachment, Attachments, PromptInput, PromptInputButton } from "@vvedantb/native-ui/ai";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import {
@@ -10,7 +10,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
+import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
@@ -36,6 +36,7 @@ export default function NewSessionScreen() {
   const repo = repos?.find((candidate) => candidate._id === picked) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
   const foreground = tokens.color.foreground[scheme];
+  const muted = tokens.color.muted[scheme];
 
   const handleSend = async (prompt: string) => {
     if (!repo || sending) return;
@@ -59,21 +60,29 @@ export default function NewSessionScreen() {
       {repos === undefined ? (
         <CenteredSpinner label="Loading repos" />
       ) : (
-        <View className="flex-1 justify-center gap-3 px-4">
-          {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline. */}
+        // The web landing at 390: `p-4` in a column 10 short of the right edge.
+        <View className="flex-1 justify-center gap-3 pl-4 pr-[26px]">
+          {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline (GitHub mark, name underlined at 30%). */}
           <View className="flex-row flex-wrap items-center justify-center gap-x-2 gap-y-1">
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               {firstName ? `${firstName}, what are we building for` : "What are we building for"}
             </Text>
             <DropdownMenu>
-              <DropdownMenuTrigger accessibilityLabel={`Repo: ${repo ? (repo.label ?? repo.name) : "none"}`} className="flex-row items-center gap-1 active:opacity-70">
+              <DropdownMenuTrigger accessibilityLabel={`Repo: ${repo ? (repo.label ?? repo.name) : "none"}`} className="flex-row items-center gap-1.5 active:opacity-70">
+                <IconBrandGithub size={28} color={muted} />
                 <Text
                   className="font-instrument-sans-semibold text-xl"
-                  style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5, textDecorationLine: "underline" }}
+                  style={{
+                    color: foreground,
+                    fontWeight: "600",
+                    letterSpacing: -0.5,
+                    textDecorationLine: "underline",
+                    textDecorationColor: withAlpha(foreground, 0.3),
+                  }}
                 >
                   {repo ? (repo.label ?? repo.name) : "a repo"}
                 </Text>
-                <IconChevronDown size={18} color={foreground} />
+                <IconChevronDown size={16} color={foreground} />
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {repos.map((candidate) => (
@@ -83,17 +92,20 @@ export default function NewSessionScreen() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600" }}>
+            <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               ?
             </Text>
           </View>
           <PromptInput
             layout="inline"
+            shape="pill"
             disabled={!repo || sending}
             status={sending ? "submitted" : "ready"}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
-            leading={<PromptInputButton icon={IconPlus} label="Add attachment" onPress={() => void attachments.pick()} />}
+            leading={
+              <PromptInputButton variant="secondary" icon={IconPlus} label="Add attachment" onPress={() => void attachments.pick()} />
+            }
             header={
               attachments.items.length > 0 ? (
                 <Attachments>

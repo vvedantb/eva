@@ -4,12 +4,12 @@ import { installUnhandledRejectionLogging } from "@/logging/unhandledRejections"
 import { useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-  InstrumentSans_600SemiBold,
-  InstrumentSans_700Bold,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
   useFonts,
-} from "@expo-google-fonts/instrument-sans";
+} from "@expo-google-fonts/inter";
 import { AuthProviders } from "@vvedantb/native-ui/auth";
 import { NativeUiProvider } from "@vvedantb/native-ui/theme";
 import { Toaster } from "@vvedantb/native-ui/toast";
@@ -24,6 +24,7 @@ import {
   NATIVE_API_DISABLED_MESSAGE,
 } from "@/ui/clerkNativeApi";
 import { applyEvaTheme } from "@/ui/evaTheme";
+import { EVA_FONT } from "@/ui/fonts";
 import { StartupFailure } from "@/ui/StartupFailure";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
@@ -96,11 +97,12 @@ function ClerkGate({ children }: { children: ReactNode }) {
 export default function RootLayout() {
   const scheme = useScheme();
   const fontsTimedOut = useTimedOut(FONT_TIMEOUT_MS);
+  // Inter under the names the classes and JS styles use (`@/ui/fonts`).
   const [fontsLoaded, fontError] = useFonts({
-    InstrumentSans_400Regular,
-    InstrumentSans_500Medium,
-    InstrumentSans_600SemiBold,
-    InstrumentSans_700Bold,
+    [EVA_FONT.regular]: Inter_400Regular,
+    [EVA_FONT.medium]: Inter_500Medium,
+    [EVA_FONT.semibold]: Inter_600SemiBold,
+    [EVA_FONT.bold]: Inter_700Bold,
   });
   if (!fontsLoaded && !fontError && !fontsTimedOut) return null;
 

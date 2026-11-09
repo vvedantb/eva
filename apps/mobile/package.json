@@ -19,7 +19,7 @@
     "@clerk/clerk-expo": "^2.20.2",
     "@eva/backend": "workspace:*",
     "@eva/shared": "workspace:*",
-    "@expo-google-fonts/instrument-sans": "^0.4.2",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo/metro-runtime": "~57.0.17",
     "@expo/vector-icons": "^15.1.1",
     "@rn-primitives/select": "^1.5.2",

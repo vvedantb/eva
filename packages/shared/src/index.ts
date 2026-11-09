@@ -56,3 +56,9 @@ export {
   type ForkTranscriptTurn,
 } from "./messageFork";
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
+export {
+  getNotificationAppearance,
+  type NotificationAppearance,
+  type NotificationIconName,
+  type NotificationTone,
+} from "./notificationAppearance";

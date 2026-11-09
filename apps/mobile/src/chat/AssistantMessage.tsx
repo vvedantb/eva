@@ -59,14 +59,14 @@ export function AssistantMessage({
   messageId,
   content,
   activityLog,
-  seconds,
+  duration,
 }: {
   /** For loading a trimmed step's full detail. */
   messageId: string;
   content: string;
   activityLog?: string;
-  /** How long the turn ran, once it finished. Folds the steps behind "Worked for …", as the web does. */
-  seconds?: number;
+  /** How long the turn ran ("2m", the web `formatDuration`), once it finished. Folds the steps behind "Worked for …". */
+  duration?: string;
 }) {
   const steps = parseToolSteps(activityLog);
   // A step with a command, output or edits opens to them, as the web rows do.
@@ -96,8 +96,8 @@ export function AssistantMessage({
   );
   return (
     <>
-      {steps.length === 0 ? null : seconds !== undefined ? (
-        <AgentTraceFold seconds={seconds}>{stepRows}</AgentTraceFold>
+      {steps.length === 0 ? null : duration !== undefined ? (
+        <AgentTraceFold duration={duration}>{stepRows}</AgentTraceFold>
       ) : (
         <AgentTraceCollapsible>
           <AgentTraceCollapsibleTrigger>

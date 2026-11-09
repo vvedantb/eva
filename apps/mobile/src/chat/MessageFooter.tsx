@@ -1,6 +1,7 @@
 import { formatClockTime } from "@eva/shared/dayLabel";
+import { formatDuration } from "@eva/shared/duration";
 import { IconCheck, IconGitFork, IconLink } from "@tabler/icons-react-native";
-import { MessageAction, MessageActionsBar, MessageMeta, formatElapsed } from "@vvedantb/native-ui/ai";
+import { MessageAction, MessageActionsBar, MessageMeta } from "@vvedantb/native-ui/ai";
 import { palette } from "@vvedantb/native-ui/theme";
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
@@ -11,7 +12,9 @@ export type Sentiment = "positive" | "negative";
 /**
  * The row under a message, as Eva's web chat: copy (a check for 2s once
  * copied), copy link, fork from here, thumbs on agent replies, then the clock
- * ("10:21 PM · 1m" for a finished reply).
+ * ("10:21 PM · 1m" for a finished reply, the web `formatDuration`). The web
+ * `icon-xs` buttons (28, 14 icons) sit 2 apart; the groups and the clock are
+ * 8 apart on a reply (`gap-2`) and 12 on a user message (`gap-3`).
  */
 export function MessageFooter({
   text,
@@ -37,34 +40,40 @@ export function MessageFooter({
     setCopied(what);
     setTimeout(() => setCopied(null), 2000);
   };
-  const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatElapsed((finishedAt - at) / 1000)}` : formatClockTime(at);
+  const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatDuration(at, finishedAt)}` : formatClockTime(at);
   return (
-    <MessageActionsBar>
-      <MessageAction
-        kind="copy"
-        label={copied === "text" ? "Copied" : "Copy message"}
-        icon={copied === "text" ? SuccessCheck : undefined}
-        onPress={() => void copy("text")}
-      />
-      <MessageAction
-        icon={copied === "link" ? SuccessCheck : IconLink}
-        label={copied === "link" ? "Link copied" : "Copy link to message"}
-        onPress={() => void copy("link")}
-      />
-      {onFork ? <MessageAction icon={IconGitFork} label="Fork from here" onPress={onFork} /> : null}
+    <MessageActionsBar className={rating ? "mt-0.5 gap-2" : "gap-3"}>
+      <MessageActionsBar className="gap-0.5">
+        <MessageAction
+          kind="copy"
+          size="xs"
+          label={copied === "text" ? "Copied" : "Copy message"}
+          icon={copied === "text" ? SuccessCheck : undefined}
+          onPress={() => void copy("text")}
+        />
+        <MessageAction
+          size="xs"
+          icon={copied === "link" ? SuccessCheck : IconLink}
+          label={copied === "link" ? "Link copied" : "Copy link to message"}
+          onPress={() => void copy("link")}
+        />
+        {onFork ? <MessageAction size="xs" icon={IconGitFork} label="Fork from here" onPress={onFork} /> : null}
+      </MessageActionsBar>
       {rating ? (
-        <>
+        <MessageActionsBar className="gap-0.5">
           <MessageAction
             kind="like"
+            size="xs"
             selected={rating.sentiment === "positive"}
             onPress={() => rating.onRate(rating.sentiment === "positive" ? null : "positive")}
           />
           <MessageAction
             kind="dislike"
+            size="xs"
             selected={rating.sentiment === "negative"}
             onPress={() => rating.onRate(rating.sentiment === "negative" ? null : "negative")}
           />
-        </>
+        </MessageActionsBar>
       ) : null}
       <MessageMeta>{meta}</MessageMeta>
     </MessageActionsBar>
