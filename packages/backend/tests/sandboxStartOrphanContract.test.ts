@@ -22,9 +22,8 @@ describe("a start that fails does not leak its new sandbox", () => {
   /** A new start path added without cleanup is the whole failure mode. */
   test("every create site is accounted for", () => {
     expect(owners.map((owner) => owner.name).sort()).toEqual([
-      "prepareProjectPreviewSandboxInternal",
+      "preparePreviewSandboxInternal",
       "prepareSessionSandboxInternal",
-      "prepareTaskPreviewSandboxInternal",
     ]);
   });
 
@@ -34,7 +33,7 @@ describe("a start that fails does not leak its new sandbox", () => {
    */
   test.each([
     "prepareSessionSandboxInternal",
-    "prepareTaskPreviewSandboxInternal",
+    "preparePreviewSandboxInternal",
   ])("%s deletes the sandbox it created and its credentials", (name) => {
     const handler = catchBodyOf(owners, name);
     expect(handler, `${name} no longer deletes on failure`).toContain(
@@ -45,19 +44,31 @@ describe("a start that fails does not leak its new sandbox", () => {
   /**
    * The exception, and it has to stay a deliberate one: the project path records
    * its sandbox on the project straight after create, so a failure leaves a
-   * tracked sandbox rather than an orphan.
+   * tracked sandbox rather than an orphan. Tasks have no such record, so they
+   * delete.
    */
   test("the project path records its sandbox instead of deleting it", () => {
-    const body = bodyOf(owners, "prepareProjectPreviewSandboxInternal");
+    const body = bodyOf(owners, "preparePreviewSandboxInternal");
     const createAt = body.indexOf(CREATE);
-    const recordAt = body.indexOf(
-      "internal.projects.projectSandboxAllocated",
-      createAt,
-    );
     expect(
-      recordAt,
-      "the project path now leaks on setup failure",
+      body.indexOf("hooks.afterCreate(", createAt),
+      "the preview path no longer records its sandbox after create",
     ).toBeGreaterThan(createAt);
+    expect(catchBodyOf(owners, "preparePreviewSandboxInternal")).toContain(
+      "if (hooks.deleteOnSetupFailure) {",
+    );
+
+    const hooks = definitionOf("previewOwnerHooks");
+    const projectAt = hooks.indexOf("const { projectId } = owner;");
+    expect(projectAt, "the project arm moved").toBeGreaterThan(-1);
+    const taskArm = hooks.slice(0, projectAt);
+    const projectArm = hooks.slice(projectAt);
+    expect(taskArm).toContain("deleteOnSetupFailure: true");
+    expect(projectArm).toContain("deleteOnSetupFailure: false");
+    expect(
+      projectArm,
+      "the project path now leaks on setup failure",
+    ).toContain("internal.projects.projectSandboxAllocated");
   });
 
   /**
@@ -85,18 +96,24 @@ describe("a start that fails does not leak its new sandbox", () => {
  * laid out.
  */
 function createSites(): { name: string; body: string }[] {
+  return definitions().filter((definition) => definition.body.includes(CREATE));
+}
+
+function definitions(): { name: string; body: string }[] {
   const boundaries = [
     ...sessions.matchAll(/\n(?:export )?(?:async )?(?:function|const) (\w+)/g),
   ];
-  return boundaries
-    .map((match, index) => ({
-      name: match[1],
-      body: sessions.slice(
-        match.index,
-        boundaries[index + 1]?.index ?? sessions.length,
-      ),
-    }))
-    .filter((definition) => definition.body.includes(CREATE));
+  return boundaries.map((match, index) => ({
+    name: match[1],
+    body: sessions.slice(
+      match.index,
+      boundaries[index + 1]?.index ?? sessions.length,
+    ),
+  }));
+}
+
+function definitionOf(name: string): string {
+  return bodyOf(definitions(), name);
 }
 
 function bodyOf(

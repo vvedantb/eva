@@ -52,8 +52,6 @@ export const listPullRequestCandidates = action({
     users: { login: string; avatarUrl: string | null }[];
     labels: { name: string; color: string; description: string | null }[];
   }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
@@ -101,8 +99,6 @@ export const setPullRequestReviewers = action({
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
@@ -145,8 +141,6 @@ export const setPullRequestAssignees = action({
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
@@ -175,8 +169,6 @@ export const setPullRequestLabels = action({
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);

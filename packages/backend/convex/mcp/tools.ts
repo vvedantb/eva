@@ -14,6 +14,7 @@ import {
   orchestratorQuestionTools,
 } from "./agentInteractionTools";
 import { defineTool, type EvaTool } from "./registry";
+import { jsonValue } from "../_jev/jsonValue";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
@@ -28,7 +29,9 @@ import {
 } from "./entityRef";
 
 import {
+  chatSourceArg,
   matchRepoByName,
+  mcpCallAsUser,
   repoRefLabel,
   mcpGetContext,
   mcpListUserRepos,
@@ -711,14 +714,26 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     if ("content" in resolved) return resolved;
     const { repo } = resolved;
 
-    const taskId = await ctx.runAction(internal.mcp.nodeActions.createTask, {
+    // Task and session creation deliberately send no model. The mutations
+    // behind them fall back to `repo.defaultModel`, and that per-repo choice
+    // (provider, cost, plan limits) is the one the MCP surface must not
+    // override. Per-turn sends (orchestratorSendMessage) keep their override.
+    const taskId = await mcpCallAsUser(
+      ctx,
       clerkUserId,
-      repoId: repo.id,
-      title: input.title,
-      description: input.description,
-      baseBranch: input.baseBranch,
-      projectId: input.projectId,
-    });
+      {
+        type: "mutation",
+        path: "_agentTasks/mutations:createQuickTask",
+        args: {
+          repoId: repo.id,
+          title: input.title,
+          description: input.description,
+          ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
+          ...(input.projectId ? { projectId: input.projectId } : {}),
+        },
+      },
+      z.string(),
+    );
 
     await watchTaskAsAve(taskId);
 
@@ -737,10 +752,16 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         const result = await createTaskForRepo(input, userId);
         if ("content" in result) return result;
 
-        await ctx.runAction(internal.mcp.nodeActions.startTaskExecution, {
+        await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          taskId: result.taskId,
-        });
+          {
+            type: "mutation",
+            path: "_agentTasks/execution:startExecution",
+            args: { id: result.taskId },
+          },
+          jsonValue,
+        );
 
         return toolJsonResult({
           taskId: result.taskId,
@@ -842,43 +863,37 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
         if ("content" in resolved) return resolved;
         const { repo } = resolved;
 
-        const tasksForMutation = input.tasks.map((t) => ({
-          title: t.title,
-          description: t.description,
-          dependsOn: t.dependsOn,
-        }));
-
-        const result = await ctx.runAction(
-          internal.mcp.nodeActions.createTasksBatch,
+        const result = await mcpCallAsUser(
+          ctx,
+          clerkUserId,
           {
-            clerkUserId,
-            repoId: repo.id,
-            tasks: tasksForMutation,
-            projectTitle: input.projectTitle,
-            baseBranch: input.baseBranch,
+            type: "mutation",
+            path: "_agentTasks/mutations:createBatchWithDependencies",
+            args: {
+              repoId: repo.id,
+              tasks: input.tasks.map((t) => ({
+                title: t.title,
+                ...(t.description ? { description: t.description } : {}),
+                ...(t.dependsOn ? { dependsOn: t.dependsOn } : {}),
+              })),
+              ...(input.projectTitle
+                ? { projectTitle: input.projectTitle }
+                : {}),
+              ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
+            },
           },
+          z.object({
+            taskIds: z.array(z.string()),
+            projectId: z.string().optional(),
+          }),
         );
 
-        // Result is typed as 'any' from Convex; launder to unknown, then narrow to
-        // an object before spreading so no assertion is needed.
-        const rawResult: unknown = result;
-        const batchResult =
-          typeof rawResult === "object" && rawResult !== null
-            ? { ...rawResult }
-            : {};
-
-        const created = z
-          .object({ taskIds: z.array(z.string()) })
-          .safeParse(rawResult);
-        if (created.success) {
-          for (const taskId of created.data.taskIds) {
-            await watchTaskAsAve(taskId);
-          }
-        }
+        for (const taskId of result.taskIds) await watchTaskAsAve(taskId);
 
         return toolJsonResult({
           repo: repoRefLabel(repo),
-          ...batchResult,
+          taskIds: result.taskIds,
+          ...(result.projectId ? { projectId: result.projectId } : {}),
           taskCount: input.tasks.length,
           status: "created",
         });
@@ -1018,17 +1033,22 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("content" in resolved) return resolved;
         const { repo } = resolved;
 
-        const docId = await ctx.runAction(
-          internal.mcp.nodeActions.createEvaDoc,
+        const docId = await mcpCallAsUser(
+          ctx,
+          clerkUserId,
           {
-            clerkUserId,
-            repoId: repo.id,
-            title,
-            content,
-            ...(entityKind !== undefined && entityId !== undefined
-              ? { sourceKind: entityKind, sourceId: entityId }
-              : {}),
+            type: "mutation",
+            path: "docs:create",
+            args: {
+              repoId: repo.id,
+              title,
+              content,
+              ...(entityKind !== undefined && entityId !== undefined
+                ? { source: chatSourceArg(entityKind, entityId) }
+                : {}),
+            },
           },
+          z.string(),
         );
 
         return toolJsonResult({
@@ -1056,10 +1076,12 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         // Resolve identity first (ensures the Eva user row exists) so the
         // as-user query can authenticate.
         await getContext();
-        const doc = await ctx.runAction(internal.mcp.nodeActions.getEvaDoc, {
+        const doc = await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          docId,
-        });
+          { type: "query", path: "docs:get", args: { id: docId } },
+          jsonValue,
+        );
         return toolJsonResult({ document: doc });
       },
     }),
@@ -1094,11 +1116,16 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         if ("content" in resolved) return resolved;
         const { repo } = resolved;
 
-        const docs = await ctx.runAction(internal.mcp.nodeActions.listEvaDocs, {
+        const docs = await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          repoId: repo.id,
-          kind,
-        });
+          {
+            type: "query",
+            path: "docs:list",
+            args: { repoId: repo.id, ...(kind !== undefined ? { kind } : {}) },
+          },
+          jsonValue,
+        );
         return toolJsonResult({ repo: repoRefLabel(repo), docs });
       },
     }),
@@ -1118,13 +1145,21 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       },
       handler: async ({ docId, title, content, description }) => {
         await getContext();
-        await ctx.runAction(internal.mcp.nodeActions.updateEvaDoc, {
+        await mcpCallAsUser(
+          ctx,
           clerkUserId,
-          docId,
-          title,
-          content,
-          description,
-        });
+          {
+            type: "mutation",
+            path: "docs:update",
+            args: {
+              id: docId,
+              ...(title !== undefined ? { title } : {}),
+              ...(content !== undefined ? { content } : {}),
+              ...(description !== undefined ? { description } : {}),
+            },
+          },
+          z.null(),
+        );
         return toolJsonResult({ docId, status: "updated" });
       },
     }),
