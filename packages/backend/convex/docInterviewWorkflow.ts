@@ -6,7 +6,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { isTrackedWorkflowRunning, workflow } from "./workflowManager";
-import { authMutation } from "./functions";
+import { authMutation, hasRepoAccess } from "./functions";
 import { getDocWithAccess } from "./_docs/access";
 import {
   completionCallbackArgs,
@@ -288,6 +288,8 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc || !doc.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId)))
+      throw new Error("Not authorized");
     if (
       !(await settleAgentTurnCompletion(ctx, {
         entityId: args.docId,

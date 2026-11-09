@@ -6,6 +6,7 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
 import { authAction, authMutation, hasRepoAccess } from "./functions";
+import { assertComposerMessageRole } from "./_messages/publicRole";
 import {
   aiModelValidator,
   getAIModelProvider,
@@ -319,12 +320,13 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const role = args.role ?? "user";
+    assertComposerMessageRole({ role, content: args.content });
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    const role = args.role ?? "user";
     const providerAccountId =
       role === "user"
         ? await resolveTurnProviderAccountId(ctx.db, {

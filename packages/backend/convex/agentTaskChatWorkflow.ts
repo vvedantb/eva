@@ -83,6 +83,7 @@ import {
 } from "./_sandbox/transitions";
 import { taskPrUrl } from "./_pullRequests/store";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
+import { assertComposerMessageRole } from "./_messages/publicRole";
 
 /** Streaming-activity entity id for a task chat. */
 
@@ -337,6 +338,8 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const role = args.role ?? "user";
+    assertComposerMessageRole({ role, content: args.content });
     const task = await ctx.db.get(args.taskId);
     if (!task) throw new Error("Task not found");
     if (
@@ -345,7 +348,6 @@ export const addMessage = authMutation({
     ) {
       throw new Error("Not authorized");
     }
-    const role = args.role ?? "user";
     const providerAccountId =
       role === "user"
         ? await resolveTurnProviderAccountId(ctx.db, {

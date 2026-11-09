@@ -6,7 +6,9 @@ import type { QueryCtx } from "../_generated/server";
 import {
   authQuery,
   authMutation,
+  getProjectWithAccess,
   hasRepoAccess,
+  hasTaskAccess,
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
@@ -86,7 +88,9 @@ export const saveDraft = authMutation({
 
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
+    const project = args.projectId
+      ? await getProjectWithAccess(ctx.db, args.projectId, ctx.userId)
+      : null;
 
     const now = Date.now();
 
@@ -146,7 +150,12 @@ export const activateDraft = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
-    if (!task || task.createdBy !== ctx.userId || task.status !== "draft")
+    if (
+      !task ||
+      task.createdBy !== ctx.userId ||
+      task.status !== "draft" ||
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
+    )
       throw new Error("Draft not found");
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;

@@ -169,6 +169,7 @@ import type * as _mentions_skillToken from "../_mentions/skillToken.js";
 import type * as _messages_activityLog from "../_messages/activityLog.js";
 import type * as _messages_media from "../_messages/media.js";
 import type * as _messages_preview from "../_messages/preview.js";
+import type * as _messages_publicRole from "../_messages/publicRole.js";
 import type * as _migrations_backfillArchivedFromPrState from "../_migrations/backfillArchivedFromPrState.js";
 import type * as _migrations_backfillEvaPrRecapOrigin from "../_migrations/backfillEvaPrRecapOrigin.js";
 import type * as _migrations_backfillExperimentalFlags from "../_migrations/backfillExperimentalFlags.js";
@@ -731,6 +732,7 @@ declare const fullApi: ApiFromModules<{
   "_messages/activityLog": typeof _messages_activityLog;
   "_messages/media": typeof _messages_media;
   "_messages/preview": typeof _messages_preview;
+  "_messages/publicRole": typeof _messages_publicRole;
   "_migrations/backfillArchivedFromPrState": typeof _migrations_backfillArchivedFromPrState;
   "_migrations/backfillEvaPrRecapOrigin": typeof _migrations_backfillEvaPrRecapOrigin;
   "_migrations/backfillExperimentalFlags": typeof _migrations_backfillExperimentalFlags;

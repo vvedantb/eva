@@ -6,7 +6,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { authQuery, authMutation } from "./functions";
+import { authQuery } from "./functions";
 import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 
 /**
@@ -125,16 +125,6 @@ export const get = authQuery({
   handler: async (ctx, args) => readStreamingActivity(ctx, args.entityId),
 });
 
-/** Updates or creates streaming activity state for an entity, only writing on actual changes. */
-export const set = authMutation({
-  args: setArgs,
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await upsertStreamingActivity(ctx, args);
-    return null;
-  },
-});
-
 /** Gets streaming activity state (internal use, no auth check). */
 export const internalGet = internalQuery({
   args: { entityId: v.string() },
@@ -167,13 +157,6 @@ export async function touchStreamingEntity(
   return true;
 }
 
-/** Bumps lastUpdatedAt only — used for lightweight watchdog heartbeats (callback token). */
-export const touch = authMutation({
-  args: { entityId: v.string() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => touchStreamingEntity(ctx, args.entityId),
-});
-
 /** Internal touch for HTTP heartbeat route and liveness probe refresh. */
 export const internalTouch = internalMutation({
   args: { entityId: v.string() },
@@ -187,20 +170,6 @@ export const internalSet = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await upsertStreamingActivity(ctx, args);
-    return null;
-  },
-});
-
-/** Removes the streaming activity record for an entity. */
-export const clear = authMutation({
-  args: { entityId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("streamingActivity")
-      .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
-      .first();
-    if (existing) await ctx.db.delete(existing._id);
     return null;
   },
 });

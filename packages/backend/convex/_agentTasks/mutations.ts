@@ -11,6 +11,8 @@ import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
 import {
   authMutation,
+  getProjectWithAccess,
+  getRepoWithAccess,
   hasRepoAccess,
   hasTaskAccess,
   softDeleteAgentTask,
@@ -69,6 +71,13 @@ export const update = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    // Moving a task needs access to where it lands, not only where it is.
+    if (args.repoId !== undefined && args.repoId !== task.repoId) {
+      await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    }
+    if (args.projectId && args.projectId !== task.projectId) {
+      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    }
     const updates = await buildTaskUpdates(ctx, task, args);
     await ctx.db.patch(args.id, updates);
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
@@ -316,6 +325,9 @@ export const createQuickTask = authMutation({
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
     const now = Date.now();
+    const project = args.projectId
+      ? await getProjectWithAccess(ctx.db, args.projectId, ctx.userId)
+      : null;
     let taskNumber: number | undefined;
     if (args.projectId) {
       const existingTasks = await ctx.db
@@ -324,7 +336,6 @@ export const createQuickTask = authMutation({
         .collect();
       taskNumber = maxTaskNumberOf(existingTasks) + 1;
     }
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
     const numId = await allocateNumId(ctx.db, args.repoId, "agentTasks");
     const model = args.model ?? repo.defaultModel;
     const providerAccountId =
@@ -462,7 +473,8 @@ export const assignToProject = authMutation({
     for (const taskId of args.taskIds) {
       if (existingProjectTaskIds.has(taskId)) continue;
       const task = await ctx.db.get(taskId);
-      if (!task) throw new Error(`Task ${taskId} not found`);
+      if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+        throw new Error(`Task ${taskId} not found`);
       assigned++;
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
@@ -591,7 +603,13 @@ export const reorderProjectTasks = authMutation({
     const existingNumbers: number[] = [];
     for (const taskId of args.taskIds) {
       const task = await ctx.db.get(taskId);
-      existingNumbers.push(task?.taskNumber ?? 0);
+      if (
+        !task ||
+        task.projectId !== args.projectId ||
+        !(await hasTaskAccess(ctx.db, task, ctx.userId))
+      )
+        throw new Error("Task not found");
+      existingNumbers.push(task.taskNumber ?? 0);
     }
     const sortedNumbers = [...existingNumbers].sort((a, b) => a - b);
     for (let i = 0; i < args.taskIds.length; i++) {
@@ -619,10 +637,14 @@ export const deleteCascade = authMutation({
         .withIndex("by_dependency", (q) => q.eq("dependsOnId", taskId))
         .collect();
       for (const dep of dependents) {
-        if (!tasksToDelete.includes(dep.taskId)) {
-          tasksToDelete.push(dep.taskId);
-          await collectDependents(dep.taskId);
-        }
+        if (tasksToDelete.includes(dep.taskId)) continue;
+        // A dependent the caller cannot see (another tenant's task, or a
+        // teammate's draft) is left alone, and so is its own subtree.
+        const dependent = await ctx.db.get(dep.taskId);
+        if (!dependent || !(await hasTaskAccess(ctx.db, dependent, ctx.userId)))
+          continue;
+        tasksToDelete.push(dep.taskId);
+        await collectDependents(dep.taskId);
       }
     };
     await collectDependents(args.id);

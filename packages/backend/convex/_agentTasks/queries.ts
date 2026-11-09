@@ -4,7 +4,12 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { internalQuery } from "../_generated/server";
 import { aiModelValidator, taskStatusValidator } from "../validators";
-import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+  isTaskVisibleTo,
+} from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
@@ -192,7 +197,7 @@ export const listByProject = authQuery({
         .query("agentTasks")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect(),
-    );
+    ).filter((task) => isTaskVisibleTo(task, ctx.userId));
     const sorted = tasks.sort(
       (a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0),
     );
@@ -256,6 +261,7 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
+    if (task && !isTaskVisibleTo(task, ctx.userId)) return null;
     return entityVisible(task);
   },
 });
@@ -420,7 +426,10 @@ export const getDependentTasks = authQuery({
       dependents.map((dep) => ctx.db.get(dep.taskId)),
     );
     return filterActiveEntities(
-      depTasks.filter((t): t is Exclude<typeof t, null> => t !== null),
+      depTasks.filter(
+        (t): t is Exclude<typeof t, null> =>
+          t !== null && isTaskVisibleTo(t, ctx.userId),
+      ),
     ).map((t) => ({
       _id: t._id,
       title: t.title,
