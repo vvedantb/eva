@@ -379,6 +379,8 @@ export const envVarEntryValidator = v.object({
   key: v.string(),
   value: v.string(),
   sandboxExclude: v.optional(v.boolean()),
+  // Given to snapshot seed runs only; always stored with sandboxExclude: true.
+  seedOnly: v.optional(v.boolean()),
 });
 
 /** An env var entry as listed to the client: value masked, flag resolved. */
@@ -386,6 +388,7 @@ export const maskedEnvVarEntryValidator = v.object({
   key: v.string(),
   value: v.string(),
   sandboxExclude: v.boolean(),
+  seedOnly: v.boolean(),
 });
 
 /** One chat surface, keyed by its kind and the id of its owning row. */

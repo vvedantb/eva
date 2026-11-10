@@ -489,15 +489,17 @@ const pushWebhookSchema = z.object({
 });
 
 const SKILLS_ROOT_PREFIXES = [".agents/skills", ".claude/skills"];
+const EVA_CONFIG_ROOT_PREFIXES = [".eva"];
 
-/** True when a commit touches a supported skill root, or when GitHub sent no
+/** True when a commit touches one of the given roots, or when GitHub sent no
  * path lists (force-push / truncated payloads) so we still resync. */
-function pushTouchesSkills(
+function pushTouchesRoots(
   commits: Array<{
     added: string[];
     modified: string[];
     removed: string[];
   }>,
+  prefixes: ReadonlyArray<string>,
 ): boolean {
   if (commits.length === 0) return true;
   let sawAnyPath = false;
@@ -509,7 +511,7 @@ function pushTouchesSkills(
     ]) {
       sawAnyPath = true;
       if (
-        SKILLS_ROOT_PREFIXES.some(
+        prefixes.some(
           (prefix) => path === prefix || path.startsWith(`${prefix}/`),
         )
       ) {
@@ -685,12 +687,19 @@ http.route({
         );
         await ctx.scheduler.runAfter(
           0,
-          internal.githubWebhook.handlePushForSkillSync,
+          internal.githubWebhook.handlePushToBaseBranch,
           {
             owner: parsed.data.repository.owner.login,
             name: parsed.data.repository.name,
             branch,
-            touchedSkillsPath: pushTouchesSkills(parsed.data.commits),
+            touchedSkillsPath: pushTouchesRoots(
+              parsed.data.commits,
+              SKILLS_ROOT_PREFIXES,
+            ),
+            touchedEvaConfig: pushTouchesRoots(
+              parsed.data.commits,
+              EVA_CONFIG_ROOT_PREFIXES,
+            ),
           },
         );
       }

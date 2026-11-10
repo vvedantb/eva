@@ -1,6 +1,5 @@
 import { existsSync } from "fs";
 import { TURN_MAX_RUNTIME_MS } from "@eva/shared/agentTurnLimits";
-import { hasEvaMcpConfig } from "./evaMcp.js";
 import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
@@ -336,8 +335,6 @@ function buildSettingsJson(): string {
 }
 
 export const settingsJson = buildSettingsJson();
-/** True when Eva MCP auth was supplied at callback startup. */
-export const hasMcpConfig = hasEvaMcpConfig;
 const claudeModelBase = MODEL.startsWith("claude:")
   ? MODEL.slice("claude:".length)
   : MODEL;

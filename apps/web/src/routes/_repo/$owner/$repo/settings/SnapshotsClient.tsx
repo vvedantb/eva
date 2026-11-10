@@ -29,7 +29,11 @@ import {
   ListEnter,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { BranchSelect } from "@/lib/components/BranchSelect";
+import {
+  EvaConfigManagedNote,
+  ReadOnlyLines,
+} from "@/lib/components/evaConfig/EvaConfigReadOnly";
+import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import {
   IconCamera,
@@ -239,7 +243,7 @@ export function SnapshotsClient({
   );
 }
 
-/** Configuration tab: schedule, branch and command boxes, saved on change/blur. */
+/** Configuration tab: schedule, build branch and command boxes, saved on change/blur. */
 function SnapshotConfigurationTab({
   repoId,
   snapshot,
@@ -247,12 +251,14 @@ function SnapshotConfigurationTab({
   repoId: Id<"githubRepos">;
   snapshot: Snapshot | null;
 }) {
+  const { repo } = useRepo();
   const saveRepoSnapshot = useMutation(api.repoSnapshots.saveRepoSnapshot);
   const setSnapshotEnabled = useMutation(api.repoSnapshots.setSnapshotEnabled);
 
   // Derive values directly from Convex
   const schedule = snapshot?.schedule ?? "manual";
-  const workflowRef = snapshot?.workflowRef ?? "main";
+  // Snapshots build from the repo's default branch (the branch `.eva/` syncs from).
+  const buildBranch = repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const buildCommandsText = snapshot?.buildCommands?.join("\n") ?? "";
   const seedCommandsText = snapshot?.seedCommands?.join("\n") ?? "";
   const isEnabled = snapshot?.enabled === true;
@@ -262,18 +268,6 @@ function SnapshotConfigurationTab({
     saveRepoSnapshot({
       repoId,
       schedule: newSchedule,
-      workflowRef: workflowRef.trim() || undefined,
-      buildCommands: snapshot?.buildCommands,
-      seedCommands: snapshot?.seedCommands,
-    });
-  };
-
-  // Save on change for branch
-  const handleBranchChange = (newBranch: string) => {
-    saveRepoSnapshot({
-      repoId,
-      schedule,
-      workflowRef: newBranch.trim() || undefined,
       buildCommands: snapshot?.buildCommands,
       seedCommands: snapshot?.seedCommands,
     });
@@ -289,7 +283,6 @@ function SnapshotConfigurationTab({
     saveRepoSnapshot({
       repoId,
       schedule,
-      workflowRef: workflowRef.trim() || undefined,
       buildCommands: parsed.length > 0 ? parsed : undefined,
       seedCommands: snapshot?.seedCommands,
     });
@@ -303,7 +296,6 @@ function SnapshotConfigurationTab({
     saveRepoSnapshot({
       repoId,
       schedule,
-      workflowRef: workflowRef.trim() || undefined,
       buildCommands: snapshot?.buildCommands,
       seedCommands: parsed.length > 0 ? parsed : undefined,
     });
@@ -335,67 +327,71 @@ function SnapshotConfigurationTab({
           ) : null
         }
       >
-        <SettingsField
-          label="Branch"
-          description={
-            <>
-              Branch to clone for the snapshot. Defaults to <code>main</code> if
-              empty.
-            </>
-          }
-        >
-          <BranchSelect
-            value={workflowRef}
-            onValueChange={handleBranchChange}
-            className="h-8 text-xs"
-            placeholder="Select a branch"
-          />
-        </SettingsField>
+        <p className="text-sm text-foreground">
+          Builds from <code>{buildBranch}</code>, the repo&apos;s default
+          branch.
+        </p>
       </SettingsSection>
 
       {snapshot && <RebuildRequiredWarning />}
 
-      <SettingsSection title="Build Commands">
-        <SettingsField
-          label="Commands to run during snapshot build"
-          description={
-            <>
-              One command per line. Runs in <code>/tmp/repo</code> after{" "}
-              <code>pnpm install</code> and before services start. Use for
-              codegen and builds.
-            </>
-          }
-        >
-          <Textarea
-            key={`build-${snapshot?._id ?? "none"}`}
-            defaultValue={buildCommandsText}
-            onBlur={handleBuildCommandsBlur}
-            className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
-            placeholder="pnpm convex codegen&#10;pnpm build"
-          />
-        </SettingsField>
-      </SettingsSection>
+      {repo.evaConfig !== undefined ? (
+        <SettingsSection title="Build and Seed Commands">
+          <div className="grid gap-5">
+            <EvaConfigManagedNote evaConfig={repo.evaConfig} />
+            <SettingsField label="Build">
+              <ReadOnlyLines lines={snapshot?.buildCommands} />
+            </SettingsField>
+            <SettingsField label="Seed">
+              <ReadOnlyLines lines={snapshot?.seedCommands} />
+            </SettingsField>
+          </div>
+        </SettingsSection>
+      ) : (
+        <>
+          <SettingsSection title="Build Commands">
+            <SettingsField
+              label="Commands to run during snapshot build"
+              description={
+                <>
+                  One command per line. Runs in <code>/tmp/repo</code> after{" "}
+                  <code>pnpm install</code> and before services start. Use for
+                  codegen and builds.
+                </>
+              }
+            >
+              <Textarea
+                key={`build-${snapshot?._id ?? "none"}`}
+                defaultValue={buildCommandsText}
+                onBlur={handleBuildCommandsBlur}
+                className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
+                placeholder="pnpm convex codegen&#10;pnpm build"
+              />
+            </SettingsField>
+          </SettingsSection>
 
-      <SettingsSection title="Seed Commands">
-        <SettingsField
-          label="One-time data seeding, run with services up"
-          description={
-            <>
-              One command per line. Runs once per seeded build after services
-              start. Unlike startup commands, these do not run on every sandbox
-              boot.
-            </>
-          }
-        >
-          <Textarea
-            key={`seed-${snapshot?._id ?? "none"}`}
-            defaultValue={seedCommandsText}
-            onBlur={handleSeedCommandsBlur}
-            className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
-            placeholder="cd packages/backend && npx convex env set MY_KEY 'value'&#10;cd packages/backend && npx convex import seed.zip --yes"
-          />
-        </SettingsField>
-      </SettingsSection>
+          <SettingsSection title="Seed Commands">
+            <SettingsField
+              label="One-time data seeding, run with services up"
+              description={
+                <>
+                  One command per line. Runs once per seeded build after
+                  services start. Unlike startup commands, these do not run on
+                  every sandbox boot.
+                </>
+              }
+            >
+              <Textarea
+                key={`seed-${snapshot?._id ?? "none"}`}
+                defaultValue={seedCommandsText}
+                onBlur={handleSeedCommandsBlur}
+                className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
+                placeholder="cd packages/backend && npx convex env set MY_KEY 'value'&#10;cd packages/backend && npx convex import seed.zip --yes"
+              />
+            </SettingsField>
+          </SettingsSection>
+        </>
+      )}
 
       <p className="text-xs leading-relaxed text-muted-foreground">
         Requires Vercel Sandbox credentials:{" "}

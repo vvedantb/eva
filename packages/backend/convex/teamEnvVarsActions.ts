@@ -31,6 +31,8 @@ export const upsertVar = action({
     key: v.string(),
     value: v.string(),
     sandboxExclude: v.optional(v.boolean()),
+    // Seed-only: stored for snapshot seed runs, never injected into a sandbox.
+    seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -41,6 +43,7 @@ export const upsertVar = action({
       key: args.key,
       value: stored,
       sandboxExclude: args.sandboxExclude,
+      seedOnly: args.seedOnly,
     });
     return null;
   },

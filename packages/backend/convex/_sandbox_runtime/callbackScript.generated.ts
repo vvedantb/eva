@@ -15,79 +15,6 @@ var ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT = "terminated after max runtime of";
 var TURN_CONTINUE_DISPLAY = \`Continue: the last turn hit the \${TURN_MAX_RUNTIME_HOURS}-hour limit.\`;
 var TURN_CONTINUE_PROMPT = \`Your last turn reached the \${TURN_MAX_RUNTIME_HOURS}-hour runtime limit and was stopped. Eva committed your work at that point. Check git status and git log, then continue the task from where you stopped. Do not repeat finished steps. If a step is very long (a benchmark or load test), run it in the background and check on it, so one turn does not hit the limit again.\`;
 
-// callback-src/evaMcp.ts
-var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
-var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
-function buildEvaMcpServers({
-  auth,
-  baseUrl
-}) {
-  if (!auth || !baseUrl) return {};
-  return {
-    eva: {
-      type: "http",
-      url: \`\${baseUrl}/mcp\`,
-      headers: { Authorization: \`Bearer \${auth}\` }
-    }
-  };
-}
-function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
-  const auth = env[authKey];
-  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
-  delete env[authKey];
-  delete env[urlKey];
-  if (!auth || !url) return { servers: {}, handoff: {} };
-  return {
-    servers: {
-      [name]: {
-        type: "http",
-        url,
-        headers: { Authorization: \`Bearer \${auth}\` }
-      }
-    },
-    handoff: {
-      [authKey]: auth,
-      [urlKey]: url
-    }
-  };
-}
-function consumeEvaMcpEnvironment(env) {
-  const eva = buildEvaMcpServers({
-    auth: env.EVA_MCP_AUTH,
-    baseUrl: env.EVA_MCP_BASE_URL
-  });
-  const evaAuth = env.EVA_MCP_AUTH;
-  const evaBase = env.EVA_MCP_BASE_URL;
-  delete env.EVA_MCP_AUTH;
-  delete env.EVA_MCP_BASE_URL;
-  const linear = takeBearerServer(
-    env,
-    "linear",
-    "LINEAR_MCP_AUTH",
-    "LINEAR_MCP_URL",
-    LINEAR_MCP_DEFAULT_URL
-  );
-  const figma = takeBearerServer(
-    env,
-    "figma",
-    "FIGMA_MCP_AUTH",
-    "FIGMA_MCP_URL",
-    FIGMA_MCP_DEFAULT_URL
-  );
-  return {
-    servers: { ...eva, ...linear.servers, ...figma.servers },
-    workerHandoffEnv: {
-      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
-      ...linear.handoff,
-      ...figma.handoff
-    }
-  };
-}
-var consumed = consumeEvaMcpEnvironment(process.env);
-var evaMcpServers = consumed.servers;
-var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
-var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
-
 // callback-src/jsonGuards.ts
 function isJsonObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -382,7 +309,6 @@ function buildSettingsJson() {
   return JSON.stringify(settings);
 }
 var settingsJson = buildSettingsJson();
-var hasMcpConfig = hasEvaMcpConfig;
 var claudeModelBase = MODEL.startsWith("claude:") ? MODEL.slice("claude:".length) : MODEL;
 var normalizedClaudeModel = PROVIDER === "claude" && AI_CONTEXT_1M === "1" ? \`\${claudeModelBase}[1m]\` : claudeModelBase;
 var normalizedCodexModel = MODEL.startsWith("codex:") ? MODEL.slice("codex:".length) : MODEL;
@@ -458,31 +384,9 @@ var completedLabels = {
   "Asking a question...": "Asked a question"
 };
 
-// callback-src/providers/claudeSdkDaemon.ts
-import { readdirSync as readdirSync3 } from "fs";
-import { homedir } from "os";
-
-// callback-src/providers/daemonPaths.ts
-var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
-var LEGACY_DAEMON_ENTITY = "/tmp/eva-daemon.entity";
-var LEGACY_DAEMON_OPTS = "/tmp/eva-daemon.opts";
-function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_ID) {
-  const field = entityIdField ?? "sessionId";
-  const id = entityId ?? "";
-  const suffix = \`\${field}-\${id}\`;
-  return {
-    pid: \`/tmp/eva-daemon.\${suffix}.pid\`,
-    entity: \`/tmp/eva-daemon.\${suffix}.entity\`,
-    opts: \`/tmp/eva-daemon.\${suffix}.opts\`
-  };
-}
-function resolveLegacySessionDaemonPaths() {
-  return {
-    pid: LEGACY_DAEMON_PID,
-    entity: LEGACY_DAEMON_ENTITY,
-    opts: LEGACY_DAEMON_OPTS
-  };
-}
+// callback-src/evaMcp.ts
+import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
+import { join } from "path";
 
 // callback-src/utils.ts
 import { spawnSync as spawnSync2 } from "child_process";
@@ -958,6 +862,211 @@ function attemptElapsedMs() {
 }
 function elapsedAttemptMs() {
   return attemptElapsedMs();
+}
+
+// callback-src/evaMcp.ts
+var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
+var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
+function buildEvaMcpServers({
+  auth,
+  baseUrl
+}) {
+  if (!auth || !baseUrl) return {};
+  return {
+    eva: {
+      type: "http",
+      url: \`\${baseUrl}/mcp\`,
+      headers: { Authorization: \`Bearer \${auth}\` }
+    }
+  };
+}
+function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
+  const auth = env[authKey];
+  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
+  delete env[authKey];
+  delete env[urlKey];
+  if (!auth || !url) return { servers: {}, handoff: {} };
+  return {
+    servers: {
+      [name]: {
+        type: "http",
+        url,
+        headers: { Authorization: \`Bearer \${auth}\` }
+      }
+    },
+    handoff: {
+      [authKey]: auth,
+      [urlKey]: url
+    }
+  };
+}
+function consumeEvaMcpEnvironment(env) {
+  const eva = buildEvaMcpServers({
+    auth: env.EVA_MCP_AUTH,
+    baseUrl: env.EVA_MCP_BASE_URL
+  });
+  const evaAuth = env.EVA_MCP_AUTH;
+  const evaBase = env.EVA_MCP_BASE_URL;
+  delete env.EVA_MCP_AUTH;
+  delete env.EVA_MCP_BASE_URL;
+  const linear = takeBearerServer(
+    env,
+    "linear",
+    "LINEAR_MCP_AUTH",
+    "LINEAR_MCP_URL",
+    LINEAR_MCP_DEFAULT_URL
+  );
+  const figma = takeBearerServer(
+    env,
+    "figma",
+    "FIGMA_MCP_AUTH",
+    "FIGMA_MCP_URL",
+    FIGMA_MCP_DEFAULT_URL
+  );
+  return {
+    servers: { ...eva, ...linear.servers, ...figma.servers },
+    workerHandoffEnv: {
+      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
+      ...linear.handoff,
+      ...figma.handoff
+    }
+  };
+}
+var RESERVED_MCP_SERVER_NAMES = /* @__PURE__ */ new Set(["eva", "linear", "figma"]);
+function isJsonObject2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+var SkipServer = class extends Error {
+};
+function substituteVars(value, env) {
+  return value.replace(/\\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => {
+    const resolved = env[name];
+    if (!resolved) throw new SkipServer("missing env var " + name);
+    return resolved;
+  });
+}
+function stringRecord(value, field, env) {
+  if (value === void 0) return {};
+  if (!isJsonObject2(value)) throw new SkipServer(field + " must be an object");
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "string") {
+      throw new SkipServer(field + "." + key + " must be a string");
+    }
+    out[key] = substituteVars(entry, env);
+  }
+  return out;
+}
+function parseRepoMcpServer(raw, env) {
+  if (!isJsonObject2(raw)) throw new SkipServer("entry must be an object");
+  const { type, url, command, args } = raw;
+  const kind = type ?? (command !== void 0 ? "stdio" : url !== void 0 ? "http" : "");
+  if (kind === "http" || kind === "sse") {
+    if (typeof url !== "string") throw new SkipServer("url must be a string");
+    return {
+      type: kind,
+      url: substituteVars(url, env),
+      headers: stringRecord(raw.headers, "headers", env)
+    };
+  }
+  if (kind === "stdio") {
+    if (typeof command !== "string") {
+      throw new SkipServer("command must be a string");
+    }
+    if (args !== void 0 && !Array.isArray(args)) {
+      throw new SkipServer("args must be an array");
+    }
+    return {
+      type: "stdio",
+      command: substituteVars(command, env),
+      args: (args ?? []).map((arg) => {
+        if (typeof arg !== "string") throw new SkipServer("args must be strings");
+        return substituteVars(arg, env);
+      }),
+      env: stringRecord(raw.env, "env", env)
+    };
+  }
+  throw new SkipServer("unsupported type " + JSON.stringify(type));
+}
+function parseRepoMcpConfig(text, env) {
+  const parsed = tryParseJson(text);
+  if (!isJsonObject2(parsed) || !isJsonObject2(parsed.mcpServers)) {
+    return {
+      servers: {},
+      warnings: ["invalid JSON or missing mcpServers object"]
+    };
+  }
+  const servers = {};
+  const warnings = [];
+  for (const [name, raw] of Object.entries(parsed.mcpServers)) {
+    try {
+      servers[name] = parseRepoMcpServer(raw, env);
+    } catch (error) {
+      if (!(error instanceof SkipServer)) throw error;
+      warnings.push("skipped server " + name + ": " + error.message);
+    }
+  }
+  return { servers, warnings };
+}
+function mergeRepoMcpServers(evaServers, repoServers) {
+  const kept = {};
+  const warnings = [];
+  for (const [name, server] of Object.entries(repoServers)) {
+    if (RESERVED_MCP_SERVER_NAMES.has(name)) {
+      warnings.push("skipped server " + name + ": name is reserved for Eva");
+    } else {
+      kept[name] = server;
+    }
+  }
+  return { servers: { ...kept, ...evaServers }, warnings };
+}
+var REPO_MCP_PATH = join(WORK_DIR, ".eva", "mcp.json");
+var hasRepoMcpFile = existsSync3(REPO_MCP_PATH);
+function loadRepoMcpServers(evaServers) {
+  if (!hasRepoMcpFile) return evaServers;
+  let text;
+  try {
+    text = readFileSync2(REPO_MCP_PATH, "utf8");
+  } catch (error) {
+    log(".eva/mcp.json unreadable: " + String(error));
+    return evaServers;
+  }
+  const repo = parseRepoMcpConfig(text, process.env);
+  const merged = mergeRepoMcpServers(evaServers, repo.servers);
+  for (const warning of [...repo.warnings, ...merged.warnings]) {
+    log(".eva/mcp.json: " + warning);
+  }
+  return merged.servers;
+}
+var consumed = consumeEvaMcpEnvironment(process.env);
+var evaMcpServers = loadRepoMcpServers(consumed.servers);
+var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
+var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
+
+// callback-src/providers/claudeSdkDaemon.ts
+import { readdirSync as readdirSync3 } from "fs";
+import { homedir } from "os";
+
+// callback-src/providers/daemonPaths.ts
+var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
+var LEGACY_DAEMON_ENTITY = "/tmp/eva-daemon.entity";
+var LEGACY_DAEMON_OPTS = "/tmp/eva-daemon.opts";
+function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_ID) {
+  const field = entityIdField ?? "sessionId";
+  const id = entityId ?? "";
+  const suffix = \`\${field}-\${id}\`;
+  return {
+    pid: \`/tmp/eva-daemon.\${suffix}.pid\`,
+    entity: \`/tmp/eva-daemon.\${suffix}.entity\`,
+    opts: \`/tmp/eva-daemon.\${suffix}.opts\`
+  };
+}
+function resolveLegacySessionDaemonPaths() {
+  return {
+    pid: LEGACY_DAEMON_PID,
+    entity: LEGACY_DAEMON_ENTITY,
+    opts: LEGACY_DAEMON_OPTS
+  };
 }
 
 // callback-src/runtime/turnLease.ts
@@ -2112,7 +2221,7 @@ function routeClaimedTurn(input) {
 }
 
 // callback-src/runtime/daemonProcess.ts
-import { readFileSync as readFileSync4, unlinkSync, writeFileSync as writeFileSync7 } from "fs";
+import { readFileSync as readFileSync5, unlinkSync, writeFileSync as writeFileSync7 } from "fs";
 
 // callback-src/providers/githubToken.ts
 function tokenFromActionResponse(data) {
@@ -2177,7 +2286,7 @@ async function refreshDaemonGithubTokenFromEnv() {
 }
 
 // callback-src/session/claudeSession.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "fs";
 function buildClaudeStartupStep() {
   if (callbackState.waitingForFirstAssistantEvent && callbackState.claudeInitAt > 0) {
     const elapsedSeconds = Math.max(
@@ -2201,11 +2310,11 @@ function buildClaudeStartupStep() {
   };
 }
 function readClaudeSessionState() {
-  if (!existsSync3(CLAUDE_LOCAL_STATE_FILE)) {
+  if (!existsSync4(CLAUDE_LOCAL_STATE_FILE)) {
     return null;
   }
   const parsed = tryParseJsonObject(
-    readFileSync2(CLAUDE_LOCAL_STATE_FILE, "utf8")
+    readFileSync3(CLAUDE_LOCAL_STATE_FILE, "utf8")
   );
   if (!parsed) return null;
   const resumeSessionId = typeof parsed.resumeSessionId === "string" ? parsed.resumeSessionId.trim() : "";
@@ -2285,7 +2394,7 @@ function hydratePersistedClaudeState() {
 function ensureClaudeWorkspaceTrust() {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  const parsed = existsSync3(configPath) ? tryParseJsonObject(readFileSync2(configPath, "utf8")) : null;
+  const parsed = existsSync4(configPath) ? tryParseJsonObject(readFileSync3(configPath, "utf8")) : null;
   const config = parsed ? { ...parsed } : {};
   const rawProjects = config.projects;
   const projects = rawProjects && typeof rawProjects === "object" && !Array.isArray(rawProjects) ? { ...rawProjects } : {};
@@ -2303,7 +2412,7 @@ function resolveClaudeSessionMode() {
   }
   const persistedState = readClaudeSessionState();
   if (persistedState) {
-    if (existsSync3(
+    if (existsSync4(
       buildClaudeTranscriptPath(
         CLAUDE_LOCAL_PROJECT_DIR,
         persistedState.resumeSessionId
@@ -2316,7 +2425,7 @@ function resolveClaudeSessionMode() {
     );
     return { mode: "session", sessionId: configuredSessionId };
   }
-  if (existsSync3(
+  if (existsSync4(
     buildClaudeTranscriptPath(CLAUDE_LOCAL_PROJECT_DIR, configuredSessionId)
   )) {
     return { mode: "resume", sessionId: configuredSessionId };
@@ -3351,15 +3460,15 @@ var claudeAdapter = {
 import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
 
 // callback-src/session/createSessionStore.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "fs";
 function createSessionStore(config) {
   const readSessionState = () => {
-    const statePath = existsSync4(config.localStateFile) ? config.localStateFile : existsSync4(config.persistStateFile) ? config.persistStateFile : "";
+    const statePath = existsSync5(config.localStateFile) ? config.localStateFile : existsSync5(config.persistStateFile) ? config.persistStateFile : "";
     if (!statePath) {
       return null;
     }
     try {
-      const parsed = JSON.parse(readFileSync3(statePath, "utf8"));
+      const parsed = JSON.parse(readFileSync4(statePath, "utf8"));
       if (!isJsonObject(parsed)) {
         return null;
       }
@@ -3454,16 +3563,25 @@ function writeCodexFileIfConfigured(fileName, rawValue, encodedValue) {
   mkdirSync4(CODEX_RUNTIME_HOME_DIR, { recursive: true });
   writeFileSync4(CODEX_RUNTIME_HOME_DIR + "/" + fileName, value);
 }
+function tomlInlineTable(record) {
+  const entries = Object.entries(record).map(([key, value]) => \`\${JSON.stringify(key)} = \${JSON.stringify(value)}\`).join(", ");
+  return \`{ \${entries} }\`;
+}
 function codexMcpServerSections(servers) {
   return Object.entries(servers).flatMap(([name, server]) => {
-    const headers = Object.entries(server.headers).map(
-      ([header, value]) => \`\${JSON.stringify(header)} = \${JSON.stringify(value)}\`
-    ).join(", ");
+    const header = ["", \`[mcp_servers.\${JSON.stringify(name)}]\`];
+    if (server.type === "stdio") {
+      return [
+        ...header,
+        \`command = \${JSON.stringify(server.command)}\`,
+        \`args = [\${server.args.map((arg) => JSON.stringify(arg)).join(", ")}]\`,
+        \`env = \${tomlInlineTable(server.env)}\`
+      ];
+    }
     return [
-      "",
-      \`[mcp_servers.\${JSON.stringify(name)}]\`,
+      ...header,
       \`url = \${JSON.stringify(server.url)}\`,
-      \`http_headers = { \${headers} }\`
+      \`http_headers = \${tomlInlineTable(server.headers)}\`
     ];
   });
 }
@@ -4938,7 +5056,7 @@ function pidAlive(pid) {
 function isCallbackRunnerPid(pid) {
   if (!pidAlive(pid)) return false;
   try {
-    return readFileSync4(\`/proc/\${pid}/cmdline\`, "utf8").includes(
+    return readFileSync5(\`/proc/\${pid}/cmdline\`, "utf8").includes(
       "run-design.mjs"
     );
   } catch {
@@ -4956,7 +5074,7 @@ function writeOomScoreAdj(target2, score) {
 function callbackBundleWentStale(expectedFingerprint) {
   if (!expectedFingerprint) return false;
   try {
-    return readFileSync4(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
+    return readFileSync5(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
   } catch {
     return false;
   }
@@ -4966,7 +5084,7 @@ function callbackScriptWentStale() {
 }
 function readPidFromFile(pidPath) {
   try {
-    return Number(readFileSync4(pidPath, "utf8").trim());
+    return Number(readFileSync5(pidPath, "utf8").trim());
   } catch {
     return Number.NaN;
   }
@@ -5078,9 +5196,9 @@ async function bootWarmDaemon(params) {
 
 // callback-src/runtime/completion.ts
 import {
-  existsSync as existsSync5,
+  existsSync as existsSync6,
   mkdirSync as mkdirSync6,
-  readFileSync as readFileSync5,
+  readFileSync as readFileSync6,
   readdirSync as readdirSync2,
   renameSync,
   writeFileSync as writeFileSync8
@@ -5428,7 +5546,7 @@ async function uploadMediaFile(filePath, mimeType) {
   );
   const urlValue = urlRes && typeof urlRes === "object" && !Array.isArray(urlRes) && urlRes.value && typeof urlRes.value === "string" ? urlRes.value : "";
   if (!urlValue) throw new Error("Missing upload URL");
-  const fileData = readFileSync5(filePath);
+  const fileData = readFileSync6(filePath);
   const uploadRes = await fetchWithTimeout(
     urlValue,
     {
@@ -5487,14 +5605,14 @@ async function uploadAndAttachSandboxMedia(target2) {
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
   const isDuplicate = (filePath) => {
-    const digest = createHash("sha256").update(readFileSync5(filePath)).digest("hex");
+    const digest = createHash("sha256").update(readFileSync6(filePath)).digest("hex");
     if (seenDigests.has(digest)) return true;
     seenDigests.add(digest);
     return false;
   };
   const { recordings, screenshots } = mediaSearchDirs(WORK_DIR, ROOT_DIRECTORY);
   for (const recDir of recordings) {
-    if (!existsSync5(recDir)) continue;
+    if (!existsSync6(recDir)) continue;
     for (const file of readdirSync2(recDir)) {
       if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
       const fp = recDir + "/" + file;
@@ -5517,7 +5635,7 @@ async function uploadAndAttachSandboxMedia(target2) {
     webp: "image/webp"
   };
   for (const ssDir of screenshots) {
-    if (!existsSync5(ssDir)) continue;
+    if (!existsSync6(ssDir)) continue;
     for (const file of readdirSync2(ssDir)) {
       if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
       const fp = ssDir + "/" + file;
@@ -5631,7 +5749,7 @@ function handleRealtimeStreamLine(line) {
 
 // callback-src/providers/claudeSdk.ts
 import { execSync } from "child_process";
-import { existsSync as existsSync6, readFileSync as readFileSync6 } from "fs";
+import { existsSync as existsSync7, readFileSync as readFileSync7 } from "fs";
 import { dirname } from "path";
 
 // callback-src/runtime/pendingQuestion.ts
@@ -5800,7 +5918,7 @@ var SDK_LOCAL_PREFIX = "/home/eva/.eva-agent-sdk";
 function installedPackageVersion(packageRoot) {
   try {
     const manifest = JSON.parse(
-      readFileSync6(packageRoot + "/package.json", "utf8")
+      readFileSync7(packageRoot + "/package.json", "utf8")
     );
     if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
       return null;
@@ -5876,7 +5994,7 @@ function resolvePinnedCliBinary(cli) {
       "cli version drift: global " + cli.binName + " is " + (globalVersion ?? "unknown") + ", need " + pinned + "; preferring the pinned fallback install"
     );
   }
-  if (cli.fallbackBinPath && existsSync6(cli.fallbackBinPath)) {
+  if (cli.fallbackBinPath && existsSync7(cli.fallbackBinPath)) {
     const fallbackVersion = binPackageVersion(
       cli.fallbackBinPath,
       cli.packageName
@@ -5972,6 +6090,10 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     ...sessionMode.mode === "session" && sessionMode.sessionId ? { sessionId: sessionMode.sessionId } : {},
     ...sessionMode.mode === "resume" && sessionMode.sessionId ? { resume: sessionMode.sessionId } : {},
     extraArgs,
+    // A repo with \`.eva/mcp.json\` gets the merged set from Eva; its own
+    // \`.mcp.json\` would then add duplicates, such as a second \`eva\`. Repos
+    // without one keep loading \`.mcp.json\` as before.
+    ...hasRepoMcpFile ? { strictMcpConfig: true } : {},
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...effortOption,
     ...thinkingOption
@@ -7444,7 +7566,7 @@ async function createOutputSchemaFile(schema) {
     return { cleanup: async () => {
     } };
   }
-  if (!isJsonObject2(schema)) {
+  if (!isJsonObject3(schema)) {
     throw new Error("outputSchema must be a plain JSON object");
   }
   const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
@@ -7463,7 +7585,7 @@ async function createOutputSchemaFile(schema) {
     throw error;
   }
 }
-function isJsonObject2(value) {
+function isJsonObject3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 var Thread = class {
@@ -8517,12 +8639,12 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync8, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
+import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
 
 // callback-src/providers/cursorSdk.ts
 import {
   mkdirSync as mkdirSync7,
-  readFileSync as readFileSync7,
+  readFileSync as readFileSync8,
   renameSync as renameSync2,
   statSync as statSync4,
   writeFileSync as writeFileSync10
@@ -8694,7 +8816,7 @@ function readCachedCursorModelResolution() {
     const ageMs = Date.now() - statSync4(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
     if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
     const cached = JSON.parse(
-      readFileSync7(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
+      readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
     );
     if (!isJsonObject(cached)) {
       return null;
@@ -9340,7 +9462,7 @@ function readCursorTurnWorkerClaim() {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
   }
-  const prompt = readFileSync8(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
+  const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
   if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
@@ -9678,10 +9800,10 @@ async function runCursorDaemon() {
 
 // callback-src/runtime/systemSkills.ts
 import {
-  existsSync as existsSync7,
+  existsSync as existsSync8,
   mkdirSync as mkdirSync8,
   readdirSync as readdirSync4,
-  readFileSync as readFileSync9,
+  readFileSync as readFileSync10,
   rmSync,
   writeFileSync as writeFileSync12
 } from "fs";
@@ -9741,9 +9863,9 @@ function skillsRoots() {
 }
 function isEvaStub(directory) {
   const skillFile = \`\${directory}/SKILL.md\`;
-  if (!existsSync7(skillFile)) return false;
+  if (!existsSync8(skillFile)) return false;
   try {
-    return readFileSync9(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync10(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
@@ -9751,7 +9873,7 @@ function isEvaStub(directory) {
 function writeStub(skill) {
   const directories = skillsRoots().map((root) => \`\${root}/\${skill.name}\`);
   const userOwned = directories.some(
-    (directory) => existsSync7(\`\${directory}/SKILL.md\`) && !isEvaStub(directory)
+    (directory) => existsSync8(\`\${directory}/SKILL.md\`) && !isEvaStub(directory)
   );
   if (userOwned) {
     log(\`[system-skills] \${skill.name} exists in the repo \\u2014 leaving it alone\`);
@@ -9765,7 +9887,7 @@ function writeStub(skill) {
 }
 function pruneStaleStubs(keep) {
   for (const root of skillsRoots()) {
-    if (!existsSync7(root)) continue;
+    if (!existsSync8(root)) continue;
     for (const entry of readdirSync4(root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       if (keep.has(entry.name)) continue;
@@ -9782,10 +9904,10 @@ function pruneStaleStubs(keep) {
 }
 function updateGitExclude(names) {
   const gitDir = \`\${WORK_DIR}/.git\`;
-  if (!existsSync7(gitDir)) return;
+  if (!existsSync8(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync7(excludeFile) ? readFileSync9(excludeFile, "utf8") : "";
+  const existing = existsSync8(excludeFile) ? readFileSync10(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
@@ -9808,13 +9930,13 @@ function reconcileSystemSkills(skills) {
 }
 function materializeSystemSkills() {
   try {
-    if (!existsSync7(SYSTEM_SKILLS_STATE_FILE)) return;
-    if (!existsSync7(WORK_DIR)) {
+    if (!existsSync8(SYSTEM_SKILLS_STATE_FILE)) return;
+    if (!existsSync8(WORK_DIR)) {
       log("[system-skills] no checkout yet \\u2014 skipping");
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync9(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync10(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
@@ -9830,10 +9952,10 @@ function materializeSystemSkills() {
 import { spawn as spawn4 } from "child_process";
 import {
   closeSync,
-  existsSync as existsSync8,
+  existsSync as existsSync9,
   mkdirSync as mkdirSync9,
   openSync,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync11,
   rmSync as rmSync2,
   statSync as statSync5,
   writeFileSync as writeFileSync13
@@ -9850,7 +9972,7 @@ var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
   try {
-    const contents = readFileSync10(SERVER_LOG_FILE, "utf8");
+    const contents = readFileSync11(SERVER_LOG_FILE, "utf8");
     return contents.length > maxBytes ? contents.slice(-maxBytes) : contents;
   } catch {
     return "";
@@ -9868,7 +9990,7 @@ async function probeHealth(timeoutMs = HEALTH_PROBE_TIMEOUT_MS) {
 }
 function readRecordedPid() {
   try {
-    const parsed = tryParseJsonObject(readFileSync10(SERVER_STATE_FILE, "utf8"));
+    const parsed = tryParseJsonObject(readFileSync11(SERVER_STATE_FILE, "utf8"));
     if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
@@ -9880,7 +10002,7 @@ function killRecordedServer() {
   if (!pid) return;
   let cmdline = "";
   try {
-    cmdline = readFileSync10("/proc/" + String(pid) + "/cmdline", "utf8");
+    cmdline = readFileSync11("/proc/" + String(pid) + "/cmdline", "utf8");
   } catch {
     return;
   }
@@ -9975,7 +10097,7 @@ async function ensureOpencodeServer() {
       if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) {
         return opencodeServerBaseUrl;
       }
-      if (!existsSync8(SERVER_LOCK_DIR)) break;
+      if (!existsSync9(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;
     releaseStartupLock();
@@ -10110,7 +10232,12 @@ async function ensureEvaMcpServers(client, servers = evaMcpServers) {
         const added = await client.mcp.add({
           body: {
             name,
-            config: {
+            config: server.type === "stdio" ? {
+              type: "local",
+              command: [server.command, ...server.args],
+              environment: server.env,
+              enabled: true
+            } : {
               type: "remote",
               url: server.url,
               headers: server.headers,
@@ -10493,7 +10620,7 @@ await ensureGithubToken({
   repoId: REPO_ID
 });
 log(
-  "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasMcpConfig ? "yes" : "no")
+  "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasEvaMcpConfig ? "yes" : "no")
 );
 try {
   beginTurnCheckpoint();
