@@ -1073,6 +1073,9 @@ export const githubRepoFields = {
       syncedAt: v.number(),
       // Parse error of the current file; the cache keeps the last good values.
       error: v.optional(v.string()),
+      // False when the repo has the file but it does not list this app: the
+      // app keeps Convex-managed (editable) commands. See ownsRunCommands.
+      appListed: v.optional(v.boolean()),
       mcpServers: v.array(
         v.object({
           name: v.string(),

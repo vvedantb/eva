@@ -92,10 +92,12 @@ describe("applyEvaConfig", () => {
         // The file names no dev command for admin, so detection takes over.
         expect(admin?.devCommand).toBeUndefined();
 
-        // The monorepo root is not listed: it stays Convex-managed.
+        // The monorepo root is not listed: its commands stay Convex-managed,
+        // but it is marked as part of a repo that has the file, so the setup
+        // prompt does not show for it.
         const root = await ctx.db.get(ids.root);
         expect(root?.startupCommands).toEqual(["root-old"]);
-        expect(root?.evaConfig).toBeUndefined();
+        expect(root?.evaConfig?.appListed).toBe(false);
 
         const snapshot = await ctx.db.get(ids.snapshot);
         expect(snapshot?.buildCommands).toEqual(["pnpm install"]);

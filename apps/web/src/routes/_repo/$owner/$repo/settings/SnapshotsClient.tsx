@@ -32,6 +32,7 @@ import { AnimatePresence, m } from "motion/react";
 import {
   EvaConfigManagedNote,
   ReadOnlyLines,
+  ownsRunCommands,
 } from "@/lib/components/evaConfig/EvaConfigReadOnly";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
@@ -335,7 +336,7 @@ function SnapshotConfigurationTab({
 
       {snapshot && <RebuildRequiredWarning />}
 
-      {repo.evaConfig !== undefined ? (
+      {ownsRunCommands(repo.evaConfig) ? (
         <SettingsSection title="Build and Seed Commands">
           <div className="grid gap-5">
             <EvaConfigManagedNote evaConfig={repo.evaConfig} />
