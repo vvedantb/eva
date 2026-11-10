@@ -8,6 +8,7 @@ import {
 } from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { teamMemberRoleValidator } from "./validators";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Lists all members of a team with their user profiles. Returns empty if the requester isn't a member. */
 export const list = authQuery({
@@ -121,6 +122,7 @@ export const add = authMutation({
   },
   returns: v.id("teamMembers"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -166,6 +168,7 @@ export const remove = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -210,6 +213,7 @@ export const updateRole = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,

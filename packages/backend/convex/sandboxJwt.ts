@@ -7,10 +7,19 @@ import { internal } from "./_generated/api";
 import { importJWK, SignJWT } from "jose";
 import { z } from "zod";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
+import { EVA_MCP_CLAIM } from "./_auth/sandboxIdentity";
 
 const sandboxPrivateJwkSchema = z
   .object({ kid: z.string().optional() })
   .passthrough();
+
+/**
+ * `vm`: the daemon's CONVEX_TOKEN (24h, no claim). `mcp`: the MCP `runAsUser`
+ * token (1h) marked with EVA_MCP_CLAIM, so the backend can tell the two apart
+ * (`_auth/sandboxIdentity.ts`). Only MCP is marked, so in-flight VM tokens keep
+ * their meaning.
+ */
+export type SandboxJwtPurpose = "vm" | "mcp";
 
 /**
  * Signs the ES256 sandbox-user JWT that Convex auth accepts (see
@@ -18,18 +27,20 @@ const sandboxPrivateJwkSchema = z
  */
 export async function signSandboxUserJwt(
   clerkId: string,
-  expiresIn: "1h" | "24h",
+  purpose: SandboxJwtPurpose,
 ): Promise<string> {
   const privateKeyJwk = sandboxPrivateJwkSchema.parse(
     JSON.parse(requiredEnv("SANDBOX_JWT_PRIVATE_KEY")),
   );
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");
-  return await new SignJWT({ sub: clerkId })
+  const claims =
+    purpose === "mcp" ? { sub: clerkId, [EVA_MCP_CLAIM]: true } : { sub: clerkId };
+  return await new SignJWT(claims)
     .setProtectedHeader({ alg: "ES256", kid })
     .setIssuer(SANDBOX_JWT_ISSUER)
     .setAudience("convex")
-    .setExpirationTime(expiresIn)
+    .setExpirationTime(purpose === "mcp" ? "1h" : "24h")
     .setIssuedAt()
     .sign(key);
 }
@@ -85,7 +96,7 @@ export const mintSandboxSessionTokens = internalAction({
     }
 
     // Sandbox auth token (ES256) — required.
-    const sandboxToken = await signSandboxUserJwt(clerkId, "24h");
+    const sandboxToken = await signSandboxUserJwt(clerkId, "vm");
 
     // MCP-internal token (HS256) — best-effort.
     let mcpToken: { token: string; expiresIn: number } | null = null;

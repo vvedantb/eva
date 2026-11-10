@@ -234,7 +234,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
     return cached.jwt;
   }
 
-  const jwt = await signSandboxUserJwt(clerkUserId, "1h");
+  const jwt = await signSandboxUserJwt(clerkUserId, "mcp");
 
   userJwtCache.set(clerkUserId, {
     jwt,

@@ -14,6 +14,7 @@ import {
   envVarEntryValidator,
   maskedEnvVarEntryValidator,
 } from "./_validators/shapes";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Lists repo env vars for the authenticated user, masking actual values. */
 export const list = authQuery({
@@ -104,6 +105,7 @@ export const removeVar = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findRepoEnvVarDoc(ctx.db, args.repoId);
     if (!doc) return null;
@@ -124,6 +126,7 @@ export const toggleSandboxExclude = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const doc = await findRepoEnvVarDoc(ctx.db, args.repoId);
     if (!doc) return null;

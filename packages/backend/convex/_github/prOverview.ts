@@ -9,6 +9,7 @@ import { invalidatePrHeaderCache } from "./pullRequests";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { getActionRepoWithAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { patchPullRequest } from "./pullRequestWrite";
 import { fetchLatestDeploymentStatus } from "./deploymentSnapshot";
 import {
@@ -798,6 +799,7 @@ export const mergePullRequest = action({
     ctx,
     args,
   ): Promise<{ merged: boolean; sha: string | null; message: string }> => {
+    await rejectSandboxCaller(ctx);
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
