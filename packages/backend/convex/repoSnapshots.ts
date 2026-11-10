@@ -9,7 +9,6 @@ export {
   setSeededSnapshotName,
   getCurrentSeedFingerprint,
   setBaseSnapshotId,
-  setSeedCommandsInternal,
   listAllProtectedSnapshotIds,
 } from "./_repoSnapshots/config";
 

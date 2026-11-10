@@ -21,7 +21,6 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-  Textarea,
   tokenTransition,
   SettingsField,
   SettingsSection,
@@ -32,7 +31,6 @@ import { AnimatePresence, m } from "motion/react";
 import {
   EvaConfigManagedNote,
   ReadOnlyLines,
-  ownsRunCommands,
 } from "@/lib/components/evaConfig/EvaConfigReadOnly";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
@@ -44,7 +42,7 @@ import {
   IconUpload,
 } from "@tabler/icons-react";
 import { formatDurationMs } from "@eva/shared/duration";
-import { parseCommandLines, formatFileSize } from "./_utils";
+import { formatFileSize } from "./_utils";
 import { RebuildRequiredWarning } from "./_components/RebuildRequiredWarning";
 import { BuildRow } from "./_components/BuildRow";
 import { SnapshotStatusTab } from "./_components/SnapshotStatusTab";
@@ -55,7 +53,6 @@ import {
 } from "@/lib/utils/mutationToast";
 
 /** Every command box on this page is a monospace, resizable textarea. */
-const COMMAND_TEXTAREA_CLASS = "resize-y bg-background font-mono text-xs";
 
 /**
  * Shown on the Status and Builds tabs when no snapshot config exists yet —
@@ -260,46 +257,10 @@ function SnapshotConfigurationTab({
   const schedule = snapshot?.schedule ?? "manual";
   // Snapshots build from the repo's default branch (the branch `.eva/` syncs from).
   const buildBranch = repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-  const buildCommandsText = snapshot?.buildCommands?.join("\n") ?? "";
-  const seedCommandsText = snapshot?.seedCommands?.join("\n") ?? "";
   const isEnabled = snapshot?.enabled === true;
 
-  // Save on change for schedule
   const handleScheduleChange = (newSchedule: string) => {
-    saveRepoSnapshot({
-      repoId,
-      schedule: newSchedule,
-      buildCommands: snapshot?.buildCommands,
-      seedCommands: snapshot?.seedCommands,
-    });
-  };
-
-  // Save on blur for build commands
-  const handleBuildCommandsBlur = (
-    e: React.FocusEvent<HTMLTextAreaElement>,
-  ) => {
-    const next = e.target.value;
-    if (next === buildCommandsText) return;
-    const parsed = parseCommandLines(next);
-    saveRepoSnapshot({
-      repoId,
-      schedule,
-      buildCommands: parsed.length > 0 ? parsed : undefined,
-      seedCommands: snapshot?.seedCommands,
-    });
-  };
-
-  // Save on blur for seed commands
-  const handleSeedCommandsBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
-    const next = e.target.value;
-    if (next === seedCommandsText) return;
-    const parsed = parseCommandLines(next);
-    saveRepoSnapshot({
-      repoId,
-      schedule,
-      buildCommands: snapshot?.buildCommands,
-      seedCommands: parsed.length > 0 ? parsed : undefined,
-    });
+    saveRepoSnapshot({ repoId, schedule: newSchedule });
   };
 
   return (
@@ -336,63 +297,23 @@ function SnapshotConfigurationTab({
 
       {snapshot && <RebuildRequiredWarning />}
 
-      {ownsRunCommands(repo.evaConfig) ? (
-        <SettingsSection title="Build and Seed Commands">
-          <div className="grid gap-5">
+      <SettingsSection title="Build and Seed Commands">
+        <div className="grid gap-5">
+          {repo.evaConfig ? (
             <EvaConfigManagedNote evaConfig={repo.evaConfig} />
-            <SettingsField label="Build">
-              <ReadOnlyLines lines={snapshot?.buildCommands} />
-            </SettingsField>
-            <SettingsField label="Seed">
-              <ReadOnlyLines lines={snapshot?.seedCommands} />
-            </SettingsField>
-          </div>
-        </SettingsSection>
-      ) : (
-        <>
-          <SettingsSection title="Build Commands">
-            <SettingsField
-              label="Commands to run during snapshot build"
-              description={
-                <>
-                  One command per line. Runs in <code>/tmp/repo</code> after{" "}
-                  <code>pnpm install</code> and before services start. Use for
-                  codegen and builds.
-                </>
-              }
-            >
-              <Textarea
-                key={`build-${snapshot?._id ?? "none"}`}
-                defaultValue={buildCommandsText}
-                onBlur={handleBuildCommandsBlur}
-                className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
-                placeholder="pnpm convex codegen&#10;pnpm build"
-              />
-            </SettingsField>
-          </SettingsSection>
-
-          <SettingsSection title="Seed Commands">
-            <SettingsField
-              label="One-time data seeding, run with services up"
-              description={
-                <>
-                  One command per line. Runs once per seeded build after
-                  services start. Unlike startup commands, these do not run on
-                  every sandbox boot.
-                </>
-              }
-            >
-              <Textarea
-                key={`seed-${snapshot?._id ?? "none"}`}
-                defaultValue={seedCommandsText}
-                onBlur={handleSeedCommandsBlur}
-                className={`h-48 ${COMMAND_TEXTAREA_CLASS}`}
-                placeholder="cd packages/backend && npx convex env set MY_KEY 'value'&#10;cd packages/backend && npx convex import seed.zip --yes"
-              />
-            </SettingsField>
-          </SettingsSection>
-        </>
-      )}
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Set in <code>.eva/config.json</code> under <code>snapshot</code>.
+            </p>
+          )}
+          <SettingsField label="Build">
+            <ReadOnlyLines lines={snapshot?.buildCommands} />
+          </SettingsField>
+          <SettingsField label="Seed">
+            <ReadOnlyLines lines={snapshot?.seedCommands} />
+          </SettingsField>
+        </div>
+      </SettingsSection>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
         Requires Vercel Sandbox credentials:{" "}

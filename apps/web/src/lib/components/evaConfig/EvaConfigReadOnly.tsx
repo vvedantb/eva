@@ -11,16 +11,6 @@ type Repo = NonNullable<
 /** Present ⇒ the repo owns its commands via `.eva/config.json`. */
 export type EvaConfig = NonNullable<Repo["evaConfig"]>;
 
-/**
- * The app's run commands come from `.eva/config.json` (read-only here). A repo
- * whose file does not list this app keeps Convex-managed commands.
- */
-export function ownsRunCommands(
-  evaConfig: EvaConfig | undefined,
-): evaConfig is EvaConfig {
-  return evaConfig !== undefined && evaConfig.appListed !== false;
-}
-
 /** Parse error of the repo's `.eva/` files. Multi-line, so kept verbatim. */
 export function EvaConfigError({ error }: { error: string }) {
   return (
@@ -50,7 +40,10 @@ export function EvaConfigManagedNote({ evaConfig }: { evaConfig: EvaConfig }) {
         >
           .eva/config.json
         </a>{" "}
-        on <code>{evaConfig.ref}</code>. Edit the file to change these.
+        on <code>{evaConfig.ref}</code>.{" "}
+        {evaConfig.appListed === false
+          ? "This app is not in the file yet. Add it to set its commands."
+          : "Edit the file to change these."}
       </p>
       {evaConfig.error ? <EvaConfigError error={evaConfig.error} /> : null}
     </div>

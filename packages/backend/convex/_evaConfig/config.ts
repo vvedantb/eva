@@ -53,15 +53,6 @@ const evaConfigSchema = z
 
 export type EvaConfig = z.infer<typeof evaConfigSchema>;
 
-/**
- * Whether `.eva/config.json` owns this app's run commands (read-only in Eva).
- * A repo with the file that does not list the app keeps Convex commands.
- */
-export function ownsRunCommands(
-  evaConfig: { appListed?: boolean } | undefined,
-): boolean {
-  return evaConfig !== undefined && evaConfig.appListed !== false;
-}
 export type EvaApp = z.infer<typeof evaAppSchema>;
 export type EvaSnapshotCommands = z.infer<typeof snapshotCommandsSchema>;
 
