@@ -1,16 +1,13 @@
 import { compactRelativeTime } from "@eva/shared/dates";
-import type { Id } from "@eva/backend";
 import {
   newestCapturedAt,
   snapshotsOf,
   type UsageAccountEntry,
 } from "./_utils";
 import { UsageProviderSection } from "./UsageProviderSection";
-import { UsageRefreshButton } from "./UsageRefreshButton";
-import { ListEnter } from "@vvedantb/ui";
+import { ListEnter, Spinner } from "@vvedantb/ui";
 
 interface UsageLimitsDetailsProps {
-  repoId: Id<"githubRepos">;
   /** Every credential the viewer can run on, in the query's order. */
   entries: readonly UsageAccountEntry[];
   /**
@@ -19,19 +16,20 @@ interface UsageLimitsDetailsProps {
    * card's countdown ticks along with it.
    */
   now: number;
+  /** True while the refresh that opening the card started is in flight. */
+  refreshing: boolean;
 }
 
 /**
  * The expanded card: one section per Claude credential the viewer can run on,
  * whether or not it has reported yet — an account missing from the list would
- * read as "no limits" rather than "no reading". Refreshing is one button for
- * the lot: a card that lists every account is only useful if one click fills
- * it in.
+ * read as "no limits" rather than "no reading". Opening the card refreshes the
+ * lot, so the header only shows a spinner while that runs.
  */
 export function UsageLimitsDetails({
-  repoId,
   entries,
   now,
+  refreshing,
 }: UsageLimitsDetailsProps) {
   const capturedAt = newestCapturedAt(snapshotsOf(entries));
 
@@ -51,7 +49,13 @@ export function UsageLimitsDetails({
     <div className="divide-y">
       <div className="flex items-center justify-between gap-2 py-1.5 pr-1.5 pl-3">
         <p className="font-medium text-xs">Plan usage</p>
-        <UsageRefreshButton repoId={repoId} />
+        {/* Fixed slot keeps the header height steady as the spinner comes and goes. */}
+        <span
+          className="flex size-8 items-center justify-center"
+          aria-live="polite"
+        >
+          {refreshing && <Spinner size="sm" aria-label="Refreshing plan usage" />}
+        </span>
       </div>
       {entries.map((entry, index) => (
         <ListEnter key={entry.providerAccountId ?? "team"} index={index}>

@@ -25,6 +25,7 @@ import type * as _ai_gatewayErrors from "../_ai/gatewayErrors.js";
 import type * as _arena_browserRun from "../_arena/browserRun.js";
 import type * as _auth_currentUser from "../_auth/currentUser.js";
 import type * as _auth_experimentalFlags from "../_auth/experimentalFlags.js";
+import type * as _auth_sandboxIdentity from "../_auth/sandboxIdentity.js";
 import type * as _automationEvents_dispatch from "../_automationEvents/dispatch.js";
 import type * as _automationEvents_events from "../_automationEvents/events.js";
 import type * as _automationEvents_flush from "../_automationEvents/flush.js";
@@ -159,6 +160,7 @@ import type * as _logs_usage from "../_logs/usage.js";
 import type * as _logs_usageSummary from "../_logs/usageSummary.js";
 import type * as _mcp_codeModeTools from "../_mcp/codeModeTools.js";
 import type * as _mcp_evaluateTool from "../_mcp/evaluateTool.js";
+import type * as _mcp_postgresSsrfGuard from "../_mcp/postgresSsrfGuard.js";
 import type * as _mcp_previewTools from "../_mcp/previewTools.js";
 import type * as _mcp_renderHtmlTool from "../_mcp/renderHtmlTool.js";
 import type * as _mcp_renderUiTool from "../_mcp/renderUiTool.js";
@@ -195,7 +197,6 @@ import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyC
 import type * as _migrations_projectInterview from "../_migrations/projectInterview.js";
 import type * as _migrations_projectPhases from "../_migrations/projectPhases.js";
 import type * as _migrations_removeProjectIdField from "../_migrations/removeProjectIdField.js";
-import type * as _migrations_removeRepoSnapshotWorkflowRef from "../_migrations/removeRepoSnapshotWorkflowRef.js";
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
 import type * as _migrations_repoSkills from "../_migrations/repoSkills.js";
@@ -603,6 +604,7 @@ declare const fullApi: ApiFromModules<{
   "_arena/browserRun": typeof _arena_browserRun;
   "_auth/currentUser": typeof _auth_currentUser;
   "_auth/experimentalFlags": typeof _auth_experimentalFlags;
+  "_auth/sandboxIdentity": typeof _auth_sandboxIdentity;
   "_automationEvents/dispatch": typeof _automationEvents_dispatch;
   "_automationEvents/events": typeof _automationEvents_events;
   "_automationEvents/flush": typeof _automationEvents_flush;
@@ -737,6 +739,7 @@ declare const fullApi: ApiFromModules<{
   "_logs/usageSummary": typeof _logs_usageSummary;
   "_mcp/codeModeTools": typeof _mcp_codeModeTools;
   "_mcp/evaluateTool": typeof _mcp_evaluateTool;
+  "_mcp/postgresSsrfGuard": typeof _mcp_postgresSsrfGuard;
   "_mcp/previewTools": typeof _mcp_previewTools;
   "_mcp/renderHtmlTool": typeof _mcp_renderHtmlTool;
   "_mcp/renderUiTool": typeof _mcp_renderUiTool;
@@ -773,7 +776,6 @@ declare const fullApi: ApiFromModules<{
   "_migrations/projectInterview": typeof _migrations_projectInterview;
   "_migrations/projectPhases": typeof _migrations_projectPhases;
   "_migrations/removeProjectIdField": typeof _migrations_removeProjectIdField;
-  "_migrations/removeRepoSnapshotWorkflowRef": typeof _migrations_removeRepoSnapshotWorkflowRef;
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
   "_migrations/repoSkills": typeof _migrations_repoSkills;
