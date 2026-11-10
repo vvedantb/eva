@@ -7,10 +7,7 @@ import {
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
 import { SessionChromeTabsBar } from "@/lib/components/sidebar/session-tabs/SessionChromeTabsBar";
 import { useChromeSessionTabsActive } from "@/lib/components/sidebar/session-tabs/useChromeSessionTabs";
-import {
-  SHELL_CONTENT_CARD_CLASS,
-  useSidebarContentOffset,
-} from "@/lib/components/sidebar/useSidebarContentOffset";
+import { useSidebarContentOffset } from "@/lib/components/sidebar/useSidebarContentOffset";
 import { cn } from "@eva/ui";
 
 export const Route = createFileRoute("/_global")({
@@ -51,8 +48,7 @@ function GlobalMainContent() {
     >
       <div
         className={cn(
-          "relative flex flex-1 flex-col",
-          SHELL_CONTENT_CARD_CLASS,
+          "relative flex flex-1 flex-col bg-background",
           (isInbox || isAvePath) && "min-h-0 overflow-hidden",
         )}
       >
