@@ -9,7 +9,8 @@ import { z } from "zod";
  *
  * Steps the trace does not show (the reply itself, reasoning, status lines,
  * notices, hooks, steers, todo lists, questions) are dropped, and so is any
- * step whose shape does not parse.
+ * step whose shape does not parse. `parseTraceSegments` keeps the reasoning,
+ * as prose between the tool runs.
  */
 export const TOOL_STEP_TYPES = [
   "read",
@@ -46,8 +47,8 @@ export type ToolStep = z.infer<typeof toolStepSchema>;
 
 const activityLogSchema = z.array(z.unknown());
 
-/** Tool steps in order, or [] for an empty, legacy plain-text or malformed log. */
-export function parseToolSteps(activityLog: string | undefined): ToolStep[] {
+/** The raw entries of a log, or [] for an empty, legacy plain-text or malformed one. */
+function parseLogEntries(activityLog: string | undefined): unknown[] {
   if (!activityLog) return [];
   let raw: unknown;
   try {
@@ -56,11 +57,83 @@ export function parseToolSteps(activityLog: string | undefined): ToolStep[] {
     return [];
   }
   const parsed = activityLogSchema.safeParse(raw);
-  if (!parsed.success) return [];
-  return parsed.data.flatMap((step) => {
+  return parsed.success ? parsed.data : [];
+}
+
+/** Tool steps in order, or [] for an empty, legacy plain-text or malformed log. */
+export function parseToolSteps(activityLog: string | undefined): ToolStep[] {
+  return parseLogEntries(activityLog).flatMap((step) => {
     const result = toolStepSchema.safeParse(step);
     return result.success ? [result.data] : [];
   });
+}
+
+/** A tool step and its place in `parseToolSteps`, for loading its full detail. */
+export type TraceStep = { step: ToolStep; index: number };
+
+/**
+ * One block of a turn's trace, as the web's folded `ActivityTasks`
+ * (`groupActivityRows` in @vvedantb/ui): the model's reasoning as prose, or a
+ * run of tool steps behind one summary line (`summariseToolSteps`).
+ */
+export type TraceSegment = { kind: "reasoning"; text: string } | { kind: "actions"; steps: TraceStep[] };
+
+const traceEntrySchema = z.object({ type: z.string(), label: z.string().optional(), detail: z.string().optional() });
+
+/** Steps that read as narration on the web. Each stands alone, so it ends the tool run before it. */
+const STANDALONE_TYPES = new Set(["todos", "notice", "status", "question", "steer"]);
+
+/** Older logs stored reasoning as `thinking` steps with these labels (web `normalizeStep`). */
+const REASONING_LABELS = new Set(["Thinking...", "Thought"]);
+
+/** Placeholder detail on those older steps: nothing to show. */
+const FILLER_DETAILS = new Set([
+  "Claude is reasoning...",
+  "Codex is reasoning...",
+  "Opencode is reasoning...",
+  "Cursor is reasoning...",
+  "Receiving reply...",
+]);
+
+/** The prose of a reasoning step, or undefined when the entry is not one. */
+function reasoningText({ type, label, detail }: z.infer<typeof traceEntrySchema>): string | undefined {
+  if (type === "reasoning") return detail?.trim() ?? "";
+  const legacy = type === "thinking" && label !== undefined && REASONING_LABELS.has(label);
+  return legacy && detail && !FILLER_DETAILS.has(detail) ? detail.trim() : undefined;
+}
+
+/**
+ * A turn's trace in the web's read-then-act rhythm: each reasoning step is
+ * prose, and the tool steps after it fold into one run. The web hides reply
+ * text and status narration in this layout, so they are dropped; a to-do
+ * list, notice, status, question or steer still ends a run, as on the web.
+ * A reasoning step with no text still ends a run; draw nothing for it.
+ */
+export function parseTraceSegments(activityLog: string | undefined): TraceSegment[] {
+  const segments: TraceSegment[] = [];
+  let run: TraceStep[] | undefined;
+  let toolIndex = 0;
+  for (const raw of parseLogEntries(activityLog)) {
+    const tool = toolStepSchema.safeParse(raw);
+    if (tool.success) {
+      if (!run) {
+        run = [];
+        segments.push({ kind: "actions", steps: run });
+      }
+      run.push({ step: tool.data, index: toolIndex++ });
+      continue;
+    }
+    const entry = traceEntrySchema.safeParse(raw);
+    if (!entry.success) continue;
+    const text = reasoningText(entry.data);
+    if (text !== undefined) {
+      segments.push({ kind: "reasoning", text });
+      run = undefined;
+    } else if (STANDALONE_TYPES.has(entry.data.type)) {
+      run = undefined;
+    }
+  }
+  return segments;
 }
 
 /** Same phrases as the web's folded tool run (`deriveActionGroupSummary` in @vvedantb/ui). */
@@ -78,9 +151,15 @@ const GROUP_PHRASES: Record<ToolStepType, string> = {
   tool: "used tools",
 };
 
-/** One line for a folded run of steps: "Edited files, ran commands". */
+/** A step's phrase. Codex reports edits as a `file_change` tool call, so that reads as an edit (web `groupPhraseForStep`). */
+function groupPhrase(step: ToolStep): string {
+  const fileChange = step.type === "tool" && (step.label.toLowerCase().includes("file change") || step.detail === "file_change");
+  return GROUP_PHRASES[fileChange ? "edit" : step.type];
+}
+
+/** One line for a folded run of steps: "Edited files, ran commands", each kind of work once, in first-seen order. */
 export function summariseToolSteps(steps: ReadonlyArray<ToolStep>): string {
-  const phrases = [...new Set(steps.map((step) => GROUP_PHRASES[step.type]))];
+  const phrases = [...new Set(steps.map(groupPhrase))];
   const joined = phrases.join(", ");
   return joined ? `${joined.charAt(0).toUpperCase()}${joined.slice(1)}` : "Worked";
 }

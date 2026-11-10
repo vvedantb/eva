@@ -31,7 +31,14 @@ const CONFIG = JSON.stringify({
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
-    const base = { owner: "acme", name: "mono", installationId: 1 };
+    // Siblings are same owner/name AND same team, as every prod row has a team.
+    const userId = await ctx.db.insert("users", { clerkId: "clerk|eva-config" });
+    const teamId = await ctx.db.insert("teams", {
+      name: "Team",
+      createdBy: userId,
+      createdAt: 0,
+    });
+    const base = { owner: "acme", name: "mono", installationId: 1, teamId };
     const root = await ctx.db.insert("githubRepos", {
       ...base,
       startupCommands: ["root-old"],

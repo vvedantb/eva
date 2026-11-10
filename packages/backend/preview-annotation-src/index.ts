@@ -338,9 +338,14 @@ function evaPreviewAnnotationScript(): void {
     return typeof raw === "string" && raw ? originOf(raw) : "";
   }
 
-  /** Eva's origin, or "" when unknown (ungated proxy with no Eva URL). */
+  /**
+   * Eva's origin, or "" when unknown (ungated proxy with no Eva URL, and a
+   * browser without `ancestorOrigins` or a referrer). Unknown means silent:
+   * the bridge never posts to "*" and never trusts a message of any origin.
+   */
   const parentOrigin =
     injectedParentOrigin() ||
+    originOf(window.location.ancestorOrigins?.item(0) ?? "") ||
     (document.referrer ? originOf(document.referrer) : "");
 
   let modeActive = false;
@@ -413,9 +418,9 @@ function evaPreviewAnnotationScript(): void {
         },
   ): void {
     // Payloads carry page text, console output and failing request URLs, so
-    // they go to Eva's exact origin. "*" only survives where no origin is known
-    // at all, which is the ungated legacy proxy.
-    window.parent.postMessage(payload, parentOrigin || "*");
+    // they go to Eva's exact origin, never "*".
+    if (!parentOrigin) return;
+    window.parent.postMessage(payload, parentOrigin);
   }
 
   function ensureOverlay(): void {
@@ -1540,7 +1545,7 @@ function evaPreviewAnnotationScript(): void {
   }
 
   window.addEventListener("message", (event) => {
-    if (parentOrigin && event.origin !== parentOrigin) return;
+    if (!parentOrigin || event.origin !== parentOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const type = Reflect.get(data, "type");

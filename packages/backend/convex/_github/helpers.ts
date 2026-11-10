@@ -3,6 +3,44 @@
 import type { Octokit } from "octokit";
 import { z } from "zod";
 import { decodeGitHubContent } from "../_repoSkills/decodeGitHubContent";
+import { getAppOctokit, getInstallationOctokit } from "../githubAuth";
+
+/** Octokit throws RequestError, which carries the HTTP status as a property. */
+const requestErrorSchema = z.object({ status: z.number() });
+
+const NOT_IN_INSTALLATION = "Repository is not part of this GitHub installation";
+
+/**
+ * GitHub's own id, owner and name for `owner/name`. Throws unless the repo is
+ * part of `installationId`. Asks the App which installation holds the repo,
+ * because an installation token can also read public repos outside it.
+ */
+export async function resolveInstallationRepo(
+  installationId: number,
+  owner: string,
+  name: string,
+): Promise<{ githubId: number; owner: string; name: string }> {
+  const lookup = async () => {
+    const octokit = await getInstallationOctokit(installationId);
+    return await Promise.all([
+      getAppOctokit().rest.apps.getRepoInstallation({ owner, repo: name }),
+      octokit.rest.repos.get({ owner, repo: name }),
+    ]);
+  };
+  const [{ data: installation }, { data: repo }] = await lookup().catch(
+    (error) => {
+      const parsed = requestErrorSchema.safeParse(error);
+      if (parsed.success && parsed.data.status === 404) {
+        throw new Error(NOT_IN_INSTALLATION, { cause: error });
+      }
+      throw error;
+    },
+  );
+  if (installation.id !== installationId) {
+    throw new Error(NOT_IN_INSTALLATION);
+  }
+  return { githubId: repo.id, owner: repo.owner.login, name: repo.name };
+}
 
 const packageJsonSchema = z.object({
   scripts: z.object({ dev: z.string() }).partial().optional(),

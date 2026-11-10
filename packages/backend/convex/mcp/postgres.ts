@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { errorMessage } from "@vvedantb/server";
+import { safePostgresStream } from "../_mcp/postgresSsrfGuard";
 
 const ENV_KEY = "POSTGRES_READ_REPLICA_URL";
 const CONNECT_TIMEOUT_MS = 10_000;
@@ -113,9 +114,11 @@ export const runPostgresQuery = internalAction({
     }
 
     // Fresh client per request; pg honours ?sslmode=... in the URL itself.
+    // The repo controls the URL, so the socket refuses private/metadata hosts.
     const client = new Client({
       connectionString: connEntry.value,
       connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+      stream: safePostgresStream,
     });
 
     try {

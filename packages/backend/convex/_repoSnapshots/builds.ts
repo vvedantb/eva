@@ -15,6 +15,7 @@ import {
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { workflow, cancelTrackedWorkflow } from "../workflowManager";
 import { sanitizeSeededApps } from "./sanitizeSeededApps";
+import { findSiblingsOf } from "../_githubRepos/helpers";
 
 /** Full snapshot build doc as returned to the client (provider always resolved). */
 const snapshotBuildReturnValidator = v.object({
@@ -316,12 +317,7 @@ export const startBuildForRepo = internalMutation({
     if (!repoSnapshotId) {
       const repo = await ctx.db.get(args.repoId);
       if (!repo) throw new Error("Repo not found");
-      const siblings = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", repo.owner).eq("name", repo.name),
-        )
-        .collect();
+      const siblings = await findSiblingsOf(ctx.db, repo);
       let shared: Doc<"repoSnapshots"> | null = null;
       for (const sibling of siblings) {
         if (sibling._id === args.repoId) continue;

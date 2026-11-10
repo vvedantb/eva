@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { Button, CrossfadeIcon, Spinner, toast } from "@vvedantb/ui";
-import { IconRefresh } from "@tabler/icons-react";
+import { toast } from "@vvedantb/ui";
 
 /**
  * Why a refresh came back with nothing, in the user's terms. Each one names a
@@ -27,10 +26,6 @@ type RefreshOutcome = FunctionReturnType<
   typeof api.usageLimitsActions.refreshAll
 >["results"][number];
 
-interface UsageRefreshButtonProps {
-  repoId: Id<"githubRepos">;
-}
-
 /**
  * Failures are named per account: several credentials are read at once, and
  * "Couldn't reach Claude" is no use without knowing whose token it was.
@@ -43,21 +38,23 @@ function reportOutcome(result: RefreshOutcome): void {
 
 /**
  * Pulls a reading for every credential now instead of waiting for the next turn
- * to report one. One button rather than one per row: the card lists accounts
- * that have never reported, and filling those in is the whole point of asking.
+ * to report one. The card calls it on open, so it is never stale by the time
+ * someone looks — there is no manual button.
  *
- * Nothing is invalidated on success: `getForViewer` is a live query, so the card
- * the button sits in updates itself the moment a row is written.
+ * Nothing is invalidated on success: `getForViewer` is a live query, so the open
+ * card updates itself the moment a row is written. A second open while one is
+ * in flight is dropped rather than doubling the probes.
  */
-export function UsageRefreshButton({ repoId }: UsageRefreshButtonProps) {
-  const refresh = useAction(api.usageLimitsActions.refreshAll);
+export function useRefreshUsage(repoId: Id<"githubRepos">) {
+  const refreshAll = useAction(api.usageLimitsActions.refreshAll);
   const [pending, setPending] = useState(false);
 
-  const onRefresh = async () => {
+  const refresh = async () => {
+    if (pending) return;
     setPending(true);
     let results: readonly RefreshOutcome[] = [];
     try {
-      const response = await refresh({ repoId });
+      const response = await refreshAll({ repoId });
       results = response.results;
     } catch {
       // A server throw carries Convex internals (request id, stack), which is
@@ -68,25 +65,5 @@ export function UsageRefreshButton({ repoId }: UsageRefreshButtonProps) {
     for (const result of results) reportOutcome(result);
   };
 
-  return (
-    <Button
-      size="icon-sm"
-      variant="ghost"
-      aria-label="Refresh plan usage"
-      disabled={pending}
-      onClick={() => {
-        void onRefresh();
-      }}
-    >
-      <CrossfadeIcon
-        show={pending}
-        trueKey="loading"
-        falseKey="idle"
-        variant="soft"
-        className="relative flex size-3.5 items-center justify-center"
-        whenTrue={<Spinner size="sm" />}
-        whenFalse={<IconRefresh size={14} />}
-      />
-    </Button>
-  );
+  return { refresh, pending };
 }

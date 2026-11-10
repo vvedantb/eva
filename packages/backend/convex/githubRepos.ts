@@ -14,7 +14,7 @@ export {
   getInternal,
   getInstallationAccessState,
   findParentRepoByOwnerAndName,
-  listRepoIdsByOwnerAndName,
+  listSiblingRepoIds,
   getInstallationIdByOwnerAndName,
   listGroupedByCodebase,
   getAppSlug,
@@ -23,7 +23,6 @@ export {
 export {
   assignToTeam,
   removeFromTeam,
-  create,
   createForInstallation,
   updateConfig,
   updateMcpRootPrompt,

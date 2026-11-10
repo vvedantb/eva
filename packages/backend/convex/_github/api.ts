@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { getInstallationOctokit, getInstallationToken } from "../githubAuth";
-import { detectAppsForRepo } from "./helpers";
+import { detectAppsForRepo, resolveInstallationRepo } from "./helpers";
 import { authAction, getActionRepoWithAccess } from "../functions";
 import { assertUserCanUseRepo, listInstallationReposForUser } from "./userAuth";
 
@@ -132,29 +132,36 @@ export const detectMonorepoApps = authAction({
         args.name,
       );
     }
+    const repo = await resolveInstallationRepo(
+      args.installationId,
+      args.owner,
+      args.name,
+    );
     const octokit = await getInstallationOctokit(args.installationId);
-    return detectAppsForRepo(octokit, args.owner, args.name);
+    return detectAppsForRepo(octokit, repo.owner, repo.name);
   },
 });
 
 /**
- * Adds a repo to Eva, verifying against GitHub when the installation is new.
+ * Adds a repo (or one monorepo app of it) to Eva.
  *
- * The GitHub-side check happens here rather than in the mutation because it
- * needs a network call: `assertUserCanUseRepo` asks GitHub whether *this user's*
- * token can see `owner/name` inside the installation. Without that, any signed-in
- * user could bind a row to an arbitrary installation id and then mint
- * installation tokens for it through `getInstallationTokenAction`.
- *
- * Installations Eva already knows the caller can use skip the round trip, so
- * adding a second repo from an installation never re-prompts for authorization.
+ * The GitHub-side checks happen here rather than in the mutation because they
+ * need network calls:
+ * - New installation: `assertUserCanUseRepo` asks GitHub whether *this user's*
+ *   token can see `owner/name` inside it. Without that, any signed-in user could
+ *   bind a row to an arbitrary installation id and then mint installation
+ *   tokens for it through `getInstallationTokenAction`. Installations Eva
+ *   already knows the caller can use skip this, so adding a second repo never
+ *   re-prompts for authorization.
+ * - Always: `resolveInstallationRepo` proves the repo is in the installation
+ *   and supplies the stored id, owner and name. Client values are never stored,
+ *   so a row cannot impersonate another tenant's repository.
  */
 export const connectRepo = authAction({
   args: {
     owner: v.string(),
     name: v.string(),
     installationId: v.number(),
-    githubId: v.optional(v.number()),
     rootDirectory: v.optional(v.string()),
     teamId: v.optional(v.id("teams")),
   },
@@ -179,9 +186,22 @@ export const connectRepo = authAction({
         args.name,
       );
     }
+    const repo = await resolveInstallationRepo(
+      args.installationId,
+      args.owner,
+      args.name,
+    );
     return await ctx.runMutation(
       internal._githubRepos.mutations.createForInstallation,
-      { ...args, userId: ctx.userId },
+      {
+        owner: repo.owner,
+        name: repo.name,
+        githubId: repo.githubId,
+        installationId: args.installationId,
+        rootDirectory: args.rootDirectory,
+        teamId: args.teamId,
+        userId: ctx.userId,
+      },
     );
   },
 });

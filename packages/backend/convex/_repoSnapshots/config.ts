@@ -8,6 +8,7 @@ import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import { computeSeedFingerprint } from "../_evaConfig/config";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { findSiblingsOf } from "../_githubRepos/helpers";
 
 /** Converts a schedule string to a cron expression, returning null for "manual". */
 function resolveCronspec(schedule: string): string | null {
@@ -33,12 +34,7 @@ export async function findSnapshotForRepo(
   const repo = await db.get(repoId);
   if (!repo) return null;
 
-  const siblings = await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", repo.owner).eq("name", repo.name),
-    )
-    .collect();
+  const siblings = await findSiblingsOf(db, repo);
 
   for (const sibling of siblings) {
     if (sibling._id === repoId) continue;
@@ -133,7 +129,7 @@ export const getRepoSnapshotName = internalQuery({
 /**
  * Lists the app repos a seeded snapshot is built for after the base Image
  * build. Seeded snapshots are PER APP, not per monorepo: an app is a sibling
- * (same owner/name) with stopCommands configured that is NOT the monorepo parent
+ * (same owner/name and team) with stopCommands configured that is NOT the monorepo parent
  * (i.e. no other sibling points to it via parentRepoId). For a single-app repo
  * the lone repo qualifies (it parents nobody). Returns the full repo docs so
  * callers can read display fields / seededSnapshotName.
@@ -146,12 +142,7 @@ export async function findSeedableAppRepos(
   if (!config) return [];
   const configRepo = await db.get(config.repoId);
   if (!configRepo) return [];
-  const siblings = await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", configRepo.owner).eq("name", configRepo.name),
-    )
-    .collect();
+  const siblings = await findSiblingsOf(db, configRepo);
   // Repos that are a monorepo parent of another sibling — skip these.
   const parentIds = new Set<Id<"githubRepos">>();
   for (const r of siblings) {
@@ -368,12 +359,7 @@ export const saveRepoSnapshot = authMutation({
     // and copy it to this app. This is the lazy-migration path.
     const repo = await ctx.db.get(args.repoId);
     if (repo) {
-      const siblings = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", repo.owner).eq("name", repo.name),
-        )
-        .collect();
+      const siblings = await findSiblingsOf(ctx.db, repo);
 
       for (const sibling of siblings) {
         if (sibling._id === args.repoId) continue;

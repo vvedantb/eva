@@ -31,13 +31,12 @@ export function usePreviewScreenshot(iframeElement: HTMLIFrameElement | null) {
   const [capturing, setCapturing] = useState(false);
 
   function capture() {
-    const target = iframeElement?.contentWindow;
-    if (!target) {
+    if (!iframeElement?.contentWindow) {
       toast.error("Preview isn't ready to screenshot");
       return;
     }
     setCapturing(true);
-    requestPreviewScreenshot(target)
+    requestPreviewScreenshot(iframeElement)
       .then(
         (dataUrl) =>
           copyOrDownloadScreenshot(dataUrl).catch(() => {
