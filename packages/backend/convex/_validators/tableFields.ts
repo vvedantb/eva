@@ -2207,8 +2207,8 @@ export const repoSnapshotFields = {
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
-  // Deprecated: snapshots build from githubRepos.defaultBaseBranch. Kept so
-  // existing documents still validate; nothing reads it.
+  // Deprecated: snapshots build from githubRepos.defaultBaseBranch. Remove
+  // after migrations:removeRepoSnapshotWorkflowRef has run on every deployment.
   workflowRef: v.optional(v.string()),
   buildCommands: v.optional(v.array(v.string())),
   // Seed-once commands run ONLY during seeded-snapshot builds, in the
@@ -2216,11 +2216,6 @@ export const repoSnapshotFields = {
   // data seeding (env set, convex import). Never re-run on sandbox boot,
   // unlike githubRepos.startupCommands. Not part of the image fingerprint.
   seedCommands: v.optional(v.array(v.string())),
-  // Fingerprint of the image inputs (lockfile sha on the build branch,
-  // buildCommands, config-file blobs, image definition version) stored at the
-  // last successful Image build. When unchanged, the build workflow skips the
-  // ~11-15m image rebuild — its output would be byte-identical.
-  imageFingerprint: v.optional(v.string()),
   // Vercel base Image capture (`snap_*`) from a running sandbox — separate
   // from `snapshotName` and per-app `seededSnapshotName`.
   baseSnapshotId: v.optional(v.string()),
