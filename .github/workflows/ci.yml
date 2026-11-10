@@ -1,7 +1,8 @@
 # PR gate. This exists because #755 and #758 shipped a React hook-order crash
-# to production with no automated check standing in the way. Tests are
-# deliberately excluded — they were flaky and kept breaking the gate. Make this
-# a required status check in branch protection so the automerge bot cannot
+# to production with no automated check standing in the way. Tests run here
+# since the source-text tests (regex over source files) were deleted: those
+# broke on every refactor and were the reason tests were once excluded. Make
+# this a required status check in branch protection so the automerge bot cannot
 # bypass it.
 
 name: CI
@@ -53,6 +54,12 @@ jobs:
       - name: Lint
         if: ${{ !cancelled() }}
         run: pnpm lint
+
+      # A test that never runs has no value. Web + backend vitest, plus the
+      # node tests for the oxlint plugin and the schema gate.
+      - name: Tests
+        if: ${{ !cancelled() }}
+        run: pnpm test
 
       # Fails on a new React Compiler bailout that is not in the baseline.
       - name: React Compiler bailouts

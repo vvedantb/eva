@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
   AUTOMATION_APP_SORT_LABELS,
@@ -10,8 +7,6 @@ import {
   isAutomationSortOrder,
 } from "./automationsSidebarSettings";
 import { APP_SORT_ORDERS } from "./sessionsSidebarSettings";
-
-const here = dirname(fileURLToPath(import.meta.url));
 
 describe("automations sidebar defaults", () => {
   // Regression: the sidebar sorted both lists by `updated_at` regardless of the
@@ -47,34 +42,6 @@ describe("sort menu labels", () => {
     }
     for (const order of AUTOMATION_SORT_ORDERS) {
       expect(AUTOMATION_SORT_LABELS[order]).toBeTruthy();
-    }
-  });
-});
-
-/**
- * The bug was not in this module — it was the two callers passing a literal.
- * Sorting is invisible in a unit test of the settings, so pin the wiring.
- */
-describe("sidebar wiring", () => {
-  test("sorts from the saved settings, never a hardcoded order", () => {
-    const sidebar = readFileSync(
-      join(here, "../GlobalAutomationsSidebar.tsx"),
-      "utf8",
-    );
-    expect(sidebar).toContain("settings.appSortOrder");
-    expect(sidebar).toContain(
-      "automationSortOrder={settings.automationSortOrder}",
-    );
-
-    const group = readFileSync(
-      join(here, "../_components/GlobalAutomationGroup.tsx"),
-      "utf8",
-    );
-    expect(group).toContain(
-      "sortSessionsForSidebar(automations, automationSortOrder)",
-    );
-    for (const order of AUTOMATION_SORT_ORDERS) {
-      expect(group).not.toContain(`"${order}"`);
     }
   });
 });

@@ -29,7 +29,11 @@ export const seedRefsSchema = z.object({
 export type SeedRefs = z.infer<typeof seedRefsSchema>;
 
 const DAY = 24 * 60 * 60 * 1000;
-const DAY_BUCKET: "day" = "day";
+
+/** `usage.summary` bucket; a function so the literal type does not widen to string. */
+function dayBucket(): "day" {
+  return "day";
+}
 
 function sessionOwner(sessionId: Id<"sessions">): { kind: "session"; sessionId: Id<"sessions"> } {
   return { kind: "session", sessionId };
@@ -94,7 +98,7 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("projects.listTaskProgress", "projects page", api.projects.listTaskProgress, (r) => ({ repoId: r.repoId })),
   q("projects.getActive", "repo home", api.projects.getActive, (r) => ({ repoId: r.repoId })),
   q("agentTasks.getAllTasks", "tasks board", api.agentTasks.getAllTasks, (r) => ({ repoId: r.repoId })),
-  q("agentTasks.getActiveTasks", "repo home", api.agentTasks.getActiveTasks, (r) => ({ repoId: r.repoId })),
+  q("agentTasks.countSandboxTasks", "sidebar badge", api.agentTasks.countSandboxTasks, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listDrafts", "tasks board", api.agentTasks.listDrafts, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listByProject", "project page", api.agentTasks.listByProject, (r) => ({ projectId: r.projectId })),
   q("agentRuns.listByTask", "task page", api.agentRuns.listByTask, (r) => ({ taskId: r.taskId })),
@@ -114,7 +118,7 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("analytics.getActivityTimeline", "analytics page", api.analytics.getActivityTimeline, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY, endTime: r.now, bucketSizeMs: DAY })),
   q("analytics.getActivityHeatmap", "analytics page", api.analytics.getActivityHeatmap, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY })),
   q("analytics.getLeaderboard", "analytics page", api.analytics.getLeaderboard, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY })),
-  q("usage.summary", "usage page", api.usage.summary, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY, endTime: r.now, bucket: DAY_BUCKET })),
+  q("usage.summary", "usage page", api.usage.summary, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY, endTime: r.now, bucket: dayBucket() })),
   q("mentions.listData", "@-mention picker", api.mentions.listData, (r) => ({ repoId: r.repoId })),
   q("spotlight.search", "⌘K search", api.spotlight.search, () => ({ query: "session" })),
   q("routedThreads.countWaitingForMe", "sidebar badge", api.routedThreads.countWaitingForMe, () => ({})),

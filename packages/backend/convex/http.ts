@@ -8,6 +8,7 @@ import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import {
   previewActivityHmacMessage,
@@ -704,7 +705,7 @@ http.route({
  * installations resume setup; anything else lands on the codebase list.
  */
 function githubAuthReturnUrl(installationId: number | null): string {
-  const webAppUrl = process.env.WEB_APP_URL ?? "";
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   return installationId === null
     ? `${webAppUrl}/home`
     : `${webAppUrl}/setup/${installationId}`;
@@ -779,7 +780,7 @@ http.route({
 });
 
 function connectorAuthReturnUrl(returnPath: string | null): string {
-  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   const path =
     returnPath &&
     returnPath.startsWith("/settings") &&
@@ -884,7 +885,7 @@ http.route({
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!expected || !appUrl) {
       return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
         status: 500,

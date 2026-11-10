@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryStates } from "nuqs";
 import { useUser } from "@clerk/clerk-react";
 import { useMutation } from "convex/react";
 import {
@@ -11,6 +12,7 @@ import {
   type Id,
 } from "@eva/backend";
 import { toast } from "@vvedantb/ui";
+import { IconStack2 } from "@tabler/icons-react";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -26,6 +28,7 @@ import {
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { stackBaseParser, stackOnPrParser } from "@/lib/search-params";
 import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 
 /**
@@ -40,7 +43,19 @@ export function NewSessionComposer() {
   const firstName = user?.firstName?.trim();
   const createSession = useMutation(api.sessions.create);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { baseBranch, setBaseBranch } = useBaseBranchState();
+  // Set by "Stack a new session" on a pull request: start from its head branch.
+  const [stack] = useQueryStates({
+    stackOn: stackOnPrParser,
+    stackBase: stackBaseParser,
+  });
+  const stackBase = stack.stackOn === null ? null : stack.stackBase;
+  const { baseBranch, setBaseBranch } = useBaseBranchState(
+    stackBase ?? undefined,
+  );
+  // Picking another branch abandons the stack: the session's PR would no longer
+  // sit on top of that pull request.
+  const stackOnPrNumber =
+    stackBase !== null && baseBranch === stackBase ? stack.stackOn : null;
   const codebases = useCodebasesSelection();
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
@@ -95,6 +110,7 @@ export function NewSessionComposer() {
             installDependencies: codebases.installDependencies,
           }
         : {};
+    const stackArgs = stackOnPrNumber === null ? {} : { stackOnPrNumber };
     try {
       const { numId } = await createSession({
         repoId: repo._id,
@@ -111,6 +127,7 @@ export function NewSessionComposer() {
         providerAccountId: accountId,
         attachmentStorageIds,
         ...linkedCodebases,
+        ...stackArgs,
       });
       clearDraft();
       // The codebases selection is query-string state, and this navigation
@@ -180,13 +197,21 @@ export function NewSessionComposer() {
             onSave: setDraft,
           }}
           underCardLeading={
-            <BranchSelect
-              value={baseBranch}
-              onValueChange={setBaseBranch}
-              placeholder="Select a branch"
-              className="h-7 w-auto max-w-full justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-              disabled={isSubmitting}
-            />
+            <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+              <BranchSelect
+                value={baseBranch}
+                onValueChange={setBaseBranch}
+                placeholder="Select a branch"
+                className="h-7 w-auto max-w-full min-w-0 shrink justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                disabled={isSubmitting}
+              />
+              {stackOnPrNumber === null ? null : (
+                <span className="flex shrink-0 items-center gap-1 pr-1 text-xs whitespace-nowrap text-muted-foreground">
+                  <IconStack2 size={13} aria-hidden />
+                  Stacks on #{stackOnPrNumber}
+                </span>
+              )}
+            </span>
           }
         />
       </div>

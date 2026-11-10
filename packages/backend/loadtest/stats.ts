@@ -40,7 +40,7 @@ export function bootstrapMedianCi(
   if (values.length === 0) return { lo: Number.NaN, hi: Number.NaN };
   const rand = mulberry32(0x5eed);
   const medians: Array<number> = [];
-  const resample: Array<number> = new Array(values.length);
+  const resample: Array<number> = Array.from({ length: values.length }, () => 0);
   for (let i = 0; i < iterations; i++) {
     for (let j = 0; j < values.length; j++) {
       resample[j] = values[Math.floor(rand() * values.length)] ?? 0;
@@ -77,7 +77,7 @@ export function mannWhitney(
     ...a.map((value) => ({ value, group: 0 })),
     ...b.map((value) => ({ value, group: 1 })),
   ].sort((x, y) => x.value - y.value);
-  const ranks: Array<number> = new Array(pooled.length);
+  const ranks: Array<number> = Array.from({ length: pooled.length }, () => 0);
   let tieTerm = 0;
   for (let i = 0; i < pooled.length; ) {
     let j = i;

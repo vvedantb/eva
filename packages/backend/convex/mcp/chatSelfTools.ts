@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import {
   entityAccess,
   entityRefArgs,
