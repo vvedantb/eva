@@ -75,7 +75,7 @@ export function MessageFooter({
           />
         </MessageActionsBar>
       ) : null}
-      <MessageMeta>{meta}</MessageMeta>
+      <MessageMeta size="2xs">{meta}</MessageMeta>
     </MessageActionsBar>
   );
 }

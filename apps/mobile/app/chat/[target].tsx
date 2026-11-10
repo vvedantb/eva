@@ -182,6 +182,7 @@ export default function ChatScreen() {
           <ChoiceQuestion
             key={pending.toolUseId}
             questions={questions}
+            buttonWeight="semibold"
             onSubmit={async (answers) => {
               try {
                 await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
