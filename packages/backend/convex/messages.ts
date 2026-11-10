@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   assertMessageParentAccess,
   authQuery,
@@ -157,11 +157,32 @@ export const activityLogById = authQuery({
   },
 });
 
-/** Updates an exact message when supplied, otherwise the latest legacy target. */
+/**
+ * The reply bubble a turn opened, or null when the id is unknown or the row
+ * is gone. Takes a string: the callback sends the turn id it got from env.
+ */
+async function turnReplyMessage(
+  db: QueryCtx["db"],
+  turnId: string | undefined,
+): Promise<Doc<"messages"> | null> {
+  if (turnId === undefined) return null;
+  const id = db.normalizeId("turns", turnId);
+  if (!id) return null;
+  const turn = await db.get(id);
+  if (turn?.placeholderMessageId === undefined) return null;
+  return await db.get(turn.placeholderMessageId);
+}
+
+/** Updates an exact message, else the turn's own reply, else the latest message. */
 export const updateLastInternal = internalMutation({
   args: {
     parentId: parentIdValidator,
     messageId: v.optional(v.id("messages")),
+    /**
+     * The turn that made the media. Its own reply is the target, so a queued
+     * follow-up that lands during the upload cannot take the media.
+     */
+    turnId: v.optional(v.string()),
     content: v.optional(v.string()),
     activityLog: v.optional(v.string()),
     variations: v.optional(v.array(variationValidator)),
@@ -185,11 +206,12 @@ export const updateLastInternal = internalMutation({
     }
     const target = args.messageId
       ? await ctx.db.get(args.messageId)
-      : await ctx.db
+      : ((await turnReplyMessage(ctx.db, args.turnId)) ??
+        (await ctx.db
           .query("messages")
           .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
           .order("desc")
-          .first();
+          .first()));
     if (!target || target.parentId !== args.parentId) return null;
 
     const patch: {

@@ -5600,6 +5600,7 @@ async function attachChatMediaIfAny(uploaded, target2) {
     mediaStorageIds: uploaded.map((item) => item.storageId)
   };
   if (target2.messageId) mediaArgs.messageId = target2.messageId;
+  if (target2.turnId) mediaArgs.turnId = target2.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 async function attachRunMediaIfAny(uploaded) {
@@ -5630,8 +5631,13 @@ async function sendTurnCompletion(mutation, args) {
 }
 async function deliverCompletionWithMedia(completionArgs) {
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
+  const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
-  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
+  if (!RUN_ID) {
+    await uploadAndAttachSandboxMedia(
+      typeof turnId === "string" ? { turnId } : {}
+    );
+  }
 }
 function harvestableFile(dir, file) {
   if (file === "." || file === ".." || file.includes("/")) return null;

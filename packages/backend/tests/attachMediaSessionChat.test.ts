@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { openSessionChatTurn } from "../convex/_chat/turnStore";
 
 /**
  * Session turns write their transcript under a `sessionChats` id, and the
@@ -72,6 +73,51 @@ describe("attachMedia", () => {
           mediaStorageIds: [f.storageId],
         });
       expect(await f.readMedia()).toEqual([f.storageId]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "attaches to the turn's own reply when a queued follow-up opened after it",
+    async () => {
+      const f = await fixture();
+      const { turnId, nextReplyId } = await f.t.run(async (ctx) => {
+        const chat = await ctx.db.get(f.chatId);
+        if (!chat) throw new Error("missing chat");
+        const turnId = await openSessionChatTurn(ctx, {
+          chatId: f.chatId,
+          sessionId: chat.sessionId,
+          streamingEntityId: String(f.chatId),
+          placeholderMessageId: f.messageId,
+          prompt: "take a screenshot",
+          model: "claude:sonnet",
+          repoId: chat.repoId,
+        });
+        // Completion drained the queue while the upload ran.
+        await ctx.db.insert("messages", {
+          parentId: f.chatId,
+          role: "user",
+          content: "next message",
+          timestamp: 2_000,
+        });
+        const nextReplyId = await ctx.db.insert("messages", {
+          parentId: f.chatId,
+          role: "assistant",
+          content: "",
+          timestamp: 2_001,
+        });
+        return { turnId, nextReplyId };
+      });
+      await f.t
+        .withIdentity({ subject: CLERK_ID })
+        .action(api.screenshots.attachMedia, {
+          parentId: f.chatId,
+          turnId,
+          mediaStorageIds: [f.storageId],
+        });
+      expect(await f.readMedia()).toEqual([f.storageId]);
+      const nextReply = await f.t.run((ctx) => ctx.db.get(nextReplyId));
+      expect(nextReply?.mediaStorageIds).toBeUndefined();
     },
     TIMEOUT_MS,
   );
