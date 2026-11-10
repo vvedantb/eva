@@ -69,20 +69,39 @@ export function RepoPicker({
         </Text>
         <IconChevronDown size={14} color={theme.mutedForeground} />
       </Pressable>
-      <FooterSheet open={open} onOpenChange={setOpen} title="Repo">
-        {repos.map((repo) => (
-          <SheetRow
-            key={repo._id}
-            icon={IconBrandGithub}
-            title={repoName(repo)}
-            active={repo._id === value._id}
-            onPress={() => {
-              onChange(repo._id);
-              setOpen(false);
-            }}
-          />
-        ))}
-      </FooterSheet>
+      <RepoSheet open={open} onOpenChange={setOpen} repos={repos} value={value} onChange={onChange} />
     </>
+  );
+}
+
+/** The bottom sheet of the user's repos (GitHub mark and name, the current one checked); a pick closes it. */
+export function RepoSheet({
+  open,
+  onOpenChange,
+  repos,
+  value,
+  onChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  repos: Repo[];
+  value: Repo | undefined;
+  onChange: (repoId: Id<"githubRepos">) => void;
+}) {
+  return (
+    <FooterSheet open={open} onOpenChange={onOpenChange} title="Repo">
+      {repos.map((repo) => (
+        <SheetRow
+          key={repo._id}
+          icon={IconBrandGithub}
+          title={repoName(repo)}
+          active={repo._id === value?._id}
+          onPress={() => {
+            onChange(repo._id);
+            onOpenChange(false);
+          }}
+        />
+      ))}
+    </FooterSheet>
   );
 }

@@ -14,7 +14,7 @@ import { AuthProviders } from "@vvedantb/native-ui/auth";
 import { NativeUiProvider } from "@vvedantb/native-ui/theme";
 import { Toaster } from "@vvedantb/native-ui/toast";
 import { ConvexReactClient } from "convex/react";
-import { type ErrorBoundaryProps, Slot, ThemeProvider } from "expo-router";
+import { type ErrorBoundaryProps, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useEffect, useState } from "react";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
@@ -111,7 +111,10 @@ export default function RootLayout() {
       <ThemeProvider value={navigationTheme(scheme)}>
         <NativeUiProvider>
           <ClerkGate>
-            <Slot />
+            {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
+                drops their state, so Back landed on the Inbox, not the tab it came from.
+                No transition, as before: screens swap at once. */}
+            <Stack screenOptions={{ headerShown: false, animation: "none" }} />
           </ClerkGate>
           <Toaster />
           <StatusBar style={scheme === "dark" ? "light" : "dark"} />
