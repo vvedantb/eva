@@ -1,25 +1,7 @@
+import { escapeRegExp } from "@eva/shared";
 import { escapeHtml } from "@eva/shared/escapeHtml";
 import { EDITOR_CHIP_CLICKABLE_CLASS } from "./mentionChipStyles";
 import { LINK_URL_SOURCE } from "./linkUrls";
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * Builds an alternation regex that matches `@<label>` for each known label.
- * Sorted longest-first so longer labels win when one is a prefix of another.
- */
-export function buildMentionPattern(labels: string[]): RegExp {
-  const sorted = [...labels].sort((a, b) => b.length - a.length);
-  return new RegExp(`@(?:${sorted.map(escapeRegex).join("|")})`, "g");
-}
-
-/** Builds an alternation regex that matches `/<label>` for each known skill label. */
-export function buildSkillPattern(labels: string[]): RegExp {
-  const sorted = [...labels].sort((a, b) => b.length - a.length);
-  return new RegExp(`\\/(?:${sorted.map(escapeRegex).join("|")})`, "g");
-}
 
 interface EditorChipSegment {
   type: "text" | "mention" | "skill" | "link";
@@ -37,10 +19,10 @@ function buildEditorChipPattern(
 ): RegExp {
   const parts: string[] = [LINK_URL_SOURCE];
   for (const label of [...mentionLabels].sort((a, b) => b.length - a.length)) {
-    parts.push(`@${escapeRegex(label)}`);
+    parts.push(`@${escapeRegExp(label)}`);
   }
   for (const label of [...skillLabels].sort((a, b) => b.length - a.length)) {
-    parts.push(`\\/${escapeRegex(label)}`);
+    parts.push(`\\/${escapeRegExp(label)}`);
   }
   return new RegExp(parts.join("|"), "g");
 }
@@ -165,38 +147,6 @@ export function renderEditorChipHtml(
       return escapeHtml(segment.value).replace(/\n/g, "<br>");
     })
     .join("");
-}
-
-/** Where the last accepted picker item put its chip, and what it inserted. */
-export interface InsertedToken {
-  startIndex: number;
-  /** The visible token, e.g. `/caveman-help` or `@Design doc`. */
-  token: string;
-}
-
-/**
- * True when the trigger just found is nothing but the chip the last accept
- * inserted, still intact.
- *
- * A chip's own text is indistinguishable from an in-progress trigger — `/label`
- * with no whitespace after it — so whenever the trailing space that accepting
- * inserts goes missing, the picker reopens filtering by the chip's own label.
- * The space can go missing for reasons outside this module: a surface that
- * overrides `white-space` to a collapsing value lets the browser's editing
- * engine drop it on the next keystroke.
- *
- * Gated on the token still being present at that index, so backspacing into a
- * chip (a deliberate way to re-open the picker and pick something else) still
- * works — the value stops matching, and the trigger is honoured again.
- */
-export function isInsertedTokenTrigger(
-  value: string,
-  triggerStartIndex: number,
-  inserted: InsertedToken | null,
-): boolean {
-  if (inserted === null) return false;
-  if (triggerStartIndex !== inserted.startIndex) return false;
-  return value.startsWith(inserted.token, inserted.startIndex);
 }
 
 /**

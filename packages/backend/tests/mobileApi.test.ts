@@ -6,6 +6,9 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
+import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
+import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 
 /**
  * The mobile app's writes (apps/mobile): replies in every chat kind, Stop and
@@ -327,6 +330,35 @@ describe("mobile api", () => {
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
       ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a phone @mention and /skill go on the wire as the backend's own tokens, stored as sent on a reply and a new session",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // What the phone composer sends after picking Grace and a skill. A
+      // production-shaped id: convex-test ids hold a `;`, outside the token charset.
+      const graceId = "k17grace00000000000000000000000g";
+      const skillId = systemSkillTokenId("eva-capture");
+      const message = tokenizeMentionText("ask @Grace Hopper to /eva-capture", {
+        mentionMap: new Map([["Grace Hopper", graceId]]),
+        skillMap: new Map([["eva-capture", skillId]]),
+      });
+      // The regexes `notifyChatMentions` and the skill resolver read.
+      expect([...message.matchAll(MENTION_TOKEN_REGEX)].map((match) => [match[1], match[2]])).toEqual([
+        ["Grace Hopper", graceId],
+      ]);
+      expect([...message.matchAll(SKILL_TOKEN_REGEX)].map((match) => [match[1], match[2]])).toEqual([
+        ["eva-capture", skillId],
+      ]);
+      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message });
+      expect(await sent(t, ids.chatId)).toEqual([expect.objectContaining({ content: message })]);
+      const { sessionId } = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: message });
+      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      if (!chat) throw new Error("no chat");
+      expect(await sent(t, chat.parentId)).toEqual([expect.objectContaining({ content: message })]);
     },
     TIMEOUT_MS,
   );

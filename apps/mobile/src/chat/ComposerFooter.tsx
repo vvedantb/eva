@@ -33,23 +33,21 @@ export function useFooterChipColor() {
 export function ComposerFooter({
   leading,
   repoId,
-  draft,
-  onDraftChange,
+  onRestore,
   model,
 }: {
   leading?: ReactNode;
   /** The repo the stash is saved against (the web stash is per user and repo). */
   repoId: Id<"githubRepos"> | undefined;
-  /** The composer text, which a restored stash is added to. */
-  draft: string;
-  onDraftChange: (text: string) => void;
+  /** Adds a restored stash's tokenized text to the composer (`useMentionComposer().restore`). */
+  onRestore: (tokenized: string) => void;
   /** The model chip. Simple view hides it, as the web composer. */
   model?: ReactNode;
 }) {
   const theme = EVA_THEME[useScheme()];
   const simpleView = useSimpleView();
   const entries = useQuery(api.promptStash.listForRepo, repoId ? { repoId } : "skip") ?? [];
-  const stash = entries.length > 0 ? <StashChip entries={entries} draft={draft} onDraftChange={onDraftChange} /> : null;
+  const stash = entries.length > 0 ? <StashChip entries={entries} onRestore={onRestore} /> : null;
   const modelChip = simpleView ? null : model;
   if (!leading && !stash && !modelChip) return null;
   return (
@@ -122,15 +120,7 @@ function previewSnippet(tokenized: string): string {
  * the prompt into the composer and takes it off the stash, × deletes it.
  * Stashing a draft is ⌘S on the web, which a phone has no key for.
  */
-function StashChip({
-  entries,
-  draft,
-  onDraftChange,
-}: {
-  entries: StashEntry[];
-  draft: string;
-  onDraftChange: (text: string) => void;
-}) {
+function StashChip({ entries, onRestore }: { entries: StashEntry[]; onRestore: (tokenized: string) => void }) {
   const color = useFooterChipColor();
   const [open, setOpen] = useState(false);
   const remove = useMutation(api.promptStash.remove);
@@ -143,9 +133,9 @@ function StashChip({
       toast.error("This stash has attachments this composer cannot accept.");
       return;
     }
-    // The stored text, mention and skill tokens included, so a send still
-    // mentions whom the stashed prompt did. Added after any draft, as the web.
-    onDraftChange(draft.trim() === "" ? entry.content : `${draft}\n\n${entry.content}`);
+    // The stored tokens come back as picks, so a send still mentions whom the
+    // stashed prompt did. Added after any draft, as the web.
+    onRestore(entry.content);
     setOpen(false);
     // Already restored: keep the entry rather than lose it, as the web.
     remove({ id: entry._id }).catch(() => toast.error("Restored, but could not remove stash entry."));

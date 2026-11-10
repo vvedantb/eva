@@ -1,8 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { MarkdownLink } from "@vvedantb/ui";
 import { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
-import { MENTION_TOKEN_REGEX } from "./mentionToken";
-import { SKILL_TOKEN_REGEX } from "./skillToken";
+import { MENTION_TOKEN_REGEX, SKILL_TOKEN_REGEX } from "@eva/shared";
 import { LINK_URL_SOURCE } from "./linkUrls";
 
 interface MentionMatch {
@@ -127,7 +126,8 @@ export function MentionText({
   return (
     <Tag
       className={
-        className ?? "text-sm text-foreground whitespace-pre-wrap wrap-break-word"
+        className ??
+        "text-sm text-foreground whitespace-pre-wrap wrap-break-word"
       }
     >
       {segments.map((segment, i) => {
