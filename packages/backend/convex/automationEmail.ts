@@ -32,8 +32,8 @@ async function changelogFeedbackUrlBuilder(
 }
 
 /**
- * Delivers a run's `sent` email to every user with email notifications
- * enabled. Scheduled once, by the mutation that marks the email sent (auto-send
+ * Delivers a run's `sent` email to its recipients (`getRunForEmail`).
+ * Scheduled once, by the mutation that marks the email sent (auto-send
  * or a reviewed draft). A failed send is logged and skipped so it does not
  * abort the batch.
  */
@@ -47,10 +47,7 @@ export const sendAutomationEmail = internalAction({
     if (!run) return null;
 
     const appUrl = getEvaBaseUrl();
-    const recipients = await ctx.runQuery(
-      internal.users.listEmailRecipients,
-      {},
-    );
+    const { recipients } = run;
 
     let sent = 0;
     const failures: string[] = [];

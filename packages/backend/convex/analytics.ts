@@ -615,7 +615,7 @@ export const getLeaderboard = authQuery({
   },
   returns: v.array(
     v.object({
-      clerkId: v.string(),
+      userId: v.id("users"),
       fullName: v.optional(v.string()),
       tasksCompleted: v.number(),
       prsCreated: v.number(),
@@ -694,13 +694,13 @@ export const getLeaderboard = authQuery({
       userStatEntries.map(([userId]) => ctx.db.get(userId)),
     );
     const leaderboard = userStatEntries
-      .map(([, stats], i) => {
+      .map(([userId, stats], i) => {
         const user = leaderboardUsers[i];
-        const clerkId = user?.clerkId ?? "";
-        if (!clerkId) return null;
+        // Unchanged rule: only users with a linked Clerk account are listed.
+        if (!user?.clerkId) return null;
         return {
-          clerkId,
-          fullName: user?.fullName ?? undefined,
+          userId,
+          fullName: user.fullName,
           ...stats,
         };
       })

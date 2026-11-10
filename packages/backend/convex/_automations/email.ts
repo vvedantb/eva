@@ -1,6 +1,6 @@
 /**
  * An automation run's email: drafted when the run succeeds, reviewed and
- * edited on the run, then sent to every email recipient. With `emailAutoSend`
+ * edited on the run, then sent to its recipients. With `emailAutoSend`
  * the draft step is skipped. `run.email.status` is the single source of truth:
  * only a `sent` email is ever delivered, and only a `draft` can change, so a
  * double click or a retry cannot send twice.
@@ -27,7 +27,11 @@ import {
 } from "../emailTemplates";
 import { authMutation, authQuery } from "../functions";
 import { createNotification, getRepoHref } from "../notifications";
-import { collectEmailRecipients } from "../users";
+import { findChangelogAutomation } from "../changelog";
+import {
+  collectEmailRecipients,
+  collectEmailRecipientsAmong,
+} from "../users";
 import { loadRunWithAccess } from "./helpers";
 import { resolveAutomationDoc } from "./systemAutomations";
 
@@ -67,6 +71,40 @@ export function renderAutomationEmail(opts: {
     publishedAt: opts.publishedAt,
     heading: opts.automationTitle,
   });
+}
+
+/**
+ * Who an automation's email goes to. The weekly changelog broadcasts to every
+ * opted-in user; any other automation emails only the opted-in members of its
+ * repo's team (or the repo's connector when the repo has no team).
+ */
+async function collectRunEmailRecipients(
+  db: DatabaseReader,
+  automation: Doc<"automations">,
+) {
+  if (
+    automation.title === CHANGELOG_AUTOMATION_TITLE &&
+    (await findChangelogAutomation(db))?._id === automation._id
+  ) {
+    return await collectEmailRecipients(db);
+  }
+  const repo = await db.get(automation.repoId);
+  if (!repo) return [];
+  const teamId = repo.teamId;
+  if (teamId === undefined) {
+    return await collectEmailRecipientsAmong(
+      db,
+      repo.connectedBy ? [repo.connectedBy] : [],
+    );
+  }
+  const members = await db
+    .query("teamMembers")
+    .withIndex("by_team", (q) => q.eq("teamId", teamId))
+    .collect();
+  return await collectEmailRecipientsAmong(
+    db,
+    members.map((member) => member.userId),
+  );
 }
 
 /** This automation's count of successful runs: the email's edition number. */
@@ -170,7 +208,7 @@ export const updateRunEmail = authMutation({
   },
 });
 
-/** Sends a reviewed draft to every email recipient. */
+/** Sends a reviewed draft to the automation's email recipients. */
 export const sendRunEmail = authMutation({
   args: { runId: v.id("automationRuns") },
   returns: v.null(),
@@ -214,7 +252,7 @@ export const previewRunEmail = authQuery({
     if (!run.email) return null;
     const [viewer, recipients] = await Promise.all([
       ctx.db.get(ctx.userId),
-      collectEmailRecipients(ctx.db),
+      collectRunEmailRecipients(ctx.db, automation),
     ]);
     return {
       html: renderAutomationEmail({
@@ -231,8 +269,9 @@ export const previewRunEmail = authQuery({
 });
 
 /**
- * A sent run's email for the delivery action. Null unless the email is `sent`,
- * so a draft or discarded email can never be delivered. Internal use only.
+ * A sent run's email and its recipients, for the delivery action. Null unless
+ * the email is `sent`, so a draft or discarded email can never be delivered.
+ * Internal use only.
  */
 export const getRunForEmail = internalQuery({
   args: { runId: v.id("automationRuns") },
@@ -242,6 +281,13 @@ export const getRunForEmail = internalQuery({
       body: v.string(),
       publishedAt: v.number(),
       automationTitle: v.string(),
+      recipients: v.array(
+        v.object({
+          userId: v.id("users"),
+          email: v.string(),
+          name: v.optional(v.string()),
+        }),
+      ),
     }),
     v.null(),
   ),
@@ -255,6 +301,7 @@ export const getRunForEmail = internalQuery({
       body: run.email.body,
       publishedAt: run.finishedAt ?? run.startedAt,
       automationTitle: resolveAutomationDoc(automation).title,
+      recipients: await collectRunEmailRecipients(ctx.db, automation),
     };
   },
 });

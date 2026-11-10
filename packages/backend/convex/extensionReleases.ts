@@ -1,10 +1,11 @@
+import { timingSafeEqual } from "@vvedantb/server";
 import { mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
-/** Validates the provided admin key against the expected environment variable. */
+/** Validates the provided admin key against the expected environment variable, in constant time. */
 function validateAdminKey(key: string): void {
   const expected = process.env.EXTENSION_ADMIN_KEY;
-  if (!expected || key !== expected) {
+  if (!expected || !timingSafeEqual(key, expected)) {
     throw new Error("Unauthorized");
   }
 }

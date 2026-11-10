@@ -5,7 +5,7 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import { authMutation, authQuery } from "./functions";
+import { authMutation, authQuery, requireAppAdmin } from "./functions";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { requestProjectSandboxStop } from "./_projects/sandbox";
@@ -80,10 +80,10 @@ export const getSandboxAutoStopSettings = authQuery({
 });
 
 /**
- * Upserts the app-wide sandbox auto-stop settings. `timeZone` is the IANA zone
- * captured from the browser at save time so the entered time is interpreted as
- * the user's local time. Changing the schedule clears the last-run guard so the
- * new time can fire today.
+ * Upserts the app-wide sandbox auto-stop settings (app admins only). `timeZone`
+ * is the IANA zone captured from the browser at save time so the entered time is
+ * interpreted as the user's local time. Changing the schedule clears the
+ * last-run guard so the new time can fire today.
  */
 export const setSandboxAutoStopSettings = authMutation({
   args: {
@@ -93,6 +93,8 @@ export const setSandboxAutoStopSettings = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // App-wide: the sweep stops every user's sandboxes.
+    await requireAppAdmin(ctx.db, ctx.userId);
     const existing = await ctx.db.query("appSettings").first();
     if (existing) {
       await ctx.db.patch(existing._id, {
