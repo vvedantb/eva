@@ -1,3 +1,4 @@
+import { ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT } from "@eva/shared/agentTurnLimits";
 import {
   CODEX_PRICING_PER_MILLION,
   COMPLETION_MUTATION,
@@ -400,7 +401,9 @@ export function buildErrorMessage(
   if (timedOutForMaxRuntime) {
     return (
       agentName +
-      " terminated after max runtime of " +
+      " " +
+      ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT +
+      " " +
       MAX_TOTAL_RUNTIME_MS +
       "ms"
     );

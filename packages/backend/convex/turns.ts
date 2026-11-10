@@ -1,5 +1,6 @@
 import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
+import { errorMessage } from "@vvedantb/server";
 import {
   internalAction,
   internalMutation,
@@ -653,7 +654,7 @@ export const reconcile = internalAction({
           );
         } catch (error) {
           console.log(
-            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${errorMessage(error)}`,
           );
         }
       }
@@ -667,7 +668,7 @@ export const reconcile = internalAction({
         });
       } catch (error) {
         console.error(
-          `[watchdog][lease-finalize-failed] turnId=${turn.turnId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[watchdog][lease-finalize-failed] turnId=${turn.turnId}: ${errorMessage(error)}`,
         );
       }
     }

@@ -8,6 +8,14 @@ WHY: Failed clones, startup commands, runner log tails and turn completions coul
 
 Architectural: one `redactSecrets` in `@eva/shared/redactSecrets`, used by the callback bundle and Convex. Callback: `log()`, `buildStepOutput` and `sendTurnCompletion` (`result`, `error`, `rawResultEvent`). Convex: `execHandle` failure text, git exec logs, startup and background command logs, Convex readiness tail, runner log tail (redacted before clipping), watchdog diagnostics (`readKillDiagnostics`). File Viewer reads and writes only under `/tmp/repo`, `/workspace/repo` and `/tmp/workspace`, never a `.git`, `.eva-env.sh` or `git-credentials.env` segment, and resolves symlinks in the sandbox before the same check (`isValidSandboxViewerPath`, `resolveViewerPathScript`). Media harvest uploads only plain single-link files in a real folder. Claude session ids that are not a safe path segment are dropped.
 
+## Backend: fence two implicit state machines (run start, chat result)
+
+Date: 2026-11-10
+
+WHY: An audit found writes that ignored the current state. A run cancelled before its first workflow step could come back as `running` with no watchdog, which blocked new runs. A late result from a closed chat turn could write into the newer turn's reply, clear its slot, and let the queue start a third turn.
+
+Architectural: `updateRunToRunning` now applies only to a `queued` run and returns `"not_queued"` otherwise. `taskExecutionWorkflow` calls it before its `try` and returns on that value, so the tail does not clear a newer run's `activeWorkflowId`. Journals from before this change replay `null` and continue. New pure `isSupersededChatResult(turn, activeWorkflowId)` in `_chat/turnStore.ts`: the turn is closed and another workflow holds the slot. The session, task and project chat `saveResult` mutations return early on it. `projects.update` still sets any phase: the Change Phase dialog uses it, and it already runs the PR sync.
+
 ## Web: composer links look like chat links (underline + favicon), not chips
 
 Date: 2026-11-09

@@ -17,6 +17,7 @@ import { ChangelogDialogGate } from "@/lib/components/ChangelogDialogGate";
 import { IS_EMBEDDED } from "@/lib/embed/embedded";
 import { EmbedNavigationBridge } from "@/lib/embed/EmbedNavigationBridge";
 import { useDocumentTitle } from "@/lib/hooks/useDocumentTitle";
+import { PrCloseDialogHost } from "@/lib/components/pr-menu/PrCloseDialogHost";
 
 export interface RouterContext {
   isSignedIn: boolean;
@@ -102,6 +103,8 @@ function RootComponent() {
           {app}
           {/* The What's New dialog belongs to the top-level window, not previews. */}
           {IS_EMBEDDED ? null : <ChangelogDialogGate />}
+          {/* "Close without merging" from any PR menu confirms here. */}
+          <PrCloseDialogHost />
         </ClientProvider>
       )}
     </TooltipProvider>

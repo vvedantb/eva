@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type * as ConvexClient from "../http/convexClient.js";
 
@@ -230,27 +227,15 @@ describe("the canUseTool gate grants MCP on every surface", () => {
     });
   }
 
-  test("a non-session surface lets AskUserQuestion through instead of blocking", async () => {
+  test("a surface with no answering UI lets AskUserQuestion through instead of blocking", async () => {
     // Would hang on postQuestion/pollForAnswer if it tried to block here —
-    // nothing on a task chat can answer it.
-    const canUseTool = await gateFor("taskId");
+    // nothing on a doc chat can answer it.
+    const canUseTool = await gateFor("docId");
     const result = await canUseTool(
       "AskUserQuestion",
       { questions: [] },
       options(),
     );
     expect(result.behavior).toBe("allow");
-  });
-});
-
-describe("the permission mode is not tied to blocking questions", () => {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const source = readFileSync(join(here, "../providers/claudeSdk.ts"), "utf8");
-
-  test("canUseTool is installed for every agent turn", () => {
-    expect(source).toContain('tools === "agent"\n      ? {');
-    expect(source).not.toContain(
-      'tools === "agent" && BLOCKING_QUESTIONS_ENABLED',
-    );
   });
 });

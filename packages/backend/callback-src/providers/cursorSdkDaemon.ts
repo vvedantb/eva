@@ -1,3 +1,4 @@
+import { TURN_MAX_RUNTIME_ERROR } from "@eva/shared/agentTurnLimits";
 import { spawn, type ChildProcess } from "child_process";
 import { readFileSync, unlinkSync, writeFileSync } from "fs";
 import {
@@ -313,7 +314,7 @@ function startTurnWatchdog(): void {
       // failure completion retries.
       supervisor.beginFinalizing();
       abortActiveTurn?.();
-      void failTurnAndExit("The assistant exceeded the maximum turn runtime.");
+      void failTurnAndExit(TURN_MAX_RUNTIME_ERROR);
     }
   }, WATCHDOG_TICK_MS);
   timer.unref?.();

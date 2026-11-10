@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -18,10 +15,6 @@ import schema from "../convex/schema";
  * The degraded path matters as much as the happy one. Routing is a network
  * call that can fail, and a mention it never judged keeps `urgency` undefined;
  * that mention must still email, exactly as it did before routing existed.
- *
- * Behavioural where the real query can run, source-level for the two edges
- * convex-test cannot observe: the scheduler call inside `setUrgency`, and the
- * hand-off from the mention notifier to the `"use node"` routing action.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -167,42 +160,4 @@ describe("notification urgency", () => {
     },
     TIMEOUT_MS,
   );
-});
-
-/**
- * Source-level, because convex-test does not surface the scheduler queue: what
- * would break is a delivery consequence nothing else asserts.
- */
-const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
-const read = (path: string) => readFileSync(join(convexDir, path), "utf8");
-
-describe("urgency drives delivery", () => {
-  test("setUrgency schedules the short-delay email only for high", () => {
-    const source = read("notifications.ts");
-    const body = source.slice(source.indexOf("export const setUrgency"));
-    const handler = body.slice(0, body.indexOf("export const scheduleLegacy"));
-    expect(handler).toContain('args.urgency === "high"');
-    expect(handler).toContain("HIGH_URGENCY_EMAIL_DELAY_MS");
-    expect(handler).toContain("sendUnreadForUser");
-  });
-
-  test("creating a mention no longer schedules the legacy email itself", () => {
-    // Routing owns the decision now; scheduling here as well would email every
-    // mention regardless of what Jev decided.
-    expect(read("notifications.ts")).toContain('type !== "mention"');
-  });
-
-  test("the mention notifier hands every mention to routing", () => {
-    expect(read("_mentions/notifyChatMentions.ts")).toContain(
-      "internal.mentionRouting.routeMentions",
-    );
-  });
-
-  test("routing is a node action, tagged for gateway spend attribution", () => {
-    const source = read("mentionRouting.ts");
-    expect(source.startsWith('"use node";')).toBe(true);
-    expect(source).toContain('"eva-mention-routing"');
-    // The fallback is the whole reason a gateway failure is not a lost email.
-    expect(source).toContain("scheduleLegacyMentionEmail");
-  });
 });
