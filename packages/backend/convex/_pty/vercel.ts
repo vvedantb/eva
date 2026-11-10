@@ -8,6 +8,7 @@ import {
   pkgInstall,
 } from "../_sandbox_runtime/packageManager";
 import { tmuxSessionName } from "./consoleSessionName";
+import { errorMessage } from "@vvedantb/server";
 
 /** Browser WebSockets cannot set headers — pass the interactive token as a query param. */
 function buildVercelInteractiveWsUrl(url: string, token: string): string {
@@ -34,9 +35,7 @@ export async function ensureVercelSharedTerminal(
     });
   } catch (error) {
     console.warn(
-      `[vercel] ensureEvaEnvInteractiveHook failed on ${handle.id}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `[vercel] ensureEvaEnvInteractiveHook failed on ${handle.id}: ${errorMessage(error)}`,
     );
   }
   const existing = await handle.exec(
