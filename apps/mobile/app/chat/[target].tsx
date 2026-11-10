@@ -1,10 +1,11 @@
 import { api } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
-import { collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
+import { formatDuration } from "@eva/shared/duration";
+import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { IconMessageCircle, IconPlayerStopFilled, IconPlus } from "@tabler/icons-react-native";
+import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
 import {
   Attachment,
   Attachments,
@@ -20,6 +21,7 @@ import {
   Shimmer,
 } from "@vvedantb/native-ui/ai";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
+import { Markdown } from "@vvedantb/native-ui/markdown";
 import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -28,6 +30,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Fragment } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
+import { AttachButton } from "@/chat/AttachButton";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
 import { MessageFooter } from "@/chat/MessageFooter";
@@ -75,6 +78,8 @@ export default function ChatScreen() {
       (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog)),
   );
   const dayStarts = findDayBoundaryIds(visible);
+  // The user turn before each reply holds the model it ran on (the footer mark), as the web.
+  const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
   const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
   const webUrl = (path: string) => `${WEB_URL}${path}`;
@@ -121,7 +126,8 @@ export default function ChatScreen() {
         onStop={working ? handleStop : undefined}
       />
       <Conversation>
-        <ConversationContent>
+        {/* The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`, messages `gap-3`. */}
+        <ConversationContent contentContainerClassName="gap-3 pl-[22px] pr-8">
           {messages === undefined ? (
             <CenteredSpinner label="Loading messages" />
           ) : messages.length === 0 ? (
@@ -130,17 +136,19 @@ export default function ChatScreen() {
             visible.map((message) => (
               <Fragment key={message._id}>
                 {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
-                <Message from={message.role}>
-                  {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. */}
-                  <MessageContent bubble="tint">
+                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
+                <Message from={message.role} className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}>
+                  {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`. */}
+                  <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
                     {message.role === "user" ? (
-                      message.content
+                      // The web user text is markdown in `text-sm` (14 / 20).
+                      <Markdown leading="normal">{message.content}</Markdown>
                     ) : (
                       <AssistantMessage
                         messageId={message._id}
                         content={message.content}
                         activityLog={message.activityLog}
-                        seconds={message.finishedAt ? (message.finishedAt - message.timestamp) / 1000 : undefined}
+                        duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
                       />
                     )}
                   </MessageContent>
@@ -151,6 +159,7 @@ export default function ChatScreen() {
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       link={webUrl(messageLinkHref(chat.webPath, message._id))}
                       onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
+                      turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
                       rating={
                         message.role === "assistant"
                           ? {
@@ -169,14 +178,15 @@ export default function ChatScreen() {
           )}
           {working && questions === null ? <Shimmer>Working…</Shimmer> : null}
         </ConversationContent>
-        <ConversationScrollButton />
+        <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel />
       </Conversation>
       {pending && questions ? (
-        // The web dock: p-3 around the card, in place of the composer.
-        <View className="p-3">
+        // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
+        <View className="p-3 pr-[22px]">
           <ChoiceQuestion
             key={pending.toolUseId}
             questions={questions}
+            buttonWeight="semibold"
             onSubmit={async (answers) => {
               try {
                 await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
@@ -187,24 +197,30 @@ export default function ChatScreen() {
           />
         </View>
       ) : chat.canReply ? (
-        // Send stays ready during a turn (a send queues behind it) and Stop sits beside it,
-        // as the web composer's `stopMode="alongside"`.
-        <PromptInput
-          layout="inline"
-          onSubmit={handleSend}
-          placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
-          leading={<PromptInputButton icon={IconPlus} label="Add attachment" onPress={() => void attachments.pick()} />}
-          header={
-            attachments.items.length > 0 ? (
-              <Attachments>
-                {attachments.items.map((item) => (
-                  <Attachment key={item.id} data={item} onRemove={() => attachments.remove(item.id)} />
-                ))}
-              </Attachments>
-            ) : null
-          }
-          toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
-        />
+        // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
+        // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
+        // it, as `stopMode="alongside"`.
+        <View className="pr-2.5">
+          <PromptInput
+            layout="inline"
+            shape="pill"
+            onSubmit={handleSend}
+            placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
+            leading={
+              <AttachButton onPress={() => void attachments.pick()} />
+            }
+            header={
+              attachments.items.length > 0 ? (
+                <Attachments>
+                  {attachments.items.map((item) => (
+                    <Attachment key={item.id} data={item} onRemove={() => attachments.remove(item.id)} />
+                  ))}
+                </Attachments>
+              ) : null
+            }
+            toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
+          />
+        </View>
       ) : (
         <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
           This chat is closed.
