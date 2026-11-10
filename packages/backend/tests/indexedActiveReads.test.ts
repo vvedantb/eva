@@ -4,11 +4,9 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 /**
- * Bandwidth fix a1146b42 moved the sandbox sweeps and the sidebar's extra-chat
- * list from full scans plus a filter onto status indexes. Both failure modes
- * are silent: a sweep that misses a live sandbox leaks a VM, and an index
- * range that misses `archived: undefined` hides every chat that never had the
- * field written.
+ * Bandwidth fix a1146b42 moved the sandbox sweeps from full scans plus a
+ * filter onto status indexes. The failure mode is silent: a sweep that misses
+ * a live sandbox leaks a VM.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -31,51 +29,6 @@ async function fixture() {
   });
   return { t, asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
-
-describe("sessionChats.listExtraForRepo", () => {
-  test(
-    "returns open non-Main chats whether archived is unset or false",
-    async () => {
-      const f = await fixture();
-      await f.t.run(async (ctx) => {
-        const sessionId = await ctx.db.insert("sessions", {
-          repoId: f.repoId,
-          userId: f.userId,
-          title: "Chats",
-          status: "active",
-        });
-        const chat = (
-          title: string,
-          number: number,
-          isMain: boolean,
-          archived?: boolean,
-        ) =>
-          ctx.db.insert("sessionChats", {
-            sessionId,
-            repoId: f.repoId,
-            userId: f.userId,
-            title,
-            number,
-            isMain,
-            ...(archived === undefined ? {} : { archived }),
-          });
-        await chat("Main", 1, true);
-        await chat("Open, explicit", 3, false, false);
-        await chat("Open, never set", 2, false);
-        await chat("Closed", 4, false, true);
-      });
-
-      const chats = await f.asUser.query(api.sessionChats.listExtraForRepo, {
-        repoId: f.repoId,
-      });
-      expect(chats.map((chat) => chat.title)).toEqual([
-        "Open, never set",
-        "Open, explicit",
-      ]);
-    },
-    TIMEOUT_MS,
-  );
-});
 
 describe("active sandbox sweeps", () => {
   test(

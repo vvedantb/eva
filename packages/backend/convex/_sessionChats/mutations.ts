@@ -17,7 +17,6 @@ import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
-import { cancelChatExecution } from "../_sessions/execution";
 import {
   createSessionChat,
   ensureMainChat,
@@ -113,36 +112,6 @@ export const rename = authMutation({
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });
-    return null;
-  },
-});
-
-/**
- * Closes a parallel chat: cancels its turn, kills its daemon and hides its
- * tab. Main cannot be closed — it is the session's own transcript.
- */
-export const archive = authMutation({
-  args: { chatId: v.id("sessionChats") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    const { chat, session } = context;
-    if (chat.isMain) throw new Error("The Main chat cannot be closed");
-    if (chat.archived === true) return null;
-    await cancelChatExecution(ctx, context);
-    await ctx.db.patch(chat._id, { archived: true, updatedAt: Date.now() });
-    if (session.sandboxId && session.status === "active") {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-        sandboxId: session.sandboxId,
-        repoId: session.repoId,
-        entityIdField: "chatId",
-        entityId: String(chat._id),
-      });
-    }
     return null;
   },
 });
