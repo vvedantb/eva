@@ -15,7 +15,7 @@ import {
   OPENCODE_SERVER_PORT,
   opencodeCommand,
 } from "../config.js";
-import { log, tryParseJson } from "../utils.js";
+import { log, tryParseJsonObject } from "../utils.js";
 import { pidAlive, sleep, writeOomScoreAdj } from "../runtime/daemonProcess.js";
 
 /**
@@ -41,8 +41,16 @@ const SERVER_LOCK_DIR = OPENCODE_RUNTIME_HOME_DIR + "/server.lock";
 const SERVER_LOG_FILE = OPENCODE_RUNTIME_HOME_DIR + "/server.log";
 
 const HEALTH_PROBE_TIMEOUT_MS = 3_000;
+/**
+ * Per-probe cap while a server boots. The socket accepts connections ~0.3s
+ * before `opencode serve` can answer, and a request that lands in that window
+ * never gets a reply: with the 3s cap every cold start lost ~3s to it. An
+ * aborted probe does not cancel the instance bootstrap it started, so a short
+ * cap only means a retry. Healthy replies take ~15ms (first one ~170ms).
+ */
+const STARTUP_PROBE_TIMEOUT_MS = 250;
 const STARTUP_TIMEOUT_MS = 60_000;
-const HEALTH_POLL_INTERVAL_MS = 250;
+const HEALTH_POLL_INTERVAL_MS = 50;
 /** A lock older than this belongs to a callback that died mid-start. */
 const LOCK_STALE_MS = 90_000;
 /** Cap on the server log tail surfaced in error messages. */
@@ -68,10 +76,12 @@ export function readOpencodeServerLogTail(
  * `GET /config` is the cheapest authenticated-by-nothing route the server
  * exposes; a 2xx means the HTTP layer and the config loader are both up.
  */
-async function probeHealth(): Promise<boolean> {
+async function probeHealth(
+  timeoutMs: number = HEALTH_PROBE_TIMEOUT_MS,
+): Promise<boolean> {
   try {
     const response = await fetch(opencodeServerBaseUrl + "/config", {
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return response.ok;
   } catch {
@@ -81,10 +91,8 @@ async function probeHealth(): Promise<boolean> {
 
 function readRecordedPid(): number {
   try {
-    const parsed = tryParseJson(readFileSync(SERVER_STATE_FILE, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return 0;
-    }
+    const parsed = tryParseJsonObject(readFileSync(SERVER_STATE_FILE, "utf8"));
+    if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
     return 0;
@@ -159,7 +167,7 @@ function spawnServer(): number {
 async function waitForHealth(pid: number): Promise<void> {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await probeHealth()) return;
+    if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) return;
     if (pid && !pidAlive(pid)) {
       throw new Error(
         "opencode serve exited during startup. Server log tail:\n" +
@@ -226,7 +234,9 @@ export async function ensureOpencodeServer(): Promise<string> {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(HEALTH_POLL_INTERVAL_MS);
-      if (await probeHealth()) return opencodeServerBaseUrl;
+      if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) {
+        return opencodeServerBaseUrl;
+      }
       if (!existsSync(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;

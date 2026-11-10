@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 
 export type GatewayDictationStatus =
   | "idle"
@@ -156,6 +156,9 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
   }, [cleanup]);
 
   const stop = useCallback(() => {
+    // Invalidate a start still connecting (no session yet), so it gives up
+    // after its awaits instead of opening the mic once the user said stop.
+    generationRef.current += 1;
     cleanup();
     setStatus("idle");
   }, [cleanup]);
@@ -217,6 +220,11 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           () => URL.revokeObjectURL(workletUrl),
         );
         await addModule;
+        if (generationRef.current !== generation) {
+          stopMediaTracks(mediaStream);
+          void audioContext.close();
+          return;
+        }
 
         const sourceNode = audioContext.createMediaStreamSource(mediaStream);
         const workletNode = new AudioWorkletNode(
@@ -292,7 +300,16 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           await loadGatewayDictationSdk();
 
         if (generationRef.current !== generation) {
-          cleanup();
+          // Close this start's own audio only: a newer start may already own
+          // `sessionRef`, and `cleanup()` would close that one instead.
+          closeAudio();
+          const currentSession = sessionRef.current;
+          if (currentSession) {
+            if (currentSession.audioContext === audioContext) {
+              sessionRef.current = null;
+              streamReaderCancelRef.current = null;
+            }
+          }
           return;
         }
 
@@ -358,7 +375,10 @@ export function useGatewayDictation(onText: (fullText: string) => void) {
           }
         })();
       } catch (error) {
-        if (generationRef.current !== generation) return;
+        if (generationRef.current !== generation) {
+          void audioContext.close();
+          return;
+        }
         console.error("[useGatewayDictation]", error);
         void audioContext.close();
         toast.error(

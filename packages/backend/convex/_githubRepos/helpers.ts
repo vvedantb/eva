@@ -12,24 +12,6 @@ export {
   type AppRepoPickFields,
 } from "./sandboxRepoPick";
 
-/** True when the user connected the repo or shares its team. */
-export async function userCanAccessRepo(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  repo: Doc<"githubRepos">,
-): Promise<boolean> {
-  if (repo.connectedBy === userId) return true;
-  const teamId = repo.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
-}
-
 /** Resolves a repo ID to its parent repo ID if it is a sub-app, otherwise returns itself. */
 export async function resolveCanonicalRepoId(
   db: GenericDatabaseReader<DataModel>,
@@ -74,6 +56,19 @@ export async function hasCodebaseRepoAccess(
   return false;
 }
 
+/** All repo rows for one GitHub owner/name codebase (root + sub-apps). */
+export function findReposByOwnerAndName(
+  db: GenericDatabaseReader<DataModel>,
+  repo: { owner: string; name: string },
+): Promise<Array<Doc<"githubRepos">>> {
+  return db
+    .query("githubRepos")
+    .withIndex("by_owner_and_name", (q) =>
+      q.eq("owner", repo.owner).eq("name", repo.name),
+    )
+    .collect();
+}
+
 /** Finds all repo rows sharing the same GitHub owner and name (root + sub-apps). */
 export async function findSiblingRepos(
   db: GenericDatabaseReader<DataModel>,
@@ -81,13 +76,7 @@ export async function findSiblingRepos(
 ): Promise<Array<Doc<"githubRepos">>> {
   const repo = await db.get(repoId);
   if (!repo) return [];
-
-  return await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", repo.owner).eq("name", repo.name),
-    )
-    .collect();
+  return await findReposByOwnerAndName(db, repo);
 }
 
 /** Finds all repo entry ids sharing the same owner and name (root + sub-apps). */
@@ -109,24 +98,26 @@ export async function gatherAccessibleRepos(
   userId: Id<"users">,
   includeHidden: boolean,
 ): Promise<Array<Doc<"githubRepos">>> {
-  const userTeamMemberships = await db
-    .query("teamMembers")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .collect();
-
-  const teamRepoResults = await Promise.all(
-    userTeamMemberships.map((m) =>
-      db
-        .query("githubRepos")
-        .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-        .collect(),
-    ),
-  );
-
-  const connectedRepos = await db
-    .query("githubRepos")
-    .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
-    .collect();
+  const [teamRepoResults, connectedRepos] = await Promise.all([
+    db
+      .query("teamMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect()
+      .then((memberships) =>
+        Promise.all(
+          memberships.map((m) =>
+            db
+              .query("githubRepos")
+              .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
+              .collect(),
+          ),
+        ),
+      ),
+    db
+      .query("githubRepos")
+      .withIndex("by_connected_by", (q) => q.eq("connectedBy", userId))
+      .collect(),
+  ]);
 
   const seen = new Set<string>();
   const repos: Array<Doc<"githubRepos">> = [];

@@ -20,7 +20,10 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconArrowBackUp,
   IconChevronDown,
@@ -32,12 +35,6 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
 import { mergeButtonLabel, stackMergeTargets } from "./prStack";
 import type { PrOverview } from "./prOverviewMeta";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type MergeMethod = "merge" | "squash" | "rebase";
 
@@ -92,7 +89,7 @@ function MergeAction({
   const [method, setMethod] = useState<MergeMethod>("squash");
   const [confirming, setConfirming] = useState(false);
   const [merging, setMerging] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const blocker = mergeBlocker(overview);
   const canMerge =
@@ -105,6 +102,9 @@ function MergeAction({
     MERGE_METHODS.find((entry) => entry.value === method)?.label ?? "Merge";
 
   const runMerge = async () => {
+    // The skip-confirm click calls this straight from the trigger, so the
+    // trigger's disabled state is the only thing between two merges.
+    if (merging) return;
     setMerging(true);
     // No `||` in the try and no `finally`: React Compiler bails on the whole
     // file for either.
@@ -133,11 +133,11 @@ function MergeAction({
     <>
       <ButtonGroup>
         <Button
+          shape="rounded"
           size="xs"
-          disabled={!canMerge}
+          disabled={!canMerge || merging}
           onClick={(event) =>
             requestConfirm(
-              altHeld,
               () => setConfirming(true),
               () => {
                 void runMerge();
@@ -154,8 +154,9 @@ function MergeAction({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
+              shape="rounded"
               size="xs"
-              disabled={!canMerge}
+              disabled={!canMerge || merging}
               className="px-1.5"
               aria-label="Choose a merge method"
             >
@@ -180,7 +181,13 @@ function MergeAction({
         </DropdownMenu>
       </ButtonGroup>
 
-      <Dialog open={confirming} onOpenChange={setConfirming}>
+      <Dialog
+        open={confirming}
+        onOpenChange={(open) => {
+          // Closing mid-merge would hide the only progress the user sees.
+          if (!merging) setConfirming(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{methodLabel}?</DialogTitle>
@@ -291,11 +298,13 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const createSession = useConvexMutation(api.sessions.create);
   const [starting, setStarting] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const sha = overview.mergeCommitSha;
 
   const start = async () => {
+    // Same as merge: the skip-confirm path calls this from the trigger.
+    if (starting) return;
     setStarting(true);
     // Built before the `try`: expression-level control flow inside one bails
     // the whole file out of the React Compiler.
@@ -325,10 +334,10 @@ function RevertAction({ overview }: { overview: PrOverview }) {
     <>
       <Button
         size="xs"
+        disabled={starting}
         title={skipConfirmTitle("Revert")}
         onClick={(event) =>
           requestConfirm(
-            altHeld,
             () => setConfirming(true),
             () => {
               void start();

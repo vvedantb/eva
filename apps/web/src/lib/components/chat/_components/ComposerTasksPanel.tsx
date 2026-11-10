@@ -1,11 +1,11 @@
+import { cn } from "@eva/ui";
 import {
   Button,
-  cn,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  motionBase,
-} from "@eva/ui";
+  tokenTransition,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -43,7 +43,8 @@ export function composerTaskStepsFromActivity(
   if (!todos) return [];
   return todos.map((todo) => ({
     step: todo.content,
-    status: todo.status === "in_progress" ? ("inProgress" as const) : todo.status,
+    status:
+      todo.status === "in_progress" ? ("inProgress" as const) : todo.status,
   }));
 }
 
@@ -204,7 +205,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionBase}
+          transition={tokenTransition.base}
         >
           {/* Flush above the input card. The dock in ComposerStash owns the inset, so
               this fills its column; the squared bottom matches QueuedMessagesPanel so

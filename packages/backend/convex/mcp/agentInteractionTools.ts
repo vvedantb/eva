@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { FunctionReturnType } from "convex/server";
 import type { ActionCtx } from "../_generated/server";
@@ -12,10 +13,8 @@ import {
   type EntityRef,
 } from "./entityRef";
 import {
-  errorResult,
   mcpCallAsUser,
   mcpGetContext,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
@@ -46,9 +45,7 @@ const askedQuestionSchema = z.object({
   header: z.string().optional(),
   multiSelect: z.boolean().optional(),
   options: z
-    .array(
-      z.object({ label: z.string(), description: z.string().optional() }),
-    )
+    .array(z.object({ label: z.string(), description: z.string().optional() }))
     .optional(),
 });
 
@@ -224,7 +221,7 @@ urgency "normal" (default) also lands in the user's daily email digest if they h
           .string()
           .min(1)
           .max(120)
-          .describe("One-line headline, e.g. \"PR #664 is ready to review\"."),
+          .describe('One-line headline, e.g. "PR #664 is ready to review".'),
         body: z
           .string()
           .max(500)
@@ -246,7 +243,7 @@ urgency "normal" (default) also lands in the user's daily email digest if they h
         let linked: ReturnType<typeof entitySummary> | undefined;
         if (namesChat(ref)) {
           const resolved = await resolveEntityTarget(ref, userId);
-          if ("isError" in resolved) return resolved;
+          if ("content" in resolved) return resolved;
           chat = { kind: resolved.target.kind, id: resolved.target.targetId };
           linked = entitySummary(resolved.target);
         }
@@ -255,7 +252,7 @@ urgency "normal" (default) also lands in the user's daily email digest if they h
           internal.mcp.agentInteractionQueries.notifyUserFromAgent,
           { userId, title, message: body, urgency, chat },
         );
-        return textResult({
+        return toolJsonResult({
           notificationId,
           urgency,
           linkedTo: linked ?? null,
@@ -305,11 +302,11 @@ ${DECISION_RULE}`,
         let entityId: string | undefined;
         if (namesChat(ref)) {
           const resolved = await resolveEntityTarget(ref, userId);
-          if ("isError" in resolved) return resolved;
+          if ("content" in resolved) return resolved;
           entityId = resolved.target.targetId;
         }
         const rows = await listPending({ userId, entityId });
-        return textResult({
+        return toolJsonResult({
           pending: rows.map(describePendingRow),
           count: rows.length,
         });
@@ -347,31 +344,31 @@ ${DECISION_RULE}`,
           rows = await listPending({ userId, questionId });
         } else if (namesChat(ref)) {
           const resolved = await resolveEntityTarget(ref, userId);
-          if ("isError" in resolved) return resolved;
+          if ("content" in resolved) return resolved;
           rows = await listPending({
             userId,
             entityId: resolved.target.targetId,
           });
         } else {
-          return errorResult(
+          return toolErrorResult(
             'Name the question: pass "questionId" from list_pending_questions, or the chat\'s "id", "prUrl", or "numId" with "kind" and "repoName".',
           );
         }
 
         const [row] = rows;
         if (!row) {
-          return errorResult(
+          return toolErrorResult(
             "No unanswered question matched, or you do not have access to it. It may already have been answered, or its sandbox stopped.",
           );
         }
         const questions = parseAskedQuestions(row.payload);
         if (!questions) {
-          return errorResult(
+          return toolErrorResult(
             "This question is in a shape Eva cannot read, so it cannot be answered here. Ask the user to answer it in the chat.",
           );
         }
         const built = buildAnswerMap(questions, answers);
-        if ("error" in built) return errorResult(built.error);
+        if ("error" in built) return toolErrorResult(built.error);
 
         await mcpCallAsUser(
           ctx,
@@ -388,7 +385,7 @@ ${DECISION_RULE}`,
           z.null(),
         );
 
-        return textResult({
+        return toolJsonResult({
           questionId: row.questionId,
           chat: describePendingRow(row).chat,
           answers: built.answers,

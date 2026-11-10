@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@eva/ui";
 import {
   Button,
   DropdownMenu,
@@ -12,8 +13,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import {
   IconChevronsDown,
   IconChevronsUp,
@@ -25,8 +25,19 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import type { DiffView } from "@/lib/search-params";
+import { PrDiffStat } from "@/lib/components/reviews/_components/prReviewParts";
+import { DIFF_FILE_KINDS, type DiffFileKind, type DiffSize } from "./diffFiles";
+
+const KIND_LABEL: Record<DiffFileKind, string> = {
+  code: "Code",
+  tests: "Tests",
+  mocks: "Mocks",
+  generated: "Generated",
+};
 
 interface DiffsToolbarProps {
+  /** Line totals of the files on screen; null while the diff is not loaded. */
+  size: DiffSize | null;
   /** The commit Code is scoped to, shown as a clearable chip; null for all. */
   scopedCommit: { sha: string; headline: string } | null;
   onClearScope: () => void;
@@ -53,6 +64,7 @@ interface DiffsToolbarProps {
  * whole change.
  */
 export function DiffsToolbar({
+  size,
   scopedCommit,
   onClearScope,
   diffView,
@@ -71,6 +83,9 @@ export function DiffsToolbar({
 }: DiffsToolbarProps) {
   return (
     <>
+      {size === null || size.total.files === 0 ? null : (
+        <DiffSizeSplit size={size} />
+      )}
       {scopedCommit === null ? null : (
         <span className="mr-1 flex max-w-64 min-w-0 items-center gap-1 rounded-full bg-muted py-0.5 pr-0.5 pl-2.5 text-xs">
           <span className="truncate" title={scopedCommit.headline}>
@@ -82,7 +97,7 @@ export function DiffsToolbar({
           <Button
             size="icon-xs"
             variant="ghost"
-            className="size-5 rounded-full"
+            className="size-5"
             aria-label="Show all commits"
             onClick={onClearScope}
           >
@@ -92,8 +107,14 @@ export function DiffsToolbar({
       )}
       <IconToggle
         pressed={false}
-        onPress={() => onDiffViewChange(diffView === "unified" ? "split" : "unified")}
-        label={diffView === "unified" ? "Switch to split view" : "Switch to stacked view"}
+        onPress={() =>
+          onDiffViewChange(diffView === "unified" ? "split" : "unified")
+        }
+        label={
+          diffView === "unified"
+            ? "Switch to split view"
+            : "Switch to stacked view"
+        }
         className="max-md:hidden"
       >
         {diffView === "unified" ? <IconLayoutRows /> : <IconLayoutColumns />}
@@ -107,7 +128,12 @@ export function DiffsToolbar({
       </IconToggle>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="ghost" aria-label="More diff options">
+          <Button
+            shape="rounded"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="More diff options"
+          >
             <IconDots />
           </Button>
         </DropdownMenuTrigger>
@@ -128,7 +154,9 @@ export function DiffsToolbar({
             Hide whitespace changes
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={allExpanded ? onCollapseAll : onExpandAll}>
+          <DropdownMenuItem
+            onSelect={allExpanded ? onCollapseAll : onExpandAll}
+          >
             {allExpanded ? (
               <IconChevronsUp className="size-4" />
             ) : (
@@ -143,6 +171,65 @@ export function DiffsToolbar({
         </DropdownMenuContent>
       </DropdownMenu>
     </>
+  );
+}
+
+/**
+ * The diff's `+n −m`, and beside it how much of that is code — so a "+2,000"
+ * that is mostly lockfile and tests reads as the 300 lines it really is. The
+ * tooltip breaks it down by kind.
+ */
+function DiffSizeSplit({
+  size,
+}: {
+  size: DiffSize;
+}) {
+  const { total, byKind } = size;
+  const code = byKind.code;
+  const allCode = code.files === total.files;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className="mr-1 flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground max-sm:hidden"
+        >
+          <PrDiffStat
+            additions={total.additions}
+            deletions={total.deletions}
+            hideZero
+          />
+          {allCode ? null : (
+            <span className="tabular-nums">
+              · {(code.additions + code.deletions).toLocaleString()} code
+            </span>
+          )}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <table className="text-xs">
+          <tbody>
+            {DIFF_FILE_KINDS.filter((kind) => byKind[kind].files > 0).map(
+              (kind) => (
+                <tr key={kind}>
+                  <td className="pr-3">{KIND_LABEL[kind]}</td>
+                  <td className="pr-3 text-right tabular-nums opacity-70">
+                    {byKind[kind].files}{" "}
+                    {byKind[kind].files === 1 ? "file" : "files"}
+                  </td>
+                  <td>
+                    <PrDiffStat
+                      additions={byKind[kind].additions}
+                      deletions={byKind[kind].deletions}
+                    />
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -163,6 +250,7 @@ function IconToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          shape="rounded"
           variant="ghost"
           size="icon-sm"
           aria-pressed={pressed}

@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Checkbox, Spinner, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, Checkbox, Spinner } from "@vvedantb/ui";
 import {
   IconArrowRight,
   IconBell,

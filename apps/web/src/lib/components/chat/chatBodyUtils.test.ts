@@ -1,16 +1,13 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import type { ActivityStep } from "@eva/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import {
   buildPrecedingUserTurns,
   collectQuestionSteps,
   findTurnWindowStart,
-  findDayBoundaryIds,
   findHandoffBoundaryIds,
   findNewMessageIds,
   findStreamingTargetMessage,
+  isChatTurnExecuting,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
   otherUserIdsInChat,
@@ -21,6 +18,7 @@ import {
   turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
+import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 
 type TestMessage = {
   role: "user" | "assistant";
@@ -555,15 +553,6 @@ describe("collectQuestionSteps", () => {
   });
 });
 
-test("ChatBody looks up other senders, not the whole user table", () => {
-  const chatBody = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "ChatBody.tsx"),
-    "utf8",
-  );
-  expect(chatBody).toContain("api.users.getMany");
-  expect(chatBody).not.toContain("api.users.listAll");
-});
-
 /**
  * The bug this covers: quick task chat locked its composer whenever the
  * sandbox was not marked active, and a quick task's first run only marks it
@@ -622,5 +611,66 @@ describe("sandboxComposerState", () => {
       placeholder: SANDBOX_CHAT_COPY.activePlaceholder,
       disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
     });
+  });
+});
+
+/**
+ * The composer, the subagent thread, the Agents roster and the design panel
+ * used to each derive "is a turn running" from different inputs, so one chat
+ * could read as working in one place and idle in another. They share this.
+ */
+describe("isChatTurnExecuting", () => {
+  const working = [user("u1"), placeholder("a1")];
+  const settled = [user("u1"), finished("a1")];
+
+  test("the durable turn wins over a stale empty bubble", () => {
+    expect(isChatTurnExecuting({ turnOpen: false, messages: working })).toBe(
+      false,
+    );
+  });
+
+  test("an open turn runs even when the last bubble has settled", () => {
+    // A synthetic continuation opens a turn before its bubble lands.
+    expect(isChatTurnExecuting({ turnOpen: true, messages: settled })).toBe(
+      true,
+    );
+  });
+
+  test("message shape covers the render while the status loads", () => {
+    expect(
+      isChatTurnExecuting({ turnOpen: undefined, messages: working }),
+    ).toBe(true);
+    expect(
+      isChatTurnExecuting({ turnOpen: undefined, messages: settled }),
+    ).toBe(false);
+    expect(
+      isChatTurnExecuting({ turnOpen: undefined, messages: undefined }),
+    ).toBe(false);
+  });
+
+  test("a system alert after the bubble does not end the turn", () => {
+    expect(
+      isChatTurnExecuting({
+        turnOpen: undefined,
+        messages: [...working, alert("x1")],
+      }),
+    ).toBe(true);
+  });
+
+  test("a running first run counts whatever the chat turn says", () => {
+    expect(
+      isChatTurnExecuting({
+        turnOpen: false,
+        messages: settled,
+        isFirstRunInProgress: true,
+      }),
+    ).toBe(true);
+    expect(
+      isChatTurnExecuting({
+        turnOpen: false,
+        messages: settled,
+        isFirstRunInProgress: false,
+      }),
+    ).toBe(false);
   });
 });

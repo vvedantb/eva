@@ -1,8 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   parsePrRecapOutput,
-  PR_RECAP_HTML_MARKER,
+  PR_RECAP_WALKTHROUGH_MARKER,
 } from "../convex/_prRecapWorkflow/prompts";
+import {
+  ALL_CHANGES_STEP_TITLE,
+  OTHER_CHANGES_STEP_TITLE,
+} from "../convex/_prRecapWorkflow/walkthrough";
 
 const VALID_MARKDOWN = `## Summary
 
@@ -12,55 +16,128 @@ Adds recap output validation so incomplete model replies are stored as errors.
 False-ready recaps hid the retry path.
 `;
 
-const VALID_HTML = `<!doctype html>
-<html>
-<head>
-<style>
-body { font-family: sans-serif; color: #111; }
-.add { background: #e6ffed; }
-.del { background: #ffeef0; }
-</style>
-</head>
-<body>
-<div id="step">Overview</div>
-<button type="button">Previous</button>
-<button type="button">Next</button>
-<script>
-const step = 0;
-</script>
-</body>
-</html>`;
+const CHANGED = ["convex/schema.ts", "convex/docs.ts", "web/Recap.tsx"];
 
-function recapOutput(markdown: string, html: string): string {
-  return `${markdown}\n${PR_RECAP_HTML_MARKER}\n${html}`;
+function recapOutput(markdown: string, walkthrough: string): string {
+  return `${markdown}\n${PR_RECAP_WALKTHROUGH_MARKER}\n${walkthrough}`;
+}
+
+function walkthroughJson(
+  steps: ReadonlyArray<{ title: string; summary: string; files: string[] }>,
+): string {
+  return JSON.stringify({ steps });
 }
 
 describe("parsePrRecapOutput", () => {
-  test("accepts markdown plus a complete HTML walkthrough", () => {
-    const parsed = parsePrRecapOutput(recapOutput(VALID_MARKDOWN, VALID_HTML));
+  test("accepts markdown plus a walkthrough that covers every file", () => {
+    const parsed = parsePrRecapOutput(
+      recapOutput(
+        VALID_MARKDOWN,
+        JSON.stringify({
+          steps: [
+            {
+              title: "Store the walkthrough",
+              summary: "Adds the field.",
+              files: ["convex/schema.ts", "convex/docs.ts"],
+              lookClosely: "The field is optional, so old rows still load.",
+            },
+            {
+              title: "Render it",
+              summary: "Native viewer.",
+              files: ["web/Recap.tsx"],
+            },
+          ],
+        }),
+      ),
+      CHANGED,
+    );
 
     expect(parsed).toEqual({
       ok: true,
       markdown: VALID_MARKDOWN.trim(),
-      html: VALID_HTML,
+      walkthrough: [
+        {
+          title: "Store the walkthrough",
+          summary: "Adds the field.",
+          files: ["convex/schema.ts", "convex/docs.ts"],
+          lookClosely: "The field is optional, so old rows still load.",
+        },
+        {
+          title: "Render it",
+          summary: "Native viewer.",
+          files: ["web/Recap.tsx"],
+        },
+      ],
     });
   });
 
-  test("strips an html fence around the walkthrough", () => {
+  test("puts files the agent skipped into a final Other changes step", () => {
     const parsed = parsePrRecapOutput(
-      recapOutput(VALID_MARKDOWN, `\`\`\`html\n${VALID_HTML}\n\`\`\``),
+      recapOutput(
+        VALID_MARKDOWN,
+        walkthroughJson([
+          {
+            title: "Schema",
+            summary: "Adds the field.",
+            files: ["convex/schema.ts"],
+          },
+        ]),
+      ),
+      CHANGED,
     );
 
     expect(parsed.ok).toBe(true);
-    if (parsed.ok) {
-      expect(parsed.html).toBe(VALID_HTML);
-    }
+    if (!parsed.ok) return;
+    const last = parsed.walkthrough.at(-1);
+    expect(last?.title).toBe(OTHER_CHANGES_STEP_TITLE);
+    expect(last?.files).toEqual(["convex/docs.ts", "web/Recap.tsx"]);
+  });
+
+  test("drops invented paths and keeps a repeated file in its first step only", () => {
+    const parsed = parsePrRecapOutput(
+      recapOutput(
+        VALID_MARKDOWN,
+        walkthroughJson([
+          {
+            title: "One",
+            summary: "First.",
+            files: ["convex/schema.ts", "not/in/the/pr.ts"],
+          },
+          {
+            title: "Two",
+            summary: "Second.",
+            files: ["convex/schema.ts", "convex/docs.ts", "web/Recap.tsx"],
+          },
+        ]),
+      ),
+      CHANGED,
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.walkthrough.map((step) => step.files)).toEqual([
+      ["convex/schema.ts"],
+      ["convex/docs.ts", "web/Recap.tsx"],
+    ]);
+  });
+
+  test("strips a json fence around the walkthrough", () => {
+    const parsed = parsePrRecapOutput(
+      recapOutput(
+        VALID_MARKDOWN,
+        `\`\`\`json\n${walkthroughJson([{ title: "All", summary: "Everything.", files: CHANGED }])}\n\`\`\``,
+      ),
+      CHANGED,
+    );
+
+    expect(parsed.ok).toBe(true);
   });
 
   test("rejects progress narration with no marker", () => {
     expect(
       parsePrRecapOutput(
         "I'll turn the 44-file diff into a reviewer recap covering schema and UI.",
+        CHANGED,
       ),
     ).toEqual({ ok: false, reason: "missing_marker" });
   });
@@ -70,28 +147,35 @@ describe("parsePrRecapOutput", () => {
       parsePrRecapOutput(
         recapOutput(
           "I'll write the recap next after reading the remaining files.",
-          VALID_HTML,
+          walkthroughJson([
+            { title: "All", summary: "Everything.", files: CHANGED },
+          ]),
         ),
+        CHANGED,
       ),
     ).toEqual({ ok: false, reason: "invalid_markdown" });
   });
 
-  test("rejects a stub HTML document", () => {
-    expect(
-      parsePrRecapOutput(
-        recapOutput(VALID_MARKDOWN, "<!doctype html><html></html>"),
-      ),
-    ).toEqual({ ok: false, reason: "invalid_html" });
-  });
-
-  test("rejects HTML that never closes the document", () => {
-    expect(
-      parsePrRecapOutput(
-        recapOutput(
-          VALID_MARKDOWN,
-          `<!doctype html><html><style>body{}</style><script>void 0</script><p>${"x".repeat(200)}`,
-        ),
-      ),
-    ).toEqual({ ok: false, reason: "invalid_html" });
+  test("keeps the markdown and lists every file when the walkthrough is unusable", () => {
+    for (const walkthrough of [
+      "<!doctype html><html></html>",
+      `{"steps":[]}`,
+      `{"steps":[{"title":"Cut off","summary":"The JSON en`,
+    ]) {
+      const parsed = parsePrRecapOutput(
+        recapOutput(VALID_MARKDOWN, walkthrough),
+        CHANGED,
+      );
+      expect(parsed).toEqual({
+        ok: true,
+        markdown: VALID_MARKDOWN.trim(),
+        walkthrough: [
+          expect.objectContaining({
+            title: ALL_CHANGES_STEP_TITLE,
+            files: CHANGED,
+          }),
+        ],
+      });
+    }
   });
 });

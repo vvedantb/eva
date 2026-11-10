@@ -3,14 +3,11 @@ import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, ModelSelect, Switch, toast } from "@eva/ui";
+import { Button, ModelPicker, Switch, toast, SettingsField, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
-import { SettingsStack } from "@/lib/components/settings/SettingsStack";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
+import { EmailSettingsRows } from "./EmailSettingsRows";
 import { IssueLabelField } from "./TriggerSection";
 import { automationTriggerOf, describeTrigger } from "./trigger";
 
@@ -105,23 +102,13 @@ export function SystemAutomationSettings({
         {/* Event presets post a one-line note per run, so there is no
             summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (
-          <SettingsToggleRow
-            title="Send email"
-            description="Email this automation's run summary to all users when a run succeeds."
-            action={
-              <Switch
-                checked={automation.sendEmail === true}
-                onCheckedChange={(next) => commit({ sendEmail: next })}
-                aria-label="Send email"
-              />
-            }
-          />
+          <EmailSettingsRows automation={automation} commit={commit} />
         ) : null}
       </SettingsSection>
 
       <SettingsSection title="Model">
         <SettingsField label="Provider and model">
-          <ModelSelect
+          <ModelPicker
             value={model}
             options={modelOptions}
             onValueChange={(m) => commit({ model: m })}

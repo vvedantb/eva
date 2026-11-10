@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconInfoCircle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconX } from "@tabler/icons-react";
 import {
   readinessHints,
   shouldNudge,
@@ -12,15 +13,15 @@ import {
 interface DraftReadinessBannerProps {
   result: DraftReadiness | null;
   onDismiss: () => void;
-  /** Spacing for the surface it sits on; the modal and composer differ. */
+  /** Spacing and corners for the surface it sits on; the modal and composer differ. */
   className?: string;
 }
 
 /**
- * Slim strip beside the draft — the quick-task description or the chat
- * composer — when it looks too vague for an agent to start on. Advisory only:
- * nothing blocks sending, and dismissing hides it for the text it was judged
- * against.
+ * Compact amber strip beside the draft — the quick-task description or the
+ * chat composer — when it looks too vague for an agent to start on. Advisory
+ * only: nothing blocks sending, and dismissing hides it for the text it was
+ * judged against.
  */
 export function DraftReadinessBanner({
   result,
@@ -28,36 +29,38 @@ export function DraftReadinessBanner({
   className,
 }: DraftReadinessBannerProps) {
   const hints = result === null ? [] : readinessHints(result.missing);
-  const lead = "This may be too vague to run well.";
+  const lead = "May be too vague to run well.";
   // Built as one string: JSX would put a stray space between the sentence and
   // a conditional sibling expression.
   const message = hints.length > 0 ? `${lead} Add: ${hints.join(", ")}.` : lead;
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {shouldNudge(result) ? (
         <m.div
+          role="status"
           className={cn(
-            "mx-5 mb-2 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-muted/30 px-3 py-2.5",
+            "flex items-center gap-2 rounded-surface bg-warning-bg py-1 pl-3 pr-1 text-xs leading-5 text-warning-strong",
             className,
           )}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
-          <IconInfoCircle size={16} className="shrink-0 text-warning" />
-          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
-            {message}
-          </span>
+          <IconAlertTriangle aria-hidden className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">{message}</span>
           <Button
             type="button"
+            size="icon-xs"
             variant="ghost"
-            size="sm"
-            className="h-7 shrink-0 px-2 text-xs"
+            aria-label="Dismiss vagueness warning"
+            className="shrink-0 text-warning-strong hover:bg-warning/15 hover:text-warning-strong"
             onClick={onDismiss}
+            // Keep composer focus when dismissing from the input.
+            onPointerDown={(event) => event.preventDefault()}
           >
-            Dismiss
+            <IconX aria-hidden className="size-3" />
           </Button>
         </m.div>
       ) : null}

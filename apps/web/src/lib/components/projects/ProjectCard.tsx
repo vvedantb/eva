@@ -3,14 +3,14 @@
 import type { Id } from "@eva/backend";
 import { useState, type MouseEvent } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { useUpdateProject } from "@/lib/components/projects/useUpdateProject";
 import { UserInitials } from "@eva/shared/user-initials";
 import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 import {
   AvatarStack,
   Badge,
-  cn,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
@@ -32,7 +32,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
@@ -43,8 +45,6 @@ import {
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
@@ -116,43 +116,7 @@ export function ProjectCard({
   const [editOpen, setEditOpen] = useState(false);
   const [editTitle, setEditTitle] = useState(title);
   const [editDescription, setEditDescription] = useState(description ?? "");
-  const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
-    (localStore, args) => {
-      const current = localStore.getQuery(api.projects.get, { id: projectId });
-      if (current !== undefined && current !== null) {
-        const {
-          id: _id,
-          priority,
-          projectLead,
-          codeReviewer,
-          model,
-          providerAccountId,
-          ...safeFields
-        } = args;
-        localStore.setQuery(
-          api.projects.get,
-          { id: projectId },
-          {
-            ...current,
-            ...safeFields,
-            ...(priority !== undefined
-              ? { priority: priority ?? undefined }
-              : {}),
-            ...(projectLead !== undefined
-              ? { projectLead: projectLead ?? undefined }
-              : {}),
-            ...(codeReviewer !== undefined
-              ? { codeReviewer: codeReviewer ?? undefined }
-              : {}),
-            ...(model !== undefined ? { model: model ?? undefined } : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
-              : {}),
-          },
-        );
-      }
-    },
-  );
+  const updateProject = useUpdateProject(projectId);
   const currentUserId = useQuery(api.auth.me);
   const users = useQuery(api.users.listAll);
   const memberIds = [

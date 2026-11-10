@@ -1,4 +1,5 @@
-import { catColorForSlot, type CatSlot } from "@eva/ui";
+import { catColorForSlot } from "@vvedantb/ui";
+import type { CatSlot } from "@vvedantb/ui";
 
 export interface RepoTileColor {
   /** Tinted fill behind the fallback initial. */

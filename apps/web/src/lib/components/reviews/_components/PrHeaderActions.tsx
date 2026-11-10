@@ -12,7 +12,9 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconExternalLink,
@@ -24,7 +26,6 @@ import {
 import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
-import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
 import { useClosePullRequest } from "@/lib/components/pr-menu/useClosePullRequest";
 import { useStackNewSession } from "@/lib/components/pr-menu/useStackNewSession";
 
@@ -54,7 +55,7 @@ export function PrHeaderActions({
 }) {
   const { close: closePullRequest, closing } = useClosePullRequest();
   const [confirmingClose, setConfirmingClose] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { stack } = useStackNewSession();
 
   const stackNewSession = () =>
@@ -84,7 +85,9 @@ export function PrHeaderActions({
             size="icon-xs"
             variant="ghost"
             aria-label={
-              refreshing ? "Refreshing pull request" : "More pull request actions"
+              refreshing
+                ? "Refreshing pull request"
+                : "More pull request actions"
             }
           >
             <CrossfadeIcon
@@ -108,7 +111,11 @@ export function PrHeaderActions({
             Copy link
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <a href={overview.htmlUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={overview.htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <IconExternalLink size={14} aria-hidden />
               View on GitHub
             </a>
@@ -128,7 +135,6 @@ export function PrHeaderActions({
                 disabled={closing}
                 onSelect={() =>
                   requestConfirm(
-                    altHeld,
                     () => setConfirmingClose(true),
                     () => {
                       void close();

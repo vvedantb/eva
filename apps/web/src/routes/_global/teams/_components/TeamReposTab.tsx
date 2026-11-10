@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -17,11 +18,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@eva/ui";
+  SettingsEmptyState,
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconPlus, IconFolder } from "@tabler/icons-react";
 import { TeamRepoCard } from "./TeamRepoCard";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.listByTeam>[number];
@@ -68,28 +69,21 @@ export function TeamReposTab({
   const removeRepo = useMutation(
     api.githubRepos.removeFromTeam,
   ).withOptimisticUpdate((localStore, args) => {
-    const currentTeamRepos = localStore.getQuery(api.githubRepos.listByTeam, {
-      teamId: args.teamId,
-    });
-    if (currentTeamRepos !== undefined) {
-      localStore.setQuery(
-        api.githubRepos.listByTeam,
-        { teamId: args.teamId },
-        currentTeamRepos.filter((repo) => repo._id !== args.repoId),
-      );
-    }
-    const currentAllRepos = localStore.getQuery(api.githubRepos.list, {
-      includeHidden: true,
-    });
-    if (currentAllRepos !== undefined) {
-      localStore.setQuery(
-        api.githubRepos.list,
-        { includeHidden: true },
-        currentAllRepos.map((r) =>
+    patchLoadedQuery(
+      localStore,
+      api.githubRepos.listByTeam,
+      { teamId: args.teamId },
+      (repos) => repos.filter((repo) => repo._id !== args.repoId),
+    );
+    patchLoadedQuery(
+      localStore,
+      api.githubRepos.list,
+      { includeHidden: true },
+      (repos) =>
+        repos.map((r) =>
           r._id === args.repoId ? { ...r, teamId: undefined } : r,
         ),
-      );
-    }
+    );
   });
 
   const [dialog, setDialog] = useState({

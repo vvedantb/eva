@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import { Button, Popover, PopoverContent, PopoverTrigger, cn } from "@eva/ui";
+import { Button, Popover, PopoverContent, PopoverTrigger, cn } from "@vvedantb/ui";
 import { IconStack2 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";

@@ -1,9 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Button } from "@eva/ui";
+import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 
 interface SandboxPaneBoundaryProps {
   /** Pane name shown in the fallback, e.g. "Review". */
@@ -22,7 +21,7 @@ export function SandboxPaneBoundary({
   children,
 }: SandboxPaneBoundaryProps) {
   return (
-    <QueryErrorBoundary
+    <ErrorBoundary
       fallback={(retry) => (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
           <IconAlertTriangle className="h-8 w-8 text-muted-foreground/60" />
@@ -39,6 +38,6 @@ export function SandboxPaneBoundary({
       )}
     >
       {children}
-    </QueryErrorBoundary>
+    </ErrorBoundary>
   );
 }

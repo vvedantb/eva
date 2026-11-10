@@ -8,9 +8,9 @@ import {
   CardContent,
   Input,
   LIST_ROW_CONTROL_CLASS,
-  motionBase,
-  CircleSpinner,
-} from "@eva/ui";
+  tokenTransition,
+  Spinner,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
   IconCheck,
@@ -18,6 +18,10 @@ import {
   IconArrowRight,
   IconArrowLeft,
 } from "@tabler/icons-react";
+import {
+  buildStructuredAnswer,
+  type ParsedQuestion,
+} from "@eva/shared/pendingQuestion";
 
 /**
  * The pressable surface of an option card. A stretched native `<button>` rather
@@ -29,17 +33,8 @@ import {
 const OPTION_OVERLAY_CLASS =
   "absolute inset-0 z-1 cursor-pointer rounded-surface focus-visible:outline-hidden";
 
-interface OptionItem {
-  label: string;
-  description: string;
-}
-
-interface QuestionItem {
-  question: string;
-  header: string;
-  options: OptionItem[];
-  multiSelect: boolean;
-}
+type QuestionItem = ParsedQuestion;
+type OptionItem = ParsedQuestion["options"][number];
 
 interface MultipleChoiceQuestionProps {
   question?: string;
@@ -127,29 +122,19 @@ export function MultipleChoiceQuestion({
       .join("\n\n");
   };
 
-  // Structured answer keyed by question text → selected label (or free-text
-  // "Other"). Multi-select is a comma-separated string — the shape AskUserQuestion
-  // expects in updatedInput.answers.
-  const buildStructuredAnswer = (): Record<string, string> => {
-    const result: Record<string, string> = {};
-    resolvedQuestions.forEach((rq, idx) => {
-      if (otherActive[idx]) {
-        result[rq.question] = (customAnswers[idx] ?? "").trim();
-        return;
-      }
-      const selected = answers[idx] ?? [];
-      result[rq.question] = rq.multiSelect
-        ? selected.join(", ")
-        : (selected[0] ?? "");
-    });
-    return result;
-  };
+  // Structured answer keyed by question text; shape shared with mobile.
+  const buildAnswer = () =>
+    buildStructuredAnswer(resolvedQuestions, (_, idx) =>
+      otherActive[idx]
+        ? [(customAnswers[idx] ?? "").trim()]
+        : (answers[idx] ?? []),
+    );
 
   const handleNext = () => {
     if (!currentHasAnswer || isLoading) return;
     if (isLastStep) {
       if (onAnswerStructured) {
-        onAnswerStructured(buildStructuredAnswer());
+        onAnswerStructured(buildAnswer());
       } else {
         onAnswer(formatAnswer());
       }
@@ -175,7 +160,7 @@ export function MultipleChoiceQuestion({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionBase}
+          transition={tokenTransition.base}
         >
           <div className="flex items-center justify-between">
             <p className="text-[15px] font-semibold leading-snug text-foreground">
@@ -183,10 +168,7 @@ export function MultipleChoiceQuestion({
             </p>
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
               {q.header && (
-                <Badge
-                  variant="secondary"
-                  className="text-3xs font-semibold"
-                >
+                <Badge variant="secondary" className="text-3xs font-semibold">
                   {q.header}
                 </Badge>
               )}
@@ -346,7 +328,9 @@ export function MultipleChoiceQuestion({
           onClick={handleNext}
           disabled={!currentHasAnswer || isLoading}
         >
-          {isLoading ? <CircleSpinner size="sm" className="mr-2" /> : null}
+          {isLoading ? (
+            <Spinner variant="circle" size="sm" className="mr-2" />
+          ) : null}
           {isLastStep ? "Submit" : "Next"}
           {!isLoading && (
             <IconArrowRight size={15} strokeWidth={2.5} className="ml-1" />

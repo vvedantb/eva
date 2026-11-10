@@ -1,13 +1,16 @@
-import { cn, HoverCard, HoverCardContent, HoverCardTrigger } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@vvedantb/ui";
 import { IconAlertTriangle, IconShieldCheck } from "@tabler/icons-react";
 import {
   formatPercent,
   hunkHeadline,
   hunkLocation,
+  hunkNotes,
   hunkUnrequestedProbability,
-  isUnmentioned,
+  scopeCheckCoverage,
   scopeCheckLabel,
   scopeCheckTone,
+  screenshotsMissRequest,
   unmentionedHunks,
   type ScopeCheck,
   type ScopeCheckHunk,
@@ -71,9 +74,13 @@ export function ScopeCheckChip({
               : `Jev puts the chance this turn changed things you did not ask for at ${percent}.`}
         </p>
         <p className="mt-1 text-2xs text-muted-foreground">
-          {check.judgedHunks} of {check.totalHunks} changes judged
-          {check.partial ? " · diff clipped" : ""}
+          {scopeCheckCoverage(check)}
         </p>
+        {screenshotsMissRequest(check) ? (
+          <p className="mt-1 text-2xs text-muted-foreground">
+            The screenshots may not show what you asked for.
+          </p>
+        ) : null}
         {check.flagged.length > 0 ? (
           <div className="mt-2 flex flex-col gap-0.5">
             {check.flagged.map((hunk) => (
@@ -103,7 +110,6 @@ function FlaggedHunkRow({
   // to the designer or PM this row exists for. The path stays as the title so
   // a developer can still get at it, and as the fallback for rows judged
   // before the plain-English pass existed.
-  const silent = isUnmentioned(hunk);
   const body = (
     <>
       <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
@@ -112,7 +118,7 @@ function FlaggedHunkRow({
         </span>
         <span className="w-full truncate text-left text-2xs text-muted-foreground">
           {hunkLocation(hunk)}
-          {silent ? " · not mentioned in the reply" : ""}
+          {hunkNotes(hunk)}
         </span>
       </span>
       <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">

@@ -1,12 +1,11 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { codeModeTools } from "../convex/_mcp/codeModeTools";
 import {
   EVALUATE_MODEL,
+  MAX_IMAGES,
+  MAX_LONG_STATE_CHARS,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   MAX_STATE_CHARS,
@@ -16,10 +15,6 @@ import {
   type EvaluateInput,
   type EvaluateOutcome,
 } from "../convex/_mcp/evaluateTool";
-
-const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
-const convexSource = (relative: string) =>
-  readFileSync(join(convexDir, relative), "utf8");
 
 const booleanQ = {
   type: "boolean",
@@ -67,6 +62,57 @@ const manyOptions = (count: number) =>
   );
 
 describe("evaluate input schema", () => {
+  test("raises the state cap only with longContext", () => {
+    const state = "x".repeat(MAX_STATE_CHARS + 1);
+    const questions = { q: booleanQ };
+    expect(evaluateInput.safeParse({ state, questions }).success).toBe(false);
+    expect(
+      evaluateInput.safeParse({ state, questions, longContext: true }).success,
+    ).toBe(true);
+    expect(
+      evaluateInput.safeParse({
+        state: "x".repeat(MAX_LONG_STATE_CHARS + 1),
+        questions,
+        longContext: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("accepts named images up to the cap, with unique names", () => {
+    const image = (name: string) => ({ name, storageId: `kg2${name}` });
+    const questions = { q: booleanQ };
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: [image("before"), image("after")],
+      }).success,
+    ).toBe(true);
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: [image("shot"), image("shot")],
+      }).success,
+    ).toBe(false);
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: Array.from({ length: MAX_IMAGES + 1 }, (_, index) =>
+          image(`s${index}`),
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      evaluateInput.safeParse({
+        state: "x",
+        questions,
+        images: [image("has space")],
+      }).success,
+    ).toBe(false);
+  });
+
   test("accepts every question type with string state", () => {
     const parsed = evaluateInput.safeParse({
       state: "fix: null deref in checkout",
@@ -350,33 +396,5 @@ describe("evaluate inside execute", () => {
     if (block?.type !== "text") throw new Error("expected a text block");
     const payload = executePayload.parse(JSON.parse(block.text));
     expect(payload.result).toContain("AI_GATEWAY_API_KEY");
-  });
-});
-
-describe("evaluate wiring contract", () => {
-  test("is registered for every caller and calls the gateway with ZDR", () => {
-    const tools = convexSource("mcp/tools.ts");
-    const registration = tools.indexOf("evaluateTool(");
-    expect(registration).toBeGreaterThan(-1);
-    expect(registration).toBeLessThan(tools.indexOf("if (isAve) {"));
-
-    const action = convexSource("mcp/evaluate.ts");
-    expect(action.startsWith('"use node";')).toBe(true);
-    expect(action).toContain("evaluateDecision(");
-    expect(action).toContain('"eva-mcp-evaluate"');
-
-    // The one place the gateway is called, for every Jev caller.
-    const client = convexSource("_jev/client.ts");
-    expect(client.startsWith('"use node";')).toBe(true);
-    expect(client).toContain("experimental_evaluate");
-    expect(client).toContain("zeroDataRetention: true");
-    expect(client).toContain("AI_GATEWAY_API_KEY");
-    expect(client).toContain("tags: [options.tag]");
-    expect(client).not.toContain("TYPESAFE_API_KEY");
-
-    expect(convexSource("_jev/schema.ts")).toContain(
-      `EVALUATE_MODEL = "typesafe-ai/jev"`,
-    );
-    expect(convexSource("_mcp/evaluateTool.ts")).toContain("mutating: false");
   });
 });

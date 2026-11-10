@@ -1,7 +1,9 @@
 import { v, type Infer } from "convex/values";
+import { reclaimQueuedAttachments } from "./_queues/attachments";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { aiModelValidator, queuedMessageFields } from "./validators";
 import { drainChatQueueQuietly } from "./_queues/helpers";
+import { steerQueuedMessage } from "./_chat/steer";
 import { findMainChat } from "./_sessionChats/helpers";
 import type { DatabaseReader } from "./_generated/server";
 
@@ -81,6 +83,33 @@ export const update = authMutation({
 });
 
 /**
+ * Sends a queued message now and redirects the running agent with it. Claude
+ * and Codex take it into the live turn; every other provider stops the turn
+ * and runs it next. An idle chat just sends it. See `_chat/steer.ts`.
+ */
+export const steer = authMutation({
+  args: {
+    id: v.id("queuedMessages"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const queuedMessage = await ctx.db.get(args.id);
+    if (!queuedMessage) {
+      return null;
+    }
+    const parent = await ctx.db.get(queuedMessage.parentId);
+    if (!parent || !parent.repoId) {
+      return null;
+    }
+    if (!(await hasRepoAccess(ctx.db, parent.repoId, ctx.userId))) {
+      throw new Error("Not authorized");
+    }
+    await steerQueuedMessage(ctx, queuedMessage);
+    return null;
+  },
+});
+
+/**
  * Deletes a queued message, its attached blobs, and updates the parent's
  * timestamp. The blobs are safe to delete because a queued message's
  * attachments are uploaded for that message alone, and dequeuing hands the same
@@ -105,9 +134,7 @@ export const remove = authMutation({
     }
 
     await ctx.db.delete(args.id);
-    for (const storageId of queuedMessage.attachmentStorageIds ?? []) {
-      await ctx.storage.delete(storageId);
-    }
+    await reclaimQueuedAttachments(ctx, queuedMessage);
     await ctx.db.patch(queuedMessage.parentId, { updatedAt: Date.now() });
     return null;
   },

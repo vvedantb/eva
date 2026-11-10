@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@eva/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import type { ThemeMode } from "@/lib/hooks/useThemeMode";
 import {
   IconMoon,
@@ -10,6 +9,7 @@ import {
   IconCircleHalf,
   IconCheck,
 } from "@tabler/icons-react";
+import { ListEnter } from "@vvedantb/ui";
 
 const MODES = [
   "light",

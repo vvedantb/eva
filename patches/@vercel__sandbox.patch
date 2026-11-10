@@ -1,0 +1,148 @@
+diff --git a/dist/sandbox.cjs b/dist/sandbox.cjs
+index 463e6563d8b913f84810928caeb467f06c080cfd..b97134534d4e84dad3bf1b3d249fac153beda308 100644
+--- a/dist/sandbox.cjs
++++ b/dist/sandbox.cjs
+@@ -612,7 +612,51 @@ var Sandbox = class Sandbox {
+ 	/**
+ 	* Execute `fn`, and if the session is stopped/stopping/snapshotting, resume and retry.
+ 	*/
++	/**
++	* Eva patch: turn lazy resume on or off. When off, a command on a stopped,
++	* stopping or snapshotting sandbox throws instead of resuming it. Only an
++	* explicit `resume()` or `Sandbox.get({ resume: true })` wakes it then.
++	*/
++	setAutoResume(enabled) {
++		this.autoResume = enabled;
++	}
++	/**
++	* Eva patch: attach the current session only if it is running. Never
++	* resumes; throws `SandboxNotRunningError` otherwise.
++	*/
++	async attachRunningSession(signal) {
++		const client = await this.ensureClient();
++		const response = await client.getSandbox({
++			name: this.sandbox.name,
++			projectId: this.projectId,
++			resume: false,
++			signal
++		});
++		const session = response.json.session;
++		if (!session || session.status !== "running") {
++			const error = new Error(`Sandbox ${this.sandbox.name} is not running (status: ${session?.status ?? "none"}); auto-resume is disabled`);
++			error.name = "SandboxNotRunningError";
++			throw error;
++		}
++		this.session = new require_session.Session({
++			client,
++			routes: response.json.routes,
++			session
++		});
++	}
+ 	async withResume(fn, signal) {
++		if (this.autoResume === false) {
++			if (!this.session) await this.attachRunningSession(signal);
++			try {
++				return await fn();
++			} catch (err) {
++				if (isSandboxStoppedError(err) || isSandboxStoppingError(err) || isSandboxSnapshottingError(err)) {
++					await this.attachRunningSession(signal);
++					return fn();
++				}
++				throw err;
++			}
++		}
+ 		if (!this.session) await this.resume(signal);
+ 		try {
+ 			return await fn();
+diff --git a/dist/sandbox.d.cts b/dist/sandbox.d.cts
+index f6221025bba45105b9215c8870ef089f58c82819..0cb49bffc4cb38050366b01d0c193d6fd2bccc09 100644
+--- a/dist/sandbox.d.cts
++++ b/dist/sandbox.d.cts
+@@ -754,6 +754,13 @@ declare class Sandbox implements ExecutionContext {
+    * Execute `fn`, and if the session is stopped/stopping/snapshotting, resume and retry.
+    */
+   private withResume;
++  /**
++   * Eva patch: turn lazy resume on or off. When off, a command on a stopped,
++   * stopping or snapshotting sandbox throws `SandboxNotRunningError` instead
++   * of resuming it.
++   */
++  setAutoResume(enabled: boolean): void;
++  private attachRunningSession;
+   /**
+    * Start executing a command in this sandbox.
+    *
+diff --git a/dist/sandbox.d.ts b/dist/sandbox.d.ts
+index 968d65b6e82105c78333bdec7821fed423ee42a7..0ee937c59e84406a68c284cb9d2407b6296ad297 100644
+--- a/dist/sandbox.d.ts
++++ b/dist/sandbox.d.ts
+@@ -755,6 +755,13 @@ declare class Sandbox implements ExecutionContext {
+    * Execute `fn`, and if the session is stopped/stopping/snapshotting, resume and retry.
+    */
+   private withResume;
++  /**
++   * Eva patch: turn lazy resume on or off. When off, a command on a stopped,
++   * stopping or snapshotting sandbox throws `SandboxNotRunningError` instead
++   * of resuming it.
++   */
++  setAutoResume(enabled: boolean): void;
++  private attachRunningSession;
+   /**
+    * Start executing a command in this sandbox.
+    *
+diff --git a/dist/sandbox.js b/dist/sandbox.js
+index 0a08f0e8c70b809c23a333f6698b35e32d3ae0cc..3a46207452a12ed1ec16bed1f65e0221d5fc49f8 100644
+--- a/dist/sandbox.js
++++ b/dist/sandbox.js
+@@ -611,7 +611,51 @@ var Sandbox = class Sandbox {
+ 	/**
+ 	* Execute `fn`, and if the session is stopped/stopping/snapshotting, resume and retry.
+ 	*/
++	/**
++	* Eva patch: turn lazy resume on or off. When off, a command on a stopped,
++	* stopping or snapshotting sandbox throws instead of resuming it. Only an
++	* explicit `resume()` or `Sandbox.get({ resume: true })` wakes it then.
++	*/
++	setAutoResume(enabled) {
++		this.autoResume = enabled;
++	}
++	/**
++	* Eva patch: attach the current session only if it is running. Never
++	* resumes; throws `SandboxNotRunningError` otherwise.
++	*/
++	async attachRunningSession(signal) {
++		const client = await this.ensureClient();
++		const response = await client.getSandbox({
++			name: this.sandbox.name,
++			projectId: this.projectId,
++			resume: false,
++			signal
++		});
++		const session = response.json.session;
++		if (!session || session.status !== "running") {
++			const error = new Error(`Sandbox ${this.sandbox.name} is not running (status: ${session?.status ?? "none"}); auto-resume is disabled`);
++			error.name = "SandboxNotRunningError";
++			throw error;
++		}
++		this.session = new Session({
++			client,
++			routes: response.json.routes,
++			session
++		});
++	}
+ 	async withResume(fn, signal) {
++		if (this.autoResume === false) {
++			if (!this.session) await this.attachRunningSession(signal);
++			try {
++				return await fn();
++			} catch (err) {
++				if (isSandboxStoppedError(err) || isSandboxStoppingError(err) || isSandboxSnapshottingError(err)) {
++					await this.attachRunningSession(signal);
++					return fn();
++				}
++				throw err;
++			}
++		}
+ 		if (!this.session) await this.resume(signal);
+ 		try {
+ 			return await fn();

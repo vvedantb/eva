@@ -1,9 +1,6 @@
 import { type Id } from "@eva/backend";
-import {
-  usePromptInputAttachments,
-  toast,
-  type PromptInputMessage,
-} from "@eva/ui";
+import { usePromptInputAttachments, toast } from "@vvedantb/ui";
+import type { PromptInputMessage } from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { useState } from "react";

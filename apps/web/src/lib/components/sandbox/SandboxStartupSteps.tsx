@@ -1,17 +1,17 @@
 "use client";
 
 import {
-  CircleSpinner,
-  formatElapsed,
+  Spinner,
+  formatActivityElapsed,
   Shimmer,
-  Trace,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
-  useElapsedSeconds,
-  type ActivityStep,
-  type TraceStatus,
-} from "@eva/ui";
+  AgentTrace,
+  AgentTraceIcon,
+  AgentTraceLine,
+  AgentTraceTitle,
+  useActivityElapsedSeconds,
+  RollingNumber,
+} from "@vvedantb/ui";
+import type { ActivityStep, AgentTraceStatus } from "@vvedantb/ui";
 import { IconCheck, IconCircle, IconX } from "@tabler/icons-react";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
@@ -30,7 +30,7 @@ function stageState(step: ActivityStep): StageState {
   return "done";
 }
 
-const STAGE_TRACE_STATUS: Record<StageState, TraceStatus | undefined> = {
+const STAGE_TRACE_STATUS: Record<StageState, AgentTraceStatus | undefined> = {
   pending: "pending",
   running: "running",
   failed: "error",
@@ -38,7 +38,8 @@ const STAGE_TRACE_STATUS: Record<StageState, TraceStatus | undefined> = {
 };
 
 function StageIcon({ state }: { state: StageState }) {
-  if (state === "running") return <CircleSpinner size="sm" className="size-3.5" />;
+  if (state === "running")
+    return <Spinner variant="circle" size="sm" className="size-3.5" />;
   if (state === "failed") return <IconX />;
   if (state === "pending") return <IconCircle className="size-3.5" />;
   return <IconCheck />;
@@ -60,7 +61,7 @@ export function SandboxStartupSteps({
   title?: string;
 }) {
   const steps = parseActivitySteps(activity) ?? [];
-  const elapsed = useElapsedSeconds(startedAt, true);
+  const elapsed = useActivityElapsedSeconds(startedAt, true);
 
   return (
     <section aria-label="Sandbox startup" className="space-y-1.5">
@@ -74,30 +75,31 @@ export function SandboxStartupSteps({
           {title}
         </Shimmer>
         {startedAt ? (
-          <span className="ml-auto shrink-0 text-xs">
-            {formatElapsed(elapsed)}
-          </span>
+          <RollingNumber
+            value={formatActivityElapsed(elapsed)}
+            className="ml-auto shrink-0 text-xs"
+          />
         ) : null}
       </div>
       {steps.length > 0 ? (
-        <Trace>
+        <AgentTrace>
           {steps.map((step, index) => {
             const state = stageState(step);
             return (
-              <TraceLine
+              <AgentTraceLine
                 key={`${step.label}:${index}`}
                 status={STAGE_TRACE_STATUS[state]}
               >
-                <TraceIcon iconKey={state}>
+                <AgentTraceIcon iconKey={state}>
                   <StageIcon state={state} />
-                </TraceIcon>
-                <TraceTitle shimmer={state === "running"}>
+                </AgentTraceIcon>
+                <AgentTraceTitle shimmer={state === "running"}>
                   {stageLabel(step.label)}
-                </TraceTitle>
-              </TraceLine>
+                </AgentTraceTitle>
+              </AgentTraceLine>
             );
           })}
-        </Trace>
+        </AgentTrace>
       ) : null}
     </section>
   );

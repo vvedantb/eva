@@ -5,7 +5,7 @@ import { buildAgentTaskChatPrompt } from "../convex/_agentTasks/chatPrompt";
 import { buildProjectChatPrompt } from "../convex/_projects/chatPrompt";
 import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
 
-const HEADING = "## Other repositories you may read";
+const HEADING = "## Other repositories you may use";
 
 const TWO_REPOS = [
   { owner: "vvedantb", name: "eva" },
@@ -24,25 +24,22 @@ test("buildReadableReposBlock lists every repo and clones the first one", () => 
   expect(block).toContain(
     "git clone https://github.com/vvedantb/eva.git /tmp/eva",
   );
-  // Clone/fetch only: the helper mints read-only tokens.
-  expect(block).toContain("clone/fetch only, no push");
+  // The helper mints contents-write tokens, so the block must say push works.
+  expect(block).toContain("clone, fetch and push these repositories");
 });
 
 function sessionPrompt(
   readableRepos: Array<{ owner: string; name: string }>,
 ): string {
-  return buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/session-1",
-    "",
-    "continue",
-    "",
-    "",
-    "Repo system prompt text",
-    undefined,
-    [],
+  return buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/session-1",
+    message: "continue",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    systemPrompt: "Repo system prompt text",
     readableRepos,
-  );
+  });
 }
 
 test("buildEditPrompt appends the block after the system prompt", () => {

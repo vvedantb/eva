@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import type { Id } from "@eva/backend";
-import { cn, Spinner, Button, WebPreview } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Spinner, Button, WebPreview, useMediaQuery } from "@vvedantb/ui";
 import { useSessionStorage } from "usehooks-ts";
 import { SandboxAsleepState } from "@/lib/components/sandbox/SandboxAsleepState";
 import { IconRefresh, IconWorld } from "@tabler/icons-react";
@@ -23,9 +23,12 @@ import {
   closePreviewMiniPlayer,
   openPreviewMiniPlayer,
   usePreviewMiniPlayer,
+  type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
+import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
+import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
 import { PreviewFloatingPlaceholder } from "./_components/PreviewFloatingPlaceholder";
 import { PreviewPanelNavBar } from "./_components/PreviewPanelNavBar";
@@ -74,19 +77,15 @@ interface WebPreviewPanelProps {
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
-   * Session-only: submit compact display + rich agent prompt for a preview
-   * annotation. When absent, the select-element toggle is hidden.
+   * Submit compact display + rich agent prompt for a preview annotation into
+   * the owner's chat. When absent, the select-element toggle is hidden.
    */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
+  onAnnotationSubmit?: AnnotationSubmit;
   /**
-   * Session-only, set while this pane is the visible preview: lets it float
-   * into the mini-player when the user leaves the sessions area or pops it out.
+   * Set while this pane is the visible preview: lets it float into the
+   * mini-player when the user leaves the preview or pops it out.
    */
-  miniPlayer?: {
-    sessionId: Id<"sessions">;
-    returnTo: string;
-    title: string;
-  };
+  miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
   /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
 }
@@ -114,6 +113,10 @@ export function WebPreviewPanel({
 }: WebPreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [annotationMode, setAnnotationMode] = useState(false);
+  const [sketchMode, setSketchMode] = useState(false);
+  // Sketch hands its image to a composer through this context; without one
+  // there is nowhere for it to go.
+  const canSketch = usePendingPreviewSnapshots() !== undefined;
   // The mini-player is a desktop affordance: on a phone there is no "beside".
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const floating = usePreviewMiniPlayer();
@@ -313,8 +316,23 @@ export function WebPreviewPanel({
         contain={contain}
         onToggleContain={handleToggleContain}
         annotationMode={annotationMode}
-        onAnnotationModeChange={setAnnotationMode}
+        onAnnotationModeChange={(active) => {
+          setAnnotationMode(active);
+          if (active) setSketchMode(false);
+        }}
         showAnnotationToggle={Boolean(onAnnotationSubmit)}
+        sketch={
+          canSketch
+            ? {
+                active: sketchMode,
+                onToggle: () => {
+                  setSketchMode(!sketchMode);
+                  // One tool at a time: both read pointer input on the page.
+                  setAnnotationMode(false);
+                },
+              }
+            : undefined
+        }
         popOut={popOut}
       />
       <PreviewToolCallExecutor
@@ -385,6 +403,12 @@ export function WebPreviewPanel({
               }
             />
           </PreviewViewportFrame>
+          {sketchMode ? (
+            <PreviewSketchLayer
+              iframeElement={iframeElement}
+              onClose={() => setSketchMode(false)}
+            />
+          ) : null}
           {onAnnotationSubmit ? (
             <PreviewAnnotationLayer
               mode={annotationMode}

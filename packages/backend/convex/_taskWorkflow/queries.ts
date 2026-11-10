@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { buildTaskBranchName } from "../_git/branchNames";
 import {
   buildTraitsExecutionPayload,
   reasoningLevelValidator,
@@ -99,10 +100,23 @@ export const getTaskData = internalQuery({
     devCommand: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
+    const [task, repo, comments, successfulRuns] = await Promise.all([
+      ctx.db.get(args.taskId),
+      ctx.db.get(args.repoId),
+      ctx.db
+        .query("taskComments")
+        .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+        .collect(),
+      // Only surface comments the last successful run hasn't already
+      // addressed (see the cutoff below).
+      ctx.db
+        .query("agentRuns")
+        .withIndex("by_task_and_status", (q) =>
+          q.eq("taskId", args.taskId).eq("status", "success"),
+        )
+        .collect(),
+    ]);
     if (!task) throw new Error("Task not found");
-
-    const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repository not found");
 
     const resolveDescriptionForPrompt = async (
@@ -148,22 +162,11 @@ export const getTaskData = internalQuery({
     const keepTaskSandboxActiveAfterRun =
       !args.projectId && task.reviewTaskSandboxStatus === "active";
 
-    const comments = await ctx.db
-      .query("taskComments")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
-
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
     // latest successful run's startedAt (not finishedAt), so comments added
     // while that run was in-flight still carry over. Failed/errored runs are
     // NOT cutoffs — their comments stay unaddressed for the next retry.
-    const successfulRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task_and_status", (q) =>
-        q.eq("taskId", args.taskId).eq("status", "success"),
-      )
-      .collect();
     const latestSuccessfulRun = successfulRuns.reduce<Doc<"agentRuns"> | null>(
       (latest, run) => {
         if (run.startedAt === undefined) return latest;
@@ -226,7 +229,7 @@ export const getTaskData = internalQuery({
       }),
     );
 
-    const branchName = args.branchName || `eva/task-${args.taskId}`;
+    const branchName = args.branchName || buildTaskBranchName(args.taskId);
 
     const rootDirectory = repo.rootDirectory ?? "";
 
@@ -316,17 +319,20 @@ export const getTaskPrCreationData = internalQuery({
     changeRequests: v.array(v.string()),
   }),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
+    const [task, runs, changeRequests] = await Promise.all([
+      ctx.db.get(args.taskId),
+      ctx.db
+        .query("agentRuns")
+        .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+        .collect(),
+      getChangeRequestContents(ctx, args.taskId),
+    ]);
     if (!task) throw new Error("Task not found");
     if (!task.repoId) throw new Error("Task has no repository");
 
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const runs = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
     const sortedRuns = runs.sort(
       (a, b) =>
         (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
@@ -334,14 +340,12 @@ export const getTaskPrCreationData = internalQuery({
     const latestRun = sortedRuns[0] ?? null;
     const existingPrUrl = sortedRuns.find((r) => r.prUrl)?.prUrl ?? null;
 
-    const changeRequests = await getChangeRequestContents(ctx, args.taskId);
-
     return {
       repoId: repo._id,
       installationId: repo.installationId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: `eva/task-${args.taskId}`,
+      branchName: buildTaskBranchName(args.taskId),
       baseBranch: await resolveTaskWorkflowBaseBranchForTask(
         ctx.db,
         task,

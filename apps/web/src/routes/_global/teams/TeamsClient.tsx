@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { EmptyState } from "@/lib/components/ui/EmptyState";
 import {
   Button,
   Input,
@@ -14,28 +14,24 @@ import {
   DialogTitle,
   DialogFooter,
   CenteredSpinner,
-} from "@eva/ui";
+  useRequestConfirm,
+  ListEnter,
+  userFacingErrorMessage,
+  EmptyState,
+} from "@vvedantb/ui";
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { TeamDeleteDialog } from "./_components/TeamDeleteDialog";
 import { TeamCard } from "./_components/TeamCard";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { userFacingErrorMessage } from "@/lib/utils/convexErrorMessage";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 export function TeamsClient() {
   const teams = useQuery(api.teams.list);
   const createTeam = useMutation(api.teams.create);
   const deleteTeam = useMutation(api.teams.remove).withOptimisticUpdate(
     (localStore, args) => {
-      const current = localStore.getQuery(api.teams.list, {});
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.teams.list,
-          {},
-          current.filter((team) => team._id !== args.id),
-        );
-      }
+      patchLoadedQuery(localStore, api.teams.list, {}, (teams) =>
+        teams.filter((team) => team._id !== args.id),
+      );
     },
   );
 
@@ -44,7 +40,7 @@ export function TeamsClient() {
     name: string;
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const handleDelete = async (
     target: { id: Id<"teams">; name: string } | null = deleteTarget,
@@ -129,13 +125,19 @@ export function TeamsClient() {
       {teams === undefined ? (
         <CenteredSpinner label="Loading teams" />
       ) : teams.length === 0 ? (
-        <EmptyState
-          icon={<IconUsers size={24} />}
-          title="No teams yet"
-          description="Create a team to collaborate on codebases."
-          actionLabel="Create Team"
-          onAction={openCreate}
-        />
+        <EmptyState.Root>
+          <EmptyState.Icon icon={IconUsers} size={24} />
+          <EmptyState.Title>No teams yet</EmptyState.Title>
+          <EmptyState.Description>
+            Create a team to collaborate on codebases.
+          </EmptyState.Description>
+          <EmptyState.Actions>
+            <Button size="sm" onClick={openCreate} className="mt-6">
+              <IconPlus size={16} />
+              Create Team
+            </Button>
+          </EmptyState.Actions>
+        </EmptyState.Root>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {teams.map((team, index) => (
@@ -144,7 +146,6 @@ export function TeamsClient() {
                 team={team}
                 onDelete={(target) =>
                   requestConfirm(
-                    altHeld,
                     () => setDeleteTarget(target),
                     () => {
                       void handleDelete(target);

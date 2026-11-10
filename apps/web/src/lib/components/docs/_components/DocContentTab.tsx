@@ -12,7 +12,7 @@ import type { Id } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { docModeParser, type DocMode } from "@/lib/search-params";
 import { nanoid } from "nanoid";
-import { Button, Spinner, motionFast } from "@eva/ui";
+import { Button, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconMessage } from "@tabler/icons-react";
 import { FloatingToc } from "../FloatingToc";
@@ -214,6 +214,10 @@ export function DocContentTab({
    */
   const runSaveVersion = () => {
     if (!editor) return;
+    // Only the edits this snapshot covers are settled by it. Edits typed while
+    // it is in flight stay counted, keep the line on "Unsaved version", and
+    // the idle timer they re-armed saves them next.
+    const editsCovered = editCountRef.current;
     setDocSaveState({ status: "saving" });
     saveVersion({
       docId: doc._id,
@@ -221,8 +225,15 @@ export function DocContentTab({
       pmContent: JSON.stringify(editor.state.doc.toJSON()),
     })
       .then(() => {
-        editCountRef.current = 0;
-        setDocSaveState({ status: "saved", at: Date.now() });
+        editCountRef.current = Math.max(
+          0,
+          editCountRef.current - editsCovered,
+        );
+        setDocSaveState(
+          editCountRef.current > 0
+            ? { status: "pending" }
+            : { status: "saved", at: Date.now() },
+        );
       })
       .catch(() => setDocSaveState({ status: "error" }));
   };
@@ -391,7 +402,7 @@ export function DocContentTab({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <DocVersionDiff
                 versionId={selectedVersionId}
@@ -406,7 +417,7 @@ export function DocContentTab({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {!commentsOpen &&
                 !historyOpen &&
@@ -459,7 +470,7 @@ export function DocContentTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <DocCommentsPanel
               docId={doc._id}
@@ -481,7 +492,7 @@ export function DocContentTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <DocHistoryPanel
               docId={doc._id}
@@ -498,7 +509,7 @@ export function DocContentTab({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <DocSuggestionsPanel
               editor={editor}

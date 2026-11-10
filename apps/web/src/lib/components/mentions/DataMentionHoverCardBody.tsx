@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { MentionContentPreview } from "./MentionContentPreview";
 
 interface DataMentionHoverCardBodyProps {

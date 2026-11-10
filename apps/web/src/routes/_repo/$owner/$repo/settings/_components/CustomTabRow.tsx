@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Doc } from "@eva/backend";
-import { Button, Input, Switch } from "@eva/ui";
+import { Button, Input, Switch } from "@vvedantb/ui";
 import { IconTrash } from "@tabler/icons-react";
 import {
   RESERVED_APP_TAB_SLUGS,

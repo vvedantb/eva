@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Spinner, motionFast } from "@eva/ui";
+import { Button, Spinner, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconArrowUpRight, IconInbox } from "@tabler/icons-react";
 import { type Notification } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import { embedReadyMessage } from "@/lib/embed/embedded";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";
@@ -138,7 +138,7 @@ export function NotificationDetailPane({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={motionFast}
+        transition={tokenTransition.fast}
       >
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar">
           <div className="mx-auto w-full max-w-2xl space-y-4 px-6 py-6">

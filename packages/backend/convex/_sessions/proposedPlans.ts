@@ -39,6 +39,8 @@ export const capture = authMutation({
     if (!sessionId) return null;
     const session = await ctx.db.get(sessionId);
     if (!session) return null;
+    // The daemon calls in as the launching user (CONVEX_TOKEN), who has access.
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
 
     const captureKey = exitPlanCaptureKey({
       toolUseId: args.toolUseId,

@@ -23,7 +23,6 @@ import {
   MobilePaneSwitcher,
   type MobilePaneLabels,
 } from "@/lib/components/MobilePaneSwitcher";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import {
   LEFT_PANEL_ID,
   RIGHT_PANEL_ID,
@@ -34,6 +33,7 @@ import {
   usableExpandedPanelSize,
   usePersistentPanelSize,
 } from "@/lib/hooks/usePersistentPanelSize";
+import { motionEase, useMediaQuery } from "@vvedantb/ui";
 
 interface PanelContext {
   rightPanelCollapsed: boolean;
@@ -82,7 +82,6 @@ interface ResizablePanelLayoutProps {
 }
 
 const DEFAULT_RIGHT_PANEL_SIZE = "60%";
-const MOBILE_PANEL_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const DEFAULT_MOBILE_PANE_LABELS: MobilePaneLabels = {
   left: "List",
   right: "Details",
@@ -294,7 +293,7 @@ export function ResizablePanelLayout({
   };
 
   if (isMobile) {
-    const panelTransition = { duration: 0.22, ease: MOBILE_PANEL_EASE };
+    const panelTransition = { duration: 0.22, ease: motionEase };
     const panelEnter = { opacity: 0, y: "8%" };
     const panelRest = { opacity: 1, y: "0%" };
     const panelExit = { opacity: 0, y: "8%" };

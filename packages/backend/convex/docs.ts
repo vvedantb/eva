@@ -1,11 +1,13 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   authAction,
   authQuery,
   authMutation,
+  getSessionWithAccess,
   hasRepoAccess,
 } from "./functions";
+import { findDocWithAccess, getDocWithAccess } from "./_docs/access";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
 import {
   internalMutation,
@@ -27,7 +29,14 @@ import {
   docFields,
   evaluationStatusValidator,
 } from "./validators";
-import { resolvePrRecapWrite } from "./_prRecapWorkflow/recapState";
+import {
+  hasStoredRecap,
+  resolvePrRecapWrite,
+} from "./_prRecapWorkflow/recapState";
+import {
+  recapWalkthroughStepValidator,
+  type RecapWalkthroughStep,
+} from "./_prRecapWorkflow/walkthrough";
 import { prosemirrorSync } from "./prosemirrorSync";
 import { markdownToDocJson } from "./_docEditor/markdown";
 import { workflow } from "./workflowManager";
@@ -161,14 +170,19 @@ export const list = authQuery({
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     const seen = new Set<string>();
     const docs: Doc<"docs">[] = [];
+    const docsBySibling = await Promise.all(
+      siblingIds.map((siblingId) =>
+        ctx.db
+          .query("docs")
+          .withIndex("by_repo_and_deleted", (q) =>
+            q.eq("repoId", siblingId).eq("deletedAt", undefined),
+          )
+          .collect(),
+      ),
+    );
 
-    for (const siblingId of siblingIds) {
-      const siblingDocs = await ctx.db
-        .query("docs")
-        .withIndex("by_repo", (q) => q.eq("repoId", siblingId))
-        .collect();
-
-      for (const doc of siblingDocs) {
+    for (const [i, siblingId] of siblingIds.entries()) {
+      for (const doc of docsBySibling[i]) {
         if (seen.has(doc._id)) continue;
         if (args.kind !== undefined && doc.kind !== args.kind) continue;
         const isCurrentRepo = siblingId === args.repoId;
@@ -181,7 +195,6 @@ export const list = authQuery({
         ) {
           continue;
         }
-        if (isEntityDeleted(doc)) continue;
         seen.add(doc._id);
         docs.push(doc);
       }
@@ -291,18 +304,8 @@ export const get = authQuery({
   args: { id: v.id("docs") },
   returns: v.union(docValidator, v.null()),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) return null;
-
-    if (doc.kind === "pr-recap") {
-      if (!(await hasCodebaseRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-        return null;
-      }
-      return entityVisible(doc);
-    }
-
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) return null;
-    return entityVisible(doc);
+    const doc = await findDocWithAccess(ctx.db, args.id, ctx.userId);
+    return doc ? entityVisible(doc) : null;
   },
 });
 
@@ -390,10 +393,7 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const updates: {
       title?: string;
       content?: string;
@@ -430,11 +430,11 @@ export const createFromSession = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.id("docs"),
   handler: async (ctx, args) => {
-    const session = await ctx.db.get(args.sessionId);
-    if (!session) throw new Error("Session not found");
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
     const planContent = session.planContent?.trim();
     if (!planContent) {
       throw new Error("Session has no plan content to save");
@@ -493,11 +493,7 @@ export const ensureSyncDoc = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
 
     const existing = await ctx.runQuery(
       components.prosemirrorSync.lib.getSnapshot,
@@ -515,13 +511,7 @@ export const remove = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) {
-      throw new Error("Doc not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, doc.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
     return null;
   },
@@ -537,8 +527,7 @@ export const addInterviewMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    const doc = await getDocWithAccess(ctx.db, args.id, ctx.userId);
     const history = doc.interviewHistory ?? [];
     history.push({
       role: args.role,
@@ -556,8 +545,7 @@ export const clearInterview = authMutation({
   args: { id: v.id("docs") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("Doc not found");
+    await getDocWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       interviewHistory: undefined,
       sandboxId: undefined,
@@ -584,6 +572,26 @@ export const getByPrUrl = internalQuery({
   },
 });
 
+/** The run setup a ready recap records: shown in the badge, reused to revise. */
+const recapRunValidator = v.object({
+  model: aiModelValidator,
+  ...modelTraitsExecutionFields,
+});
+
+/**
+ * Every field is written, so a trait the run did not set is cleared rather
+ * than left over from an older run.
+ */
+function recapRunPatch(run: Infer<typeof recapRunValidator>) {
+  return {
+    prRecapModel: run.model,
+    reasoningLevel: run.reasoningLevel,
+    thinkingEnabled: run.thinkingEnabled,
+    use1mContext: run.use1mContext,
+    fastMode: run.fastMode,
+  };
+}
+
 /** Creates or updates a system-owned PR recap doc and resets its ProseMirror content. */
 async function upsertPrRecapDocImpl(
   ctx: MutationCtx,
@@ -594,7 +602,9 @@ async function upsertPrRecapDocImpl(
     title: string;
     headSha: string;
     content: string;
-    html?: string;
+    recapWalkthrough?: RecapWalkthroughStep[];
+    /** Model and traits of the run that produced this recap (ready writes). */
+    run?: Infer<typeof recapRunValidator>;
     prRecapStatus: "pending" | "ready" | "error";
     prRecapError?: string;
     clearActiveWorkflowId?: boolean;
@@ -613,9 +623,32 @@ async function upsertPrRecapDocImpl(
 
   const markdownJson = markdownToDocJson(args.content);
 
+  // A run starting on an existing recap only flips it to pending. The recap on
+  // show — summary, walkthrough and the commit it was written for — stays
+  // until the run's ready write replaces it, so a failed run leaves it intact
+  // instead of a "Generating…" placeholder and a commit it never covered.
+  if (existing && args.prRecapStatus === "pending") {
+    await ctx.db.patch(existing._id, {
+      title: args.title,
+      updatedAt: now,
+      kind: "pr-recap",
+      prUrl: args.prUrl,
+      prNumber: args.prNumber,
+      headSha: existing.headSha ?? args.headSha,
+      prRecapStatus: "pending",
+      prRecapError: undefined,
+      ...(args.prRecapOrigin !== undefined
+        ? { prRecapOrigin: args.prRecapOrigin }
+        : {}),
+    });
+    return existing._id;
+  }
+
   if (existing) {
+    // Status no longer says whether the content is a real recap (a pending or
+    // failed run keeps the last one), so history is kept for any stored recap.
     const shouldSnapshot =
-      existing.prRecapStatus === "ready" &&
+      hasStoredRecap(existing) &&
       existing.content.trim().length > 0 &&
       existing.content !== args.content;
 
@@ -645,11 +678,12 @@ async function upsertPrRecapDocImpl(
     }
     await prosemirrorSync.create(ctx, existing._id, markdownJson);
     // The invariant is about the row that ends up stored, so it is checked
-    // against the html this write leaves behind — a preserved walkthrough
+    // against the walkthrough this write leaves behind — a preserved one
     // included.
     const resolved = resolvePrRecapWrite({
       prRecapStatus: args.prRecapStatus,
-      html: args.html ?? existing.html,
+      recapWalkthrough: args.recapWalkthrough ?? existing.recapWalkthrough,
+      html: args.recapWalkthrough !== undefined ? undefined : existing.html,
       prRecapError: args.prRecapError,
     });
     await ctx.db.patch(existing._id, {
@@ -663,9 +697,13 @@ async function upsertPrRecapDocImpl(
       headSha: args.headSha,
       prRecapStatus: resolved.prRecapStatus,
       prRecapError: resolved.prRecapError,
-      // Only overwrite html when the agent produced one, so a failed regen does
-      // not wipe a previously generated walkthrough.
-      ...(args.html !== undefined ? { html: args.html } : {}),
+      // Only overwrite the walkthrough when the agent produced one, so a failed
+      // regen does not wipe the previous one. A new walkthrough retires the
+      // legacy HTML page it replaces.
+      ...(args.recapWalkthrough !== undefined
+        ? { recapWalkthrough: args.recapWalkthrough, html: undefined }
+        : {}),
+      ...(args.run !== undefined ? recapRunPatch(args.run) : {}),
       ...(args.clearActiveWorkflowId ? { activeWorkflowId: undefined } : {}),
       ...(args.prRecapOrigin !== undefined
         ? { prRecapOrigin: args.prRecapOrigin }
@@ -676,7 +714,7 @@ async function upsertPrRecapDocImpl(
 
   const inserted = resolvePrRecapWrite({
     prRecapStatus: args.prRecapStatus,
-    html: args.html,
+    recapWalkthrough: args.recapWalkthrough,
     prRecapError: args.prRecapError,
   });
   const docId = await ctx.db.insert("docs", {
@@ -684,7 +722,8 @@ async function upsertPrRecapDocImpl(
     kind: "pr-recap",
     title: args.title,
     content: args.content,
-    html: args.html,
+    recapWalkthrough: args.recapWalkthrough,
+    ...(args.run !== undefined ? recapRunPatch(args.run) : {}),
     prUrl: args.prUrl,
     prNumber: args.prNumber,
     headSha: args.headSha,
@@ -710,7 +749,8 @@ export const upsertPrRecapDoc = internalMutation({
     title: v.string(),
     headSha: v.string(),
     content: v.string(),
-    html: v.optional(v.string()),
+    recapWalkthrough: v.optional(v.array(recapWalkthroughStepValidator)),
+    run: v.optional(recapRunValidator),
     prRecapStatus: prRecapStatusValidator,
     prRecapError: v.optional(v.string()),
     clearActiveWorkflowId: v.optional(v.boolean()),
@@ -733,11 +773,11 @@ export const patchPrRecapStatus = internalMutation({
     const doc = await ctx.db.get(args.docId);
     if (!doc) return null;
 
-    // A status patch carries no html, so "ready" is judged against the doc's
-    // stored walkthrough: without one the row would claim a recap it cannot
-    // show.
+    // A status patch carries no walkthrough, so "ready" is judged against the
+    // doc's stored one: without it the row would claim a recap it cannot show.
     const resolved = resolvePrRecapWrite({
       prRecapStatus: args.prRecapStatus,
+      recapWalkthrough: doc.recapWalkthrough,
       html: doc.html,
       prRecapError: args.prRecapError,
     });
@@ -795,7 +835,7 @@ export const startPrRecap = internalMutation({
     pendingPlaceholder: v.optional(v.string()),
     reviewerFeedback: v.optional(v.array(reviewerFeedbackItemValidator)),
     consumeAgentCommentIds: v.optional(v.array(v.id("docComments"))),
-    /** Absent falls back to the repo default; resolved here so the doc records the real model. */
+    /** Absent falls back to the repo default; resolved here so the run (and its ready write) carries the real model. */
     model: v.optional(aiModelValidator),
     ...modelTraitsExecutionFields,
   },
@@ -844,14 +884,8 @@ export const startPrRecap = internalMutation({
       ...(prRecapOrigin !== undefined ? { prRecapOrigin } : {}),
     });
 
-    // Written unconditionally so unsetting a trait clears it from the doc.
-    await ctx.db.patch(docId, {
-      prRecapModel: model,
-      reasoningLevel: args.reasoningLevel,
-      thinkingEnabled: args.thinkingEnabled,
-      use1mContext: args.use1mContext,
-      fastMode: args.fastMode,
-    });
+    // The model and traits are recorded by the ready write (`recapRunPatch`),
+    // not here: a run that fails must not relabel the recap still on show.
 
     const workflowId = await workflow.start(
       ctx,

@@ -1,5 +1,5 @@
 import { getAIModelProvider, type AIProvider } from "@eva/backend";
-import type { ModelAccount } from "@eva/ui";
+import type { ModelAccount } from "@vvedantb/ui";
 
 type SelectableAccount = Pick<ModelAccount, "id" | "provider" | "isOwn">;
 

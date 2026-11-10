@@ -1,12 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
-import { CenteredSpinner, motionBase, motionStagger } from "@eva/ui";
+import {
+  CenteredSpinner,
+  tokenTransition,
+  staggerDelay,
+  CountPop,
+} from "@vvedantb/ui";
 import { m } from "motion/react";
-import { CountPop } from "@/lib/components/ui/CountPop";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SystemAutomationCard } from "./_components/SystemAutomationCard";
@@ -21,25 +26,21 @@ function patchInstalled(installed: boolean) {
     localStore: OptimisticLocalStore,
     args: { repoId: Id<"githubRepos">; key: string },
   ) => {
-    const queryArgs = { repoId: args.repoId };
-    const current = localStore.getQuery(
+    patchLoadedQuery(
+      localStore,
       api.automations.listSystemAutomations,
-      queryArgs,
-    );
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.automations.listSystemAutomations,
-      queryArgs,
-      current.map((entry) =>
-        entry.key === args.key
-          ? {
-              ...entry,
-              installed,
-              enabled: installed,
-              numId: installed ? entry.numId : null,
-            }
-          : entry,
-      ),
+      { repoId: args.repoId },
+      (current) =>
+        current.map((entry) =>
+          entry.key === args.key
+            ? {
+                ...entry,
+                installed,
+                enabled: installed,
+                numId: installed ? entry.numId : null,
+              }
+            : entry,
+        ),
     );
   };
 }
@@ -105,35 +106,38 @@ function AutomationsHubPage() {
                 key={entry.key}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ ...motionBase, delay: motionStagger(index) }}
+                transition={{
+                  ...tokenTransition.base,
+                  delay: staggerDelay(index),
+                }}
               >
-              <SystemAutomationCard
-                entryKey={entry.key}
-                readOnly={entry.readOnly}
-                title={entry.title}
-                blurb={entry.blurb}
-                cronSchedule={entry.cronSchedule}
-                trigger={entry.trigger}
-                installed={entry.installed}
-                numId={entry.numId}
-                basePath={basePath}
-                onInstall={() => {
-                  void withMutationToast(
-                    install({ repoId, key: entry.key }),
-                    "Automation installed",
-                    "Couldn't install automation",
-                    "system-automation-install",
-                  );
-                }}
-                onUninstall={() => {
-                  void withMutationToast(
-                    uninstall({ repoId, key: entry.key }),
-                    "Automation removed",
-                    "Couldn't uninstall automation",
-                    "system-automation-uninstall",
-                  );
-                }}
-              />
+                <SystemAutomationCard
+                  entryKey={entry.key}
+                  readOnly={entry.readOnly}
+                  title={entry.title}
+                  blurb={entry.blurb}
+                  cronSchedule={entry.cronSchedule}
+                  trigger={entry.trigger}
+                  installed={entry.installed}
+                  numId={entry.numId}
+                  basePath={basePath}
+                  onInstall={() => {
+                    void withMutationToast(
+                      install({ repoId, key: entry.key }),
+                      "Automation installed",
+                      "Couldn't install automation",
+                      "system-automation-install",
+                    );
+                  }}
+                  onUninstall={() => {
+                    void withMutationToast(
+                      uninstall({ repoId, key: entry.key }),
+                      "Automation removed",
+                      "Couldn't uninstall automation",
+                      "system-automation-uninstall",
+                    );
+                  }}
+                />
               </m.div>
             ))}
           </div>

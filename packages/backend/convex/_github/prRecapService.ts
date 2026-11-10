@@ -20,6 +20,8 @@ const prDiffResultValidator = v.object({
   additions: v.number(),
   deletions: v.number(),
   changedFiles: v.number(),
+  /** Every changed path, including files the size cap left out of diffText. */
+  filePaths: v.array(v.string()),
   truncated: v.boolean(),
 });
 
@@ -64,6 +66,7 @@ export type PrDiffResult = {
   additions: number;
   deletions: number;
   changedFiles: number;
+  filePaths: string[];
   truncated: boolean;
 };
 
@@ -112,6 +115,7 @@ export async function fetchPullRequestDiff(
     additions,
     deletions,
     changedFiles: files.length,
+    filePaths: files.map((file) => file.filename),
     truncated,
   };
 }

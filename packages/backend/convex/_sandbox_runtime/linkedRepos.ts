@@ -16,6 +16,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { execHandle, getSandboxHandle } from "./helpers";
+import { sandboxStillWanted } from "./execution";
 import {
   cloneRepoInto,
   installDependencies,
@@ -35,6 +36,7 @@ import {
 import { launchLinkedRepoDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
 import { resolveEnvVars } from "../envVarResolver";
 import { type ProgressStep, startupProgress } from "./startupProgress";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
@@ -49,7 +51,7 @@ async function setLinkedRepoProgress(
   steps: ProgressStep[],
 ): Promise<void> {
   await ctx.runMutation(internal.streaming.internalSet, {
-    entityId: `session-startup-${sessionId}`,
+    entityId: sandboxStartupEntityId({ kind: "session", sessionId }),
     currentActivity: JSON.stringify(steps),
   });
 }
@@ -73,23 +75,32 @@ export const prepareLinkedRepo = internalAction({
   handler: async (ctx, args) => {
     const details = `sessionId=${args.sessionId}, sessionRepoId=${args.sessionRepoId}`;
     await runLoggedGitStep("prepareLinkedRepo", details, async () => {
-      const row = await ctx.runQuery(
-        internal.sessions.getSessionRepoInternal,
-        { id: args.sessionRepoId },
-      );
+      // Independent reads: fetch together, then check in the original order.
+      const [row, primaryRepo, stillWanted] = await Promise.all([
+        ctx.runQuery(internal.sessions.getSessionRepoInternal, {
+          id: args.sessionRepoId,
+        }),
+        ctx.runQuery(internal.githubRepos.getInternal, { id: args.repoId }),
+        sandboxStillWanted(ctx, args.sandboxId, args.sessionId),
+      ]);
       if (!row) {
         logLinkedRepo(
           `prepareLinkedRepo: sessionRepos row gone, skipping (${details})`,
         );
         return;
       }
-      const primaryRepo = await ctx.runQuery(internal.githubRepos.getInternal, {
-        id: args.repoId,
-      });
       if (!primaryRepo) {
         throw new Error(
           `prepareLinkedRepo: primary repo ${args.repoId} not found`,
         );
+      }
+      // Workflow retries can land after the user stopped the session; the
+      // first exec would resume the stopped VM and leave it billing.
+      if (!stillWanted) {
+        logLinkedRepo(
+          `prepareLinkedRepo: sandbox stopped, skipping (${details})`,
+        );
+        return;
       }
       const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
 

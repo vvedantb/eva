@@ -1,16 +1,9 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import sendgrid from "@sendgrid/mail";
 
 /** Reads a required environment variable, throwing a clear error when it is missing. */
-function getEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set in the Convex environment`);
-  }
-  return value;
-}
-
 export interface SendEmailPayload {
   to: string | string[];
   subject: string;
@@ -37,10 +30,10 @@ function normalizeEmails(emails: string | string[] | undefined): string[] {
  * never reach real users.
  */
 export async function sendEmail(data: SendEmailPayload): Promise<void> {
-  sendgrid.setApiKey(getEnv("SENDGRID_API_KEY"));
+  sendgrid.setApiKey(requiredEnv("SENDGRID_API_KEY"));
   // SendGrid renders { email, name } as the sender display name in the inbox.
   const from = {
-    email: data.from ?? getEnv("SENDGRID_FROM_EMAIL"),
+    email: data.from ?? requiredEnv("SENDGRID_FROM_EMAIL"),
     name: "Eva",
   };
 
@@ -69,6 +62,6 @@ export async function sendEmail(data: SendEmailPayload): Promise<void> {
     from,
     subject: `[dev] ${data.subject}`,
     html: data.html,
-    to: getEnv("SENDGRID_DEV_TEST_EMAIL"),
+    to: requiredEnv("SENDGRID_DEV_TEST_EMAIL"),
   });
 }

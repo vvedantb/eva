@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 
 /** Updates a repo's display label with optimistic list + detail cache patches. */
 export function useSetRepoLabel(teamId?: Id<"teams">) {
@@ -27,16 +28,12 @@ export function useSetRepoLabel(teamId?: Id<"teams">) {
       const resolvedTeamId =
         teamId ?? list?.find((row) => row._id === args.repoId)?.teamId;
       if (resolvedTeamId !== undefined) {
-        const teamList = localStore.getQuery(api.githubRepos.listByTeam, {
-          teamId: resolvedTeamId,
-        });
-        if (teamList !== undefined) {
-          localStore.setQuery(
-            api.githubRepos.listByTeam,
-            { teamId: resolvedTeamId },
-            patchRows(teamList),
-          );
-        }
+        patchLoadedQuery(
+          localStore,
+          api.githubRepos.listByTeam,
+          { teamId: resolvedTeamId },
+          patchRows,
+        );
       }
 
       const detailSource =
@@ -55,16 +52,12 @@ export function useSetRepoLabel(teamId?: Id<"teams">) {
           name: row.name,
           appName,
         };
-        const current = localStore.getQuery(
+        patchLoadedQuery(
+          localStore,
           api.githubRepos.getByOwnerAndName,
           queryArgs,
+          (cur) => cur && { ...cur, label: nextLabel },
         );
-        if (current !== undefined && current !== null) {
-          localStore.setQuery(api.githubRepos.getByOwnerAndName, queryArgs, {
-            ...current,
-            label: nextLabel,
-          });
-        }
       }
     },
   );

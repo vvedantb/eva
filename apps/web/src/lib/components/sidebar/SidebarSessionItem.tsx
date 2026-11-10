@@ -1,15 +1,17 @@
 ﻿"use client";
 
 import { DynamicLink } from "@/lib/components/DynamicLink";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
-  cn,
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
   LoadingState,
-} from "@eva/ui";
+  RelativeDateTime,
+  MarqueeOnHover,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
   SANDBOX_STATUS_STYLES,
@@ -21,16 +23,20 @@ import {
   SessionFolderAuthor,
   SessionHoverCardBody,
 } from "@/lib/components/sidebar/SidebarListHoverCard";
-import { MarqueeOnHover } from "@/lib/components/ui/MarqueeOnHover";
-import { UnreadDot } from "@/lib/components/ui/UnreadDot";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
 import type { RepoPathParts } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
+import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  SESSIONS_LEADING_SLOT,
+  SESSIONS_ROW_X,
+  SESSIONS_TEXT_INDENT,
+} from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 
 /** Identity of a session's actual primary repo, for a row linked in from it. */
-export type SessionLinkedFrom = RepoPathParts;
+type SessionLinkedFrom = RepoPathParts;
 
 function prStateLabel(
   state: "draft" | "open" | "merged" | "closed" | undefined,
@@ -99,6 +105,11 @@ interface SidebarSessionItemProps {
   linkedFrom?: SessionLinkedFrom;
   /** Set on sessions made by "Fork session"; shows the fork glyph. */
   forkedFromSessionId?: Id<"sessions">;
+  /**
+   * The session's own app on rows in a cross-repo linked group: its mark sits
+   * left of the title, and the hover card names it.
+   */
+  app?: RepoAppMarkRepo;
 }
 
 /** Fork glyph on rows made by "Fork session"; the hover card names the source. */
@@ -160,7 +171,7 @@ function SessionPrIcon({
  * already implies an active sandbox). Otherwise the sandbox status color dot
  * (simple view: error only).
  */
-export function SessionStatusLeading({
+function SessionStatusLeading({
   label,
   dotClassName,
   isExecuting,
@@ -173,23 +184,20 @@ export function SessionStatusLeading({
 }) {
   if (isAwaitingAnswer) {
     return (
-      <span
-        className="flex shrink-0 items-center"
-        title="Waiting for your answer"
-      >
+      <span className={SESSIONS_LEADING_SLOT} title="Waiting for your answer">
         <AwaitingAnswerMark />
       </span>
     );
   }
   if (isExecuting) {
     return (
-      <span className="flex shrink-0 items-center" title="Working">
+      <span className={SESSIONS_LEADING_SLOT} title="Working">
         <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
       </span>
     );
   }
   return (
-    <span className="flex shrink-0 items-center" title={label}>
+    <span className={SESSIONS_LEADING_SLOT} title={label}>
       <span className={cn("size-2 shrink-0 rounded-full", dotClassName)} />
     </span>
   );
@@ -232,6 +240,7 @@ export function SidebarSessionItem({
   linkedRepoCount,
   linkedFrom,
   forkedFromSessionId,
+  app,
 }: SidebarSessionItemProps) {
   const isFork = forkedFromSessionId !== undefined;
   const simpleView = useSimpleView();
@@ -268,16 +277,26 @@ export function SidebarSessionItem({
     />
   ) : null;
 
+  const appMark = app ? (
+    <span className="flex shrink-0" title={repoDisplayLabel(app)}>
+      <RepoAppMark repo={app} />
+    </span>
+  ) : null;
+
   const link = (
     <DynamicLink
       to={href}
       onClick={onNavigate}
-      className="block rounded-menu-item px-4 py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40"
+      className={cn(
+        "block rounded-menu-item py-1.5 text-2sm leading-[18px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/40",
+        SESSIONS_ROW_X,
+      )}
     >
       {isFolder ? (
-        <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
             {statusLeading}
+            {appMark}
             <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
@@ -287,7 +306,7 @@ export function SidebarSessionItem({
           <div
             className={cn(
               "flex min-w-0 items-center gap-2 opacity-60",
-              showLeading && "pl-4",
+              showLeading && SESSIONS_TEXT_INDENT,
             )}
           >
             <div className="min-w-0 flex-1">
@@ -309,6 +328,7 @@ export function SidebarSessionItem({
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           {statusLeading}
+          {appMark}
           <MarqueeOnHover className={titleClass}>{title}</MarqueeOnHover>
           <TitleRegeneratingHint show={isRegeneratingTitle} />
           <ForkedGlyph show={isFork} />
@@ -342,6 +362,7 @@ export function SidebarSessionItem({
           createdAt={createdAt}
           userId={userId}
           baseBranch={baseBranch}
+          app={app}
         />
       </HoverCardContent>
     </HoverCard>

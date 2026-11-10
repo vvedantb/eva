@@ -1,6 +1,7 @@
 "use client";
 
 import type { Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,8 +10,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
   LoadingState,
-  cn,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconGitPullRequest, IconX } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import {

@@ -1,10 +1,10 @@
 "use client";
 
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { Button } from "@eva/ui";
+import { Button, ErrorBoundary } from "@vvedantb/ui";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
-import { QueryErrorBoundary } from "@/lib/components/QueryErrorBoundary";
 import { useAveChat } from "@/lib/components/ave/useAveChat";
+import { useMarkAveRead } from "@/lib/components/ave/aveUnread";
 import {
   RoutedQuestionDock,
   type RoutedQuestionDockSize,
@@ -22,12 +22,15 @@ import {
  */
 export function AveChat({
   size = "popover",
+  visible = true,
 }: {
   /** The full-screen `/ave` page has room for a taller question dock. */
   size?: RoutedQuestionDockSize;
+  /** False while the popover is minimized: it stays mounted but unseen. */
+  visible?: boolean;
 }) {
   return (
-    <QueryErrorBoundary
+    <ErrorBoundary
       fallback={(retry) => (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <IconAlertTriangle className="size-8 text-muted-foreground/60" />
@@ -38,13 +41,20 @@ export function AveChat({
         </div>
       )}
     >
-      <AveChatBody size={size} />
-    </QueryErrorBoundary>
+      <AveChatBody size={size} visible={visible} />
+    </ErrorBoundary>
   );
 }
 
-function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
+function AveChatBody({
+  size,
+  visible,
+}: {
+  size: RoutedQuestionDockSize;
+  visible: boolean;
+}) {
   const chat = useAveChat();
+  useMarkAveRead(visible);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -65,9 +75,9 @@ function AveChatBody({ size }: { size: RoutedQuestionDockSize }) {
         onCancel={chat.cancel}
         localDraft={chat.localDraft}
         preInputContent={
-          <QueryErrorBoundary>
+          <ErrorBoundary>
             <RoutedQuestionDock size={size} />
-          </QueryErrorBoundary>
+          </ErrorBoundary>
         }
         hideJumpRail
       />

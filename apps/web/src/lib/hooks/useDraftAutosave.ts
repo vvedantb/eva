@@ -2,7 +2,7 @@ import type { RefObject } from "react";
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { api } from "@eva/backend";
-import { useSingleFlight } from "@/lib/hooks/useSingleFlight";
+import { useSingleFlight } from "@vvedantb/ui";
 
 /**
  * Minimal shape the autosave needs from a mention editor ref: a tokenizer that

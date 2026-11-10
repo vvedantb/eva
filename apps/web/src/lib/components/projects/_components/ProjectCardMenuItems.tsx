@@ -13,7 +13,9 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+} from "@vvedantb/ui";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
@@ -30,7 +32,6 @@ import {
   PROJECT_PHASES,
   type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
 import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 

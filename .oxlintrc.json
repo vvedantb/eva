@@ -50,6 +50,7 @@
     "eva/no-json-parse": "warn",
     "eva/no-double-cast": "warn",
     "eva/no-value-block-in-try": "off",
+    "eva/no-source-text-in-tests": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/consistent-type-assertions": [
@@ -76,12 +77,57 @@
         ]
       }
     ],
-    "no-console": ["warn", { "allow": ["warn", "error"] }]
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "complexity": ["warn", { "max": 20 }]
   },
   "overrides": [
     {
       "files": ["apps/web/src/**"],
-      "rules": { "eva/no-value-block-in-try": "error" }
+      "rules": {
+        "eva/no-value-block-in-try": "error",
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "localStorage",
+            "message": "Use useLocalStorage from usehooks-ts. Raw access is only for code that runs outside React (see the allowlist in .oxlintrc.json)."
+          },
+          {
+            "name": "sessionStorage",
+            "message": "Use useSessionStorage from usehooks-ts. Raw access is only for code that runs outside React (see the allowlist in .oxlintrc.json)."
+          }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "window",
+            "property": "localStorage",
+            "message": "Use useLocalStorage from usehooks-ts. Raw access is only for code that runs outside React (see the allowlist in .oxlintrc.json)."
+          },
+          {
+            "object": "window",
+            "property": "sessionStorage",
+            "message": "Use useSessionStorage from usehooks-ts. Raw access is only for code that runs outside React (see the allowlist in .oxlintrc.json)."
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/**/*.test.ts",
+        "apps/web/src/**/*.test.tsx",
+        "apps/web/src/lib/authHint.ts",
+        "apps/web/src/lib/contexts/themeHint.ts",
+        "apps/web/src/lib/components/ThemeModeProvider.tsx",
+        "apps/web/src/lib/utils/staleDeployReload.ts",
+        "apps/web/src/lib/migrateLegacyStorageKeys.ts",
+        "apps/web/src/lib/components/sandbox/useSandboxPreview.ts",
+        "apps/web/src/routes/_repo/$owner/$repo/sessions/_utils/previewViewport.ts",
+        "apps/web/src/lib/components/notifications/desktopNotifications.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": "off",
+        "no-restricted-properties": "off"
+      }
     },
     {
       "files": ["packages/shared/src/index.ts"],
@@ -96,6 +142,7 @@
                   "react-dom",
                   "@eva/ui",
                   "@eva/ui/*",
+                  "@vvedantb/ui",
                   "facehash",
                   "convex-helpers/react",
                   "convex-helpers/react/*",
@@ -129,6 +176,9 @@
     "**/.vite/**",
     "**/.wxt/**",
     "video/**",
+    ".claude/skills/**",
+    ".agents/skills/**",
+    "apps/web/src/lib/stageshow/**",
     "scripts/oxlint-plugin-anti-slop/**"
   ]
 }

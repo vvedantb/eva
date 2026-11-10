@@ -71,13 +71,15 @@ export function createAnnotationTask(
       payload.pageUrl,
       payload.elementContext,
     );
-    const taskId = await client.mutation(api.agentTasks.createQuickTask, {
-      repoId,
-      title: payload.title.slice(0, 100),
-      description,
-    });
-    const meUserId = await client.query(api.auth.me, {});
-    const creatorInitials = await getCreatorInitials();
+    const [taskId, meUserId, creatorInitials] = await Promise.all([
+      client.mutation(api.agentTasks.createQuickTask, {
+        repoId,
+        title: payload.title.slice(0, 100),
+        description,
+      }),
+      client.query(api.auth.me, {}),
+      getCreatorInitials(),
+    ]);
     return {
       pinId: payload.pinId,
       taskId: String(taskId),
@@ -103,7 +105,11 @@ export function runAllAnnotations(
   payload: BgRequestMap["RUN_ALL_ANNOTATIONS"]["payload"],
 ): Promise<BgRequestMap["RUN_ALL_ANNOTATIONS"]["response"]> {
   return withAuth(async (client) => {
-    const repoId = await resolveRepoForUrl(client, payload.pageUrl);
+    const [repoId, meUserId, creatorInitials] = await Promise.all([
+      resolveRepoForUrl(client, payload.pageUrl),
+      client.query(api.auth.me, {}),
+      getCreatorInitials(),
+    ]);
     const created: Array<{ pinId: string; taskId: string }> = [];
     for (const [pinId, pin] of Object.entries(payload.pins)) {
       try {
@@ -118,8 +124,6 @@ export function runAllAnnotations(
         console.error("Failed to run task:", e);
       }
     }
-    const meUserId = await client.query(api.auth.me, {});
-    const creatorInitials = await getCreatorInitials();
     return {
       created,
       userId: meUserId,

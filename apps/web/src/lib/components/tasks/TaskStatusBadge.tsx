@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, m } from "motion/react";
-import { Badge } from "@eva/ui";
+import { Badge, motionEase } from "@vvedantb/ui";
 import {
   IconCircle,
   IconClock,
@@ -142,7 +142,7 @@ export function TaskStatusBadge({ status }: TaskStatusBadgeProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.075, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.075, ease: motionEase }}
         className="inline-flex"
       >
         <Badge className={`${config.text} ${config.bg} border-transparent`}>

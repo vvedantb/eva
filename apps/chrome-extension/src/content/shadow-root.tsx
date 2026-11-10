@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import type { ReactNode } from "react";
+import { EvaUiProvider } from "@eva/ui";
 import contentCss from "./content.css?inline";
 
 interface ShadowMount {
@@ -38,7 +39,7 @@ export function createShadowMount(): ShadowMount {
     wrapper,
     root,
     render(node: ReactNode) {
-      root.render(node);
+      root.render(<EvaUiProvider>{node}</EvaUiProvider>);
     },
     unmount() {
       root.unmount();

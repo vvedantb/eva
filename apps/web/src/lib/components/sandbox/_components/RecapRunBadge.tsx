@@ -7,7 +7,7 @@ import {
   type AIModel,
   type StoredModelTraits,
 } from "@eva/backend";
-import { Badge, formatModelDisplayLabel, ProviderIcon } from "@eva/ui";
+import { Badge, formatModelDisplayLabel, ProviderIcon } from "@vvedantb/ui";
 
 /**
  * States which model and traits produced the recap on screen. Traits appear

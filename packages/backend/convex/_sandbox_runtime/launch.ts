@@ -1,11 +1,12 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
 import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
-import { execHandle, requireEnv } from "./helpers";
+import { execHandle } from "./helpers";
 import {
   resolvePublicConvexCloudUrl,
   resolvePublicConvexSiteUrl,
@@ -19,7 +20,7 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import {
   CLAUDE_CLI_INSTALL_DIR,
   CODEX_CLI_INSTALL_DIR,
-  EVA_ENV_FILE,
+  EVA_ENV_SOURCE_CMD,
 } from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
@@ -127,7 +128,7 @@ function computeScopedHmac(message: string): string | null {
  */
 function publicConvexUrl(): string {
   return (
-    resolvePublicConvexCloudUrl(process.env) ?? requireEnv("CONVEX_CLOUD_URL")
+    resolvePublicConvexCloudUrl(process.env) ?? requiredEnv("CONVEX_CLOUD_URL")
   );
 }
 
@@ -454,6 +455,7 @@ export async function launchScript(
     openSyntheticTurnMutation?: string;
     completeSyntheticTurnMutation?: string;
     updateBackgroundAgentsMutation?: string;
+    updateGoalMutation?: string;
     harnessCatalogToken?: string;
     /** Multi-repo sessions only: the session's linked repo clones. */
     linkedRepos?: LinkedRepoEnvRow[];
@@ -607,6 +609,9 @@ export async function launchScript(
       `UPDATE_BACKGROUND_AGENTS_MUTATION=${quote([opts.updateBackgroundAgentsMutation])}`,
     );
   }
+  if (opts.updateGoalMutation) {
+    envParts.push(`UPDATE_GOAL_MUTATION=${quote([opts.updateGoalMutation])}`);
+  }
   if (opts.extraEnvVars) {
     for (const [key, val] of Object.entries(opts.extraEnvVars)) {
       envParts.push(`${key}=${quote([val])}`);
@@ -640,7 +645,7 @@ export async function launchScript(
   const runnerLaunchScript = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
-    `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`,
+    EVA_ENV_SOURCE_CMD,
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/eva-mcp.json",
     ...exportLines,
     // The script carries per-launch credentials, so unlink it once this shell

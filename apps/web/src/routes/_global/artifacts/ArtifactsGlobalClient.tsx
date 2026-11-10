@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { CenteredSpinner } from "@eva/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { ArtifactList } from "@/lib/components/artifacts/ArtifactList";
 import { ArtifactUploadDialog } from "@/lib/components/artifacts/ArtifactUploadDialog";

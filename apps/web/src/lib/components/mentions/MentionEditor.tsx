@@ -25,22 +25,25 @@ import {
   type InsertedToken,
 } from "./mentionEditorUtils";
 import { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
-import { countLinkUrls } from "./linkChipUtils";
+import { countLinkUrls } from "./linkUrls";
 import {
   MentionPickerPopup,
   type MentionPopupLayout,
 } from "./MentionPickerPopup";
-import { optionId } from "./mentionOptionId";
 import { MentionRow, type MentionKind } from "./MentionRow";
 import {
   computeMentionPopupPlacement,
-  computePanelPopupPlacement,
   getSelectionAnchorRect,
   type MentionPopupPlacement,
 } from "./mentionPopupPosition";
 import { cn } from "@eva/ui";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
+import {
+  composerSlashOptionId as optionId,
+  computePanelPopupPlacement,
+  viewportSize,
+} from "@vvedantb/ui";
 
 // The inline AI suggestion renders as an `::after` pseudo-element fed by
 // `data-suggestion`, mirroring how the placeholder uses `::before`. A pseudo-
@@ -271,71 +274,182 @@ function findActiveTrigger(
   };
 }
 
-export function MentionEditor<TItem extends MentionItem = MentionItem>({
-  ref,
-  value,
-  onValueChange,
-  items,
+/** The optional props `MentionEditor` gives a default, resolved in one place. */
+function withMentionEditorDefaults<TItem extends MentionItem>({
   slashItems = [],
-  placeholder,
-  className,
   chipClassName = MENTION_CHIP_CLASS,
   skillChipClassName = SKILL_CHIP_CLASS,
-  onEnterSubmit,
-  onHistoryNavigate,
-  suggestion,
-  onAcceptSuggestion,
-  onDismissSuggestion,
-  onImageFiles,
-  onLargeTextPaste,
   renderItem = defaultRenderItem,
   renderSlashItem = defaultRenderSlashItem,
   filterItem = matchesQuery,
   filterSlashItem = matchesQuery,
-  emptySlashContent,
   popupLayout = "caret",
   mentionPopupTitle = "Data",
-  onMentionChipClick,
-  onSkillChipClick,
   mentionChipHoverCard = false,
+  disabled = false,
+}: MentionEditorProps<TItem>) {
+  return {
+    slashItems,
+    chipClassName,
+    skillChipClassName,
+    renderItem,
+    renderSlashItem,
+    filterItem,
+    filterSlashItem,
+    popupLayout,
+    mentionPopupTitle,
+    mentionChipHoverCard,
+    disabled,
+  };
+}
+
+/**
+ * Inline AI completion keys. Returns true when the key was consumed. Sits after
+ * the picker block so the picker keeps priority on Tab, and before history
+ * recall so Escape reaches it.
+ */
+function handleSuggestionKey(
+  e: React.KeyboardEvent<HTMLDivElement>,
+  active: boolean,
+  onAcceptSuggestion: (() => void) | undefined,
+  onDismissSuggestion: (() => void) | undefined,
+): boolean {
+  if (!active) return false;
+  if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    onAcceptSuggestion?.();
+    return true;
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    onDismissSuggestion?.();
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Message-history recall: Alt+Up/Down so plain arrows stay for caret movement
+ * in multi-line drafts. Returns true when a history entry was applied.
+ */
+function handleHistoryKey(
+  e: React.KeyboardEvent<HTMLDivElement>,
+  triggerOpen: boolean,
+  onHistoryNavigate: ((direction: "up" | "down") => boolean) | undefined,
+): boolean {
+  if (
+    !onHistoryNavigate ||
+    triggerOpen ||
+    !e.altKey ||
+    e.shiftKey ||
+    e.metaKey ||
+    e.ctrlKey
+  ) {
+    return false;
+  }
+  if (e.key === "ArrowUp") {
+    if (onHistoryNavigate("up")) {
+      e.preventDefault();
+      return true;
+    }
+  }
+  if (e.key === "ArrowDown") {
+    if (onHistoryNavigate("down")) {
+      e.preventDefault();
+      return true;
+    }
+  }
+  return false;
+}
+
+function handleEnterSubmitKey(
+  e: React.KeyboardEvent<HTMLDivElement>,
+  onEnterSubmit: ((e: React.KeyboardEvent<HTMLDivElement>) => void) | undefined,
+) {
+  if (e.key === "Enter" && onEnterSubmit) {
+    if (e.nativeEvent.isComposing) return;
+    if (e.shiftKey) return;
+    e.preventDefault();
+    onEnterSubmit(e);
+  }
+}
+
+/**
+ * Gated on the *unfiltered* list so a query that matches nothing shows "No
+ * matches" instead of unmounting the popup.
+ */
+function shouldShowPopup(
+  trigger: TriggerState,
+  slashItemCount: number,
+  hasEmptySlashContent: boolean,
+  itemCount: number,
+): boolean {
+  return (
+    trigger.isOpen &&
+    (trigger.kind === "slash"
+      ? slashItemCount > 0 || hasEmptySlashContent
+      : itemCount > 0)
+  );
+}
+
+/**
+ * ARIA 1.2 combobox state: the editor is the input, the picker is the popup it
+ * controls, and `aria-activedescendant` is how a screen reader is told which
+ * row ArrowUp/ArrowDown moved to — the picker rows keep DOM focus out of it
+ * entirely. Without these the popup opened silently.
+ */
+function editorAriaState({
+  showPopup,
+  listboxId,
+  activeItem,
+  disabled,
+  ariaLabel,
+  placeholder,
+}: {
+  showPopup: boolean;
+  listboxId: string;
+  activeItem: MentionItem | undefined;
+  disabled: boolean;
+  ariaLabel: string | undefined;
+  placeholder: string | undefined;
+}): {
+  "aria-expanded": boolean;
+  "aria-controls": string | undefined;
+  "aria-activedescendant": string | undefined;
+  "aria-disabled": "true" | undefined;
+  "aria-label": string;
+} {
+  return {
+    "aria-expanded": showPopup,
+    "aria-controls": showPopup ? listboxId : undefined,
+    "aria-activedescendant": activeItem
+      ? optionId(listboxId, activeItem.id)
+      : undefined,
+    "aria-disabled": disabled ? "true" : undefined,
+    "aria-label": ariaLabel ?? placeholder ?? "Editor",
+  };
+}
+
+interface ChipHoverCardOptions {
+  mentionMap: Map<string, string>;
+  skillMap: Map<string, string>;
+  mentionChipHoverCard: boolean;
+  renderMentionChipHoverCard: ((id: string) => ReactNode) | undefined;
+  renderSkillChipHoverCard: ((id: string) => ReactNode) | undefined;
+}
+
+/** Hover state, timers and mouse handlers for the chip hover card. */
+function useChipHoverCard({
+  mentionMap,
+  skillMap,
+  mentionChipHoverCard,
   renderMentionChipHoverCard,
   renderSkillChipHoverCard,
-  dataSlot,
-  ariaLabel,
-  onBlur,
-  disabled = false,
-  initialMentionMap,
-  initialSkillMap,
-}: MentionEditorProps<TItem>) {
-  const chipsClickable =
-    onMentionChipClick !== undefined || onSkillChipClick !== undefined;
+}: ChipHoverCardOptions) {
   const chipHoverEnabled =
     mentionChipHoverCard ||
     renderMentionChipHoverCard !== undefined ||
     renderSkillChipHoverCard !== undefined;
-  const isPanel = popupLayout === "panel";
-  const editorRef = useRef<HTMLDivElement>(null);
-  /**
-   * The listbox this combobox controls. One id is enough: the slash popup and
-   * the mention popup are two `key`s of the same slot and only one trigger can
-   * be open at a time.
-   */
-  const listboxId = useId();
-  const [trigger, setTrigger] = useState<TriggerState>(CLOSED_TRIGGER);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  /**
-   * The chip the last accept inserted, so the trigger scan can tell it apart
-   * from a trigger the user is still typing. See `isInsertedTokenTrigger`.
-   */
-  const insertedTokenRef = useRef<InsertedToken | null>(null);
-  const [popupPlacement, setPopupPlacement] =
-    useState<MentionPopupPlacement | null>(null);
-  const [mentionMap, setMentionMap] = useState<Map<string, string>>(() =>
-    initialMentionMap ? new Map(initialMentionMap) : new Map(),
-  );
-  const [skillMap, setSkillMap] = useState<Map<string, string>>(() =>
-    initialSkillMap ? new Map(initialSkillMap) : new Map(),
-  );
   const [mentionHover, setMentionHover] = useState<{
     userId: string;
   } | null>(null);
@@ -423,6 +537,240 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     }, 250);
   };
 
+  const handleEditorMouseOver = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!chipHoverEnabled) return;
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const mentionChip = target.closest("[data-mention-label]");
+    if (mentionChip instanceof HTMLElement) {
+      if (mentionChipHoverCard) {
+        scheduleMentionHoverCard(mentionChip);
+      } else if (renderMentionChipHoverCard) {
+        scheduleContentChipHoverCard(mentionChip, "mention");
+      }
+      return;
+    }
+    const skillChip = target.closest("[data-skill-label]");
+    if (
+      skillChip instanceof HTMLElement &&
+      renderSkillChipHoverCard !== undefined
+    ) {
+      scheduleContentChipHoverCard(skillChip, "skill");
+    }
+  };
+
+  const handleEditorMouseOut = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!chipHoverEnabled) return;
+    const related = e.relatedTarget;
+    if (related instanceof Element) {
+      if (
+        related.closest("[data-mention-label]") !== null ||
+        related.closest("[data-skill-label]") !== null ||
+        related.closest("[data-mention-hover-card]") !== null
+      ) {
+        return;
+      }
+    }
+    scheduleChipHoverClose();
+  };
+
+  return {
+    chipHoverEnabled,
+    mentionHover,
+    contentChipHover,
+    mentionHoverRect,
+    setMentionHoverRect,
+    mentionHoverChipRef,
+    mentionHoverOpenTimerRef,
+    mentionHoverCloseTimerRef,
+    cancelChipHoverClose,
+    clearChipHoverCard,
+    scheduleChipHoverClose,
+    handleEditorMouseOver,
+    handleEditorMouseOut,
+  };
+}
+
+/**
+ * Keeps the open chip hover card pinned to its chip, clears the hover timers
+ * on unmount, and renders the card into a portal.
+ */
+function useChipHoverCardLayer(
+  hover: ReturnType<typeof useChipHoverCard>,
+  {
+    mentionChipHoverCard,
+    renderMentionChipHoverCard,
+    renderSkillChipHoverCard,
+  }: Omit<ChipHoverCardOptions, "mentionMap" | "skillMap">,
+): ReactNode {
+  const {
+    mentionHover,
+    contentChipHover,
+    mentionHoverRect,
+    setMentionHoverRect,
+    mentionHoverChipRef,
+    mentionHoverOpenTimerRef,
+    mentionHoverCloseTimerRef,
+    cancelChipHoverClose,
+    scheduleChipHoverClose,
+  } = hover;
+
+  useEffect(() => {
+    if ((!mentionHover && !contentChipHover) || !mentionHoverRect) return;
+    let attached = false;
+    const updateRect = () => {
+      if (document.visibilityState !== "visible") return;
+      const chip = mentionHoverChipRef.current;
+      if (chip) {
+        setMentionHoverRect(chip.getBoundingClientRect());
+      }
+    };
+    const syncLayoutListeners = () => {
+      const shouldAttach = document.visibilityState === "visible";
+      if (shouldAttach && !attached) {
+        window.addEventListener("scroll", updateRect, true);
+        window.addEventListener("resize", updateRect);
+        attached = true;
+      } else if (!shouldAttach && attached) {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+        attached = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      syncLayoutListeners();
+      updateRect();
+    };
+    syncLayoutListeners();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (attached) {
+        window.removeEventListener("scroll", updateRect, true);
+        window.removeEventListener("resize", updateRect);
+      }
+    };
+  }, [mentionHover, contentChipHover, mentionHoverRect]);
+
+  useEffect(() => {
+    return () => {
+      if (mentionHoverOpenTimerRef.current !== null) {
+        clearTimeout(mentionHoverOpenTimerRef.current);
+      }
+      if (mentionHoverCloseTimerRef.current !== null) {
+        clearTimeout(mentionHoverCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  const chipHoverCardContent =
+    mentionHover && mentionChipHoverCard ? (
+      <UserProfileHoverCardBody userId={mentionHover.userId} />
+    ) : contentChipHover?.kind === "mention" &&
+      renderMentionChipHoverCard !== undefined ? (
+      renderMentionChipHoverCard(contentChipHover.id)
+    ) : contentChipHover?.kind === "skill" &&
+      renderSkillChipHoverCard !== undefined ? (
+      renderSkillChipHoverCard(contentChipHover.id)
+    ) : null;
+
+  return chipHoverCardContent &&
+    mentionHoverRect &&
+    typeof document !== "undefined"
+    ? createPortal(
+        <div
+          data-mention-hover-card="true"
+          className="fixed z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col-reverse items-stretch"
+          style={{
+            left: mentionHoverRect.left,
+            bottom: window.innerHeight - mentionHoverRect.top,
+          }}
+          onMouseEnter={cancelChipHoverClose}
+          onMouseLeave={scheduleChipHoverClose}
+        >
+          <div className="h-3 shrink-0" aria-hidden />
+          {chipHoverCardContent}
+        </div>,
+        document.body,
+      )
+    : null;
+}
+
+export function MentionEditor<TItem extends MentionItem = MentionItem>(
+  props: MentionEditorProps<TItem>,
+) {
+  const {
+    ref,
+    value,
+    onValueChange,
+    items,
+    placeholder,
+    className,
+    onEnterSubmit,
+    onHistoryNavigate,
+    suggestion,
+    onAcceptSuggestion,
+    onDismissSuggestion,
+    onImageFiles,
+    onLargeTextPaste,
+    emptySlashContent,
+    onMentionChipClick,
+    onSkillChipClick,
+    renderMentionChipHoverCard,
+    renderSkillChipHoverCard,
+    dataSlot,
+    ariaLabel,
+    onBlur,
+    initialMentionMap,
+    initialSkillMap,
+  } = props;
+  const {
+    slashItems,
+    chipClassName,
+    skillChipClassName,
+    renderItem,
+    renderSlashItem,
+    filterItem,
+    filterSlashItem,
+    popupLayout,
+    mentionPopupTitle,
+    mentionChipHoverCard,
+    disabled,
+  } = withMentionEditorDefaults(props);
+  const chipsClickable =
+    onMentionChipClick !== undefined || onSkillChipClick !== undefined;
+  const isPanel = popupLayout === "panel";
+  const editorRef = useRef<HTMLDivElement>(null);
+  /**
+   * The listbox this combobox controls. One id is enough: the slash popup and
+   * the mention popup are two `key`s of the same slot and only one trigger can
+   * be open at a time.
+   */
+  const listboxId = useId();
+  const [trigger, setTrigger] = useState<TriggerState>(CLOSED_TRIGGER);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  /**
+   * The chip the last accept inserted, so the trigger scan can tell it apart
+   * from a trigger the user is still typing. See `isInsertedTokenTrigger`.
+   */
+  const insertedTokenRef = useRef<InsertedToken | null>(null);
+  const [popupPlacement, setPopupPlacement] =
+    useState<MentionPopupPlacement | null>(null);
+  const [mentionMap, setMentionMap] = useState<Map<string, string>>(() =>
+    initialMentionMap ? new Map(initialMentionMap) : new Map(),
+  );
+  const [skillMap, setSkillMap] = useState<Map<string, string>>(() =>
+    initialSkillMap ? new Map(initialSkillMap) : new Map(),
+  );
+  const chipHover = useChipHoverCard({
+    mentionMap,
+    skillMap,
+    mentionChipHoverCard,
+    renderMentionChipHoverCard,
+    renderSkillChipHoverCard,
+  });
+  const { chipHoverEnabled, clearChipHoverCard } = chipHover;
+
   /* eslint-disable no-effect/no-derived-state, no-effect/no-chain-state-updates, no-effect/no-event-handler --
      `value` is owned by whichever controller wraps the editor (send, draft pull,
      programmatic seed), so "the input was emptied" has no single call site to
@@ -444,10 +792,10 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     if (!el) return;
     const domText = normalizeMentionText(extractEditableText(el));
     // A pasted/typed link URL leaves DOM text already equal to `value`, so also
-    // re-render when the link-chip count is out of sync — this chips a fresh URL
+    // re-render when the link count is out of sync — this links a fresh URL
     // exactly once, then stays stable during normal editing.
-    const linkChipCount = el.querySelectorAll("[data-link-url]").length;
-    if (domText !== value || linkChipCount !== countLinkUrls(value)) {
+    const linkCount = el.querySelectorAll("[data-link-url]").length;
+    if (domText !== value || linkCount !== countLinkUrls(value)) {
       el.innerHTML = renderEditorChipHtml(
         value,
         mentionMap,
@@ -657,7 +1005,10 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
           : null;
         setPopupPlacement(
           panelAnchor
-            ? computePanelPopupPlacement(panelAnchor.getBoundingClientRect())
+            ? computePanelPopupPlacement(
+                panelAnchor.getBoundingClientRect(),
+                viewportSize(),
+              )
             : computeMentionPopupPlacement(getSelectionAnchorRect(el)),
         );
       });
@@ -761,51 +1112,21 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
       return;
     }
 
-    // Inline AI completion. Sits after the picker block so the picker keeps
-    // priority on Tab, and before history recall so Escape reaches it.
-    if (suggestion && !trigger.isOpen) {
-      if (e.key === "Tab" && !e.shiftKey) {
-        e.preventDefault();
-        onAcceptSuggestion?.();
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onDismissSuggestion?.();
-        return;
-      }
-    }
-
-    // Message-history recall: Alt+Up/Down so plain arrows stay for caret
-    // movement in multi-line drafts. Skip when the mention picker is open.
     if (
-      onHistoryNavigate &&
-      !trigger.isOpen &&
-      e.altKey &&
-      !e.shiftKey &&
-      !e.metaKey &&
-      !e.ctrlKey
+      handleSuggestionKey(
+        e,
+        Boolean(suggestion) && !trigger.isOpen,
+        onAcceptSuggestion,
+        onDismissSuggestion,
+      )
     ) {
-      if (e.key === "ArrowUp") {
-        if (onHistoryNavigate("up")) {
-          e.preventDefault();
-          return;
-        }
-      }
-      if (e.key === "ArrowDown") {
-        if (onHistoryNavigate("down")) {
-          e.preventDefault();
-          return;
-        }
-      }
+      return;
     }
 
-    if (e.key === "Enter" && onEnterSubmit) {
-      if (e.nativeEvent.isComposing) return;
-      if (e.shiftKey) return;
-      e.preventDefault();
-      onEnterSubmit(e);
-    }
+    // Skip history recall when the mention picker is open.
+    if (handleHistoryKey(e, trigger.isOpen, onHistoryNavigate)) return;
+
+    handleEnterSubmitKey(e, onEnterSubmit);
   };
 
   const handleBlur = () => {
@@ -814,100 +1135,26 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
     onBlur?.();
   };
 
-  const handleEditorMouseOver = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!chipHoverEnabled) return;
-    const target = e.target;
-    if (!(target instanceof Element)) return;
-    const mentionChip = target.closest("[data-mention-label]");
-    if (mentionChip instanceof HTMLElement) {
-      if (mentionChipHoverCard) {
-        scheduleMentionHoverCard(mentionChip);
-      } else if (renderMentionChipHoverCard) {
-        scheduleContentChipHoverCard(mentionChip, "mention");
-      }
-      return;
-    }
-    const skillChip = target.closest("[data-skill-label]");
-    if (
-      skillChip instanceof HTMLElement &&
-      renderSkillChipHoverCard !== undefined
-    ) {
-      scheduleContentChipHoverCard(skillChip, "skill");
-    }
+  const chipHoverCard = useChipHoverCardLayer(chipHover, {
+    mentionChipHoverCard,
+    renderMentionChipHoverCard,
+    renderSkillChipHoverCard,
+  });
+
+  /** A link favicon that 404s hides itself (`.markdown-link-icon[data-failed]`). */
+  const hideFailedFavicon = (e: React.SyntheticEvent<HTMLDivElement>) => {
+    if (e.target instanceof HTMLImageElement) e.target.dataset.failed = "true";
   };
-
-  const handleEditorMouseOut = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!chipHoverEnabled) return;
-    const related = e.relatedTarget;
-    if (related instanceof Element) {
-      if (
-        related.closest("[data-mention-label]") !== null ||
-        related.closest("[data-skill-label]") !== null ||
-        related.closest("[data-mention-hover-card]") !== null
-      ) {
-        return;
-      }
-    }
-    scheduleChipHoverClose();
-  };
-
-  useEffect(() => {
-    if ((!mentionHover && !contentChipHover) || !mentionHoverRect) return;
-    let attached = false;
-    const updateRect = () => {
-      if (document.visibilityState !== "visible") return;
-      const chip = mentionHoverChipRef.current;
-      if (chip) {
-        setMentionHoverRect(chip.getBoundingClientRect());
-      }
-    };
-    const syncLayoutListeners = () => {
-      const shouldAttach = document.visibilityState === "visible";
-      if (shouldAttach && !attached) {
-        window.addEventListener("scroll", updateRect, true);
-        window.addEventListener("resize", updateRect);
-        attached = true;
-      } else if (!shouldAttach && attached) {
-        window.removeEventListener("scroll", updateRect, true);
-        window.removeEventListener("resize", updateRect);
-        attached = false;
-      }
-    };
-    const onVisibilityChange = () => {
-      syncLayoutListeners();
-      updateRect();
-    };
-    syncLayoutListeners();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      if (attached) {
-        window.removeEventListener("scroll", updateRect, true);
-        window.removeEventListener("resize", updateRect);
-      }
-    };
-  }, [mentionHover, contentChipHover, mentionHoverRect]);
-
-  useEffect(() => {
-    return () => {
-      if (mentionHoverOpenTimerRef.current !== null) {
-        clearTimeout(mentionHoverOpenTimerRef.current);
-      }
-      if (mentionHoverCloseTimerRef.current !== null) {
-        clearTimeout(mentionHoverCloseTimerRef.current);
-      }
-    };
-  }, []);
 
   const handleChipClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target;
     if (!(target instanceof Element)) return;
 
-    // Link chips open externally and are always clickable, independent of the
+    // Links open externally and are always clickable, independent of the
     // mention/skill click handlers.
-    const linkChip = target.closest("[data-link-url]");
-    if (linkChip instanceof HTMLElement) {
-      const url = linkChip.dataset.linkUrl;
+    const link = target.closest("[data-link-url]");
+    if (link instanceof HTMLElement) {
+      const url = link.dataset.linkUrl;
       if (url) {
         e.preventDefault();
         e.stopPropagation();
@@ -988,13 +1235,12 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
 
   const isEmpty = isEditorValueEmpty(value);
 
-  // Gated on the *unfiltered* list so a query that matches nothing shows "No
-  // matches" instead of unmounting the popup.
-  const showPopup =
-    trigger.isOpen &&
-    (trigger.kind === "slash"
-      ? slashItems.length > 0 || emptySlashContent !== undefined
-      : items.length > 0);
+  const showPopup = shouldShowPopup(
+    trigger,
+    slashItems.length,
+    emptySlashContent !== undefined,
+    items.length,
+  );
 
   const popupTitle = trigger.kind === "slash" ? "Skills" : mentionPopupTitle;
 
@@ -1032,37 +1278,6 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
       )
     ) : null;
 
-  const chipHoverCardContent =
-    mentionHover && mentionChipHoverCard ? (
-      <UserProfileHoverCardBody userId={mentionHover.userId} />
-    ) : contentChipHover?.kind === "mention" &&
-      renderMentionChipHoverCard !== undefined ? (
-      renderMentionChipHoverCard(contentChipHover.id)
-    ) : contentChipHover?.kind === "skill" &&
-      renderSkillChipHoverCard !== undefined ? (
-      renderSkillChipHoverCard(contentChipHover.id)
-    ) : null;
-
-  const chipHoverCard =
-    chipHoverCardContent && mentionHoverRect && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            data-mention-hover-card="true"
-            className="fixed z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col-reverse items-stretch"
-            style={{
-              left: mentionHoverRect.left,
-              bottom: window.innerHeight - mentionHoverRect.top,
-            }}
-            onMouseEnter={cancelChipHoverClose}
-            onMouseLeave={scheduleChipHoverClose}
-          >
-            <div className="h-3 shrink-0" aria-hidden />
-            {chipHoverCardContent}
-          </div>,
-          document.body,
-        )
-      : null;
-
   return (
     <>
       <div
@@ -1073,21 +1288,19 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         data-suggestion={suggestion}
         contentEditable={!disabled}
         suppressContentEditableWarning
-        /* ARIA 1.2 combobox: the editor is the input, the picker is the popup
-           it controls, and `aria-activedescendant` is how a screen reader is
-           told which row ArrowUp/ArrowDown moved to — the picker rows keep DOM
-           focus out of it entirely. Without these the popup opened silently. */
+        /* ARIA 1.2 combobox — see `editorAriaState`. */
         role="combobox"
         aria-multiline="true"
         aria-haspopup="listbox"
         aria-autocomplete="list"
-        aria-expanded={showPopup}
-        aria-controls={showPopup ? listboxId : undefined}
-        aria-activedescendant={
-          activeItem ? optionId(listboxId, activeItem.id) : undefined
-        }
-        aria-disabled={disabled ? "true" : undefined}
-        aria-label={ariaLabel ?? placeholder ?? "Editor"}
+        {...editorAriaState({
+          showPopup,
+          listboxId,
+          activeItem,
+          disabled,
+          ariaLabel,
+          placeholder,
+        })}
         className={cn(
           DEFAULT_EDITOR_CLASS,
           // `role="combobox"` opts into the base-layer pointer cursor meant for
@@ -1099,8 +1312,13 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>({
         onInput={disabled ? undefined : handleInput}
         onKeyDown={disabled ? undefined : handleKeyDown}
         onClick={disabled ? undefined : handleChipClick}
-        onMouseOver={chipHoverEnabled ? handleEditorMouseOver : undefined}
-        onMouseOut={chipHoverEnabled ? handleEditorMouseOut : undefined}
+        onErrorCapture={hideFailedFavicon}
+        onMouseOver={
+          chipHoverEnabled ? chipHover.handleEditorMouseOver : undefined
+        }
+        onMouseOut={
+          chipHoverEnabled ? chipHover.handleEditorMouseOut : undefined
+        }
         onBlur={disabled ? undefined : handleBlur}
         onPaste={disabled ? undefined : handlePaste}
       />

@@ -10,9 +10,11 @@ import {
   getAIModelProvider,
   launchTraitsFromStored,
   normalizeAIModel,
+  usesChatDaemon,
 } from "../validators";
 import type { AIProvider } from "../validators";
 import { queuedMessageFields } from "../_validators/tableFields";
+import { reclaimQueuedAttachments } from "./attachments";
 import {
   backgroundAgentsExpireAt,
   runningBackgroundAgents,
@@ -40,6 +42,11 @@ import {
   type UsageLimitHold,
 } from "../_taskWorkflow/usageLimitReset";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
+import { buildSessionPrompt } from "../_sessions/sessionPrompt";
+import {
+  buildDaemonPendingTurn,
+  scheduleChatDaemonPrewarm,
+} from "../_sessions/daemonTurn";
 import { wakeTaskSandboxForQueue } from "../_agentTasks/sandbox";
 import { wakeProjectSandboxForQueue } from "../_projects/sandbox";
 import {
@@ -196,6 +203,10 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
  * process whatever that subagent reports back. Dequeuing in either window
  * starts the queued message on top of work the user is still waiting on — the
  * "queued message ran while a subagent was working" bug.
+ *
+ * Subagents only count on an awake sandbox: they die with their VM, and a stop
+ * never settles them. Counting them on a sleeping sandbox held the message
+ * without waking Eva, so it sat in "Queued" until the 2-hour cap.
  */
 async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   ctx: MutationCtx,
@@ -209,6 +220,7 @@ async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
     return true;
   }
   if (
+    config.sandboxState(entity) === "awake" &&
     runningBackgroundAgents(config.backgroundAgents(entity), Date.now())
       .length > 0
   ) {
@@ -244,6 +256,7 @@ async function scheduleDrainAtBackgroundAgentExpiry<
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<void> {
   if (config.hasActiveWorkflow(entity)) return;
+  if (config.sandboxState(entity) !== "awake") return;
   const now = Date.now();
   const expiresAt = backgroundAgentsExpireAt(
     config.backgroundAgents(entity),
@@ -261,6 +274,37 @@ async function scheduleDrainAtBackgroundAgentExpiry<
     internal._queues.helpers.drainQueueAfterBackgroundAgents,
     { parentId: id },
   );
+}
+
+/**
+ * Drops the user row the composer stored (`addMessage`) for a send that
+ * `startExecute` queued instead of starting: the dequeue inserts its own row,
+ * so keeping it would show the prompt twice. The composer picks send or queue
+ * from its own subscription, so a burst of sends can all reach `startExecute`
+ * before it sees the first turn. Their rows interleave with that turn's
+ * placeholder, so this takes the newest matching user row since the last
+ * finished reply, not just the newest row. Returns the row's attachments.
+ */
+export async function dropComposerUserRow(
+  ctx: MutationCtx,
+  parentId: ChatQueueId,
+  content: string,
+): Promise<Id<"_storage">[] | undefined> {
+  const recent = await ctx.db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .order("desc")
+    .take(20);
+  for (const message of recent) {
+    if (message.role === "assistant" && message.finishedAt !== undefined) {
+      return undefined;
+    }
+    if (message.role === "user" && message.content === content) {
+      await ctx.db.delete(message._id);
+      return message.attachmentStorageIds;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -355,15 +399,28 @@ async function startNextQueuedChatMessage<
     return false;
   }
 
+  // An account deleted or unshared since the enqueue makes this throw. A throw
+  // here rolls back the caller — often the turn's own completion — and the next
+  // drain throws again, so the message would sit at the front forever. Consume
+  // it with an error bubble instead, like a guard failure.
+  let providerAccountId: Id<"userProviderAccounts"> | undefined;
+  try {
+    providerAccountId = await config.turnAccountId(ctx, entity, nextMessage);
+  } catch (error) {
+    await ctx.db.delete(nextMessage._id);
+    // No user message will own the uploads: reclaim them with the row.
+    await reclaimQueuedAttachments(ctx, nextMessage);
+    const reason =
+      error instanceof Error ? error.message : config.defaultStartErrorMessage;
+    await config.recordError(ctx, id, `Error: ${reason}`);
+    await notifyWatchingOrchestrator("error");
+    return false;
+  }
+
   // The last turn ran out of usage: sending now would only fail again, so the
   // queue waits for the reset. Every drain that lands here books the resume —
   // duplicates are harmless, since the first to run starts the turn and makes
   // the rest find the surface busy.
-  const providerAccountId = await config.turnAccountId(
-    ctx,
-    entity,
-    nextMessage,
-  );
   const hold = await usageLimitHoldFor(ctx, id, nextMessage, providerAccountId);
   if (hold !== null) {
     await ctx.scheduler.runAt(
@@ -391,6 +448,8 @@ async function startNextQueuedChatMessage<
     providerAccountId,
   );
   if (!guard.ok) {
+    // The row is gone and no user message was inserted to take the uploads.
+    await reclaimQueuedAttachments(ctx, nextMessage);
     await config.recordError(ctx, id, guard.error);
     // The queued turn is consumed and cannot run, so the child is idle again —
     // without this the master would wait forever on a turn that never starts.
@@ -593,7 +652,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sentViaOrchestrator: next.sentViaOrchestrator,
     });
   },
-  startWorkflow: async (ctx, id, { session }, next, prepared) => {
+  startWorkflow: async (ctx, id, { session, chat }, next, prepared) => {
     const placeholderMessageId = await ctx.db.insert("messages", {
       parentId: id,
       role: "assistant",
@@ -612,6 +671,46 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sandboxId: session.sandboxId,
       repoId: session.repoId,
     });
+    // Normalised, not forwarded raw: the composer enqueues model defaults
+    // explicitly (e.g. reasoning "high"), and the workflow feeds these
+    // straight into prewarmSessionDaemon — a raw default yields a
+    // different opts sig from the page-open prewarm and kills its daemon.
+    const model = normalizeAIModel(prepared.model);
+    const launchTraits = launchTraitsFromStored(model, {
+      reasoningLevel: next.reasoningLevel,
+      thinkingEnabled: next.thinkingEnabled,
+      use1mContext: next.use1mContext,
+      fastMode: next.fastMode,
+    });
+    // Same daemon-pull staging as a direct send (stageAndStartChatTurn). A new
+    // session's first message lands here once its sandbox exists; leaving the
+    // staging to the workflow held the turn ~7s behind its validate step.
+    if (usesChatDaemon(model)) {
+      const { prompt } = await buildSessionPrompt(ctx, {
+        session,
+        chat,
+        repo: prepared.repo,
+        user: await ctx.db.get(next.userId),
+        message: next.content,
+        model,
+      });
+      await ctx.db.patch(id, {
+        pendingTurn: buildDaemonPendingTurn({
+          prompt,
+          turnId,
+          attachmentStorageIds: next.attachmentStorageIds,
+          model,
+        }),
+      });
+      await scheduleChatDaemonPrewarm(ctx, {
+        session,
+        chat,
+        userId: next.userId,
+        model,
+        launchTraits,
+        providerAccountId: prepared.providerAccountId,
+      });
+    }
     try {
       return await workflow.start(
         ctx,
@@ -620,16 +719,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
           chatId: id,
           message: next.content,
           model: prepared.model,
-          // Normalised, not forwarded raw: the composer enqueues model defaults
-          // explicitly (e.g. reasoning "high"), and the workflow feeds these
-          // straight into prewarmSessionDaemon — a raw default yields a
-          // different opts sig from the page-open prewarm and kills its daemon.
-          ...launchTraitsFromStored(normalizeAIModel(prepared.model), {
-            reasoningLevel: next.reasoningLevel,
-            thinkingEnabled: next.thinkingEnabled,
-            use1mContext: next.use1mContext,
-            fastMode: next.fastMode,
-          }),
+          ...launchTraits,
           providerAccountId: prepared.providerAccountId,
           credentialOwnerUserId: session.createdBy ?? session.userId,
           userId: next.userId,
@@ -708,7 +798,7 @@ const projectChatQueueConfig: ChatQueueConfig<
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
-      content: next.content,
+      content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,
@@ -822,7 +912,7 @@ const taskChatQueueConfig: ChatQueueConfig<
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
-      content: next.content,
+      content: next.displayContent ?? next.content,
       timestamp: now,
       userId: next.userId,
       attachmentStorageIds: next.attachmentStorageIds,

@@ -1,14 +1,12 @@
 "use node";
 
 import { v } from "convex/values";
-import { z } from "zod";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   resolveSandboxCredentials,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
-import { getInstallationToken } from "./githubAuth";
 import {
   buildConfigFileDownloadCommands,
   filterDownloadableConfigFiles,
@@ -24,6 +22,7 @@ import { getSandboxClient } from "./_sandbox/factory";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
 import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
+import { writeSandboxFile } from "./_sandbox_runtime/sandboxFiles";
 import {
   COREPACK_SANDBOX_ENV,
   renderEvaEnvFile,
@@ -41,8 +40,10 @@ import {
   releaseSwapFile,
   resolveSwapConfig,
 } from "./_sandbox_runtime/swap";
-import { CLAUDE_CODE_VERSION } from "./_sandbox_runtime/claudeCliVersion";
-import { CODEX_CLI_VERSION } from "./_sandbox_runtime/codexCliVersion";
+import {
+  resolveClaudeCliVersion,
+  resolveCodexCliVersion,
+} from "./_sandbox_runtime/launch";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
 import { SANDBOX_TAG } from "./_sandbox/tags";
 import {
@@ -189,97 +190,6 @@ function seededRuntimeStateCaptureLines(
   ];
 }
 
-// Bump when the Vercel seed-prep toolchain/build inputs change in a way that
-// should invalidate existing image fingerprints (see getImageFingerprint)
-// even though repo/config inputs are unchanged.
-const IMAGE_DEF_VERSION = 2;
-
-// Boundary schema for the small GitHub JSON responses this module reads.
-const shaResponseSchema = z.object({ sha: z.string() });
-
-/** Manifest files that affect baked install output (Node lockfiles + Python). */
-const FINGERPRINT_MANIFEST_FILES = [
-  "pnpm-lock.yaml",
-  "package-lock.json",
-  "yarn.lock",
-  "requirements.txt",
-  "pyproject.toml",
-] as const;
-
-/**
- * Fingerprint of the Image inputs: every dependency manifest blob sha found on
- * the build branch (Node lockfiles + Python), the build commands, the
- * config-file blobs baked into the image, and IMAGE_DEF_VERSION. When this
- * matches the value stored at the last successful Image build, the workflow
- * skips the ~11-15m rebuild — the output would be byte-identical (sandboxes
- * fetch fresh branches at boot, so a repo checkout that is a few commits stale
- * costs nothing; node_modules / site-packages only drift when a manifest
- * changes, which changes this fingerprint). Returns null when the inputs
- * cannot be determined (e.g. no manifests found) — callers must treat null as
- * "always rebuild".
- */
-export const getImageFingerprint = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args): Promise<string | null> => {
-    const config = await ctx.runQuery(
-      internal.repoSnapshots.getRepoSnapshotInternal,
-      { repoSnapshotId: args.repoSnapshotId },
-    );
-    if (!config) return null;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: config.repoId,
-    });
-    if (!repo) return null;
-    const branch = config.workflowRef ?? "main";
-    const manifestShas: string[] = [];
-    try {
-      const token = await getInstallationToken(repo.installationId);
-      for (const manifest of FINGERPRINT_MANIFEST_FILES) {
-        const resp = await fetch(
-          `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: "application/vnd.github+json",
-            },
-          },
-        );
-        if (resp.ok) {
-          const parsed = shaResponseSchema.safeParse(await resp.json());
-          if (parsed.success) {
-            manifestShas.push(`${manifest}:${parsed.data.sha}`);
-          }
-        }
-      }
-    } catch (e) {
-      console.error(
-        `[snapshot] image fingerprint: manifest lookup failed: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      );
-      return null;
-    }
-    if (manifestShas.length === 0) return null;
-    const fileKeys: string[] = await ctx.runQuery(
-      internal.sandboxConfigFiles.getConfigFileKeys,
-      { repoId: config.repoId },
-    );
-    const payload = JSON.stringify({
-      v: IMAGE_DEF_VERSION,
-      branch,
-      manifestShas,
-      buildCommands: config.buildCommands ?? [],
-      files: fileKeys,
-    });
-    let hash = 5381;
-    for (let i = 0; i < payload.length; i++) {
-      hash = (hash * 33) ^ payload.charCodeAt(i);
-    }
-    return `img-${(hash >>> 0).toString(36)}-${payload.length}`;
-  },
-});
-
 /**
  * Seeded-snapshot build — LAUNCH step. Composes the app's whole seed sequence
  * (startup commands → marker → stop commands) into one bash script and launches
@@ -311,18 +221,29 @@ export const launchSeedRun = internalAction({
     // Validates Vercel credentials are configured for this repo; the sandbox
     // handle itself is resolved separately below via getSandboxHandle.
     await resolveSandboxCredentials(ctx, args.repoId);
-    const startupCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStartupCommands,
-      { repoId: args.repoId },
-    );
-    const backgroundCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getBackgroundCommands,
-      { repoId: args.repoId },
-    );
-    const stopCommands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStopCommands,
-      { repoId: args.repoId },
-    );
+    // Bake the same registry-latest CLIs a launch resolves (launch.ts). Baking
+    // the compiled floor made every launch npm-install the latest Claude CLI
+    // before its daemon could start: ~5-7s on half of all first turns.
+    // These reads are independent, so they run together.
+    const [
+      claudeCliVersion,
+      codexCliVersion,
+      startupCommands,
+      backgroundCommands,
+      stopCommands,
+    ] = await Promise.all([
+      resolveClaudeCliVersion(),
+      resolveCodexCliVersion(),
+      ctx.runQuery(internal.repoSnapshots.getStartupCommands, {
+        repoId: args.repoId,
+      }),
+      ctx.runQuery(internal.repoSnapshots.getBackgroundCommands, {
+        repoId: args.repoId,
+      }),
+      ctx.runQuery(internal.repoSnapshots.getStopCommands, {
+        repoId: args.repoId,
+      }),
+    ]);
     const requireSupabaseDump = shouldCaptureSupabaseState([
       ...(startupCommands ?? []),
       ...(backgroundCommands ?? []),
@@ -417,7 +338,7 @@ export const launchSeedRun = internalAction({
       "sudo mkdir -p /opt/git/etc",
       'sudo /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
       'sudo env GIT_CONFIG_SYSTEM=/etc/gitconfig /usr/local/bin/git-lfs install --system || { echo "SEEDRUN-FAILED:git-lfs-filters"; exit 1; }',
-      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", CLAUDE_CODE_VERSION)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", CODEX_CLI_VERSION)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${CODEX_CLI_VERSION} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
+      `command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1 && ${globalPackageIsVersion("@anthropic-ai/claude-code", claudeCliVersion)} && ${globalPackageIsVersion("@anthropic-ai/claude-agent-sdk", CLAUDE_AGENT_SDK_VERSION)} && ${globalPackageIsVersion("@openai/codex", codexCliVersion)} && ${globalPackageIsVersion("@cursor/sdk", CURSOR_SDK_VERSION)} || sudo npm install -g @anthropic-ai/claude-code@${claudeCliVersion} @anthropic-ai/claude-agent-sdk@${CLAUDE_AGENT_SDK_VERSION} @openai/codex@${codexCliVersion} agent-browser convex agentation-mcp@1.2.0 @cursor/sdk@${CURSOR_SDK_VERSION} || { echo "SEEDRUN-FAILED:agent-clis"; exit 1; }`,
       `command -v opencode >/dev/null 2>&1 && ${globalPackageIsVersion("@opencode-ai/sdk", OPENCODE_VERSION)} || sudo npm install -g opencode-ai@${OPENCODE_VERSION} @opencode-ai/sdk@${OPENCODE_VERSION} || { echo "SEEDRUN-FAILED:opencode-cli"; exit 1; }`,
       // code-server publishes one artifact per packaging format, and the two
       // asset names differ by more than the extension (`code-server_V_amd64.deb`
@@ -647,7 +568,7 @@ export const launchSeedRun = internalAction({
         "rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh",
         30,
       );
-      await sandbox.writeFile("/tmp/seedrun.sh", script);
+      await writeSandboxFile(sandbox, "/tmp/seedrun.sh", script);
       await execHandle(sandbox, "chmod +x /tmp/seedrun.sh", 30);
       const wrote = await execHandle(
         sandbox,
@@ -783,7 +704,10 @@ export const createSeedPrepSandbox = internalAction({
   ): Promise<
     { ok: true; sandboxId: string } | { ok: false; error: string }
   > => {
-    const resolved = await tryResolveSandboxCredentials(ctx, args.repoId);
+    const [resolved, repo] = await Promise.all([
+      tryResolveSandboxCredentials(ctx, args.repoId),
+      ctx.runQuery(internal.repoSnapshots.getRepo, { repoId: args.repoId }),
+    ]);
     if (!resolved.ok) {
       console.warn(`[snapshot] createSeedPrepSandbox: ${resolved.error}`);
       return { ok: false, error: resolved.error };
@@ -796,9 +720,6 @@ export const createSeedPrepSandbox = internalAction({
     const effectiveImageSnapshot = !args.imageSnapshot.startsWith("snap_")
       ? undefined
       : args.imageSnapshot;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: args.repoId,
-    });
     if (!repo) throw new Error("Repo not found");
     const seedPrepLifecycle = {
       ...SESSION_LIFECYCLE,

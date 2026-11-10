@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  AI_MODEL_ALIASES,
   AI_MODEL_OPTIONS,
   buildTraitsExecutionPayload,
   getAIModelProvider,
@@ -130,10 +131,10 @@ test("normalizeAIModel remaps retired opencode models to gpt-5.6-sol", () => {
   );
 });
 
-test("the picker leads with Fable 5.1 and GPT-6 Astra", () => {
+test("the picker leads with Fable 5.2 and GPT-6 Astra", () => {
   const first = (provider: string) =>
     AI_MODEL_OPTIONS.find((option) => option.provider === provider)?.id;
-  expect(first("claude")).toBe("claude:claude-fable-5-1");
+  expect(first("claude")).toBe("claude:claude-fable-5-2");
   expect(first("codex")).toBe("codex:gpt-6-astra");
   expect(first("opencode")).toBe("opencode:openai/gpt-6-astra");
 });
@@ -158,13 +159,16 @@ test("normalizeAIModel upgrades bare legacy claude aliases", () => {
   expect(normalizeAIModel("opus")).toBe("claude:opus");
   expect(normalizeAIModel("haiku")).toBe("claude:haiku");
   expect(normalizeAIModel("sonnet")).toBe("claude:sonnet");
-  expect(normalizeAIModel("fable")).toBe("claude:claude-fable-5-1");
-  expect(normalizeAIModel("claude:fable")).toBe("claude:claude-fable-5-1");
+  expect(normalizeAIModel("fable")).toBe("claude:claude-fable-5-2");
+  expect(normalizeAIModel("claude:fable")).toBe("claude:claude-fable-5-2");
   expect(normalizeAIModel("claude:claude-fable-5")).toBe(
-    "claude:claude-fable-5-1",
+    "claude:claude-fable-5-2",
   );
   expect(normalizeAIModel("claude:claude-fable-5-1")).toBe(
-    "claude:claude-fable-5-1",
+    "claude:claude-fable-5-2",
+  );
+  expect(normalizeAIModel("claude:claude-fable-5-2")).toBe(
+    "claude:claude-fable-5-2",
   );
 });
 
@@ -186,4 +190,12 @@ test("storedTraitsFromRepoDefaults maps repo config fields", () => {
     use1mContext: undefined,
     fastMode: true,
   });
+});
+
+// The old `switch` rejected a repeated case at compile time; the alias Map
+// would let the last entry win silently, so pin uniqueness here.
+test("every model alias is listed once", () => {
+  const aliases = AI_MODEL_ALIASES.flatMap(([, list]) => list);
+  const repeated = aliases.filter((alias, i) => aliases.indexOf(alias) !== i);
+  expect(repeated).toEqual([]);
 });

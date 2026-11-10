@@ -15,6 +15,10 @@ export const SCOPE_REVIEW_THRESHOLD = 0.35;
 export const SCOPE_FLAGGED_THRESHOLD = 0.65;
 /** Below this, the reply did not tell the user about the change. */
 export const MENTION_THRESHOLD = 0.5;
+/** At or above this, the change shows in the turn's screenshots. */
+export const VISIBLE_THRESHOLD = 0.5;
+/** Below this, the screenshots probably show something other than the ask. */
+export const SHOWS_REQUEST_THRESHOLD = 0.5;
 
 /**
  * Hunks the reply never mentioned. Absent `mentioned` means the question was
@@ -85,6 +89,42 @@ export function hunkUnrequestedProbability(hunk: ScopeCheckHunk): number {
 /** Whether this row is one the reply never told the user about. */
 export function isUnmentioned(hunk: ScopeCheckHunk): boolean {
   return hunk.mentioned !== undefined && hunk.mentioned < MENTION_THRESHOLD;
+}
+
+/** Whether a screenshot the turn posted shows this change. */
+export function isVisibleInScreenshot(hunk: ScopeCheckHunk): boolean {
+  return hunk.visible !== undefined && hunk.visible >= VISIBLE_THRESHOLD;
+}
+
+/** Row suffixes after the location, in reading order. */
+export function hunkNotes(hunk: ScopeCheckHunk): string {
+  return [
+    isUnmentioned(hunk) ? "not mentioned in the reply" : null,
+    isVisibleInScreenshot(hunk) ? "visible in a screenshot" : null,
+  ]
+    .filter((note) => note !== null)
+    .map((note) => ` · ${note}`)
+    .join("");
+}
+
+/** The meta line under the headline: coverage of the diff and the screenshots. */
+export function scopeCheckCoverage(check: ScopeCheck): string {
+  const parts = [`${check.judgedHunks} of ${check.totalHunks} changes judged`];
+  if (check.partial) parts.push("diff clipped");
+  const checked = check.screenshots?.checked ?? 0;
+  if (checked > 0) {
+    parts.push(`${checked} screenshot${checked === 1 ? "" : "s"} checked`);
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * True when Jev read the screenshots and leans "they do not show the ask".
+ * Unanswered is not a miss, the same rule as `mentioned`.
+ */
+export function screenshotsMissRequest(check: ScopeCheck): boolean {
+  const showsRequest = check.screenshots?.showsRequest;
+  return showsRequest !== undefined && showsRequest < SHOWS_REQUEST_THRESHOLD;
 }
 
 /**

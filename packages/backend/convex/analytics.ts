@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { internalQuery } from "./_generated/server";
 import { authQuery, hasRepoAccess } from "./functions";
 import { filterActiveEntities } from "./numId";
 import { loadLastSeenAt } from "./_users/lastSeen";
@@ -160,7 +161,10 @@ export const getImpactStats = authQuery({
       Array<{ startedAt?: number; finishedAt?: number }>
     >();
     // Every PR a task opened, project PRs included (they name their task).
-    const prsByTaskId = new Map<string, Array<{ prUrl: string; createdAt: number }>>();
+    const prsByTaskId = new Map<
+      string,
+      Array<{ prUrl: string; createdAt: number }>
+    >();
     await Promise.all(
       tasksNeedingRuns.map(async (task) => {
         const [runs, prs] = await Promise.all([
@@ -469,26 +473,35 @@ export const getActivityTimeline = authQuery({
         if (buckets[bucket]) buckets[bucket].prsShipped++;
       }
     }
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-      .collect();
-    const usersInActiveSessions = new Set<Id<"users">>();
-    for (const session of sessions) {
-      if (session._creationTime >= args.startTime) {
-        const bucket = getBucket(session._creationTime);
-        if (buckets[bucket]) {
-          buckets[bucket].sessions++;
-          if (session.prUrl) {
-            buckets[bucket].prsShipped++;
-            buckets[bucket].sessionsWithPr++;
-          }
+    // Sessions in the window fill the buckets; active sessions of any age
+    // name the users whose last-seen time is plotted.
+    const [windowSessions, activeSessions] = await Promise.all([
+      ctx.db
+        .query("sessions")
+        .withIndex("by_repo", (q) =>
+          q.eq("repoId", args.repoId).gte("_creationTime", args.startTime),
+        )
+        .collect(),
+      ctx.db
+        .query("sessions")
+        .withIndex("by_repo_and_status", (q) =>
+          q.eq("repoId", args.repoId).eq("status", "active"),
+        )
+        .collect(),
+    ]);
+    for (const session of windowSessions) {
+      const bucket = getBucket(session._creationTime);
+      if (buckets[bucket]) {
+        buckets[bucket].sessions++;
+        if (session.prUrl) {
+          buckets[bucket].prsShipped++;
+          buckets[bucket].sessionsWithPr++;
         }
       }
-      if (session.status === "active") {
-        usersInActiveSessions.add(session.userId);
-      }
     }
+    const usersInActiveSessions = new Set<Id<"users">>(
+      activeSessions.map((session) => session.userId),
+    );
     const activeSessionUserIds = [...usersInActiveSessions];
     const lastSeenAts = await Promise.all(
       activeSessionUserIds.map((id) => loadLastSeenAt(ctx.db, id)),
@@ -510,6 +523,22 @@ export const getActivityTimeline = authQuery({
         activeUsers: activeUsersByBucket[Number(date)]?.size ?? 0,
       }))
       .sort((a, b) => a.date - b.date);
+  },
+});
+
+/**
+ * PR numbers Eva opened in a repo, for `getEvaMergeShare`. Every
+ * `pullRequests` row sits on an Eva branch, so the table is the list.
+ */
+export const listEvaPrNumbers = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(v.number()),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("pullRequests")
+      .withIndex("by_repo_and_head_branch", (q) => q.eq("repoId", args.repoId))
+      .collect();
+    return rows.map((row) => row.prNumber);
   },
 });
 
@@ -595,19 +624,27 @@ export const getLeaderboard = authQuery({
   ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-      .collect();
+    const startTime = args.startTime;
+    // Only the window is read. Tasks come back in `updatedAt` order, so put
+    // them back in `by_repo` (creation) order: it decides ties in the top 5.
+    const filteredTasks =
+      startTime === undefined
+        ? await ctx.db
+            .query("agentTasks")
+            .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
+            .collect()
+        : (
+            await ctx.db
+              .query("agentTasks")
+              .withIndex("by_repo_and_updatedAt", (q) =>
+                q.eq("repoId", args.repoId).gte("updatedAt", startTime),
+              )
+              .collect()
+          ).sort((a, b) => a._creationTime - b._creationTime);
     const userStats = new Map<
       Id<"users">,
       { tasksCompleted: number; prsCreated: number; sessionsWithPr: number }
     >();
-    const startTime = args.startTime;
-    const filteredTasks =
-      startTime !== undefined
-        ? tasks.filter((t) => t.updatedAt >= startTime)
-        : tasks;
     const tasksWithCreator = filteredTasks.filter((t) => t.createdBy);
     const leaderboardPrs = await Promise.all(
       tasksWithCreator.map((task) =>
@@ -633,14 +670,14 @@ export const getLeaderboard = authQuery({
           : prs.length;
       userStats.set(task.createdBy, cur);
     }
-    const sessions = await ctx.db
+    const filteredSessions = await ctx.db
       .query("sessions")
-      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
+      .withIndex("by_repo", (q) =>
+        startTime === undefined
+          ? q.eq("repoId", args.repoId)
+          : q.eq("repoId", args.repoId).gte("_creationTime", startTime),
+      )
       .collect();
-    const filteredSessions =
-      startTime !== undefined
-        ? sessions.filter((s) => s._creationTime >= startTime)
-        : sessions;
     for (const session of filteredSessions) {
       if (session.prUrl) {
         const cur = userStats.get(session.userId) ?? {

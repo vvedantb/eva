@@ -10,7 +10,7 @@ import {
   Button,
   Textarea,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useMutation, useAction } from "convex/react";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";

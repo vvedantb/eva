@@ -9,11 +9,12 @@ import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
-  awaitingAnswerEntityIdsForRepo,
+  chatTurnFlagsForRepos,
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../_chat/turnProjection";
-import { unreadLookupForRepo } from "../chatReads";
+import { hasUnreadByPointRead, unreadLookupForRepo } from "../chatReads";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 
 /** Validator for a task document enriched with its latest run and busy state. */
 export const agentTaskWithLastRunValidator = v.object({
@@ -52,6 +53,83 @@ async function turnIdsForRepos(
   return new Set(sets.flatMap((set) => [...set]));
 }
 
+/**
+ * Up to this many tasks, enrichment reads each task's run summary and chat
+ * read row by point lookup. Longer lists (the whole-repo task view) read the
+ * repo's rows once instead. Both paths return the same rows.
+ */
+const POINT_READ_TASK_LIMIT = 50;
+
+type RunSummary = Doc<"agentTaskRunSummaries">;
+
+/** Each task's run summary and unread flag, one point read per task. */
+async function pointReadLookups(
+  db: QueryCtx["db"],
+  userId: Id<"users">,
+  tasks: ReadonlyArray<Doc<"agentTasks">>,
+  repoIds: ReadonlySet<Id<"githubRepos">>,
+) {
+  const summaries = await Promise.all(
+    tasks.map((task) =>
+      db
+        .query("agentTaskRunSummaries")
+        .withIndex("by_task", (q) => q.eq("taskId", task._id))
+        .order("desc")
+        .first(),
+    ),
+  );
+  const summariesByTask = new Map<string, RunSummary>();
+  tasks.forEach((task, i) => {
+    const summary = summaries[i];
+    // The repo-wide path only sees summaries filed under the listed repos.
+    if (summary && repoIds.has(summary.repoId)) {
+      summariesByTask.set(String(task._id), summary);
+    }
+  });
+  return {
+    summariesByTask,
+    hasUnread: (task: Doc<"agentTasks">) =>
+      hasUnreadByPointRead(db, userId, task),
+  };
+}
+
+/** Run summaries and unread flags for every task, from one range per repo. */
+async function repoWideLookups(
+  db: QueryCtx["db"],
+  userId: Id<"users">,
+  repoIds: ReadonlyArray<Id<"githubRepos">>,
+) {
+  const [unreadByRepo, summaryGroups] = await Promise.all([
+    Promise.all(
+      repoIds.map((repoId) => unreadLookupForRepo(db, userId, repoId)),
+    ),
+    Promise.all(
+      repoIds.map((repoId) =>
+        db
+          .query("agentTaskRunSummaries")
+          .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+          .collect(),
+      ),
+    ),
+  ]);
+  const unreadLookups = new Map<
+    string,
+    (task: Doc<"agentTasks">) => Promise<boolean>
+  >();
+  repoIds.forEach((repoId, i) => {
+    unreadLookups.set(String(repoId), unreadByRepo[i]);
+  });
+  return {
+    summariesByTask: new Map<string, RunSummary>(
+      summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
+    ),
+    hasUnread: async (task: Doc<"agentTasks">) => {
+      const unreadLookup = unreadLookups.get(String(task.repoId));
+      return unreadLookup ? await unreadLookup(task) : false;
+    },
+  };
+}
+
 /** Enriches each task with its most recent run start and its busy state. */
 async function enrichTasksWithLastRun(
   db: QueryCtx["db"],
@@ -59,40 +137,21 @@ async function enrichTasksWithLastRun(
   tasks: Array<Doc<"agentTasks">>,
 ) {
   const repoIds = repoIdsOf(tasks);
-  const [openChatEntityIds, awaitingAnswerIds] = await Promise.all([
-    turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
-    turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
+  const [
+    { openIds: openChatEntityIds, awaitingAnswerIds },
+    { summariesByTask, hasUnread: unreadOf },
+  ] = await Promise.all([
+    chatTurnFlagsForRepos(db, repoIds),
+    tasks.length <= POINT_READ_TASK_LIMIT
+      ? pointReadLookups(db, userId, tasks, repoIds)
+      : repoWideLookups(db, userId, [...repoIds]),
   ]);
-  const unreadLookups = new Map<
-    string,
-    (task: Doc<"agentTasks">) => Promise<boolean>
-  >();
-  await Promise.all(
-    [...repoIds].map(async (repoId) => {
-      unreadLookups.set(
-        String(repoId),
-        await unreadLookupForRepo(db, userId, repoId),
-      );
-    }),
-  );
-  const summaryGroups = await Promise.all(
-    [...repoIds].map((repoId) =>
-      db
-        .query("agentTaskRunSummaries")
-        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-        .collect(),
-    ),
-  );
-  const summariesByTask = new Map(
-    summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
-  );
 
   return Promise.all(
     tasks.map(async (task) => {
       const summary = summariesByTask.get(String(task._id));
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
-      const unreadLookup = unreadLookups.get(String(task.repoId));
-      const hasUnread = unreadLookup ? await unreadLookup(task) : false;
+      const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       if (summary) {
         return {
@@ -227,29 +286,8 @@ async function activeTasksForUser(
       if (!(await hasRepoAccess(ctx.db, args.repoId, ctxUserId))) return [];
       repoIds = [args.repoId];
     } else {
-      const memberships = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_user", (q) => q.eq("userId", ctxUserId))
-        .collect();
-      const teamRepos = await Promise.all(
-        memberships.map((m) =>
-          ctx.db
-            .query("githubRepos")
-            .withIndex("by_team", (q) => q.eq("teamId", m.teamId))
-            .collect(),
-        ),
-      );
-      const connectedRepos = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_connected_by", (q) => q.eq("connectedBy", ctxUserId))
-        .collect();
-      const seen = new Set<string>();
-      repoIds = [];
-      for (const repo of [...connectedRepos, ...teamRepos.flat()]) {
-        if (seen.has(String(repo._id))) continue;
-        seen.add(String(repo._id));
-        repoIds.push(repo._id);
-      }
+      const repos = await gatherAccessibleRepos(ctx.db, ctxUserId, true);
+      repoIds = repos.map((repo) => repo._id);
     }
 
     const taskArrays = await Promise.all(
@@ -391,7 +429,12 @@ export const getDependentTasks = authQuery({
   },
 });
 
-/** Returns the status of multiple tasks by their IDs. */
+type TaskStatusRow = {
+  id: Id<"agentTasks">;
+  status: Doc<"agentTasks">["status"];
+};
+
+/** Returns the status of the given tasks the caller can access. */
 export const getStatusesByIds = authQuery({
   args: { ids: v.array(v.id("agentTasks")) },
   returns: v.array(
@@ -401,10 +444,16 @@ export const getStatusesByIds = authQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const tasks = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return tasks
-      .filter((t): t is Exclude<typeof t, null> => t !== null)
-      .map((t) => ({ id: t._id, status: t.status }));
+    // The Chrome extension polls ids it has seen; ids the caller cannot
+    // access are dropped exactly like deleted tasks.
+    const statuses: TaskStatusRow[] = [];
+    for (const id of args.ids) {
+      const task = await ctx.db.get(id);
+      if (task && (await hasTaskAccess(ctx.db, task, ctx.userId))) {
+        statuses.push({ id: task._id, status: task.status });
+      }
+    }
+    return statuses;
   },
 });
 

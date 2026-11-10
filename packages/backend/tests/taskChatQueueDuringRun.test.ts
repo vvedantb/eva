@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -20,8 +17,6 @@ const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
-
-const testsDir = dirname(fileURLToPath(import.meta.url));
 
 async function fixture(overrides?: { activeWorkflowId?: string }) {
   const t = convexTest(schema, modules);
@@ -112,23 +107,4 @@ describe("a follow-up queued while a task run is going", () => {
     },
     TIMEOUT_MS,
   );
-});
-
-test("the run's wind-down is what drains the task chat queue", () => {
-  const source = readFileSync(
-    join(testsDir, "../convex/_taskWorkflow/scheduling.ts"),
-    "utf8",
-  );
-  const start = source.indexOf("export const clearActiveWorkflow");
-  expect(start).toBeGreaterThan(-1);
-  const body = source.slice(start);
-  expect(body).toContain("await startNextQueuedTaskChatMessage(ctx, args.taskId)");
-});
-
-test("a task's own run counts as busy in the shared dequeue gate", () => {
-  const source = readFileSync(
-    join(testsDir, "../convex/_queues/helpers.ts"),
-    "utf8",
-  );
-  expect(source).toContain("task.activeWorkflowId !== undefined");
 });

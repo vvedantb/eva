@@ -11,8 +11,10 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
+  ConfirmSkipHint,
   toast,
-} from "@eva/ui";
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import {
   IconExternalLink,
@@ -20,7 +22,6 @@ import {
   IconLink,
   IconStack2,
 } from "@tabler/icons-react";
-import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
 import { PrRow } from "./PrRow";
 import { requestPrClose } from "./prCloseRequest";
 import { useClosePullRequest } from "./useClosePullRequest";
@@ -91,7 +92,7 @@ function PrActionItems({
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Separator =
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { close } = useClosePullRequest();
   const { canStack, stack } = useStackNewSession();
   const live = pr.state === "open" || pr.state === "draft";
@@ -136,7 +137,6 @@ function PrActionItems({
             className="text-destructive"
             onSelect={() =>
               requestConfirm(
-                altHeld,
                 () => requestPrClose(target),
                 () => {
                   void close(target);

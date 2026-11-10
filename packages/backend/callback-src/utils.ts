@@ -14,8 +14,12 @@ import {
   CLAUDE_RUNTIME_CONFIG_DIR,
   CLAUDE_SYNC_PER_FILE_TIMEOUT_SECONDS,
   CLAUDE_SYNC_TIMEOUT_MS,
+  PROMPT_FILE,
+  SYSTEM_PROMPT,
   WORK_DIR,
 } from "./config.js";
+import { isJsonObject } from "./jsonGuards.js";
+import { git } from "./runtime/gitExec.js";
 import { callbackState as S } from "./runtime/state.js";
 import type { JsonObject, JsonValue } from "./types.js";
 
@@ -78,11 +82,11 @@ export function log(msg: string): void {
   }
 }
 
+export { isJsonObject, trimmedString } from "./jsonGuards.js";
+
 /** Coerces a JSON value to an object; non-objects become `{}`. */
 export function asJsonObject(value: JsonValue | undefined): JsonObject {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
+  return isJsonObject(value) ? value : {};
 }
 
 /** Attempts to parse a JSON string, returning null on failure. */
@@ -102,6 +106,37 @@ export function tryParseJson(text: string): JsonValue | null {
   } catch {
     return null;
   }
+}
+
+/** Parses JSON text and keeps it only when it is a plain object. */
+export function tryParseJsonObject(text: string): JsonObject | null {
+  const parsed = tryParseJson(text);
+  return isJsonObject(parsed) ? parsed : null;
+}
+
+/**
+ * Raw (untrimmed) value of the first key whose value is a string with
+ * non-blank content; "" when none match.
+ */
+export function readStringField(
+  obj: JsonObject,
+  keys: readonly string[],
+): string {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
+/** The turn prompt that launch.ts uploads to PROMPT_FILE. */
+export function readTurnPrompt(): string {
+  return readFileSync(PROMPT_FILE, "utf8");
+}
+
+/** Prepends SYSTEM_PROMPT for providers that have no system-prompt option. */
+export function withSystemPrompt(prompt: string): string {
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\n\n" + prompt : prompt;
 }
 
 /** Narrow a fetch Response.json() body; rejects non-JSON types without assertions. */
@@ -186,14 +221,11 @@ export function runTimedBashSync(script: string, label: string): boolean {
  * than distinguishing why.
  */
 export function readGitHeadSha(dir: string = WORK_DIR): string {
-  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
-    encoding: "utf8",
-    timeout: CLAUDE_SYNC_TIMEOUT_MS,
+  const result = git(["rev-parse", "HEAD"], {
+    cwd: dir,
+    timeoutMs: CLAUDE_SYNC_TIMEOUT_MS,
   });
-  if (result.status !== 0) {
-    return "";
-  }
-  return (result.stdout || "").trim();
+  return result.ok ? result.stdout : "";
 }
 
 /** True when the workspace has at least one commit after baselineHead. */
@@ -205,15 +237,14 @@ export function hasNewTaskCommitSince(baselineHead: string): boolean {
   if (!currentHead || currentHead === baselineHead) {
     return false;
   }
-  const countResult = spawnSync(
-    "git",
-    ["-C", WORK_DIR, "rev-list", "--count", baselineHead + ".." + currentHead],
-    { encoding: "utf8", timeout: CLAUDE_SYNC_TIMEOUT_MS },
+  const countResult = git(
+    ["rev-list", "--count", baselineHead + ".." + currentHead],
+    { timeoutMs: CLAUDE_SYNC_TIMEOUT_MS },
   );
-  if (countResult.status !== 0) {
+  if (!countResult.ok) {
     return true;
   }
-  const count = Number((countResult.stdout || "").trim());
+  const count = Number(countResult.stdout);
   return Number.isFinite(count) && count > 0;
 }
 

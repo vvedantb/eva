@@ -1,4 +1,4 @@
-import { cn } from "@eva/ui";
+import { cn } from "@vvedantb/ui";
 import { statusMeta } from "@/lib/components/reviews/_components/prOverviewMeta";
 
 /**
