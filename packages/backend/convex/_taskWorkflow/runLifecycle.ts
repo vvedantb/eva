@@ -25,15 +25,23 @@ import {
   sendCompletionEvent,
 } from "./helpers";
 
-/** Transitions a queued run to running, sets streaming activity, and schedules the 2-hour backstop. */
+/**
+ * Transitions a queued run to running, sets streaming activity, and schedules
+ * the 2-hour backstop. Only `queued` may start: a run cancelled before this
+ * step ran must stay cancelled, not come back as `running` with no watchdog.
+ * Returns "not_queued" so the workflow stops; journals from before this guard
+ * replay `null` and carry on as before.
+ */
 export const updateRunToRunning = internalMutation({
   args: {
     runId: v.id("agentRuns"),
     taskId: v.id("agentTasks"),
     repoId: v.id("githubRepos"),
   },
-  returns: v.null(),
+  returns: v.union(v.literal("not_queued"), v.null()),
   handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (run?.status !== "queued") return "not_queued";
     const startedAt = Date.now();
 
     await ctx.db.patch(args.runId, {
