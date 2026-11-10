@@ -622,7 +622,7 @@ export function EnvVarsTable({
         <>
           {/* The table owns the card's full width, so the body carries no padding. */}
           <SettingsSection
-            title="Other variables"
+            title="Sandbox variables"
             description="Anything not covered by a known slot above."
             action={freeformActions}
             bodyVariant="list"
@@ -650,7 +650,7 @@ export function EnvVarsTable({
             ) : (
               <SettingsEmptyState
                 icon={IconKey}
-                title="No other variables"
+                title="No sandbox variables"
                 description="Add one to inject it into every sandbox for this scope."
               />
             )}
