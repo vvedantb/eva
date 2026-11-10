@@ -106,6 +106,20 @@ export {
   type PrStateTone,
 } from "./prState";
 export {
+  PRIORITY_LABELS,
+  PRIORITY_ORDER,
+  TASK_STATUSES,
+  TASK_STATUS_LABELS,
+  defaultQuickTaskSections,
+  formatEntityNumLabel,
+  groupByTaskStatus,
+  priorityCompare,
+  statusWorkflowOrder,
+  type DisplayTaskStatus,
+  type Priority,
+  type TaskStatus,
+} from "./taskMeta";
+export {
   getNotificationAppearance,
   type NotificationAppearance,
   type NotificationIconName,

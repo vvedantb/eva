@@ -6,7 +6,7 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
+import { defaultQuickTaskSections, systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 
@@ -330,6 +330,51 @@ describe("mobile api", () => {
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
       ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the Quick Tasks screen files a task in To Do without a run, lists it first and opens it as a chat",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // What the phone form sends: the web `createQuickTask` with its picks.
+      const taskId = await asUser.mutation(api.agentTasks.createQuickTask, {
+        repoId: ids.repoId,
+        title: "Fix the footer",
+        description: "It overlaps the tab bar",
+        baseBranch: "staging",
+        model: "claude:opus",
+        reasoningLevel: "low",
+        priority: "high",
+        tags: ["frontend"],
+      });
+      const task = await t.run((ctx) => ctx.db.get(taskId));
+      expect(task).toMatchObject({
+        status: "todo",
+        baseBranch: "staging",
+        model: "claude:opus",
+        reasoningLevel: "low",
+        priority: "high",
+        tags: ["frontend"],
+      });
+      expect(task?.activeWorkflowId).toBeUndefined();
+      // A task in a project is not in the list the web opens with.
+      await asUser.mutation(api.agentTasks.createQuickTask, {
+        repoId: ids.repoId,
+        title: "Billing step",
+        projectId: ids.projectId,
+      });
+      const sections = defaultQuickTaskSections(await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId }));
+      expect(sections.map((section) => [section.status, section.tasks.map((row) => row.title)])).toEqual([
+        ["todo", ["Fix the footer"]],
+        ["in_progress", []],
+        ["business_review", []],
+        ["code_review", ["Bump the deps"]],
+        ["done", []],
+        ["cancelled", []],
+      ]);
+      expect(await asUser.query(api.mobile.getChat, { target: taskId })).toMatchObject({ kind: "task", canReply: true });
     },
     TIMEOUT_MS,
   );
