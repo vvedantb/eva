@@ -4,6 +4,8 @@ import { Button, Spinner, SettingsSection } from "@vvedantb/ui";
 import { IconCheck, IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import { describeCron } from "@/lib/components/CronScheduleCard";
 import { BuildStatusBadge } from "./BuildRow";
+import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { useRepo } from "@/lib/contexts/RepoContext";
 
 type Snapshot = NonNullable<
   FunctionReturnType<typeof api.repoSnapshots.getRepoSnapshot>
@@ -170,6 +172,8 @@ function CurrentStatusGrid({
   snapshot: Snapshot;
   lastBuild: Build | null;
 }) {
+  // Snapshots build from the repo's default branch (the branch `.eva/` syncs from).
+  const { repo } = useRepo();
   return (
     <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 sm:gap-4">
       <div>
@@ -185,7 +189,7 @@ function CurrentStatusGrid({
       <div>
         <span className="text-muted-foreground">Clone Branch</span>
         <p className="font-mono mt-0.5 max-sm:break-all">
-          {snapshot.workflowRef ?? "main"}
+          {repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH}
         </p>
       </div>
       {lastBuild && (

@@ -194,6 +194,7 @@ import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyC
 import type * as _migrations_projectInterview from "../_migrations/projectInterview.js";
 import type * as _migrations_projectPhases from "../_migrations/projectPhases.js";
 import type * as _migrations_removeProjectIdField from "../_migrations/removeProjectIdField.js";
+import type * as _migrations_removeRepoSnapshotWorkflowRef from "../_migrations/removeRepoSnapshotWorkflowRef.js";
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
 import type * as _migrations_repoSkills from "../_migrations/repoSkills.js";
@@ -770,6 +771,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/projectInterview": typeof _migrations_projectInterview;
   "_migrations/projectPhases": typeof _migrations_projectPhases;
   "_migrations/removeProjectIdField": typeof _migrations_removeProjectIdField;
+  "_migrations/removeRepoSnapshotWorkflowRef": typeof _migrations_removeRepoSnapshotWorkflowRef;
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
   "_migrations/repoSkills": typeof _migrations_repoSkills;

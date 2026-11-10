@@ -67,7 +67,6 @@ export const getRepoSnapshot = authQuery({
       workflowRef: v.optional(v.string()),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
-      imageFingerprint: v.optional(v.string()),
       baseSnapshotId: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -261,7 +260,6 @@ export const getRepoSnapshotInternal = internalQuery({
       branch: v.string(),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
-      imageFingerprint: v.optional(v.string()),
       baseSnapshotId: v.optional(v.string()),
     }),
     v.null(),
@@ -276,7 +274,6 @@ export const getRepoSnapshotInternal = internalQuery({
       branch: repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
       buildCommands: doc.buildCommands,
       seedCommands: doc.seedCommands,
-      imageFingerprint: doc.imageFingerprint,
       baseSnapshotId: doc.baseSnapshotId,
     };
   },
