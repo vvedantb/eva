@@ -9,6 +9,7 @@ import {
   parseEvaMcpSummary,
   type EvaMcpServerSummary,
 } from "./config";
+import { findSiblingsOf } from "../_githubRepos/helpers";
 
 function nonEmpty(commands: string[]): string[] | undefined {
   return commands.length > 0 ? commands : undefined;
@@ -36,12 +37,7 @@ export const getSyncTarget = internalQuery({
     // connected; the `.eva/` folder belongs to the whole GitHub repo, so any
     // connected app is enough.
     if (repo.connected === false) {
-      const siblings = await ctx.db
-        .query("githubRepos")
-        .withIndex("by_owner_and_name", (q) =>
-          q.eq("owner", repo.owner).eq("name", repo.name),
-        )
-        .collect();
+      const siblings = await findSiblingsOf(ctx.db, repo);
       if (siblings.every((row) => row.connected === false)) return null;
     }
     return {
