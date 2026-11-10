@@ -1,5 +1,6 @@
 import {
   api,
+  getAIModelProvider,
   normalizeAIModel,
   resolveTraitsForDisplay,
   storedTraitsFromRepoDefaults,
@@ -28,14 +29,16 @@ import { Text, View } from "react-native";
 import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter } from "@/chat/ComposerFooter";
+import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
+import { useMentionComposer } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
 
 /**
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
  * what are we building for <repo ⌄>?" over the composer, and under it the
- * web footer: base branch, stash and model. Sends with those picks
+ * web footer: base branch, stash and model, and the web `@` / `/` picker. Sends with those picks
  * (`mobile.startSession`), then opens the chat.
  */
 export default function NewSessionScreen() {
@@ -47,7 +50,6 @@ export default function NewSessionScreen() {
   const attachments = useAttachments();
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
   const [sending, setSending] = useState(false);
-  const [draft, setDraft] = useState("");
   // The web landing: model and traits start from the repo defaults, a pick
   // overrides them; the base branch re-seeds to each repo's own default
   // (`useBaseBranchState`), so it is kept with the repo it was picked for.
@@ -65,6 +67,7 @@ export default function NewSessionScreen() {
     repo && pickedBranch?.repoId === repo._id
       ? pickedBranch.branch
       : (repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
+  const composer = useMentionComposer(repo?._id, getAIModelProvider(model));
 
   const handleSend = async (prompt: string) => {
     if (!repo || sending) return;
@@ -78,7 +81,7 @@ export default function NewSessionScreen() {
       const display = resolveTraitsForDisplay(model, traits);
       const { sessionId } = await startSession({
         repoId: repo._id,
-        prompt,
+        prompt: composer.tokenize(prompt),
         attachmentStorageIds: attachments.storageIds,
         model,
         baseBranch,
@@ -141,8 +144,9 @@ export default function NewSessionScreen() {
             shape="pill"
             disabled={!repo || sending}
             status={sending ? "submitted" : "ready"}
-            value={draft}
-            onChangeText={setDraft}
+            value={composer.text}
+            onChangeText={composer.setText}
+            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
             leading={
@@ -161,8 +165,7 @@ export default function NewSessionScreen() {
               repo ? (
                 <ComposerFooter
                   repoId={repo._id}
-                  draft={draft}
-                  onDraftChange={setDraft}
+                  onRestore={composer.restore}
                   leading={
                     <BaseBranchChip
                       repoId={repo._id}
