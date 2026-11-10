@@ -105,6 +105,7 @@ export {
   type PrState,
   type PrStateTone,
 } from "./prState";
+export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,

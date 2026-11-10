@@ -1,15 +1,17 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { authMutation, authQuery, getSessionWithAccess, hasRepoAccess } from "./functions";
 import { awaitingAnswerEntityIdsForRepo } from "./_chat/turnProjection";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import {
   mobileChatValidator,
   repoLabel,
   resolveMobileChat,
+  sessionWebPath,
 } from "./_mobile/chatTarget";
 import { cancelChatExecution, sendSessionChatMessage } from "./_sessions/execution";
-import { createSession, type AuthMutationCtx } from "./_sessions/mutations";
+import { archiveSessionDoc, createSession, type AuthMutationCtx } from "./_sessions/mutations";
+import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { setSessionChatModel, setSessionChatTraits } from "./_sessionChats/mutations";
 import { setProjectChatModel, setProjectTraits } from "./_projects/mutations";
 import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
@@ -237,6 +239,8 @@ export const listChats = authQuery({
     v.object({
       sessionId: v.id("sessions"),
       title: v.string(),
+      /** The group's repo, for its "+" (a new session in that repo). */
+      repoId: v.id("githubRepos"),
       repoLabel: v.string(),
       status: sessionStatusValidator,
       updatedAt: v.number(),
@@ -245,6 +249,9 @@ export const listChats = authQuery({
       /** The session's primary PR and its rolled-up state, as the web sidebar row shows. */
       prUrl: v.optional(v.string()),
       prState: v.optional(prStateValidator),
+      /** For the row menu: Copy branch name and Copy link, as the web row's. */
+      branchName: v.optional(v.string()),
+      webPath: v.string(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -286,12 +293,33 @@ export const listChats = authQuery({
     return rows.map(({ session, repo, updatedAt }) => ({
       sessionId: session._id,
       title: session.title,
+      repoId: repo._id,
       repoLabel: repoLabel(repo),
       status: session.status,
       updatedAt,
       isAwaitingAnswer: awaiting.get(repo._id)?.has(String(session._id)) === true,
       prUrl: session.prUrl,
       prState: session.prState,
+      branchName: session.branchName,
+      webPath: sessionWebPath(repo, session),
     }));
+  },
+});
+
+/**
+ * Archives a session as the web Archive does (`useArchiveSession`): stops the
+ * sandbox when one is up, then `sessions.archive` (cold storage, open PRs
+ * closed). One call, because the phone does not know the sandbox id.
+ * Rename and Unarchive are the web `sessions.update` and `sessions.unarchive`.
+ */
+export const archiveSession = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
+    if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
+    // Re-read: the stop moves the status, and the archive patches from this doc.
+    await archiveSessionDoc(ctx, await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId));
+    return null;
   },
 });

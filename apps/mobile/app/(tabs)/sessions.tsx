@@ -12,6 +12,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
 import { SessionGroup } from "@/sessions/SessionGroup";
+import { useSessionActions } from "@/sessions/useSessionActions";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
@@ -64,10 +65,13 @@ export default function SessionsScreen() {
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
  * at phone width: Active and Archived tabs, then one collapsible group per
- * repo (`SessionGroup`) with compact rows and "Show more".
+ * repo (`SessionGroup`) with compact rows and "Show more". A long press on a
+ * row opens the web row menu as a sheet (`useSessionActions`).
  */
 function SessionsSection() {
+  const router = useRouter();
   const [tab, setTab] = useState<SessionTab>("active");
+  const sessionActions = useSessionActions();
   const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
   const scheme = useScheme();
   const largerText = useLargerText();
@@ -76,12 +80,13 @@ function SessionsSection() {
   // Repos in order of their newest session; sessions stay newest first.
   const groups = new Map<string, NonNullable<typeof sessions>>();
   for (const session of sessions ?? []) {
-    groups.set(session.repoLabel, [...(groups.get(session.repoLabel) ?? []), session]);
+    groups.set(session.repoId, [...(groups.get(session.repoId) ?? []), session]);
   }
 
   return (
     <>
-      <View className="px-4 pb-2">        <Tabs value={tab} onValueChange={(value: string) => setTab(value === "archived" ? "archived" : "active")}>
+      <View className="px-4 pb-2">
+        <Tabs value={tab} onValueChange={(value: string) => setTab(value === "archived" ? "archived" : "active")}>
           {/* The web `SessionsListModeTabs`: an `h-8` `tabs-segmented` list with
           `sm` triggers (24 high). Its dark trough is the card colour. */}
           <TabsList
@@ -108,17 +113,24 @@ function SessionsSection() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}>
-          {[...groups].map(([repoLabel, rows]) => (
+          {[...groups].map(([repoId, rows]) => (
             <SessionGroup
-              key={repoLabel}
-              repoLabel={repoLabel}
+              key={repoId}
+              repoLabel={rows[0]?.repoLabel ?? ""}
               rows={rows}
-              // The web counts running sessions in the Active list only.
+              // The web counts running sessions, and offers "+", in the Active list only.
               live={tab === "active" ? rows.filter((row) => row.status === "active").length : 0}
+              onNew={
+                tab === "active"
+                  ? () => router.push({ pathname: "/session/new", params: { repo: repoId } })
+                  : undefined
+              }
+              onRowLongPress={(row) => sessionActions.openSheet({ ...row, archived: tab === "archived" })}
             />
           ))}
         </ScrollView>
       )}
+      {sessionActions.dialogs}
     </>
   );
 }

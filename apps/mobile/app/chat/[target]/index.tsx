@@ -2,7 +2,14 @@ import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
-import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt, toRepoRelativePath } from "@eva/shared";
+import {
+  buildPrecedingUserTurns,
+  collectForkPrefix,
+  forkThreadTitle,
+  formatForkPrompt,
+  type SessionMenuAction,
+  toRepoRelativePath,
+} from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
@@ -41,7 +48,11 @@ import { MessageFooter } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
+import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
+
+/** The session actions the chat header ⋯ adds; it has Copy link of its own. */
+const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename", "archive", "unarchive"]);
 
 /**
  * One chat (session, quick task or project): the transcript with the web
@@ -85,6 +96,8 @@ export default function ChatScreen() {
   const simpleView = useSimpleView();
   // The `/` list follows the chat's model provider, as the web composer.
   const composer = useMentionComposer(chat?.repoId, chat ? getAIModelProvider(normalizeAIModel(chat.model)) : undefined);
+  // The web leaves a session's page once it is archived; the phone goes back.
+  const sessionActions = useSessionActions({ onArchived: () => router.back() });
 
   if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
   if (chat === null) {
@@ -114,6 +127,9 @@ export default function ChatScreen() {
     : (path: string | undefined) =>
         router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
+  const sessionTarget = chat.session
+    ? { sessionId: chat.session.id, title: chat.session.title, archived: chat.session.archived, webPath: chat.webPath }
+    : null;
 
   const handleSend = (text: string) => {
     if (attachments.uploading) {
@@ -159,7 +175,16 @@ export default function ChatScreen() {
         onOpenWeb={() => void Linking.openURL(webUrl(chat.webPath))}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
+        sessionMenu={
+          sessionTarget
+            ? {
+                actions: sessionActions.actionsFor(sessionTarget).filter((action) => HEADER_SESSION_ACTIONS.has(action)),
+                onSelect: (action) => sessionActions.run(action, sessionTarget),
+              }
+            : undefined
+        }
       />
+      {sessionActions.dialogs}
       <Conversation>
         {/* The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`, messages `gap-3`. */}
         <ConversationContent contentContainerClassName="gap-3 pl-[22px] pr-8">

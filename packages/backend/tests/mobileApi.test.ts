@@ -6,7 +6,7 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { defaultQuickTaskSections, systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
+import { defaultQuickTaskSections, sessionMenuActions, systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 
@@ -429,6 +429,96 @@ describe("mobile api", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "the session menu renames, archives and unarchives a session, as the web row menu",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await t.run((ctx) => ctx.db.patch(ids.sessionId, { branchName: "eva/login", sandboxId: "sbx-1" }));
+      const [row] = await asUser.query(api.mobile.listChats, {});
+      expect(row).toMatchObject({
+        repoId: ids.repoId,
+        branchName: "eva/login",
+        webPath: "/vvedantb/eva/sessions/42",
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        session: { id: ids.sessionId, title: "Fix the login bug", archived: false },
+      });
+
+      // Rename: the web `sessions.update`.
+      await asUser.mutation(api.sessions.update, { id: ids.sessionId, title: "Fix the sign-in bug" });
+      expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.title)).toEqual(["Fix the sign-in bug"]);
+
+      // Archive stops the sandbox first, then leaves the Active list for Archived.
+      await asUser.mutation(api.mobile.archiveSession, { sessionId: ids.sessionId });
+      const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
+      expect(archived).toMatchObject({ archived: true, status: "closed" });
+      expect(await asUser.query(api.mobile.listChats, {})).toEqual([]);
+      expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toEqual([
+        ids.sessionId,
+      ]);
+      // Read-only while archived, as the web session page.
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        canReply: false,
+        session: { archived: true },
+      });
+
+      // Unarchive: the web `sessions.unarchive`.
+      await asUser.mutation(api.sessions.unarchive, { id: ids.sessionId });
+      expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.sessionId)).toEqual([ids.sessionId]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "archiveSession refuses a session you cannot access",
+    async () => {
+      const { t, asUser } = await fixture();
+      const strangerSessionId = await t.run(async (ctx) => {
+        const strangerRepo = await ctx.db
+          .query("githubRepos")
+          .filter((q) => q.eq(q.field("owner"), "someone"))
+          .unique();
+        if (!strangerRepo) throw new Error("fixture");
+        return await ctx.db.insert("sessions", {
+          repoId: strangerRepo._id,
+          userId: strangerRepo.connectedBy,
+          title: "Not yours",
+          status: "closed",
+        });
+      });
+      await expect(asUser.mutation(api.mobile.archiveSession, { sessionId: strangerSessionId })).rejects.toThrow();
+      expect(await t.run((ctx) => ctx.db.get(strangerSessionId))).not.toHaveProperty("archived");
+    },
+    TIMEOUT_MS,
+  );
+
+  test("sessionMenuActions lists the web row menu in its order, per list and view", () => {
+    const pr = { branchName: "eva/login", prUrl: "https://github.com/vvedantb/eva/pull/1" };
+    expect(sessionMenuActions({ archived: false, simpleView: false, ...pr })).toEqual([
+      "rename",
+      "regenerateTitle",
+      "copyTitle",
+      "copyLink",
+      "copyBranchName",
+      "openPr",
+      "archive",
+    ]);
+    expect(sessionMenuActions({ archived: true, simpleView: false, ...pr })).toEqual([
+      "copyTitle",
+      "copyLink",
+      "copyBranchName",
+      "openPr",
+      "unarchive",
+    ]);
+    expect(sessionMenuActions({ archived: false, simpleView: true, ...pr })).toEqual([
+      "rename",
+      "regenerateTitle",
+      "copyTitle",
+      "copyLink",
+      "archive",
+    ]);
+  });
 
   test("messageLinkHref aims a web path or URL at one message", () => {
     expect(messageLinkHref("/vvedantb/eva/sessions/42", "m1")).toBe("/vvedantb/eva/sessions/42?message=m1");
