@@ -109,12 +109,13 @@ export function TeamEnvVarsClient() {
           if (!repo.teamId) return;
           await removeTeamVar({ teamId: repo.teamId, key });
         }}
-        onToggleSandboxExclude={async (key, sandboxExclude) => {
+        onToggleSandboxExclude={async (key, sandboxExclude, seedOnly) => {
           if (!repo.teamId) return;
           await toggleSandboxExclude({
             teamId: repo.teamId,
             key,
             sandboxExclude,
+            seedOnly,
           });
         }}
       />

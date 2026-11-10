@@ -27,6 +27,8 @@ This draft is built from the commands Eva has stored for this repo. Keep every c
 
 **The draft can contain inline secrets** (deploy keys, service-role keys, passwords, tokens, database URLs with credentials). Never commit one. Replace each with a shell variable (\`$NAME\`), and make sure \`NAME\` exists as a repo env var (step 5). Commands run with the repo's env vars set.
 
+A secret that only the snapshot seed needs (for example a staging deploy key used to copy data) should be a **seed-only** env var: Eva gives it to snapshot seed runs and never to session sandboxes. After you request it, tell the user to mark it seed-only on the Env Variables page (the lock button cycles: in sandbox → seed only → excluded).
+
 \`\`\`json
 ${draft.trimEnd()}
 \`\`\`

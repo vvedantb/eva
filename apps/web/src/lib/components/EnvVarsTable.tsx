@@ -20,6 +20,7 @@ import {
   Textarea,
 } from "@eva/ui";
 import {
+  IconCamera,
   IconCheck,
   IconClipboard,
   IconCopy,
@@ -57,6 +58,18 @@ export interface EnvVar {
   key: string;
   value: string;
   sandboxExclude: boolean;
+  /** Given to snapshot seed runs only; implies sandboxExclude. */
+  seedOnly?: boolean;
+}
+
+/** Lock button cycle: in sandbox → seed only → excluded → in sandbox. */
+function nextSandboxScope(v: EnvVar): {
+  sandboxExclude: boolean;
+  seedOnly: boolean;
+} {
+  if (!v.sandboxExclude) return { sandboxExclude: true, seedOnly: true };
+  if (v.seedOnly) return { sandboxExclude: true, seedOnly: false };
+  return { sandboxExclude: false, seedOnly: false };
 }
 
 interface EnvVarsTableProps {
@@ -71,6 +84,7 @@ interface EnvVarsTableProps {
   onToggleSandboxExclude?: (
     key: string,
     sandboxExclude: boolean,
+    seedOnly: boolean,
   ) => Promise<void>;
   description: string;
   /** Repo tab shows VERCEL_PROJECT_ID; team tab omits repo-only infra slots. */
@@ -273,8 +287,11 @@ export function EnvVarsTable({
   const sandboxVars = (
     freeformVars?.filter((v) => !v.sandboxExclude) ?? []
   ).sort((a, b) => a.key.localeCompare(b.key));
+  const seedOnlyVars = (
+    freeformVars?.filter((v) => v.seedOnly) ?? []
+  ).sort((a, b) => a.key.localeCompare(b.key));
   const excludedVars = (
-    freeformVars?.filter((v) => v.sandboxExclude) ?? []
+    freeformVars?.filter((v) => v.sandboxExclude && !v.seedOnly) ?? []
   ).sort((a, b) => a.key.localeCompare(b.key));
   const showTable = (freeformVars && freeformVars.length > 0) || adding;
 
@@ -377,20 +394,29 @@ export function EnvVarsTable({
                       size="icon-sm"
                       variant="ghost"
                       className="max-sm:hit-target"
-                      onClick={() =>
+                      onClick={() => {
+                        const next = nextSandboxScope(v);
                         void catchMutationError(
-                          onToggleSandboxExclude(v.key, !v.sandboxExclude),
+                          onToggleSandboxExclude(
+                            v.key,
+                            next.sandboxExclude,
+                            next.seedOnly,
+                          ),
                           "Couldn't update sandbox setting",
                           "env-var-sandbox-exclude",
-                        )
-                      }
+                        );
+                      }}
                       title={
-                        v.sandboxExclude
-                          ? "Excluded from sandbox (click to include)"
-                          : "Included in sandbox (click to exclude)"
+                        v.seedOnly
+                          ? "Snapshot builds only (click to exclude)"
+                          : v.sandboxExclude
+                            ? "Excluded from sandbox (click to include)"
+                            : "Included in sandbox (click for snapshot builds only)"
                       }
                     >
-                      {v.sandboxExclude ? (
+                      {v.seedOnly ? (
+                        <IconCamera size={14} className="text-warning" />
+                      ) : v.sandboxExclude ? (
                         <IconLock size={14} className="text-warning" />
                       ) : (
                         <IconLockOpen size={14} />
@@ -610,6 +636,26 @@ export function EnvVarsTable({
               />
             )}
           </SettingsSection>
+
+          {seedOnlyVars.length > 0 && (
+            <SettingsSection
+              title={
+                <span className="flex items-center gap-1.5">
+                  <IconCamera size={14} className="text-warning" />
+                  Snapshot builds only
+                </span>
+              }
+              description="Given to snapshot seed runs only — never injected into a session sandbox. Reference them in seed commands as $NAME."
+              bodyVariant="list"
+            >
+              <div className="overflow-x-auto">
+                <Table className="min-w-[360px]">
+                  {tableHeader}
+                  <TableBody>{seedOnlyVars.map(renderRow)}</TableBody>
+                </Table>
+              </div>
+            </SettingsSection>
+          )}
 
           {excludedVars.length > 0 && (
             <SettingsSection

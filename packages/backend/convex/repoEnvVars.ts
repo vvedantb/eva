@@ -10,6 +10,7 @@ import {
   maskEnvVarEntries,
   removeEnvVarEntry,
   sandboxEligibleEnvVars,
+  seedOnlyEnvVars,
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "./_envVars/documentStore";
@@ -30,6 +31,7 @@ export const list = authQuery({
       key: v.string(),
       value: v.string(),
       sandboxExclude: v.boolean(),
+      seedOnly: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -48,6 +50,7 @@ export const getAllInternal = internalQuery({
       key: v.string(),
       value: v.string(),
       sandboxExclude: v.optional(v.boolean()),
+      seedOnly: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -65,6 +68,17 @@ export const getForSandbox = internalQuery({
     const doc = await findByRepo(ctx.db, args.repoId);
     if (!doc) return [];
     return sandboxEligibleEnvVars(doc.vars);
+  },
+});
+
+/** Repo env vars marked seed-only (encrypted), for snapshot seed runs only. */
+export const getForSeed = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(v.object({ key: v.string(), value: v.string() })),
+  handler: async (ctx, args) => {
+    const doc = await findByRepo(ctx.db, args.repoId);
+    if (!doc) return [];
+    return seedOnlyEnvVars(doc.vars);
   },
 });
 
@@ -123,6 +137,8 @@ export const toggleSandboxExclude = authMutation({
     repoId: v.id("githubRepos"),
     key: v.string(),
     sandboxExclude: v.boolean(),
+    // Seed-only: given to snapshot seed runs, never to sessions.
+    seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -133,6 +149,7 @@ export const toggleSandboxExclude = authMutation({
       doc.vars,
       args.key,
       args.sandboxExclude,
+      args.seedOnly ?? false,
     );
     await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     return null;

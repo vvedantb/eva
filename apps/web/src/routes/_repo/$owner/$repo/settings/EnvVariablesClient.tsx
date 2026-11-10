@@ -51,8 +51,8 @@ export function EnvVariablesClient() {
       onRemove={async (key) => {
         await removeVar({ repoId, key });
       }}
-      onToggleSandboxExclude={async (key, sandboxExclude) => {
-        await toggleSandboxExclude({ repoId, key, sandboxExclude });
+      onToggleSandboxExclude={async (key, sandboxExclude, seedOnly) => {
+        await toggleSandboxExclude({ repoId, key, sandboxExclude, seedOnly });
       }}
       description="Repo variables injected into this repository's sandboxes. Use known slots for agent credentials."
     />

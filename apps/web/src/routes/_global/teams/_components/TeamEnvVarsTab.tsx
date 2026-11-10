@@ -58,8 +58,8 @@ export function TeamEnvVarsTab({ teamId, teamEnvVars }: TeamEnvVarsTabProps) {
       onRemove={async (key) => {
         await removeTeamVar({ teamId, key });
       }}
-      onToggleSandboxExclude={async (key, sandboxExclude) => {
-        await toggleSandboxExclude({ teamId, key, sandboxExclude });
+      onToggleSandboxExclude={async (key, sandboxExclude, seedOnly) => {
+        await toggleSandboxExclude({ teamId, key, sandboxExclude, seedOnly });
       }}
       description="Team variables inherited by every codebase. Use known slots for shared agent credentials."
     />
