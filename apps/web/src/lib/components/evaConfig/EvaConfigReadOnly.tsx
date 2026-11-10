@@ -43,27 +43,9 @@ export function EvaConfigManagedNote({ evaConfig }: { evaConfig: EvaConfig }) {
         on <code>{evaConfig.ref}</code>.{" "}
         {evaConfig.appListed === false
           ? "This app is not in the file yet. Add it to set its commands."
-          : "Edit the file to change these."}
+          : "Edit the file to change this app's commands."}
       </p>
       {evaConfig.error ? <EvaConfigError error={evaConfig.error} /> : null}
     </div>
-  );
-}
-
-/** Synced values (commands, a port), one per line, read-only. */
-export function ReadOnlyLines({
-  lines,
-  emptyLabel = "None",
-}: {
-  lines: readonly string[] | undefined;
-  emptyLabel?: string;
-}) {
-  if (lines === undefined || lines.length === 0) {
-    return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
-  }
-  return (
-    <pre className="whitespace-pre-wrap wrap-break-word rounded-control bg-muted px-3 py-2 font-mono text-xs leading-relaxed text-foreground/80">
-      {lines.join("\n")}
-    </pre>
   );
 }
