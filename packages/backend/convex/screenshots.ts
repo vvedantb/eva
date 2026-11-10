@@ -12,12 +12,16 @@ export const generateUploadUrl = authMutation({
   },
 });
 
-/** Attaches uploaded media to an exact message, or the latest for legacy callbacks. */
+/**
+ * Attaches uploaded media to an exact message, else the turn's own reply, else
+ * the latest message (legacy callbacks).
+ */
 export const attachMedia = authAction({
   args: {
     // Same union as `messages.parentId`: session turns send their chat id.
     parentId: messageFields.parentId,
     messageId: v.optional(v.id("messages")),
+    turnId: v.optional(v.string()),
     imageStorageId: v.optional(v.id("_storage")),
     videoStorageId: v.optional(v.id("_storage")),
     mediaStorageIds: v.optional(v.array(v.id("_storage"))),
@@ -28,6 +32,7 @@ export const attachMedia = authAction({
       parentId: args.parentId,
       requesterUserId: ctx.userId,
       messageId: args.messageId,
+      turnId: args.turnId,
       imageStorageId: args.imageStorageId,
       videoStorageId: args.videoStorageId,
       mediaStorageIds: args.mediaStorageIds,

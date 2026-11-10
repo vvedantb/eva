@@ -646,11 +646,12 @@ async function uploadMediaFile(
 
 /**
  * Which chat message a harvest attaches to: an exact one for a synthetic turn,
- * otherwise the parent's latest. Named rather than inline so the signatures
- * below stay on one line — the deliverable-contract tests read these function
- * bodies as text.
+ * otherwise the reply of `turnId`. The server falls back to the parent's latest
+ * message only when neither resolves. The latest alone is wrong: completion
+ * drains the queue, so a follow-up turn can open during the upload and take
+ * this turn's media.
  */
-type MediaTarget = { messageId?: string };
+type MediaTarget = { messageId?: string; turnId?: string };
 
 /** Attaches uploaded media to the chat message the turn just wrote. */
 async function attachChatMediaIfAny(
@@ -663,6 +664,7 @@ async function attachChatMediaIfAny(
     mediaStorageIds: uploaded.map((item) => item.storageId),
   };
   if (target.messageId) mediaArgs.messageId = target.messageId;
+  if (target.turnId) mediaArgs.turnId = target.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 
@@ -733,14 +735,20 @@ export async function deliverCompletionWithMedia(
   // The run harvest runs while the lease is still held: the server has not
   // closed the turn yet, so its heartbeats stay valid during the upload.
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
+  // Every caller fences the payload with its turn lease before this point.
+  const { turnId } = completionArgs;
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
-  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
+  if (!RUN_ID) {
+    await uploadAndAttachSandboxMedia(
+      typeof turnId === "string" ? { turnId } : {},
+    );
+  }
 }
 
 /**
  * Scans sandbox `recordings/` then `screenshots/` under the repo root and the
  * app rootDirectory, uploads all captured media (videos first, in capture
- * order), and attaches it to the last chat message — or, for a task run, to the
+ * order), and attaches it to the turn's chat reply — or, for a task run, to the
  * run doc that the chat renders its first turn from.
  * Shared by the one-shot callback and the Claude sdk-daemon finalize path —
  * daemon turns previously skipped this, so chat never showed agent
