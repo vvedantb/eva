@@ -3,7 +3,7 @@
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import type { FunctionReturnType } from "convex/server";
 import {
-  api,
+  type api,
   type AIModel,
   type Id,
   type ModelTraitsExecutionArgs,
