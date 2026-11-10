@@ -1,4 +1,8 @@
 import { v } from "convex/values";
+import {
+  queueRuntimeContinue,
+  type StickyComposerTraits,
+} from "../_chat/runtimeContinue";
 import { internalMutation } from "../_generated/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -135,6 +139,8 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
    * detection when the previous turn carries no model stamp.
    */
   fallbackProvider: (entity: TEntity) => AIProvider | undefined;
+  /** The chat's sticky composer traits, carried onto an automatic continue. */
+  stickyTraits: (entity: TEntity) => StickyComposerTraits;
   /**
    * The account `next` runs on (undefined = Team), re-resolved at dequeue
    * rather than trusted from enqueue time. Resolved before the usage-limit
@@ -361,6 +367,11 @@ async function startNextQueuedChatMessage<
 ): Promise<boolean> {
   const entity = await config.getEntity(ctx, id);
   if (!entity) return false;
+  // Before the busy check: a turn that ends with subagents still running
+  // queues its continue now, and the later drain starts it.
+  if (trigger === "turn-ended") {
+    await queueRuntimeContinue(ctx, id, config.stickyTraits(entity));
+  }
   if (await isSurfaceBusy(ctx, entity, config)) {
     await scheduleDrainAtBackgroundAgentExpiry(ctx, id, entity, config);
     return false;
@@ -607,6 +618,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
   syntheticTurnMessageId: ({ chat }) => chat.syntheticTurnMessageId,
   streamingEntityId: (id) => sessionChatStreamingEntityId(id),
   fallbackProvider: ({ chat }) => chat.provider,
+  stickyTraits: ({ chat }) => chat,
   // The queued model may belong to another provider than the stored pick.
   turnAccountId: (ctx, { session }, next) =>
     resolveTurnProviderAccountId(ctx.db, {
@@ -775,6 +787,7 @@ const projectChatQueueConfig: ChatQueueConfig<
   syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
   streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
   fallbackProvider: (project) => getAIModelProvider(project.model),
+  stickyTraits: (project) => project,
   // Owner-only, and a collaborator's stored override is dropped rather than
   // resolved: raising here would strand the whole queue on one bad row.
   turnAccountId: (ctx, project, next) =>
@@ -889,6 +902,7 @@ const taskChatQueueConfig: ChatQueueConfig<
   syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
   streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
   fallbackProvider: (task) => getAIModelProvider(task.model),
+  stickyTraits: (task) => task,
   // Owner-only, and a collaborator's stored override is dropped rather than
   // resolved: raising here would strand the whole queue on one bad row.
   turnAccountId: (ctx, task, next) =>

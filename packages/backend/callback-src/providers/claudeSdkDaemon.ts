@@ -1,3 +1,4 @@
+import { TURN_MAX_RUNTIME_ERROR } from "@eva/shared/agentTurnLimits";
 import { readdirSync } from "fs";
 import { homedir } from "os";
 import {
@@ -315,11 +316,11 @@ function startTurnWatchdog(): void {
       turnActive = false;
       if (supervisor.currentTurn?.kind === "synthetic") {
         void failSyntheticTurn(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       } else {
         void failTurnAndExit(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       }
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {

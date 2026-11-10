@@ -9,6 +9,11 @@ import { existsSync } from "fs";
 // ../shared/src/agentTurnLimits.ts
 var TURN_MAX_RUNTIME_MS = 3 * 60 * 60 * 1e3;
 var TURN_BACKSTOP_MS = TURN_MAX_RUNTIME_MS + 30 * 60 * 1e3;
+var TURN_MAX_RUNTIME_HOURS = TURN_MAX_RUNTIME_MS / 36e5;
+var TURN_MAX_RUNTIME_ERROR = "The assistant exceeded the maximum turn runtime.";
+var ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT = "terminated after max runtime of";
+var TURN_CONTINUE_DISPLAY = \`Continue: the last turn hit the \${TURN_MAX_RUNTIME_HOURS}-hour limit.\`;
+var TURN_CONTINUE_PROMPT = \`Your last turn reached the \${TURN_MAX_RUNTIME_HOURS}-hour runtime limit and was stopped. Eva committed your work at that point. Check git status and git log, then continue the task from where you stopped. Do not repeat finished steps. If a step is very long (a benchmark or load test), run it in the background and check on it, so one turn does not hit the limit again.\`;
 
 // callback-src/evaMcp.ts
 var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
@@ -5313,7 +5318,7 @@ function buildErrorMessage(code, fatalHeartbeatError, toolStallError, timedOutFo
     return agentName + " terminated because the agent process entered zombie state (likely a grandchild held stdio open after the agent exited)";
   }
   if (timedOutForMaxRuntime) {
-    return agentName + " terminated after max runtime of " + MAX_TOTAL_RUNTIME_MS + "ms";
+    return agentName + " " + ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT + " " + MAX_TOTAL_RUNTIME_MS + "ms";
   }
   if (timedOutForFirstEvent) {
     return agentName + " produced no parseable stream-json events within " + FIRST_EVENT_TIMEOUT_MS + "ms";
@@ -6539,11 +6544,11 @@ function startTurnWatchdog() {
       turnActive = false;
       if (supervisor.currentTurn?.kind === "synthetic") {
         void failSyntheticTurn(
-          "The assistant exceeded the maximum turn runtime."
+          TURN_MAX_RUNTIME_ERROR
         );
       } else {
         void failTurnAndExit(
-          "The assistant exceeded the maximum turn runtime."
+          TURN_MAX_RUNTIME_ERROR
         );
       }
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {
@@ -8487,7 +8492,7 @@ async function runCodexAppServerDaemon() {
       }
       if (supervisor2.currentTurn !== null && now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS) {
         await failActiveTurn(
-          "The assistant exceeded the maximum turn runtime."
+          TURN_MAX_RUNTIME_ERROR
         );
       } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_MESSAGE_TIMEOUT_MS) {
         await failActiveTurn(
@@ -9458,7 +9463,7 @@ function startTurnWatchdog2() {
     if (now - turnStartedAtMs2 > TURN_HARD_TIMEOUT_MS) {
       supervisor3.beginFinalizing();
       abortActiveTurn?.();
-      void failTurnAndExit2("The assistant exceeded the maximum turn runtime.");
+      void failTurnAndExit2(TURN_MAX_RUNTIME_ERROR);
     }
   }, WATCHDOG_TICK_MS2);
   timer.unref?.();
