@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { resolveSandboxCredentialsOnly } from "./envVarResolver";
+import { errorMessage } from "@vvedantb/server";
 
 /**
  * Leak sweep: stops Vercel VMs that run while every Eva owner is `closed`.
@@ -57,7 +58,7 @@ export const run = internalAction({
         }
       } catch (error) {
         console.warn(
-          `[sandboxLeakSweep] skip repo=${repoId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[sandboxLeakSweep] skip repo=${repoId}: ${errorMessage(error)}`,
         );
       }
     }

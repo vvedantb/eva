@@ -23,7 +23,7 @@ import { chatUiCatalog } from "@eva/shared/generativeUi";
 import { buildChatUiCandidates } from "./candidates";
 import { appendMissingBlocks } from "./completeness";
 import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
-import { errorMessageOf } from "../_ai/gatewayErrors";
+import { errorMessageOf } from "@vvedantb/server/ai";
 import {
   MAX_PANEL_ELEMENTS,
   renderUiInput,

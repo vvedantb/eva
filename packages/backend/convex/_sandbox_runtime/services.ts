@@ -21,6 +21,7 @@ import { assertActionSandboxAccess } from "../functions";
 import { buildHttpReadyProbeCommand } from "./httpReadyProbe";
 // Aliased: this module's public action is also called writeSandboxFile.
 import { writeSandboxFile as writeFileToSandbox } from "./sandboxFiles";
+import { errorMessage } from "@vvedantb/server";
 
 /** Starts or stops a code-server instance inside a sandbox. */
 export const toggleCodeServer = action({
@@ -121,7 +122,7 @@ export const toggleCodeServer = action({
         console.error(`[code-server] Failed to start. Logs:\n${logs}`);
         return { success: false, message: "Failed to start", logs };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = errorMessage(error);
         console.error(`[code-server] Error starting: ${errorMsg}`);
         let logs = "";
         try {
@@ -142,7 +143,7 @@ export const toggleCodeServer = action({
         console.log(`[code-server] Stopped`);
         return { success: true, message: "Stopped" };
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = errorMessage(error);
         console.error(`[code-server] Error stopping: ${errorMsg}`);
         return { success: false, message: errorMsg };
       }

@@ -38,6 +38,7 @@ import {
   computeRepoGroupFingerprint,
   type GroupForBuildResult,
 } from "./snapshot";
+import { errorMessage } from "@vvedantb/server";
 
 // Large seeded snapshots take well over the SDK's 30s default to boot the
 // ephemeral builder sandbox — mirrors createSeedPrepSandbox's readyTimeoutSeconds.
@@ -214,7 +215,7 @@ export const buildGroupSnapshot = internalAction({
       );
     } catch (e) {
       logBuild(
-        `build failed for group ${args.groupId}: ${e instanceof Error ? e.message : String(e)}`,
+        `build failed for group ${args.groupId}: ${errorMessage(e)}`,
       );
     } finally {
       if (sandbox) {
@@ -223,7 +224,7 @@ export const buildGroupSnapshot = internalAction({
         } catch (e) {
           logBuild(
             `failed to delete ephemeral builder sandbox for group ${args.groupId}: ${
-              e instanceof Error ? e.message : String(e)
+              errorMessage(e)
             }`,
           );
         }

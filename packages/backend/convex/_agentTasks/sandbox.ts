@@ -35,6 +35,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
+import { errorMessage } from "@vvedantb/server";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -532,7 +533,7 @@ export const finalizeStopTaskSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorMessage(err);
     }
     await ctx.runMutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
       taskId: args.taskId,

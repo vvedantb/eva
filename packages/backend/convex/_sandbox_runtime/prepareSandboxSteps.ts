@@ -4,6 +4,7 @@ import { internal } from "../_generated/api";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { ensureSandboxStartedSteps } from "./resumeSandboxSteps";
 import { type ProgressStep, startupProgress } from "./startupProgress";
+import { errorMessage } from "@vvedantb/server";
 
 type PrepareSandboxArgs = {
   installationId: number;
@@ -255,7 +256,7 @@ export async function prepareSandboxSteps(
           }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorMessage(e);
         console.warn(
           `[prepareSandbox] Background commands failed — continuing: ${msg}`,
         );
@@ -305,7 +306,7 @@ export async function prepareSandboxSteps(
         }
       } catch (e) {
         // Non-fatal: log warning and continue
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorMessage(e);
         console.warn(
           `[prepareSandbox] Startup commands failed — continuing: ${msg}`,
         );

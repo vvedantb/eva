@@ -85,6 +85,7 @@ import {
 import { taskPrUrl } from "./_pullRequests/store";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 import { assertComposerMessageRole } from "./_messages/publicRole";
+import { errorMessage } from "@vvedantb/server";
 
 /** Streaming-activity entity id for a task chat. */
 
@@ -1114,7 +1115,7 @@ export const agentTaskChatExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("chat", error);
         console.error(
-          `[agentTaskChatWorkflow] pushSandboxBranch failed taskId=${String(args.taskId)}: ${error instanceof Error ? error.message : String(error)}`,
+          `[agentTaskChatWorkflow] pushSandboxBranch failed taskId=${String(args.taskId)}: ${errorMessage(error)}`,
         );
         await step.runMutation(internal.agentTaskChatWorkflow.saveResult, {
           taskId: args.taskId,

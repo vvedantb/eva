@@ -14,7 +14,6 @@ import {
   ensureDockerDaemon,
   RESUME_READY_TIMEOUT_SECONDS,
   errorMessage,
-  sleep,
   workspaceDirShell,
   WORKSPACE_DIR,
 } from "./helpers";
@@ -59,6 +58,7 @@ import { runStartupCommandsDirect } from "./execution";
 import { resolveVercelConsoleDevCommand } from "./vercelAppPorts";
 import type { GenericActionCtx } from "convex/server";
 import { startDesktopWithChrome } from "./desktop";
+import { sleep } from "../_shared/async";
 
 /**
  * Starts the app server in Preview Console (Vercel tmux) so Console can show

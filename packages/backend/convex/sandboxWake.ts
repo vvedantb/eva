@@ -10,6 +10,7 @@ import {
 import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
 import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
+import { sleep } from "./_shared/async";
 
 /**
  * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
@@ -145,9 +146,6 @@ async function start(ctx: ActionCtx, target: WakeTarget): Promise<void> {
     projectId: target.id,
   });
 }
-
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Brings the entity's sandbox to `active` (starting it if paused) and returns.

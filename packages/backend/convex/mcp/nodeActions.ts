@@ -47,6 +47,7 @@ import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { signSandboxUserJwt } from "../sandboxJwt";
 import { evaMcpServerInfo } from "./serverInfo";
+import { sleep } from "../_shared/async";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -1247,10 +1248,6 @@ async function readChatDocAsUser(
   return raw;
 }
 
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Reads one entity's preview sandbox state as the calling user, so the read
  * doubles as the access check. Each surface parks that state somewhere
@@ -1296,7 +1293,7 @@ async function ensureEntitySandboxActive(
         [surface.idArg]: id,
       });
     },
-    sleep: delay,
+    sleep,
   });
 }
 
@@ -1578,7 +1575,7 @@ export const mcpStopEntitySandbox = internalAction({
     const deadline = Date.now() + SANDBOX_STOP_SETTLE_TIMEOUT_MS;
     let settled = "stopping";
     while (Date.now() < deadline) {
-      await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
+      await sleep(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
       settled = await readEntitySandboxStatus(clerkUserId, kind, id);
       if (settled !== "stopping") break;
     }
