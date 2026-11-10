@@ -21,11 +21,12 @@ import {
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
+import {
+  PROJECT_CHAT_STREAM_PREFIX,
+  TASK_CHAT_STREAM_PREFIX,
+} from "./agentStreamIds";
 
-/** Streaming entityId prefix for project chat workflows. */
-export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
-/** Streaming entityId prefix for agent task chat workflows. */
-export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
+export { PROJECT_CHAT_STREAM_PREFIX, TASK_CHAT_STREAM_PREFIX };
 
 export function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
   return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;

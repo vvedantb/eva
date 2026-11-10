@@ -1,13 +1,27 @@
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { authQuery } from "./functions";
+import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
 import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
+import {
+  AUTOMATION_RUN_STREAM_PREFIX,
+  PR_RECAP_STREAM_PREFIX,
+  PROJECT_CHAT_STREAM_PREFIX,
+  SESSION_SUMMARY_STREAM_PREFIX,
+  TASK_CHAT_STREAM_PREFIX,
+  TASK_RUN_STREAM_PREFIX,
+} from "./_chat/agentStreamIds";
+import {
+  parseSandboxStartupEntityId,
+  resolveSandboxOwnerForUser,
+  type SandboxOwner,
+} from "./_sandbox/owner";
+import { findDocWithAccess } from "./_docs/access";
 
 /**
  * Finalize an in-flight assistant message after the user hits stop.
@@ -118,11 +132,134 @@ export async function upsertStreamingActivity(
   }
 }
 
-/** Gets the current streaming activity state for an entity (task, session, etc.). */
+/** Whose live output a streaming row carries, by its entity id. */
+type StreamOwner =
+  | { kind: "sandboxOwner"; owner: SandboxOwner }
+  | { kind: "sessionChat"; chatId: Id<"sessionChats"> }
+  | { kind: "doc"; docId: Id<"docs"> }
+  | { kind: "report"; reportId: Id<"evaluationReports"> }
+  | { kind: "taskRun"; runId: Id<"agentRuns"> }
+  | { kind: "automationRun"; runId: Id<"automationRuns"> };
+
+/**
+ * Maps every streaming entity id the app reads to its owner: the prefixed
+ * ids (`_chat/agentStreamIds.ts`, the chat prefixes, sandbox startup rows)
+ * and the bare row ids of session chats, sessions, docs (interview, test
+ * gen), evaluation reports and projects (interview). Unknown ids map to null.
+ */
+function parseStreamOwner(
+  db: QueryCtx["db"],
+  entityId: string,
+): StreamOwner | null {
+  const startup = parseSandboxStartupEntityId(db, entityId);
+  if (startup) return { kind: "sandboxOwner", owner: startup };
+  const after = (prefix: string) =>
+    entityId.startsWith(prefix) ? entityId.slice(prefix.length) : null;
+
+  const taskRun = after(TASK_RUN_STREAM_PREFIX);
+  if (taskRun !== null) {
+    const runId = db.normalizeId("agentRuns", taskRun);
+    return runId ? { kind: "taskRun", runId } : null;
+  }
+  const automationRun = after(AUTOMATION_RUN_STREAM_PREFIX);
+  if (automationRun !== null) {
+    const runId = db.normalizeId("automationRuns", automationRun);
+    return runId ? { kind: "automationRun", runId } : null;
+  }
+  const recap = after(PR_RECAP_STREAM_PREFIX);
+  if (recap !== null) {
+    const docId = db.normalizeId("docs", recap);
+    return docId ? { kind: "doc", docId } : null;
+  }
+  const summary = after(SESSION_SUMMARY_STREAM_PREFIX);
+  if (summary !== null) {
+    const sessionId = db.normalizeId("sessions", summary);
+    return sessionId
+      ? { kind: "sandboxOwner", owner: { kind: "session", sessionId } }
+      : null;
+  }
+  const taskChat = after(TASK_CHAT_STREAM_PREFIX);
+  if (taskChat !== null) {
+    const taskId = db.normalizeId("agentTasks", taskChat);
+    return taskId
+      ? { kind: "sandboxOwner", owner: { kind: "task", taskId } }
+      : null;
+  }
+  const projectChat = after(PROJECT_CHAT_STREAM_PREFIX);
+  if (projectChat !== null) {
+    const projectId = db.normalizeId("projects", projectChat);
+    return projectId
+      ? { kind: "sandboxOwner", owner: { kind: "project", projectId } }
+      : null;
+  }
+
+  const chatId = db.normalizeId("sessionChats", entityId);
+  if (chatId) return { kind: "sessionChat", chatId };
+  const sessionId = db.normalizeId("sessions", entityId);
+  if (sessionId) {
+    return { kind: "sandboxOwner", owner: { kind: "session", sessionId } };
+  }
+  const docId = db.normalizeId("docs", entityId);
+  if (docId) return { kind: "doc", docId };
+  const reportId = db.normalizeId("evaluationReports", entityId);
+  if (reportId) return { kind: "report", reportId };
+  const projectId = db.normalizeId("projects", entityId);
+  if (projectId) {
+    return { kind: "sandboxOwner", owner: { kind: "project", projectId } };
+  }
+  const taskId = db.normalizeId("agentTasks", entityId);
+  if (taskId) return { kind: "sandboxOwner", owner: { kind: "task", taskId } };
+  return null;
+}
+
+/** The read rule of the entity that owns a streaming row. */
+async function canReadStream(
+  db: QueryCtx["db"],
+  userId: Id<"users">,
+  owner: StreamOwner,
+): Promise<boolean> {
+  switch (owner.kind) {
+    case "sandboxOwner":
+      return (await resolveSandboxOwnerForUser(db, userId, owner.owner)) !== null;
+    case "sessionChat": {
+      const chat = await db.get(owner.chatId);
+      return chat !== null && (await hasRepoAccess(db, chat.repoId, userId));
+    }
+    case "doc":
+      return (await findDocWithAccess(db, owner.docId, userId)) !== null;
+    case "report": {
+      // Same rule as `evaluationReports.listByDoc`, where the id comes from.
+      const report = await db.get(owner.reportId);
+      const doc = report ? await db.get(report.docId) : null;
+      return doc !== null && (await hasRepoAccess(db, doc.repoId, userId));
+    }
+    case "taskRun": {
+      // Same rule as `agentRuns.get`: the run follows its task.
+      const run = await db.get(owner.runId);
+      const task = run ? await db.get(run.taskId) : null;
+      return task !== null && (await hasTaskAccess(db, task, userId));
+    }
+    case "automationRun": {
+      const run = await db.get(owner.runId);
+      return run !== null && (await hasRepoAccess(db, run.repoId, userId));
+    }
+  }
+}
+
+/**
+ * Gets the live agent output for an entity the caller can read. Any other
+ * id, including one no surface streams under, reads as null.
+ */
 export const get = authQuery({
   args: { entityId: v.string() },
   returns: activityStateValidator,
-  handler: async (ctx, args) => readStreamingActivity(ctx, args.entityId),
+  handler: async (ctx, args) => {
+    const owner = parseStreamOwner(ctx.db, args.entityId);
+    if (!owner || !(await canReadStream(ctx.db, ctx.userId, owner))) {
+      return null;
+    }
+    return readStreamingActivity(ctx, args.entityId);
+  },
 });
 
 /** Gets streaming activity state (internal use, no auth check). */

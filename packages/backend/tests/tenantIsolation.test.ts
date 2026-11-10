@@ -359,3 +359,42 @@ describe("public chat writes are the caller's own user turns", () => {
     TIMEOUT_MS,
   );
 });
+
+describe("live agent output follows the entity's read rule", () => {
+  test(
+    "each stream id reads for a member and is null for a stranger",
+    async () => {
+      const f = await fixture();
+      const streamIds = [
+        `task-chat-${f.taskId}`,
+        `task-run-${f.runId}`,
+        `task-sandbox-startup-${f.taskId}`,
+        `project-chat-${f.projectId}`,
+        String(f.projectId),
+        String(f.chatId),
+        `pr-recap:${f.docId}`,
+        String(f.docId),
+      ];
+      await f.t.run(async (ctx) => {
+        for (const entityId of streamIds) {
+          await ctx.db.insert("streamingActivity", {
+            entityId,
+            currentActivity: "[]",
+            currentContent: "secret output",
+          });
+        }
+      });
+      for (const entityId of streamIds) {
+        expect(
+          await f.stranger.query(api.streaming.get, { entityId }),
+          entityId,
+        ).toBeNull();
+        expect(
+          (await f.mate.query(api.streaming.get, { entityId }))?.currentContent,
+          entityId,
+        ).toBe("secret output");
+      }
+    },
+    TIMEOUT_MS,
+  );
+});
