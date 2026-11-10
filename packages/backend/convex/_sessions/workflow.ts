@@ -60,6 +60,7 @@ import {
   claimStagedTurn,
   closeTurn,
   findOpenTurn,
+  isSupersededChatResult,
   leaseSyntheticTurn,
   openSessionChatTurn,
   resolveCompletionTurn,
@@ -923,6 +924,8 @@ export const saveResult = internalMutation({
     const context = await loadSessionChat(ctx.db, args.chatId);
     if (!context) return null;
     const { chat, session } = context;
+    const turn = await ctx.db.get(args.turnId);
+    if (isSupersededChatResult(turn, chat.activeWorkflowId)) return null;
 
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
@@ -975,7 +978,6 @@ export const saveResult = internalMutation({
       sessionPatch.planContent = args.planContent;
     }
     await ctx.db.patch(session._id, sessionPatch);
-    const turn = await ctx.db.get(args.turnId);
     if (turn) {
       await closeTurn(
         ctx,

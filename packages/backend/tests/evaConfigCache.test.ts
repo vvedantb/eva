@@ -92,10 +92,12 @@ describe("applyEvaConfig", () => {
         // The file names no dev command for admin, so detection takes over.
         expect(admin?.devCommand).toBeUndefined();
 
-        // The monorepo root is not listed: it stays Convex-managed.
+        // The monorepo root is not listed: its commands stay Convex-managed,
+        // but it is marked as part of a repo that has the file, so the setup
+        // prompt does not show for it.
         const root = await ctx.db.get(ids.root);
         expect(root?.startupCommands).toEqual(["root-old"]);
-        expect(root?.evaConfig).toBeUndefined();
+        expect(root?.evaConfig?.appListed).toBe(false);
 
         const snapshot = await ctx.db.get(ids.snapshot);
         expect(snapshot?.buildCommands).toEqual(["pnpm install"]);
@@ -151,6 +153,32 @@ describe("applyEvaConfig", () => {
           { name: "sentry", kind: "http", target: "https://mcp.sentry.dev/mcp" },
         ]);
       });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a disconnected monorepo root still syncs while an app is connected",
+    async () => {
+      const { t, ids } = await fixture();
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.root, { connected: false });
+      });
+      const target = await t.query(internal._evaConfig.cache.getSyncTarget, {
+        repoId: ids.root,
+      });
+      expect(target?.owner).toBe("acme");
+
+      await t.run(async (ctx) => {
+        for (const id of [ids.web, ids.admin]) {
+          await ctx.db.patch(id, { connected: false });
+        }
+      });
+      expect(
+        await t.query(internal._evaConfig.cache.getSyncTarget, {
+          repoId: ids.root,
+        }),
+      ).toBeNull();
     },
     TIMEOUT_MS,
   );

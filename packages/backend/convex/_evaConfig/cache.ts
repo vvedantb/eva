@@ -31,7 +31,19 @@ export const getSyncTarget = internalQuery({
   ),
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
-    if (!repo || repo.connected === false) return null;
+    if (!repo) return null;
+    // A monorepo's root row is often disconnected while its app rows are
+    // connected; the `.eva/` folder belongs to the whole GitHub repo, so any
+    // connected app is enough.
+    if (repo.connected === false) {
+      const siblings = await ctx.db
+        .query("githubRepos")
+        .withIndex("by_owner_and_name", (q) =>
+          q.eq("owner", repo.owner).eq("name", repo.name),
+        )
+        .collect();
+      if (siblings.every((row) => row.connected === false)) return null;
+    }
     return {
       owner: repo.owner,
       name: repo.name,
@@ -49,7 +61,8 @@ export const getSyncTarget = internalQuery({
  *
  * - No `config.json`: the repo is Convex-managed again; commands are untouched.
  * - Invalid `config.json`: the last good commands stay; the error is shown.
- * - An app row the file does not list stays Convex-managed.
+ * - An app row the file does not list keeps Convex-managed commands
+ *   (`appListed: false`).
  * - Snapshot commands go to each app's own snapshot config (per app in Convex).
  */
 export const applyEvaConfig = internalMutation({
@@ -103,10 +116,13 @@ export const applyEvaConfig = internalMutation({
         await ctx.db.patch(row._id, { evaConfig });
         continue;
       }
-      // An app row the file does not list (the monorepo root, a newly added
-      // app) stays Convex-managed: editable, commands untouched.
+      // An app row the file does not list (a newly added app) keeps its
+      // Convex-managed commands, but is still marked as part of a repo that
+      // has the file, so the setup prompt does not show for it.
       if (!app) {
-        if (row.evaConfig) await ctx.db.patch(row._id, { evaConfig: undefined });
+        await ctx.db.patch(row._id, {
+          evaConfig: { ...evaConfig, appListed: false },
+        });
         continue;
       }
       await ctx.db.patch(row._id, {

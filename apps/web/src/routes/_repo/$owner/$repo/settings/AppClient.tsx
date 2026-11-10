@@ -9,6 +9,7 @@ import { Input, Textarea, SettingsField, SettingsSection } from "@vvedantb/ui";
 import { parseCommandLines } from "./_utils";
 import { LogoSettingsSection } from "./_components/LogoSettingsSection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import { ownsRunCommands } from "@/lib/components/evaConfig/EvaConfigReadOnly";
 import { SetUpWithEvaButton } from "@/lib/components/evaConfig/SetUpWithEvaButton";
 import { AppCommandsReadOnly } from "./_components/AppCommandsReadOnly";
 
@@ -47,7 +48,7 @@ export function AppClient() {
       args.startupCommands !== undefined ||
       args.backgroundCommands !== undefined ||
       args.stopCommands !== undefined;
-    if (repo.evaConfig !== undefined && sendsCommands) return;
+    if (ownsRunCommands(repo.evaConfig) && sendsCommands) return;
     void catchMutationError(
       updateConfig(args),
       "Couldn't save app settings",
@@ -120,7 +121,7 @@ export function AppClient() {
         />
       </SettingsSection>
 
-      {repo.evaConfig !== undefined ? (
+      {ownsRunCommands(repo.evaConfig) ? (
         <AppCommandsReadOnly
           evaConfig={repo.evaConfig}
           devPort={repo.devPort}

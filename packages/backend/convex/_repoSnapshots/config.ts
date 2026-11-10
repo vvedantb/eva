@@ -6,7 +6,10 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
-import { computeSeedFingerprint } from "../_evaConfig/config";
+import {
+  computeSeedFingerprint,
+  ownsRunCommands,
+} from "../_evaConfig/config";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Converts a schedule string to a cron expression, returning null for "manual". */
@@ -340,7 +343,7 @@ export const saveRepoSnapshot = authMutation({
     const accessRepo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     // A repo that commits `.eva/config.json` owns its build/seed commands:
     // the cache sync writes them, the settings form only edits the schedule.
-    const repoOwnsCommands = accessRepo.evaConfig !== undefined;
+    const repoOwnsCommands = ownsRunCommands(accessRepo.evaConfig);
     const commandFields = repoOwnsCommands
       ? {}
       : { buildCommands: args.buildCommands, seedCommands: args.seedCommands };

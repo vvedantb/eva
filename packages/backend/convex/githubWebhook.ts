@@ -373,20 +373,25 @@ export const handlePushToBaseBranch = internalMutation({
       ) ??
       siblings.find((repo) => repo.parentRepoId === undefined) ??
       siblings[0];
-    if (!workflowRepo || workflowRepo.connected === false) return null;
+    if (!workflowRepo) return null;
 
     const baseBranch =
       workflowRepo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
     if (args.branch !== baseBranch) return null;
 
-    if (args.touchedSkillsPath) {
+    if (args.touchedSkillsPath && workflowRepo.connected !== false) {
       await ctx.scheduler.runAfter(
         0,
         internal._repoSkills.sync.syncRepoInternal,
         { repoId: workflowRepo._id },
       );
     }
-    if (args.touchedEvaConfig) {
+    // `.eva/` belongs to the whole GitHub repo: a disconnected monorepo root
+    // still syncs while any of its apps is connected.
+    if (
+      args.touchedEvaConfig &&
+      siblings.some((repo) => repo.connected !== false)
+    ) {
       await ctx.scheduler.runAfter(
         0,
         internal._evaConfig.sync.syncEvaConfig,
