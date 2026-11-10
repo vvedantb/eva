@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  type ChangedFile,
-  workspaceRepoName,
-} from "@/lib/components/chat/ChangedFilesCard";
-import {
   groupChangedFilesByRepo,
   selectChangedFilePreview,
   shouldAutoExpandChangedFiles,
   shouldPreviewChangedFiles,
-} from "@/lib/components/chat/changedFilesPresentation";
+  workspaceRepoName,
+  type ChangedFile,
+} from "@eva/shared";
 
 function file(path: string, repoName: string | null = null): ChangedFile {
   const segments = path.split("/");

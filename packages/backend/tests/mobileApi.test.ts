@@ -283,6 +283,28 @@ describe("mobile api", () => {
   );
 
   test(
+    "getChat carries the pull request the web Review pane diffs",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const prUrl = "https://github.com/vvedantb/eva/pull/12";
+      const projectPr = "https://github.com/vvedantb/eva/pull/13";
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).not.toHaveProperty("prUrl");
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { prUrl });
+        await ctx.db.patch(ids.taskId, { prUrl });
+        await ctx.db.patch(ids.projectId, { prUrl: projectPr });
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({ prUrl });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({ prUrl });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
+      // A task in a project ships through the project's pull request.
+      await t.run((ctx) => ctx.db.patch(ids.taskId, { projectId: ids.projectId }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({ prUrl: projectPr });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "setChatModel sets the sticky model and traits a reply then uses",
     async () => {
       const { t, ids, asUser } = await fixture();

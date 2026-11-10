@@ -1,3 +1,4 @@
+import { collectChangedFiles } from "@eva/shared";
 import {
   hasStepDetail,
   parseTraceSegments,
@@ -34,6 +35,7 @@ import { Markdown } from "@vvedantb/native-ui/markdown";
 import * as Clipboard from "expo-clipboard";
 import type { ComponentType } from "react";
 import { View } from "react-native";
+import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StepDetail } from "./StepDetail";
 
 /** The code block's copy button, as the web code header. */
@@ -109,13 +111,16 @@ function StepRun({ steps, messageId }: { steps: TraceStep[]; messageId: string }
  * An agent reply: its trace as the web's folded `ActivityTasks` (reasoning as
  * prose, each run of tool steps behind a summary line), all behind "Worked
  * for …" once the turn finished, then the reply as markdown (native-ui
- * `/markdown`, the web `markdown.css` scale).
+ * `/markdown`, the web `markdown.css` scale), then the files the turn changed
+ * (the web `ChangedFilesCard`) once it has text or has finished.
  */
 export function AssistantMessage({
   messageId,
   content,
   activityLog,
   duration,
+  isLatestAssistantTurn,
+  onOpenDiff,
 }: {
   /** For loading a trimmed step's full detail. */
   messageId: string;
@@ -123,8 +128,18 @@ export function AssistantMessage({
   activityLog?: string;
   /** How long the turn ran ("2m", the web `formatDuration`), once it finished. Folds the trace behind "Worked for …". */
   duration?: string;
+  /** The latest reply opens its changed files, as the web. */
+  isLatestAssistantTurn: boolean;
+  /** Opens the diff screen at a changed file. Without it (simple view, as the web) there is no card. */
+  onOpenDiff?: (path: string | undefined) => void;
 }) {
   const segments = parseTraceSegments(activityLog);
+  // The web skips a reply still streaming its first text (`getAssistantTurnState`).
+  const settled = content !== "" || duration !== undefined;
+  const changedFiles =
+    onOpenDiff && settled
+      ? collectChangedFiles(segments.flatMap((segment) => (segment.kind === "actions" ? segment.steps.map(({ step }) => step) : [])))
+      : [];
   const trace = segments.map((segment, index) =>
     segment.kind === "actions" ? (
       <StepRun key={index} steps={segment.steps} messageId={messageId} />
@@ -143,6 +158,9 @@ export function AssistantMessage({
         <AgentTrace>{trace}</AgentTrace>
       )}
       {content.trim() !== "" ? <Markdown onCopyCode={copyCode}>{content}</Markdown> : null}
+      {onOpenDiff ? (
+        <ChangedFilesCard files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
+      ) : null}
     </>
   );
 }

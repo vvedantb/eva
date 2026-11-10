@@ -2,7 +2,7 @@ import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
-import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
+import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt, toRepoRelativePath } from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
@@ -107,6 +107,12 @@ export default function ChatScreen() {
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
   const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
+  const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
+  // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
+  const openDiff = simpleView
+    ? undefined
+    : (path: string | undefined) =>
+        router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
 
   const handleSend = (text: string) => {
@@ -178,6 +184,8 @@ export default function ChatScreen() {
                         content={message.content}
                         activityLog={message.activityLog}
                         duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
+                        isLatestAssistantTurn={message._id === latestReplyId}
+                        onOpenDiff={openDiff}
                       />
                     )}
                   </MessageContent>

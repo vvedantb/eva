@@ -9,10 +9,9 @@ import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
-import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
+import { toSandboxFilePath, type DiffSize } from "@eva/shared";
 import { ContextUsageDisplay } from "@/lib/components/context-usage";
 import { DiffsToolbar } from "@/lib/components/sandbox/DiffsToolbar";
-import type { DiffSize } from "@/lib/components/sandbox/diffFiles";
 import { PreviewSnapshotButton } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { PreviewWebMcpButton } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import { DEMO_PREVIEW_SNAPSHOT } from "@/lib/components/sandbox/previewSnapshot";
