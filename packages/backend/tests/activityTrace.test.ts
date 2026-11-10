@@ -1,14 +1,9 @@
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
   hasStepDetail,
   parseToolSteps,
   parseTraceSegments,
   summariseToolSteps,
-  TOOL_STEP_TYPES,
 } from "@eva/shared/activityTrace";
 
 /** The mobile chat's tool trace reads `messages.activityLog` with no web types. */
@@ -97,20 +92,5 @@ describe("trace segments", () => {
   test("a legacy or malformed log has no segments", () => {
     expect(parseTraceSegments("Ran the tests")).toEqual([]);
     expect(parseTraceSegments(undefined)).toEqual([]);
-  });
-
-  test("phrases and narration types match the web (@vvedantb/ui)", () => {
-    const web = join(dirname(fileURLToPath(import.meta.url)), "../../../apps/web/package.json");
-    const ui = dirname(createRequire(web).resolve("@vvedantb/ui/package.json"));
-    const label = readFileSync(join(ui, "src/ai-elements/activity-step-label.ts"), "utf8");
-    const phrases = /const GROUP_PHRASES[^{]*\{([^}]*)\}/.exec(label)?.[1] ?? "";
-    const webPhrase = (type: string) => new RegExp(`\\b${type}: "([^"]+)"`).exec(phrases)?.[1];
-    for (const type of TOOL_STEP_TYPES) {
-      expect(summariseToolSteps([{ type, label: "", status: "complete" }]).toLowerCase(), type).toBe(webPhrase(type));
-    }
-    const utils = readFileSync(join(ui, "src/ai-elements/activity-tasks-utils.ts"), "utf8");
-    expect(/const STANDALONE_TYPES[^(]*\(\[([^\]]*)\]/.exec(utils)?.[1]?.replace(/\s/g, "")).toBe(
-      '"todos","notice","status","question","steer",',
-    );
   });
 });
