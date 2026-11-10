@@ -168,4 +168,48 @@ describe("guards end to end", () => {
       fullName: "Ada King",
     });
   }, 30_000);
+
+  // A new Clerk account (unknown `sub`) whose token carries an existing
+  // user's email address.
+  const NEWCOMER: UserIdentity = {
+    issuer: CLERK.issuer,
+    subject: "user_newcomer",
+    tokenIdentifier: `${CLERK.issuer}|user_newcomer`,
+    email: "owner@example.com",
+  };
+
+  test.each([undefined, false])(
+    "ensureUserExists does not rebind when email_verified is %s",
+    async (emailVerified) => {
+      const { t } = await fixture();
+      const result = await t
+        .withIdentity({ ...NEWCOMER, emailVerified })
+        .mutation(api.auth.ensureUserExists, {});
+      expect(result.wasCreated).toBe(true);
+      const owner = await t.run((ctx) =>
+        ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", "user_clerk"))
+          .first(),
+      );
+      expect(owner).not.toBeNull();
+      expect(owner?._id).not.toBe(result.userId);
+    },
+    30_000,
+  );
+
+  test("ensureUserExists rebinds when email_verified is true", async () => {
+    const { t } = await fixture();
+    const result = await t
+      .withIdentity({ ...NEWCOMER, emailVerified: true })
+      .mutation(api.auth.ensureUserExists, {});
+    const owner = await t.run((ctx) =>
+      ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", "owner@example.com"))
+        .first(),
+    );
+    expect(result).toEqual({ userId: owner?._id, wasCreated: false });
+    expect(owner?.clerkId).toBe("user_newcomer");
+  }, 30_000);
 });
