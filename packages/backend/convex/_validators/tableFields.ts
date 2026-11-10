@@ -2207,9 +2207,6 @@ export const repoSnapshotFields = {
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
-  // Deprecated: snapshots build from githubRepos.defaultBaseBranch. Remove
-  // after migrations:removeRepoSnapshotWorkflowRef has run on every deployment.
-  workflowRef: v.optional(v.string()),
   buildCommands: v.optional(v.array(v.string())),
   // Seed-once commands run ONLY during seeded-snapshot builds, in the
   // post-daemon phase (services like `convex dev` are up). For one-time

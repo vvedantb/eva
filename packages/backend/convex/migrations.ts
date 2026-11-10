@@ -20,7 +20,6 @@ export {
 export { removeSnapshotWarmupFields } from "./_migrations/removeSnapshotWarmupFields";
 export { removeSessionStartupRequestedAt } from "./_migrations/removeSessionStartupRequestedAt";
 export { removeProjectIdField } from "./_migrations/removeProjectIdField";
-export { removeRepoSnapshotWorkflowRef } from "./_migrations/removeRepoSnapshotWorkflowRef";
 export {
   backfillNumIds,
   backfillNumIdsForEntityType,
