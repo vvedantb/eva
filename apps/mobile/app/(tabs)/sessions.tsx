@@ -3,49 +3,49 @@ import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { CenteredSpinner, EmptyState, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, PillTabs, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
 import { SessionGroup } from "@/sessions/SessionGroup";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
 type SessionTab = "active" | "archived";
+type Section = "sessions" | "quick-tasks";
+
+const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
+  { id: "sessions", label: "Sessions" },
+  { id: "quick-tasks", label: "Quick Tasks" },
+];
 
 /**
- * Sessions across every repo the user can access, as the web sessions sidebar
- * at phone width: Active and Archived tabs, then one collapsible group per
- * repo (`SessionGroup`) with compact rows and "Show more".
+ * The Sessions tab holds the web's two places to start work: Sessions and
+ * Quick Tasks, switched by pills under the title (`?section=quick-tasks`, so
+ * a link or back press keeps it). The title and "+" follow the section.
  */
 export default function SessionsScreen() {
-  const [tab, setTab] = useState<SessionTab>("active");
-  const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
   const router = useRouter();
-  const scheme = useScheme();
-  const largerText = useLargerText();
-  const insets = useSafeAreaInsets();
-  const muted = tokens.color.muted[scheme];
-
-  // Repos in order of their newest session; sessions stay newest first.
-  const groups = new Map<string, NonNullable<typeof sessions>>();
-  for (const session of sessions ?? []) {
-    groups.set(session.repoLabel, [...(groups.get(session.repoLabel) ?? []), session]);
-  }
+  const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
+  const section: Section = sectionParam === "quick-tasks" ? "quick-tasks" : "sessions";
+  const { openNew: openNewQuickTask } = useQuickTaskRepo();
+  const muted = tokens.color.muted[useScheme()];
+  const isQuickTasks = section === "quick-tasks";
 
   return (
     <TabScreen>
       <PageHeader
-        title="Sessions"
+        title={isQuickTasks ? "Quick Tasks" : "Sessions"}
         action={
           // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="New session"
-            onPress={() => router.push("/session/new")}
+            accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
+            onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
             hitSlop={2}
             className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
           >
@@ -54,7 +54,34 @@ export default function SessionsScreen() {
         }
       />
       <View className="px-4 pb-2">
-        <Tabs value={tab} onValueChange={(value: string) => setTab(value === "archived" ? "archived" : "active")}>
+        <PillTabs options={SECTIONS} value={section} onChange={(next) => router.setParams({ section: next })} />
+      </View>
+      {isQuickTasks ? <QuickTasksSection /> : <SessionsSection />}
+    </TabScreen>
+  );
+}
+
+/**
+ * Sessions across every repo the user can access, as the web sessions sidebar
+ * at phone width: Active and Archived tabs, then one collapsible group per
+ * repo (`SessionGroup`) with compact rows and "Show more".
+ */
+function SessionsSection() {
+  const [tab, setTab] = useState<SessionTab>("active");
+  const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
+  const scheme = useScheme();
+  const largerText = useLargerText();
+  const insets = useSafeAreaInsets();
+
+  // Repos in order of their newest session; sessions stay newest first.
+  const groups = new Map<string, NonNullable<typeof sessions>>();
+  for (const session of sessions ?? []) {
+    groups.set(session.repoLabel, [...(groups.get(session.repoLabel) ?? []), session]);
+  }
+
+  return (
+    <>
+      <View className="px-4 pb-2">        <Tabs value={tab} onValueChange={(value: string) => setTab(value === "archived" ? "archived" : "active")}>
           {/* The web `SessionsListModeTabs`: an `h-8` `tabs-segmented` list with
           `sm` triggers (24 high). Its dark trough is the card colour. */}
           <TabsList
@@ -92,6 +119,6 @@ export default function SessionsScreen() {
           ))}
         </ScrollView>
       )}
-    </TabScreen>
+    </>
   );
 }

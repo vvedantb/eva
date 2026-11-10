@@ -3,10 +3,10 @@ import { useQueryStates } from "nuqs";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import {
-  TASK_STATUSES,
+  groupByTaskStatus,
   statusWorkflowOrder,
   type DisplayTaskStatus,
-} from "@/lib/components/tasks/TaskStatusBadge";
+} from "@eva/shared";
 import { priorityCompare } from "@/lib/components/priority/priorityMeta";
 import {
   searchParser,
@@ -210,18 +210,7 @@ function applyQuickTaskFilters(
 // each bucket. Used so prev/next on the detail page matches the kanban's
 // visual top-to-bottom-then-rightward flow.
 function groupByStatusOrder(tasks: QuickTask[]): QuickTask[] {
-  const byStatus = new Map<string, QuickTask[]>();
-  for (const task of tasks) {
-    const list = byStatus.get(task.status) ?? [];
-    list.push(task);
-    byStatus.set(task.status, list);
-  }
-  const result: QuickTask[] = [];
-  for (const status of TASK_STATUSES) {
-    const group = byStatus.get(status);
-    if (group) result.push(...group);
-  }
-  return result;
+  return groupByTaskStatus(tasks).flatMap((section) => section.tasks);
 }
 
 export function useFilteredQuickTasks(
