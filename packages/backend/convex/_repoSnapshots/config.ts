@@ -6,10 +6,7 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { snapshotScheduleValidator } from "../validators";
 import { authQuery, authMutation, getRepoWithAccess } from "../functions";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
-import {
-  computeSeedFingerprint,
-  ownsRunCommands,
-} from "../_evaConfig/config";
+import { computeSeedFingerprint } from "../_evaConfig/config";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 
 /** Converts a schedule string to a cron expression, returning null for "manual". */
@@ -70,7 +67,6 @@ export const getRepoSnapshot = authQuery({
       workflowRef: v.optional(v.string()),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
-      imageFingerprint: v.optional(v.string()),
       baseSnapshotId: v.optional(v.string()),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -264,7 +260,6 @@ export const getRepoSnapshotInternal = internalQuery({
       branch: v.string(),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
-      imageFingerprint: v.optional(v.string()),
       baseSnapshotId: v.optional(v.string()),
     }),
     v.null(),
@@ -279,7 +274,6 @@ export const getRepoSnapshotInternal = internalQuery({
       branch: repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
       buildCommands: doc.buildCommands,
       seedCommands: doc.seedCommands,
-      imageFingerprint: doc.imageFingerprint,
       baseSnapshotId: doc.baseSnapshotId,
     };
   },
@@ -335,23 +329,15 @@ export const saveRepoSnapshot = authMutation({
   args: {
     repoId: v.id("githubRepos"),
     schedule: snapshotScheduleValidator,
-    buildCommands: v.optional(v.array(v.string())),
-    seedCommands: v.optional(v.array(v.string())),
   },
   returns: v.id("repoSnapshots"),
   handler: async (ctx, args) => {
-    const accessRepo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
-    // A repo that commits `.eva/config.json` owns its build/seed commands:
-    // the cache sync writes them, the settings form only edits the schedule.
-    const repoOwnsCommands = ownsRunCommands(accessRepo.evaConfig);
-    const commandFields = repoOwnsCommands
-      ? {}
-      : { buildCommands: args.buildCommands, seedCommands: args.seedCommands };
-    if (repoOwnsCommands) {
-      await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
-        repoId: args.repoId,
-      });
-    }
+    await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    // Build/seed commands come from `.eva/config.json`; a resync fills them in
+    // when this creates the app's snapshot row.
+    await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
+      repoId: args.repoId,
+    });
     // Check for an app-specific config first (per-app model).
     // During transition, fall back to a shared root config and create an app-scoped row from it.
     const appSpecific = await ctx.db
@@ -374,7 +360,6 @@ export const saveRepoSnapshot = authMutation({
       await ctx.db.patch(appSpecific._id, {
         schedule: args.schedule,
         cronJobId,
-        ...commandFields,
         updatedAt: Date.now(),
       });
       return appSpecific._id;
@@ -405,8 +390,7 @@ export const saveRepoSnapshot = authMutation({
             snapshotName: siblingSnapshot.snapshotName,
             schedule: args.schedule,
             enabled: true,
-            ...commandFields,
-            baseSnapshotId: siblingSnapshot.baseSnapshotId,
+                baseSnapshotId: siblingSnapshot.baseSnapshotId,
             createdAt: now,
             updatedAt: now,
           });
@@ -433,7 +417,6 @@ export const saveRepoSnapshot = authMutation({
       snapshotName,
       schedule: args.schedule,
       enabled: true,
-      ...commandFields,
       createdAt: now,
       updatedAt: now,
     });
@@ -452,31 +435,6 @@ export const saveRepoSnapshot = authMutation({
   },
 });
 
-/**
- * Sets a repo's snapshot seed commands directly (internal, CLI/ops use) —
- * mirrors githubRepos:setRepoCommandsInternal for the repoSnapshots row.
- * An empty array clears the field. Fails if the repo has no snapshot config.
- */
-export const setSeedCommandsInternal = internalMutation({
-  args: {
-    repoId: v.id("githubRepos"),
-    seedCommands: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const config = await ctx.db
-      .query("repoSnapshots")
-      .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-      .first();
-    if (!config) throw new Error("No snapshot config found for this repo");
-    await ctx.db.patch(config._id, {
-      seedCommands:
-        args.seedCommands.length > 0 ? args.seedCommands : undefined,
-      updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
 
 /** Toggles the enabled state of a snapshot, registering or deleting the cron job. */
 export const setSnapshotEnabled = authMutation({

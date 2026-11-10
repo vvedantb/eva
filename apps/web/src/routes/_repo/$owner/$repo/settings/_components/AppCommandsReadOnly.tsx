@@ -1,4 +1,5 @@
 import { SettingsField, SettingsSection } from "@vvedantb/ui";
+import { SetUpWithEvaButton } from "@/lib/components/evaConfig/SetUpWithEvaButton";
 import {
   EvaConfigManagedNote,
   ReadOnlyLines,
@@ -6,7 +7,8 @@ import {
 } from "@/lib/components/evaConfig/EvaConfigReadOnly";
 
 interface AppCommandsReadOnlyProps {
-  evaConfig: EvaConfig;
+  /** Undefined until the repo has a synced `.eva/config.json`. */
+  evaConfig: EvaConfig | undefined;
   devPort: number | undefined;
   devCommand: string | undefined;
   startupCommands: string[] | undefined;
@@ -15,8 +17,8 @@ interface AppCommandsReadOnlyProps {
 }
 
 /**
- * The App page's command sections when the repo owns them in
- * `.eva/config.json`: the synced values, with no inputs.
+ * The App page's command sections: the values synced from `.eva/config.json`,
+ * with no inputs. Commands only change through the file.
  */
 export function AppCommandsReadOnly({
   evaConfig,
@@ -28,9 +30,19 @@ export function AppCommandsReadOnly({
 }: AppCommandsReadOnlyProps) {
   return (
     <>
-      <SettingsSection title="Dev server">
+      <SettingsSection
+        title="Dev server"
+        action={evaConfig ? undefined : <SetUpWithEvaButton />}
+      >
         <div className="grid gap-5">
-          <EvaConfigManagedNote evaConfig={evaConfig} />
+          {evaConfig ? (
+            <EvaConfigManagedNote evaConfig={evaConfig} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              This repo has no <code>.eva/config.json</code> yet. Set up with
+              Eva to write it.
+            </p>
+          )}
           <div className="grid gap-5 sm:grid-cols-2">
             <SettingsField label="Port">
               <ReadOnlyLines

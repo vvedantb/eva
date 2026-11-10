@@ -1050,6 +1050,9 @@ export const githubRepoFields = {
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
   mcpRootPrompt: v.optional(v.string()),
+  // startup/background/stop commands and devPort/devCommand: a read-only cache
+  // of `.eva/config.json` on the default branch (_evaConfig/cache.ts writes
+  // them). Sandboxes read this copy so a boot needs no GitHub call.
   startupCommands: v.optional(v.array(v.string())),
   backgroundCommands: v.optional(v.array(v.string())),
   // Clean-shutdown commands run before snapshotting a seeded sandbox so on-disk
@@ -1065,8 +1068,7 @@ export const githubRepoFields = {
   // differs skips the seeded snapshot (see resolveSandboxContext).
   seededFingerprint: v.optional(v.string()),
   // Last sync of the repo-owned `.eva/` folder on the default branch (see
-  // _evaConfig/sync.ts). Present ⇒ the repo owns its commands: the command
-  // fields above are a read-only cache of `.eva/config.json`.
+  // _evaConfig/sync.ts). Absent ⇒ the repo has no `.eva/config.json` yet.
   evaConfig: v.optional(
     v.object({
       ref: v.string(),
@@ -1074,7 +1076,7 @@ export const githubRepoFields = {
       // Parse error of the current file; the cache keeps the last good values.
       error: v.optional(v.string()),
       // False when the repo has the file but it does not list this app: the
-      // app keeps Convex-managed (editable) commands. See ownsRunCommands.
+      // app's commands are left as they were (add it to the file to set them).
       appListed: v.optional(v.boolean()),
       mcpServers: v.array(
         v.object({
@@ -2205,8 +2207,8 @@ export const repoSnapshotFields = {
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
-  // Deprecated: snapshots build from githubRepos.defaultBaseBranch. Kept so
-  // existing documents still validate; nothing reads it.
+  // Deprecated: snapshots build from githubRepos.defaultBaseBranch. Remove
+  // after migrations:removeRepoSnapshotWorkflowRef has run on every deployment.
   workflowRef: v.optional(v.string()),
   buildCommands: v.optional(v.array(v.string())),
   // Seed-once commands run ONLY during seeded-snapshot builds, in the
@@ -2214,11 +2216,6 @@ export const repoSnapshotFields = {
   // data seeding (env set, convex import). Never re-run on sandbox boot,
   // unlike githubRepos.startupCommands. Not part of the image fingerprint.
   seedCommands: v.optional(v.array(v.string())),
-  // Fingerprint of the image inputs (lockfile sha on the build branch,
-  // buildCommands, config-file blobs, image definition version) stored at the
-  // last successful Image build. When unchanged, the build workflow skips the
-  // ~11-15m image rebuild — its output would be byte-identical.
-  imageFingerprint: v.optional(v.string()),
   // Vercel base Image capture (`snap_*`) from a running sandbox — separate
   // from `snapshotName` and per-app `seededSnapshotName`.
   baseSnapshotId: v.optional(v.string()),

@@ -3,7 +3,6 @@ import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { ownsRunCommands } from "../_evaConfig/config";
 import {
   authMutation,
   getRepoWithAccess,
@@ -227,29 +226,12 @@ export const updateConfig = authMutation({
     agentMemoryEnabled: v.optional(v.boolean()),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
-    devPort: v.optional(v.union(v.number(), v.null())),
-    devCommand: v.optional(v.string()),
-    startupCommands: v.optional(v.array(v.string())),
-    backgroundCommands: v.optional(v.array(v.string())),
-    stopCommands: v.optional(v.array(v.string())),
     systemPrompt: v.optional(v.string()),
     label: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
-
-    const editsRunCommands =
-      args.devPort !== undefined ||
-      args.devCommand !== undefined ||
-      args.startupCommands !== undefined ||
-      args.backgroundCommands !== undefined ||
-      args.stopCommands !== undefined;
-    if (ownsRunCommands(repo.evaConfig) && editsRunCommands) {
-      throw new Error(
-        "This repo's commands live in .eva/config.json. Edit the file in the repo.",
-      );
-    }
 
     const sharedPatch: Record<string, string | boolean> = {};
     if (args.defaultBaseBranch !== undefined)
@@ -296,43 +278,6 @@ export const updateConfig = authMutation({
     if (args.domains !== undefined) {
       await ctx.db.patch(args.repoId, {
         domains: args.domains.length > 0 ? args.domains : undefined,
-      });
-    }
-
-    // Per-app dev config: empty/null clears the override so detection falls back.
-    if (args.devPort !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        devPort: args.devPort === null ? undefined : args.devPort,
-      });
-    }
-
-    if (args.devCommand !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        devCommand:
-          args.devCommand.trim().length > 0 ? args.devCommand : undefined,
-      });
-    }
-
-    if (args.startupCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        startupCommands:
-          args.startupCommands.length > 0 ? args.startupCommands : undefined,
-      });
-    }
-
-    if (args.backgroundCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        backgroundCommands:
-          args.backgroundCommands.length > 0
-            ? args.backgroundCommands
-            : undefined,
-      });
-    }
-
-    if (args.stopCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        stopCommands:
-          args.stopCommands.length > 0 ? args.stopCommands : undefined,
       });
     }
 
@@ -426,47 +371,6 @@ export const updateMcpRootPrompt = authMutation({
   },
 });
 
-/**
- * Sets an app repo's command config directly (internal, CLI/ops use). Stop
- * commands gate seeded-snapshot builds (findSeedableAppRepos), and updateConfig
- * is auth+ownership-checked so it cannot be driven from `npx convex run` when a
- * deployment's config needs backfilling or repair (e.g. prod after a dev-only
- * setup). Each array is optional; an empty array clears the field.
- */
-export const setRepoCommandsInternal = internalMutation({
-  args: {
-    repoId: v.id("githubRepos"),
-    startupCommands: v.optional(v.array(v.string())),
-    backgroundCommands: v.optional(v.array(v.string())),
-    stopCommands: v.optional(v.array(v.string())),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-    if (args.startupCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        startupCommands:
-          args.startupCommands.length > 0 ? args.startupCommands : undefined,
-      });
-    }
-    if (args.backgroundCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        backgroundCommands:
-          args.backgroundCommands.length > 0
-            ? args.backgroundCommands
-            : undefined,
-      });
-    }
-    if (args.stopCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        stopCommands:
-          args.stopCommands.length > 0 ? args.stopCommands : undefined,
-      });
-    }
-    return null;
-  },
-});
 
 /** Deletes a GitHub repo entry by ID (internal use only). */
 export const deleteInternal = internalMutation({
