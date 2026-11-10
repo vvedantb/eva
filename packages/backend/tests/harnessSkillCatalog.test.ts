@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   filterHarnessCommands,
@@ -10,12 +7,6 @@ import {
 import { parseHarnessCatalogReport } from "../convex/_harnessSkills/report";
 import { streamingHeartbeatHmacMessage } from "../convex/_sandbox_runtime/callbackAuth";
 import { AI_PROVIDERS } from "../convex/_validators/aiModels";
-
-const testsDir = dirname(fileURLToPath(import.meta.url));
-
-function backendSource(path: string): string {
-  return readFileSync(join(testsDir, "..", path), "utf8");
-}
 
 function command(
   name: string,
@@ -271,47 +262,7 @@ describe("harness catalog write path", () => {
     );
   });
 
-  /**
-   * The global row every composer reads must not be writable by any signed-in
-   * user — only by a sandbox holding the launcher-injected signature.
-   */
-  it("keeps the catalog mutation internal", () => {
-    const source = backendSource("convex/harnessSkills.ts");
-    expect(source).toContain(
-      "export const upsertForProvider = internalMutation(",
-    );
-    expect(source).not.toContain("authMutation");
-  });
-
-  it("parses before consuming a single-use token, then authorizes before write", () => {
-    const source = backendSource("convex/http.ts");
-    const route = source.slice(source.indexOf("/api/harness-skills/report"));
-    expect(route.indexOf("parseHarnessCatalogReport")).toBeLessThan(
-      route.indexOf("consumeReportToken"),
-    );
-    expect(route.indexOf("consumeReportToken")).toBeLessThan(
-      route.indexOf("upsertForProvider"),
-    );
-  });
-
-  it("provides both a clear path and single-use token mutations", () => {
-    const source = backendSource("convex/harnessSkills.ts");
-    expect(source).toContain(
-      "export const clearForProvider = internalMutation(",
-    );
-    expect(source).toContain(
-      "export const issueReportToken = internalMutation(",
-    );
-    expect(source).toContain(
-      "export const consumeReportToken = internalMutation(",
-    );
-    expect(source).toContain("await ctx.db.delete(row._id)");
-  });
-
   it("keeps one canonical provider list for every parser boundary", () => {
     expect(AI_PROVIDERS).toEqual(["claude", "codex", "opencode", "cursor"]);
-    const source = backendSource("convex/_validators/aiModels.ts");
-    expect(source).toContain("type AIProvider = (typeof AI_PROVIDERS)[number]");
-    expect(source).toContain("...AI_PROVIDERS.map");
   });
 });

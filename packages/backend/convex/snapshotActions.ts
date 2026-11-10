@@ -3,8 +3,10 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { quote } from "shell-quote";
 import {
   resolveSandboxCredentials,
+  resolveSeedOnlyEnvVars,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
 import {
@@ -19,6 +21,8 @@ import {
   SESSION_LIFECYCLE,
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
+import { computeStartupFingerprint } from "./_evaConfig/config";
+import { STARTUP_MARKER_PATH } from "./_sandbox_runtime/startupMarker";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
 import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
@@ -190,6 +194,17 @@ function seededRuntimeStateCaptureLines(
   ];
 }
 
+/** Loaded and deleted by the seed script; see launchSeedRun. */
+const SEED_ENV_FILE = "/tmp/.eva-seed-env.sh";
+
+/** `export KEY='value'` lines for the seed-only vars, or null when none. */
+function renderSeedOnlyEnvFile(vars: Record<string, string>): string | null {
+  const lines = Object.entries(vars)
+    .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+    .map(([key, value]) => `export ${key}=${quote([value])}`);
+  return lines.length > 0 ? `${lines.join("\n")}\n` : null;
+}
+
 /**
  * Seeded-snapshot build — LAUNCH step. Composes the app's whole seed sequence
  * (startup commands → marker → stop commands) into one bash script and launches
@@ -269,6 +284,19 @@ export const launchSeedRun = internalAction({
       PACKAGE_HELPER_SCRIPT,
       "rm -f /tmp/.seedrun-done",
     ];
+    // Seed-only env vars (e.g. a staging deploy key) reach this run and no
+    // session. They ride a separate file that the script loads and deletes at
+    // once, so they never sit in seedrun.sh or the captured filesystem. xtrace
+    // goes off for the rest of the run: it would print expanded values into
+    // seedrun.log, which is captured too.
+    const seedOnlyVars = await resolveSeedOnlyEnvVars(ctx, args.repoId);
+    const seedEnvFile = renderSeedOnlyEnvFile(seedOnlyVars);
+    if (seedEnvFile !== null) {
+      lines.push(
+        "set +x",
+        `if [ -f ${SEED_ENV_FILE} ]; then set -a; . ${SEED_ENV_FILE}; set +a; rm -f ${SEED_ENV_FILE}; echo "seed-only env vars loaded; xtrace off"; else echo "SEEDRUN-FAILED:seed-env-missing"; exit 1; fi`,
+      );
+    }
     // Daytona used to bake its whole agent-CLI toolchain (claude, codex,
     // opencode, supabase, docker, ...) into the sandbox's Image
     // at build time — every fresh Daytona sandbox already had them.
@@ -537,7 +565,11 @@ export const launchSeedRun = internalAction({
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
     // Marker so a sandbox booting from the captured snapshot skips the seed.
-    lines.push("touch /tmp/.startup-commands-done");
+    // It carries the startup fingerprint: a branch with other startup
+    // commands sees a mismatch and reruns them (runStartupCommandsDirect).
+    lines.push(
+      `printf %s ${computeStartupFingerprint(startupCommands ?? [])} > ${STARTUP_MARKER_PATH}`,
+    );
     (stopCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:stop-${i}"; exit 1; }`,
@@ -565,9 +597,13 @@ export const launchSeedRun = internalAction({
       // Use the provider writeFile API instead.
       await execHandle(
         sandbox,
-        "rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh",
+        `rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh ${SEED_ENV_FILE}`,
         30,
       );
+      if (seedEnvFile !== null) {
+        await writeSandboxFile(sandbox, SEED_ENV_FILE, seedEnvFile);
+        await execHandle(sandbox, `chmod 600 ${SEED_ENV_FILE}`, 30);
+      }
       await writeSandboxFile(sandbox, "/tmp/seedrun.sh", script);
       await execHandle(sandbox, "chmod +x /tmp/seedrun.sh", 30);
       const wrote = await execHandle(

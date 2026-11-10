@@ -78,6 +78,8 @@ interface ChatPanelProps {
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
   messages: SessionMessage[];
+  /** The transcript has not loaded: show the loader, not the empty state. */
+  isLoadingMessages: boolean;
   queuedMessages: QueuedSessionMessage[];
   streamingActivity?: string;
   streamingContent?: string;
@@ -129,6 +131,7 @@ export function ChatPanel({
   prState,
   summary,
   messages,
+  isLoadingMessages,
   queuedMessages,
   streamingActivity,
   streamingContent,
@@ -479,6 +482,7 @@ export function ChatPanel({
           chatParentId={chatId}
           isRouteActive={isRouteActive}
           messages={messages}
+          isLoadingMessages={isLoadingMessages}
           queuedMessages={queuedMessages}
           queueLabel={queueGate.queueLabel(isExecuting)}
           streamingActivity={streamingActivity}

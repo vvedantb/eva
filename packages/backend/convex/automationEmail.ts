@@ -1,6 +1,7 @@
 "use node";
 
 import { requiredEnv } from "@vvedantb/server";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -45,7 +46,7 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = requiredEnv("WEB_APP_URL");
+    const appUrl = getEvaBaseUrl();
     const recipients = await ctx.runQuery(
       internal.users.listEmailRecipients,
       {},

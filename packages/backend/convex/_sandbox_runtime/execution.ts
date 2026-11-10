@@ -30,6 +30,13 @@ import {
   restartUnresponsiveSandbox,
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
+import { computeStartupFingerprint } from "../_evaConfig/config";
+import {
+  readBranchAppCommands,
+  readStartupMarker,
+  startupMarkerMatches,
+  writeStartupMarker,
+} from "./startupMarker";
 import { pollPreviewReadiness } from "./previewPoll";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import {
@@ -117,6 +124,7 @@ import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { createHmac } from "node:crypto";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
+import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
 
 /**
  * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
@@ -198,7 +206,28 @@ export const validateSandbox = internalAction({
   },
 });
 
-/** Returns whether startup commands have already completed on this sandbox. */
+/**
+ * The startup commands this sandbox should run: the checked-out branch's own
+ * `.eva/config.json` entry when present, else the cached default-branch ones.
+ */
+async function resolveStartupCommands(
+  ctx: ActionCtx,
+  sandbox: SandboxHandle,
+  repoId: Id<"githubRepos">,
+): Promise<string[]> {
+  const cached = await ctx.runQuery(internal.repoSnapshots.getAppRunCommands, {
+    repoId,
+  });
+  if (!cached) return [];
+  const branch = await readBranchAppCommands(sandbox, cached.rootDirectory);
+  return branch?.startup ?? cached.startupCommands;
+}
+
+/**
+ * Returns whether this sandbox already ran its current startup commands: the
+ * marker exists and carries their fingerprint (a seeded snapshot built from
+ * other commands, or a branch that edited them, does not count).
+ */
 export const startupCommandsMarkerExists = internalAction({
   args: {
     sandboxId: v.string(),
@@ -207,12 +236,11 @@ export const startupCommandsMarkerExists = internalAction({
   returns: v.boolean(),
   handler: async (ctx, args): Promise<boolean> => {
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    try {
-      await execHandle(handle, "test -f /tmp/.startup-commands-done", 5);
-      return true;
-    } catch {
-      return false;
-    }
+    const commands = await resolveStartupCommands(ctx, handle, args.repoId);
+    return startupMarkerMatches(
+      await readStartupMarker(handle),
+      computeStartupFingerprint(commands),
+    );
   },
 });
 
@@ -241,29 +269,23 @@ export async function runStartupCommandsDirect(
   ctx: ActionCtx,
   args: { sandboxId: string; repoId: Id<"githubRepos">; force?: boolean },
 ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> {
-  // Get startup commands for this repo
-  const commands: string[] | null = await ctx.runQuery(
-    internal.repoSnapshots.getStartupCommands,
-    { repoId: args.repoId },
-  );
+  const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+  const commands = await resolveStartupCommands(ctx, sandbox, args.repoId);
 
-  if (!commands || commands.length === 0) {
+  if (commands.length === 0) {
     return { ran: false, commandCount: 0, errors: [] };
   }
 
-  const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
+  const fingerprint = computeStartupFingerprint(commands);
   if (!args.force) {
-    // Check if startup commands have already run (marker file)
-    try {
-      await execHandle(sandbox, "test -f /tmp/.startup-commands-done", 5);
-      // Marker exists, commands already ran
+    // Skip when these exact commands already ran (marker carries their
+    // fingerprint). A branch that edited them reruns here, even on a sandbox
+    // booted from a seeded snapshot.
+    if (startupMarkerMatches(await readStartupMarker(sandbox), fingerprint)) {
       console.log(
-        `[sandbox] runStartupCommands: marker exists, skipping ${commands.length} commands`,
+        `[sandbox] runStartupCommands: marker matches, skipping ${commands.length} commands`,
       );
       return { ran: false, commandCount: 0, errors: [] };
-    } catch {
-      // Marker doesn't exist, proceed
     }
   }
 
@@ -295,7 +317,7 @@ export async function runStartupCommandsDirect(
   // marker absent lets the next resume retry the full startup sequence.
   if (errors.length === 0) {
     try {
-      await execHandle(sandbox, "touch /tmp/.startup-commands-done", 5);
+      await writeStartupMarker(sandbox, fingerprint);
     } catch {
       // Non-fatal
     }
@@ -427,16 +449,21 @@ export const runBackgroundCommands = internalAction({
     ctx,
     args,
   ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> => {
-    const commands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getBackgroundCommands,
+    const cached = await ctx.runQuery(
+      internal.repoSnapshots.getAppRunCommands,
       { repoId: args.repoId },
     );
-
-    if (!commands || commands.length === 0) {
-      return { ran: false, commandCount: 0, errors: [] };
-    }
+    if (!cached) return { ran: false, commandCount: 0, errors: [] };
 
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    // Background daemons run on every boot, so the checked-out branch's own
+    // `.eva/config.json` entry wins over the cached default-branch commands.
+    const branch = await readBranchAppCommands(sandbox, cached.rootDirectory);
+    const commands = branch?.background ?? cached.backgroundCommands;
+
+    if (commands.length === 0) {
+      return { ran: false, commandCount: 0, errors: [] };
+    }
 
     console.log(
       `[sandbox] runBackgroundCommands: launching ${commands.length} background command(s)${args.onlyRestartDead ? " (onlyRestartDead)" : ""}`,
@@ -949,7 +976,7 @@ async function buildPreviewUrl(
           publicKeyJwk: previewPublicJwk,
           sandboxId: args.sandboxId,
           repoId: args.repoId,
-          webAppUrl: process.env.WEB_APP_URL ?? "",
+          webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort ?? args.port,
@@ -1039,7 +1066,6 @@ export const previewUrlForAuthorizedSandbox = internalAction({
 });
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
-const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
@@ -2227,7 +2253,6 @@ async function launchAgentOnSandbox(
       fastMode: args.fastMode,
     }),
   );
-  extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
 
   const normalizedModel = normalizeAIModel(args.model);
   const claudeSessionId =

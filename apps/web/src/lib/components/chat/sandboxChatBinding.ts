@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import type { FunctionReturnType } from "convex/server";
 import {
   api,
@@ -89,7 +89,7 @@ export function sandboxTurnSettings(
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
   const turnOpen = useChatTurnOpen(parentId);
-  const messages = useQuery(api.messages.listByParent, { parentId });
+  const messages = useChatTranscript(parentId);
   const isExecuting = isChatTurnExecuting({
     turnOpen,
     messages,

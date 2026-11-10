@@ -29,7 +29,11 @@ export const seedRefsSchema = z.object({
 export type SeedRefs = z.infer<typeof seedRefsSchema>;
 
 const DAY = 24 * 60 * 60 * 1000;
-const DAY_BUCKET: "day" = "day";
+
+/** `usage.summary` bucket; a function so the literal type does not widen to string. */
+function dayBucket(): "day" {
+  return "day";
+}
 
 function sessionOwner(sessionId: Id<"sessions">): { kind: "session"; sessionId: Id<"sessions"> } {
   return { kind: "session", sessionId };
@@ -68,12 +72,33 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("sessions.listRepos", "session header", api.sessions.listRepos, (r) => ({ sessionId: r.sessionId })),
   q("sessionChats.listExtraForRepo", "sessions sidebar", api.sessionChats.listExtraForRepo, (r) => ({ repoId: r.repoId })),
   q("messages.listByParent", "chat transcript", api.messages.listByParent, (r) => ({ parentId: r.mainChatId })),
+  // Opening a session: what `SessionDetailClient`, `ChatPanel` and `ChatBody`
+  // subscribe to for the focal (heavy) chat.
+  q("sessions.getByNumId", "session open", api.sessions.getByNumId, (r) => ({ repoId: r.repoId, numId: 1 })),
+  q("sessions.get", "session open", api.sessions.get, (r) => ({ id: r.sessionId })),
+  q("sessionChats.listForSession", "session open", api.sessionChats.listForSession, (r) => ({ sessionId: r.sessionId })),
+  q("sessionChats.resolveForSession", "session open", api.sessionChats.resolveForSession, (r) => ({ sessionId: r.sessionId })),
+  q("turns.listSessionChatStatuses", "session open", api.turns.listSessionChatStatuses, (r) => ({ sessionId: r.sessionId })),
+  q("turns.getChatStatus", "session open", api.turns.getChatStatus, (r) => ({ entityId: r.mainChatId })),
+  q("queuedMessages.listByParent", "session open", api.queuedMessages.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("streaming.get", "session open", api.streaming.get, (r) => ({ entityId: r.mainChatId })),
+  q("chatUi.listByParent", "session open", api.chatUi.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("chatHtml.listByParent", "session open", api.chatHtml.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("envVarRequests.listByParent", "session open", api.envVarRequests.listByParent, (r) => ({ parentId: r.mainChatId })),
+  q("artifacts.listForChat", "session open", api.artifacts.listForChat, (r) => ({ parentId: r.mainChatId })),
+  q("feedback.listForChat", "session open", api.feedback.listForChat, (r) => ({ parentId: r.mainChatId })),
+  q("pendingQuestions.getActive", "session open", api.pendingQuestions.getActive, (r) => ({ entityId: r.mainChatId })),
+  q("proposedPlans.listBySession", "session open", api.proposedPlans.listBySession, (r) => ({ sessionId: r.sessionId })),
+  q("chatReads.isUnread", "session open", api.chatReads.isUnread, (r) => ({ parentId: r.mainChatId })),
+  // What a chat paints from first: `TRANSCRIPT_TAIL_MESSAGES` (30) in the web
+  // app's `useChatTranscript`. Compare with `messages.listByParent` above.
+  q("messages.listByParent.tail", "session open", api.messages.listByParent, (r) => ({ parentId: r.mainChatId, tail: 30 })),
   q("pullRequests.listForOwner", "session PR chrome", api.pullRequests.listForOwner, (r) => ({ owner: sessionOwner(r.sessionId) })),
   q("projects.list", "projects page", api.projects.list, (r) => ({ repoId: r.repoId })),
   q("projects.listTaskProgress", "projects page", api.projects.listTaskProgress, (r) => ({ repoId: r.repoId })),
   q("projects.getActive", "repo home", api.projects.getActive, (r) => ({ repoId: r.repoId })),
   q("agentTasks.getAllTasks", "tasks board", api.agentTasks.getAllTasks, (r) => ({ repoId: r.repoId })),
-  q("agentTasks.getActiveTasks", "repo home", api.agentTasks.getActiveTasks, (r) => ({ repoId: r.repoId })),
+  q("agentTasks.countSandboxTasks", "sidebar badge", api.agentTasks.countSandboxTasks, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listDrafts", "tasks board", api.agentTasks.listDrafts, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listByProject", "project page", api.agentTasks.listByProject, (r) => ({ projectId: r.projectId })),
   q("agentRuns.listByTask", "task page", api.agentRuns.listByTask, (r) => ({ taskId: r.taskId })),
@@ -93,7 +118,7 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("analytics.getActivityTimeline", "analytics page", api.analytics.getActivityTimeline, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY, endTime: r.now, bucketSizeMs: DAY })),
   q("analytics.getActivityHeatmap", "analytics page", api.analytics.getActivityHeatmap, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY })),
   q("analytics.getLeaderboard", "analytics page", api.analytics.getLeaderboard, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY })),
-  q("usage.summary", "usage page", api.usage.summary, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY, endTime: r.now, bucket: DAY_BUCKET })),
+  q("usage.summary", "usage page", api.usage.summary, (r) => ({ repoId: r.repoId, startTime: r.now - 30 * DAY, endTime: r.now, bucket: dayBucket() })),
   q("mentions.listData", "@-mention picker", api.mentions.listData, (r) => ({ repoId: r.repoId })),
   q("spotlight.search", "⌘K search", api.spotlight.search, () => ({ query: "session" })),
   q("routedThreads.countWaitingForMe", "sidebar badge", api.routedThreads.countWaitingForMe, () => ({})),
