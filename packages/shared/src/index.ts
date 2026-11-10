@@ -6,6 +6,7 @@ export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
   CONVEX_ID_PATTERN,
+  MENTION_HREF_REGEX,
   MENTION_TOKEN_REGEX,
   SKILL_TOKEN_REGEX,
   buildMentionPattern,
@@ -16,13 +17,23 @@ export {
   harnessSkillTokenId,
   isHarnessSkillTokenId,
   isSystemSkillTokenId,
+  mentionChipHref,
+  mentionTokensToChipLinks,
   mentionTokensToEditableText,
+  parseMentionChipHref,
   systemSkillTokenId,
   tokenizeMentionText,
   tokenizedToDisplayText,
   tokenizedToEditable,
+  type MentionChipKind,
   type MentionTokenMaps,
 } from "./mentionText";
+export {
+  carriedAccountForProvider,
+  defaultAccountForProvider,
+  toPickerAccounts,
+  type PickerAccount,
+} from "./providerAccounts";
 export {
   CLAUDE_HARNESS_SKILLS,
   acceptMentionTrigger,

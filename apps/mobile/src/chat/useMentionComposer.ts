@@ -1,6 +1,8 @@
 import { api, type AIProvider, type Id } from "@eva/backend";
 import {
   acceptMentionTrigger,
+  buildMentionPattern,
+  buildSkillPattern,
   dataMentionItems,
   filterMentionItems,
   findMentionTrigger,
@@ -13,6 +15,7 @@ import {
   tokenizeMentionText,
   tokenizedToEditable,
   type InsertedToken,
+  type MentionChipKind,
   type MentionItem,
   type MentionTrigger,
 } from "@eva/shared";
@@ -32,6 +35,14 @@ type Draft = {
 };
 
 const EMPTY_DRAFT: Draft = { text: "", mentionMap: new Map(), skillMap: new Map(), inserted: null };
+
+/** A pick still in the draft text: an `@` mention or a `/` skill, by its label. */
+export type ComposerPick = { kind: MentionChipKind; label: string };
+
+/** The labels of `map` whose `@Label` (or `/Label`) is still in `text`. */
+function labelsIn(text: string, map: ReadonlyMap<string, string>, pattern: (labels: string[]) => RegExp): string[] {
+  return [...map.keys()].filter((label) => pattern([label]).test(text));
+}
 
 /** The open picker: what it lists for the trigger the draft is typing. */
 export type MentionMenuState = {
@@ -117,8 +128,33 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     });
   };
 
+  /** Takes a pick out: each `@Label` (or `/Label`) and the space after it, and its id. */
+  const removePick = (pick: ComposerPick) => {
+    const pattern = (pick.kind === "slash" ? buildSkillPattern : buildMentionPattern)([pick.label]);
+    const without = (map: ReadonlyMap<string, string>) => new Map([...map].filter(([label]) => label !== pick.label));
+    const text = draft.text.replace(new RegExp(`${pattern.source} ?`, "g"), "");
+    if (text.trim() === "") {
+      setDraft(EMPTY_DRAFT);
+      return;
+    }
+    setDraft({
+      text,
+      inserted: null,
+      mentionMap: pick.kind === "at" ? without(draft.mentionMap) : draft.mentionMap,
+      skillMap: pick.kind === "slash" ? without(draft.skillMap) : draft.skillMap,
+    });
+  };
+
+  const picks: ComposerPick[] = [
+    ...labelsIn(draft.text, draft.mentionMap, buildMentionPattern).map((label): ComposerPick => ({ kind: "at", label })),
+    ...labelsIn(draft.text, draft.skillMap, buildSkillPattern).map((label): ComposerPick => ({ kind: "slash", label })),
+  ];
+
   return {
     text: draft.text,
+    /** The picks still in the text, `@` mentions first, as chips above the field. */
+    picks,
+    removePick,
     setText,
     menu,
     pick,
