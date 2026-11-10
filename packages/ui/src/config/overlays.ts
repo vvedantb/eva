@@ -38,26 +38,31 @@ const floatingMotionClass =
  * the cost was the menu lingering *after* a selection, not the open itself, so
  * the fix is a quick outbound path rather than no motion at all.
  *
- * `origin` must be the Radix transform-origin var class for the specific
- * primitive — pass it literally so Tailwind can see it.
+ * `origin` and `maxHeight` must be the Radix transform-origin and
+ * available-height var classes for the specific primitive — pass them literally
+ * so Tailwind can see them.
  */
-function menuContentClass(origin: string): string {
+function menuContentClass(origin: string, maxHeight: string): string {
   return [
-    // Height cap + internal scroll (`dvh`, never `vh`) so a long menu stays on
-    // screen on a phone, and a width cap so `min-w-48` cannot widen the page at
+    // Height cap at the space Radix measured between the trigger and the
+    // viewport edge, with internal scroll, so a long menu (e.g. many PR links)
+    // never runs off screen. A width cap so `min-w-48` cannot widen the page at
     // a 320px viewport.
-    "z-50 min-w-48 overflow-hidden max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto bg-popover/95 p-1.5 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg",
+    "z-50 min-w-48 overflow-x-hidden overflow-y-auto scrollbar max-sm:max-w-[calc(100vw-2rem)] bg-popover/95 p-1.5 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg",
     "rounded-surface",
     origin,
+    maxHeight,
     "duration-150 data-[state=closed]:duration-75 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
   ].join(" ");
 }
 
 const dropdownMenuContentClass = menuContentClass(
   "origin-(--radix-dropdown-menu-content-transform-origin)",
+  "max-h-(--radix-dropdown-menu-content-available-height)",
 );
 const contextMenuContentClass = menuContentClass(
   "origin-(--radix-context-menu-content-transform-origin)",
+  "max-h-(--radix-context-menu-content-available-height)",
 );
 
 /**

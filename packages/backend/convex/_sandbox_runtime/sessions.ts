@@ -1086,6 +1086,7 @@ async function prepareSessionSandboxInternal(
     () =>
       resolveSandboxContext(ctx, args.repoId, {
         repoGroupId: launchSession?.repoGroupId,
+        branch: args.branchName,
       }),
   );
   // A forked session's first sandbox is a Vercel fork of the source sandbox
@@ -2151,7 +2152,8 @@ async function preparePreviewSandboxInternal(
   const { sandboxEnvVars, snapshotName } = await runLoggedSessionStep(
     `resolve${hooks.label}SandboxContext`,
     actionDetails,
-    () => resolveSandboxContext(ctx, args.repoId),
+    () =>
+      resolveSandboxContext(ctx, args.repoId, { branch: args.branchName }),
   );
 
   await hooks.emit(completedSteps, "Creating sandbox...");

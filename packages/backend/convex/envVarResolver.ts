@@ -56,6 +56,28 @@ export async function resolveEnvVars(
   };
 }
 
+/**
+ * Decrypted seed-only env vars (team + repo, repo wins). Only the snapshot
+ * seed run receives these; session sandboxes never do.
+ */
+export async function resolveSeedOnlyEnvVars(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<Record<string, string>> {
+  const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
+    repoId,
+  });
+  const teamVars = teamId
+    ? decryptCredentialMap(
+        await ctx.runQuery(internal.teamEnvVars.getForSeed, { teamId }),
+      )
+    : {};
+  const repoVars = decryptCredentialMap(
+    await ctx.runQuery(internal.repoEnvVars.getForSeed, { repoId }),
+  );
+  return { ...teamVars, ...repoVars };
+}
+
 /** All repos in the same codebase (owner/name), requested repo first. */
 async function listMonorepoRepoIds(
   ctx: GenericActionCtx<DataModel>,

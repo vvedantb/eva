@@ -1,9 +1,4 @@
-import { requiredEnvUrl } from "@vvedantb/server";
-
-/** Eva web app origin, no trailing slash. */
-export function getEvaBaseUrl(): string {
-  return requiredEnvUrl("WEB_APP_URL");
-}
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 
 function repoPath(repoName: string, rootDirectory?: string): string {
   if (!rootDirectory) return repoName;
