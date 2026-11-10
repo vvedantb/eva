@@ -722,34 +722,6 @@ export function resolveTraitsForDisplay(
 }
 
 /**
- * What a model picker trigger shows after the model name: the reasoning
- * level, "1M" when the 1M context is on, "No thinking" when thinking is off,
- * joined by " · ", and whether Fast is on (a bolt). Shared by the web
- * `ModelSelectWithTraits` and the phone composer footer.
- */
-export function modelTraitSummary(
-  model: string | null | undefined,
-  stored: StoredModelTraits,
-): { suffix: string | undefined; fast: boolean } {
-  const config = getModelTraits(model);
-  const display = resolveTraitsForDisplay(model, stored);
-  const parts: string[] = [];
-  if (config.reasoning) {
-    parts.push(
-      getReasoningLevelLabel(display.effortLevel ?? config.reasoning.default),
-    );
-  }
-  if (config.contextWindow1m && display.use1mContext) parts.push("1M");
-  if (config.thinkingToggle && !display.thinkingEnabled) {
-    parts.push("No thinking");
-  }
-  return {
-    suffix: parts.length > 0 ? parts.join(" · ") : undefined,
-    fast: Boolean(config.fastMode && display.fastMode),
-  };
-}
-
-/**
  * Build execution payload: only non-default trait overrides are included so the
  * runner uses each model's native defaults when the user has not changed them.
  */

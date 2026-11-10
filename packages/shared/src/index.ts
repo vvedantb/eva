@@ -4,7 +4,6 @@
 // Convex bundler cannot resolve. Import them from `@eva/shared/user-initials`.
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
-export { mentionTokensToEditableText, tokenizedToDisplayText } from "./mentionText";
 export {
   SANDBOX_STOPPED_ALERT,
   isSandboxPausedAlert,

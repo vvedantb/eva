@@ -1,13 +1,4 @@
-import {
-  api,
-  normalizeAIModel,
-  resolveTraitsForDisplay,
-  storedTraitsFromRepoDefaults,
-  type AIModel,
-  type Id,
-  type StoredModelTraits,
-} from "@eva/backend";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
+import { api, type Id } from "@eva/backend";
 import { useUser } from "@clerk/clerk-expo";
 import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
 import { Attachment, Attachments, PromptInput } from "@vvedantb/native-ui/ai";
@@ -31,9 +22,8 @@ import { useScheme } from "@/ui/theme";
 
 /**
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
- * what are we building for <repo ⌄>?" over the composer, and under it the
- * web footer: base branch, stash and model. Sends with those picks
- * (`mobile.startSession`), then opens the chat.
+ * what are we building for <repo ⌄>?" over the composer. Sends with the
+ * repo's default model and branch (`mobile.startSession`), then opens the chat.
  */
 export default function NewSessionScreen() {
   const router = useRouter();
@@ -44,13 +34,6 @@ export default function NewSessionScreen() {
   const attachments = useAttachments();
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
   const [sending, setSending] = useState(false);
-  const [draft, setDraft] = useState("");
-  // The web landing: model and traits start from the repo defaults, a pick
-  // overrides them; the base branch re-seeds to each repo's own default
-  // (`useBaseBranchState`), so it is kept with the repo it was picked for.
-  const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
-  const [pickedTraits, setPickedTraits] = useState<StoredModelTraits>({});
-  const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
   const repo = repos?.find((candidate) => candidate._id === picked) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
   const foreground = tokens.color.foreground[scheme];
@@ -64,19 +47,7 @@ export default function NewSessionScreen() {
     }
     setSending(true);
     try {
-      // The resolved traits (model defaults included), as the web snapshots them.
-      const display = resolveTraitsForDisplay(model, traits);
-      const { sessionId } = await startSession({
-        repoId: repo._id,
-        prompt,
-        attachmentStorageIds: attachments.storageIds,
-        model,
-        baseBranch,
-        reasoningLevel: display.effortLevel,
-        thinkingEnabled: display.thinkingEnabled,
-        use1mContext: display.use1mContext,
-        fastMode: display.fastMode,
-      });
+      const { sessionId } = await startSession({ repoId: repo._id, prompt, attachmentStorageIds: attachments.storageIds });
       router.replace({ pathname: "/chat/[target]", params: { target: sessionId } });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't create session");
@@ -131,8 +102,6 @@ export default function NewSessionScreen() {
             shape="pill"
             disabled={!repo || sending}
             status={sending ? "submitted" : "ready"}
-            value={draft}
-            onChangeText={setDraft}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
             leading={
@@ -145,32 +114,6 @@ export default function NewSessionScreen() {
                     <Attachment key={item.id} data={item} onRemove={() => attachments.remove(item.id)} />
                   ))}
                 </Attachments>
-              ) : null
-            }
-            footer={
-              repo ? (
-                <ComposerFooter
-                  repoId={repo._id}
-                  draft={draft}
-                  onDraftChange={setDraft}
-                  leading={
-                    <BaseBranchChip
-                      repoId={repo._id}
-                      value={baseBranch}
-                      onChange={(branch) => setPickedBranch({ repoId: repo._id, branch })}
-                      disabled={sending}
-                    />
-                  }
-                  model={
-                    <ModelChip
-                      repoId={repo._id}
-                      model={model}
-                      traits={traits}
-                      onModelChange={setPickedModel}
-                      onTraitsChange={(partial) => setPickedTraits((current) => ({ ...current, ...partial }))}
-                    />
-                  }
-                />
               ) : null
             }
           />

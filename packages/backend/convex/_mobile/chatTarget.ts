@@ -7,8 +7,7 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { getRepoHref } from "../notifications";
-import { storedComposerTraits } from "../_shared/composerTraits";
-import { aiModelValidator, reasoningLevelValidator } from "../validators";
+import { aiModelValidator } from "../validators";
 
 /**
  * Chat targets for the Eva mobile app (apps/mobile). The app opens every chat
@@ -41,23 +40,6 @@ export const mobileChatValidator = v.object({
   canReply: v.boolean(),
   /** The chat's sticky model, which a reply uses. */
   model: v.optional(aiModelValidator),
-  /**
-   * The chat's sticky traits in the web traits menu shape: absent fields fall
-   * back to the model's defaults (`resolveTraitsForDisplay`). A reply uses them.
-   */
-  traits: v.object({
-    effortLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  }),
-  /**
-   * The branch the sandbox worktree is on, only while the sandbox runs: the
-   * web composer's read-only `SandboxBranchChip`.
-   */
-  sandboxBranch: v.optional(v.string()),
-  /** The branch Eva booted the sandbox on, when the chat has one; a different `sandboxBranch` is hinted. */
-  intendedBranch: v.optional(v.string()),
   /** Path on the web app, for "Open on web" and message links. */
   webPath: v.string(),
 });
@@ -107,9 +89,6 @@ export async function resolveMobileChat(
         parentId: chat._id,
         canReply: chat.archived !== true && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
-        traits: storedComposerTraits(chat),
-        sandboxBranch: session.status === "active" ? session.sandboxBranch : undefined,
-        intendedBranch: session.branchName,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
       },
     };
@@ -134,8 +113,6 @@ export async function resolveMobileChat(
         parentId: task._id,
         canReply: task.deletedAt === undefined,
         model: task.lastChatModel ?? task.model,
-        traits: storedComposerTraits(task),
-        sandboxBranch: task.reviewTaskSandboxStatus === "active" ? task.sandboxBranch : undefined,
         webPath:
           project?.numId !== undefined
             ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
@@ -160,9 +137,6 @@ export async function resolveMobileChat(
         parentId: project._id,
         canReply: project.deletedAt === undefined,
         model: project.lastChatModel ?? project.model,
-        traits: storedComposerTraits(project),
-        sandboxBranch: project.reviewProjectSandboxStatus === "active" ? project.sandboxBranch : undefined,
-        intendedBranch: project.branchName,
         webPath: `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/projects/${project.numId ?? ""}`,
       },
     };

@@ -1,5 +1,3 @@
-import { tokenizedToDisplayText } from "@eva/shared";
-
 /**
  * Token format for inline mentions: `@[Label](id)`.
  * Mirrors the backend regex in `_mentions/mentionToken.ts`. Restricting the
@@ -13,10 +11,13 @@ export function formatMentionToken(label: string, id: string): string {
   return `@[${label}](${id})`;
 }
 
-export {
-  mentionTokensToEditableText,
-  tokenizedToDisplayText,
-} from "@eva/shared";
+/** Converts stored `@[Label](id)` tokens back to `@Label` for the mention editor. */
+export function mentionTokensToEditableText(content: string): string {
+  return content.replace(
+    MENTION_TOKEN_REGEX,
+    (_match, label: string) => `@${label}`,
+  );
+}
 
 /**
  * Scans tokenized content and builds label→id maps for both mention and skill
@@ -53,6 +54,21 @@ function extractMapsFromTokenizedText(content: string): {
   }
 
   return { mentionMap, skillMap };
+}
+
+/**
+ * Converts stored tokenized content into plain editable display text:
+ * `@[Label](id)` → `@Label` and `/[Label](id)` → `/Label`.
+ *
+ * The skill-token regex is inlined here (rather than imported from
+ * skillToken.ts) to avoid a circular import.
+ */
+export function tokenizedToDisplayText(content: string): string {
+  const withMentions = mentionTokensToEditableText(content);
+  return withMentions.replace(
+    /\/\[([^\]]{1,200})\]\(([a-z0-9_]{16,40})\)/g,
+    (_match, label: string) => `/${label}`,
+  );
 }
 
 /**

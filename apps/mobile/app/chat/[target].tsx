@@ -1,4 +1,4 @@
-import { api, normalizeAIModel } from "@eva/backend";
+import { api } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
@@ -27,7 +27,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
@@ -41,8 +41,7 @@ import { textColor, useScheme } from "@/ui/theme";
 /**
  * One chat (session, quick task or project): the transcript with the web
  * message actions, the agent's question when it asks one, and the composer
- * (attachments, Stop beside Send while the agent works) with the web footer:
- * the live sandbox branch, the stash and the chat's sticky model.
+ * (attachments, Stop beside Send while the agent works).
  */
 export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
@@ -60,24 +59,7 @@ export default function ChatScreen() {
   const startSession = useMutation(api.mobile.startSession);
   const rate = useMutation(api.feedback.rateTurn);
   const answer = useMutation(api.pendingQuestions.answer);
-  // A pick is the chat's sticky model, as the web; shown at once.
-  const setChatModel = useMutation(api.mobile.setChatModel).withOptimisticUpdate((store, pick) => {
-    const current = store.getQuery(api.mobile.getChat, { target });
-    if (!current) return;
-    store.setQuery(api.mobile.getChat, { target }, {
-      ...current,
-      model: pick.model ?? current.model,
-      traits: {
-        effortLevel: pick.reasoningLevel ?? current.traits.effortLevel,
-        thinkingEnabled: pick.thinkingEnabled ?? current.traits.thinkingEnabled,
-        use1mContext: pick.use1mContext ?? current.traits.use1mContext,
-        fastMode: pick.fastMode ?? current.traits.fastMode,
-      },
-    });
-  });
   const attachments = useAttachments();
-  const simpleView = useSimpleView();
-  const [draft, setDraft] = useState("");
 
   if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
   if (chat === null) {
@@ -112,10 +94,6 @@ export default function ChatScreen() {
     send({ target: chat.parentId, message: text, attachmentStorageIds }).catch(() => {
       toast.error("Couldn't send your message");
     });
-  };
-
-  const handlePick = (pick: Omit<Parameters<typeof setChatModel>[0], "target">) => {
-    setChatModel({ target, ...pick }).catch(() => toast.error("Couldn't change the model"));
   };
 
   const handleStop = () => {

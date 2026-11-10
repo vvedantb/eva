@@ -46,7 +46,6 @@ export {
   resolveTraitsForDisplay,
   buildTraitsExecutionPayload,
   getReasoningLevelLabel,
-  modelTraitSummary,
   normalizeAIModel,
   storedTraitsFromRepoDefaults,
   type AIModel,

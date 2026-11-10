@@ -18,7 +18,6 @@
     "./generativeUi": "./src/generativeUi/index.ts",
     "./gitDefaults": "./src/gitDefaults.ts",
     "./htmlRender": "./src/htmlRender.ts",
-    "./mentionText": "./src/mentionText.ts",
     "./messageLink": "./src/messageLink.ts",
     "./modelPricing": "./src/modelPricing.ts",
     "./notificationGroups": "./src/notificationGroups.ts",
