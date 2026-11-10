@@ -43,10 +43,20 @@ Flags: `--scales 1,10` (subset), `--samples 30`, `--warmup 3`,
 | Sessions, projects, quick tasks, docs, automations in the focal repo | 30, 5, 15, 10, 3 | yes |
 | Notifications, chat reads, drafts, routed threads for the focal user | per session / task | yes |
 | Messages in the focal chat, runs/comments/activity of the focal task, comments on the focal doc, PRs of the focal session, runs of the focal automation | 40, 10, 10, 10, 5, 20 | yes |
+| Activity log of each assistant message in the focal chat | mean 25.6 KB (2 KB to 110 KB) | no |
 | Children of non-focal entities (messages per chat, runs per task) | 3, 2 | no |
 
 Per-entity fan-outs scale only on the focal entity: scaling them everywhere
 grows as N² and models no real tenant. 1000× is about 690,000 documents.
+
+The focal chat is the heavy session. Its activity-log sizes follow production
+(600 newest messages on 9 November 2026: median 8.8 KB, p90 84 KB, p99 294 KB),
+so the chat holds 0.56 MB at 1×, 5.6 MB at 10× (400 messages) and 56 MB at
+100×. The `session open` cases are the queries a session page subscribes to
+for that chat. `messages.listByParent.tail` is the query the chat paints from.
+
+1000× needs about 6 GB of memory for the load-test backend. Do not run it
+beside other heavy work: on a 16 GB VM the kernel killed the dev backend.
 
 ## Limits of the method
 
@@ -59,6 +69,12 @@ grows as N² and models no real tenant. 1000× is about 690,000 documents.
   4,096 reads per function, 16 MiB read, 8,192 items in a returned array,
   and "too many system operations" timeouts. Absolute times are for this VM,
   not for Convex cloud; compare before and after on the same machine.
+- On the local backend, any read in a large index range is slow, whatever it
+  returns: `take(1)` on the focal chat's `by_parent` range takes about 185 ms
+  at 100× (4,000 messages), ascending or descending. So server time of a
+  bounded read (`messages.listByParent.tail`: 34 documents at every scale)
+  still grows here. Judge bounded reads by documents and bytes read; Convex
+  cloud was not measured.
 - The backend's crons run during the probe; their executions are not counted.
 
 ## Statistics

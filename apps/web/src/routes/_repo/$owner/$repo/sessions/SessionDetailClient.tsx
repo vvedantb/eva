@@ -3,6 +3,7 @@ import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
 import { useEffect, useRef, useState } from "react";
+import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import { ChatPanel } from "./ChatPanel";
@@ -78,9 +79,8 @@ export function SessionDetailClient({
     isRouteActive ? { sessionId } : "skip",
   );
   const chatId = activeChat?._id;
-  const messages = useHeldQuery(
-    api.messages.listByParent,
-    isRouteActive && chatId ? { parentId: chatId } : "skip",
+  const messages = useChatTranscript(
+    isRouteActive && chatId ? chatId : "skip",
   );
   const queuedMessages = useHeldQuery(
     api.queuedMessages.listByParent,
@@ -321,6 +321,7 @@ export function SessionDetailClient({
       prState={session.prState}
       summary={session.summary}
       messages={messages ?? []}
+      isLoadingMessages={messages === undefined}
       queuedMessages={queuedMessages ?? []}
       streamingActivity={streaming?.currentActivity}
       streamingContent={streaming?.currentContent}

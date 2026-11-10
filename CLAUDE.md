@@ -26,6 +26,7 @@ FOLLOW ALL OF THESE RULES
 - Never call a component as a function in render; name hook-calling helpers `use*` (the compiler memoises capitalised calls and skips them).
 - Do not run dev / lint / build unless the user asks.
 - After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (or `internal/changelog.md`).
+- Tests: default is no new test; a test must call real code and fail when behaviour breaks; never regex source files.
 - Before a PR that touches async code, run `/parallel-awaits` with `--diff origin/main`.
 - Eliminate duplication, centralise your changes so its easier to update them
 - Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.

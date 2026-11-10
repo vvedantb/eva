@@ -1,14 +1,5 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { evaMarkDataUri } from "./evaMark";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const staticFavicon = readFileSync(
-  join(here, "../../../public/favicon.svg"),
-  "utf8",
-);
 
 function runtimeSvg(badgeLabel: string | null): string {
   const uri = evaMarkDataUri("dark", badgeLabel, "#FF0000", "#FFFFFF");
@@ -35,14 +26,6 @@ test("runtime favicon disc fills the whole 512 canvas", () => {
     "256,256,256",
     "256,256,256",
   ]);
-});
-
-/**
- * `public/favicon.svg` is a hand-written copy of the runtime mark. The tab
- * shows it before JS runs, so drift makes the icon jump on load.
- */
-test("static favicon.svg mirrors the runtime favicon geometry", () => {
-  expect(markGeometry(staticFavicon)).toEqual(markGeometry(runtimeSvg(null)));
 });
 
 /** The badge draws on top; it must not move or resize the mark under it. */

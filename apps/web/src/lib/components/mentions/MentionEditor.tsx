@@ -25,7 +25,7 @@ import {
   type InsertedToken,
 } from "./mentionEditorUtils";
 import { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
-import { countLinkUrls } from "./linkChipUtils";
+import { countLinkUrls } from "./linkUrls";
 import {
   MentionPickerPopup,
   type MentionPopupLayout,
@@ -792,10 +792,10 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     if (!el) return;
     const domText = normalizeMentionText(extractEditableText(el));
     // A pasted/typed link URL leaves DOM text already equal to `value`, so also
-    // re-render when the link-chip count is out of sync — this chips a fresh URL
+    // re-render when the link count is out of sync — this links a fresh URL
     // exactly once, then stays stable during normal editing.
-    const linkChipCount = el.querySelectorAll("[data-link-url]").length;
-    if (domText !== value || linkChipCount !== countLinkUrls(value)) {
+    const linkCount = el.querySelectorAll("[data-link-url]").length;
+    if (domText !== value || linkCount !== countLinkUrls(value)) {
       el.innerHTML = renderEditorChipHtml(
         value,
         mentionMap,
@@ -1141,15 +1141,20 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     renderSkillChipHoverCard,
   });
 
+  /** A link favicon that 404s hides itself (`.markdown-link-icon[data-failed]`). */
+  const hideFailedFavicon = (e: React.SyntheticEvent<HTMLDivElement>) => {
+    if (e.target instanceof HTMLImageElement) e.target.dataset.failed = "true";
+  };
+
   const handleChipClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target;
     if (!(target instanceof Element)) return;
 
-    // Link chips open externally and are always clickable, independent of the
+    // Links open externally and are always clickable, independent of the
     // mention/skill click handlers.
-    const linkChip = target.closest("[data-link-url]");
-    if (linkChip instanceof HTMLElement) {
-      const url = linkChip.dataset.linkUrl;
+    const link = target.closest("[data-link-url]");
+    if (link instanceof HTMLElement) {
+      const url = link.dataset.linkUrl;
       if (url) {
         e.preventDefault();
         e.stopPropagation();
@@ -1307,6 +1312,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
         onInput={disabled ? undefined : handleInput}
         onKeyDown={disabled ? undefined : handleKeyDown}
         onClick={disabled ? undefined : handleChipClick}
+        onErrorCapture={hideFailedFavicon}
         onMouseOver={
           chipHoverEnabled ? chipHover.handleEditorMouseOver : undefined
         }

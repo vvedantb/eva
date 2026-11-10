@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { hasEvaMcpConfig } from "./evaMcp.js";
+import { TURN_MAX_RUNTIME_MS } from "@eva/shared/agentTurnLimits";
 import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
@@ -151,7 +151,7 @@ export const FIRST_ASSISTANT_EVENT_TIMEOUT_MS = Number(
 );
 export const NO_OUTPUT_CHECK_INTERVAL_MS = 5000;
 export const MAX_TOTAL_RUNTIME_MS = Number(
-  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || "5400000",
+  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || String(TURN_MAX_RUNTIME_MS),
 );
 export const SCRIPT_STARTED_AT = Date.now();
 export const CALLBACK_HTTP_TIMEOUT_MS = Number(
@@ -335,8 +335,6 @@ function buildSettingsJson(): string {
 }
 
 export const settingsJson = buildSettingsJson();
-/** True when Eva MCP auth was supplied at callback startup. */
-export const hasMcpConfig = hasEvaMcpConfig;
 const claudeModelBase = MODEL.startsWith("claude:")
   ? MODEL.slice("claude:".length)
   : MODEL;

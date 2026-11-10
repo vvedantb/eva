@@ -1,3 +1,4 @@
+import { TURN_MAX_RUNTIME_ERROR } from "@eva/shared/agentTurnLimits";
 import { readdirSync } from "fs";
 import { homedir } from "os";
 import {
@@ -123,7 +124,7 @@ const PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 
 // Per-turn watchdog. Without this a turn whose SDK query stalls or ends without
 // emitting a result would never send a completion event, so the workflow's
-// awaitEvent hangs until the 2h stale-session timeout (empty "Working…" bubble).
+// awaitEvent hangs until the `RUN_TIMEOUT_MS` stale-session timeout (empty "Working…" bubble).
 // Mirrors the one-shot path (claudeSdk.ts): fail the turn if it produces no SDK
 // message for a while, or exceeds the hard runtime cap. Silence while a tool is
 // in flight (S.inFlightToolUses > 0) is exempt — the SDK emits nothing during a
@@ -315,11 +316,11 @@ function startTurnWatchdog(): void {
       turnActive = false;
       if (supervisor.currentTurn?.kind === "synthetic") {
         void failSyntheticTurn(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       } else {
         void failTurnAndExit(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       }
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {
