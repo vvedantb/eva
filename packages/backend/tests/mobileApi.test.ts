@@ -7,12 +7,17 @@ import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import {
-  defaultQuickTaskSections,
   mentionTokensToChipLinks,
   parseMentionChipHref,
   sessionMenuActions,
   systemSkillTokenId,
   tokenizeMentionText,
+  QUICK_TASK_LIST_DEFAULTS,
+  applyQuickTaskFilters,
+  groupByTaskStatus,
+  runAllPlan,
+  startAll,
+  visibleDrafts,
 } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
@@ -479,7 +484,8 @@ describe("mobile api", () => {
         title: "Billing step",
         projectId: ids.projectId,
       });
-      const sections = defaultQuickTaskSections(await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId }));
+      const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
+      const sections = groupByTaskStatus(applyQuickTaskFilters(listed, QUICK_TASK_LIST_DEFAULTS, Date.now()));
       expect(sections.map((section) => [section.status, section.tasks.map((row) => row.title)])).toEqual([
         ["todo", ["Fix the footer"]],
         ["in_progress", []],
@@ -489,6 +495,65 @@ describe("mobile api", () => {
         ["cancelled", []],
       ]);
       expect(await asUser.query(api.mobile.getChat, { target: taskId })).toMatchObject({ kind: "task", canReply: true });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "Run All on the Quick Tasks list starts the user's own To Do tasks with the web startExecution and skips a teammate's",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const mine = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, title: "Fix the footer" });
+      const theirs = await t.run(async (ctx) => {
+        const teammate = await ctx.db.insert("users", {});
+        return await ctx.db.insert("agentTasks", {
+          repoId: ids.repoId,
+          title: "Not mine",
+          status: "todo",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          createdBy: teammate,
+        });
+      });
+      const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
+      const plan = runAllPlan(listed, await asUser.query(api.auth.me, {}));
+      expect(plan.owned.map((task) => task._id)).toEqual([mine]);
+      expect(plan.skippedCount).toBe(1);
+      const failed = await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }));
+      expect(failed).toBe(0);
+      const runsOf = (taskId: Id<"agentTasks">) =>
+        t.run((ctx) => ctx.db.query("agentRuns").withIndex("by_task", (q) => q.eq("taskId", taskId)).collect());
+      expect(await runsOf(mine)).toHaveLength(1);
+      expect(await runsOf(theirs)).toHaveLength(0);
+      // A second Run (the row menu's "Run Eva") on a task that is running fails and is counted, not thrown.
+      expect(await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }))).toBe(1);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a quick-task draft saved on the phone is listed on any device and becomes a To Do task on Create",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // What the phone saves when the form is left with text in it: the web `saveDraft` fields.
+      const draftId = await asUser.mutation(api.agentTasks.saveDraft, {
+        repoId: ids.repoId,
+        title: "Half an idea",
+        description: "More later",
+        baseBranch: "staging",
+      });
+      // Left again after an edit: the same draft, not a second one.
+      await asUser.mutation(api.agentTasks.saveDraft, { id: draftId, repoId: ids.repoId, title: "Half an idea, v2" });
+      const drafts = visibleDrafts(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId }));
+      expect(drafts.map((draft) => draft.title)).toEqual(["Half an idea, v2"]);
+      // Drafts are not on the list.
+      const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
+      expect(applyQuickTaskFilters(listed, QUICK_TASK_LIST_DEFAULTS, Date.now()).map((task) => task.title)).not.toContain(
+        "Half an idea, v2",
+      );
+      await asUser.mutation(api.agentTasks.activateDraft, { id: draftId, title: "Whole idea", tags: ["ui"] });
+      expect(await t.run((ctx) => ctx.db.get(draftId))).toMatchObject({ status: "todo", title: "Whole idea" });
+      expect(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId })).toEqual([]);
     },
     TIMEOUT_MS,
   );

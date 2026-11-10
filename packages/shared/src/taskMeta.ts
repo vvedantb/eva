@@ -55,22 +55,6 @@ export function groupByTaskStatus<T extends { status: TaskStatus }>(
   }));
 }
 
-/**
- * The Quick Tasks list as the web opens it with no filters set: tasks outside
- * any project, most recently updated first, in status sections.
- */
-export function defaultQuickTaskSections<
-  T extends { status: TaskStatus; projectId?: string; updatedAt: number },
->(tasks: readonly T[]): Array<{ status: DisplayTaskStatus; tasks: T[] }> {
-  // `filter` copies, so `sort` mutates nothing shared; `toSorted` is missing
-  // in some Hermes release builds (see `notificationGroups.ts`).
-  return groupByTaskStatus(
-    tasks
-      .filter((task) => task.projectId === undefined)
-      .sort((a, b) => b.updatedAt - a.updatedAt),
-  );
-}
-
 /** "#12", or "#3/12" inside project 3; null without a number. */
 export function formatEntityNumLabel(options: {
   numId?: number;

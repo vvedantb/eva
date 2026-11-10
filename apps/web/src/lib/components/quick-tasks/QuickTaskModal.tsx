@@ -86,7 +86,7 @@ import {
   draftCountAfterRemove,
   draftsAfterRemove,
   visibleDrafts,
-} from "./_utils/draftVisibility";
+} from "@eva/shared";
 import {
   catchMutationError,
   withMutationToast,

@@ -3,11 +3,11 @@ import { useQueryStates } from "nuqs";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import {
+  QUICK_TASK_SORT_DEFAULTS,
+  applyQuickTaskFilters,
   groupByTaskStatus,
-  statusWorkflowOrder,
-  type DisplayTaskStatus,
+  type QuickTaskListFilters,
 } from "@eva/shared";
-import { priorityCompare } from "@/lib/components/priority/priorityMeta";
 import {
   searchParser,
   statusesParser,
@@ -21,27 +21,9 @@ import {
 } from "@/lib/search-params";
 
 type QuickTaskView = "kanban" | "list";
-type SortField =
-  | "status"
-  | "lastRun"
-  | "updated"
-  | "created"
-  | "title"
-  | "priority";
-type SortDir = "asc" | "desc";
-type TimeRange = "7d" | "30d" | "90d" | "all";
 
-interface QuickTaskFilters {
-  q: string;
+interface QuickTaskFilters extends QuickTaskListFilters {
   view: QuickTaskView;
-  project: string;
-  user: string;
-  assignee: string;
-  tags: string[];
-  sortField: SortField;
-  sortDir: SortDir;
-  timeRange: TimeRange;
-  statuses: DisplayTaskStatus[];
 }
 
 // Per-user presentation preference — kept in localStorage. Everything else
@@ -53,13 +35,6 @@ interface QuickTaskLocalFilters {
 
 const LOCAL_DEFAULTS: QuickTaskLocalFilters = {
   view: "kanban",
-};
-
-// Used when the URL carries no explicit sort. Both views convey status by
-// column/grouping already, so recency is the more useful default.
-const SORT_DEFAULTS: { sortField: SortField; sortDir: SortDir } = {
-  sortField: "updated",
-  sortDir: "desc",
 };
 
 // v2: product default sort flipped lastRun → updated; bump key so existing
@@ -100,8 +75,8 @@ export function useQuickTaskFilters(): [
   const filters: QuickTaskFilters = {
     ...local,
     ...url,
-    sortField: sortField ?? SORT_DEFAULTS.sortField,
-    sortDir: sortDir ?? SORT_DEFAULTS.sortDir,
+    sortField: sortField ?? QUICK_TASK_SORT_DEFAULTS.sortField,
+    sortDir: sortDir ?? QUICK_TASK_SORT_DEFAULTS.sortDir,
   };
 
   const setParams = (patch: Partial<QuickTaskFilters>) => {
@@ -120,90 +95,6 @@ export function useQuickTaskFilters(): [
 export type QuickTask = FunctionReturnType<
   typeof api.agentTasks.getAllTasks
 >[number];
-
-function applyQuickTaskFilters(
-  tasks: QuickTask[],
-  filters: QuickTaskFilters,
-): QuickTask[] {
-  let filtered = tasks;
-
-  if (filters.q.trim()) {
-    const query = filters.q.trim().toLowerCase();
-    filtered = filtered.filter(
-      (t) =>
-        t.title.toLowerCase().includes(query) ||
-        (t.description && t.description.toLowerCase().includes(query)),
-    );
-  }
-
-  if (filters.project !== "all") {
-    filtered =
-      filters.project === "none"
-        ? filtered.filter((t) => !t.projectId)
-        : filtered.filter((t) => t.projectId === filters.project);
-  }
-
-  if (filters.user !== "all") {
-    filtered = filtered.filter((t) => t.createdBy === filters.user);
-  }
-
-  if (filters.assignee !== "all") {
-    filtered =
-      filters.assignee === "unassigned"
-        ? filtered.filter((t) => !t.assignedTo)
-        : filtered.filter((t) => t.assignedTo === filters.assignee);
-  }
-
-  const statusSet = new Set<string>(filters.statuses);
-  filtered = filtered.filter(
-    (t) => t.status !== "draft" && statusSet.has(t.status),
-  );
-
-  if (filters.tags.length > 0) {
-    const tagSet = new Set(filters.tags);
-    filtered = filtered.filter(
-      (t) => t.tags && t.tags.some((tag) => tagSet.has(tag)),
-    );
-  }
-
-  if (filters.timeRange !== "all") {
-    const now = Date.now();
-    const msMap: Record<string, number> = {
-      "7d": 7 * 24 * 60 * 60 * 1000,
-      "30d": 30 * 24 * 60 * 60 * 1000,
-      "90d": 90 * 24 * 60 * 60 * 1000,
-    };
-    const cutoff = now - (msMap[filters.timeRange] ?? 0);
-    filtered = filtered.filter((t) => t.createdAt >= cutoff);
-  }
-
-  const sorted = [...filtered].sort((a, b) => {
-    let cmp = 0;
-    if (filters.sortField === "status") {
-      // Workflow order (todo → … → done), not alphabetical. Ties fall back to
-      // most-recently-updated first so each status block stays readable.
-      cmp = statusWorkflowOrder(a.status) - statusWorkflowOrder(b.status);
-      if (cmp === 0) return b.updatedAt - a.updatedAt;
-    } else if (filters.sortField === "lastRun") {
-      // Fall back to createdAt so tasks that have never run are sorted by
-      // creation time rather than collapsing to 0 and sinking to the bottom.
-      const aTime = a.lastRunStartedAt ?? a.createdAt;
-      const bTime = b.lastRunStartedAt ?? b.createdAt;
-      cmp = aTime - bTime;
-    } else if (filters.sortField === "updated") {
-      cmp = a.updatedAt - b.updatedAt;
-    } else if (filters.sortField === "created") {
-      cmp = a.createdAt - b.createdAt;
-    } else if (filters.sortField === "title") {
-      cmp = a.title.localeCompare(b.title);
-    } else if (filters.sortField === "priority") {
-      cmp = priorityCompare(a.priority, b.priority);
-    }
-    return filters.sortDir === "asc" ? cmp : -cmp;
-  });
-
-  return sorted;
-}
 
 // Regroup an already-sorted array into kanban order: tasks bucketed by status
 // in TASK_STATUSES order, preserving the input array's relative order within

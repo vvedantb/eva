@@ -117,12 +117,38 @@ export {
   type PrStateTone,
 } from "./prState";
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
+export {
+  QUICK_TASK_FILTER_DEFAULTS,
+  QUICK_TASK_LIST_DEFAULTS,
+  QUICK_TASK_SORT_DEFAULTS,
+  QUICK_TASK_SORT_FIELDS,
+  QUICK_TASK_SORT_FIELD_LABELS,
+  QUICK_TASK_TIME_RANGES,
+  QUICK_TASK_TIME_RANGE_LABELS,
+  activeQuickTaskFilterKeys,
+  applyQuickTaskFilters,
+  clearedQuickTaskFilter,
+  clearedQuickTaskFilters,
+  hasActiveQuickTaskFilters,
+  quickTaskFilterChips,
+  runAllPlan,
+  startAll,
+  toggleQuickTaskStatus,
+  type FilterableQuickTask,
+  type QuickTaskFilterChip,
+  type QuickTaskFilterKey,
+  type QuickTaskListFilters,
+  type QuickTaskSortDir,
+  type QuickTaskSortField,
+  type QuickTaskTimeRange,
+} from "./quickTaskFilters";
+export { repoBasePath } from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
-  defaultQuickTaskSections,
   formatEntityNumLabel,
   groupByTaskStatus,
   priorityCompare,
