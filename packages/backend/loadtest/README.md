@@ -69,6 +69,12 @@ beside other heavy work: on a 16 GB VM the kernel killed the dev backend.
   4,096 reads per function, 16 MiB read, 8,192 items in a returned array,
   and "too many system operations" timeouts. Absolute times are for this VM,
   not for Convex cloud; compare before and after on the same machine.
+- On the local backend, any read in a large index range is slow, whatever it
+  returns: `take(1)` on the focal chat's `by_parent` range takes about 185 ms
+  at 100× (4,000 messages), ascending or descending. So server time of a
+  bounded read (`messages.listByParent.tail`: 34 documents at every scale)
+  still grows here. Judge bounded reads by documents and bytes read; Convex
+  cloud was not measured.
 - The backend's crons run during the probe; their executions are not counted.
 
 ## Statistics
