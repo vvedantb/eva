@@ -21,6 +21,7 @@ import {
   DialogTitle,
   Input,
   Sheet,
+  SheetBody,
   SheetContent,
   SheetHeader,
   SheetRow,
@@ -30,8 +31,8 @@ import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
 import * as Clipboard from "expo-clipboard";
-import { useState, type ComponentType } from "react";
-import { Linking, Text } from "react-native";
+import { useRef, useState, type ComponentType } from "react";
+import { Linking, Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { WEB_URL } from "@/config";
 import { useScheme } from "@/ui/theme";
@@ -81,6 +82,8 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   const [renameValue, setRenameValue] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<SessionActionTarget | null>(null);
+  // The Rename field, focused once its dialog is on screen (`onShow`): focus is imperative.
+  const renameInput = useRef<TextInput>(null);
 
   /** The actions for one session, in the web order (`sessionMenuActions`). */
   const actionsFor = (target: SessionActionTarget) => sessionMenuActions({ ...target, simpleView });
@@ -170,23 +173,26 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
           <SheetHeader className="px-2">
             <SheetTitle numberOfLines={1}>{sheetTarget?.title ?? ""}</SheetTitle>
           </SheetHeader>
-          {sheetTarget
-            ? actionsFor(sheetTarget).map((action) => {
-                const item = SESSION_ACTION_ITEMS[action];
-                return (
-                  <SheetRow
-                    key={action}
-                    icon={item.icon}
-                    title={item.label}
-                    warning={item.warning}
-                    onPress={() => {
-                      setSheetTarget(null);
-                      run(action, sheetTarget);
-                    }}
-                  />
-                );
-              })
-            : null}
+          {/* Up to eight rows: they scroll in a short window, under the title. */}
+          <SheetBody contentContainerClassName="gap-3">
+            {sheetTarget
+              ? actionsFor(sheetTarget).map((action) => {
+                  const item = SESSION_ACTION_ITEMS[action];
+                  return (
+                    <SheetRow
+                      key={action}
+                      icon={item.icon}
+                      title={item.label}
+                      warning={item.warning}
+                      onPress={() => {
+                        setSheetTarget(null);
+                        run(action, sheetTarget);
+                      }}
+                    />
+                  );
+                })
+              : null}
+          </SheetBody>
         </SheetContent>
       </Sheet>
       {/* The web "Rename session" dialog; the kit draws it as a bottom sheet at phone size. */}
@@ -196,17 +202,17 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
           if (!open) setRenameTarget(null);
         }}
       >
-        <DialogContent>
+        <DialogContent onShow={() => renameInput.current?.focus()}>
           <DialogHeader>
             <DialogTitle>Rename session</DialogTitle>
           </DialogHeader>
           <Input
+            ref={renameInput}
             accessibilityLabel="Session title"
             value={renameValue}
             onChangeText={setRenameValue}
             onSubmitEditing={() => void saveRename()}
             returnKeyType="done"
-            autoFocus
             selectTextOnFocus
           />
           <DialogFooter>

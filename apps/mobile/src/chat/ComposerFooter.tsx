@@ -3,13 +3,13 @@ import { tokenizedToDisplayText } from "@eva/shared/mentionText";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconBookmark, IconFileText, IconX } from "@tabler/icons-react-native";
 import { PROMPT_INPUT_CHIP, PromptInputChip } from "@vvedantb/native-ui/ai";
-import { Sheet, SheetContent, SheetHeader, SheetRow, SheetTitle } from "@vvedantb/native-ui/primitives";
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetRow, SheetTitle } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Pressable, View } from "react-native";
 import { fromNow } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
@@ -76,8 +76,9 @@ export function useSimpleView(): boolean {
 
 /**
  * A footer chip's bottom sheet: the title, then `children` in a scroll view
- * capped at 60% of the screen, so a long list keeps the sheet in one hand's
- * reach and scrolls. `header` sits above the scroll (search, traits).
+ * (`SheetBody`) capped at 60% of the screen, so a long list keeps the sheet
+ * in one hand's reach and scrolls; with the keyboard up it scrolls in what is
+ * left. `header` sits above the scroll (search, traits).
  */
 export function FooterSheet({
   open,
@@ -92,7 +93,6 @@ export function FooterSheet({
   header?: ReactNode;
   children: ReactNode;
 }) {
-  const { height } = useWindowDimensions();
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="gap-3 px-3">
@@ -100,9 +100,7 @@ export function FooterSheet({
           <SheetTitle>{title}</SheetTitle>
         </SheetHeader>
         {header}
-        <ScrollView style={{ maxHeight: height * 0.6 }} keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
+        <SheetBody>{children}</SheetBody>
       </SheetContent>
     </Sheet>
   );
