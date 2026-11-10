@@ -64,7 +64,6 @@ export const getRepoSnapshot = authQuery({
       schedule: snapshotScheduleValidator,
       enabled: v.optional(v.boolean()),
       cronJobId: v.optional(v.string()),
-      workflowRef: v.optional(v.string()),
       buildCommands: v.optional(v.array(v.string())),
       seedCommands: v.optional(v.array(v.string())),
       baseSnapshotId: v.optional(v.string()),
