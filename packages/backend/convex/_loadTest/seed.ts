@@ -45,7 +45,9 @@ const DOCS_PER_UNIT: Record<SeedChunkKind, number> = {
   quickTasks: 8,
   docs: 1,
   automations: 2,
-  focalMessages: 1,
+  // One document, but about 13 KB with its activity log: 4 keeps a chunk of
+  // 250 messages near 3 MiB, under the 16 MiB a mutation may write.
+  focalMessages: 4,
   focalRuns: 1,
   focalTaskTimeline: 2,
   focalDocComments: 1,
@@ -118,6 +120,73 @@ function filler(seed: number, length: number): string {
   return out.join(" ").slice(0, length);
 }
 
+/**
+ * Activity-log sizes (bytes) for the focal chat's assistant messages, cycled.
+ * Mean 25.6 KB, matched to production on 2026-11-09 (600 newest messages:
+ * median 8.8 KB, p90 84 KB, p99 294 KB; the heaviest chat averaged 26 KB per
+ * assistant message). The heavy tail matters: a few turns hold most bytes.
+ */
+const ACTIVITY_LOG_BYTES = [
+  2_000, 4_000, 6_000, 8_000, 9_000, 11_000, 16_000, 30_000, 60_000, 110_000,
+] as const;
+
+/**
+ * A step-array activity log of about `bytes`, shaped like the callback
+ * parsers' output (`callback-src/parse/toolSteps.ts`). About half the bytes
+ * are expanded-only detail (`output`, `edits`), which
+ * `trimActivityLogForTranscript` drops, as on real transcripts.
+ */
+function activityLog(seed: number, bytes: number): string {
+  const steps: Array<string> = [];
+  let size = 2;
+  for (let i = 0; size < bytes; i++) {
+    const path = `apps/web/src/lib/components/chat/File${(seed + i) % 97}.tsx`;
+    const kind = i % 4;
+    const step =
+      kind === 0
+        ? {
+            type: "bash",
+            label: "Running command...",
+            detail: filler(seed + i, 120),
+            command: filler(seed + i, 200),
+            status: "complete",
+            output: { text: filler(seed + i + 1, 700), exitCode: 0 },
+          }
+        : kind === 1
+          ? { type: "read", label: "Reading file...", detail: path, path, status: "complete" }
+          : kind === 2
+            ? {
+                type: "edit",
+                label: "Editing file...",
+                detail: path,
+                path,
+                status: "complete",
+                edits: [{ oldText: filler(seed + i, 300), newText: filler(seed + i + 2, 300) }],
+              }
+            : { type: "thinking", label: "Thinking...", detail: filler(seed + i, 500), status: "complete" };
+    const json = JSON.stringify(step);
+    steps.push(json);
+    size += json.length + 1;
+  }
+  return `[${steps.join(",")}]`;
+}
+
+/**
+ * Sub-agent roster on a task or project row, about 850 bytes: the production
+ * average for `backgroundAgents` (400 newest tasks, 10 November 2026). List
+ * queries drop it, so it shows in bytes returned.
+ */
+function backgroundAgents(seed: number, startedAt: number) {
+  return Array.from({ length: 5 }, (_, i) => ({
+    toolUseId: `toolu_loadtest_${seed}_${i}_${"x".repeat(12)}`,
+    taskId: `b${seed}${i}loadtest`,
+    description: filler(seed + i, 60),
+    status: "completed",
+    startedAt: startedAt + i * 1000,
+    settledAt: startedAt + i * 1000 + 30_000,
+  }));
+}
+
 /** Spread timestamps across the last 60 days, newest last. */
 function ago(now: number, i: number, total: number): number {
   return now - Math.floor(((total - i) / Math.max(total, 1)) * 60 * DAY);
@@ -171,6 +240,7 @@ export const setup = internalMutation({
       repoId,
       userId,
       title: "Focal session",
+      numId: 1,
       status: "active",
       lastTurnFinishedAt: now - 3_600_000,
     });
@@ -336,6 +406,7 @@ async function insertTaskWithChildren(
     repoId,
     projectId,
     taskNumber: i,
+    backgroundAgents: backgroundAgents(i, createdAt),
     ...(status === "draft" ? {} : { lastTurnFinishedAt: createdAt + DAY }),
     ...(i % 10 === 7 ? { deletedAt: createdAt + 2 * DAY } : {}),
   });
@@ -549,6 +620,7 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       phase: i % 4 === 0 ? "completed" : "in_progress",
       planningMode: i % 2 === 0 ? "interview" : "tasks_only",
       lastTurnFinishedAt: ago(now, i, total) + DAY,
+      backgroundAgents: backgroundAgents(i, ago(now, i, total)),
       ...(i % 10 === 9 ? { deletedAt: ago(now, i, total) } : {}),
     });
     await db.insert("projectDetails", {
@@ -604,11 +676,21 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
   },
 
   focalMessages: async (db, refs, i, total) => {
+    const assistant = i % 2 === 1;
+    const turn = Math.floor(i / 2);
     await db.insert("messages", {
       parentId: refs.mainChatId,
-      role: i % 2 === 0 ? "user" : "assistant",
-      content: filler(i, 800),
+      role: assistant ? "assistant" : "user",
+      content: filler(i, assistant ? 1200 : 300),
       timestamp: ago(refs.now, i, total),
+      ...(assistant
+        ? {
+            activityLog: activityLog(
+              i,
+              ACTIVITY_LOG_BYTES[turn % ACTIVITY_LOG_BYTES.length] ?? 8_000,
+            ),
+          }
+        : {}),
     });
   },
 
