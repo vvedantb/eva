@@ -1,4 +1,4 @@
-import { api } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import { headerBlocker, type PrOverview } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
@@ -21,6 +21,9 @@ import {
   EmptyState,
   HeaderIconButton,
   Spinner,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from "@vvedantb/native-ui/primitives";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { tokens } from "@vvedantb/native-ui/theme";
@@ -29,31 +32,37 @@ import { useAction, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DiffOptions } from "@/diff/DiffOptions";
+import { usePendingLineComments, usePrDiff } from "@/diff/prDiffStore";
 import { MergeAction } from "@/reviews/MergeAction";
 import { prStatusAppearance, ToneIcon, toneColour } from "@/reviews/prAppearance";
-import { ReviewComposer } from "@/reviews/ReviewComposer";
+import { ReviewCode } from "@/reviews/ReviewCode";
+import { ReviewComposer, type ComposerMode } from "@/reviews/ReviewComposer";
 import { ReviewSummary } from "@/reviews/ReviewSummary";
 import { useActionResult } from "@/reviews/useActionResult";
 import { type Scheme, useScheme } from "@/ui/theme";
 
+/** The phone's review tabs: the web Summary and Code (Timeline is not on the phone yet). */
+type ReviewTab = "summary" | "code";
+
 /**
- * One pull request under Reviews (the web `/reviews/$prNumber/summary`), at
+ * One pull request under Reviews (the web `/reviews/$prNumber/$reviewTab`), at
  * phone width: the web header (state, `head → base`, the ⋯ menu, the title
- * with its number linking to GitHub, and a blocker line when there is one),
- * then Summary. The web header's Merge and floating composer sit in a bar at
- * the bottom, in thumb reach. The overview is `github.getPullRequestOverview`,
- * read once on open; Refresh and every write read it again past the cache.
+ * with its number linking to GitHub, a blocker line when there is one, and
+ * the tab row), then Summary or Code. The web header's Merge and floating
+ * composer sit in a bar at the bottom, in thumb reach. The overview is
+ * `github.getPullRequestOverview`, read once on open; Refresh and every write
+ * read it again past the cache.
  */
 export default function ReviewScreen() {
-  const params = useLocalSearchParams<{ repoId: string; prNumber: string }>();
+  const params = useLocalSearchParams<{ repoId: string; prNumber: string; tab?: string }>();
   const router = useRouter();
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
   const repos = useQuery(api.githubRepos.list, {});
   const getOverview = useAction(api.github.getPullRequestOverview);
-  const [composing, setComposing] = useState(false);
   const repo = repos?.find((candidate) => candidate._id === params.repoId);
   const prNumber = Number(params.prNumber);
   const valid = Number.isInteger(prNumber) && prNumber > 0;
@@ -94,47 +103,154 @@ export default function ReviewScreen() {
     );
   }
 
-  const overview = state.data;
+  return (
+    <ReviewTabs
+      repoId={repoId}
+      overview={state.data}
+      tab={params.tab === "code" ? "code" : "summary"}
+      onTabChange={(tab) => router.setParams({ tab })}
+      refreshing={state.refreshing}
+      onRefresh={reload}
+      onBack={back}
+    />
+  );
+}
+
+/**
+ * The loaded pull request: the header with the tab row, both tabs, and the
+ * bottom bar. The tab is a route param set in place (`setParams`), so a switch
+ * adds no history and Back still leaves the pull request. Code mounts on its
+ * first visit, so reading Summary does not download the diff, and then stays
+ * mounted with its scroll, as the web keeps every tab mounted.
+ */
+function ReviewTabs({
+  repoId,
+  overview,
+  tab,
+  onTabChange,
+  refreshing,
+  onRefresh,
+  onBack,
+}: {
+  repoId: Id<"githubRepos">;
+  overview: PrOverview;
+  tab: ReviewTab;
+  onTabChange: (tab: ReviewTab) => void;
+  refreshing: boolean;
+  onRefresh: () => void;
+  onBack: () => void;
+}) {
+  const router = useRouter();
+  const scheme = useScheme();
+  const insets = useSafeAreaInsets();
+  const pr = { repoId, prNumber: overview.number };
+  const [codeVisited, setCodeVisited] = useState(tab === "code");
+  const [composing, setComposing] = useState(false);
+  const [composerMode, setComposerMode] = useState<ComposerMode>("comment");
+  const codeMounted = codeVisited || tab === "code";
+  const diff = usePrDiff(codeMounted ? pr : null);
+  const pending = usePendingLineComments(pr).comments.length;
   const isOpen = overview.status === "open";
+
+  const nav = (
+    // 44 high on both tabs, so Code's ⋯ does not move the content when it shows.
+    <View className="min-h-11 flex-row items-center gap-2 px-1">
+      <Tabs
+        value={tab}
+        onValueChange={(value: string) => {
+          const next = value === "code" ? "code" : "summary";
+          if (next === "code") setCodeVisited(true);
+          onTabChange(next);
+        }}
+      >
+        <TabsList size="sm" className="self-start">
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="code">Code</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {/* Code's controls, at the tab row's right end as on the web. */}
+      <View className="ml-auto">
+        {tab === "code" ? (
+          <DiffOptions pr={pr} refreshing={diff.state.status === "ready" && diff.state.refreshing} onRefresh={diff.reload} />
+        ) : null}
+      </View>
+    </View>
+  );
+
   return (
     <View className="flex-1">
-      <ReviewHeader overview={overview} refreshing={state.refreshing} onRefresh={reload} onBack={back} scheme={scheme} />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 16 }}>
+      <ReviewHeader overview={overview} refreshing={refreshing} onRefresh={onRefresh} onBack={onBack} scheme={scheme} nav={nav} />
+      <ScrollView className="flex-1" style={tab === "summary" ? undefined : HIDDEN} contentContainerStyle={{ paddingBottom: 16 }}>
         <ReviewSummary overview={overview} />
       </ScrollView>
+      {codeMounted ? (
+        <View className="flex-1" style={tab === "code" ? undefined : HIDDEN}>
+          <ReviewCode
+            pr={pr}
+            state={diff.state}
+            onOpenFile={(path) =>
+              router.push({
+                pathname: "/review/[repoId]/[prNumber]/file",
+                params: { repoId, prNumber: String(overview.number), path },
+              })
+            }
+          />
+        </View>
+      ) : null}
       {/* The web header's Merge and its floating composer, in thumb reach. */}
       <View
         className="flex-row items-center gap-2 px-4 pt-2"
         style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: tokens.color.border[scheme] }}
       >
-        <View className="min-w-0 flex-1">{isOpen ? <MergeAction repoId={repoId} overview={overview} onDone={reload} /> : null}</View>
+        <View className="min-w-0 flex-1">{isOpen ? <MergeAction repoId={repoId} overview={overview} onDone={onRefresh} /> : null}</View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Comment on pull request"
-          onPress={() => setComposing(true)}
+          accessibilityLabel={
+            pending > 0 ? `Review pull request, ${pending} ${pending === 1 ? "comment" : "comments"} pending` : "Comment on pull request"
+          }
+          onPress={() => {
+            // As the web composer: pending line comments open it on Review.
+            setComposerMode(pending > 0 ? "review" : "comment");
+            setComposing(true);
+          }}
           className="size-11 items-center justify-center rounded-full active:opacity-70"
           style={{ backgroundColor: EVA_THEME[scheme].secondary }}
         >
           <IconMessage size={18} color={EVA_THEME[scheme].secondaryForeground} />
+          {pending > 0 ? (
+            <View
+              className="absolute -top-1 -right-1 h-4 min-w-4 items-center justify-center rounded-full px-1"
+              style={{ backgroundColor: EVA_THEME[scheme].primary }}
+            >
+              <Text className="font-instrument-sans-semibold" style={{ fontSize: 10, lineHeight: 12, fontWeight: "600", color: EVA_THEME[scheme].primaryForeground, fontVariant: ["tabular-nums"] }}>
+                {pending}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
       <ReviewComposer
         open={composing}
         onOpenChange={setComposing}
+        mode={composerMode}
+        onModeChange={setComposerMode}
         repoId={repoId}
         prNumber={overview.number}
         isOpen={isOpen}
-        onPosted={reload}
+        onPosted={onRefresh}
       />
     </View>
   );
 }
 
+/** A tab kept mounted while another shows. */
+const HIDDEN: ViewStyle = { display: "none" };
+
 /**
  * The web `ReviewHeader`: Back (phones expect one), the state pill, `head →
  * base` and the ⋯ menu (Refresh, Copy link, View on GitHub; its dots turn into
  * a spinner while a refresh runs); then the title with `#N` linking to
- * GitHub; then the blocker, when there is one worth a line.
+ * GitHub; then the blocker, when there is one worth a line; then the tabs.
  */
 function ReviewHeader({
   overview,
@@ -142,12 +258,15 @@ function ReviewHeader({
   onRefresh,
   onBack,
   scheme,
+  nav,
 }: {
   overview: PrOverview;
   refreshing: boolean;
   onRefresh: () => void;
   onBack: () => void;
   scheme: Scheme;
+  /** The tab row, last, as the web header ends in its tabs. */
+  nav: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[scheme];
@@ -224,6 +343,7 @@ function ReviewHeader({
           </Text>
         </View>
       )}
+      {nav}
     </View>
   );
 }

@@ -185,6 +185,28 @@ export function unifiedDiffLines(patch: string): UnifiedDiffLine[] {
   return rows;
 }
 
+/**
+ * Where a review comment on one unified diff row attaches in GitHub's review
+ * model, and the web range label for it. A removed line is on the base side
+ * (`LEFT`, its old number); an added or context line is on the head side
+ * (`RIGHT`, its new number), as the web Code tab anchors a one-line
+ * selection. The label is the number with the row's `+`/`-` marker, so `+12`,
+ * `-4` or `9`. Null for a hunk header, which takes no comment.
+ */
+export function lineCommentTarget(
+  row: UnifiedDiffLine,
+): { line: number; side: "LEFT" | "RIGHT"; label: string } | null {
+  if (row.kind === "hunk") return null;
+  const line = row.kind === "removed" ? row.oldLine : row.newLine;
+  if (line === null) return null;
+  const marker = row.kind === "added" ? "+" : row.kind === "removed" ? "-" : "";
+  return {
+    line,
+    side: row.kind === "removed" ? "LEFT" : "RIGHT",
+    label: `${marker}${line}`,
+  };
+}
+
 /** What a changed file is, for splitting a PR's size the way t3code does. */
 export type DiffFileKind = "code" | "tests" | "mocks" | "generated";
 

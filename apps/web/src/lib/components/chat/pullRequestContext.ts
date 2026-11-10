@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prNumberFromGithubUrl } from "@/lib/githubPr";
+import { prNumberFromGithubUrl } from "@eva/shared";
 
 /**
  * A pull request attached to the next prompt as context. Dragging a PR row
