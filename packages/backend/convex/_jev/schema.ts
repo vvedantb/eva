@@ -14,6 +14,14 @@ import { jsonValue, type JsonValue } from "./jsonValue";
 export const EVALUATE_MODEL = "typesafe-ai/jev";
 /** Serialised `state` cap — Jev is a per-item judge, not a document reader. */
 export const MAX_STATE_CHARS = 200_000;
+/**
+ * Cap with `longContext` on. Jev then accepts 262k tokens; diffs and logs run
+ * about two to four characters a token, so anything past this would be
+ * rejected upstream as `max_tokens_exceeded` anyway.
+ */
+export const MAX_LONG_STATE_CHARS = 500_000;
+/** Images per call. Each one costs input tokens and TypeSafe caps a request at 32 MiB. */
+export const MAX_IMAGES = 4;
 export const MAX_QUESTIONS = 32;
 /** Jev's own limit on choice options and score levels. */
 export const MAX_OPTIONS = 255;
@@ -80,11 +88,33 @@ export const question = z.discriminatedUnion("type", [
 
 export const QUESTION_ID = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * An image stored in Convex file storage (`upload_media` gives agents one).
+ * Questions point at it by name in backticks, the way TypeSafe documents it.
+ */
+export const evaluateImage = z.object({
+  name: z.string().min(1).max(64).regex(QUESTION_ID),
+  storageId: z.string().min(1),
+});
+
 /** Raw shape for `defineTool`; `search_tools` turns it into JSON schema for agents. */
 export const evaluateInputShape = {
   state: evalInput.describe(
-    `The thing to judge: a string, or a JSON object or array. Text only; up to ${MAX_STATE_CHARS.toLocaleString("en-GB")} characters serialised.`,
+    `The thing to judge: a string, or a JSON object or array. Up to ${MAX_STATE_CHARS.toLocaleString("en-GB")} characters serialised (${MAX_LONG_STATE_CHARS.toLocaleString("en-GB")} with longContext).`,
   ),
+  images: z
+    .array(evaluateImage)
+    .max(MAX_IMAGES)
+    .optional()
+    .describe(
+      `Up to ${MAX_IMAGES} PNG or JPEG images to judge alongside state, as { name, storageId } (storageId from upload_media). Refer to each one by name in backticks in instructions, e.g. "Does \`after\` show a red banner?". Experimental: Jev is weaker on images than on text, so keep image questions small and literal.`,
+    ),
+  longContext: z
+    .boolean()
+    .optional()
+    .describe(
+      "Raise Jev's context limit to 262k tokens for a long state (a whole diff, a log). Off by default: TypeSafe reports it makes answers less reliable, so only set it when a normal call fails with max_tokens_exceeded.",
+    ),
   questions: z
     .record(z.string().min(1).max(64).regex(QUESTION_ID), question)
     .refine(
@@ -111,12 +141,24 @@ export const evaluateInput = z
       typeof value.state === "string"
         ? value.state.length
         : JSON.stringify(value.state).length;
-    if (stateChars > MAX_STATE_CHARS) {
+    const cap = value.longContext ? MAX_LONG_STATE_CHARS : MAX_STATE_CHARS;
+    if (stateChars > cap) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["state"],
-        message: `state is ${stateChars.toLocaleString("en-GB")} characters serialised; the cap is ${MAX_STATE_CHARS.toLocaleString("en-GB")}`,
+        message: `state is ${stateChars.toLocaleString("en-GB")} characters serialised; the cap is ${cap.toLocaleString("en-GB")}`,
       });
+    }
+    const names = new Set<string>();
+    for (const image of value.images ?? []) {
+      if (names.has(image.name)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["images"],
+          message: `image name "${image.name}" is used twice`,
+        });
+      }
+      names.add(image.name);
     }
     for (const [id, entry] of Object.entries(value.questions)) {
       const chars =
