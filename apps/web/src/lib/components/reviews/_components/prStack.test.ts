@@ -1,14 +1,14 @@
 import { describe, expect, test } from "vitest";
-import { mergeBlocker } from "./prMergeState";
-import { overview } from "./prOverviewFixture";
 import {
+  mergeBlocker,
   mergeButtonLabel,
   stackBlockingReason,
   stackMergeTargets,
   stackVerdict,
   type PrStack,
   type PrStackEntry,
-} from "./prStack";
+} from "@eva/shared";
+import { overview } from "./prOverviewFixture";
 
 function entry(position: number, partial: Partial<PrStackEntry> = {}): PrStackEntry {
   return {

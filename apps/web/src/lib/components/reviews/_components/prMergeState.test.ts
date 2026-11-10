@@ -1,13 +1,16 @@
 import { describe, expect, test } from "vitest";
 import {
+  canMergePr,
+  canSubmitReview,
   checksHeadline,
   checksOverallTone,
   countChecks,
   headerBlocker,
   mergeBlocker,
-} from "./prMergeState";
+  type PrCheck,
+  type PrOverview,
+} from "@eva/shared";
 import { overview } from "./prOverviewFixture";
-import type { PrCheck, PrOverview } from "./prOverviewMeta";
 
 const BASE_CHECK: PrCheck = {
   kind: "check",
@@ -199,5 +202,29 @@ describe("check roll-up", () => {
     expect(checksHeadline(countChecks([check({ conclusion: "skipped" })]))).toBe(
       "1 skipped",
     );
+  });
+});
+
+/**
+ * The merge button and the review Submit on both apps are gated here. The
+ * phone's review has no line comments, so its only way to a comment review
+ * is a summary.
+ */
+describe("action gates", () => {
+  test("merge is live only on an open, ready, mergeable pull request", () => {
+    expect(canMergePr(overview({}))).toBe(true);
+    expect(canMergePr(overview({ draft: true }))).toBe(false);
+    expect(canMergePr(overview({ mergeable: null }))).toBe(false);
+    expect(canMergePr(overview({ mergeable: false }))).toBe(false);
+    expect(canMergePr(overview({ status: "merged" }))).toBe(false);
+  });
+
+  test("a review needs what GitHub needs", () => {
+    expect(canSubmitReview("APPROVE", "", 0)).toBe(true);
+    expect(canSubmitReview("COMMENT", "  ", 0)).toBe(false);
+    expect(canSubmitReview("COMMENT", "", 2)).toBe(true);
+    expect(canSubmitReview("COMMENT", "Nice", 0)).toBe(true);
+    expect(canSubmitReview("REQUEST_CHANGES", "", 3)).toBe(false);
+    expect(canSubmitReview("REQUEST_CHANGES", "Rename it", 0)).toBe(true);
   });
 });

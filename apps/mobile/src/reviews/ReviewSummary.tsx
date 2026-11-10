@@ -1,0 +1,453 @@
+import {
+  buildSummaryComments,
+  checkTone,
+  checksHeadline,
+  countChecks,
+  prReviewers,
+  reviewStateMeta,
+  splitSummaryComments,
+  type PrOverview,
+  type SummaryComment,
+} from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
+import {
+  IconArrowUpRight,
+  IconArrowsSort,
+  IconChevronRight,
+  IconExternalLink,
+  IconFileCode,
+  IconRocket,
+  IconTag,
+  IconUserCheck,
+  IconUsers,
+  type IconProps,
+} from "@tabler/icons-react-native";
+import { Markdown } from "@vvedantb/native-ui/markdown";
+import { Avatar, AvatarFallback, AvatarImage, Button } from "@vvedantb/native-ui/primitives";
+import { withAlpha } from "@vvedantb/native-ui/theme";
+import { useState, type ComponentType, type ReactNode } from "react";
+import { Linking, Pressable, Text, View } from "react-native";
+import { ToneIcon } from "@/reviews/prAppearance";
+import { timeAgo } from "@/ui/format";
+import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
+
+/** What a first render carries, as the web: the recent remarks are the ones worth arriving for. */
+const COMMENT_PAGE = 10;
+
+/** The web `text-xs` (12 / 16). */
+const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
+/** The web `text-2xs` (11 / 16, 0.01em). */
+const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
+
+/** The web reviewer ring: the verdict rides the face that earned it. */
+const VERDICT_RING: Record<string, keyof (typeof EVA_THEME)["light"]> = {
+  APPROVED: "success",
+  CHANGES_REQUESTED: "destructive",
+};
+
+/**
+ * The web Summary tab at phone width: the label rows (reviewers, assignees,
+ * labels, previews), then folding sections: Description, Checks (folded) and
+ * Comments. Read-only: the web pencils that edit the description, reviewers,
+ * assignees and labels, and the Recap walkthrough, are not on the phone.
+ */
+export function ReviewSummary({ overview }: { overview: PrOverview }) {
+  const scheme = useScheme();
+  const checks = countChecks(overview.checks);
+  const body = overview.body ?? "";
+  return (
+    <View>
+      <MetaRows overview={overview} scheme={scheme} />
+      <Section title="Description">
+        {body.trim().length > 0 ? (
+          <Markdown>{body}</Markdown>
+        ) : (
+          <Text className="font-instrument-sans text-sm italic" style={{ color: EVA_THEME[scheme].mutedForeground }}>
+            No description provided.
+          </Text>
+        )}
+      </Section>
+      <Section title={checks.total === 0 ? "Checks" : `Checks · ${checksHeadline(checks)}`} defaultOpen={false}>
+        {checks.total === 0 ? (
+          <Note scheme={scheme}>No checks reported.</Note>
+        ) : (
+          overview.checks.map((check) => (
+            <LinkRow key={`${check.kind}-${check.name}`} url={check.htmlUrl} label={check.name}>
+              <ToneIcon tone={checkTone(check)} scheme={scheme} />
+              <Text numberOfLines={1} className="font-instrument-sans min-w-0 flex-1 text-sm" style={{ color: EVA_THEME[scheme].foreground }}>
+                {check.name}
+              </Text>
+              {check.htmlUrl ? <IconExternalLink size={12} color={EVA_THEME[scheme].mutedForeground} /> : null}
+            </LinkRow>
+          ))
+        )}
+        {overview.checksTruncated ? (
+          <Note scheme={scheme} boxed>{`Only the first ${overview.checks.length} checks are shown.`}</Note>
+        ) : null}
+      </Section>
+      <Comments overview={overview} scheme={scheme} />
+    </View>
+  );
+}
+
+/** The web `SummaryMetaRows`: a 96 label column (icon and label), then the value. */
+function MetaRows({ overview, scheme }: { overview: PrOverview; scheme: Scheme }) {
+  const theme = EVA_THEME[scheme];
+  const reviewers = prReviewers(overview);
+  const none = <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>None</Text>;
+  return (
+    <View className="gap-1 px-4 pb-1 pt-3">
+      <MetaRow icon={IconUsers} label="Reviewers" scheme={scheme}>
+        {reviewers.length === 0
+          ? none
+          : reviewers.map((reviewer) => (
+              <Person
+                key={reviewer.login}
+                login={reviewer.login}
+                avatarUrl={reviewer.avatarUrl}
+                ring={VERDICT_RING[reviewer.state]}
+                faded={reviewer.state === "REQUESTED"}
+                hint={reviewer.state === "REQUESTED" ? "Awaiting review" : reviewStateMeta(reviewer.state).label}
+                scheme={scheme}
+              />
+            ))}
+      </MetaRow>
+      <MetaRow icon={IconUserCheck} label="Assignees" scheme={scheme}>
+        {overview.assignees.length === 0
+          ? none
+          : overview.assignees.map((assignee) => (
+              <Person key={assignee.login} login={assignee.login} avatarUrl={assignee.avatarUrl} scheme={scheme} />
+            ))}
+      </MetaRow>
+      <MetaRow icon={IconTag} label="Labels" scheme={scheme}>
+        {overview.labels.length === 0
+          ? none
+          : overview.labels.map((label) => (
+              // Web `LabelChip`: `bg-muted/60` pill, the GitHub colour kept to a dot.
+              <View
+                key={label.name}
+                className="max-w-48 flex-row items-center gap-1.5 rounded-full px-2 py-0.5"
+                style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}
+              >
+                <View className="size-2 rounded-full" style={{ backgroundColor: `#${label.color}` }} />
+                <Text numberOfLines={1} style={[TEXT_XS, { color: theme.foreground }]}>
+                  {label.name}
+                </Text>
+              </View>
+            ))}
+      </MetaRow>
+      {overview.previews.length === 0 ? null : (
+        <MetaRow icon={IconRocket} label="Previews" scheme={scheme}>
+          <View className="min-w-0 flex-1">
+            {overview.previews.map((preview) => (
+              <LinkRow key={`${preview.environment}-${preview.updatedAt}`} url={preview.url} label={previewLabel(preview)}>
+                <Text numberOfLines={1} className="min-w-0 flex-1" style={[TEXT_XS, { color: theme.foreground }]}>
+                  {previewLabel(preview)}
+                </Text>
+                <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>{timeAgo(new Date(preview.updatedAt).getTime())}</Text>
+                {preview.url === null ? null : <IconArrowUpRight size={13} color={theme.mutedForeground} />}
+              </LinkRow>
+            ))}
+          </View>
+        </MetaRow>
+      )}
+    </View>
+  );
+}
+
+function MetaRow({
+  icon: Icon,
+  label,
+  scheme,
+  children,
+}: {
+  icon: ComponentType<IconProps>;
+  label: string;
+  scheme: Scheme;
+  children: ReactNode;
+}) {
+  const muted = EVA_THEME[scheme].mutedForeground;
+  return (
+    <View className="min-h-7 flex-row items-center gap-2">
+      <View className="w-24 flex-row items-center gap-1.5 self-start pt-1.5">
+        <Icon size={13} color={muted} />
+        <Text style={[TEXT_XS, { color: muted }]}>{label}</Text>
+      </View>
+      <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-1.5 py-1">{children}</View>
+    </View>
+  );
+}
+
+/** A face and a login. The web shows reviewers as faces with a hover name; a phone has no hover, so the name is written out. */
+function Person({
+  login,
+  avatarUrl,
+  ring,
+  faded = false,
+  hint,
+  scheme,
+}: {
+  login: string;
+  avatarUrl: string | null;
+  ring?: keyof (typeof EVA_THEME)["light"];
+  faded?: boolean;
+  hint?: string;
+  scheme: Scheme;
+}) {
+  const theme = EVA_THEME[scheme];
+  return (
+    <View
+      accessible
+      accessibilityLabel={hint ? `${login}, ${hint}` : login}
+      className="flex-row items-center gap-1"
+      style={{ opacity: faded ? 0.6 : 1 }}
+    >
+      <View className="rounded-full" style={ring ? { borderWidth: 2, borderColor: theme[ring] } : undefined}>
+        <PrAvatar login={login} avatarUrl={avatarUrl} size={16} />
+      </View>
+      <Text style={[TEXT_XS, { color: theme.foreground }]}>{login}</Text>
+    </View>
+  );
+}
+
+/** The web `PrAvatar`: the GitHub avatar, or the login's first two letters. */
+function PrAvatar({ login, avatarUrl, size }: { login: string | null; avatarUrl: string | null; size: number }) {
+  return (
+    <Avatar size={size}>
+      {avatarUrl ? <AvatarImage source={{ uri: avatarUrl }} /> : null}
+      <AvatarFallback>{login === null ? "?" : login.slice(0, 2).toUpperCase()}</AvatarFallback>
+    </Avatar>
+  );
+}
+
+/** A 44 high row that opens `url` on GitHub (or the deploy), or a plain row when there is none. */
+function LinkRow({ url, label, children }: { url: string | null; label: string; children: ReactNode }) {
+  if (url === null) return <View className="min-h-11 flex-row items-center gap-2 px-1.5">{children}</View>;
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      onPress={() => void Linking.openURL(url)}
+      className="min-h-11 flex-row items-center gap-2 rounded-md px-1.5 active:opacity-70"
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** The host, as the web preview row names it; the environment when there is no URL, the raw URL when it is not absolute. */
+function previewLabel(preview: PrOverview["previews"][number]): string {
+  if (preview.url === null) return preview.environment;
+  try {
+    return new URL(preview.url).hostname || preview.url;
+  } catch {
+    return preview.url;
+  }
+}
+
+/**
+ * The web `SummarySection`: a quiet 44 high heading (muted `text-xs` medium
+ * and a chevron that turns open) that folds its body. `actions` sit beside it.
+ */
+function Section({
+  title,
+  defaultOpen = true,
+  actions,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const muted = EVA_THEME[useScheme()].mutedForeground;
+  return (
+    <View>
+      <View className="flex-row items-center pr-4">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityState={{ expanded: open }}
+          onPress={() => setOpen(!open)}
+          className="min-h-11 min-w-0 flex-1 flex-row items-center gap-1.5 px-4 active:opacity-70"
+        >
+          <Text numberOfLines={1} className="font-instrument-sans-medium shrink" style={[TEXT_XS, { color: muted, fontWeight: "500" }]}>
+            {title}
+          </Text>
+          <View style={open ? { transform: [{ rotate: "90deg" }] } : undefined}>
+            <IconChevronRight size={13} color={withAlpha(muted, 0.6)} />
+          </View>
+        </Pressable>
+        {actions}
+      </View>
+      {open ? <View className="px-4 pb-4">{children}</View> : null}
+    </View>
+  );
+}
+
+/** A quiet notice; `boxed` is the web `NOTICE_CLASS` (`bg-muted/50`, radius 6). */
+function Note({ scheme, boxed = false, children }: { scheme: Scheme; boxed?: boolean; children: string }) {
+  const theme = EVA_THEME[scheme];
+  return (
+    <Text
+      className={boxed ? "mt-2 rounded-md px-3 py-2" : "py-2"}
+      style={[TEXT_XS, { color: theme.mutedForeground }, boxed ? { backgroundColor: withAlpha(theme.muted, 0.5) } : null]}
+    >
+      {children}
+    </Text>
+  );
+}
+
+/**
+ * The web `SummaryComments`: people first, newest first by default, ten at a
+ * time; bots folded into one group beneath them. The order toggle is not
+ * remembered between visits, as the web keeps it in local storage.
+ */
+function Comments({ overview, scheme }: { overview: PrOverview; scheme: Scheme }) {
+  const [order, setOrder] = useState<"newest" | "oldest">("newest");
+  const [shown, setShown] = useState(COMMENT_PAGE);
+  const all = buildSummaryComments(overview);
+  const { people, bots } = splitSummaryComments(all, order);
+  const visible = people.slice(0, shown);
+  const hidden = people.length - visible.length;
+  const muted = EVA_THEME[scheme].mutedForeground;
+
+  return (
+    <Section
+      title={`Comments (${all.length}${overview.commentsTruncated ? "+" : ""})`}
+      actions={
+        <Button
+          size="sm"
+          variant="ghost"
+          fullWidth={false}
+          leftIcon={<IconArrowsSort size={14} color={muted} />}
+          accessibilityLabel={order === "newest" ? "Show oldest comments first" : "Show newest comments first"}
+          onPress={() => setOrder(order === "newest" ? "oldest" : "newest")}
+        >
+          {order === "newest" ? "Newest first" : "Oldest first"}
+        </Button>
+      }
+    >
+      {overview.commentsTruncated ? (
+        <Note scheme={scheme} boxed>
+          {`This conversation is longer than one read. The most recent ${overview.comments.length} are here; open it on GitHub to read the rest.`}
+        </Note>
+      ) : null}
+      {all.length === 0 ? (
+        <Note scheme={scheme}>No comments yet.</Note>
+      ) : (
+        <View className="gap-3">
+          {visible.map((comment) => (
+            <CommentCard key={comment.key} comment={comment} scheme={scheme} framed />
+          ))}
+          {hidden > 0 ? (
+            <Button size="sm" variant="outline" onPress={() => setShown(shown + COMMENT_PAGE)}>
+              {`Show ${Math.min(hidden, COMMENT_PAGE)} more (${hidden} hidden)`}
+            </Button>
+          ) : null}
+          {bots.length > 0 ? <BotGroup comments={bots} scheme={scheme} /> : null}
+        </View>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * The web `PrCommentCard`: the face, the login in semibold, the action and
+ * any verdict; then the age and the file and line; then the markdown. The
+ * GitHub link is the card's own press, as a phone has no hover to reveal it.
+ */
+function CommentCard({ comment, scheme, framed }: { comment: SummaryComment; scheme: Scheme; framed: boolean }) {
+  const theme = EVA_THEME[scheme];
+  const muted = theme.mutedForeground;
+  return (
+    <View className={framed ? "rounded-lg px-3 py-2.5" : "px-2 py-2"} style={framed ? { backgroundColor: theme.card } : undefined}>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`${comment.authorLogin ?? "ghost"} ${comment.action}. Open on GitHub`}
+        onPress={() => void Linking.openURL(comment.htmlUrl)}
+        className="flex-row items-start gap-2 active:opacity-70"
+      >
+        <View className="pt-0.5">
+          <PrAvatar login={comment.authorLogin} avatarUrl={comment.authorAvatarUrl} size={20} />
+        </View>
+        <View className="min-w-0 flex-1">
+          <View className="flex-row flex-wrap items-center gap-x-1.5">
+            <Text className="font-instrument-sans-semibold" style={[TEXT_XS, { color: theme.foreground, fontWeight: "600" }]}>
+              {comment.authorLogin ?? "ghost"}
+            </Text>
+            <Text style={[TEXT_XS, { color: muted }]}>{comment.action}</Text>
+            {comment.verdict === null ? null : (
+              <Text className="font-instrument-sans-medium" style={{ fontSize: 10, lineHeight: 14, color: muted, fontWeight: "500" }}>
+                {comment.verdict}
+              </Text>
+            )}
+          </View>
+          <View className="mt-0.5 flex-row flex-wrap items-center gap-x-2">
+            {comment.at === null ? null : <Text style={[TEXT_2XS, { color: muted }]}>{timeAgo(new Date(comment.at).getTime())}</Text>}
+            {comment.path ? (
+              <View className="min-w-0 flex-row items-center gap-1">
+                <IconFileCode size={11} color={muted} />
+                <Text numberOfLines={1} className="min-w-0 shrink" style={[TEXT_2XS, { color: muted, fontFamily: "monospace" }]}>
+                  {`${comment.path}${comment.line === undefined || comment.line === null ? "" : `:${comment.line}`}`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+        <IconExternalLink size={12} color={muted} />
+      </Pressable>
+      {comment.body.trim().length > 0 ? (
+        <View className="mt-2">
+          <Markdown>{comment.body}</Markdown>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The web `BotGroup`: bot remarks folded behind one row naming how many and when. */
+function BotGroup({ comments, scheme }: { comments: readonly SummaryComment[]; scheme: Scheme }) {
+  const [open, setOpen] = useState(false);
+  const theme = EVA_THEME[scheme];
+  const muted = theme.mutedForeground;
+  const authors = [...new Map(comments.map((comment) => [comment.authorLogin, comment])).values()];
+  const latest = comments[0]?.at ?? null;
+  return (
+    <View className="overflow-hidden rounded-lg" style={{ backgroundColor: theme.card }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+        className="min-h-11 flex-row items-center gap-3 px-3 py-2.5 active:opacity-70"
+      >
+        <View className="flex-row">
+          {authors.slice(0, 3).map((author, index) => (
+            <View key={author.authorLogin} className="rounded-full" style={{ marginLeft: index === 0 ? 0 : -6, borderWidth: 2, borderColor: theme.card }}>
+              <PrAvatar login={author.authorLogin} avatarUrl={author.authorAvatarUrl} size={20} />
+            </View>
+          ))}
+        </View>
+        <View className="min-w-0 flex-1">
+          <Text className="font-instrument-sans-medium" style={[TEXT_XS, { color: theme.foreground, fontWeight: "500" }]}>
+            {`${comments.length} bot ${comments.length === 1 ? "comment" : "comments"}`}
+          </Text>
+          <Text style={[TEXT_2XS, { color: muted }]}>
+            {`${authors.length} ${authors.length === 1 ? "author" : "authors"}${latest === null ? "" : ` · Latest ${timeAgo(new Date(latest).getTime())}`}`}
+          </Text>
+        </View>
+        <View style={open ? { transform: [{ rotate: "90deg" }] } : undefined}>
+          <IconChevronRight size={13} color={muted} />
+        </View>
+      </Pressable>
+      {open ? (
+        <View className="gap-1 px-1 pb-1">
+          {comments.map((comment) => (
+            <CommentCard key={comment.key} comment={comment} scheme={scheme} framed={false} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}

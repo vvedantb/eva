@@ -1,7 +1,10 @@
 "use client";
 
-import type { FunctionReturnType } from "convex/server";
-import type { api } from "@eva/backend";
+import {
+  reviewStateMeta,
+  type PrOverview,
+  type StatusTone,
+} from "@eva/shared";
 import { Spinner } from "@vvedantb/ui";
 import {
   IconCircleCheck,
@@ -16,34 +19,21 @@ import {
 } from "@tabler/icons-react";
 
 /**
- * Convex is the single source of truth for the Overview shape — every card
- * below indexes into this type rather than restating fields.
+ * The overview shape and its pure readings live in `@eva/shared` (`prReview`),
+ * shared with the phone review screen; this file adds the web glyphs and
+ * classes. Every card indexes into these types rather than restating fields.
  */
-export type PrOverview = FunctionReturnType<
-  typeof api.github.getPullRequestOverview
->;
-export type PrCheck = PrOverview["checks"][number];
+export {
+  checkTone,
+  reviewStateMeta,
+  type PrCheck,
+  type PrOverview,
+  type StatusTone,
+} from "@eva/shared";
 export type PrReviewEvent = PrOverview["reviewEvents"][number];
 export type PrCommit = PrOverview["commits"][number];
 export type PrComment = PrOverview["comments"][number];
 export type PrLabel = PrOverview["labels"][number];
-
-export type StatusTone = "success" | "failure" | "pending" | "neutral";
-
-/** Maps a check run or commit status onto one of four visual tones. */
-export function checkTone(check: PrCheck): StatusTone {
-  if (check.status !== "completed") return "pending";
-  if (check.conclusion === "success") return "success";
-  if (
-    check.conclusion === "failure" ||
-    check.conclusion === "timed_out" ||
-    check.conclusion === "cancelled" ||
-    check.conclusion === "action_required"
-  ) {
-    return "failure";
-  }
-  return "neutral";
-}
 
 export function ToneIcon({
   tone,
@@ -137,23 +127,6 @@ export const SECTION_LABEL_CLASS =
 /** Shared idiom for a quiet, non-blocking notice (truncation, empty states). */
 export const NOTICE_CLASS =
   "rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground";
-
-/**
- * Review states as GitHub words them, plus the tone that drives the icon.
- * "Commented" is deliberately neutral — it neither blocks nor unblocks.
- */
-export function reviewStateMeta(state: string): {
-  label: string;
-  tone: StatusTone;
-} {
-  if (state === "APPROVED") return { label: "Approved", tone: "success" };
-  if (state === "CHANGES_REQUESTED") {
-    return { label: "Requested changes", tone: "failure" };
-  }
-  if (state === "DISMISSED") return { label: "Dismissed", tone: "neutral" };
-  if (state === "PENDING") return { label: "Pending", tone: "pending" };
-  return { label: "Commented", tone: "neutral" };
-}
 
 export function ReviewStateIcon({ state }: { state: string }) {
   if (state === "COMMENTED") {

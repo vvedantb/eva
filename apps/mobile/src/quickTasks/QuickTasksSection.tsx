@@ -1,4 +1,4 @@
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { TASK_STATUS_LABELS, defaultQuickTaskSections, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChecklist, IconChevronRight, IconPlus } from "@tabler/icons-react-native";
@@ -6,28 +6,23 @@ import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
 import { useLargerText, withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
-import { RepoPicker } from "@/ui/RepoPicker";
+import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
-/**
- * The repo the Quick Tasks list shows, kept in the Sessions tab URL
- * (`?repo=`) as the web keeps it in its path. Default: the first repo.
- */
+/** The Quick Tasks repo (`useRepoParam`), and the new-task screen on it. */
 export function useQuickTaskRepo() {
   const router = useRouter();
-  const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
-  const repos = useQuery(api.githubRepos.list, {});
-  const repo = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
+  const { repos, repo, setRepo } = useRepoParam();
   return {
     repos,
     repo,
-    setRepo: (repoId: Id<"githubRepos">) => router.setParams({ repo: repoId }),
+    setRepo,
     /** The new-task screen, on this repo. */
     openNew: () =>
       router.push(repo ? { pathname: "/quick-task/new", params: { repoId: repo._id } } : "/quick-task/new"),

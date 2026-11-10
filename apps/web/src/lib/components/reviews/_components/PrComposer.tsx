@@ -14,7 +14,8 @@ import {
 import { IconMessage, IconTrash, IconX } from "@tabler/icons-react";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { PrCommentForm } from "./PrCommentForm";
-import { PrReviewForm, type ReviewEvent } from "./PrReviewForm";
+import type { ReviewEvent } from "@eva/shared";
+import { PrReviewForm } from "./PrReviewForm";
 
 type ComposerMode = "comment" | "review";
 
