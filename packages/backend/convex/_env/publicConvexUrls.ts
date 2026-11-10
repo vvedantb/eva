@@ -28,3 +28,31 @@ export function resolvePublicConvexSiteUrl(
   if (!cloud) return undefined;
   return cloud.replace(".convex.cloud", ".convex.site");
 }
+
+/** Convex Cloud API hosts, e.g. `happy-animal-123.convex.cloud` or a regional `….eu-west-1.convex.cloud`. */
+const CONVEX_CLOUD_HOST = /^([a-z0-9-]+\.)+convex\.cloud$/;
+
+/**
+ * Origin of a repo-configured Convex URL, or a thrown error. Eva sends the
+ * repo's deploy key to this URL, so it must be an https Convex Cloud host:
+ * anything else would hand the key to whoever controls the host.
+ */
+export function customerConvexOrigin(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Convex URL is not a valid URL");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username !== "" ||
+    parsed.password !== "" ||
+    !CONVEX_CLOUD_HOST.test(parsed.hostname)
+  ) {
+    throw new Error(
+      "Convex URL must be an https://<deployment>.convex.cloud URL",
+    );
+  }
+  return parsed.origin;
+}

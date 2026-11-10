@@ -22,7 +22,7 @@ import {
   PR_WATCH_TOOL_NAMES,
 } from "./tools";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
-import { supabaseTools } from "./supabase";
+import { supabaseProjectRef, supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
@@ -43,7 +43,10 @@ import {
 import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { chatSourceArg, repoRefLabel } from "./toolShared";
-import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
+import {
+  customerConvexOrigin,
+  resolvePublicConvexCloudUrl,
+} from "../_env/publicConvexUrls";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { signSandboxUserJwt } from "../sandboxJwt";
 import { evaMcpServerInfo } from "./serverInfo";
@@ -399,7 +402,9 @@ export const getRepoConvexCredentials = internalAction({
     if (!urlEntry || !keyEntry) return null;
 
     const creds: { convexUrl: string; deployKey: string; expiresAt: number } = {
-      convexUrl: urlEntry.value.replace(/\/$/, ""),
+      // Every deploy-key request (listTables, queryTable, runTestQuery) uses
+      // this URL, so this is the one place it is checked.
+      convexUrl: customerConvexOrigin(urlEntry.value.trim()),
       deployKey: keyEntry.value,
       expiresAt: Date.now() + CACHE_TTL_MS,
     };
@@ -1754,51 +1759,47 @@ export const orchestratorSetWatch = internalAction({
 // Supabase Proxy Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const supabaseTokenCache = new Map<
+const supabaseCredentialsCache = new Map<
   string,
-  { token: string; expiresAt: number }
+  { token: string; projectRef: string; expiresAt: number }
 >();
 
-export const resolveSupabaseToken = internalAction({
-  args: { clerkUserId: v.string() },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { clerkUserId }): Promise<string | null> => {
-    const cached = supabaseTokenCache.get(clerkUserId);
+/**
+ * The repo's own Supabase access token and project. A Supabase token reaches
+ * every project in its account, so tools only run against the project the
+ * repo names, never a token borrowed from another of the user's repos.
+ */
+export const resolveSupabaseCredentials = internalAction({
+  args: { repoId: v.string() },
+  returns: v.union(
+    v.object({ token: v.string(), projectRef: v.string() }),
+    v.null(),
+  ),
+  handler: async (
+    ctx,
+    { repoId },
+  ): Promise<{ token: string; projectRef: string } | null> => {
+    const cached = supabaseCredentialsCache.get(repoId);
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.token;
+      return { token: cached.token, projectRef: cached.projectRef };
     }
 
-    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
-      clerkId: clerkUserId,
-    });
-    if (!user) return null;
-    const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
-      userId: user._id,
-    });
+    const vars: EnvVar[] = await ctx.runAction(
+      internal.mcp.routes.getDecryptedRepoEnvVars,
+      { repoId },
+    );
+    const token = vars
+      .find((entry) => entry.key === "SUPABASE_ACCESS_TOKEN")
+      ?.value.trim();
+    const projectRef = supabaseProjectRef(vars);
+    if (!token || !projectRef) return null;
 
-    // Search for Supabase token in each repo's env vars
-    for (const { id: repoId } of repos) {
-      try {
-        const vars: EnvVar[] = await ctx.runAction(
-          internal.mcp.routes.getDecryptedRepoEnvVars,
-          { repoId },
-        );
-        const match: EnvVar | undefined = vars.find(
-          (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
-        );
-        if (match) {
-          supabaseTokenCache.set(clerkUserId, {
-            token: match.value,
-            expiresAt: Date.now() + CACHE_TTL_MS,
-          });
-          return match.value;
-        }
-      } catch {
-        // Skip failed repos
-      }
-    }
-
-    return null;
+    supabaseCredentialsCache.set(repoId, {
+      token,
+      projectRef,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+    return { token, projectRef };
   },
 });
 
