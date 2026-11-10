@@ -14,7 +14,13 @@ export function LandingPillarSection({ pillar }: { pillar: LandingPillar }) {
     <LandingSection id={pillar.id}>
       <LandingReveal>
         <LandingSectionHeading
-          eyebrow={`${pillar.step} — ${pillar.label}`}
+          split
+          eyebrow={
+            <>
+              <span className="text-foreground">{pillar.step}</span>
+              {pillar.label}
+            </>
+          }
           heading={pillar.heading}
           intro={pillar.intro}
         />

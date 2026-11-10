@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -7,18 +8,16 @@ import {
   entityAccess,
   entityRefArgs,
   entitySummary,
-  withSelfDefault,
   type EntityRef,
   type EntityTarget,
 } from "./entityRef";
 import {
-  errorResult,
   mcpCallAsUser,
   mcpGetContext,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { canonicalPrUrl } from "./sessionRef";
 import type { ChatDetails } from "./chatSelfQueries";
 
 const DEFAULT_LOG_LINES = 200;
@@ -81,7 +80,7 @@ export function chatSelfTools(
 ): EvaTool[] {
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
-  const { resolveEntityTarget } = entityAccess(ctx, credentials);
+  const { resolveEntityTarget, resolveChat } = entityAccess(ctx, credentials);
 
   /**
    * The sandbox id when the chat's sandbox is active and its VM is running
@@ -90,9 +89,9 @@ export function chatSelfTools(
   async function runningSandboxId(
     target: EntityTarget,
     action: string,
-  ): Promise<string | ReturnType<typeof errorResult>> {
+  ): Promise<string | ReturnType<typeof toolErrorResult>> {
     if (target.sandboxId === undefined || target.sandboxStatus !== "active") {
-      return errorResult(
+      return toolErrorResult(
         `This ${target.kind}'s sandbox is "${target.sandboxStatus}". ${action} only runs on an active sandbox; call start_sandbox first, or wait for it to settle.`,
       );
     }
@@ -101,7 +100,7 @@ export function chatSelfTools(
       { repoId: target.repoId, sandboxId: target.sandboxId },
     );
     if (!vm.running) {
-      return errorResult(
+      return toolErrorResult(
         `The VM is "${vm.vmState}", not running, so nothing was run. Call start_sandbox first.`,
       );
     }
@@ -118,25 +117,21 @@ export function chatSelfTools(
   }
 
   /** Resolves the named chat (or the caller's own) plus its details row. */
-  async function resolveChat(
+  async function resolveChatDetails(
     ref: EntityRef,
   ): Promise<
     | { target: EntityTarget; details: ChatDetails }
-    | ReturnType<typeof errorResult>
+    | ReturnType<typeof toolErrorResult>
   > {
-    const { userId } = await mcpGetContext(ctx, clerkUserId);
-    const resolved = await resolveEntityTarget(
-      withSelfDefault(ref, credentials),
-      userId,
-    );
-    if ("isError" in resolved) return resolved;
+    const resolved = await resolveChat(ref);
+    if ("content" in resolved) return resolved;
     const { target } = resolved;
     const details = await ctx.runQuery(
       internal.mcp.chatSelfQueries.getChatDetails,
       { kind: target.kind, id: target.targetId, repoId: target.repoId },
     );
     if (!details) {
-      return errorResult("That chat or its repo no longer exists.");
+      return toolErrorResult("That chat or its repo no longer exists.");
     }
     return { target, details };
   }
@@ -154,10 +149,10 @@ Name no chat and it answers for your own. Use it before guessing at ports, branc
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           status: target.status,
           baseBranch: details.baseBranch,
@@ -213,8 +208,8 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
           ),
       },
       handler: async ({ lines, ...ref }) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
         const summary = {
           ...entitySummary(target),
@@ -227,14 +222,14 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
           target.sandboxId === undefined ||
           target.sandboxStatus !== "active"
         ) {
-          return textResult({
+          return toolJsonResult({
             ...summary,
             logs: null,
             note: `This ${target.kind}'s sandbox is "${target.sandboxStatus}", so there is no dev server to read. Call start_sandbox first.`,
           });
         }
         if (details.devPort === undefined) {
-          return textResult({
+          return toolJsonResult({
             ...summary,
             logs: null,
             note: "No dev port is recorded for this chat yet; the sandbox may still be setting up.",
@@ -252,13 +247,13 @@ Name no chat and it reads your own. "lines" defaults to ${DEFAULT_LOG_LINES} (ma
           },
         );
         if (!result.running) {
-          return textResult({
+          return toolJsonResult({
             ...summary,
             logs: null,
             note: `The VM is "${result.vmState}", not running. Logs are not read from a stopped VM because that would wake it; call start_sandbox if you need it.`,
           });
         }
-        return textResult({
+        return toolJsonResult({
           ...summary,
           listenPort: result.listenPort,
           portListening: result.portListening,
@@ -286,20 +281,20 @@ Name no chat and it restarts your own. Refused while the sandbox is starting, st
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
 
         if (
           target.sandboxId === undefined ||
           UNSETTLED_SANDBOX_STATUSES.has(target.sandboxStatus)
         ) {
-          return errorResult(
+          return toolErrorResult(
             `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Restart only runs on an active sandbox; while it is starting, Eva launches the dev server itself.`,
           );
         }
         if (details.devPort === undefined || details.devCommand === undefined) {
-          return errorResult(
+          return toolErrorResult(
             "No dev command or port is recorded for this chat or its repo, so there is nothing to relaunch. Set them in the repo's app settings.",
           );
         }
@@ -316,11 +311,11 @@ Name no chat and it restarts your own. Refused while the sandbox is starting, st
           },
         );
         if (!result.restarted) {
-          return errorResult(
+          return toolErrorResult(
             `The VM is "${result.vmState}", not running, so nothing was restarted. Call start_sandbox first.`,
           );
         }
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           restarted: true,
           devPort: details.devPort,
@@ -345,8 +340,8 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
 
         const repoVars = await mcpCallAsUser(
@@ -382,7 +377,7 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
           excludedFromSandbox: row.sandboxExclude,
         }));
 
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           envVars,
           count: envVars.length,
@@ -431,11 +426,11 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
           ),
       },
       handler: async ({ key, reason, scope, ...ref }) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
         if (scope === "team" && details.repoTeamId === undefined) {
-          return errorResult(
+          return toolErrorResult(
             'This repo has no team, so a "team" var has nowhere to live. Use scope "repo".',
           );
         }
@@ -461,9 +456,9 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
           },
         );
         if (requestId === null) {
-          return errorResult("That chat no longer exists.");
+          return toolErrorResult("That chat no longer exists.");
         }
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           requestId,
           status: "requested",
@@ -504,10 +499,10 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
       },
       handler: async ({ path, port, ...ref }) => {
         if (path === undefined && port === undefined) {
-          return errorResult('Pass "path", "port" or both.');
+          return toolErrorResult('Pass "path", "port" or both.');
         }
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target } = chat;
         const owner = sandboxOwner(target);
 
@@ -535,7 +530,7 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
             z.null(),
           );
         }
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           ...(path !== undefined ? { previewPath: path } : {}),
           ...(port !== undefined ? { previewPort: port } : {}),
@@ -560,12 +555,12 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
 
         if (details.backgroundCommands.length === 0) {
-          return errorResult(
+          return toolErrorResult(
             "This repo has no background commands configured, so there is nothing to relaunch. Add them in the repo's app settings.",
           );
         }
@@ -596,7 +591,7 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
                 },
             z.null(),
           );
-          return textResult({
+          return toolJsonResult({
             ...summary,
             relaunched: "queued",
             note: "Relaunch queued. Check /tmp/bg-<index>.log in the sandbox in a few seconds to confirm each daemon came up.",
@@ -614,7 +609,7 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
             ...(session ? { sessionId: session._id } : {}),
           },
         );
-        return textResult({
+        return toolJsonResult({
           ...summary,
           relaunched: result.commandCount,
           errors: result.errors,
@@ -642,12 +637,12 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
-        const chat = await resolveChat(ref);
-        if ("isError" in chat) return chat;
+        const chat = await resolveChatDetails(ref);
+        if ("content" in chat) return chat;
         const { target, details } = chat;
 
         if (details.startupCommands.length === 0) {
-          return errorResult(
+          return toolErrorResult(
             "This repo has no startup commands configured, so there is nothing to re-run. Add them in the repo's app settings.",
           );
         }
@@ -661,7 +656,7 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
             target.sandboxStatus === "starting" ||
             target.sandboxStatus === "stopping"
           ) {
-            return errorResult(
+            return toolErrorResult(
               `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Wait for it to settle before re-running startup commands.`,
             );
           }
@@ -683,7 +678,7 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
                 },
             z.null(),
           );
-          return textResult({
+          return toolJsonResult({
             ...summary,
             rerun: "started",
             note: 'The sandbox startup flow is running with startup commands forced. Its status is "starting" until it finishes; check get_chat_context, then get_dev_server_logs.',
@@ -704,10 +699,116 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           repoId: target.repoId,
           force: true,
         });
-        return textResult({
+        return toolJsonResult({
           ...summary,
           rerun: "scheduled",
           note: "Startup commands are running in the background. There is no progress signal: check the effect (for example, the seeded data) after a few minutes.",
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // watch_pull_request / unwatch_pull_request
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** The chat this agent runs in. Watches always wake the chat that asked. */
+  async function ownChat(): Promise<
+    EntityTarget | ReturnType<typeof toolErrorResult>
+  > {
+    const { entityId, entityKind } = credentials;
+    if (entityId === undefined || entityKind === undefined) {
+      return toolErrorResult(
+        "Only an agent running inside an Eva session, quick task or project can watch a pull request.",
+      );
+    }
+    const { userId } = await mcpGetContext(ctx, clerkUserId);
+    const resolved = await resolveEntityTarget(
+      { id: entityId, kind: entityKind },
+      userId,
+    );
+    return "content" in resolved ? resolved : resolved.target;
+  }
+
+  /** The canonical link, undefined for "default", or null when malformed. */
+  function watchPrUrl(prUrl: string | undefined): string | undefined | null {
+    return prUrl === undefined ? undefined : canonicalPrUrl(prUrl);
+  }
+  const BAD_PR_URL =
+    'prUrl must be a GitHub pull request link, e.g. "https://github.com/acme/app/pull/12".';
+
+  const watchPrArgs = {
+    prUrl: z
+      .string()
+      .optional()
+      .describe(
+        "One of this chat's own pull requests. Omit it for the chat's main open pull request.",
+      ),
+  };
+
+  tools.push(
+    defineTool({
+      name: "watch_pull_request",
+      description: `Watch one of this chat's pull requests after you open or update it. Eva wakes this chat with a message when something needs you:
+- a check newly fails on the PR's head commit,
+- all required checks pass (all checks when none is required),
+- a reviewer with write access comments or reviews (your own and other bots' comments never wake you),
+- the branch starts to conflict with its base branch.
+Several changes close together arrive as one message, queued after any turn already running. Act on it, then end your turn; Eva keeps watching.
+
+The watch ends when the PR merges or closes, when you call unwatch_pull_request, after 10 comment-only wakes in a row, or when GitHub cannot read the PR for 15 minutes. It does not report the current state: run \`gh pr checks\` now if you need it. Only pull requests linked to this chat can be watched.`,
+      mutating: true,
+      input: watchPrArgs,
+      handler: async ({ prUrl }) => {
+        const url = watchPrUrl(prUrl);
+        if (url === null) return toolErrorResult(BAD_PR_URL);
+        const target = await ownChat();
+        if ("content" in target) return target;
+        const reply = await ctx.runMutation(
+          internal._pullRequests.watch.startWatch,
+          {
+            kind: target.kind,
+            id: target.targetId,
+            ...(target.kind === "session" && credentials.chatId !== undefined
+              ? { sessionChatId: credentials.chatId }
+              : {}),
+            ...(url === undefined ? {} : { prUrl: url }),
+          },
+        );
+        if (!reply.ok) return toolErrorResult(reply.error);
+        return toolJsonResult({
+          watching: { url: reply.prUrl, number: reply.prNumber },
+          note: "Eva wakes this chat on the next failed or passing checks, new review feedback, or a merge conflict. End your turn when you have nothing else to do.",
+        });
+      },
+    }),
+  );
+
+  tools.push(
+    defineTool({
+      name: "unwatch_pull_request",
+      description: `Stop watching this chat's pull requests (see watch_pull_request). Name one with prUrl, or omit it to stop every watch this chat has.`,
+      mutating: true,
+      input: watchPrArgs,
+      handler: async ({ prUrl }) => {
+        const url = watchPrUrl(prUrl);
+        if (url === null) return toolErrorResult(BAD_PR_URL);
+        const target = await ownChat();
+        if ("content" in target) return target;
+        const stopped = await ctx.runMutation(
+          internal._pullRequests.watch.stopWatchForChat,
+          {
+            kind: target.kind,
+            id: target.targetId,
+            ...(url === undefined ? {} : { prUrl: url }),
+          },
+        );
+        return toolJsonResult({
+          stopped,
+          note:
+            stopped.length === 0
+              ? "No watched pull request matched; nothing changed."
+              : "Eva no longer wakes this chat for these pull requests.",
         });
       },
     }),

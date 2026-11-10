@@ -3,7 +3,14 @@
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
 import { isTitleRegenerating } from "@eva/shared";
-import { ContextMenuItem, ContextMenuSeparator, toast } from "@eva/ui";
+import {
+  ContextMenuItem,
+  ContextMenuSeparator,
+  toast,
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  convexErrorMessage,
+} from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,
@@ -13,15 +20,14 @@ import {
   IconGitBranch,
   IconGitFork,
   IconLink,
+  IconLinkOff,
   IconPencil,
   IconSparkles,
 } from "@tabler/icons-react";
 import { useAction } from "convex/react";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { convexErrorMessage } from "@/lib/utils/convexErrorMessage";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 
 export interface SessionMenuSession {
   _id: Id<"sessions">;
@@ -60,6 +66,8 @@ interface SessionMenuItemsProps {
   onArchiveRequest?: () => void;
   /** Archived list: unarchive. */
   onUnarchive?: () => Promise<void>;
+  /** Rows in a linked-session group: take the session out of the group. */
+  onRemoveFromGroup?: () => void;
 }
 
 /**
@@ -76,6 +84,7 @@ export function SessionMenuItems({
   onSendForReview,
   onArchiveRequest,
   onUnarchive,
+  onRemoveFromGroup,
 }: SessionMenuItemsProps) {
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
   const forkSession = useAction(api.sandbox.forkSession);
@@ -195,6 +204,15 @@ export function SessionMenuItems({
             <IconEye size={16} className="text-status-code-review" />
             Send for Review
             <ConfirmSkipHint />
+          </ContextMenuItem>
+        </>
+      ) : null}
+      {onRemoveFromGroup ? (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={onRemoveFromGroup}>
+            <IconLinkOff size={16} />
+            Remove from group
           </ContextMenuItem>
         </>
       ) : null}

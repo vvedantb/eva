@@ -7,7 +7,7 @@ import {
   PopoverContent,
   Calendar,
   Button,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconCalendarPlus } from "@tabler/icons-react";
 
 interface ScheduleDatesPopoverProps {

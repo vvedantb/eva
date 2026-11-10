@@ -8,8 +8,69 @@ export interface AssistantCitation {
   readonly comment: string;
 }
 
+export type CitationMessageSegment =
+  | { readonly kind: "text"; readonly id: string; readonly text: string }
+  | {
+      readonly kind: "citation";
+      readonly id: string;
+      readonly messageId: string;
+      readonly text: string;
+      readonly comment: string;
+    };
+
+const CITATION_BLOCK_PATTERN =
+  /<cited_assistant messageId="([^"]*)">\n?([\s\S]*?)\n?<\/cited_assistant>/g;
+const CITATION_COMMENT_SEPARATOR = "\n\nComment: ";
+
 function escapeCitationText(value: string): string {
   return value.replaceAll("<", "\\u003c");
+}
+
+function unescapeCitationText(value: string): string {
+  return value.replaceAll("\\u003c", "<");
+}
+
+/** Splits a sent prompt back into text runs and `<cited_assistant>` blocks. */
+export function parseCitationSegments(
+  value: string,
+): ReadonlyArray<CitationMessageSegment> {
+  const segments: CitationMessageSegment[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(CITATION_BLOCK_PATTERN)) {
+    const start = match.index;
+    if (start > cursor) {
+      segments.push({
+        kind: "text",
+        id: `cite-text:${cursor}`,
+        text: value.slice(cursor, start),
+      });
+    }
+    // The quote is whitespace-collapsed on create, so the first blank line
+    // can only be the comment separator.
+    const body = match[2] ?? "";
+    const split = body.indexOf(CITATION_COMMENT_SEPARATOR);
+    segments.push({
+      kind: "citation",
+      id: `cite:${start}`,
+      messageId: unescapeCitationText(match[1] ?? ""),
+      text: unescapeCitationText(split < 0 ? body : body.slice(0, split)),
+      comment:
+        split < 0
+          ? ""
+          : unescapeCitationText(
+              body.slice(split + CITATION_COMMENT_SEPARATOR.length),
+            ),
+    });
+    cursor = start + match[0].length;
+  }
+  if (cursor < value.length) {
+    segments.push({
+      kind: "text",
+      id: `cite-text:${cursor}`,
+      text: value.slice(cursor),
+    });
+  }
+  return segments;
 }
 
 export function citationPreview(citation: AssistantCitation): string {

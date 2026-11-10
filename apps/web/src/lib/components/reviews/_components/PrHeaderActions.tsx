@@ -13,7 +13,9 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconExternalLink,
@@ -24,7 +26,6 @@ import {
 import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
-import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
 
 /**
  * The header's right-hand cluster, in t3code's order: the one filled button that
@@ -53,7 +54,7 @@ export function PrHeaderActions({
   const update = useAction(api.github.updatePullRequest);
   const [closing, setClosing] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const close = async () => {
     setClosing(true);
@@ -87,7 +88,9 @@ export function PrHeaderActions({
             size="icon-xs"
             variant="ghost"
             aria-label={
-              refreshing ? "Refreshing pull request" : "More pull request actions"
+              refreshing
+                ? "Refreshing pull request"
+                : "More pull request actions"
             }
           >
             <CrossfadeIcon
@@ -111,7 +114,11 @@ export function PrHeaderActions({
             Copy link
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <a href={overview.htmlUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={overview.htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <IconExternalLink size={14} aria-hidden />
               View on GitHub
             </a>
@@ -127,7 +134,6 @@ export function PrHeaderActions({
                 disabled={closing}
                 onSelect={() =>
                   requestConfirm(
-                    altHeld,
                     () => setConfirmingClose(true),
                     () => {
                       void close();

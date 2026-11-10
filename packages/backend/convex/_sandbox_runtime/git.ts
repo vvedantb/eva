@@ -3,8 +3,11 @@
 import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
+import {
+  AUTO_PUBLISH_BRANCH_GIT_CONFIG,
+  COMMIT_EXCLUDE_PATHSPECS,
+} from "@eva/shared/gitDefaults";
 import { getInstallationToken } from "../githubAuth";
-import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type {
   SandboxClient,
@@ -30,7 +33,10 @@ import {
 } from "./devServer";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { writeSandboxFile } from "./sandboxFiles";
-import { ensureGitCredentialHelper } from "./gitCredentials";
+import {
+  deleteSandboxAndCredentials,
+  ensureGitCredentialHelper,
+} from "./gitCredentials";
 import { isMissingRemoteRefFetchFailure } from "../_git/remoteRef";
 import { gitRemoteAuthPrefix } from "./gitRemoteCommand";
 import {
@@ -259,21 +265,18 @@ function isSafeBranchName(branchName: string): boolean {
   return /^[^\s\\:?*[~^]+$/.test(branchName) && !branchName.includes("..");
 }
 
-/** Transient git failure (network, GitHub 5xx, token race) worth a retry. */
-export function isRetryableGitNetworkError(message: string): boolean {
+/**
+ * Transport-level hiccup (exec timeout, dropped connection, TLS, gateway 5xx),
+ * never a real command failure. Sandbox setup uses this scope alone, because
+ * it deletes and recreates the VM on retry.
+ */
+export function isTransientTransportError(message: string): boolean {
   const lower = message.toLowerCase();
   return (
     isSandboxExecTimeout(message) ||
-    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
-    lower.includes("internal server error") ||
-    lower.includes("status code 500") ||
     lower.includes("status code 502") ||
     lower.includes("status code 503") ||
     lower.includes("status code 504") ||
-    lower.includes("status code 401") ||
-    lower.includes("http 401") ||
-    lower.includes("authentication failed") ||
-    lower.includes("could not read username") ||
     lower.includes("fetch failed") ||
     lower.includes("econnreset") ||
     lower.includes("econnrefused") ||
@@ -286,6 +289,37 @@ export function isRetryableGitNetworkError(message: string): boolean {
     lower.includes("rpc failed") ||
     lower.includes("early eof") ||
     lower.includes("http/2 stream")
+  );
+}
+
+/**
+ * Transient git push/fetch/clone failure: transport hiccups plus GitHub-side
+ * 500s and the installation-token race (401 or auth prompt right after a
+ * token rotation). Too broad for sandbox setup, where an auth failure is
+ * permanent.
+ */
+export function isRetryableGitNetworkError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    isTransientTransportError(message) ||
+    // GitHub-side hiccup on push: "! [remote rejected] … (Internal Server Error)".
+    lower.includes("internal server error") ||
+    lower.includes("status code 500") ||
+    lower.includes("status code 401") ||
+    lower.includes("http 401") ||
+    lower.includes("authentication failed") ||
+    lower.includes("could not read username")
+  );
+}
+
+/**
+ * Session checkout and dependency install: transport hiccups plus a bare
+ * "network" (npm "network request … failed", git "Network is unreachable").
+ */
+export function isRetryableSessionStepError(message: string): boolean {
+  return (
+    isTransientTransportError(message) ||
+    message.toLowerCase().includes("network")
   );
 }
 
@@ -303,12 +337,24 @@ function isNonFastForwardPushError(message: string): boolean {
   );
 }
 
-/** Retries transient git network operations with short backoff. */
-async function retryGitNetworkOperation<T>(
+/**
+ * Retries a sandbox step on transient failures with linear backoff
+ * (`delayStepMs * attempt`). `isRetryable` picks the scope; git operations
+ * default to `isRetryableGitNetworkError`.
+ */
+export async function retryGitNetworkOperation<T>(
   label: string,
   details: string,
   fn: () => Promise<T>,
-  maxAttempts = 3,
+  {
+    maxAttempts = 3,
+    delayStepMs = 1000,
+    isRetryable = isRetryableGitNetworkError,
+  }: {
+    maxAttempts?: number;
+    delayStepMs?: number;
+    isRetryable?: (message: string) => boolean;
+  } = {},
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -321,18 +367,15 @@ async function retryGitNetworkOperation<T>(
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const shouldRetry =
-        attempt < maxAttempts && isRetryableGitNetworkError(message);
+      const shouldRetry = attempt < maxAttempts && isRetryable(message);
       if (!shouldRetry) {
         throw error;
       }
-      const delayMs = 1000 * attempt;
+      const delayMs = delayStepMs * attempt;
       logGit(
         `${label} retrying in ${delayMs}ms after attempt ${attempt}/${maxAttempts}${details ? ` (${details})` : ""}: ${message}`,
       );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
+      await sleep(delayMs);
     }
   }
   throw new Error(
@@ -432,9 +475,9 @@ export async function createSandbox(
     // before return, their `sandbox` var stays unset and they cannot delete —
     // so orphans must be cleaned up here.
     try {
-      if (onSandboxAcquired) {
-        await onSandboxAcquired(sandbox);
-      }
+      // Env file first: early-ready below lets the session start its agent
+      // daemon, and the runner sources this file once at spawn — the snapshot's
+      // copy carries a stale token and stale repo env vars.
       const token = await tokenPromise;
       await runLoggedGitStep("createSandbox.writeEvaEnv", sandbox.id, () =>
         writeSandboxFile(
@@ -453,27 +496,15 @@ export async function createSandbox(
           }) + AGENT_CLI_PATH_LINE,
         ),
       );
+      if (onSandboxAcquired) {
+        await onSandboxAcquired(sandbox);
+      }
       // Must run before any install: it turns the raw Drive mount into the
       // writable cache root the env above points at. Never fails a create —
       // the script itself soft-fails to a plain directory.
       await runLoggedGitStep("createSandbox.driveCache", sandbox.id, () =>
         execHandle(sandbox, driveCacheSetupScript(), 60, "/"),
       );
-      // Belt-and-suspenders for login shells; tmux Console already sources
-      // eva-env. Never fail create over this hook.
-      try {
-        await runLoggedGitStep(
-          "createSandbox.ensureEvaEnvInteractiveHook",
-          sandbox.id,
-          () =>
-            execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
-        );
-      } catch (hookError) {
-        console.warn(
-          `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
-        );
-      }
-
       const appSlug = process.env.GITHUB_APP_SLUG;
       const botUserId = process.env.GITHUB_BOT_USER_ID;
       if (!appSlug || !botUserId) {
@@ -481,61 +512,63 @@ export async function createSandbox(
           "GITHUB_APP_SLUG and GITHUB_BOT_USER_ID must be set in Convex env",
         );
       }
-      // Fresh Vercel sandboxes ship without `jq`, which the git credential
-      // helper (git-credential-eva) shells out to on every authenticated
-      // fetch/push. Without it, syncRepo/fetchBaseBranch fail with exit 128
-      // ("jq: command not found") before the seed toolchain stage ever runs.
-      // Timed individually (vs. one blanket log) so slow session creates can be
-      // attributed to a specific step from Convex logs alone.
-      await runLoggedGitStep("createSandbox.ensureJq", sandbox.id, () =>
-        execHandle(
-          sandbox,
-          `${PACKAGE_HELPER_SCRIPT}\ncommand -v jq >/dev/null 2>&1 || ${pkgInstall("jq")} || true`,
-          120,
+      // The steps below are independent of each other, so they run in
+      // parallel: every exec is a ~0.5s round trip, and this whole block sits
+      // before the session's first-turn gate (measured 7.3s serial). Docker is
+      // not here: see startDockerBootstrap in createSandboxAndPrepareRepo.
+      await Promise.all([
+        // Every sandbox eva creates — session, quick task, project chat or seed
+        // prep — starts here, and the memory-hungry stages that follow
+        // (snapshot dependency install, `next build`, the first Convex backend
+        // open) all run before any resume path could provision swap.
+        // ensureSandboxRunning covers later boots; this covers the first one.
+        runLoggedGitStep("createSandbox.ensureSwap", sandbox.id, () =>
+          ensureSwapFile(sandbox),
         ),
-      );
-      await runLoggedGitStep(
-        "createSandbox.gitConfig",
-        sandbox.id,
-        async () => {
-          await execHandle(
-            sandbox,
-            `git config --global user.name "${appSlug}[bot]" && git config --global user.email "${botUserId}+${appSlug}[bot]@users.noreply.github.com"`,
-            10,
+        // Belt-and-suspenders for login shells; tmux Console already sources
+        // eva-env. Never fail create over this hook.
+        runLoggedGitStep(
+          "createSandbox.ensureEvaEnvInteractiveHook",
+          sandbox.id,
+          () =>
+            execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
+        ).catch((hookError) => {
+          console.warn(
+            `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
           );
-          // Snapshot-restored /tmp/repo is owned by vercel-sandbox; session git
-          // commands run as a different uid and hit "dubious ownership" without this.
-          await execHandle(
+        }),
+        // Fresh Vercel sandboxes ship without `jq`, which the git credential
+        // helper (git-credential-eva) shells out to on every authenticated
+        // fetch/push. Without it, syncRepo/fetchBaseBranch fail with exit 128
+        // ("jq: command not found") before the seed toolchain stage ever runs.
+        // Timed individually (vs. one blanket log) so slow session creates can
+        // be attributed to a specific step from Convex logs alone.
+        runLoggedGitStep("createSandbox.ensureJq", sandbox.id, () =>
+          execHandle(
             sandbox,
-            "git config --global --add safe.directory '*'",
+            `${PACKAGE_HELPER_SCRIPT}\ncommand -v jq >/dev/null 2>&1 || ${pkgInstall("jq")} || true`,
+            120,
+          ),
+        ),
+        runLoggedGitStep("createSandbox.gitConfig", sandbox.id, () =>
+          execHandle(
+            sandbox,
+            [
+              `git config --global user.name "${appSlug}[bot]"`,
+              `git config --global user.email "${botUserId}+${appSlug}[bot]@users.noreply.github.com"`,
+              // Snapshot-restored /tmp/repo is owned by vercel-sandbox; session
+              // git commands run as a different uid and hit "dubious ownership"
+              // without this.
+              "git config --global --add safe.directory '*'",
+              // Agents (esp. Cursor ship skills) often run `git pull` without
+              // --rebase/--no-rebase; modern git fatals on divergent branches
+              // unless a default is set. Rebase keeps session history linear.
+              "git config --global pull.rebase true",
+            ].join(" && "),
             10,
-          );
-          // Agents (esp. Cursor ship skills) often run `git pull` without
-          // --rebase/--no-rebase; modern git fatals on divergent branches unless
-          // a default is set. Rebase keeps session history linear when they do.
-          await execHandle(sandbox, "git config --global pull.rebase true", 10);
-        },
-      );
-
-      // Every sandbox eva creates — session, quick task, project chat or seed
-      // prep — starts here, and the memory-hungry stages that follow (snapshot
-      // dependency install, `next build`, the first Convex backend open) all run
-      // before any resume path could provision swap. ensureSandboxRunning covers
-      // later boots; this covers the first one.
-      await runLoggedGitStep("createSandbox.ensureSwap", sandbox.id, () =>
-        ensureSwapFile(sandbox),
-      );
-
-      // Start Docker daemon if available (for Docker-in-Docker / Supabase local
-      // dev). Idempotent — also re-invoked from ensureSandboxRunning on resume
-      // since dockerd doesn't survive auto-stop. Already fast-paths on an
-      // already-running daemon (`docker info` check first); the timing
-      // wrapper just makes that fast path visible in logs instead of assumed.
-      await runLoggedGitStep(
-        "createSandbox.bootstrapDocker",
-        sandbox.id,
-        () => bootstrapVercelDocker(sandbox),
-      );
+          ),
+        ),
+      ]);
 
       return sandbox;
     } catch (error) {
@@ -605,7 +638,7 @@ export async function fetchOrigin(
             opts?.timeoutSeconds ?? 240,
           );
         },
-        opts?.retryAttempts,
+        { maxAttempts: opts?.retryAttempts },
       );
       return { fetched: true };
     } catch (error) {
@@ -672,6 +705,15 @@ export async function fetchBranchRefs(
           }
           const fetchedBranches: string[] = [];
           for (const [index, refspec] of refspecs.entries()) {
+            // The combined fetch failed on a missing ref; if every other ref
+            // fetched, this last one is it. Skips a doomed ~0.9s round trip —
+            // a new session's never-pushed branch, on every first turn.
+            if (
+              index === refspecs.length - 1 &&
+              fetchedBranches.length === index
+            ) {
+              break;
+            }
             try {
               await execGitCommand(
                 sandbox,
@@ -691,7 +733,7 @@ export async function fetchBranchRefs(
           return fetchedBranches;
         }
       },
-      opts?.retryAttempts,
+      { maxAttempts: opts?.retryAttempts },
     );
   });
 }
@@ -811,7 +853,7 @@ async function pinBranchUpstream(
   try {
     await execGitCommand(
       sandbox,
-      `cd ${workspaceDir} && git config ${quote([`branch.${branchName}.remote`])} origin && git config ${quote([`branch.${branchName}.merge`])} ${quote([`refs/heads/${branchName}`])}`,
+      `cd ${workspaceDir} && ${pinBranchUpstreamShell(branchName)}`,
       15,
     );
   } catch (error) {
@@ -819,6 +861,11 @@ async function pinBranchUpstream(
       `pinBranchUpstream: failed for ${branchName} (continuing): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+/** Shell for {@link pinBranchUpstream}; run inside the workspace. */
+function pinBranchUpstreamShell(branchName: string): string {
+  return `git config ${quote([`branch.${branchName}.remote`])} origin && git config ${quote([`branch.${branchName}.merge`])} ${quote([`refs/heads/${branchName}`])}`;
 }
 
 /**
@@ -910,60 +957,45 @@ export async function checkoutSessionBranch(
 ): Promise<void> {
   const details = `branch=${branchName}, base=${baseBranch}`;
   await runLoggedGitStep("checkoutSessionBranch", details, async () => {
-    // Check if branch already exists locally via SDK
-    const branchList = await execSdkGitOperation(
-      sandbox,
-      `branches`,
-      () => sandbox.git.branches(WORKSPACE_DIR),
-      10,
-    );
-    if (branchList.branches.includes(branchName)) {
-      // Branch exists locally — check if we're already on it
-      const workspaceDir = workspaceDirShell();
-      const currentBranch = (
-        await execGitCommand(
-          sandbox,
-          `cd ${workspaceDir} && git branch --show-current`,
-          5,
-        )
-      ).trim();
-      if (currentBranch !== branchName) {
-        // Checkout using git command (more reliable than SDK for existing branches)
-        const quotedBranch = quote([branchName]);
-        await execGitCommand(
-          sandbox,
-          `cd ${workspaceDir} && git checkout ${quotedBranch}`,
-          20,
-        );
-      } else {
-        logGit(
-          `checkoutSessionBranch: already on ${branchName}, skipping checkout`,
-        );
-      }
-      // Also self-heals branches created before the upstream pin existed.
-      await pinBranchUpstream(sandbox, branchName);
-      return;
-    }
-    // Branch doesn't exist locally — create from remote tracking or base ref.
-    // `--no-track` on the base fallback: tracking the START POINT is what left
-    // the branch pointing at origin/<base>; pinBranchUpstream then pins the
-    // upstream to origin/<branchName> on both arms.
-    // `-f` on both arms: this path only runs on a fresh sandbox with no user
-    // work, but the dev server can re-dirty generated files between
-    // normalizeSnapshotWorktree and here (e.g. routeTree.gen.ts), and when the
-    // start point moves those files a plain checkout aborts — leaving the
-    // sandbox stuck on the base branch and publish refusing at session end.
-    const { ref: baseTarget } = await resolveBaseTarget(sandbox, baseBranch);
+    // One exec, not four: this sits on a new session's first-turn gate, and
+    // each exec is a ~0.5s round trip (measured 2.0s for the old sequence).
+    //
+    // Existing local branch: switch to it unless already there.
+    // New branch: create it from origin/<branch> when that exists, else from
+    // the best base (origin/<base>, then local <base>, then HEAD). `--no-track`
+    // on the base fallback: tracking the START POINT is what left the branch
+    // pointing at origin/<base>; the upstream pin below targets
+    // origin/<branchName> on both arms. `-f` on both arms: this path only runs
+    // on a fresh sandbox with no user work, but the dev server can re-dirty
+    // generated files between normalizeSnapshotWorktree and here (e.g.
+    // routeTree.gen.ts), and when the start point moves those files a plain
+    // checkout aborts — leaving the sandbox stuck on the base branch and
+    // publish refusing at session end.
+    //
+    // The upstream pin also self-heals branches created before it existed. It
+    // is best-effort, like before: a failed pin never fails the checkout.
     const quotedBranch = quote([branchName]);
     const quotedRemoteBranch = quote([`origin/${branchName}`]);
-    const quotedBase = quote([baseTarget]);
-    const workspaceDir = workspaceDirShell();
+    const quotedBase = quote([baseBranch]);
+    const pinUpstream = isSafeBranchName(branchName)
+      ? `{ ${pinBranchUpstreamShell(branchName)}; } || echo "pinBranchUpstream failed (continuing)" >&2`
+      : "true";
     await execGitCommand(
       sandbox,
-      `cd ${workspaceDir} && (git checkout -f -b ${quotedBranch} ${quotedRemoteBranch} || git checkout -f --no-track -b ${quotedBranch} ${quotedBase})`,
+      [
+        `cd ${workspaceDirShell()} || exit 1`,
+        `if git show-ref --verify --quiet refs/heads/${quotedBranch}; then`,
+        `  if [ "$(git branch --show-current)" != ${quotedBranch} ]; then git checkout ${quotedBranch} || exit 1; fi`,
+        "else",
+        `  if git rev-parse --verify --quiet refs/remotes/origin/${quotedBase} >/dev/null 2>&1; then start=${quote([`origin/${baseBranch}`])}`,
+        `  elif git show-ref --verify --quiet refs/heads/${quotedBase}; then start=${quotedBase}`,
+        "  else start=HEAD; fi",
+        `  git checkout -f -b ${quotedBranch} ${quotedRemoteBranch} || git checkout -f --no-track -b ${quotedBranch} "$start" || exit 1`,
+        "fi",
+        pinUpstream,
+      ].join("\n"),
       30,
     );
-    await pinBranchUpstream(sandbox, branchName);
   });
 }
 
@@ -1131,41 +1163,19 @@ export async function cloneRepoInto(
 
   await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
 
-  const maxCloneAttempts = 3;
-  for (let attempt = 1; attempt <= maxCloneAttempts; attempt += 1) {
-    try {
-      await execSdkGitOperation(
+  await retryGitNetworkOperation(
+    "cloneRepoInto",
+    `${owner}/${name}`,
+    () =>
+      execSdkGitOperation(
         sandbox,
         `clone ${owner}/${name}`,
         () =>
           sandbox.git.clone(repoUrl, destDir, "x-access-token", githubToken),
         REPO_CLONE_TIMEOUT_SECONDS,
-      );
-      if (attempt > 1) {
-        logGit(
-          `cloneRepoInto: clone recovered on attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}`,
-        );
-      }
-      return;
-    } catch (error) {
-      if (!(error instanceof Error)) {
-        throw error;
-      }
-      const shouldRetry =
-        attempt < maxCloneAttempts &&
-        isRetryableGitNetworkError(error.message);
-      if (!shouldRetry) {
-        throw error;
-      }
-      const delayMs = attempt * 2000;
-      logGit(
-        `cloneRepoInto: clone retrying in ${delayMs}ms after attempt ${attempt}/${maxCloneAttempts} for ${owner}/${name}: ${error.message}`,
-      );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
-    }
-  }
+      ),
+    { delayStepMs: 2000 },
+  );
 }
 
 /**
@@ -1467,6 +1477,30 @@ async function synchronizeBranchForPublish(
 }
 
 /**
+ * True when Eva pinned auto-publish to `chatBranch` for this turn (see
+ * `applyBranchPublishPolicy`). Unreadable config means "not pinned", which is
+ * the old behaviour.
+ */
+async function isAutoPublishPinned(
+  sandbox: SandboxHandle,
+  workspaceDir: string,
+  chatBranch: string,
+): Promise<boolean> {
+  try {
+    const pinned = (
+      await execGitCommand(
+        sandbox,
+        `cd ${workspaceDir} && (git config --get ${quote([AUTO_PUBLISH_BRANCH_GIT_CONFIG])} || true)`,
+        10,
+      )
+    ).trim();
+    return pinned === chatBranch;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pushes the current branch to origin with retry logic.
  *
  * Auth comes from the eva git credential helper installed at sandbox
@@ -1495,6 +1529,14 @@ export async function pushBranchToOrigin(
       )
     ).trim();
     if (isChatSideBranch(currentBranch, branchName)) {
+      if (await isAutoPublishPinned(sandbox, workspaceDir, branchName)) {
+        // The sender's `manualSideBranchPublish` flag: the agent owns its side
+        // branches, and the chip's "Commit & push" publishes them on request.
+        logGit(
+          `pushBranchToOrigin: sandbox is on side branch ${currentBranch}; left unpublished by the branch policy (${details})`,
+        );
+        return { pushed: false, published: false };
+      }
       logGit(
         `pushBranchToOrigin: sandbox is on side branch ${currentBranch}; publishing it instead (${details})`,
       );
@@ -1511,6 +1553,76 @@ export async function pushBranchToOrigin(
       workspaceDir,
     });
   });
+}
+
+/**
+ * Pins turn-end auto-publish to `pinnedBranch`, or unpins it (null). Read by
+ * the callback's `persistTurnWork` and by `pushBranchToOrigin`, so both
+ * publish paths follow one per-turn setting.
+ */
+export async function writeAutoPublishPolicy(
+  sandbox: SandboxHandle,
+  pinnedBranch: string | null,
+): Promise<void> {
+  const key = quote([AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
+  const command =
+    pinnedBranch === null
+      ? `git config --unset ${key} || true`
+      : `git config ${key} ${quote([pinnedBranch])}`;
+  await execGitCommand(sandbox, `cd ${workspaceDirShell()} && ${command}`, 10);
+}
+
+/**
+ * Commits any uncommitted work on the checked-out branch and pushes it. The
+ * user asked for it ("Commit & push" on the branch chip), so a side branch is
+ * published too, whatever the auto-publish policy says. Eva-owned branches
+ * only: this never pushes main or a base branch.
+ */
+export async function commitAndPushCheckedOutBranch(
+  sandbox: SandboxHandle,
+  owner: string,
+  name: string,
+): Promise<{
+  branch: string;
+  sync: { uncommittedFiles: number; unpushedCommits: number };
+}> {
+  const workspaceDir = workspaceDirShell();
+  const branch = (
+    await execGitCommand(sandbox, `cd ${workspaceDir} && git branch --show-current`, 10)
+  ).trim();
+  if (!isEvaOwnedBranch(branch)) {
+    throw new Error(
+      branch === ""
+        ? "The sandbox is on a detached HEAD. Check out a branch first."
+        : `Eva only pushes eva/ branches. The sandbox is on ${branch}.`,
+    );
+  }
+  const pathspecs = quote(["--", ".", ...COMMIT_EXCLUDE_PATHSPECS]);
+  await execGitCommand(
+    sandbox,
+    `cd ${workspaceDir} && git add -A ${pathspecs} && (git diff --cached --quiet || git commit -q -m ${quote(["task: commit work from the sandbox"])})`,
+    30,
+  );
+  await pushBranchToOrigin(sandbox, owner, name, branch, {
+    timeoutSeconds: 90,
+    retryAttempts: 3,
+  });
+  const [uncommitted = "", unpushed = ""] = (
+    await execGitCommand(
+      sandbox,
+      `cd ${workspaceDir} && echo "$(git status --porcelain ${pathspecs} | wc -l)|$(git rev-list --count HEAD --not --remotes=origin)"`,
+      15,
+    )
+  )
+    .trim()
+    .split("|");
+  return {
+    branch,
+    sync: {
+      uncommittedFiles: Number(uncommitted) || 0,
+      unpushedCommits: Number(unpushed) || 0,
+    },
+  };
 }
 
 /** Syncs `branchName` with origin and pushes it; the sandbox must be on it. */
@@ -1600,9 +1712,7 @@ async function publishCheckedOutBranch(
       logGit(
         `pushBranchToOrigin: remote moved or push was transient; refetching in ${delayMs}ms after attempt ${attempt}/${maxAttempts} (${details}): ${message}`,
       );
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs);
-      });
+      await sleep(delayMs);
     }
   }
   throw new Error(`pushBranchToOrigin exhausted retries (${details})`);
@@ -1702,6 +1812,13 @@ function isSnapshotUnusableError(err: unknown): boolean {
   );
 }
 
+type PreparedSandbox = {
+  sandbox: SandboxHandle;
+  usedSnapshot: boolean;
+  /** Settles once dockerd is up (true) or unavailable (false). Never rejects. */
+  dockerReady: Promise<boolean>;
+};
+
 /** Creates a sandbox and prepares the repo by cloning or syncing from a snapshot. */
 export async function createSandboxAndPrepareRepo(
   ctx: ActionCtx,
@@ -1732,7 +1849,11 @@ export async function createSandboxAndPrepareRepo(
   forkFrom?: string,
   // Shared package-cache Drive role. See createSandbox.driveCacheRole.
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
-): Promise<{ sandbox: SandboxHandle; usedSnapshot: boolean }> {
+  // When true, return without waiting for dockerd; the caller must await
+  // `dockerReady` before anything that needs Docker. Docker takes 2.8s at p50
+  // and 14.6s at p90, which a new session's repo prep should not wait on.
+  deferDocker = false,
+): Promise<PreparedSandbox> {
   let sandbox: SandboxHandle | undefined;
   try {
     const details = `${owner}/${name}, forkFrom=${forkFrom ?? "none"}, snapshot=${snapshotName ?? "none"}, syncStrategy=${syncStrategy.mode}`;
@@ -1777,6 +1898,17 @@ export async function createSandboxAndPrepareRepo(
             throw err;
           }
         }
+        // After createSandbox, not inside it: a missing docker binary installs
+        // through the package manager, which must not race createSandbox's jq
+        // install. Idempotent and serialized by a flock, so a later
+        // ensureDockerDaemon simply waits for this one. Never throws.
+        const createdSandbox = sandbox;
+        const dockerReady = runLoggedGitStep(
+          "createSandbox.bootstrapDocker",
+          createdSandbox.id,
+          () => bootstrapVercelDocker(createdSandbox),
+        );
+        if (!deferDocker) await dockerReady;
         if (effectiveSnapshot || forkFrom) {
           // Deliberately no `installDependencies`/pnpm install on this path:
           // a seeded/base snapshot already carries node_modules from the seed
@@ -1797,7 +1929,7 @@ export async function createSandboxAndPrepareRepo(
             await syncRepo(sandbox, owner, name, syncStrategy);
           }
           await copySandboxConfigFilesToWorkspace(sandbox, { force: true });
-          return { sandbox, usedSnapshot: true };
+          return { sandbox, usedSnapshot: true, dockerReady };
         }
         if (lifecycle.ephemeral && syncStrategy.mode === "none") {
           await cloneAndSetupRepo(
@@ -1809,7 +1941,7 @@ export async function createSandboxAndPrepareRepo(
             false,
             onProgress,
           );
-          return { sandbox, usedSnapshot: false };
+          return { sandbox, usedSnapshot: false, dockerReady };
         }
         await cloneAndSetupRepo(
           ctx,
@@ -1824,18 +1956,12 @@ export async function createSandboxAndPrepareRepo(
           if (onProgress) await onProgress("Syncing repository...");
           await syncRepo(sandbox, owner, name, syncStrategy);
         }
-        return { sandbox, usedSnapshot: false };
+        return { sandbox, usedSnapshot: false, dockerReady };
       },
     );
   } catch (error) {
     if (sandbox) {
-      try {
-        await sandbox.delete();
-      } catch {}
-      // Best-effort cleanup of the credential-helper row. No-op if absent.
-      await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
-        sandboxId: sandbox.id,
-      });
+      await deleteSandboxAndCredentials(ctx, sandbox);
     }
     throw error;
   }

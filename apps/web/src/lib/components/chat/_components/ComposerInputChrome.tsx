@@ -1,21 +1,24 @@
+import { cn } from "@eva/ui";
 import {
   BorderBeam,
   Button,
+  CrossfadeIconSlot,
   InputGroupAddon,
   PromptInput,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTools,
+  SendQueueIcon,
+  Spinner,
   toast,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  cn,
-  motionFast,
-  motionSpring,
-  type PromptInputMessage,
+  tokenTransition,
+  springTransition,
   usePromptInputController,
-} from "@eva/ui";
+} from "@vvedantb/ui";
+import type { PromptInputMessage } from "@vvedantb/ui";
 import { AnimatePresence, LayoutGroup, m } from "motion/react";
 import { ComposerSpeechButton } from "@/lib/components/chat/_components/ComposerSpeechButton";
 import {
@@ -40,6 +43,11 @@ import { isComposerVisible } from "@/lib/components/chat/_components/composerVis
 import type { ComposerPredictionTarget } from "@/lib/hooks/useComposerPrediction";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
+import { usePendingPullRequests } from "@/lib/contexts/PendingPullRequestsContext";
+import {
+  PULL_REQUEST_DRAG_MIME,
+  decodePullRequestDragPayload,
+} from "@/lib/components/chat/pullRequestContext";
 
 // `whitespace-pre!` rather than `nowrap`: both keep the pill on one line, but
 // `nowrap` still collapses whitespace, and Chrome then eats the trailing space
@@ -79,6 +87,7 @@ export function ComposerInputChrome({
   messageHistory,
   allowEmptySubmit,
   predictionTarget,
+  warn = false,
   onDraftChange,
 }: {
   repo?: ChatRepo;
@@ -102,10 +111,15 @@ export function ComposerInputChrome({
   messageHistory: string[];
   allowEmptySubmit?: boolean;
   predictionTarget?: ComposerPredictionTarget;
+  /** Amber border while the draft-readiness nudge is up; it beats the focus border. */
+  warn?: boolean;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
+  // A PR row dropped here becomes a context chip. Absent outside ChatBody
+  // (Manager Ave), where the drop is left to the browser.
+  const pullRequests = usePendingPullRequests();
   // `layoutId` is global unless a LayoutGroup namespaces it, and several
   // composers stay mounted at once (cached session shells, Manager Ave). Two
   // composers sharing an id put one in the follower slot of Motion's shared
@@ -152,7 +166,7 @@ export function ComposerInputChrome({
     <m.div
       layout="position"
       layoutId="composer-left-tools"
-      transition={motionSpring}
+      transition={springTransition}
       className="flex items-center gap-1"
     >
       <ComposerPlusMenu
@@ -168,7 +182,7 @@ export function ComposerInputChrome({
     <m.div
       layout="position"
       layoutId="composer-right-tools"
-      transition={motionSpring}
+      transition={springTransition}
       className="flex min-w-0 items-center gap-0.5"
     >
       <ComposerSpeechButton disabled={isInputDisabled} />
@@ -180,7 +194,7 @@ export function ComposerInputChrome({
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             {/* A tooltip rather than `title`: the binding is a `ShortcutKbd`
                 that follows the user's own setting, and a title attribute can
@@ -191,7 +205,6 @@ export function ComposerInputChrome({
                   size="icon-sm"
                   type="button"
                   variant="destructive"
-                  className="rounded-full"
                   onClick={onCancel}
                   aria-label="Stop Eva"
                 >
@@ -232,6 +245,17 @@ export function ComposerInputChrome({
             maxFiles={MAX_CHAT_ATTACHMENTS}
             maxFileSize={MAX_CHAT_ATTACHMENT_BYTES}
             onError={(err) => toast.error(chatAttachmentErrorMessage(err))}
+            dataDrop={
+              pullRequests
+                ? {
+                    type: PULL_REQUEST_DRAG_MIME,
+                    onDrop: (payload) => {
+                      const pr = decodePullRequestDragPayload(payload);
+                      if (pr) pullRequests.add(pr);
+                    },
+                  }
+                : undefined
+            }
             inputGroupClassName={cn(
               // Height interpolates to/from `auto` so the conversation viewport
               // grows with the composer instead of jumping when the pill snaps.
@@ -239,6 +263,8 @@ export function ComposerInputChrome({
               compact
                 ? "h-12 items-center rounded-full py-1"
                 : "h-auto rounded-surface",
+              // `!`: the InputGroup focus state sets its own border and ring colour.
+              warn && "border-warning! ring-warning/40!",
             )}
           >
             <ChatAttachmentPreview />
@@ -315,9 +341,6 @@ function ChatBodySubmit({
         isUploading ||
         (isEmpty && !hasPendingContext && !allowEmptySubmit)
       }
-      // "submitted" is the button's own spinner state. Fetch uploads report no
-      // bytes, so a spinner is the honest signal — a percentage would be made up.
-      {...(isUploading ? { status: "submitted" as const } : {})}
       className="size-9"
       title={
         isUploading
@@ -326,6 +349,12 @@ function ChatBodySubmit({
             ? "Queue message"
             : "Send message"
       }
-    />
+    >
+      {/* Fetch uploads report no bytes, so a spinner is the honest signal — a
+          percentage would be made up. */}
+      <CrossfadeIconSlot iconKey={isUploading ? "uploading" : "send"}>
+        {isUploading ? <Spinner /> : <SendQueueIcon queued={isExecuting} />}
+      </CrossfadeIconSlot>
+    </PromptInputSubmit>
   );
 }

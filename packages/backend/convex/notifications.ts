@@ -12,6 +12,7 @@ import {
   withCommentAnchor,
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
+import { schedulePush } from "./push";
 
 /** Max unread notifications shown per user in the daily digest email. */
 const DIGEST_NOTIFICATION_LIMIT = 50;
@@ -38,6 +39,17 @@ const EMAIL_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
 const CONTEXT_LABEL_TYPES: ReadonlySet<string> = new Set([
   "mention",
   "comment_reply",
+  "routed_question",
+]);
+
+/**
+ * Notification types that also push to the mobile app: someone needs the
+ * user. Agent questions push from pendingQuestions.post, not from here. A
+ * routed chat mention (`routesUrgency`) pushes later instead, from
+ * `setUrgency` (not `low`) or the routing fallback.
+ */
+const PUSH_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  "mention",
   "routed_question",
 ]);
 
@@ -81,7 +93,7 @@ const DIGEST_EXCLUDED_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /** Builds a URL path for a repo, including app name for monorepo sub-apps. */
-function getRepoHref(
+export function getRepoHref(
   owner: string,
   name: string,
   rootDirectory?: string,
@@ -112,6 +124,9 @@ export async function createNotification(
     // Set by the comment paths (task comments, doc comments). Anchors the
     // click-through to the exact comment rather than the top of the page.
     commentId?: Id<"taskComments"> | Id<"docComments">;
+    // Set by chat mentions: mention routing decides urgency afterwards and
+    // pushes then, so a `low` mention never buzzes the phone.
+    routesUrgency?: boolean;
   },
 ): Promise<Id<"notifications">> {
   const type = params.type ?? "system";
@@ -168,6 +183,8 @@ export async function createNotification(
       contextLabel = session.title;
     }
   }
+  // Most specific chat first: a project task's own chat, not the project's.
+  const chatTarget = task?._id ?? session?._id ?? project?._id;
   const notificationId = await ctx.db.insert("notifications", {
     userId: params.userId,
     type,
@@ -177,9 +194,14 @@ export async function createNotification(
     repoId: params.repoId,
     contextLabel,
     commentId: params.commentId,
+    chatTarget,
     read: false,
     createdAt: Date.now(),
   });
+
+  if (PUSH_NOTIFICATION_TYPES.has(type) && params.routesUrgency !== true) {
+    await pushNotification(ctx, notificationId);
+  }
 
   // High-signal types get an instant email after a short debounce. The send is
   // skipped if the user reads it in-app first (see notificationEmail.ts).
@@ -193,6 +215,49 @@ export async function createNotification(
     );
   }
   return notificationId;
+}
+
+/** Pushes one notification row to the user's phone, opening its chat. */
+async function pushNotification(
+  ctx: MutationCtx,
+  notificationId: Id<"notifications">,
+): Promise<void> {
+  const notification = await ctx.db.get(notificationId);
+  if (!notification) return;
+  await schedulePush(ctx, {
+    userId: notification.userId,
+    title: notification.title,
+    body: notification.message ?? notification.contextLabel,
+    data: notification.chatTarget ? { target: notification.chatTarget } : undefined,
+  });
+}
+
+/**
+ * Fans one notification out to `userIds`, skipping the actor and anyone in
+ * `alreadyNotified` (e.g. reached by a higher-signal mention). Returns the
+ * running set of notified ids so callers can chain their own dedup set.
+ */
+export async function notifyUsers(
+  ctx: MutationCtx,
+  userIds: Iterable<Id<"users">>,
+  notification: Omit<Parameters<typeof createNotification>[1], "userId">,
+  opts: { actorId?: Id<"users">; alreadyNotified?: Set<string> } = {},
+): Promise<Set<string>> {
+  const notified = opts.alreadyNotified ?? new Set<string>();
+  for (const userId of userIds) {
+    if (opts.actorId && userId === opts.actorId) continue;
+    if (notified.has(userId)) continue;
+    await createNotification(ctx, { ...notification, userId });
+    notified.add(userId);
+  }
+  return notified;
+}
+
+/** Trims and truncates comment text for a notification message, or null if empty. */
+export function truncateNotificationText(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
 }
 
 const notificationValidator = v.object({
@@ -210,6 +275,7 @@ const notificationValidator = v.object({
   emailedAt: v.optional(v.number()),
   commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
   archivedAt: v.optional(v.number()),
+  chatTarget: v.optional(v.string()),
   // Undefined = not yet routed (a mention whose routing action has not landed)
   // or legacy; treated as normal everywhere it is read.
   urgency: v.optional(notificationUrgencyValidator),
@@ -218,7 +284,8 @@ const notificationValidator = v.object({
 /**
  * Records the urgency mention routing decided on, and — for `high` — schedules
  * the instant email `createNotification` deliberately skipped. `normal` falls
- * through to the daily digest and `low` stays in the inbox only.
+ * through to the daily digest and `low` stays in the inbox only. `high` and
+ * `normal` also push to the phone; `low` does not.
  *
  * Internal use only (mentionRouting.routeMentions). Exempt from the per-row
  * owner check every public notification function makes: the id comes from the
@@ -235,6 +302,9 @@ export const setUrgency = internalMutation({
     // Archived or deleted between creation and routing: nothing left to route.
     if (!notification) return null;
     await ctx.db.patch(args.notificationId, { urgency: args.urgency });
+    if (args.urgency !== "low") {
+      await pushNotification(ctx, args.notificationId);
+    }
     if (args.urgency === "high") {
       await ctx.scheduler.runAfter(
         HIGH_URGENCY_EMAIL_DELAY_MS,
@@ -248,19 +318,23 @@ export const setUrgency = internalMutation({
 
 /**
  * Falls back to the pre-routing behaviour when Jev could not judge a mention:
- * the same 15-minute debounced instant email every other high-signal type
- * gets. Leaves `urgency` unset, which reads as normal.
+ * the push and the same 15-minute debounced instant email every other
+ * high-signal type gets. Leaves `urgency` unset, which reads as normal.
  *
  * Internal use only (mentionRouting.routeMentions).
  */
 export const scheduleLegacyMentionEmail = internalMutation({
-  args: { userId: v.id("users") },
+  args: { notificationId: v.id("notifications") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const notification = await ctx.db.get(args.notificationId);
+    // Archived or deleted between creation and routing: nothing to deliver.
+    if (!notification) return null;
+    await pushNotification(ctx, args.notificationId);
     await ctx.scheduler.runAfter(
       EMAIL_SEND_DELAY_MS,
       internal.notificationEmail.sendUnreadForUser,
-      { userId: args.userId },
+      { userId: notification.userId },
     );
     return null;
   },
@@ -285,9 +359,9 @@ async function ownedNotifications(
       `Too many notifications: ${ids.length} (max ${BULK_ID_LIMIT})`,
     );
   }
+  const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
   const owned = [];
-  for (const id of ids) {
-    const notification = await ctx.db.get(id);
+  for (const notification of rows) {
     if (!notification || notification.userId !== userId) continue;
     owned.push(notification);
   }

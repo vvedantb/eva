@@ -5,6 +5,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
   execHandle,
+  getRunningSandboxHandle,
   getSandboxHandle,
   KILL_PRIOR_AGENT_PROCESSES_CMD,
   withTimeout,
@@ -164,8 +165,13 @@ export const killSandboxProcess = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-      await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
+      // Nothing to kill on a stopped VM, and an exec would resume it.
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (sandbox) await execHandle(sandbox, KILL_PRIOR_AGENT_PROCESSES_CMD, 10);
     } catch {
       // Sandbox may already be stopped/deleted
     }
@@ -304,7 +310,14 @@ export const captureStalledTurnDiagnostics = internalAction({
   returns: v.string(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      // Diagnostics only from a live VM: an exec on a stopped one resumes it,
+      // and a parallel kill/stop can then leave it running.
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (!sandbox) throw new Error("sandbox not running");
       const diagnostics = await execHandle(
         sandbox,
         KILL_DIAGNOSTICS_COMMAND,
@@ -333,7 +346,14 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+      // Diagnostics only from a live VM: an exec on a stopped one resumes it,
+      // and a parallel kill/stop can then leave it running.
+      const sandbox = await getRunningSandboxHandle(
+        ctx,
+        args.repoId,
+        args.sandboxId,
+      );
+      if (!sandbox) throw new Error("sandbox not running");
       const diagnostics = await execHandle(
         sandbox,
         KILL_DIAGNOSTICS_COMMAND,

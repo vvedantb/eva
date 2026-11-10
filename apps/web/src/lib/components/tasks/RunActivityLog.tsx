@@ -3,7 +3,7 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { ActivityTasks, Spinner } from "@eva/ui";
+import { ActivityTasks, Spinner } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 

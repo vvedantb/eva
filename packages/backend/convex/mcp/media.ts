@@ -31,11 +31,11 @@ export const getUrl = internalQuery({
     const storageId = ctx.db.system.normalizeId("_storage", args.storageId);
     if (!storageId) return null;
 
-    const meta = await ctx.db.system.get("_storage", storageId);
-    if (!meta) return null;
-
-    const url = await ctx.storage.getUrl(storageId);
-    if (!url) return null;
+    const [meta, url] = await Promise.all([
+      ctx.db.system.get("_storage", storageId),
+      ctx.storage.getUrl(storageId),
+    ]);
+    if (!meta || !url) return null;
 
     return {
       url,

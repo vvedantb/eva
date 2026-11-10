@@ -5,7 +5,7 @@ import {
   internalQuery,
   type MutationCtx,
 } from "../_generated/server";
-import { workflow, cancelTrackedWorkflow } from "../workflowManager";
+import { workflow } from "../workflowManager";
 import { authAction, authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
@@ -16,13 +16,16 @@ import {
 } from "../validators";
 import { trackSessionChatWorkflow } from "../workflowWatchdog";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
+  dropComposerUserRow,
 } from "../_queues/helpers";
-import { buildSessionPrompt, SESSION_TOOLS } from "./workflow";
+import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
+import {
+  buildDaemonPendingTurn,
+  scheduleChatDaemonPrewarm,
+} from "./daemonTurn";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
@@ -30,15 +33,10 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
-import { detectCancelSupersession } from "../_chat/cancelRace";
+import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { touchUserActivity } from "../_sandbox/activity";
-import {
-  bindTurnWorkflow,
-  closeOpenTurn,
-  closeTurnForWorkflow,
-  openSessionChatTurn,
-} from "../_chat/turnStore";
+import { bindTurnWorkflow, openSessionChatTurn } from "../_chat/turnStore";
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
@@ -89,12 +87,15 @@ async function stageAndStartChatTurn(
 ): Promise<void> {
   const { chat, session } = params.context;
   const { settings } = params;
-  const stickyProviderAccountId = await resolveTurnProviderAccountId(ctx.db, {
-    requestedAccountId: settings.providerAccountId,
-    ownerUserId: session.createdBy ?? session.userId,
-    model: settings.model,
-    changePolicy: "owner-pool",
-  });
+  const [stickyProviderAccountId, user] = await Promise.all([
+    resolveTurnProviderAccountId(ctx.db, {
+      requestedAccountId: settings.providerAccountId,
+      ownerUserId: session.createdBy ?? session.userId,
+      model: settings.model,
+      changePolicy: "owner-pool",
+    }),
+    ctx.db.get(params.actingUserId),
+  ]);
   const credentialOwnerUserId = session.createdBy ?? session.userId;
   const streamingEntityId = sessionChatStreamingEntityId(chat._id);
 
@@ -108,7 +109,6 @@ async function stageAndStartChatTurn(
     activityLog: "",
   });
 
-  const user = await ctx.db.get(params.actingUserId);
   const { prompt } = await buildSessionPrompt(ctx, {
     session,
     chat,
@@ -143,14 +143,12 @@ async function stageAndStartChatTurn(
     repoId: session.repoId,
   });
   const pendingTurn = usesDaemonPull
-    ? {
+    ? buildDaemonPendingTurn({
         prompt,
-        requestedAt: Date.now(),
         turnId,
         attachmentStorageIds: settings.attachmentStorageIds,
         model: normalizedModel,
-        interactionMode: "default" as const,
-      }
+      })
     : undefined;
   const now = Date.now();
   await ctx.db.patch(chat._id, {
@@ -162,18 +160,14 @@ async function stageAndStartChatTurn(
   });
   await ctx.db.patch(session._id, { updatedAt: now });
 
-  if (usesDaemonPull && session.sandboxId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
-      sandboxId: session.sandboxId,
-      chatId: chat._id,
-      repoId: session.repoId,
+  if (usesDaemonPull) {
+    await scheduleChatDaemonPrewarm(ctx, {
+      session,
+      chat,
       userId: params.actingUserId,
       model: normalizedModel,
-      ...launchTraits,
-      allowedTools: SESSION_TOOLS,
+      launchTraits,
       providerAccountId: stickyProviderAccountId,
-      credentialOwnerUserId,
-      sessionPersistenceId: sessionChatPersistenceId(chat),
     });
   }
 
@@ -419,23 +413,19 @@ export const startExecute = authMutation({
       }
     }
 
-    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
+    // A send that lands behind this chat's own running turn queues too: a
+    // burst of sends can all reach here before the composer sees the first
+    // turn, and starting each one ran two turns at once.
+    const chatBusy =
+      chat.activeWorkflowId !== undefined || chat.pendingTurn !== undefined;
+    if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
       await enqueueChatMessage(ctx, {
         context,
         userId: ctx.userId,
         content: message,
         settings,
       });
-      // The composer already inserted the user row (addMessage); drop it so
-      // the queue drain's own insert does not show the prompt twice.
-      const last = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-        .order("desc")
-        .first();
-      if (last && last.role === "user" && last.content === message) {
-        await ctx.db.delete(last._id);
-      }
+      await dropComposerUserRow(ctx, chat._id, message);
       return "queued";
     }
 
@@ -620,19 +610,8 @@ export const enqueueMessage = authMutation({
     const displayContent = args.displayContent?.trim();
 
     const context = await getSessionChatOrThrow(ctx.db, args.chatId);
-    const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+    if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    await touchUserActivity(ctx, sessionActivityRef(session), {
-      source: "chat",
-      userId: ctx.userId,
-    });
-
-    await notifyChatMentions(ctx, {
-      content: displayContent || content,
-      authorUserId: ctx.userId,
-      surface: { kind: "session", session },
-    });
 
     const {
       chatId,
@@ -644,7 +623,7 @@ export const enqueueMessage = authMutation({
     void chatId;
     void message;
     void omittedDisplay;
-    await enqueueChatMessage(ctx, {
+    await sendSessionChatMessage(ctx, {
       context,
       userId: ctx.userId,
       content,
@@ -652,14 +631,43 @@ export const enqueueMessage = authMutation({
       settings,
       sentViaOrchestrator,
     });
-    // Sends at once when the chat is idle. Otherwise the queue waits: behind
-    // the running turn, for a usage-limit reset, for a free parallel-chat
-    // slot, or for Eva to wake — a sleeping sandbox is woken here and its
-    // ready drain sends the message.
-    await drainChatQueueQuietly(ctx, chat._id);
     return null;
   },
 });
+
+/**
+ * Queues a user message on a session chat and sends it at once when the chat
+ * is idle. The caller checks repo access. Shared by `enqueueMessage` and the
+ * mobile app (`mobile.sendMessage`).
+ */
+export async function sendSessionChatMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    displayContent?: string;
+    settings: TurnSettings;
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  const { chat, session } = params.context;
+  await touchUserActivity(ctx, sessionActivityRef(session), {
+    source: "chat",
+    userId: params.userId,
+  });
+  await notifyChatMentions(ctx, {
+    content: params.displayContent ?? params.content,
+    authorUserId: params.userId,
+    surface: { kind: "session", session },
+  });
+  await enqueueChatMessage(ctx, params);
+  // Sends at once when the chat is idle. Otherwise the queue waits: behind
+  // the running turn, for a usage-limit reset, for a free parallel-chat
+  // slot, or for Eva to wake — a sleeping sandbox is woken here and its
+  // ready drain sends the message.
+  await drainChatQueueQuietly(ctx, chat._id);
+}
 
 /**
  * Cancels one chat's active turn and starts its queued messages. For a
@@ -672,74 +680,26 @@ export async function cancelChatExecution(
   context: SessionChatContext,
 ): Promise<void> {
   const { chat, session } = context;
-  const streamingEntityId = sessionChatStreamingEntityId(chat._id);
-
-  // Snapshot what this cancel owns. A concurrent startExecute may stage a
-  // newer pendingTurn / activeWorkflowId while we run — must not clear those
-  // or mark the newer assistant placeholder as cancelled.
-  const workflowIdToCancel = chat.activeWorkflowId;
-  const pendingRequestedAt = chat.pendingTurn?.requestedAt;
-
-  await cancelTrackedWorkflow(ctx, workflowIdToCancel);
-
-  if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
-    await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
-  } else if (session.sandboxId) {
-    // One-shot providers run under the sandbox-wide /tmp/run-design.pid, not
-    // a per-chat daemon pidfile, so only the process kill stops them.
-    await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-    });
-  }
-
-  if (workflowIdToCancel !== undefined) {
-    await closeTurnForWorkflow(ctx, chat._id, workflowIdToCancel, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  const streaming = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-    .first();
-
-  const latest = await ctx.db.get(chat._id);
-  if (!latest) return;
-
-  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-    latestPendingTurn: latest.pendingTurn,
-    cancelPendingRequestedAt: pendingRequestedAt,
-    latestActiveWorkflowId: latest.activeWorkflowId,
-    cancelWorkflowId: workflowIdToCancel,
+  const cancelled = await cancelChatTurn(ctx, {
+    id: chat._id,
+    entity: chat,
+    activeWorkflowId: (c) => c.activeWorkflowId,
+    streamingEntityId: sessionChatStreamingEntityId(chat._id),
+    interrupt: async () => {
+      if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
+        await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
+      } else if (session.sandboxId) {
+        // One-shot providers run under the sandbox-wide /tmp/run-design.pid,
+        // not a per-chat daemon pidfile, so only the process kill stops them.
+        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+          sandboxId: session.sandboxId,
+          repoId: session.repoId,
+        });
+      }
+    },
+    getLatest: () => ctx.db.get(chat._id),
   });
-
-  if (cancelOwnsCurrentTurn) {
-    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (
-      last &&
-      last.role === "assistant" &&
-      last.finishedAt === undefined &&
-      last._id !== syntheticTurnMessageId
-    ) {
-      await finalizeCancelledAssistantMessage(ctx, last, streaming);
-    }
-    await finalizeOpenSyntheticTurnOnCancel(
-      ctx,
-      syntheticTurnMessageId,
-      streaming,
-    );
-    await closeOpenTurn(ctx, chat._id, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  await clearStreamingActivity(ctx, streamingEntityId);
+  if (!cancelled) return;
 
   const chatPatch: {
     activeWorkflowId?: undefined;
@@ -747,23 +707,11 @@ export async function cancelChatExecution(
     syntheticTurnMessageId?: undefined;
     updatedAt: number;
   } = { updatedAt: Date.now() };
-
-  if (
-    workflowIdToCancel !== undefined &&
-    latest.activeWorkflowId === workflowIdToCancel
-  ) {
-    chatPatch.activeWorkflowId = undefined;
-  }
-  if (
-    pendingRequestedAt !== undefined &&
-    latest.pendingTurn?.requestedAt === pendingRequestedAt
-  ) {
-    chatPatch.pendingTurn = undefined;
-  }
-  if (cancelOwnsCurrentTurn) {
+  if (cancelled.clearsWorkflow) chatPatch.activeWorkflowId = undefined;
+  if (cancelled.clearsPendingTurn) chatPatch.pendingTurn = undefined;
+  if (cancelled.cancelOwnsCurrentTurn) {
     chatPatch.syntheticTurnMessageId = undefined;
   }
-
   await ctx.db.patch(chat._id, chatPatch);
   await drainSessionChatQueues(ctx, session._id, chat._id);
 }

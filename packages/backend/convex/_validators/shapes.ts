@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import {
   accentColorValidator,
   auditSeverityValidator,
@@ -49,6 +49,16 @@ export const turnLeaseFenceArgs = {
   leaseGeneration: v.optional(v.number()),
 };
 
+/** Args every sandbox completion callback posts to a `handleCompletion` receiver. */
+export const completionCallbackArgs = {
+  success: v.boolean(),
+  result: v.union(v.string(), v.null()),
+  error: v.union(v.string(), v.null()),
+  activityLog: v.union(v.string(), v.null()),
+  rawResultEvent: v.optional(v.string()),
+  ...turnCheckpointArgs,
+};
+
 /** Fields every daemon claim returns, whether or not it hands over a prompt. */
 const daemonClaimDrainFields = {
   attachmentUrls: v.array(v.string()),
@@ -56,6 +66,8 @@ const daemonClaimDrainFields = {
   cancelRequested: v.boolean(),
   usageRefreshRequested: v.boolean(),
   interactionMode: v.optional(interactionModeValidator),
+  /** Queued messages the daemon injects into its live turn (`_chat/steer.ts`). */
+  steers: v.optional(v.array(v.object({ id: v.string(), text: v.string() }))),
 };
 
 /**
@@ -287,7 +299,23 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("viewVercelDeployment"),
   v.literal("disableAutoArchive"),
   v.literal("askTeammates"),
+  v.literal("claudeStyleActivity"),
+  v.literal("openPrsOnGithub"),
+  v.literal("scopeCheck"),
+  v.literal("manualSideBranchPublish"),
+  v.literal("prWatch"),
 );
+
+/**
+ * Work in the sandbox checkout that is not on GitHub yet, reported live with
+ * `sandboxBranch` (see callback-src/runtime/branchWatcher.ts). Counts use the
+ * same media exclusions as the turn-end commit, so they match what a
+ * "Commit & push" would publish.
+ */
+export const sandboxGitSyncValidator = v.object({
+  uncommittedFiles: v.number(),
+  unpushedCommits: v.number(),
+});
 
 /** Stored shape on `users.experimentalFlags` — missing key means off. */
 export const experimentalFlagsFields = {
@@ -303,6 +331,11 @@ export const experimentalFlagsFields = {
   viewVercelDeployment: v.optional(v.boolean()),
   disableAutoArchive: v.optional(v.boolean()),
   askTeammates: v.optional(v.boolean()),
+  claudeStyleActivity: v.optional(v.boolean()),
+  openPrsOnGithub: v.optional(v.boolean()),
+  scopeCheck: v.optional(v.boolean()),
+  manualSideBranchPublish: v.optional(v.boolean()),
+  prWatch: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -321,6 +354,11 @@ export const resolvedExperimentalFlagsValidator = v.object({
   viewVercelDeployment: v.boolean(),
   disableAutoArchive: v.boolean(),
   askTeammates: v.boolean(),
+  claudeStyleActivity: v.boolean(),
+  openPrsOnGithub: v.boolean(),
+  scopeCheck: v.boolean(),
+  manualSideBranchPublish: v.boolean(),
+  prWatch: v.boolean(),
 });
 
 /**
@@ -335,3 +373,25 @@ export const usageLimitWindowValidator = v.object({
   utilization: v.optional(v.number()),
   resetsAt: v.optional(v.number()),
 });
+
+/** One stored env var on a repo or team env var document. */
+export const envVarEntryValidator = v.object({
+  key: v.string(),
+  value: v.string(),
+  sandboxExclude: v.optional(v.boolean()),
+});
+
+/** An env var entry as listed to the client: value masked, flag resolved. */
+export const maskedEnvVarEntryValidator = v.object({
+  key: v.string(),
+  value: v.string(),
+  sandboxExclude: v.boolean(),
+});
+
+/** One chat surface, keyed by its kind and the id of its owning row. */
+export const chatRefValidator = v.union(
+  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
+);
+export type ChatRef = Infer<typeof chatRefValidator>;

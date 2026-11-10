@@ -1,7 +1,7 @@
 import { asRecord } from "@/lib/utils/looseRecord";
 
 /** A value that JSON.stringify is guaranteed to handle: no cycles, no BigInt. */
-export type JsonValue =
+type JsonValue =
   | string
   | number
   | boolean
@@ -9,7 +9,7 @@ export type JsonValue =
   | ReadonlyArray<JsonValue>
   | { readonly [key: string]: JsonValue };
 
-export interface WebMcpTool {
+interface WebMcpTool {
   readonly name: string;
   readonly title?: string;
   readonly description: string;

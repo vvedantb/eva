@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Spinner, toast, WebPreviewNavigationButton } from "@eva/ui";
+import { Spinner, toast, WebPreviewNavigationButton } from "@vvedantb/ui";
 import { IconPlug } from "@tabler/icons-react";
 import { requestWebMcp } from "@/lib/components/sandbox/previewWebMcp";
 import { PreviewWebMcpDialog } from "@/lib/components/sandbox/PreviewWebMcpDialog";

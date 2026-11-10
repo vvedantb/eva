@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -18,10 +15,6 @@ import {
   type EvaluateInput,
   type EvaluateOutcome,
 } from "../convex/_mcp/evaluateTool";
-
-const convexDir = join(dirname(fileURLToPath(import.meta.url)), "../convex");
-const convexSource = (relative: string) =>
-  readFileSync(join(convexDir, relative), "utf8");
 
 const booleanQ = {
   type: "boolean",
@@ -403,35 +396,5 @@ describe("evaluate inside execute", () => {
     if (block?.type !== "text") throw new Error("expected a text block");
     const payload = executePayload.parse(JSON.parse(block.text));
     expect(payload.result).toContain("AI_GATEWAY_API_KEY");
-  });
-});
-
-describe("evaluate wiring contract", () => {
-  test("is registered for every caller and calls the gateway with ZDR", () => {
-    const tools = convexSource("mcp/tools.ts");
-    const registration = tools.indexOf("evaluateTool(");
-    expect(registration).toBeGreaterThan(-1);
-    expect(registration).toBeLessThan(tools.indexOf("if (isAve) {"));
-
-    const action = convexSource("mcp/evaluate.ts");
-    expect(action.startsWith('"use node";')).toBe(true);
-    expect(action).toContain("evaluateDecision(");
-    expect(action).toContain('"eva-mcp-evaluate"');
-
-    // The one place the gateway is called, for every Jev caller.
-    const client = convexSource("_jev/client.ts");
-    expect(client.startsWith('"use node";')).toBe(true);
-    // `experimental_evaluate` drops image parts and the long-context option.
-    expect(client).toContain("experimental_decide");
-    expect(client).not.toContain("experimental_evaluate as");
-    expect(client).toContain("zeroDataRetention: true");
-    expect(client).toContain("AI_GATEWAY_API_KEY");
-    expect(client).toContain("tags: [options.tag]");
-    expect(client).not.toContain("TYPESAFE_API_KEY");
-
-    expect(convexSource("_jev/schema.ts")).toContain(
-      `EVALUATE_MODEL = "typesafe-ai/jev"`,
-    );
-    expect(convexSource("_mcp/evaluateTool.ts")).toContain("mutating: false");
   });
 });

@@ -457,6 +457,10 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
         cause,
         turn.silentSince ?? lastLeaseWriteAt,
       );
+  // Closed before either branch drains: an open turn still holds one of the
+  // session's parallel-chat slots, so a sibling parked on the cap would miss
+  // the slot this turn frees, with no later drain to release it.
+  await closeTurn(ctx, turn, "error", { error: alert.text });
   if (entity && turn.workflowId !== undefined) {
     await finalizeStaleChatTurn(
       ctx,
@@ -479,7 +483,6 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
     await adapter.finalizeOrphanTurn(ctx, id);
     await adapter.drainQueue(ctx, id);
   }
-  await closeTurn(ctx, turn, "error", { error: alert.text });
   if (!sandboxStopped) {
     await adapter.afterStallFinalize(ctx, id, turn._id);
   }
@@ -654,10 +657,19 @@ export const reconcile = internalAction({
           );
         }
       }
-      await ctx.runMutation(internal.turns.finalizeExpired, {
-        turnId: turn.turnId,
-        cause: decision.cause,
-      });
+      // One turn that cannot finalise must not starve the rest: the batch is
+      // ordered by lease expiry, so a throw here would block every later turn
+      // on every cycle.
+      try {
+        await ctx.runMutation(internal.turns.finalizeExpired, {
+          turnId: turn.turnId,
+          cause: decision.cause,
+        });
+      } catch (error) {
+        console.error(
+          `[watchdog][lease-finalize-failed] turnId=${turn.turnId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
     return null;
   },

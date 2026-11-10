@@ -27,14 +27,13 @@ import {
 import { evaMcpServers } from "../evaMcp.js";
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { updateThinkingStep } from "../parse/canonical.js";
 import {
   recordSdkAttemptFailure,
   recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { buildCanUseTool } from "../runtime/pendingQuestion.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import {
   startClaudeUsageReport,
   type ClaudeUsageResponseLike,
@@ -44,8 +43,8 @@ import type {
   ProviderAttemptResult,
   SessionMode,
 } from "../types.js";
-import { log, tryParseJson } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { log, readTurnPrompt, tryParseJsonObject } from "../utils.js";
+import { beginSdkAttempt, finishSdkAttempt } from "./attemptResult.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
@@ -95,6 +94,10 @@ export async function readSdkPlanUsage(
   return await handle.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET();
 }
 
+/** Node's own global prefix (node is `<prefix>/bin/node`); see `globalNpmRoots`. */
+const NODE_GLOBAL_ROOT =
+  dirname(dirname(process.execPath)) + "/lib/node_modules";
+
 /** Memoized: the warm daemon resolves pins repeatedly and `npm root -g` spawns a process. */
 let cachedGlobalNpmRoots: string[] | null = null;
 
@@ -116,9 +119,7 @@ let cachedGlobalNpmRoots: string[] | null = null;
  */
 function globalNpmRoots(): string[] {
   if (cachedGlobalNpmRoots !== null) return cachedGlobalNpmRoots;
-  const roots: string[] = [
-    dirname(dirname(process.execPath)) + "/lib/node_modules",
-  ];
+  const roots: string[] = [NODE_GLOBAL_ROOT];
   try {
     const npmRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
     if (npmRoot) roots.push(npmRoot);
@@ -179,6 +180,12 @@ export function resolvePinnedSdkEntry(pin: {
   // the search has failed everywhere, so a stale copy in one root stays quiet
   // while another root serves the pin.
   let driftedVersion: string | null = null;
+  // Probe the node-derived root before `globalNpmRoots` spawns `npm root -g`
+  // (~100–250ms on the daemon boot path) — the seeded image always hits here.
+  const nodeRoot = NODE_GLOBAL_ROOT + "/" + pin.packageName;
+  if (installedPackageVersion(nodeRoot) === pin.version) {
+    return nodeRoot + pin.entryRelPath;
+  }
   for (const root of globalNpmRoots()) {
     const globalRoot = root + "/" + pin.packageName;
     const globalVersion = installedPackageVersion(globalRoot);
@@ -233,11 +240,7 @@ export function resolvePinnedSdkEntry(pin: {
  * raw log, so the round trip is the boundary rather than extra work.
  */
 export function sdkMessageJson(serialized: string): JsonObject | null {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
+  return tryParseJsonObject(serialized);
 }
 
 /** Imports the Agent SDK version this callback's parsers were written for. */
@@ -353,10 +356,6 @@ function claudeExecutablePath(): string {
   });
 }
 
-function readPromptText(): string {
-  return readFileSync("/tmp/design-prompt.txt", "utf8");
-}
-
 export function buildSdkOptions(sessionMode: SessionMode): SdkOptions {
   // Map SDK option shapes from the existing config (model, system prompt,
   // allowed tools, MCP, permissions, session resume). Formerly mirrored
@@ -421,8 +420,19 @@ function buildSdkOptionsFromParts(
     DISABLE_TELEMETRY: "1",
     DISABLE_AUTOUPDATER: "1",
     DISABLE_ERROR_REPORTING: "1",
-    // Defer MCP/tool schemas when they exceed ~10% of context (agent turns only).
-    ENABLE_TOOL_SEARCH: "auto",
+    // Always defer MCP/tool schemas (agent turns only). "auto" made the CLI
+    // await a count_tokens API call before the first request to test a ~10%
+    // threshold: one more API round trip (≥0.12s measured) before every
+    // daemon's first token. With MCP servers still connecting (see below) that
+    // count saw only built-ins, so the first request also went out without
+    // ToolSearch.
+    ENABLE_TOOL_SEARCH: "true",
+    // Do not hold the first turn until every HTTP MCP server (eva, linear,
+    // figma) connects. Measured on a warm daemon: init 1.8–2.9s → ~0.1s and
+    // first token ~3s sooner. The servers still join mid-turn; ToolSearch
+    // reaches them and the CLI tells the model a pending server "is still
+    // connecting" instead of reporting its tools missing.
+    CLAUDE_CODE_MCP_STARTUP_WAIT_MS: "0",
   };
   if (
     CLAIM_MUTATION ||
@@ -474,6 +484,10 @@ function buildSdkOptionsFromParts(
     // Emit token-level partial (`stream_event`) messages so claudeParseLine can
     // stream text deltas into the reply live (dedup guards the final message).
     includePartialMessages: true,
+    // Forward each subagent's text too (not only its tool calls), so its child
+    // thread view can show the whole transcript. claudeParseLine keeps it out
+    // of the parent's reply.
+    forwardSubagentText: true,
     ...allowedToolsOption,
     env,
     ...(sessionMode.mode === "session" && sessionMode.sessionId
@@ -503,17 +517,7 @@ function buildSdkOptionsFromParts(
 export async function runClaudeSdkAttempt(
   sessionMode: SessionMode,
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  const startupStep = buildClaudeStartupStep();
-  updateThinkingStep(startupStep.label, startupStep.detail);
-  log(
-    "runClaudeSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
-  );
+  beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
 
   let attemptOutput = "";
   let lastMessageAt = Date.now();
@@ -528,7 +532,7 @@ export async function runClaudeSdkAttempt(
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
   let q = sdk.query({
-    prompt: readPromptText(),
+    prompt: readTurnPrompt(),
     options: buildSdkOptions(effectiveMode),
   });
 
@@ -608,7 +612,7 @@ export async function runClaudeSdkAttempt(
         );
         sawZeroWorkTaskNotification = false;
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode),
         });
         await consumeQuery();
@@ -633,7 +637,7 @@ export async function runClaudeSdkAttempt(
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode),
         });
         await consumeQuery();
@@ -659,35 +663,14 @@ export async function runClaudeSdkAttempt(
     error: resultErrorMessage || queryErrorMessage || undefined,
   });
 
-  const code =
-    sawResult &&
-    !resultIsError &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runClaudeSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawResult=" +
-      sawResult +
-      ", resultIsError=" +
-      resultIsError +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") +
-      ")",
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runClaudeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "queryError",
+    errorMessage: queryErrorMessage,
   });
 }

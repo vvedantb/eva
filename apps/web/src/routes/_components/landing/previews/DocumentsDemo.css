@@ -1,0 +1,230 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.dc .dc-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+/* The doc leads; the task column ends at the stage's edge, so its words keep
+   their inset from the crop. The last track is off stage. */
+.dc .dc-body {
+  display: grid;
+  grid-template-columns: 384px 220px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ss-surface);
+}
+
+/* Doc */
+.dc .dc-doc {
+  padding: 22px 28px 0;
+  border-right: 1px solid var(--ss-line);
+}
+
+.dc .dc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dc .dc-section {
+  color: var(--ss-text-strong);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dc .dc-lines {
+  display: grid;
+  gap: 9px;
+}
+
+.dc .dc-after {
+  margin-top: 22px;
+}
+
+.dc .dc-after > :first-child {
+  margin-bottom: 3px;
+}
+
+.dc .dc-list {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 0 0 0 18px;
+  color: var(--ss-text-strong);
+  font-size: 13.5px;
+  line-height: 1.5;
+  list-style: disc;
+}
+
+.dc .dc-list li::marker {
+  color: var(--ss-text-faint);
+}
+
+.dc .dc-filler {
+  display: flex;
+  align-items: center;
+  height: 1.5em;
+}
+
+/* Riya: one colour for her face in the pile, her caret and her name. */
+.dc .dc-typed {
+  --who: #c98f6e;
+}
+
+.dc .dc-caret {
+  position: relative;
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  margin-left: 1px;
+  vertical-align: -0.2em;
+  background: var(--who);
+}
+
+.dc .dc-flag {
+  position: absolute;
+  bottom: calc(100% - 1px);
+  left: 0;
+  padding: 2px 6px;
+  border-radius: 4px 4px 4px 0;
+  background: var(--who);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Task */
+.dc .dc-task {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.dc .dc-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc .dc-past {
+  display: grid;
+  gap: 8px;
+}
+
+.dc .dc-past-ask {
+  justify-self: end;
+  margin-bottom: 2px;
+}
+
+.dc .dc-ask {
+  width: fit-content;
+  margin-left: auto;
+  padding: 7px 12px;
+  border-radius: 14px;
+  background: var(--ss-well);
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.dc .dc-tool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ss-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.dc .dc-tool-mark {
+  display: flex;
+  flex: none;
+  color: var(--ss-text);
+}
+
+.dc .dc-tool-icon {
+  flex: none;
+  color: var(--ss-icon);
+}
+
+.dc .dc-reply {
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc .dc-composer {
+  margin-top: auto;
+  /* The window runs 48px off the stage's foot: keep the composer clear of it. */
+  margin-bottom: 64px;
+}
+
+.dc .dc-composer .ss-field__box {
+  padding-right: 5px;
+  font-size: 12.5px;
+}
+
+.dc .dc-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--ss-radius-sm);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+}
+
+/* Text that moves with an opening row keeps one layer, so it never steps. */
+.dc .dc-caret,
+.dc .dc-ask,
+.dc .dc-tool,
+.dc .dc-reply,
+.dc .ss-field__box {
+  will-change: transform;
+}
+
+/* Compact: the doc above the task, the window spanning the phone column. */
+.dc .ss-stage[data-layout="compact"] .dc-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.dc .ss-stage[data-layout="compact"] .dc-body {
+  grid-template-columns: 326px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.dc .ss-stage[data-layout="compact"] .dc-doc {
+  padding: 18px 16px 18px;
+  border-right: 0;
+  border-bottom: 1px solid var(--ss-line);
+}
+
+/* Room for the new turn: the doc keeps its two requirements, the earlier
+   turn keeps only its question. */
+.dc .ss-stage[data-layout="compact"] .dc-intro,
+.dc .ss-stage[data-layout="compact"] .dc-after,
+.dc .ss-stage[data-layout="compact"] .dc-past-line,
+.dc .ss-stage[data-layout="compact"] .dc-filler {
+  display: none;
+}
+
+.dc .ss-stage[data-layout="compact"] .dc-list {
+  margin-top: 22px;
+}
+
+.dc .ss-stage[data-layout="compact"] .dc-composer {
+  margin-bottom: 72px;
+}

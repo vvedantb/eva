@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { PreviewSnapshot } from "@/lib/components/sandbox/previewSnapshot";
 
 interface PendingSnapshotItem {
@@ -13,6 +19,15 @@ interface PendingPreviewSnapshotsValue {
   add: (snapshot: PreviewSnapshot) => void;
   remove: (id: string) => void;
   clear: () => void;
+  /** Count of sketches waiting for a composer; a change wakes the drain. */
+  readonly sketchCount: number;
+  /** Queues a preview sketch image for the composer's attachments. */
+  addSketch: (file: File) => void;
+  /**
+   * Hands over every queued sketch and empties the queue. Only the first
+   * caller gets them, so two mounted composers cannot attach one sketch twice.
+   */
+  takeSketches: () => File[];
 }
 
 const PendingPreviewSnapshotsContext =
@@ -31,6 +46,10 @@ export function PendingPreviewSnapshotsProvider({
       snapshot,
     })),
   );
+  // A ref, not state: `takeSketches` must empty the queue synchronously so a
+  // second composer in the same commit finds nothing.
+  const sketchesRef = useRef<File[]>([]);
+  const [sketchCount, setSketchCount] = useState(0);
 
   const value: PendingPreviewSnapshotsValue = {
     items,
@@ -45,6 +64,17 @@ export function PendingPreviewSnapshotsProvider({
     },
     clear: () => {
       setItems([]);
+    },
+    sketchCount,
+    addSketch: (file) => {
+      sketchesRef.current = [...sketchesRef.current, file];
+      setSketchCount(sketchesRef.current.length);
+    },
+    takeSketches: () => {
+      const taken = sketchesRef.current;
+      sketchesRef.current = [];
+      if (taken.length > 0) setSketchCount(0);
+      return taken;
     },
   };
 

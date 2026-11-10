@@ -2,17 +2,22 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
+import { IconBrain } from "@tabler/icons-react";
 import { api } from "@eva/backend";
 import {
   ActivityTasks,
-  Reasoning,
-  ReasoningTrigger,
-  CollapsibleContent,
   Shimmer,
+  AgentTraceCollapsible,
+  AgentTraceCollapsibleContent,
+  AgentTraceCollapsibleTrigger,
+  AgentTraceIcon,
+  AgentTraceLine,
+  AgentTraceTitle,
   Spinner,
-  formatElapsed,
-  useElapsedSeconds,
-} from "@eva/ui";
+  formatActivityElapsed,
+  useActivityElapsedSeconds,
+  RollingNumber,
+} from "@vvedantb/ui";
 import {
   isEmptyActivityPayload,
   isSandboxStartupActivity,
@@ -20,6 +25,7 @@ import {
 } from "@eva/shared/parseActivitySteps";
 import { formatDuration } from "@eva/shared/duration";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
 import { SandboxStartupIndicator } from "@/lib/components/sandbox/SandboxStartupIndicator";
 import { SandboxStartupSteps } from "@/lib/components/sandbox/SandboxStartupSteps";
 import {
@@ -38,7 +44,7 @@ import {
 const SILENT_STREAM_NOTICE_AFTER_SECONDS = 60;
 
 function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
-  const elapsed = useElapsedSeconds(startedAt, true);
+  const elapsed = useActivityElapsedSeconds(startedAt, true);
   return (
     <div className="flex items-center gap-2 text-muted-foreground text-sm">
       <Spinner size="sm" />
@@ -46,7 +52,7 @@ function SimpleViewWorkingStatus({ startedAt }: { startedAt?: number }) {
         <Shimmer as="span" duration={2.5} spread={1.5}>
           Working for
         </Shimmer>{" "}
-        <span className="tabular-nums">{formatElapsed(elapsed)}</span>
+        <RollingNumber value={formatActivityElapsed(elapsed)} />
       </span>
     </div>
   );
@@ -61,7 +67,7 @@ function SimpleViewHeartbeat({
   isStreaming: boolean;
   startedAt?: number;
 }) {
-  const sinceLastOutput = useElapsedSeconds(
+  const sinceLastOutput = useActivityElapsedSeconds(
     lastOutputAt,
     Boolean(isStreaming && startedAt),
   );
@@ -167,6 +173,7 @@ export function StreamingActivityDisplay({
   isSandboxStartup?: boolean;
 }) {
   const simpleView = useSimpleView();
+  const layout = useActivityLayout();
   const lastOutputAt = useLastVisibleOutputAt(activity, isStreaming, startedAt);
   const streamIsSilent = useSilentStreamNotice(
     activity,
@@ -215,6 +222,7 @@ export function StreamingActivityDisplay({
       icon={icon}
       startedAt={startedAt}
       onOpenFile={onOpenFile}
+      layout={layout}
     />
   );
 }
@@ -280,6 +288,7 @@ export function ActivityLogDisplay({
   onOpenFile?: (path: string) => void;
 }) {
   const simpleView = useSimpleView();
+  const layout = useActivityLayout();
   const { fullLog, request } = useFullActivityLog(messageId);
   const duration =
     startedAt && finishedAt ? formatDuration(startedAt, finishedAt) : undefined;
@@ -300,6 +309,7 @@ export function ActivityLogDisplay({
         finalText={finalText}
         onOpenFile={onOpenFile}
         onRequestFullDetail={request}
+        layout={layout}
       />
     );
   }
@@ -314,13 +324,20 @@ export function ActivityLogDisplay({
   }
 
   return (
-    <Reasoning defaultOpen={false}>
-      <ReasoningTrigger getThinkingMessage={() => "View logs"} />
-      <CollapsibleContent className="mt-4 text-sm text-muted-foreground">
+    <AgentTraceCollapsible defaultOpen={false}>
+      <AgentTraceCollapsibleTrigger>
+        <AgentTraceLine>
+          <AgentTraceIcon>
+            <IconBrain />
+          </AgentTraceIcon>
+          <AgentTraceTitle>View logs</AgentTraceTitle>
+        </AgentTraceLine>
+      </AgentTraceCollapsibleTrigger>
+      <AgentTraceCollapsibleContent>
         <pre className="whitespace-pre-wrap max-sm:wrap-break-word font-mono text-xs max-h-64 overflow-y-auto scroll-fade">
           {activityLog}
         </pre>
-      </CollapsibleContent>
-    </Reasoning>
+      </AgentTraceCollapsibleContent>
+    </AgentTraceCollapsible>
   );
 }

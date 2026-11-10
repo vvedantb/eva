@@ -1,7 +1,7 @@
 "use client";
 
 import { m, AnimatePresence } from "motion/react";
-import { motionFast, motionStagger } from "@eva/ui";
+import { tokenTransition, staggerDelay } from "@vvedantb/ui";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import { NotificationRow } from "@/lib/components/inbox/NotificationRow";
 import { groupNotifications } from "@/lib/components/inbox/groupNotifications";
@@ -54,7 +54,7 @@ export function NotificationList({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           {/* Sticky so the section label stays readable while its rows scroll by. */}
           <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-1.5">
@@ -70,8 +70,8 @@ export function NotificationList({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{
-                  ...motionFast,
-                  delay: motionStagger(index, 0.02, 0.1),
+                  ...tokenTransition.fast,
+                  delay: staggerDelay(index, 0.02, 0.1),
                 }}
               >
                 <NotificationRow

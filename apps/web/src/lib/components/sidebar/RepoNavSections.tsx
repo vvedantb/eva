@@ -2,19 +2,22 @@
 
 import { Link } from "@tanstack/react-router";
 import type { ComponentType } from "react";
-import type { FunctionReturnType } from "convex/server";
 import { IconChevronRight } from "@tabler/icons-react";
 import {
-  DocumentsIcon,
-  ReviewsIcon,
-  ProjectsIcon,
-  QuickTasksIcon,
+  BarChartIcon,
+  BoardIcon,
+  ChecklistIcon,
+  DocumentIcon,
+  FlaskIcon,
+  ReviewIcon,
   SettingsIcon,
-  StatsIcon,
-  TestingArenaIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
-import { type api } from "@eva/backend";
-import { Button, Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+  type IconProps,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
+import { cn } from "@eva/ui";
 import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksBadge";
 import { BuildingProjectsBadge } from "@/lib/components/sidebar/BuildingProjectsBadge";
 import {
@@ -28,13 +31,17 @@ import {
   type ContextSidebarMode,
 } from "@/lib/components/sidebar/contextSidebarModes";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-
-type RepoDoc = FunctionReturnType<typeof api.githubRepos.getByOwnerAndName>;
+import type { RepoDoc } from "@/lib/components/sidebar/sidebarPanelState";
 
 type RepoMainNavIcon = ComponentType<{
   size?: number;
   className?: string;
 }>;
+
+/** Eva's gear clicks round a notch at a time rather than spinning. */
+function SettingsTurnIcon(props: IconProps) {
+  return <SettingsIcon {...props} variant="turn" />;
+}
 
 type RepoMainNavItem = {
   name: string;
@@ -83,12 +90,12 @@ export function RepoNavSections({
           {
             name: "Projects",
             href: `${repoBasePath}/projects`,
-            icon: ProjectsIcon,
+            icon: BoardIcon,
           },
           {
             name: "Quick Tasks",
             href: `${repoBasePath}/quick-tasks`,
-            icon: QuickTasksIcon,
+            icon: ChecklistIcon,
           },
         ],
       },
@@ -98,7 +105,7 @@ export function RepoNavSections({
           {
             name: "Documents",
             href: `${repoBasePath}/docs`,
-            icon: DocumentsIcon,
+            icon: DocumentIcon,
           },
           ...(simpleView
             ? []
@@ -106,13 +113,13 @@ export function RepoNavSections({
                 {
                   name: "Reviews",
                   href: `${repoBasePath}/reviews`,
-                  icon: ReviewsIcon,
+                  icon: ReviewIcon,
                 } satisfies RepoMainNavItem,
               ]),
           {
             name: "Testing Arena",
             href: `${repoBasePath}/testing-arena`,
-            icon: TestingArenaIcon,
+            icon: FlaskIcon,
           },
         ],
       },
@@ -122,7 +129,7 @@ export function RepoNavSections({
           {
             name: "Stats",
             href: `${repoBasePath}/stats`,
-            icon: StatsIcon,
+            icon: BarChartIcon,
           },
           // Simple view has no repo settings pages, so the entry is dropped
           // here; the rail's gear still opens global settings.
@@ -132,7 +139,7 @@ export function RepoNavSections({
                 {
                   name: "Settings",
                   href: `${repoBasePath}/settings/config`,
-                  icon: SettingsIcon,
+                  icon: SettingsTurnIcon,
                 } satisfies RepoMainNavItem,
               ]),
         ],
@@ -182,6 +189,7 @@ export function RepoNavSections({
             <span className="truncate">{item.name}</span>
           </button>
           <Button
+            shape="rounded"
             size="icon-sm"
             variant="ghost"
             // `reveal-on-hover` rather than a hand-rolled

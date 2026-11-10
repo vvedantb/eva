@@ -1,14 +1,11 @@
-import { readFileSync } from "fs";
 import {
   AGENT_CWD,
   MAX_TOTAL_RUNTIME_MS,
   NO_OUTPUT_CHECK_INTERVAL_MS,
   NO_OUTPUT_TIMEOUT_MS,
-  SYSTEM_PROMPT,
   normalizedOpencodeModel,
 } from "../config.js";
 import { evaMcpServers } from "../evaMcp.js";
-import { updateThinkingStep } from "../parse/canonical.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
 import {
   appendToRawLogFile,
@@ -16,14 +13,14 @@ import {
   recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import {
   syncOpencodeStateToPersist,
   writeOpencodeSessionState,
 } from "../session/opencodeSession.js";
 import type { ProviderAttemptResult, SessionMode } from "../types.js";
-import { log } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { log, readTurnPrompt, withSystemPrompt } from "../utils.js";
+import { beginSdkAttempt, finishSdkAttempt } from "./attemptResult.js";
 import { resolvePinnedSdkEntry } from "./claudeSdk.js";
 import {
   ensureOpencodeServer,
@@ -71,10 +68,6 @@ async function loadOpencodeSdk(): Promise<OpencodeSdkModule> {
     })
   );
   return mod;
-}
-
-function readPromptText(): string {
-  return readFileSync("/tmp/design-prompt.txt", "utf8");
 }
 
 /**
@@ -259,29 +252,35 @@ export async function ensureEvaMcpServers(
       log("opencode mcp.status failed: " + resultFailure(status));
       return;
     }
-    for (const [name, server] of configured) {
-      if (status.data[name]) continue;
-      const added = await client.mcp.add({
-        body: {
-          name,
-          config: {
-            type: "remote",
-            url: server.url,
-            headers: server.headers,
-            enabled: true,
-          },
-        },
-      });
-      log(
-        added.data
-          ? "opencode mcp server " +
-              name +
-              " registered (" +
-              (added.data[name]?.status ?? "unknown") +
-              ")"
-          : "opencode mcp.add " + name + " failed: " + resultFailure(added),
-      );
-    }
+    const known = status.data;
+    // Each add is a full remote connect; in parallel eva + linear measured
+    // ~1.5s instead of ~2.5s serially.
+    await Promise.all(
+      configured
+        .filter(([name]) => !known[name])
+        .map(async ([name, server]) => {
+          const added = await client.mcp.add({
+            body: {
+              name,
+              config: {
+                type: "remote",
+                url: server.url,
+                headers: server.headers,
+                enabled: true,
+              },
+            },
+          });
+          log(
+            added.data
+              ? "opencode mcp server " +
+                  name +
+                  " registered (" +
+                  (added.data[name]?.status ?? "unknown") +
+                  ")"
+              : "opencode mcp.add " + name + " failed: " + resultFailure(added),
+          );
+        }),
+    );
   } catch (error) {
     log(
       "opencode mcp registration failed: " +
@@ -320,21 +319,13 @@ function requireData<TData>(
 export async function runOpencodeSdkAttempt(
   sessionMode: SessionMode,
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Opencode agent...",
-    sessionMode.mode === "resume"
-      ? "Restoring saved context..."
-      : "Creating Opencode session...",
-  );
-  log(
-    "runOpencodeSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
-  );
+  beginSdkAttempt("runOpencodeSdkAttempt", sessionMode, () => ({
+    label: "Starting Opencode agent...",
+    detail:
+      sessionMode.mode === "resume"
+        ? "Restoring saved context..."
+        : "Creating Opencode session...",
+  }));
 
   let attemptOutput = "";
   // Two clocks, deliberately: `lastEventAt` counts real stream silence and
@@ -350,8 +341,11 @@ export async function runOpencodeSdkAttempt(
   let resultIsError = false;
   let attemptErrorMessage = "";
 
-  const sdk = await loadOpencodeSdk();
-  const baseUrl = await ensureOpencodeServer();
+  // The SDK import (~40ms) overlaps the health probe or a cold server start.
+  const [sdk, baseUrl] = await Promise.all([
+    loadOpencodeSdk(),
+    ensureOpencodeServer(),
+  ]);
   const client: OpencodeClientLike = sdk.createOpencodeClient({
     baseUrl,
     // Manual smoke test (tests/linkedReposHarness.manual.md) decides whether
@@ -360,7 +354,9 @@ export async function runOpencodeSdkAttempt(
     // rebuild needed.
     directory: AGENT_CWD,
   });
-  await ensureEvaMcpServers(client);
+  // Registration overlaps session setup and the event subscription; it only
+  // has to land before the prompt. Never throws (best-effort by design).
+  const mcpRegistered = ensureEvaMcpServers(client);
 
   const persistSessionId = (sessionId: string): void => {
     S.activeOpencodeSessionId = sessionId;
@@ -410,10 +406,7 @@ export async function runOpencodeSdkAttempt(
     sessionId = await createFreshSession();
   }
 
-  const promptText = readPromptText();
-  const combinedPrompt = SYSTEM_PROMPT
-    ? SYSTEM_PROMPT + "\n\n" + promptText
-    : promptText;
+  const combinedPrompt = withSystemPrompt(readTurnPrompt());
   const model = splitOpencodeModel(normalizedOpencodeModel);
 
   const emitState = createPartEmitState();
@@ -575,6 +568,7 @@ export async function runOpencodeSdkAttempt(
     // error rather than the presence of data. Without this check a rejected
     // prompt (bad model id, deleted session) would silently wait for events
     // that never come.
+    await mcpRegistered;
     const accepted = await client.session.promptAsync({
       path: { id: sessionId },
       body: {
@@ -646,35 +640,14 @@ export async function runOpencodeSdkAttempt(
     streamAbort.abort();
   }
 
-  const code =
-    sawResult &&
-    !resultIsError &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runOpencodeSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawResult=" +
-      sawResult +
-      ", resultIsError=" +
-      resultIsError +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") +
-      ")",
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runOpencodeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "turnError",
+    errorMessage: attemptErrorMessage,
   });
 }

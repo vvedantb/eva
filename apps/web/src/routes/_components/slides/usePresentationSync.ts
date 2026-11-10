@@ -1,17 +1,20 @@
 import { useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useLocalStorage } from "usehooks-ts";
+import { z } from "zod";
 import { api } from "@eva/backend";
 
-const PARTICIPANT_KEY_STORAGE = "eva:presentation-participant-key";
-const hostKeyStorage = (code: string) => `eva:presentation-host:${code}`;
+/** Session code → host key, for every deck this browser is presenting. */
+const HOST_KEYS_STORAGE = "eva:presentation-host-keys";
+const hostKeysSchema = z.record(z.string(), z.string());
 
-function readParticipantKey(): string {
-  if (typeof window === "undefined") return "";
-  const existing = window.localStorage.getItem(PARTICIPANT_KEY_STORAGE);
-  if (existing) return existing;
-  const key = crypto.randomUUID();
-  window.localStorage.setItem(PARTICIPANT_KEY_STORAGE, key);
-  return key;
+function parseHostKeys(raw: string): Record<string, string> {
+  try {
+    const parsed = hostKeysSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
 }
 
 interface UsePresentationSyncArgs {
@@ -20,33 +23,19 @@ interface UsePresentationSyncArgs {
   updateSearch: (next: { slide?: number; session?: string }) => void;
 }
 
-export type SessionState = "none" | "loading" | "live" | "ended" | "notfound";
+type SessionState = "none" | "loading" | "live" | "ended" | "notfound";
 
 export function usePresentationSync({
   slide,
   sessionCode,
   updateSearch,
 }: UsePresentationSyncArgs) {
-  const [participantKey] = useState(readParticipantKey);
-
-  const [hostKey, setHostKey] = useState<string | null>(() =>
-    typeof window !== "undefined" && sessionCode
-      ? window.localStorage.getItem(hostKeyStorage(sessionCode))
-      : null,
+  const [hostKeys, setHostKeys] = useLocalStorage<Record<string, string>>(
+    HOST_KEYS_STORAGE,
+    {},
+    { deserializer: parseHostKeys },
   );
-
-  useSyncExternalStore(
-    () => {
-      if (typeof window === "undefined" || !sessionCode) {
-        setHostKey(null);
-        return () => {};
-      }
-      setHostKey(window.localStorage.getItem(hostKeyStorage(sessionCode)));
-      return () => {};
-    },
-    () => sessionCode ?? "",
-    () => sessionCode ?? "",
-  );
+  const hostKey = (sessionCode && hostKeys[sessionCode]) || null;
 
   const isHost = hostKey !== null;
 
@@ -103,10 +92,7 @@ export function usePresentationSync({
 
   const shareSession = async () => {
     const result = await createSessionMut({ slide });
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(hostKeyStorage(result.code), result.hostKey);
-    }
-    setHostKey(result.hostKey);
+    setHostKeys((prev) => ({ ...prev, [result.code]: result.hostKey }));
     updateSearch({ session: result.code });
   };
 
@@ -126,10 +112,14 @@ export function usePresentationSync({
   const stopSharing = async () => {
     if (!sessionCode || !hostKey) return;
     await stopSharingMut({ code: sessionCode, hostKey }).catch(() => undefined);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(hostKeyStorage(sessionCode));
-    }
-    setHostKey(null);
+    // Avoid computed ObjectPattern keys: React Compiler bails on them (BuildHIR).
+    setHostKeys((keys) => {
+      const next: Record<string, string> = {};
+      for (const [code, key] of Object.entries(keys)) {
+        if (code !== sessionCode) next[code] = key;
+      }
+      return next;
+    });
     updateSearch({ session: undefined });
   };
 
@@ -148,7 +138,6 @@ export function usePresentationSync({
     sessionState,
     effectiveSlide,
     onNavigate,
-    participantKey,
     hostKey,
     startSharing,
     stopSharing,

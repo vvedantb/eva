@@ -6,20 +6,22 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Markdown, MarkdownLink } from "@eva/ui/markdown";
+import {
+  Markdown,
+  MarkdownLink,
+  ScreenshotPreview,
+  VideoPreview,
+} from "@vvedantb/ui";
 import remarkBreaks from "remark-breaks";
 import {
   DataMentionChip,
   SkillMentionChip,
   UserMentionChip,
-  LinkChip,
   isSkillTokenId,
   isHarnessSkillTokenId,
-  isChipLinkUrl,
   MENTION_CHIP_CLASS,
   SKILL_CHIP_CLASS,
 } from "@/lib/components/mentions";
-import { ScreenshotPreview, VideoPreview } from "@/lib/components/MediaPreview";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { remarkMentionChips, MENTION_HREF_REGEX } from "./remarkMentionChips";
 
@@ -179,9 +181,6 @@ export function MarkdownMentionText({
             typeof href === "string" ? href.match(MENTION_HREF_REGEX) : null;
 
           if (!match) {
-            if (typeof href === "string" && isChipLinkUrl(href)) {
-              return <LinkChip url={href} />;
-            }
             return <MarkdownLink href={href}>{children}</MarkdownLink>;
           }
 

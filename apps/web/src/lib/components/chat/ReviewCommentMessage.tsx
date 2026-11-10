@@ -1,12 +1,20 @@
-import { IconMessage } from "@tabler/icons-react";
-import { Surface } from "@eva/ui";
+import { IconMessage, IconQuote } from "@tabler/icons-react";
+import { Surface, ListEnter } from "@vvedantb/ui";
+import { cn } from "@eva/ui";
+import {
+  parseCitationSegments,
+  type CitationMessageSegment,
+} from "@/lib/components/chat/assistantCitation";
+import { usePendingCitations } from "@/lib/contexts/PendingCitationsContext";
 import {
   MarkdownMentionText,
   PlainMarkdownText,
 } from "@/lib/components/chat/MarkdownMentionText";
 import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
-import { parseReviewCommentSegments } from "@/lib/reviewComments";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+import {
+  parseReviewCommentSegments,
+  type ReviewCommentMessageSegment,
+} from "@/lib/reviewComments";
 
 interface ReviewCommentMessageProps {
   text: string;
@@ -59,16 +67,62 @@ function ReviewCommentCard({
   );
 }
 
+/**
+ * A quote the user cited from an Eva reply. Clicking it scrolls to and
+ * flashes the source turn, same as the pending chip in the composer.
+ */
+function CitationCard({
+  messageId,
+  text,
+  comment,
+  repo,
+}: {
+  messageId: string;
+  text: string;
+  comment: string;
+  repo?: ChatRepo;
+}) {
+  const citations = usePendingCitations();
+  return (
+    <div className="space-y-2">
+      <Surface density="none" className="overflow-hidden">
+        <button
+          type="button"
+          disabled={!citations}
+          onClick={() => citations?.reveal(messageId)}
+          title={citations ? "Show in conversation" : undefined}
+          className={cn(
+            "flex w-full items-start gap-2 px-3 py-2.5 text-left text-xs leading-relaxed text-muted-foreground",
+            citations &&
+              "transition-colors hover:bg-muted/40 hover:text-foreground",
+          )}
+        >
+          <IconQuote className="mt-0.5 size-3.5 shrink-0" />
+          <span className="line-clamp-4 min-w-0">{text}</span>
+        </button>
+      </Surface>
+      {comment.length > 0 ? <MessageText text={comment} repo={repo} /> : null}
+    </div>
+  );
+}
+
 export function ReviewCommentMessage({
   text,
   repo,
 }: ReviewCommentMessageProps) {
-  const segments = parseReviewCommentSegments(text);
-  const hasReviewComments = segments.some(
-    (segment) => segment.kind === "review-comment",
+  const segments = parseReviewCommentSegments(text).flatMap<
+    ReviewCommentMessageSegment | CitationMessageSegment
+  >((segment) =>
+    segment.kind === "text"
+      ? parseCitationSegments(segment.text).map((part) => ({
+          ...part,
+          id: `${segment.id}:${part.id}`,
+        }))
+      : [segment],
   );
+  const hasCards = segments.some((segment) => segment.kind !== "text");
 
-  if (!hasReviewComments) return <MessageText text={text} repo={repo} />;
+  if (!hasCards) return <MessageText text={text} repo={repo} />;
 
   return (
     <div className="space-y-3">
@@ -77,6 +131,15 @@ export function ReviewCommentMessage({
           segment.text.trim().length > 0 ? (
             <MessageText key={segment.id} text={segment.text} repo={repo} />
           ) : null
+        ) : segment.kind === "citation" ? (
+          <ListEnter key={segment.id} index={index} fast>
+            <CitationCard
+              messageId={segment.messageId}
+              text={segment.text}
+              comment={segment.comment}
+              repo={repo}
+            />
+          </ListEnter>
         ) : (
           <ListEnter key={segment.comment.id} index={index} fast>
             <div className="flex items-start gap-2">

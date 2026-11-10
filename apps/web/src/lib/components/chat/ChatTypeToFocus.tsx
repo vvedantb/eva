@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePromptInputController } from "@eva/ui";
+import { usePromptInputController } from "@vvedantb/ui";
 import { isEditorValueEmpty } from "@/lib/components/mentions";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";

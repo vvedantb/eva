@@ -1,4 +1,5 @@
-import { cn, HoverCard, HoverCardContent, HoverCardTrigger } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@vvedantb/ui";
 import { IconAlertTriangle, IconShieldCheck } from "@tabler/icons-react";
 import {
   formatPercent,

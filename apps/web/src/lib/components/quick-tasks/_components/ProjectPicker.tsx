@@ -10,7 +10,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconFolder, IconFolderPlus, IconCheck } from "@tabler/icons-react";
 import type { FunctionReturnType } from "convex/server";
 import type { api, Id } from "@eva/backend";

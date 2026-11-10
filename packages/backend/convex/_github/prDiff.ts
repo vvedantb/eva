@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { z } from "zod";
 import { action, internalAction } from "../_generated/server";
 import { components, internal } from "../_generated/api";
-import { getInstallationOctokit } from "../githubAuth";
+import { getRepoOctokit, type getInstallationOctokit } from "../githubAuth";
 import { extractPrNumber } from "./helpers";
 import {
   decodeGitHubContent,
@@ -36,6 +36,12 @@ const prDiffResultValidator = v.object({
   baseSha: v.string(),
   /** `https://github.com/<owner>/<name>`, for per-file "View file" links. */
   repoUrl: v.string(),
+  /**
+   * The branch a session can start on to work on this PR: the head branch of
+   * an open PR from this repo. Null for a fork (its branch is not here) and for
+   * a closed PR (its branch may be gone; a merged change is on the base).
+   */
+  workBranch: v.union(v.string(), v.null()),
 });
 
 type PrDiffResult = {
@@ -44,6 +50,7 @@ type PrDiffResult = {
   headSha: string;
   baseSha: string;
   repoUrl: string;
+  workBranch: string | null;
 };
 
 type InstallationOctokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
@@ -78,12 +85,7 @@ export const fetchPrDiff = internalAction({
   },
   returns: prDiffResultValidator,
   handler: async (ctx, args): Promise<PrDiffResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     // JSON PR metadata is fine for large PRs — start it alongside the diff
     // attempt so a fallback listFiles path still reuses one meta round-trip.
     const metaPromise = octokit.rest.pulls.get({
@@ -129,15 +131,20 @@ export const fetchPrDiff = internalAction({
       headSha: meta.data.head.sha,
       baseSha: meta.data.base.sha,
       repoUrl: `https://github.com/${repo.owner}/${repo.name}`,
+      workBranch:
+        meta.data.state === "open" &&
+        meta.data.head.repo?.full_name === meta.data.base.repo.full_name
+          ? meta.data.head.ref
+          : null,
     };
   },
 });
 
-// V2: the payload gained head/base shas and the repo URL — a bumped name drops
-// V1 entries instead of serving objects that are missing the new fields.
+// V3: the payload gained `workBranch` (V2: head/base shas and the repo URL) —
+// a bumped name drops old entries instead of serving objects missing fields.
 const prDiffCache = new ActionCache(components.actionCache, {
   action: internal._github.prDiff.fetchPrDiff,
-  name: "prDiffV2",
+  name: "prDiffV3",
   ttl: PR_DIFF_CACHE_TTL_MS,
 });
 
@@ -160,8 +167,6 @@ export const getPrDiff = action({
   },
   returns: prDiffResultValidator,
   handler: async (ctx, args): Promise<PrDiffResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     const prNumber =
@@ -220,12 +225,7 @@ export const fetchCommitDiff = internalAction({
   },
   returns: commitDiffResultValidator,
   handler: async (ctx, args): Promise<CommitDiffResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const [res, meta] = await Promise.all([
       octokit.rest.repos.getCommit({
         owner: repo.owner,
@@ -280,8 +280,6 @@ export const getCommitDiff = action({
   },
   returns: commitDiffResultValidator,
   handler: async (ctx, args): Promise<CommitDiffResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await commitDiffCache.fetch(ctx, {
@@ -319,12 +317,7 @@ export const fetchCompareDiff = internalAction({
   },
   returns: compareDiffResultValidator,
   handler: async (ctx, args): Promise<CompareDiffResult> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     let data: unknown;
     try {
       const res = await octokit.rest.repos.compareCommitsWithBasehead({
@@ -379,8 +372,6 @@ export const getCompareDiff = action({
   },
   returns: compareDiffResultValidator,
   handler: async (ctx, args): Promise<CompareDiffResult> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await compareDiffCache.fetch(
@@ -481,12 +472,7 @@ export const fetchPrFileContents = internalAction({
   },
   returns: prFileContentsValidator,
   handler: async (ctx, args): Promise<PrFileContents> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const [old, next] = await Promise.all([
       readFileAtRef(octokit, repo.owner, repo.name, args.path, args.baseSha),
       readFileAtRef(octokit, repo.owner, repo.name, args.path, args.headSha),
@@ -521,8 +507,6 @@ export const getPrFileContents = action({
   },
   returns: prFileContentsValidator,
   handler: async (ctx, args): Promise<PrFileContents> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prFileContentsCache.fetch(ctx, {

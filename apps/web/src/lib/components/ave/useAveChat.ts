@@ -5,7 +5,7 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useLocalStorage } from "usehooks-ts";
 import { api, type Id } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
 import {
   findStreamingTargetMessage,
   type ChatBodyMessage,

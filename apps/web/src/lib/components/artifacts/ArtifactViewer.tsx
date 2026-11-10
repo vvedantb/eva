@@ -5,11 +5,10 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { Spinner } from "@eva/ui";
+import { Spinner, ViewTransitionSuspense } from "@vvedantb/ui";
 import { IconArrowLeft, IconExternalLink } from "@tabler/icons-react";
 import { ArtifactFrame } from "./ArtifactFrame";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { ViewTransitionSuspense } from "@/lib/components/viewTransitions";
 import {
   chatSourceLabel,
   chatSourceRoute,
@@ -61,7 +60,9 @@ function ArtifactHtmlBody({
       </Centered>
     );
   }
-  return <ArtifactFrame artifactId={artifactId} html={result.html} title={title} />;
+  return (
+    <ArtifactFrame artifactId={artifactId} html={result.html} title={title} />
+  );
 }
 
 /** Loads an artifact's stored HTML and renders it in the bridged sandbox iframe. */
@@ -98,9 +99,7 @@ export function ArtifactViewer({ artifactId }: { artifactId: string }) {
         <h1 className="min-w-0 truncate text-balance font-medium text-foreground">
           {artifact.name}
         </h1>
-        {artifact.source ? (
-          <SourceLink source={artifact.source} />
-        ) : null}
+        {artifact.source ? <SourceLink source={artifact.source} /> : null}
         <button
           type="button"
           onClick={() => openArtifactInNewTab(artifact._id)}

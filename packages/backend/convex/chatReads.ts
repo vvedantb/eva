@@ -105,6 +105,25 @@ export async function unreadLookupForRepo(
   };
 }
 
+/**
+ * One-row variant of `unreadLookupForRepo` for short lists: a point read
+ * instead of the user's whole repo. It ignores a read row filed under another
+ * repo, exactly as the repo-wide lookup does, so both give the same answer.
+ */
+export async function hasUnreadByPointRead(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  entity: ChatEntity,
+): Promise<boolean> {
+  if (entity.lastTurnFinishedAt === undefined) return false;
+  const row = await getReadRow(db, userId, entity._id);
+  return hasUnreadFor(
+    userId,
+    entity,
+    row !== null && row.repoId === entity.repoId ? row : null,
+  );
+}
+
 /** Unread state of the open chat, plus the read time the "NEW" divider anchors on. */
 export const isUnread = authQuery({
   args: { parentId: chatTurnEntityIdValidator },

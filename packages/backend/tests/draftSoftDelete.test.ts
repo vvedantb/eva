@@ -8,7 +8,7 @@ import schema from "../convex/schema";
  * 613e5d8cc). `remove` only stamps `deletedAt` and keeps the row, but
  * listDrafts/countDrafts ranged over the status-only index, so the deleted
  * draft came straight back on the next subscription push and the trash button
- * looked dead. Both now range over by_repo_status_and_deleted.
+ * looked dead. Both now range over an index with `deletedAt` in it.
  *
  * These run the real mutation against the real queries, because the property
  * that broke is behavioural: the row must leave the list while staying on

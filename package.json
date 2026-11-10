@@ -5,6 +5,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @eva/web dev",
+    "mobile": "pnpm --filter @eva/mobile start",
     "convex": "pnpm --filter @eva/backend dev",
     "convex:deploy": "pnpm --filter @eva/backend run deploy",
     "convex:all": "pnpm --filter @eva/backend run dev:all",
@@ -13,9 +14,10 @@
     "ext:build": "pnpm --filter eva-assist-extension build",
     "ext:release": "npx tsx scripts/release-extension.ts",
     "lint": "oxlint -c .oxlintrc.json .",
-    "typecheck": "pnpm --filter @eva/web typecheck && pnpm --filter @eva/backend typecheck && pnpm --filter @eva/backend typecheck:callback && pnpm --filter @eva/backend typecheck:annotation",
+    "typecheck": "pnpm --filter @eva/web typecheck && pnpm --filter @eva/backend typecheck && pnpm --filter @eva/backend typecheck:callback && pnpm --filter @eva/backend typecheck:annotation && pnpm --filter @eva/mobile typecheck",
     "compiler:check": "node scripts/compiler-check.mjs",
     "design:check": "node scripts/design-check.mjs",
+    "test": "pnpm --filter @eva/web test && pnpm --filter @eva/backend test && pnpm test:oxlint-plugin && pnpm test:schema-narrowing",
     "test:oxlint-plugin": "node --test scripts/oxlint-plugin-eva/test/rules.test.mjs",
     "test:schema-narrowing": "node --test scripts/check-schema-narrowing.test.mjs",
     "check:schema-narrowing": "node scripts/check-schema-narrowing.mjs",
@@ -38,6 +40,8 @@
       "@types/react-dom": "19.3.0",
       "react": "19.3.0",
       "react-dom": "19.3.0",
+      "@eva/mobile>react": "19.2.3",
+      "@eva/mobile>react-dom": "19.2.3",
       "axios": "1.18.0",
       "brace-expansion@1.1.15": "1.1.18",
       "convex-helpers": "0.1.114",
@@ -57,10 +61,12 @@
       "ws@8.20.1": "8.21.0"
     },
     "patchedDependencies": {
-      "@convex-dev/presence@0.3.0": "patches/@convex-dev__presence@0.3.0.patch"
+      "@convex-dev/presence@0.3.0": "patches/@convex-dev__presence@0.3.0.patch",
+      "@vercel/sandbox": "patches/@vercel__sandbox.patch"
     },
     "onlyBuiltDependencies": [
-      "@swc/core"
+      "@swc/core",
+      "@vvedantb/native-ui"
     ],
     "packageExtensions": {
       "@convex-dev/prosemirror-sync": {

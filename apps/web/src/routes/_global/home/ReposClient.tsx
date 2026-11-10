@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction } from "convex/react";
 import { useState } from "react";
+import { useLocalStorage } from "usehooks-ts";
 import { AnimatePresence } from "motion/react";
 import { api } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
@@ -20,7 +21,10 @@ import {
   CenteredSpinner,
   toast,
   RefreshSpinIcon,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconEyeOff,
@@ -28,12 +32,6 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
 import { HiddenReposSheet } from "./_components/HiddenReposSheet";
@@ -52,29 +50,13 @@ export function ReposClient() {
   const [syncing, setSyncing] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
-  const altHeld = useAltHeld();
-  const [welcomeDismissed, setWelcomeDismissed] = useState(() => {
-    // Sync read avoids banner mount/unmount flash after hydration (CLS).
-    // Only the storage read is wrapped: React Compiler bails on the whole file
-    // when a logical expression sits inside a try/catch.
-    let raw: string | null = null;
-    try {
-      raw = localStorage.getItem(WELCOME_STORAGE_KEY);
-    } catch {
-      return false;
-    }
-    if (raw === null) return false;
-    // usehooks-ts previously JSON-serialized booleans as "true"/"false".
-    return raw === "true" || raw === '"true"';
-  });
-  const handleDismissWelcome = () => {
-    setWelcomeDismissed(true);
-    try {
-      localStorage.setItem(WELCOME_STORAGE_KEY, "true");
-    } catch {
-      // Ignore quota / private mode failures.
-    }
-  };
+  const { request: requestConfirm } = useRequestConfirm();
+  // Reads storage in the first render (initializeWithValue), so no banner flash.
+  const [welcomeDismissed, setWelcomeDismissed] = useLocalStorage(
+    WELCOME_STORAGE_KEY,
+    false,
+  );
+  const handleDismissWelcome = () => setWelcomeDismissed(true);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -150,7 +132,6 @@ export function ReposClient() {
                     title={skipConfirmTitle("Sync Repos")}
                     onClick={() =>
                       requestConfirm(
-                        altHeld,
                         () => setSyncConfirmOpen(true),
                         () => {
                           void handleSync();

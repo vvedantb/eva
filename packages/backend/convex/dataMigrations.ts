@@ -8,6 +8,8 @@ import type { MutationCtx } from "./_generated/server";
 import { buildProjectBranchName } from "./_git/branchNames";
 import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
+import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
+import type { BackgroundAgentEntry } from "./_validators/tableFields";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -314,3 +316,51 @@ export const backfillRunPullRequests = dataMigrations.define({
     return { prUrl: undefined };
   },
 });
+
+/**
+ * Caps every stored `backgroundAgents` array at the settled-entry limit that
+ * `mergeBackgroundAgents` now enforces on write. Small batches: an unpruned
+ * row can hold several hundred KB, and a batch reads all of its rows at once.
+ */
+function pruneBackgroundAgentsPatch(doc: {
+  backgroundAgents?: BackgroundAgentEntry[];
+}): { backgroundAgents: BackgroundAgentEntry[] } | undefined {
+  if (!doc.backgroundAgents) return;
+  const pruned = pruneSettledBackgroundAgents(doc.backgroundAgents);
+  if (pruned === doc.backgroundAgents) return;
+  return { backgroundAgents: pruned };
+}
+
+const PRUNE_BACKGROUND_AGENTS_BATCH = 10;
+
+export const pruneSessionChatBackgroundAgents = dataMigrations.define({
+  table: "sessionChats",
+  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
+  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
+});
+
+export const pruneSessionBackgroundAgents = dataMigrations.define({
+  table: "sessions",
+  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
+  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
+});
+
+export const pruneAgentTaskBackgroundAgents = dataMigrations.define({
+  table: "agentTasks",
+  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
+  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
+});
+
+export const pruneProjectBackgroundAgents = dataMigrations.define({
+  table: "projects",
+  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
+  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
+});
+
+/** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
+export const pruneBackgroundAgents = dataMigrations.runner([
+  internal.dataMigrations.pruneSessionChatBackgroundAgents,
+  internal.dataMigrations.pruneSessionBackgroundAgents,
+  internal.dataMigrations.pruneAgentTaskBackgroundAgents,
+  internal.dataMigrations.pruneProjectBackgroundAgents,
+]);

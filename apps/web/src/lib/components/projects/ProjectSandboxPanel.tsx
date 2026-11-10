@@ -12,6 +12,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SandboxTabBar } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabBar";
+import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
@@ -25,6 +26,8 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { useProjectChatBinding } from "./ProjectSandboxChatPanel";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -59,6 +62,8 @@ interface ProjectSandboxPanelProps {
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Mini-player title; Expand returns to this project's Preview tab. */
+  title: string;
 }
 
 export function ProjectSandboxPanel({
@@ -80,12 +85,16 @@ export function ProjectSandboxPanel({
   autoWakeEligible,
   collapsed = false,
   onToggle,
+  title,
 }: ProjectSandboxPanelProps) {
   const simpleView = useSimpleView();
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const projectIdStr = String(projectId);
+  const submitAnnotation = useSandboxAnnotationSend(
+    useProjectChatBinding(projectId),
+  );
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
@@ -210,55 +219,77 @@ export function ProjectSandboxPanel({
           >
             <SessionDocumentsPanel source={artifactSource} />
           </div>
-          <div className={!simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"}>
+          <div
+            className={
+              !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
+            }
+          >
             <FilesPanel
               sandboxId={sandboxId}
               repoId={repoId}
               isActive={isActive}
               fileList={fileList}
-            wake={{ onStartSandbox, isSandboxStarting }}
+              wake={{ onStartSandbox, isSandboxStarting }}
             />
           </div>
           <div
             className={
-              !simpleView && activeTab === "agents" ? "h-full min-h-0" : "hidden"
+              !simpleView && activeTab === "agents"
+                ? "h-full min-h-0"
+                : "hidden"
             }
           >
-            <SandboxAgentsPanel entity={{ kind: "project", projectId }} agents={agents} />
+            <SandboxAgentsPanel
+              entity={{ kind: "project", projectId }}
+              agents={agents}
+            />
           </div>
-          <SandboxPaneSlots
-            activeTab={activeTab}
-            panes={panes}
-            preview={preview}
-            owner={owner}
-            sandboxId={sandboxId}
-            isActive={isActive}
-            repoId={repoId}
-            cacheKey={projectIdStr}
-            devCommand={devCommand}
-            prUrl={prUrl}
-            agentBrowsingAt={viewState?.agentBrowsingAt}
-            onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-            // Backend starts the app in the Console tmux session after startup.
-            runConsoleDevCommandOnConnect={false}
-            onStartSandbox={onStartSandbox}
-            isSandboxStarting={isSandboxStarting}
-            autoWakeEligible={autoWakeEligible}
-            // A collapsed rail is not on screen: no presence beacon, no auto-wake.
-            presenceEnabled={!collapsed}
-            stickyPreviewPath={viewState?.previewPath}
-            onStickyPreviewPathChange={(path) => {
-              void setPreviewPath({ owner, path });
-            }}
-            stickyTerminalHistoryTail={
-              viewState === undefined
-                ? undefined
-                : (viewState?.terminalHistoryTail ?? "")
-            }
-            onStickyTerminalHistoryTailChange={(tail) => {
-              void setTerminalHistoryTail({ owner, tail });
-            }}
-          />
+          <ReviewChatTargetProvider value={{ kind: "projectChat", projectId }}>
+            <SandboxPaneSlots
+              activeTab={activeTab}
+              panes={panes}
+              preview={preview}
+              owner={owner}
+              sandboxId={sandboxId}
+              isActive={isActive}
+              repoId={repoId}
+              cacheKey={projectIdStr}
+              devCommand={devCommand}
+              prUrl={prUrl}
+              agentBrowsingAt={viewState?.agentBrowsingAt}
+              onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
+              // Backend starts the app in the Console tmux session after startup.
+              runConsoleDevCommandOnConnect={false}
+              onStartSandbox={onStartSandbox}
+              isSandboxStarting={isSandboxStarting}
+              autoWakeEligible={autoWakeEligible}
+              onAnnotationSubmit={submitAnnotation}
+              // A collapsed rail is not on screen: no presence beacon, no auto-wake.
+              presenceEnabled={!collapsed}
+              // A collapsed rail keeps its preview parked.
+              miniPlayer={
+                projectPathSegment && !collapsed
+                  ? {
+                      owner: { kind: "project", projectId },
+                      returnTo: `${basePath}/projects/${projectPathSegment}/sandbox/preview`,
+                      title,
+                    }
+                  : undefined
+              }
+              stickyPreviewPath={viewState?.previewPath}
+              onStickyPreviewPathChange={(path) => {
+                void setPreviewPath({ owner, path });
+              }}
+              stickyTerminalHistoryTail={
+                viewState === undefined
+                  ? undefined
+                  : (viewState?.terminalHistoryTail ?? "")
+              }
+              onStickyTerminalHistoryTailChange={(tail) => {
+                void setTerminalHistoryTail({ owner, tail });
+              }}
+            />
+          </ReviewChatTargetProvider>
         </div>
       </SandboxPanelFrame>
     </>

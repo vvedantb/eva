@@ -1,9 +1,10 @@
-export type PublicConvexUrlEnv = {
-  EVA_PUBLIC_CONVEX_URL?: string;
-  EVA_PUBLIC_CONVEX_SITE_URL?: string;
-  CONVEX_CLOUD_URL?: string;
-  CONVEX_SITE_URL?: string;
-};
+/**
+ * Any env map, `process.env` included. Reads EVA_PUBLIC_CONVEX_URL,
+ * EVA_PUBLIC_CONVEX_SITE_URL, CONVEX_CLOUD_URL and CONVEX_SITE_URL. A map, not
+ * an all-optional object: TypeScript's weak-type check rejects a
+ * `process.env` whose type declares other keys (Expo's NODE_ENV).
+ */
+export type PublicConvexUrlEnv = Readonly<Record<string, string | undefined>>;
 
 /** Cloud URL sandboxes / external callers should use (tunnel override wins). */
 export function resolvePublicConvexCloudUrl(

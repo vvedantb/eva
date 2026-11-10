@@ -7,10 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import type { GitStatus } from "@pierre/trees";
-import { Accordion, SearchInput, Spinner, toast } from "@eva/ui";
+import {
+  Accordion,
+  SearchInput,
+  Spinner,
+  toast,
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { IconGitPullRequest, IconAlertTriangle } from "@tabler/icons-react";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { commitDiffQuery } from "@/lib/prReviewQueries";
@@ -25,7 +30,12 @@ import { DiffsToolbar } from "./DiffsToolbar";
 import { useDiffSearchParams } from "./useDiffSearchParams";
 import { useDiffViewedFiles } from "./useDiffViewedFiles";
 import { usePrDiff } from "./usePrDiff";
-import { applyIgnoreWhitespace, type DiffFileEntry } from "./diffFiles";
+import { useDiffIgnoreWhitespace } from "./useDiffIgnoreWhitespace";
+import {
+  applyIgnoreWhitespace,
+  summarizeDiffSize,
+  type DiffFileEntry,
+} from "./diffFiles";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */
@@ -99,10 +109,7 @@ export function DiffsPanel({
   });
 
   const [wrapLines, setWrapLines] = useLocalStorage("eva:pr-diff-wrap", true);
-  const [ignoreWhitespace, setIgnoreWhitespace] = useLocalStorage(
-    "eva:pr-diff-ignore-ws",
-    false,
-  );
+  const [ignoreWhitespace, setIgnoreWhitespace] = useDiffIgnoreWhitespace();
   const [treeOpen, setTreeOpen] = useLocalStorage(
     "eva:pr-diff-tree-open",
     true,
@@ -369,6 +376,11 @@ export function DiffsPanel({
         ? null
         : createPortal(
             <DiffsToolbar
+              size={
+                source.status === "ready"
+                  ? summarizeDiffSize(fileEntries)
+                  : null
+              }
               scopedCommit={
                 scopedCommit === undefined
                   ? null

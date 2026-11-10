@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Popover, PopoverTrigger, PopoverContent, Button } from "@eva/ui";
+import { Popover, PopoverTrigger, PopoverContent, Button } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";

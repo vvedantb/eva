@@ -1,11 +1,9 @@
 "use client";
 
-import { Input } from "@eva/ui";
+import { Input, SettingsField, SettingsSection } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import { isAppRepo } from "../_utils";
 import { DomainsSection } from "./DomainsSection";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 
 type UpdateRepoConfig = (args: {
   repoId: Id<"githubRepos">;

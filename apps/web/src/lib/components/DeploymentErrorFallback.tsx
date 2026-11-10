@@ -4,7 +4,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import { isChunkLoadError } from "@/lib/utils/isChunkLoadError";
 import {

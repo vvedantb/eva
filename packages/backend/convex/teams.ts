@@ -6,7 +6,13 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authQuery, authMutation } from "./functions";
+import {
+  authQuery,
+  authMutation,
+  getTeamMembership,
+  hasTeamAccess,
+  requireTeamOwner,
+} from "./functions";
 import { teamFields } from "./_validators/tableFields";
 
 /** Team doc fields plus resolved media URLs and membership role for list/get. */
@@ -38,14 +44,13 @@ async function attachTeamMediaUrls(
   ctx: QueryCtx | MutationCtx,
   team: Doc<"teams">,
 ): Promise<{ logoUrl: string | null; backgroundUrl: string | null }> {
-  return {
-    logoUrl: team.logoStorageId
-      ? await ctx.storage.getUrl(team.logoStorageId)
+  const [logoUrl, backgroundUrl] = await Promise.all([
+    team.logoStorageId ? ctx.storage.getUrl(team.logoStorageId) : null,
+    team.backgroundStorageId
+      ? ctx.storage.getUrl(team.backgroundStorageId)
       : null,
-    backgroundUrl: team.backgroundStorageId
-      ? await ctx.storage.getUrl(team.backgroundStorageId)
-      : null,
-  };
+  ]);
+  return { logoUrl, backgroundUrl };
 }
 
 /** Throws unless the user is a member of the team (any role). */
@@ -54,13 +59,9 @@ async function assertTeamMember(
   teamId: Id<"teams">,
   userId: Id<"users">,
 ): Promise<void> {
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  if (!membership) throw new Error("Not authorized");
+  if (!(await hasTeamAccess(db, teamId, userId))) {
+    throw new Error("Not authorized");
+  }
 }
 
 /** Gets the user's personal team, creating one (with owner membership) if it doesn't exist. */
@@ -134,20 +135,19 @@ export const list = authQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .collect();
 
-    const teams = [];
-    for (const membership of memberships) {
-      const team = await ctx.db.get(membership.teamId);
-      if (team) {
-        teams.push({
-          ...team,
-          ...(await attachTeamMediaUrls(ctx, team)),
-          displayName: await resolveDisplayName(ctx, team, ctx.userId),
-          userRole: membership.role,
-        });
-      }
-    }
+    const teams = await Promise.all(
+      memberships.map(async (membership) => {
+        const team = await ctx.db.get(membership.teamId);
+        if (!team) return [];
+        const [media, displayName] = await Promise.all([
+          attachTeamMediaUrls(ctx, team),
+          resolveDisplayName(ctx, team, ctx.userId),
+        ]);
+        return [{ ...team, ...media, displayName, userRole: membership.role }];
+      }),
+    );
 
-    return teams;
+    return teams.flat();
   },
 });
 
@@ -161,24 +161,17 @@ export const get = authQuery({
     const teamId = ctx.db.normalizeId("teams", args.id);
     if (!teamId) return null;
 
-    const team = await ctx.db.get(teamId);
-    if (!team) return null;
+    const [team, membership] = await Promise.all([
+      ctx.db.get(teamId),
+      getTeamMembership(ctx.db, teamId, ctx.userId),
+    ]);
+    if (!team || !membership) return null;
 
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) return null;
-
-    return {
-      ...team,
-      ...(await attachTeamMediaUrls(ctx, team)),
-      displayName: await resolveDisplayName(ctx, team, ctx.userId),
-      userRole: membership.role,
-    };
+    const [media, displayName] = await Promise.all([
+      attachTeamMediaUrls(ctx, team),
+      resolveDisplayName(ctx, team, ctx.userId),
+    ]);
+    return { ...team, ...media, displayName, userRole: membership.role };
   },
 });
 
@@ -190,16 +183,12 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.id).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership || membership.role !== "owner") {
-      throw new Error("Only team owners can update team settings");
-    }
+    await requireTeamOwner(
+      ctx.db,
+      args.id,
+      ctx.userId,
+      "Only team owners can update team settings",
+    );
 
     const updates: { name?: string } = {};
     if (args.name !== undefined) updates.name = args.name;
@@ -299,16 +288,12 @@ export const remove = authMutation({
       throw new Error("Cannot delete Personal team");
     }
 
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.id).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership || membership.role !== "owner") {
-      throw new Error("Only team owners can delete the team");
-    }
+    await requireTeamOwner(
+      ctx.db,
+      args.id,
+      ctx.userId,
+      "Only team owners can delete the team",
+    );
 
     const allMembers = await ctx.db
       .query("teamMembers")

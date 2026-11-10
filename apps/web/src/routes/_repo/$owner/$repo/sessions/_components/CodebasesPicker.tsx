@@ -5,6 +5,7 @@ import { useQueryStates } from "nuqs";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   Button,
   Input,
@@ -12,13 +13,8 @@ import {
   PopoverContent,
   PopoverTrigger,
   Switch,
-  cn,
-} from "@eva/ui";
-import {
-  IconBrandGithub,
-  IconChevronDown,
-  IconX,
-} from "@tabler/icons-react";
+} from "@vvedantb/ui";
+import { IconBrandGithub, IconChevronDown, IconX } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -104,7 +100,13 @@ function LinkedRepoChip({
   repo,
   onRemove,
 }: {
-  repo: { owner: string; name: string; rootDirectory?: string; label?: string; logoUrl?: string | null };
+  repo: {
+    owner: string;
+    name: string;
+    rootDirectory?: string;
+    label?: string;
+    logoUrl?: string | null;
+  };
   onRemove: () => void;
 }) {
   const label = repoDisplayLabel(repo);

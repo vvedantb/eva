@@ -49,7 +49,13 @@ function PreviewViewportResizeHandles({
   ) {
     if (event.button !== 0) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // Listen on the captured handle, not window, and end on
+    // `lostpointercapture`: it fires after pointerup/cancel and also when the
+    // browser drops capture (window blur, alt-tab). A window `pointerup` never
+    // arrives when the release lands in the preview iframe or another app,
+    // which left the drag stuck to the cursor.
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
     const originX = event.clientX;
     const originY = event.clientY;
     const start = { width, height };
@@ -58,6 +64,10 @@ function PreviewViewportResizeHandles({
 
     function onMove(moveEvent: PointerEvent) {
       if (moveEvent.pointerId !== pointerId) return;
+      if (moveEvent.buttons === 0) {
+        onEnd(moveEvent);
+        return;
+      }
       onResize(
         resizePreviewViewport(
           start,
@@ -71,16 +81,17 @@ function PreviewViewportResizeHandles({
       );
     }
 
-    function onUp(upEvent: PointerEvent) {
-      if (upEvent.pointerId !== pointerId) return;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+    function onEnd(endEvent: PointerEvent) {
+      if (endEvent.pointerId !== pointerId) return;
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("lostpointercapture", onEnd);
+      if (handle.hasPointerCapture(pointerId)) {
+        handle.releasePointerCapture(pointerId);
+      }
     }
 
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("lostpointercapture", onEnd);
   }
 
   return (

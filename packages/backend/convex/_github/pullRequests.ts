@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { action, internalAction, type ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { components, internal } from "../_generated/api";
-import { getInstallationOctokit } from "../githubAuth";
+import { getInstallationOctokit, getRepoOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
 
 const MAX_LIST_PAGES = 3;
@@ -62,14 +62,7 @@ export const listPullRequests = action({
   },
   returns: v.array(pullRequestListItemValidator),
   handler: async (ctx, args): Promise<PullRequestListItem[]> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    await getActionRepoWithAccess(ctx, args.repoId);
-
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
+    const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
     const pulls: PullRequestListItem[] = [];
@@ -113,12 +106,7 @@ export const fetchPullRequestHeader = internalAction({
   },
   returns: pullRequestHeaderValidator,
   handler: async (ctx, args): Promise<PullRequestHeader> => {
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: args.repoId,
-    });
-    if (!repo) throw new Error("Repo not found");
-
-    const octokit = await getInstallationOctokit(repo.installationId);
+    const { repo, octokit } = await getRepoOctokit(ctx, args.repoId);
     const { data: pr } = await octokit.rest.pulls.get({
       owner: repo.owner,
       repo: repo.name,
@@ -153,8 +141,6 @@ export const getPullRequestHeader = action({
   },
   returns: pullRequestHeaderValidator,
   handler: async (ctx, args): Promise<PullRequestHeader> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
     await getActionRepoWithAccess(ctx, args.repoId);
 
     return await prHeaderCache.fetch(

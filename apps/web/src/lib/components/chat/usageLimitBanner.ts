@@ -40,7 +40,7 @@ export interface UsageLimitRetryCandidate {
 }
 
 /** In-flight key for the team credential, which has no account id. */
-export const TEAM_RETRY_KEY = "team";
+const TEAM_RETRY_KEY = "team";
 
 interface RetryCandidateInput {
   accounts: ReadonlyArray<{

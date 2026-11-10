@@ -24,9 +24,10 @@ export const aiModelValidator = v.union(
   v.literal("claude:opusplan"),
   v.literal("claude:claude-opus-4-5-20251101"),
   v.literal("claude:claude-opus-4-6"),
+  v.literal("claude:claude-fable-5-2"),
+  // Legacy Fable 5.1 and 5 — still accepted so existing sessions can load;
+  // normalizeAIModel maps them to claude-fable-5-2.
   v.literal("claude:claude-fable-5-1"),
-  // Legacy Fable 5 — still accepted so existing sessions can load;
-  // normalizeAIModel maps it to claude-fable-5-1.
   v.literal("claude:claude-fable-5"),
   v.literal("codex:gpt-6-astra"),
   v.literal("codex:gpt-5.6-sol"),
@@ -196,7 +197,7 @@ export type AIModel =
   | "claude:opusplan"
   | "claude:claude-opus-4-5-20251101"
   | "claude:claude-opus-4-6"
-  | "claude:claude-fable-5-1"
+  | "claude:claude-fable-5-2"
   | "codex:gpt-6-astra"
   | "codex:gpt-5.6-sol"
   | "codex:gpt-5.6-terra"
@@ -214,6 +215,7 @@ export type AIModel =
 export type PersistedAIModel =
   | AIModel
   | LegacyClaudeModel
+  | "claude:claude-fable-5-1"
   | "claude:claude-fable-5"
   | "codex:gpt-5.6"
   | "codex:gpt-5.5"
@@ -269,9 +271,9 @@ export const DEFAULT_AI_MODEL: AIModel = "claude:sonnet";
 
 export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
   {
-    id: "claude:claude-fable-5-1",
+    id: "claude:claude-fable-5-2",
     provider: "claude",
-    label: "Fable 5.1",
+    label: "Fable 5.2",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
@@ -488,101 +490,122 @@ export function getAIProviderAvailability(
   };
 }
 
+/**
+ * Raw model strings (including legacy formats) grouped by the canonical
+ * AIModel they normalize to. Unlisted strings fall back to DEFAULT_AI_MODEL.
+ * Each alias may appear once: the Map below would let a repeat win silently,
+ * so `normalizeAIModel.test.ts` checks uniqueness.
+ */
+export const AI_MODEL_ALIASES: ReadonlyArray<
+  readonly [AIModel, ReadonlyArray<string>]
+> = [
+  ["claude:opus", ["opus", "claude:opus"]],
+  ["claude:haiku", ["haiku", "claude:haiku"]],
+  ["claude:opusplan", ["opusplan", "claude:opusplan"]],
+  [
+    "claude:claude-opus-4-5-20251101",
+    ["claude-opus-4-5-20251101", "claude:claude-opus-4-5-20251101"],
+  ],
+  ["claude:claude-opus-4-6", ["claude-opus-4-6", "claude:claude-opus-4-6"]],
+  [
+    "claude:claude-fable-5-2",
+    [
+      "fable",
+      "claude:fable",
+      "claude-fable-5",
+      "claude:claude-fable-5",
+      "claude-fable-5-1",
+      "claude:claude-fable-5-1",
+      "claude-fable-5-2",
+      "claude:claude-fable-5-2",
+    ],
+  ],
+  ["codex:gpt-6-astra", ["codex:gpt-6-astra"]],
+  // Bare gpt-5.6 alias routes to Sol (OpenAI's flagship alias), and retired
+  // Codex generations collapse onto the current flagship.
+  [
+    "codex:gpt-5.6-sol",
+    [
+      "codex:gpt-5.6-sol",
+      "codex:gpt-5.6",
+      "codex:gpt-5.5",
+      "codex:gpt-5.5-pro",
+      "codex:gpt-5.4",
+      "codex:gpt-5.4-mini",
+      "codex:gpt-5.3-codex",
+      "codex:gpt-5.2-codex",
+    ],
+  ],
+  ["codex:gpt-5.6-terra", ["codex:gpt-5.6-terra"]],
+  ["codex:gpt-5.6-luna", ["codex:gpt-5.6-luna"]],
+  ["opencode:openai/gpt-6-astra", ["opencode:openai/gpt-6-astra"]],
+  // Retired opencode models collapse onto the current flagship.
+  [
+    "opencode:openai/gpt-5.6-sol",
+    [
+      "opencode:openai/gpt-5.6-sol",
+      "opencode:openai/gpt-5-codex",
+      "opencode:openai/gpt-5.2",
+      "opencode:openai/gpt-5.3-codex",
+      "opencode:openai/gpt-5.4",
+      "opencode:openai/gpt-5.4-mini",
+    ],
+  ],
+  ["opencode:openai/gpt-5.6-terra", ["opencode:openai/gpt-5.6-terra"]],
+  ["opencode:openai/gpt-5.6-luna", ["opencode:openai/gpt-5.6-luna"]],
+  // Effort lives on the reasoning selector now — suffixed variants collapse
+  // to one base model (the stored reasoning level carries the distinction).
+  [
+    "cursor:grok-4.5",
+    [
+      "cursor:claude-4.6-sonnet-medium-thinking",
+      "cursor:claude-opus-4-7-thinking-high",
+      "cursor:claude-4.6-opus-high-thinking",
+      "cursor:claude-4.5-opus-high-thinking",
+      "cursor:gpt-5.4-high",
+      "cursor:grok-4.5",
+      "cursor:grok-4.5-low",
+      "cursor:grok-4.5-medium",
+      "cursor:grok-4.5-high",
+    ],
+  ],
+  ["cursor:grok-4.7", ["cursor:grok-4.7"]],
+  [
+    "cursor:grok-4.6",
+    [
+      "cursor:grok-4.6",
+      "cursor:grok-4.6-low",
+      "cursor:grok-4.6-medium",
+      "cursor:grok-4.6-high",
+      "cursor:grok-4.6-xhigh",
+    ],
+  ],
+  [
+    "cursor:gpt-6-astra",
+    [
+      "cursor:gpt-6-astra",
+      "cursor:gpt-5.5",
+      "cursor:gpt-5.5-high",
+      "cursor:gpt-5.5-low",
+    ],
+  ],
+  ["cursor:gemini-3.1-pro", ["cursor:gemini-3.1-pro"]],
+  [
+    "cursor:composer-2.5",
+    ["cursor:gpt-5.3-codex-high", "cursor:composer-2", "cursor:composer-2.5"],
+  ],
+];
+
+const AI_MODEL_BY_ALIAS: ReadonlyMap<string, AIModel> = new Map(
+  AI_MODEL_ALIASES.flatMap(([model, aliases]) =>
+    aliases.map((alias): [string, AIModel] => [alias, model]),
+  ),
+);
+
 /** Normalizes a raw model string (including legacy formats) to a canonical AIModel value. */
 export function normalizeAIModel(model: string | null | undefined): AIModel {
-  switch (model) {
-    case "opus":
-    case "claude:opus":
-      return "claude:opus";
-    case "haiku":
-    case "claude:haiku":
-      return "claude:haiku";
-    case "opusplan":
-    case "claude:opusplan":
-      return "claude:opusplan";
-    case "claude-opus-4-5-20251101":
-    case "claude:claude-opus-4-5-20251101":
-      return "claude:claude-opus-4-5-20251101";
-    case "claude-opus-4-6":
-    case "claude:claude-opus-4-6":
-      return "claude:claude-opus-4-6";
-    case "fable":
-    case "claude:fable":
-    case "claude-fable-5":
-    case "claude:claude-fable-5":
-    case "claude-fable-5-1":
-    case "claude:claude-fable-5-1":
-      return "claude:claude-fable-5-1";
-    case "codex:gpt-6-astra":
-      return "codex:gpt-6-astra";
-    case "codex:gpt-5.6-sol":
-      return "codex:gpt-5.6-sol";
-    case "codex:gpt-5.6-terra":
-      return "codex:gpt-5.6-terra";
-    case "codex:gpt-5.6-luna":
-      return "codex:gpt-5.6-luna";
-    // Bare gpt-5.6 alias routes to Sol (OpenAI's flagship alias), and retired
-    // Codex generations collapse onto the current flagship.
-    case "codex:gpt-5.6":
-    case "codex:gpt-5.5":
-    case "codex:gpt-5.5-pro":
-    case "codex:gpt-5.4":
-    case "codex:gpt-5.4-mini":
-    case "codex:gpt-5.3-codex":
-    case "codex:gpt-5.2-codex":
-      return "codex:gpt-5.6-sol";
-    case "opencode:openai/gpt-6-astra":
-      return "opencode:openai/gpt-6-astra";
-    case "opencode:openai/gpt-5.6-sol":
-      return "opencode:openai/gpt-5.6-sol";
-    case "opencode:openai/gpt-5.6-terra":
-      return "opencode:openai/gpt-5.6-terra";
-    case "opencode:openai/gpt-5.6-luna":
-      return "opencode:openai/gpt-5.6-luna";
-    // Retired opencode models collapse onto the current flagship.
-    case "opencode:openai/gpt-5-codex":
-    case "opencode:openai/gpt-5.2":
-    case "opencode:openai/gpt-5.3-codex":
-    case "opencode:openai/gpt-5.4":
-    case "opencode:openai/gpt-5.4-mini":
-      return "opencode:openai/gpt-5.6-sol";
-    // Effort lives on the reasoning selector now — suffixed variants collapse
-    // to one base model (the stored reasoning level carries the distinction).
-    case "cursor:claude-4.6-sonnet-medium-thinking":
-    case "cursor:claude-opus-4-7-thinking-high":
-    case "cursor:claude-4.6-opus-high-thinking":
-    case "cursor:claude-4.5-opus-high-thinking":
-    case "cursor:gpt-5.4-high":
-    case "cursor:grok-4.5":
-    case "cursor:grok-4.5-low":
-    case "cursor:grok-4.5-medium":
-    case "cursor:grok-4.5-high":
-      return "cursor:grok-4.5";
-    case "cursor:grok-4.7":
-      return "cursor:grok-4.7";
-    case "cursor:grok-4.6":
-    case "cursor:grok-4.6-low":
-    case "cursor:grok-4.6-medium":
-    case "cursor:grok-4.6-high":
-    case "cursor:grok-4.6-xhigh":
-      return "cursor:grok-4.6";
-    case "cursor:gpt-5.3-codex-high":
-      return "cursor:composer-2.5";
-    case "cursor:gpt-6-astra":
-    case "cursor:gpt-5.5":
-    case "cursor:gpt-5.5-high":
-    case "cursor:gpt-5.5-low":
-      return "cursor:gpt-6-astra";
-    case "cursor:gemini-3.1-pro":
-      return "cursor:gemini-3.1-pro";
-    case "cursor:composer-2":
-    case "cursor:composer-2.5":
-      return "cursor:composer-2.5";
-    case "sonnet":
-    case "claude:sonnet":
-    default:
-      return DEFAULT_AI_MODEL;
-  }
+  // "sonnet" / "claude:sonnet" and unknown strings fall back to the default.
+  return (model && AI_MODEL_BY_ALIAS.get(model)) || DEFAULT_AI_MODEL;
 }
 
 /** Returns the AI provider ("claude" | "codex" | "opencode") for a given model string. */
@@ -600,6 +623,16 @@ export function getAIModelProvider(
 export function usesChatDaemon(model: string | null | undefined): boolean {
   const provider = getAIModelProvider(model);
   return provider === "claude" || provider === "codex" || provider === "cursor";
+}
+
+/**
+ * Whether the warm daemon can inject a message into its live turn: Claude via
+ * the SDK prompt stream, Codex via App Server `turn/steer`. Cursor and
+ * OpenCode steer by interrupting the turn and sending the message next.
+ */
+export function supportsNativeSteer(model: string | null | undefined): boolean {
+  const provider = getAIModelProvider(model);
+  return provider === "claude" || provider === "codex";
 }
 
 /**
@@ -850,7 +883,7 @@ export function getVisibleAIModelOptions(
  * Everything else stays selectable in the normal UI — this only trims the list.
  */
 const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
-  "claude:claude-fable-5-1",
+  "claude:claude-fable-5-2",
   "claude:opus",
   "claude:sonnet",
   "codex:gpt-6-astra",
@@ -873,7 +906,7 @@ export const SIMPLE_VIEW_MODEL_LADDER: ReadonlyArray<AIModel> = [
   "cursor:grok-4.5",
   "cursor:grok-4.7",
   "claude:opus",
-  "claude:claude-fable-5-1",
+  "claude:claude-fable-5-2",
 ];
 
 /**
@@ -885,7 +918,7 @@ export function snapToSimpleViewLadder(model: string): AIModel {
   for (const step of SIMPLE_VIEW_MODEL_LADDER) {
     if (step === normalized) return step;
   }
-  if (normalized.includes("fable")) return "claude:claude-fable-5-1";
+  if (normalized.includes("fable")) return "claude:claude-fable-5-2";
   if (getAIModelProvider(normalized) === "claude") return "claude:opus";
   if (normalized.includes("composer")) return "cursor:composer-2.5";
   if (normalized.includes("grok-4.5")) return "cursor:grok-4.5";

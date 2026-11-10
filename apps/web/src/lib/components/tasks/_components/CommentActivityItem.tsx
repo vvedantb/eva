@@ -6,19 +6,21 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { UserInitials } from "@eva/shared/user-initials";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
+import { cn } from "@eva/ui";
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  cn,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
 import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
@@ -107,14 +109,8 @@ export function CommentActivityItem({
   const updateComment = useMutation(
     api.taskComments.update,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.taskComments.listByTask, {
-      taskId,
-    });
-    if (current === undefined) return;
-    localStore.setQuery(
-      api.taskComments.listByTask,
-      { taskId },
-      current.map((entry) =>
+    patchLoadedQuery(localStore, api.taskComments.listByTask, { taskId }, (cur) =>
+      cur.map((entry) =>
         entry._id === args.id ? { ...entry, content: args.content } : entry,
       ),
     );

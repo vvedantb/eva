@@ -2,9 +2,8 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
+import { Markdown, RelativeDateTime } from "@vvedantb/ui";
 import { IconExternalLink, IconFileCode } from "@tabler/icons-react";
-import { Markdown } from "@eva/ui/markdown";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { MARKDOWN_CLASS } from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";
 
@@ -88,7 +87,9 @@ export function PrCommentCard({
         </a>
       </div>
       {hasBody ? (
-        <Markdown className={cn(MARKDOWN_CLASS, "mt-2 min-w-0")}>{body}</Markdown>
+        <Markdown className={cn(MARKDOWN_CLASS, "mt-2 min-w-0")}>
+          {body}
+        </Markdown>
       ) : null}
     </article>
   );

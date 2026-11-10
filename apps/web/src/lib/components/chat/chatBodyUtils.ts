@@ -1,5 +1,6 @@
 import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
-import { getProviderLabel, type ActivityStep } from "@eva/ui";
+import { getProviderLabel } from "@vvedantb/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { isSandboxPausedAlert } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -8,7 +9,6 @@ import {
   collectChangedFiles,
   type ChangedFile,
 } from "@/lib/components/chat/ChangedFilesCard";
-import { z } from "zod";
 
 /**
  * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
@@ -69,23 +69,6 @@ export function findHandoffBoundaryIds(
       boundaries.add(message._id);
     }
     previousProvider = provider;
-  }
-  return boundaries;
-}
-
-/**
- * Turns that open a new local calendar day — the first turn of the transcript
- * included — so ChatBody can head each day with an iMessage-style date label.
- */
-export function findDayBoundaryIds(
-  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
-): Set<string> {
-  const boundaries = new Set<string>();
-  let previousDay: string | undefined;
-  for (const message of messages) {
-    const day = new Date(message.timestamp).toDateString();
-    if (day !== previousDay) boundaries.add(message._id);
-    previousDay = day;
   }
   return boundaries;
 }
@@ -161,36 +144,6 @@ export function visibleChatMessages<
     (hideSystemAlerts && message.isSystemAlert === true);
   if (!messages.some(hidden)) return messages;
   return messages.filter((message) => !hidden(message));
-}
-
-// Boundary schema for the pending-question JSON emitted by the agent. A
-// question with any malformed field (or option) is dropped via
-// `.catch(null)` + filter, matching the previous per-item guard behaviour.
-const questionSchema = z.object({
-  question: z.string(),
-  header: z.string(),
-  multiSelect: z.boolean(),
-  options: z.array(z.object({ label: z.string(), description: z.string() })),
-});
-
-export type ParsedQuestion = z.infer<typeof questionSchema>;
-
-const pendingQuestionSchema = z.object({
-  questions: z.array(questionSchema.nullable().catch(null)),
-});
-
-export function parsePendingQuestion(
-  raw: string | undefined | null,
-): ParsedQuestion[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = pendingQuestionSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success) return null;
-    const questions = parsed.data.questions.flatMap((q) => (q ? [q] : []));
-    return questions.length > 0 ? questions : null;
-  } catch {
-    return null;
-  }
 }
 
 /** First name for chat labels; falls back to the first word of full name. */
@@ -522,15 +475,47 @@ export function findTurnWindowStart(
   return 0;
 }
 
+type TurnShapeMessage = Pick<
+  ChatBodyMessage,
+  "role" | "content" | "isSystemAlert" | "finishedAt"
+>;
+
 /**
- * Whether a session/task chat still has an unfinished Working bubble.
- * System alerts (`isSystemAlert`) are skipped — they can append mid-turn and
- * must not make the composer think the reply finished.
+ * Whether an assistant turn is executing for one chat. One rule for every
+ * surface (session, quick task, project) and every reader of it (composer,
+ * queue, subagent thread, Agents roster, design panel), so they cannot
+ * disagree on the same chat:
+ * - a run the surface renders as a turn (a quick task's first run) counts
+ *   while it runs;
+ * - otherwise the chat's durable turn is canonical, synthetic turns included;
+ * - message shape only covers the first render while that status loads, so a
+ *   stale empty bubble cannot keep a settled turn "executing".
+ * Streaming rows are not an input: they can outlive their turn, so callers
+ * gate them on this result instead.
  */
-export function isAssistantTurnInProgress(
-  messages: ReadonlyArray<
-    Pick<ChatBodyMessage, "role" | "content" | "isSystemAlert" | "finishedAt">
-  >,
+export function isChatTurnExecuting({
+  turnOpen,
+  messages,
+  isFirstRunInProgress = false,
+}: {
+  /** The chat's durable turn is open; `undefined` while its status loads. */
+  turnOpen: boolean | undefined;
+  /** The chat transcript; `undefined` while it loads. */
+  messages: ReadonlyArray<TurnShapeMessage> | undefined;
+  /** A quick task's first run, rendered as this chat's first turn. */
+  isFirstRunInProgress?: boolean;
+}): boolean {
+  if (isFirstRunInProgress) return true;
+  return turnOpen ?? isAssistantTurnInProgress(messages ?? []);
+}
+
+/**
+ * Whether a chat still has an unfinished Working bubble: the load-time
+ * fallback of `isChatTurnExecuting`. System alerts (`isSystemAlert`) are
+ * skipped — they can append mid-turn and must not read as a finished reply.
+ */
+function isAssistantTurnInProgress(
+  messages: ReadonlyArray<TurnShapeMessage>,
 ): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
@@ -542,33 +527,4 @@ export function isAssistantTurnInProgress(
     );
   }
   return false;
-}
-
-/** One tick per user turn for the jump rail. */
-export function buildJumpRailTicks(
-  messages: ChatBodyMessage[],
-): Array<{ id: string; content: string; reply?: string }> {
-  const ticks: Array<{ id: string; content: string; reply?: string }> = [];
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    if (!message || message.role !== "user" || message.isSystemAlert) {
-      continue;
-    }
-    let reply: string | undefined;
-    for (let j = i + 1; j < messages.length; j++) {
-      const next = messages[j];
-      if (!next || next.isSystemAlert) continue;
-      if (next.role === "user") break;
-      if (next.role === "assistant") {
-        reply = next.content;
-        break;
-      }
-    }
-    ticks.push({
-      id: message._id,
-      content: message.content,
-      ...(reply !== undefined && reply.length > 0 ? { reply } : {}),
-    });
-  }
-  return ticks;
 }

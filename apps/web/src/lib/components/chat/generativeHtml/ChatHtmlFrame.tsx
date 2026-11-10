@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, motionFast } from "@eva/ui";
+import { Button, tokenTransition } from "@vvedantb/ui";
 import { api, type Doc } from "@eva/backend";
 import {
   HTML_RENDER_SIZE_CHANGED,
@@ -42,17 +42,13 @@ function readHostContext(theme: HtmlRenderAppearance): HtmlRenderHostContext {
  * loads on mount; until then its box holds the agent's height so nothing
  * below it moves.
  */
-export function ChatHtmlFrame({
-  render,
-}: {
-  render: Doc<"chatHtmlRenders">;
-}) {
+export function ChatHtmlFrame({ render }: { render: Doc<"chatHtmlRenders"> }) {
   const html = useQuery(api.chatHtml.getHtml, { renderId: render._id });
   return (
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={motionFast}
+      transition={tokenTransition.fast}
       data-testid="chat-html-frame"
     >
       {html === undefined ? (

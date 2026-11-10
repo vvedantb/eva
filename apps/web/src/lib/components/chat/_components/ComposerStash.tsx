@@ -14,19 +14,19 @@ import {
   Command,
   CommandEmpty,
   CommandList,
-  motionFast,
-  motionSpring,
+  tokenTransition,
+  springTransition,
   Popover,
   PopoverAnchor,
   PopoverContent,
   usePromptInputController,
-} from "@eva/ui";
+  ListEnter,
+} from "@vvedantb/ui";
 import { IconBookmark, IconChevronDown } from "@tabler/icons-react";
 import type { Id } from "@eva/backend";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { ComposerStashItem } from "@/lib/components/chat/_components/ComposerStashItem";
 import { useComposerStash } from "@/lib/components/chat/_components/useComposerStash";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 
 /**
  * Prompt-stash drawer plus the dock the tasks/queued panels sit in. The
@@ -114,7 +114,7 @@ export function ComposerStash({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 8 }}
-          transition={motionFast}
+          transition={tokenTransition.fast}
         >
           <button
             ref={tabRef}
@@ -133,7 +133,7 @@ export function ComposerStash({
               key={pulseKey}
               initial={{ opacity: 0, y: 2 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={motionSpring}
+              transition={springTransition}
               className="font-medium tabular-nums"
             >
               {entries.length}

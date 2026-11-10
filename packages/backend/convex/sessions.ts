@@ -5,6 +5,7 @@ export {
   getByNumId,
   getFirstMessagePreview,
   getForkLinks,
+  listGroup,
   countActive,
 } from "./_sessions/queries";
 
@@ -18,18 +19,13 @@ export {
 export {
   create,
   addMessage,
-  updateStatus,
   update,
-  updateSummary,
   archive,
   unarchive,
   updatePlanContent,
-  updateLastMessage,
 } from "./_sessions/mutations";
 
 export {
-  updateSandbox,
-  clearSandbox,
   startSandbox,
   forcePushBranch,
   stopSandbox,
@@ -41,7 +37,11 @@ export {
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
 
-export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
+export {
+  addToGroup,
+  renameGroup,
+  removeFromGroup,
+} from "./_sessions/groups";
 
 export {
   getForkSource,

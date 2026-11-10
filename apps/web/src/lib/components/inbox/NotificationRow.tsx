@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { cn } from "@eva/ui";
 import {
   Badge,
   Button,
@@ -10,8 +11,8 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   LIST_ROW_CONTROL_CLASS,
-  cn,
-} from "@eva/ui";
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,
@@ -19,14 +20,13 @@ import {
   IconMail,
   IconMailOpened,
 } from "@tabler/icons-react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import {
   NotificationIcon,
   NotificationStatusIcon,
   type Notification,
 } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 /**

@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { authMutation, recomputeProjectPhase } from "../functions";
+import {
+  authMutation,
+  getProjectWithAccess,
+  getRepoWithAccess,
+  recomputeProjectPhase,
+} from "../functions";
 import { allocateNumId } from "../numId";
 import { ensureSubscribed } from "../taskSubscribers";
 import {
@@ -10,6 +15,7 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
 
 /** Converts a finalized project spec into tasks with dependencies and sets the project to business_review. */
@@ -19,10 +25,11 @@ export const startDevelopment = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+    );
     if (project.phase !== "finalized") {
       throw new Error("Project must be finalized before starting development");
     }
@@ -32,10 +39,10 @@ export const startDevelopment = authMutation({
     }
     const spec = parseSpec(generatedSpec);
     const branchName = buildProjectBranchName(args.projectId);
-    const projectBaseBranch =
-      project.baseBranch ??
-      (await ctx.db.get(project.repoId))?.defaultBaseBranch ??
-      FALLBACK_GIT_BASE_BRANCH;
+    const projectBaseBranch = resolveProjectBaseBranch(
+      project,
+      await ctx.db.get(project.repoId),
+    );
     const taskIdMap = new Map<number, Id<"agentTasks">>();
     const now = Date.now();
     for (let i = 0; i < spec.tasks.length; i++) {
@@ -95,8 +102,13 @@ export const createFromTasks = authMutation({
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    // Only this repo's tasks may join the project: a foreign id would move
+    // another team's task under a project the caller owns.
+    const tasks = await Promise.all(args.taskIds.map((id) => ctx.db.get(id)));
+    if (tasks.some((task) => task !== null && task.repoId !== args.repoId)) {
+      throw new Error("Tasks must belong to this repository");
+    }
     const projectNumId = await allocateNumId(ctx.db, args.repoId, "projects");
     const projectId = await ctx.db.insert("projects", {
       repoId: args.repoId,
@@ -115,8 +127,7 @@ export const createFromTasks = authMutation({
     });
     for (let i = 0; i < args.taskIds.length; i++) {
       const taskId = args.taskIds[i];
-      const task = await ctx.db.get(taskId);
-      if (task) {
+      if (tasks[i]) {
         await ctx.db.patch(taskId, {
           projectId,
           taskNumber: i + 1,

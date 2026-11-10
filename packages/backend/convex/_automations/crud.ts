@@ -9,7 +9,11 @@ import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId, entityVisible } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import type { Doc } from "../_generated/dataModel";
-import { listAutomationsForRepo, resolveAutomationRepoId } from "./helpers";
+import {
+  getAutomationWithAccess,
+  listAutomationsForRepo,
+  resolveAutomationRepoId,
+} from "./helpers";
 import { resolveCanonicalRepoId } from "../_githubRepos/helpers";
 import {
   automationCronspec,
@@ -134,14 +138,15 @@ export const update = authMutation({
     actionsEnabled: v.optional(v.boolean()),
     shared: v.optional(v.boolean()),
     sendEmail: v.optional(v.boolean()),
+    emailAutoSend: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const automation = await ctx.db.get(args.id);
-    if (!automation) throw new Error("Automation not found");
-    if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const automation = await getAutomationWithAccess(
+      ctx.db,
+      args.id,
+      ctx.userId,
+    );
 
     // A system automation's definition is code-owned, but everything else —
     // schedule, model, enabled, email — belongs to the install and takes the
@@ -184,6 +189,8 @@ export const update = authMutation({
     if (args.actionsEnabled !== undefined)
       patch.actionsEnabled = args.actionsEnabled;
     if (args.sendEmail !== undefined) patch.sendEmail = args.sendEmail;
+    if (args.emailAutoSend !== undefined)
+      patch.emailAutoSend = args.emailAutoSend;
 
     if (args.shared !== undefined) {
       if (args.contextRepoId === undefined) {

@@ -1,4 +1,4 @@
-import type { BadgeProps } from "@eva/ui";
+import type { BadgeProps } from "@vvedantb/ui";
 
 export function statusLabel(status: string): string {
   if (status === "waiting_human") return "Needs reply";
@@ -47,5 +47,7 @@ export function sourceLabel(thread: {
   sourceNumId?: number;
 }): string {
   const kind = sourceKindLabel(thread.sourceKind);
-  return thread.sourceNumId === undefined ? kind : `${kind} ${thread.sourceNumId}`;
+  return thread.sourceNumId === undefined
+    ? kind
+    : `${kind} ${thread.sourceNumId}`;
 }

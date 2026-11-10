@@ -1,7 +1,6 @@
 "use client";
 
-import { VideoPreview } from "@/lib/components/MediaPreview";
-import { ImageGalleryPreview } from "@/lib/components/MediaGallery";
+import { VideoPreview, ImageGalleryPreview } from "@vvedantb/ui";
 
 /** A resolved capture: `url` is null when the stored blob is gone. */
 export type AgentMediaEntry = {

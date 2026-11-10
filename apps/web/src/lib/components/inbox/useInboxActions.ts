@@ -3,7 +3,8 @@
 import { useMutation } from "convex/react";
 import type { OptimisticLocalStore } from "convex/browser";
 import { api, type Id } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { patchLoadedQuery } from "@vvedantb/server";
+import { toast } from "@vvedantb/ui";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { Notification } from "@/lib/components/notifications/notification-config";
 
@@ -18,18 +19,14 @@ function patchList(
   listArgs: InboxListArgs,
   patch: (notification: Notification) => Notification,
 ): void {
-  const current = localStore.getQuery(api.notifications.list, listArgs);
-  if (current === undefined) return;
-  localStore.setQuery(api.notifications.list, listArgs, current.map(patch));
+  patchLoadedQuery(localStore, api.notifications.list, listArgs, (current) =>
+    current.map(patch),
+  );
 }
 
 /** Moves the unread badge by `delta`, never below zero. */
 function adjustUnread(localStore: OptimisticLocalStore, delta: number): void {
-  const count = localStore.getQuery(api.notifications.countUnread, {});
-  if (count === undefined) return;
-  localStore.setQuery(
-    api.notifications.countUnread,
-    {},
+  patchLoadedQuery(localStore, api.notifications.countUnread, {}, (count) =>
     Math.max(0, count + delta),
   );
 }

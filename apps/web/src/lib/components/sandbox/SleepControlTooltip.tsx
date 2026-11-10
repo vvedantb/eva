@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 
 /**
  * Putting the sandbox to sleep mid-turn does not cancel the turn: the daemon

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import { EmojiPicker } from "frimousse";
 import { api } from "@eva/backend";
+import { cn } from "@eva/ui";
 import {
   HoverCard,
   HoverCardContent,
@@ -11,10 +12,9 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
-} from "@eva/ui";
+  useIdleCallback,
+} from "@vvedantb/ui";
 import { IconMoodSmile } from "@tabler/icons-react";
-import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
 
 // Fast-path reactions shown above the full searchable grid.
 const QUICK_REACTIONS = ["👍", "❤️", "🎉", "😄", "🚀", "👀"];

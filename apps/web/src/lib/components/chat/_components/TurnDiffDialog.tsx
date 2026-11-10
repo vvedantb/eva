@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { DiffEntriesDialogBody } from "@/lib/components/reviews/_components/DiffEntriesDialogBody";
 import { compareDiffQuery, prErrorMessage } from "@/lib/prReviewQueries";
 

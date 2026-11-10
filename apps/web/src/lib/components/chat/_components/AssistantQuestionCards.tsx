@@ -1,4 +1,5 @@
-import { ActivityQuestionCard, type ActivityStep } from "@eva/ui";
+import { ActivityQuestionCard } from "@vvedantb/ui";
+import type { ActivityStep } from "@vvedantb/ui";
 
 /**
  * Read-only record of the AskUserQuestion prompts this turn asked, and what the

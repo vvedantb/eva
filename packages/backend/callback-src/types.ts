@@ -137,6 +137,9 @@ export type CanonicalEvent =
     }
   | { kind: "mark_last_complete" }
   | { kind: "append_text"; text: string }
+  /** Text a subagent wrote — a settled `response` step nested under its
+   * `Agent` row, never the parent's reply. */
+  | { kind: "push_subagent_text"; step: ProgressStep }
   | { kind: "stream_text_delta"; text: string }
   | { kind: "mark_message_start" }
   | { kind: "mark_text_block_start" }
