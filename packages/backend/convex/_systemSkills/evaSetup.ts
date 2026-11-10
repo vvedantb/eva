@@ -88,6 +88,6 @@ Call \`list_env_vars\` on the \`eva\` MCP server. For each variable the commands
 
 ## 7. Commit
 
-Before you commit, search \`.eva/\` for anything that looks like a secret and replace it. Then commit \`.eva/\` on this branch. Eva opens the PR. After it merges to \`${baseBranch}\`, Eva uses the file for every new sandbox and the next snapshot build.
+Before you commit, search \`.eva/\` for anything that looks like a secret and replace it. Run \`git check-ignore -v .eva/config.json .eva/mcp.json\`: if a rule such as \`mcp.json\` ignores either file, add \`!.eva/config.json\` / \`!.eva/mcp.json\` to \`.gitignore\`, or the file never reaches the repo. Then commit \`.eva/\` on this branch. Eva opens the PR. After it merges to \`${baseBranch}\`, Eva uses the file for every new sandbox and the next snapshot build.
 `;
 }
