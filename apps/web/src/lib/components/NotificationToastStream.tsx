@@ -4,19 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { useNavigate } from "@tanstack/react-router";
-import { Badge, Button, Card, CardContent } from "@eva/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  motionEase,
+  RelativeDateTime,
+} from "@vvedantb/ui";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
-import { RelativeDateTime } from "@/lib/components/RelativeDateTime";
-import { playNotificationBell } from "@/lib/utils/notificationChime";
+import { playNotificationBell } from "@/lib/utils/notificationBell";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 import {
   NotificationIcon,
   getNotificationAppearance,
   type Notification,
 } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
 import {
   isDesktopNotificationsEnabled,
@@ -56,22 +63,12 @@ export function NotificationToastStream() {
   const markAsRead = useMutation(
     api.notifications.markAsRead,
   ).withOptimisticUpdate((localStore, args) => {
-    const current = localStore.getQuery(api.notifications.list, {});
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.notifications.list,
-        {},
-        current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
-      );
-    }
-    const count = localStore.getQuery(api.notifications.countUnread, {});
-    if (count !== undefined) {
-      localStore.setQuery(
-        api.notifications.countUnread,
-        {},
-        Math.max(0, count - 1),
-      );
-    }
+    patchLoadedQuery(localStore, api.notifications.list, {}, (current) =>
+      current.map((n) => (n._id === args.id ? { ...n, read: true } : n)),
+    );
+    patchLoadedQuery(localStore, api.notifications.countUnread, {}, (count) =>
+      Math.max(0, count - 1),
+    );
   });
   const navigate = useNavigate();
   const seenNotificationIdsRef = useRef<Set<Id<"notifications">> | null>(null);
@@ -183,8 +180,7 @@ export function NotificationToastStream() {
   }, [toasts]);
 
   // Keep the fixed host mounted so AnimatePresence can play exit animations.
-  const toastEase: [number, number, number, number] = [0.22, 1, 0.36, 1];
-  const toastTransition = { duration: TOAST_DURATION_S, ease: toastEase };
+  const toastTransition = { duration: TOAST_DURATION_S, ease: motionEase };
   const toastEnter = { opacity: 0, y: -8 };
   const toastRest = { opacity: 1, y: 0 };
   const toastExit = { opacity: 0, y: -8 };

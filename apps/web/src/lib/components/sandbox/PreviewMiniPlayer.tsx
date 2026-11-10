@@ -4,8 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { AnimatePresence, m } from "motion/react";
-import { cn, motionSpring } from "@eva/ui";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { cn } from "@eva/ui";
+import { springTransition, useMediaQuery } from "@vvedantb/ui";
 import { PreviewMiniPlayerChrome } from "./_components/PreviewMiniPlayerChrome";
 import { dropPreviewGroup, PreviewAnchor } from "./previewIframeHost";
 import { DEFAULT_MINI_PLAYER_LOGICAL_SIZE } from "./previewContain";
@@ -17,7 +17,7 @@ import {
 import { usePreviewMiniPlayerFrame } from "./usePreviewMiniPlayerFrame";
 
 /**
- * Floating picture-in-picture window for a session's dev-server preview.
+ * Floating picture-in-picture window for a session's, quick task's or project's dev-server preview.
  *
  * Mounted once at the app root, just before {@link PreviewIframeHost} and on
  * the same z layer: the host overlays its iframe on the anchor rendered here,
@@ -47,19 +47,7 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
   const { style, moveHandlers, resizeHandlers, gesture } =
     usePreviewMiniPlayerFrame(entry.entryKey);
   const logicalSize = entry.logicalSize ?? DEFAULT_MINI_PLAYER_LOGICAL_SIZE;
-  // The session doc is the truth about whether this iframe still shows a live
-  // sandbox; the pane that would normally notice has been unmounted.
-  // Blob/data guests are local fixtures (no sandbox doc to reconcile).
-  const session = useQuery(
-    api.sessions.get,
-    entry.src.startsWith("blob:") || entry.src.startsWith("data:")
-      ? "skip"
-      : { id: entry.sessionId },
-  );
-  const stale =
-    session === null ||
-    (session !== undefined &&
-      (session.sandboxId !== entry.sandboxId || session.status !== "active"));
+  const stale = useOwnerSandboxStale(entry);
 
   const expand = () => {
     closePreviewMiniPlayer();
@@ -73,7 +61,7 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      transition={motionSpring}
+      transition={springTransition}
       style={style}
       className={cn(
         "fixed z-40 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-xl origin-bottom-right",
@@ -112,6 +100,48 @@ function PreviewMiniPlayerWindow({ entry }: { entry: PreviewMiniPlayerEntry }) {
       </div>
       {stale ? <StalePreviewSweeper sandboxId={entry.sandboxId} /> : null}
     </m.div>
+  );
+}
+
+/**
+ * The owner doc is the truth about whether this iframe still shows a live
+ * sandbox; the pane that would normally notice has been unmounted.
+ * Blob/data guests are local fixtures (no sandbox doc to reconcile).
+ */
+function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
+  const { owner } = entry;
+  const fixture =
+    entry.src.startsWith("blob:") || entry.src.startsWith("data:");
+  const session = useQuery(
+    api.sessions.get,
+    !fixture && owner.kind === "session" ? { id: owner.sessionId } : "skip",
+  );
+  const task = useQuery(
+    api.agentTasks.get,
+    !fixture && owner.kind === "task" ? { id: owner.taskId } : "skip",
+  );
+  const project = useQuery(
+    api.projects.get,
+    !fixture && owner.kind === "project" ? { id: owner.projectId } : "skip",
+  );
+  const live =
+    owner.kind === "session"
+      ? session && {
+          sandboxId: session.sandboxId,
+          active: session.status === "active",
+        }
+      : owner.kind === "task"
+        ? task && {
+            sandboxId: task.sandboxId,
+            active: task.reviewTaskSandboxStatus === "active",
+          }
+        : project && {
+            sandboxId: project.sandboxId,
+            active: project.reviewProjectSandboxStatus === "active",
+          };
+  return (
+    live === null ||
+    (live !== undefined && (live.sandboxId !== entry.sandboxId || !live.active))
   );
 }
 

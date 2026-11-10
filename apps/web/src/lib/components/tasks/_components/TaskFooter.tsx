@@ -8,33 +8,28 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  motionFast,
+  tokenTransition,
   CrossfadeIconSlot,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import {
-  IconHammer,
   IconPlayerPlay,
   IconChevronDown,
   IconCalendarClock,
-  IconDots,
-  IconRefresh,
-  IconServerBolt,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import { CopyLinkMenuItem } from "@/lib/components/CopyLinkButton";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
+import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { SchedulePopover } from "../SchedulePopover";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
+import {
+  getMoreMenuVisibility,
+  TaskFooterMoreMenu,
+} from "./TaskFooterMoreMenu";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -73,6 +68,83 @@ interface TaskFooterProps {
   variant?: "footer" | "header";
 }
 
+const TASK_FOOTER_LAYOUT = {
+  header: {
+    buttonSize: "sm",
+    iconSize: 16,
+    root: "flex shrink-0 items-center gap-1.5 sm:gap-2",
+    row: "flex shrink-0 items-center gap-1.5 sm:gap-2",
+    actions: "flex shrink-0 items-center gap-1.5 sm:gap-2",
+  },
+  footer: {
+    buttonSize: "default",
+    iconSize: 18,
+    root: "space-y-2 w-full",
+    row: "flex items-center gap-3 flex-wrap justify-end",
+    actions: "flex flex-wrap items-center gap-1.5 sm:gap-2",
+  },
+} satisfies Record<
+  "footer" | "header",
+  {
+    buttonSize: "default" | "sm";
+    iconSize: number;
+    root: string;
+    row: string;
+    actions: string;
+  }
+>;
+
+// `todo` only offers a first run; once it has run, the sandbox toggle takes
+// its place (`canStartSandbox` covers that case).
+function getShowRunButton({
+  task,
+  status,
+  hasRuns,
+  hasActiveRun,
+}: {
+  task: Doc<"agentTasks"> | undefined;
+  status: TaskStatus | undefined;
+  hasRuns: boolean;
+  hasActiveRun: boolean;
+}): boolean {
+  return (
+    !task?.projectId &&
+    ((status === "todo" && !hasRuns) ||
+      (status === "in_progress" && !hasActiveRun))
+  );
+}
+
+function TaskFooterError({
+  visible,
+  motionKey,
+  className,
+  executionError,
+  latestPrError,
+}: {
+  visible: boolean;
+  motionKey: string;
+  className: string;
+  executionError: string | null;
+  latestPrError: string | undefined;
+}) {
+  return (
+    <AnimatePresence initial={false}>
+      {visible && (executionError || latestPrError) ? (
+        <m.p
+          key={motionKey}
+          className={className}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={tokenTransition.fast}
+        >
+          {executionError ?? latestPrError}
+        </m.p>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
 export function TaskFooter({
   taskId,
   task,
@@ -106,14 +178,14 @@ export function TaskFooter({
 }: TaskFooterProps) {
   const simpleView = useSimpleView();
   const isHeader = variant === "header";
-  const buttonSize = isHeader ? "sm" : "default";
-  const iconSize = isHeader ? 16 : 18;
-  // `todo` only offers a first run; once it has run, the sandbox toggle takes
-  // its place (`canStartSandbox` covers that case).
-  const showRunButton =
-    !task?.projectId &&
-    ((status === "todo" && !hasRuns) ||
-      (status === "in_progress" && !hasActiveRun));
+  const layout = TASK_FOOTER_LAYOUT[variant];
+  const { buttonSize, iconSize } = layout;
+  const showRunButton = getShowRunButton({
+    task,
+    status,
+    hasRuns,
+    hasActiveRun,
+  });
   // One control for both directions, on every surface: the sandbox chat header
   // no longer carries a start/stop pair, so a header that only knew how to stop
   // left a slept sandbox with no way back. Held open through both transitions
@@ -124,19 +196,6 @@ export function TaskFooter({
   // not `hasActiveRun`: that also counts *queued* runs, and a task waiting in
   // the queue is no reason to refuse to sleep it.
   const sleepBlockedMidTurn = isAgentActive;
-  // Simple view hides the git/sandbox plumbing: conflict resolution and the
-  // startup/dev/background command runners. The footer menu then has nothing
-  // left and drops out entirely; the header menu stays for Copy link.
-  const showResolveConflicts =
-    !simpleView &&
-    !hasActiveRun &&
-    (status === "code_review" || status === "business_review");
-  const showRunStartupCommands = !simpleView && canStartSandbox;
-  const showRunDevServer = !simpleView && isSandboxActive && canStartSandbox;
-  const showRunBackgroundCommands =
-    !simpleView && isSandboxActive && canStartSandbox;
-  const hasSandboxCommandItems =
-    showRunStartupCommands || showRunDevServer || showRunBackgroundCommands;
   const prLinks = usePrLinkMenuItems({
     createPr: {
       enabled: canCreatePr,
@@ -147,56 +206,35 @@ export function TaskFooter({
     owner: { kind: "task", taskId },
     hasDeployment: Boolean(latestDeployment?.deploymentStatus),
   });
-  const showMoreMenu =
-    isHeader ||
-    showResolveConflicts ||
-    hasSandboxCommandItems ||
-    prLinks.hasItems;
-  const hasSecondaryContent = isHeader || showSandboxToggle || showMoreMenu;
+  const moreMenu = getMoreMenuVisibility({
+    simpleView,
+    hasActiveRun,
+    status,
+    canStartSandbox,
+    isSandboxActive,
+    isHeader,
+    hasPrItems: prLinks.hasItems,
+  });
+  const hasSecondaryContent =
+    isHeader || showSandboxToggle || moreMenu.showMoreMenu;
 
   return (
-    <div
-      className={
-        isHeader
-          ? "flex shrink-0 items-center gap-1.5 sm:gap-2"
-          : "space-y-2 w-full"
-      }
-    >
-      <AnimatePresence initial={false}>
-        {!isHeader && (executionError || latestPrError) ? (
-          <m.p
-            key="footer-error"
-            className="text-xs text-destructive text-right"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={motionFast}
-          >
-            {executionError ?? latestPrError}
-          </m.p>
-        ) : null}
-      </AnimatePresence>
-      <div
-        className={
-          isHeader
-            ? "flex shrink-0 items-center gap-1.5 sm:gap-2"
-            : "flex items-center gap-3 flex-wrap justify-end"
-        }
-      >
-        <AnimatePresence initial={false}>
-          {isHeader && (executionError || latestPrError) ? (
-            <m.p
-              key="header-error"
-              className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={motionFast}
-            >
-              {executionError ?? latestPrError}
-            </m.p>
-          ) : null}
-        </AnimatePresence>
+    <div className={layout.root}>
+      <TaskFooterError
+        visible={!isHeader}
+        motionKey="footer-error"
+        className="text-xs text-destructive text-right"
+        executionError={executionError}
+        latestPrError={latestPrError}
+      />
+      <div className={layout.row}>
+        <TaskFooterError
+          visible={isHeader}
+          motionKey="header-error"
+          className="text-xs text-destructive max-w-[min(240px,40vw)] truncate"
+          executionError={executionError}
+          latestPrError={latestPrError}
+        />
         <AnimatePresence initial={false} mode="popLayout">
           {showRunButton ? (
             <m.div
@@ -204,7 +242,7 @@ export function TaskFooter({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <SplitRunButton
                 taskId={taskId}
@@ -219,102 +257,33 @@ export function TaskFooter({
         {showRunButton && hasSecondaryContent && (
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
-        <div
-          className={
-            isHeader
-              ? "flex shrink-0 items-center gap-1.5 sm:gap-2"
-              : "flex flex-wrap items-center gap-1.5 sm:gap-2"
-          }
-        >
-          {showMoreMenu && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="secondary"
-                  size={buttonSize === "sm" ? "icon-sm" : "icon"}
-                  aria-label="More"
-                >
-                  <IconDots size={iconSize} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {showResolveConflicts && (
-                  <DropdownMenuItem
-                    onClick={onResolveConfirm}
-                    disabled={isStarting}
-                    title={skipConfirmTitle("Resolve Conflicts")}
-                  >
-                    {isStarting ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
-                    ) : (
-                      <IconHammer size={14} />
-                    )}
-                    Resolve Conflicts
-                    <ConfirmSkipHint />
-                  </DropdownMenuItem>
-                )}
-                {showResolveConflicts && hasSandboxCommandItems ? (
-                  <DropdownMenuSeparator />
-                ) : null}
-                {showRunStartupCommands && (
-                  <DropdownMenuItem
-                    onClick={onRunStartupCommands}
-                    disabled={isRetryingStartupCommands}
-                    title={skipConfirmTitle("Run Startup Commands")}
-                  >
-                    {isRetryingStartupCommands ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
-                    ) : (
-                      <IconRefresh size={14} />
-                    )}
-                    Run Startup Commands
-                    <ConfirmSkipHint />
-                  </DropdownMenuItem>
-                )}
-                {showRunDevServer ? (
-                  <DropdownMenuItem
-                    onClick={onRunDevServer}
-                    disabled={isRunningDevServer}
-                    title={skipConfirmTitle("Run Dev Server")}
-                  >
-                    {isRunningDevServer ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
-                    ) : (
-                      <IconPlayerPlay size={14} />
-                    )}
-                    Run Dev Server
-                    <ConfirmSkipHint />
-                  </DropdownMenuItem>
-                ) : null}
-                {showRunBackgroundCommands ? (
-                  <DropdownMenuItem
-                    onClick={onRunBackgroundCommands}
-                    disabled={isRunningBackgroundCommands}
-                  >
-                    {isRunningBackgroundCommands ? (
-                      <CircleSpinner size="sm" className="size-3.5" />
-                    ) : (
-                      <IconServerBolt size={14} />
-                    )}
-                    Run Background Commands
-                  </DropdownMenuItem>
-                ) : null}
-                {(showResolveConflicts || hasSandboxCommandItems) &&
-                prLinks.hasItems ? (
-                  <DropdownMenuSeparator />
-                ) : null}
-                {prLinks.items}
-                {isHeader ? (
-                  <>
-                    {(showResolveConflicts ||
-                      hasSandboxCommandItems ||
-                      prLinks.hasItems) && <DropdownMenuSeparator />}
-                    <CopyLinkMenuItem iconSize={14} />
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+        <div className={layout.actions}>
+          {isHeader ? (
+            <PrMergeConfetti owner={{ kind: "task", taskId }} />
+          ) : null}
+          {moreMenu.showMoreMenu && (
+            <TaskFooterMoreMenu
+              visibility={moreMenu}
+              prLinks={prLinks}
+              isHeader={isHeader}
+              buttonSize={buttonSize}
+              iconSize={iconSize}
+              isStarting={isStarting}
+              isRetryingStartupCommands={isRetryingStartupCommands}
+              isRunningDevServer={isRunningDevServer}
+              isRunningBackgroundCommands={isRunningBackgroundCommands}
+              onResolveConfirm={onResolveConfirm}
+              onRunStartupCommands={onRunStartupCommands}
+              onRunDevServer={onRunDevServer}
+              onRunBackgroundCommands={onRunBackgroundCommands}
+            />
           )}
+          <SandboxCommitPushButton
+            gitSync={task?.sandboxGitSync}
+            isSandboxActive={isSandboxActive}
+            target={{ kind: "task", taskId }}
+            size={buttonSize}
+          />
           <AnimatePresence initial={false} mode="popLayout">
             {showSandboxToggle ? (
               <m.div
@@ -322,7 +291,7 @@ export function TaskFooter({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={motionFast}
+                transition={tokenTransition.fast}
               >
                 <SandboxStartStopButton
                   isActive={isSandboxActive}
@@ -374,6 +343,7 @@ function SplitRunButton({
         <TooltipTrigger asChild>
           <div>
             <Button
+              shape="rounded"
               size={size}
               onClick={
                 isScheduled
@@ -390,7 +360,8 @@ function SplitRunButton({
                 className="relative flex size-[18px] items-center justify-center"
               >
                 {isStarting ? (
-                  <CircleSpinner
+                  <Spinner
+                    variant="circle"
                     size="sm"
                     style={{ width: iconSize, height: iconSize }}
                   />
@@ -415,6 +386,7 @@ function SplitRunButton({
         scheduledAt={scheduledAt}
         trigger={
           <Button
+            shape="rounded"
             ref={chevronRef}
             size={size}
             aria-label="Schedule options"

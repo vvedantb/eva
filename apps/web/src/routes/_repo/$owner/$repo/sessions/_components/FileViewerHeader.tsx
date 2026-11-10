@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CrossfadeIcon } from "@eva/ui";
+import { CrossfadeIcon } from "@vvedantb/ui";
 import {
   IconCheck,
   IconChevronRight,

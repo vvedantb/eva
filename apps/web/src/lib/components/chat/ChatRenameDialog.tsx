@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 interface ChatRenameDialogProps {
   /** The chat being renamed, or null when closed. */

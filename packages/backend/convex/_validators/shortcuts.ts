@@ -137,6 +137,12 @@ export const SHORTCUT_DEFS = {
     // is deliberately unavailable — it is keyboard-layout dependent.
     defaultHotkey: "Control+Alt+ArrowRight",
   },
+  cycleSandboxTabBack: {
+    name: "Cycle sandbox tabs backwards",
+    description: "Step back through the open sandbox tabs.",
+    group: "Sandbox",
+    defaultHotkey: "Control+Alt+ArrowLeft",
+  },
   togglePreviewConsole: {
     // Keep the stored id stable so existing user overrides continue to work.
     name: "Toggle terminal panel",

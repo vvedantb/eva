@@ -1,6 +1,6 @@
+import { drainSteers, steerClaimArgs } from "./steerClaim";
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
 import { authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
@@ -12,13 +12,14 @@ import {
 } from "../validators";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "../_sessions/backgroundAgents";
+import { agentGoalArg, agentGoalPatch } from "./agentGoal";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import {
   scheduleQueueDrainAfterBackgroundAgents,
   startNextQueuedTaskChatMessage,
 } from "../_queues/helpers";
-import { TASK_CHAT_STREAM_PREFIX } from "../workflowWatchdog";
+import { taskChatStreamEntityId } from "./surfaceAdapters";
 import { isDaemonClaimPaused } from "./daemonClaimPause";
 import { resolveStorageUrls } from "./storageUrls";
 import {
@@ -26,7 +27,7 @@ import {
   isTurnClaimed,
   isUnclaimedOpenTurn,
 } from "../_sessions/pendingTurnRecovery";
-import { assistantReplyContent } from "../_sessions/resultTarget";
+import { syntheticTurnCompletionPatch } from "./chatResult";
 import {
   advanceTurn,
   claimStagedTurn,
@@ -36,10 +37,6 @@ import {
   openChatTurn,
   resolveCompletionTurn,
 } from "./turnStore";
-
-function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
-  return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
-}
 
 const emptyClaimReturn = {
   prompt: null,
@@ -63,6 +60,7 @@ export const claimPendingTurn = authMutation({
     taskId: v.id("agentTasks"),
     model: v.optional(aiModelValidator),
     acceptTurn: v.optional(v.boolean()),
+    ...steerClaimArgs,
   },
   returns: daemonClaimResultValidator,
   handler: async (ctx, args) => {
@@ -95,6 +93,16 @@ export const claimPendingTurn = authMutation({
     // not consume the chip's request as a no-op.
     const usageRefreshRequested = task.usageRefreshRequestedAt !== undefined;
 
+    // Steers drain mid-turn too: that is the only time a daemon takes one.
+    const steers = await drainSteers(ctx, task, args);
+    const drained = {
+      ...emptyClaimReturn,
+      stopTaskToolUseIds,
+      cancelRequested,
+      usageRefreshRequested,
+      steers,
+    };
+
     // A prewarm is killing this daemon right now. See the session copy in
     // `_sessions/workflow.ts`: claiming here strands the turn on a dying
     // process. Placed after the drains so a cancel is never stranded.
@@ -104,65 +112,35 @@ export const claimPendingTurn = authMutation({
         now: Date.now(),
       })
     ) {
-      return {
-        ...emptyClaimReturn,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
 
     // Chat daemon only — never claim a turn while the main PR run workflow is
     // the only active consumer.
     if (!task.activeChatWorkflowId) {
-      return {
-        ...emptyClaimReturn,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
 
     if (!task.pendingTurn) {
-      return {
-        ...emptyClaimReturn,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
 
     if (args.acceptTurn === false) {
-      return {
-        ...emptyClaimReturn,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
 
     const pendingModel = task.pendingTurn.model;
     if (pendingModel !== undefined) {
       const claimModel = normalizeAIModel(args.model);
       if (normalizeAIModel(pendingModel) !== claimModel) {
-        return {
-          ...emptyClaimReturn,
-          stopTaskToolUseIds,
-          cancelRequested,
-          usageRefreshRequested,
-        };
+        return drained;
       }
     }
 
     // A daemon built before `acceptTurn` cannot hold a lease. Leave the turn
     // staged: prewarm replaces the stale daemon, and the new one claims it.
     if (args.acceptTurn === undefined) {
-      return {
-        ...emptyClaimReturn,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
     // Every chat workflow stages a turn id. A slot without one cannot hold a
     // lease, so drop it rather than run it unfenced.
@@ -175,12 +153,7 @@ export const claimPendingTurn = authMutation({
       if (claim === null || claim.status === "drop") {
         await ctx.db.patch(args.taskId, { pendingTurn: undefined });
       }
-      return {
-        ...emptyClaimReturn,
-        stopTaskToolUseIds,
-        cancelRequested,
-        usageRefreshRequested,
-      };
+      return drained;
     }
 
     const prompt = task.pendingTurn.prompt;
@@ -195,6 +168,7 @@ export const claimPendingTurn = authMutation({
       stopTaskToolUseIds,
       cancelRequested,
       usageRefreshRequested,
+      steers,
     };
     const turnLifecycle = "durable" as const;
     return { ...claimedTurn, turnLifecycle, ...claim.lease };
@@ -232,6 +206,25 @@ export const updateBackgroundAgents = authMutation({
       args.taskId,
       backgroundAgents,
     );
+    return null;
+  },
+});
+
+/** Daemon mirrors Claude's native `/goal` onto the task (writes only on change). */
+export const updateGoal = authMutation({
+  args: { taskId: v.id("agentTasks"), goal: agentGoalArg },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) throw new Error("Task not found");
+    if (
+      !task.repoId ||
+      !(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))
+    ) {
+      throw new Error("Not authorized");
+    }
+    const patch = agentGoalPatch(task.goal, args.goal);
+    if (patch) await ctx.db.patch(args.taskId, patch);
     return null;
   },
 });
@@ -361,38 +354,7 @@ export const completeSyntheticTurn = authMutation({
       return null;
     }
 
-    const patch: {
-      content: string;
-      activityLog?: string;
-      finishedAt: number;
-      pendingQuestion?: string;
-      model?: Doc<"messages">["model"];
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-    } = {
-      content: assistantReplyContent({
-        success: args.success,
-        result: args.result,
-        error: args.error,
-      }),
-      finishedAt: Date.now(),
-    };
-    if (args.activityLog) patch.activityLog = args.activityLog;
-    if (args.pendingQuestion) patch.pendingQuestion = args.pendingQuestion;
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      patch.beforeSha = args.beforeSha;
-      patch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      patch.beforeShas = args.beforeShas;
-      patch.afterShas = args.afterShas;
-    }
-    // Drops the open-time stamp so a failed turn never becomes a checkpoint.
-    if (!args.success) {
-      patch.model = undefined;
-    }
+    const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
     // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {

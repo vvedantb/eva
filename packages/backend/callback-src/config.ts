@@ -1,4 +1,5 @@
 import { existsSync } from "fs";
+import { TURN_MAX_RUNTIME_MS } from "@eva/shared/agentTurnLimits";
 import { parseLinkedReposEnv, resolveAgentCwd } from "./linkedRepos.js";
 
 export const CONVEX_URL = process.env.CONVEX_URL;
@@ -32,6 +33,8 @@ export const COMPLETE_SYNTHETIC_TURN_MUTATION =
   process.env.COMPLETE_SYNTHETIC_TURN_MUTATION;
 export const UPDATE_BACKGROUND_AGENTS_MUTATION =
   process.env.UPDATE_BACKGROUND_AGENTS_MUTATION;
+/** Mirrors Claude's native `/goal` onto the chat doc (see parse/claudeGoal.ts). */
+export const UPDATE_GOAL_MUTATION = process.env.UPDATE_GOAL_MUTATION;
 export const REQUIRE_TASK_COMMIT = process.env.REQUIRE_TASK_COMMIT === "true";
 export const PROVIDER = process.env.AI_PROVIDER || "claude";
 export const MODEL =
@@ -93,6 +96,8 @@ export const CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
   : 0;
 export const IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 export const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
+/** Turn prompt file. Mirrors the upload in convex/_sandbox_runtime/launch.ts. */
+export const PROMPT_FILE = "/tmp/design-prompt.txt";
 export const WORK_DIR = existsSync("/tmp/repo")
   ? "/tmp/repo"
   : existsSync("/workspace/repo")
@@ -130,6 +135,11 @@ export const AGENT_CWD = resolveAgentCwd(
 export const NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000",
 );
+/**
+ * Warm-daemon per-turn silence kill: fail a turn that emits no provider event
+ * for this long (in-flight tool calls are exempt; the runtime cap still applies).
+ */
+export const NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 export const FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000",
 );
@@ -141,7 +151,7 @@ export const FIRST_ASSISTANT_EVENT_TIMEOUT_MS = Number(
 );
 export const NO_OUTPUT_CHECK_INTERVAL_MS = 5000;
 export const MAX_TOTAL_RUNTIME_MS = Number(
-  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || "5400000",
+  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || String(TURN_MAX_RUNTIME_MS),
 );
 export const SCRIPT_STARTED_AT = Date.now();
 export const CALLBACK_HTTP_TIMEOUT_MS = Number(

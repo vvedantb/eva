@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  MASKED_ENV_VAR_VALUE,
   maskEnvVarEntries,
   removeEnvVarEntry,
   sandboxEligibleEnvVars,
@@ -7,7 +8,6 @@ import {
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "../convex/_envVars/documentStore";
-import { MASKED_ENV_VAR_VALUE } from "../convex/_envVars/listDisplay";
 import { extractPrNumber } from "../convex/_github/prUrl";
 import { selectPrLifecycleTransition } from "../convex/_github/prLifecycleActions";
 import {

@@ -133,7 +133,7 @@ export function tailLog(log: string, maxLines = LOG_TAIL_LINES): string {
   return lines.slice(-maxLines).join("\n");
 }
 
-function capLength(text: string): string {
+export function capLength(text: string): string {
   if (text.length <= MAX_MESSAGE_CHARS) return text;
   return `${text.slice(0, MAX_MESSAGE_CHARS)}\n\n…(truncated)`;
 }
@@ -178,25 +178,31 @@ export function buildReviewFeedbackMessage(params: {
   instructions: string;
 }): string {
   const { prUrl, prNumber, items, instructions } = params;
-  const quoted = items.map((item) => {
-    const where =
-      item.path === null
-        ? ""
-        : ` on \`${item.path}${item.line === null ? "" : `:${item.line}`}\``;
-    const body = item.body
-      .trim()
-      .split("\n")
-      .map((line) => `> ${line}`)
-      .join("\n");
-    return `**@${item.author}**${where} ([link](${item.url})):\n${body}`;
-  });
   return capLength(
     [
       `**New review feedback on #${prNumber}** (${prUrl})`,
-      quoted.join("\n\n"),
+      quoteFeedback(items),
       instructions,
     ].join("\n\n"),
   );
+}
+
+/** Each comment as its author, place and link, then the text as a quote. */
+export function quoteFeedback(items: ReadonlyArray<FeedbackItem>): string {
+  return items
+    .map((item) => {
+      const where =
+        item.path === null
+          ? ""
+          : ` on \`${item.path}${item.line === null ? "" : `:${item.line}`}\``;
+      const body = item.body
+        .trim()
+        .split("\n")
+        .map((line) => `> ${line}`)
+        .join("\n");
+      return `**@${item.author}**${where} ([link](${item.url})):\n${body}`;
+    })
+    .join("\n\n");
 }
 
 export function buildIssueTaskDescription(params: {

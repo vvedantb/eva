@@ -20,7 +20,10 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconArrowBackUp,
   IconChevronDown,
@@ -30,13 +33,8 @@ import {
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { mergeBlocker } from "./prMergeState";
+import { mergeButtonLabel, stackMergeTargets } from "./prStack";
 import type { PrOverview } from "./prOverviewMeta";
-import {
-  ConfirmSkipHint,
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 type MergeMethod = "merge" | "squash" | "rebase";
 
@@ -91,14 +89,22 @@ function MergeAction({
   const [method, setMethod] = useState<MergeMethod>("squash");
   const [confirming, setConfirming] = useState(false);
   const [merging, setMerging] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
-  const canMerge = !overview.draft && overview.mergeable === true;
-  const blocked = mergeBlocker(overview)?.detail ?? null;
+  const blocker = mergeBlocker(overview);
+  const canMerge =
+    !overview.draft && overview.mergeable === true && blocker?.kind !== "stack";
+  const blocked = blocker?.detail ?? null;
+  const buttonLabel = mergeButtonLabel(overview);
+  // Only a stack that lands more than this PR needs listing in the dialog.
+  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
   const methodLabel =
     MERGE_METHODS.find((entry) => entry.value === method)?.label ?? "Merge";
 
   const runMerge = async () => {
+    // The skip-confirm click calls this straight from the trigger, so the
+    // trigger's disabled state is the only thing between two merges.
+    if (merging) return;
     setMerging(true);
     // No `||` in the try and no `finally`: React Compiler bails on the whole
     // file for either.
@@ -127,11 +133,11 @@ function MergeAction({
     <>
       <ButtonGroup>
         <Button
+          shape="rounded"
           size="xs"
-          disabled={!canMerge}
+          disabled={!canMerge || merging}
           onClick={(event) =>
             requestConfirm(
-              altHeld,
               () => setConfirming(true),
               () => {
                 void runMerge();
@@ -142,14 +148,15 @@ function MergeAction({
           title={blocked ?? skipConfirmTitle(methodLabel)}
         >
           <IconGitMerge size={14} aria-hidden />
-          Merge
+          {buttonLabel}
           <ConfirmSkipHint />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
+              shape="rounded"
               size="xs"
-              disabled={!canMerge}
+              disabled={!canMerge || merging}
               className="px-1.5"
               aria-label="Choose a merge method"
             >
@@ -174,16 +181,43 @@ function MergeAction({
         </DropdownMenu>
       </ButtonGroup>
 
-      <Dialog open={confirming} onOpenChange={setConfirming}>
+      <Dialog
+        open={confirming}
+        onOpenChange={(open) => {
+          // Closing mid-merge would hide the only progress the user sees.
+          if (!merging) setConfirming(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{methodLabel}?</DialogTitle>
-            <DialogDescription>
-              This merges <span className="font-mono">{overview.headRef}</span>{" "}
-              into <span className="font-mono">{overview.baseRef}</span> on
-              GitHub. It cannot be undone from Eva.
-            </DialogDescription>
+            {stackTargets.length > 1 && overview.stack !== null ? (
+              <DialogDescription>
+                This merges {stackTargets.length} stacked pull requests into{" "}
+                <span className="font-mono">{overview.stack.baseRef}</span> on
+                GitHub, in this order. It cannot be undone from Eva.
+              </DialogDescription>
+            ) : (
+              <DialogDescription>
+                This merges{" "}
+                <span className="font-mono">{overview.headRef}</span> into{" "}
+                <span className="font-mono">{overview.baseRef}</span> on
+                GitHub. It cannot be undone from Eva.
+              </DialogDescription>
+            )}
           </DialogHeader>
+          {stackTargets.length > 1 ? (
+            <ol className="space-y-1 rounded-surface bg-muted/50 px-3 py-2 text-sm">
+              {stackTargets.map((entry) => (
+                <li key={entry.number} className="flex min-w-0 gap-2">
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    #{entry.number}
+                  </span>
+                  <span className="truncate">{entry.title}</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
           <DialogFooter>
             <Button
               variant="ghost"
@@ -264,11 +298,13 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const createSession = useConvexMutation(api.sessions.create);
   const [starting, setStarting] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const sha = overview.mergeCommitSha;
 
   const start = async () => {
+    // Same as merge: the skip-confirm path calls this from the trigger.
+    if (starting) return;
     setStarting(true);
     // Built before the `try`: expression-level control flow inside one bails
     // the whole file out of the React Compiler.
@@ -298,10 +334,10 @@ function RevertAction({ overview }: { overview: PrOverview }) {
     <>
       <Button
         size="xs"
+        disabled={starting}
         title={skipConfirmTitle("Revert")}
         onClick={(event) =>
           requestConfirm(
-            altHeld,
             () => setConfirming(true),
             () => {
               void start();

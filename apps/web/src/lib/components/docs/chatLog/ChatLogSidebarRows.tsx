@@ -5,9 +5,9 @@ import { compactRelativeTime } from "@eva/shared/dates";
 import { chatSourceRoute } from "@/lib/components/sandbox/chatSource";
 import { ChatSourceBadge } from "@/lib/components/sandbox/ChatSourceBadge";
 import { sidebarNavLinkClass } from "@/lib/components/sidebar/SharedLayoutNav";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
 import { CHAT_LOG_PANEL_ITEM } from "@/lib/search-params";
 import { ChatLogIcon } from "./ChatLogIcon";
+import { ListEnter } from "@vvedantb/ui";
 
 type RepoChatLog = FunctionReturnType<typeof api.chatLog.listForRepo>[number];
 

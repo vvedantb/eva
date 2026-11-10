@@ -8,13 +8,14 @@ import {
   ActivityTasks,
   Badge,
   Button,
-  useElapsedSeconds,
-  formatElapsed,
+  useActivityElapsedSeconds,
+  formatActivityElapsed,
   Spinner as UISpinner,
   Surface,
-  motionFast,
-} from "@eva/ui";
-import { ListEnter } from "@/lib/components/ui/ListEnter";
+  tokenTransition,
+  Markdown,
+  ListEnter,
+} from "@vvedantb/ui";
 import {
   IconAlertTriangle,
   IconCheck,
@@ -27,8 +28,8 @@ import dayjs from "@eva/shared/dates";
 import { formatDuration } from "@eva/shared/duration";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { Markdown } from "@eva/ui/markdown";
 import { FindingsList } from "./FindingsList";
+import { RunEmailPanel } from "./RunEmailPanel";
 
 export function LatestRun({
   run,
@@ -155,7 +156,7 @@ function RunAccordion({
     isActive ? { entityId: streamingEntityId } : "skip",
   );
 
-  const elapsed = useElapsedSeconds(run.startedAt, isActive);
+  const elapsed = useActivityElapsedSeconds(run.startedAt, isActive);
 
   const badgeVariant =
     run.status === "success"
@@ -170,7 +171,7 @@ function RunAccordion({
     run.finishedAt && run.startedAt
       ? formatDuration(run.startedAt, run.finishedAt)
       : isActive && run.startedAt
-        ? formatElapsed(elapsed)
+        ? formatActivityElapsed(elapsed)
         : "";
 
   const liveSteps = streaming?.currentActivity
@@ -211,6 +212,9 @@ function RunAccordion({
           />
         )}
         <Badge variant={badgeVariant}>{run.status}</Badge>
+        {run.email?.status === "draft" ? (
+          <Badge variant="secondary">email draft</Badge>
+        ) : null}
         <span className="text-xs text-muted-foreground sm:text-sm">
           {dayjs(run.startedAt).format("DD/MM HH:mm")}
         </span>
@@ -234,7 +238,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <Button
                 size="sm"
@@ -263,7 +267,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               <Button
                 size="sm"
@@ -285,7 +289,7 @@ function RunAccordion({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               Read
             </m.span>
@@ -298,7 +302,7 @@ function RunAccordion({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
             className="px-4 py-3 space-y-3"
           >
             {isActive && liveSteps && (
@@ -339,6 +343,7 @@ function RunAccordion({
                 )}
               </>
             )}
+            {run.email && <RunEmailPanel runId={run._id} email={run.email} />}
             {run.error && (
               <div>
                 <p className="text-xs font-medium text-destructive mb-1">

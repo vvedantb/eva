@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryStates } from "nuqs";
 import { useUser } from "@clerk/clerk-react";
 import { useMutation } from "convex/react";
 import {
@@ -10,7 +11,8 @@ import {
   storedTraitsFromRepoDefaults,
   type Id,
 } from "@eva/backend";
-import { toast } from "@eva/ui";
+import { toast } from "@vvedantb/ui";
+import { IconStack2 } from "@tabler/icons-react";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ChatComposer } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -26,6 +28,7 @@ import {
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { stackBaseParser, stackOnPrParser } from "@/lib/search-params";
 import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 import { EvaSetupCard } from "./EvaSetupCard";
 
@@ -41,7 +44,19 @@ export function NewSessionComposer() {
   const firstName = user?.firstName?.trim();
   const createSession = useMutation(api.sessions.create);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { baseBranch, setBaseBranch } = useBaseBranchState();
+  // Set by "Stack a new session" on a pull request: start from its head branch.
+  const [stack] = useQueryStates({
+    stackOn: stackOnPrParser,
+    stackBase: stackBaseParser,
+  });
+  const stackBase = stack.stackOn === null ? null : stack.stackBase;
+  const { baseBranch, setBaseBranch } = useBaseBranchState(
+    stackBase ?? undefined,
+  );
+  // Picking another branch abandons the stack: the session's PR would no longer
+  // sit on top of that pull request.
+  const stackOnPrNumber =
+    stackBase !== null && baseBranch === stackBase ? stack.stackOn : null;
   const codebases = useCodebasesSelection();
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
@@ -52,8 +67,6 @@ export function NewSessionComposer() {
     displayTraits,
     executionTraits,
     onTraitsChange,
-    providerAccountId,
-    setProviderAccountId,
     setDraft,
     clearDraft,
   } = useNewSessionComposerState(
@@ -68,43 +81,17 @@ export function NewSessionComposer() {
   } = tokenizedToEditable(draftTokenized);
 
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const {
-    options: accounts,
-    resolveId: resolveAccountId,
-    ready: accountsReady,
-  } = useProviderAccounts();
-  const [accountDefaulted, setAccountDefaulted] = useState(false);
-
-  // Default the account once the provider list is ready, but only when the
-  // stored pick does not resolve to an OWN account — a saved own pick must
-  // survive a reload, while a stored shared id is re-defaulted (an earlier bug
-  // auto-saved teammates' shared accounts here, and a shared account is an
-  // explicit per-visit choice, never a persisted default). Runs in an effect
-  // because setProviderAccountId writes to localStorage, which dispatches a
-  // sync event — doing that during render triggers React's
-  // event-handler-in-render error.
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-chain-state-updates --
-     See the comment above: setProviderAccountId writes localStorage and
-     dispatches a sync event, which React forbids during render. */
-  useEffect(() => {
-    if (accountsReady && !accountDefaulted) {
-      const storedResolvesToOwn = accounts.some(
-        (account) => account.id === providerAccountId && account.isOwn,
-      );
-      if (!storedResolvesToOwn) {
-        setProviderAccountId(defaultProviderAccountId(accounts, model));
-      }
-      setAccountDefaulted(true);
-    }
-  }, [
-    accountsReady,
-    accountDefaulted,
-    accounts,
-    model,
-    providerAccountId,
-    setProviderAccountId,
-  ]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-chain-state-updates */
+  const { options: accounts, resolveId: resolveAccountId } =
+    useProviderAccounts();
+  // `undefined` = no explicit pick this visit: follow the user's own account
+  // for the model's provider (Team when none), same as quick tasks.
+  const [pickedAccountId, setPickedAccountId] = useState<
+    string | null | undefined
+  >(undefined);
+  const providerAccountId =
+    pickedAccountId === undefined
+      ? defaultProviderAccountId(accounts, model)
+      : pickedAccountId;
 
   const handleSend = async (
     content: string,
@@ -124,6 +111,7 @@ export function NewSessionComposer() {
             installDependencies: codebases.installDependencies,
           }
         : {};
+    const stackArgs = stackOnPrNumber === null ? {} : { stackOnPrNumber };
     try {
       const { numId } = await createSession({
         repoId: repo._id,
@@ -140,6 +128,7 @@ export function NewSessionComposer() {
         providerAccountId: accountId,
         attachmentStorageIds,
         ...linkedCodebases,
+        ...stackArgs,
       });
       clearDraft();
       // The codebases selection is query-string state, and this navigation
@@ -188,14 +177,16 @@ export function NewSessionComposer() {
             model,
             setModel: (next) => {
               setModel(next);
-              setProviderAccountId(
-                providerAccountIdForModel(accounts, providerAccountId, next),
-              );
+              if (pickedAccountId !== undefined) {
+                setPickedAccountId(
+                  providerAccountIdForModel(accounts, pickedAccountId, next),
+                );
+              }
             },
             modelOptions,
             accounts,
             accountId: providerAccountId,
-            onAccountChange: setProviderAccountId,
+            onAccountChange: setPickedAccountId,
             displayTraits,
             onTraitsChange,
           }}
@@ -208,13 +199,21 @@ export function NewSessionComposer() {
             onSave: setDraft,
           }}
           underCardLeading={
-            <BranchSelect
-              value={baseBranch}
-              onValueChange={setBaseBranch}
-              placeholder="Select a branch"
-              className="h-7 w-auto max-w-full justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-              disabled={isSubmitting}
-            />
+            <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+              <BranchSelect
+                value={baseBranch}
+                onValueChange={setBaseBranch}
+                placeholder="Select a branch"
+                className="h-7 w-auto max-w-full min-w-0 shrink justify-start border-0 bg-transparent px-2 text-xs font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                disabled={isSubmitting}
+              />
+              {stackOnPrNumber === null ? null : (
+                <span className="flex shrink-0 items-center gap-1 pr-1 text-xs whitespace-nowrap text-muted-foreground">
+                  <IconStack2 size={13} aria-hidden />
+                  Stacks on #{stackOnPrNumber}
+                </span>
+              )}
+            </span>
           }
         />
       </div>

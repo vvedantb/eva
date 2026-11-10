@@ -13,6 +13,7 @@ export {
   createSessionPr,
   createDraftSessionPr,
   createDraftSessionRepoPr,
+  linkSessionPrToStack,
 } from "./_github/prFlow";
 
 export { generatePrDescription } from "./_github/prDescription";
@@ -25,6 +26,8 @@ export {
 } from "./_github/prDiff";
 
 export { listPullRequests, getPullRequestHeader } from "./_github/pullRequests";
+
+export { getEvaMergeShare } from "./_github/mergeShare";
 
 export {
   getPullRequestOverview,

@@ -1,4 +1,5 @@
 import type { JsonValue } from "./types.js";
+import { isJsonObject } from "./jsonGuards.js";
 
 /**
  * One linked repo clone for a multi-repo session: a full checkout at
@@ -16,7 +17,7 @@ export type LinkedRepo = {
 
 /** Narrows a parsed JSON array entry into `LinkedRepo` — all five fields required. */
 function isLinkedRepo(value: JsonValue): value is LinkedRepo {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return false;
   }
   return (

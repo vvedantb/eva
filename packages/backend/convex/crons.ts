@@ -30,6 +30,15 @@ crons.interval(
   {},
 );
 
+// Stop VMs that a background job woke after Stop while every owner row is
+// `closed` (the Vercel SDK resumes on any exec). Same mode gate as idle pause.
+crons.interval(
+  "sandbox leak sweep",
+  { minutes: 10 },
+  internal.sandboxLeakSweep.run,
+  {},
+);
+
 // Rescan supported skill roots on every connected codebase once a day at 04:00
 // UTC. Push webhooks also trigger an immediate sync when the base branch changes
 // skills; this cron is the backup when push events are not subscribed or a sync

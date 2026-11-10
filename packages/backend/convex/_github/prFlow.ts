@@ -11,6 +11,10 @@ import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
 import type { Doc, Id } from "../_generated/dataModel";
 import { sessionRepoPullRequest } from "../_pullRequests/store";
+import { getInstallationOctokit } from "../githubAuth";
+import { addPullRequestToStack } from "./prStack";
+import { invalidatePrOverviewCache } from "./prOverview";
+import { sessionPullRequestLabels } from "./prLabels";
 
 /**
  * Promotes a session's draft PR to ready-for-review. Called when the user
@@ -36,12 +40,12 @@ export const createSessionPr = action({
       throw new Error("No branch associated with this session");
     }
 
-    const repo = await getActionRepoWithAccess(ctx, session.repoId);
-
-    const sessionPrs = await ctx.runQuery(
-      internal.pullRequests.listForOwnerInternal,
-      { owner: { kind: "session", sessionId: args.sessionId } },
-    );
+    const [repo, sessionPrs] = await Promise.all([
+      getActionRepoWithAccess(ctx, session.repoId),
+      ctx.runQuery(internal.pullRequests.listForOwnerInternal, {
+        owner: { kind: "session", sessionId: args.sessionId },
+      }),
+    ]);
     let prUrl = sessionRepoPullRequest(sessionPrs, undefined)?.prUrl;
     if (prUrl === undefined) {
       // Recovery for sessions that pushed commits before auto-draft existed.
@@ -73,8 +77,8 @@ export const createSessionPr = action({
     // the moment the work is offered for review, the diff is final, the
     // session sandbox is normally still up, and it costs one model call per
     // review instead of one per turn. Scheduled, not awaited, so the modal
-    // returns straight away — the action is best-effort, so a stopped sandbox
-    // just logs and leaves the static body in place.
+    // returns straight away. If idle pause stopped the sandbox, the action
+    // resumes it for the model call and stops it again.
     if (session.sandboxId !== undefined) {
       await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
         installationId: repo.installationId,
@@ -141,22 +145,25 @@ async function siblingPullRequests(
   sessionPrs: Doc<"pullRequests">[],
   sessionRepoId: Id<"sessionRepos"> | undefined,
 ): Promise<SiblingPr[]> {
-  const siblings: SiblingPr[] = [];
-  for (const pr of sessionPrs) {
-    if (pr.owner.kind !== "session") continue;
-    const sameRepoOwnPr =
-      pr.owner.sessionRepoId === sessionRepoId &&
-      (sessionRepoId === undefined ? pr.primary : pr.origin === "eva");
-    if (sameRepoOwnPr) continue;
-    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-      id: pr.repoId,
-    });
-    siblings.push({
-      label: repo ? `${repo.owner}/${repo.name}` : `#${pr.prNumber}`,
-      url: pr.prUrl,
-    });
-  }
-  return siblings;
+  const others = sessionPrs.filter(
+    (pr) =>
+      pr.owner.kind === "session" &&
+      !(
+        pr.owner.sessionRepoId === sessionRepoId &&
+        (sessionRepoId === undefined ? pr.primary : pr.origin === "eva")
+      ),
+  );
+  return Promise.all(
+    others.map(async (pr): Promise<SiblingPr> => {
+      const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+        id: pr.repoId,
+      });
+      return {
+        label: repo ? `${repo.owner}/${repo.name}` : `#${pr.prNumber}`,
+        url: pr.prUrl,
+      };
+    }),
+  );
 }
 
 /**
@@ -171,15 +178,14 @@ export const createDraftSessionPr = internalAction({
   args: { sessionId: v.id("sessions") },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args): Promise<string | null> => {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: args.sessionId,
-    });
+    const [session, sessionPrs] = await Promise.all([
+      ctx.runQuery(internal.sessions.getInternal, { id: args.sessionId }),
+      ctx.runQuery(internal.pullRequests.listForOwnerInternal, {
+        owner: { kind: "session", sessionId: args.sessionId },
+      }),
+    ]);
     if (!session) return null;
     if (!session.branchName) return null;
-    const sessionPrs = await ctx.runQuery(
-      internal.pullRequests.listForOwnerInternal,
-      { owner: { kind: "session", sessionId: args.sessionId } },
-    );
     const existing = sessionRepoPullRequest(sessionPrs, undefined);
     if (existing) return existing.prUrl;
 
@@ -187,10 +193,6 @@ export const createDraftSessionPr = internalAction({
       id: session.repoId,
     });
     if (!repo) return null;
-
-    const appLabel: string | undefined = repo.rootDirectory
-      ? repo.rootDirectory.split("/").pop()
-      : undefined;
 
     // The reviewer-facing description is generated from the diff after the PR
     // exists (`generatePrDescription`); the session summary is only included
@@ -234,7 +236,7 @@ export const createDraftSessionPr = internalAction({
         baseBranch,
         title: session.title,
         body,
-        labels: ["eva", "session", "draft", ...(appLabel ? [appLabel] : [])],
+        labels: sessionPullRequestLabels(repo.rootDirectory),
       });
     } catch (error) {
       if (isBranchNotAheadError(error)) {
@@ -258,6 +260,14 @@ export const createDraftSessionPr = internalAction({
     console.log(
       `[github] Created draft PR for session ${args.sessionId}: ${result}`,
     );
+
+    if (session.stackOnPrNumber !== undefined) {
+      await ctx.scheduler.runAfter(0, internal.github.linkSessionPrToStack, {
+        repoId: session.repoId,
+        parentPrNumber: session.stackOnPrNumber,
+        prUrl: result,
+      });
+    }
 
     return result;
   },
@@ -322,7 +332,7 @@ export const createDraftSessionRepoPr = internalAction({
         baseBranch: linkedRepo.baseBranch,
         title: session.title,
         body,
-        labels: ["eva", "session", "draft"],
+        labels: sessionPullRequestLabels(undefined),
       });
     } catch (error) {
       if (isBranchNotAheadError(error)) {
@@ -349,5 +359,55 @@ export const createDraftSessionRepoPr = internalAction({
     );
 
     return result;
+  },
+});
+
+/**
+ * Joins a stacked session's new PR to the GitHub stack of the PR it was started
+ * on. Scheduled after the draft opens rather than awaited, and best-effort: a
+ * repository without stacked PRs, or a parent that is no longer the top of its
+ * stack, leaves an ordinary PR whose base is the parent's branch — still
+ * reviewable and mergeable, only without the one-step stack merge.
+ */
+export const linkSessionPrToStack = internalAction({
+  args: {
+    repoId: v.id("githubRepos"),
+    parentPrNumber: v.number(),
+    prUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const childPrNumber = extractPrNumber(args.prUrl);
+    if (!childPrNumber) return null;
+    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+      id: args.repoId,
+    });
+    if (!repo) return null;
+
+    const octokit = await getInstallationOctokit(repo.installationId);
+    try {
+      const stackNumber = await addPullRequestToStack(
+        octokit,
+        { owner: repo.owner, repo: repo.name },
+        args.parentPrNumber,
+        childPrNumber,
+      );
+      console.log(
+        `[github] Stacked #${childPrNumber} on #${args.parentPrNumber} (stack #${stackNumber})`,
+      );
+    } catch (error) {
+      console.error(
+        `[github] Could not stack #${childPrNumber} on #${args.parentPrNumber}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+
+    // Both overviews gained or changed a stack.
+    await Promise.all(
+      [args.parentPrNumber, childPrNumber].map((prNumber) =>
+        invalidatePrOverviewCache(ctx, { repoId: args.repoId, prNumber }),
+      ),
+    );
+    return null;
   },
 });

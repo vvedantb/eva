@@ -12,7 +12,9 @@ import {
   DialogTitle,
   Input,
   Textarea,
-} from "@eva/ui";
+  skipConfirmTitle,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconCheck,
   IconCopy,
@@ -24,11 +26,6 @@ import {
 } from "@tabler/icons-react";
 import type { EnvVar } from "@/lib/components/EnvVarsTable";
 import type { EnvVarSlotEntry } from "@/lib/components/_utils/envVarSlotTypes";
-import {
-  requestConfirm,
-  skipConfirmTitle,
-  useAltHeld,
-} from "@/lib/confirm";
 
 interface EnvVarProviderSlotsProps {
   entries: ReadonlyArray<EnvVarSlotEntry>;
@@ -69,7 +66,7 @@ export function EnvVarProviderSlots({
   const [revealingKey, setRevealingKey] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   const matchOf = (entry: EnvVarSlotEntry): EnvVar | undefined =>
     vars?.find((v) => entry.matchKeys.includes(v.key));
@@ -242,6 +239,7 @@ export function EnvVarProviderSlots({
                       )}
                     </div>
                     <Button
+                      shape="rounded"
                       size="icon-sm"
                       variant="ghost"
                       className="max-sm:hit-target text-primary hover:text-primary"
@@ -253,6 +251,7 @@ export function EnvVarProviderSlots({
                       <IconCheck size={14} />
                     </Button>
                     <Button
+                      shape="rounded"
                       size="icon-sm"
                       variant="ghost"
                       className="max-sm:hit-target"
@@ -284,6 +283,7 @@ export function EnvVarProviderSlots({
               {configured && matched && !isEditing && (
                 <div className="flex shrink-0 items-center gap-0.5">
                   <Button
+                    shape="rounded"
                     size="icon-sm"
                     variant="ghost"
                     className="max-sm:hit-target"
@@ -305,6 +305,7 @@ export function EnvVarProviderSlots({
                     />
                   </Button>
                   <Button
+                    shape="rounded"
                     size="icon-sm"
                     variant="ghost"
                     className="max-sm:hit-target"
@@ -325,6 +326,7 @@ export function EnvVarProviderSlots({
                   {!readOnly && (
                     <>
                       <Button
+                        shape="rounded"
                         size="icon-sm"
                         variant="ghost"
                         className="max-sm:hit-target"
@@ -337,12 +339,12 @@ export function EnvVarProviderSlots({
                         <IconPencil size={14} />
                       </Button>
                       <Button
+                        shape="rounded"
                         size="icon-sm"
                         variant="ghost"
                         title={skipConfirmTitle("Remove")}
                         onClick={(event) =>
                           requestConfirm(
-                            altHeld,
                             () => setDeleteKey(matched.key),
                             () => {
                               void confirmDelete(matched.key);

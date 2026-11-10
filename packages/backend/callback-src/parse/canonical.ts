@@ -11,7 +11,7 @@ import type {
   TodoItem,
   ToolCompleteResult,
 } from "../types.js";
-import { tryParseJson } from "../utils.js";
+import { tryParseJsonObject } from "../utils.js";
 import { headCap, STEP_FIELD_CAPS } from "./stepBudget.js";
 import {
   completeStatusOnNonStatusMessage,
@@ -82,10 +82,12 @@ function completeToolStep(
       }
     }
   }
-  if (S.accumulatedSteps.length > 0) {
-    const last = S.accumulatedSteps[S.accumulatedSteps.length - 1];
-    if (result) mergeToolResult(last, result);
-    markStepComplete(last);
+  // Fallback: the newest tool row. Text streamed meanwhile is never the target.
+  for (let i = S.accumulatedSteps.length - 1; i >= 0; i--) {
+    const step = S.accumulatedSteps[i];
+    if (step.type === "response") continue;
+    if (result) mergeToolResult(step, result);
+    markStepComplete(step);
     return;
   }
 }
@@ -158,6 +160,35 @@ function applyReasoningSnapshot(text: string): void {
 }
 
 /**
+ * Mirrors newly streamed reply text into ONE "response" step per run of text,
+ * so the activity log keeps the words the agent wrote between tool runs in
+ * timeline order (the final message only carries the last run). Like
+ * reasoning, a tool push completes the row and the next text opens a new one.
+ */
+function appendResponseText(added: string): void {
+  if (!added) return;
+  const last = S.accumulatedSteps[S.accumulatedSteps.length - 1];
+  if (last && last.type === "response" && last.status === "active") {
+    last.detail = headCap(
+      (last.detail ?? "") + added,
+      STEP_FIELD_CAPS.response,
+    ).text;
+    return;
+  }
+  const text = added.trimStart();
+  if (!text) return;
+  markLastComplete();
+  const step: ProgressStep = {
+    type: "response",
+    label: "Response",
+    status: "active",
+    detail: headCap(text, STEP_FIELD_CAPS.response).text,
+  };
+  S.accumulatedSteps.push(step);
+  stepStartedAt.set(step, Date.now());
+}
+
+/**
  * Appends ONE already-finished activity row. Unlike `updateThinkingStep` this
  * survives into the message's activityLog, so a one-off event the user must be
  * able to see after the turn (a session rotation, say) leaves a trace instead of
@@ -166,6 +197,16 @@ function applyReasoningSnapshot(text: string): void {
  */
 export function pushNoticeStep(label: string, detail?: string): void {
   pushProgressStep({ type: "notice", label, detail, status: "complete" });
+}
+
+/** Marks where a steered user message reached the live turn (`runtime/steering.ts`). */
+export function pushSteerStep(text: string): void {
+  pushProgressStep({
+    type: "steer",
+    label: "Steered",
+    detail: text,
+    status: "complete",
+  });
 }
 
 /** Thinking is streamed as liveness but never persisted in the final log. */
@@ -260,6 +301,13 @@ export function applyCanonicalEvents(events: CanonicalEvent[]): boolean {
         // paragraph break separates it from any prior block.
         appendStreamedContent(ev.text, true);
         break;
+      case "push_subagent_text":
+        // Pushed directly: pushProgressStep would treat a `response` step as
+        // thinking filler, and closing the last step could end a sibling tool
+        // that is still running in the parent or another subagent.
+        clearThinkingStep();
+        S.accumulatedSteps.push(ev.step);
+        break;
       case "stream_text_delta":
         clearThinkingStep();
         // Live provider token delta. Appends exactly like append_text but marks
@@ -311,10 +359,8 @@ export function applyCanonicalEvents(events: CanonicalEvent[]): boolean {
 
 /** Parses a single JSON stream event line and updates accumulated steps. */
 export function parseStreamEvent(line: string): boolean {
-  const event = tryParseJson(line);
-  if (!event || typeof event !== "object" || Array.isArray(event)) {
-    return false;
-  }
+  const event = tryParseJsonObject(line);
+  if (!event) return false;
   try {
     completeStatusOnNonStatusMessage(event);
     if (consumesClaudeSdkTaxonomyMessage(event)) {
@@ -327,8 +373,16 @@ export function parseStreamEvent(line: string): boolean {
   }
 }
 
-/** Appends new text to the current streamed content buffer. */
+/** Appends new text to the streamed buffer and its timeline response row. */
 function appendStreamedContent(text: string, isBlockBoundary = false): void {
+  const before = S.currentStreamedContent;
+  writeStreamedContent(text, isBlockBoundary);
+  // Both branches below only ever extend the buffer, so the suffix is exactly
+  // what this call added (a snapshot adds just its unseen tail).
+  appendResponseText(S.currentStreamedContent.slice(before.length));
+}
+
+function writeStreamedContent(text: string, isBlockBoundary: boolean): void {
   const nextText = String(text);
   if (!nextText) {
     return;

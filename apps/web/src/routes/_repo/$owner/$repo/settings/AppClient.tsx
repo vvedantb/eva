@@ -1,14 +1,13 @@
 "use client";
 
 import { useMutation } from "convex/react";
+import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
-import { Input, Textarea } from "@eva/ui";
+import { Input, Textarea, SettingsField, SettingsSection } from "@vvedantb/ui";
 import { parseCommandLines } from "./_utils";
 import { LogoSettingsSection } from "./_components/LogoSettingsSection";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { SetUpWithEvaButton } from "@/lib/components/evaConfig/SetUpWithEvaButton";
 import { AppCommandsReadOnly } from "./_components/AppCommandsReadOnly";
@@ -21,19 +20,18 @@ export function AppClient() {
   const updateConfig = useMutation(
     api.githubRepos.updateConfig,
   ).withOptimisticUpdate((localStore, args) => {
-    const queryArgs = { owner, name, appName };
-    const current = localStore.getQuery(
+    const { repoId: _id, devPort, ...safeFields } = args;
+    patchLoadedQuery(
+      localStore,
       api.githubRepos.getByOwnerAndName,
-      queryArgs,
+      { owner, name, appName },
+      (current) =>
+        current && {
+          ...current,
+          ...safeFields,
+          ...(devPort !== undefined ? { devPort: devPort ?? undefined } : {}),
+        },
     );
-    if (current !== undefined && current !== null) {
-      const { repoId: _id, devPort, ...safeFields } = args;
-      localStore.setQuery(api.githubRepos.getByOwnerAndName, queryArgs, {
-        ...current,
-        ...safeFields,
-        ...(devPort !== undefined ? { devPort: devPort ?? undefined } : {}),
-      });
-    }
   });
 
   const startupCommands = repo.startupCommands?.join("\n") ?? "";

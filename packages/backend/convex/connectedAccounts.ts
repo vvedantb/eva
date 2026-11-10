@@ -1,7 +1,9 @@
+import { bytesToBase64Url, randomToken, requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { findTeamEnvVarDoc } from "./_envVars/documentStore";
 import { authAction, authMutation, authQuery } from "./functions";
 import {
   connectorActorValidator,
@@ -42,27 +44,12 @@ function safeReturnPath(path: string | undefined): string {
 }
 
 async function createPkce(): Promise<{ verifier: string; challenge: string }> {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  const verifier = btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  const verifier = randomToken(32, "base64url");
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(verifier),
   );
-  let challengeBinary = "";
-  for (const byte of new Uint8Array(digest)) {
-    challengeBinary += String.fromCharCode(byte);
-  }
-  const challenge = btoa(challengeBinary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return { verifier, challenge };
+  return { verifier, challenge: bytesToBase64Url(new Uint8Array(digest)) };
 }
 
 async function envFallbackForUser(
@@ -76,10 +63,7 @@ async function envFallbackForUser(
     .collect();
   const keys = CONNECTOR_ENV_KEYS[provider];
   for (const membership of memberships) {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, membership.teamId);
     const hit = doc?.vars.find((entry) => keys.includes(entry.key));
     if (!hit) continue;
     const team = await ctx.db.get(membership.teamId);
@@ -105,7 +89,11 @@ export const listStatuses = authQuery({
         )
         .first();
       const env = await envFallbackForUser(ctx, ctx.userId, provider);
-      const source = row ? ("oauth" as const) : env ? ("env" as const) : ("none" as const);
+      const source = row
+        ? ("oauth" as const)
+        : env
+          ? ("env" as const)
+          : ("none" as const);
       statuses.push({
         provider,
         label: CONNECTOR_LABEL[provider],
@@ -132,8 +120,7 @@ export const startOAuth = authMutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     const { clientId } = readOAuthClient(args.provider);
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) throw new Error("CONVEX_SITE_URL is not set");
+    const siteUrl = requiredEnv("CONVEX_SITE_URL");
     const actor = args.actor ?? "user";
     const { verifier, challenge } = await createPkce();
     const nonce = crypto.randomUUID();

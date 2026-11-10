@@ -1,6 +1,6 @@
 // `UserInitials` / `UserProfileHoverCardBody` are deliberately NOT re-exported
 // here. This barrel is imported by `@eva/backend`'s Convex functions, and those
-// components pull in React, `@eva/ui` and `convex-helpers/react` — which the
+// components pull in React, `@vvedantb/ui` and `convex-helpers/react` — which the
 // Convex bundler cannot resolve. Import them from `@eva/shared/user-initials`.
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
@@ -55,3 +55,4 @@ export {
   type ForkTranscriptPrefix,
   type ForkTranscriptTurn,
 } from "./messageFork";
+export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";

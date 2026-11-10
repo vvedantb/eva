@@ -1,27 +1,15 @@
+import {
+  AUTO_PUBLISH_BRANCH_GIT_CONFIG,
+  COMMIT_EXCLUDE_PATHSPECS,
+} from "@eva/shared/gitDefaults";
 import { REQUIRE_TASK_COMMIT, RUN_ID } from "../config.js";
 import { log } from "../utils.js";
-import { git } from "./gitExec.js";
+import { requestGitStateCheck } from "./branchWatcher.js";
+import { git, readCurrentBranch } from "./gitExec.js";
 
 const PUSH_TIMEOUT_MS = 60_000;
 
-// Media exclusions mirror the agent-facing commit convention in
-// convex/_sessions/prompts.ts — captures are chat deliverables, never commits.
-const COMMIT_ADD_ARGS = [
-  "add",
-  "-A",
-  "--",
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md",
-];
+const COMMIT_ADD_ARGS = ["add", "-A", "--", ...COMMIT_EXCLUDE_PATHSPECS];
 
 type BranchSyncResult =
   | { status: "ready"; remoteExists: boolean }
@@ -36,11 +24,13 @@ type BranchSyncResult =
 function localBranchRewroteOwnHistory(branch: string, remoteRef: string): boolean {
   const remoteTip = git(["rev-parse", "--verify", remoteRef]);
   const reflog = git(["reflog", "show", "--format=%H", `refs/heads/${branch}`]);
-  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
-  return reflog.out
+  if (!remoteTip.ok || !reflog.ok || remoteTip.stdout.length === 0) {
+    return false;
+  }
+  return reflog.stdout
     .split("\n")
     .map((line) => line.trim())
-    .includes(remoteTip.out);
+    .includes(remoteTip.stdout);
 }
 
 function isMissingRemoteRef(message: string): boolean {
@@ -70,7 +60,7 @@ function synchronizeForPush(branch: string): BranchSyncResult {
       "origin",
       `+refs/heads/${branch}:${remoteRef}`,
     ],
-    PUSH_TIMEOUT_MS,
+    { timeoutMs: PUSH_TIMEOUT_MS },
   );
   if (!fetch.ok) {
     if (isMissingRemoteRef(fetch.out)) {
@@ -93,10 +83,10 @@ function synchronizeForPush(branch: string): BranchSyncResult {
     );
     return { status: "failed" };
   }
-  if (/^0\s+\d+$/.test(divergence.out)) {
+  if (/^0\s+\d+$/.test(divergence.stdout)) {
     return { status: "ready", remoteExists: true };
   }
-  if (/^[1-9]\d*\s+0$/.test(divergence.out)) {
+  if (/^[1-9]\d*\s+0$/.test(divergence.stdout)) {
     const fastForward = git(["merge", "--ff-only", remoteRef]);
     if (fastForward.ok) {
       return { status: "ready", remoteExists: true };
@@ -106,7 +96,7 @@ function synchronizeForPush(branch: string): BranchSyncResult {
     );
     return { status: "failed" };
   }
-  if (/^[1-9]\d*\s+[1-9]\d*$/.test(divergence.out)) {
+  if (/^[1-9]\d*\s+[1-9]\d*$/.test(divergence.stdout)) {
     // Merge, not rebase: a turn that merged the base branch in makes every
     // base commit since the fork local-only, and a rebase replays all of them
     // onto the remote tip (see synchronizeBranchForPublish in
@@ -120,7 +110,9 @@ function synchronizeForPush(branch: string): BranchSyncResult {
       );
       return { status: "failed" };
     }
-    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
+    const merge = git(["merge", "--no-edit", remoteRef], {
+      timeoutMs: PUSH_TIMEOUT_MS,
+    });
     if (merge.ok) {
       return { status: "ready", remoteExists: true };
     }
@@ -135,7 +127,7 @@ function synchronizeForPush(branch: string): BranchSyncResult {
 /** True when every commit reachable from HEAD is already in `exclusion`. */
 function tipAlreadyPublished(exclusion: readonly string[]): boolean {
   const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
-  return unpushed.ok && unpushed.out === "0";
+  return unpushed.ok && unpushed.stdout === "0";
 }
 
 /**
@@ -154,17 +146,36 @@ function tipAlreadyPublished(exclusion: readonly string[]): boolean {
  * workflow owns commit semantics there — the commit gate must keep failing
  * agents that did not commit, and the run's own push/PR steps follow.
  * Only ever acts on eva-owned branches (`eva/…`); never main or a base branch.
+ * With the sender's `manualSideBranchPublish` flag on, Eva pins the one branch
+ * it may publish (`AUTO_PUBLISH_BRANCH_GIT_CONFIG`), so side branches the agent
+ * created and owns are left alone. The UI's "Commit & push" covers them.
  * Best-effort throughout: failure must never fail the turn.
  */
 export function persistTurnWork(): void {
   if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  try {
+    commitAndPushTurnWork();
+  } finally {
+    // The commit and push move refs the HEAD watcher does not see.
+    requestGitStateCheck();
+  }
+}
+
+function commitAndPushTurnWork(): void {
   const startedAt = Date.now();
 
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch.ok || !branch.out.startsWith("eva/")) {
-    if (branch.ok && branch.out) {
-      log(`persistTurnWork: skipped — branch "${branch.out}" is not eva-owned`);
+  const branch = readCurrentBranch();
+  if (!branch.startsWith("eva/")) {
+    if (branch) {
+      log(`persistTurnWork: skipped — branch "${branch}" is not eva-owned`);
     }
+    return;
+  }
+  const pinned = git(["config", "--get", AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
+  if (pinned.ok && pinned.stdout.length > 0 && pinned.stdout !== branch) {
+    log(
+      `persistTurnWork: skipped — branch "${branch}" is not the chat branch "${pinned.stdout}"`,
+    );
     return;
   }
 
@@ -188,7 +199,7 @@ export function persistTurnWork(): void {
   // continuation, and the common case is a clean tree whose tip the tracking ref
   // already contains. The tracking ref only ever lags behind origin, so a zero
   // count here means origin genuinely has HEAD — no fetch or push needed.
-  if (tipAlreadyPublished([`refs/remotes/origin/${branch.out}`])) return;
+  if (tipAlreadyPublished([`refs/remotes/origin/${branch}`])) return;
 
   // The exact remote branch is refreshed below before the ahead-of-remote gate
   // and push, so a resumed sandbox cannot publish from a stale tracking ref.
@@ -196,33 +207,35 @@ export function persistTurnWork(): void {
   // branch currently points at and a bare name goes through the upstream, so
   // either could aim at the base branch; this names the exact ref to update and
   // cannot resolve anywhere else.
-  const refspec = `refs/heads/${branch.out}:refs/heads/${branch.out}`;
+  const refspec = `refs/heads/${branch}:refs/heads/${branch}`;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const sync = synchronizeForPush(branch.out);
+    const sync = synchronizeForPush(branch);
     if (sync.status === "failed") return;
 
     // Chat-only turns have nothing to publish. Once the branch exists, compare
     // to that exact ref; otherwise compare against all fetched origin refs.
     const exclusion = sync.remoteExists
-      ? [`refs/remotes/origin/${branch.out}`]
+      ? [`refs/remotes/origin/${branch}`]
       : ["--remotes=origin"];
     if (tipAlreadyPublished(exclusion)) return;
 
-    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
+    const push = git(["push", "origin", refspec], {
+      timeoutMs: PUSH_TIMEOUT_MS,
+    });
     if (push.ok) {
       log(
-        `persistTurnWork: push ok branch=${branch.out} in ${Date.now() - startedAt}ms`,
+        `persistTurnWork: push ok branch=${branch} in ${Date.now() - startedAt}ms`,
       );
       return;
     }
     if (attempt < 2 && isNonFastForwardPush(push.out)) {
       log(
-        `persistTurnWork: remote moved during push; refetching branch=${branch.out}`,
+        `persistTurnWork: remote moved during push; refetching branch=${branch}`,
       );
       continue;
     }
     log(
-      `persistTurnWork: push failed: ${push.out.slice(0, 200)} branch=${branch.out} in ${Date.now() - startedAt}ms`,
+      `persistTurnWork: push failed: ${push.out.slice(0, 200)} branch=${branch} in ${Date.now() - startedAt}ms`,
     );
     return;
   }

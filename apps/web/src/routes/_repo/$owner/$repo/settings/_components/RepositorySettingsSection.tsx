@@ -8,12 +8,14 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { Switch } from "@eva/ui";
+import {
+  Switch,
+  SettingsField,
+  SettingsToggleRow,
+  SettingsSection,
+} from "@vvedantb/ui";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
-import { SettingsToggleRow } from "@/lib/components/settings/SettingsToggleRow";
 import { ConfigModelField } from "./ConfigModelField";
 
 type RepoConfigFields = {
@@ -122,15 +124,15 @@ export function RepositorySettingsSection({
         bodyVariant="list"
       >
         <SettingsToggleRow
-          title="Readable by other sandboxes"
-          description="Sandboxes for other repositories you can access in Eva may clone this repository read-only. Turn off to keep it private to its own sandboxes."
+          title="Usable by other sandboxes"
+          description="Sandboxes for other repositories you can access in Eva may clone and push to this repository. Turn off to keep it private to its own sandboxes."
           action={
             <Switch
               checked={repo.sandboxReadExcluded !== true}
               onCheckedChange={(nextOn) =>
                 updateConfig({ repoId, sandboxReadExcluded: !nextOn })
               }
-              aria-label="Readable by other sandboxes"
+              aria-label="Usable by other sandboxes"
             />
           }
         />

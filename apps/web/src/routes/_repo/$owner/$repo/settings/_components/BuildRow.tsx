@@ -1,11 +1,5 @@
 import type { Id } from "@eva/backend";
-import {
-  Button,
-  CircleSpinner,
-  Collapsible,
-  CollapsibleContent,
-  Spinner,
-} from "@eva/ui";
+import { Button, Spinner, Collapsible, CollapsibleContent } from "@vvedantb/ui";
 import {
   IconCheck,
   IconChevronDown,
@@ -137,7 +131,8 @@ export function BuildRow({
                       <div key={a.repoId} className="flex items-start gap-2">
                         {a.status === "running" ? (
                           <span className="inline-flex items-center gap-1 text-blue-500">
-                            <CircleSpinner
+                            <Spinner
+                              variant="circle"
                               size="sm"
                               className="size-3 shrink-0"
                             />
@@ -258,7 +253,7 @@ function SeededSummary({ seededApps }: { seededApps?: SeededAppResult[] }) {
   if (seededApps.some((a) => a.status === "running")) {
     return (
       <span className="inline-flex items-center gap-1 text-blue-500">
-        <CircleSpinner size="sm" className="size-3" />
+        <Spinner variant="circle" size="sm" className="size-3" />
         {seeded}/{total}
       </span>
     );

@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
@@ -6,13 +7,11 @@ import { repoBasePath } from "../_githubRepos/helpers";
 import { entityAccess, repoRefArgs } from "./entityRef";
 import {
   confirmedDeleteArg,
-  errorResult,
   guarded,
   mcpCallAsUser,
   mcpGetContext,
   mcpListUserRepos,
   repoRefLabel,
-  textResult,
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
@@ -48,6 +47,7 @@ const automationSchema = z.object({
   actionsEnabled: z.boolean().optional(),
   shared: z.boolean().optional(),
   sendEmail: z.boolean().optional(),
+  emailAutoSend: z.boolean().optional(),
   systemKey: z.string().optional(),
 });
 type Automation = z.infer<typeof automationSchema>;
@@ -108,7 +108,7 @@ const MODEL_ALIASES: Record<string, string> = {
   opus: "claude:opus",
   sonnet: "claude:sonnet",
   haiku: "claude:haiku",
-  fable: "claude:claude-fable-5-1",
+  fable: "claude:claude-fable-5-2",
 };
 const MODEL_IDS: string[] = AI_MODEL_OPTIONS.map((option) => option.id);
 
@@ -163,7 +163,13 @@ const settingsArgs = {
     .boolean()
     .optional()
     .describe(
-      "true emails each successful run's summary to every user with email notifications on.",
+      "true emails each successful run's summary to every user with email notifications on. Each email waits as a draft for review unless emailAutoSend is true.",
+    ),
+  emailAutoSend: z
+    .boolean()
+    .optional()
+    .describe(
+      "true sends the email straight away with no review. false (the default) keeps it as a draft on the run until a person sends it.",
     ),
 };
 
@@ -176,12 +182,13 @@ interface UpdateFields {
   readOnly?: boolean;
   actionsEnabled?: boolean;
   sendEmail?: boolean;
+  emailAutoSend?: boolean;
 }
 
 /** The checks automations:update would only hit on enable, or the UI enforces. */
 function fieldsError(fields: UpdateFields) {
   if (fields.readOnly === false && fields.actionsEnabled === true) {
-    return errorResult(
+    return toolErrorResult(
       "actionsEnabled only applies to read-only automations; set readOnly true as well, or leave actionsEnabled out.",
     );
   }
@@ -205,6 +212,8 @@ function buildUpdateArgs(
   else if (fields.actionsEnabled !== undefined)
     args.actionsEnabled = fields.actionsEnabled;
   if (fields.sendEmail !== undefined) args.sendEmail = fields.sendEmail;
+  if (fields.emailAutoSend !== undefined)
+    args.emailAutoSend = fields.emailAutoSend;
   return args;
 }
 
@@ -251,7 +260,7 @@ export function automationTools(
   }
 
   const notFound = () =>
-    errorResult(
+    toolErrorResult(
       "No automation matched that id, or you do not have access to it. Use list_automations to find one.",
     );
 
@@ -260,12 +269,12 @@ export function automationTools(
     repoId?: string;
     repoName?: string;
     app?: string;
-  }): Promise<RepoInfo[] | ReturnType<typeof errorResult>> {
+  }): Promise<RepoInfo[] | ReturnType<typeof toolErrorResult>> {
     const { userId } = await mcpGetContext(ctx, clerkUserId);
     const repos = await mcpListUserRepos(ctx, userId);
     if (ref.repoId === undefined && ref.repoName === undefined) return repos;
     const resolved = await resolveRepoRef(ref, userId);
-    if ("isError" in resolved) return resolved;
+    if ("content" in resolved) return resolved;
     await assertUserRepoAccess(resolved.repoId, userId);
     return repos.filter((repo) => repo.id === resolved.repoId);
   }
@@ -287,7 +296,7 @@ A shared monorepo automation appears once, under the first app that surfaces it.
       handler: (ref) =>
         guarded(async () => {
           const repos = await targetRepos(ref);
-          if ("isError" in repos) return repos;
+          if ("content" in repos) return repos;
 
           const perRepo = await Promise.all(
             repos.map(async (repo) => ({
@@ -335,6 +344,7 @@ A shared monorepo automation appears once, under the first app that surfaces it.
                 actionsEnabled: automation.actionsEnabled === true,
                 shared: automation.shared === true,
                 sendEmail: automation.sendEmail === true,
+                emailAutoSend: automation.emailAutoSend === true,
                 systemKey: automation.systemKey ?? null,
                 lastRun: lastRun
                   ? {
@@ -348,7 +358,7 @@ A shared monorepo automation appears once, under the first app that surfaces it.
             }),
           );
 
-          return textResult({ count: automations.length, automations });
+          return toolJsonResult({ count: automations.length, automations });
         }),
     }),
   );
@@ -380,7 +390,7 @@ Each finding has an "id" for create_tasks_from_automation_findings, a severity, 
           const automation = await getAutomation(automationId);
           if (!automation) return notFound();
           const runs = (await listRuns(automationId)).slice(0, limit);
-          return textResult({
+          return toolJsonResult({
             automation: {
               id: automation._id,
               title: automation.title,
@@ -445,7 +455,7 @@ New automations start disabled unless you pass enabled: true, and use the repo's
           if (invalid) return invalid;
           const { userId } = await mcpGetContext(ctx, clerkUserId);
           const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-          if ("isError" in ref) return ref;
+          if ("content" in ref) return ref;
           await assertUserRepoAccess(ref.repoId, userId);
 
           // The UI creates with a title, then saves settings through update;
@@ -474,7 +484,7 @@ New automations start disabled unless you pass enabled: true, and use the repo's
 
           const created = await getAutomation(id);
           if (!created) return notFound();
-          return textResult({
+          return toolJsonResult({
             id,
             title: created.title,
             enabled: created.enabled,
@@ -489,7 +499,7 @@ New automations start disabled unless you pass enabled: true, and use the repo's
       name: "update_automation",
       description: `Change an existing automation: prompt, schedule, model, mode, email, or enable/disable it. Only the fields you pass change. ${TIMEZONE_NOTE}
 
-System automations (listed with a "systemKey") only accept cronSchedule, model, enabled and sendEmail; title, description, readOnly and actionsEnabled are managed by Eva and are rejected. Replies with the automation's schedule and enabled state after the change.`,
+System automations (listed with a "systemKey") only accept cronSchedule, model, enabled, sendEmail and emailAutoSend; title, description, readOnly and actionsEnabled are managed by Eva and are rejected. Replies with the automation's schedule and enabled state after the change.`,
       mutating: true,
       input: {
         automationId: automationIdArg,
@@ -502,7 +512,7 @@ System automations (listed with a "systemKey") only accept cronSchedule, model, 
           if (invalid) return invalid;
           const updateArgs = buildUpdateArgs(automationId, fields);
           if (Object.keys(updateArgs).length === 1) {
-            return errorResult("Pass at least one field to change.");
+            return toolErrorResult("Pass at least one field to change.");
           }
           await mcpCallAsUser(
             ctx,
@@ -512,7 +522,7 @@ System automations (listed with a "systemKey") only accept cronSchedule, model, 
           );
           const updated = await getAutomation(automationId);
           if (!updated) return notFound();
-          return textResult({
+          return toolJsonResult({
             id: updated._id,
             title: updated.title,
             enabled: updated.enabled,
@@ -547,7 +557,7 @@ Rejected when the automation has no prompt or already has a run queued or runnin
             z.null(),
           );
           const [run] = await listRuns(automationId);
-          return textResult({
+          return toolJsonResult({
             started: true,
             runId: run?._id ?? null,
             status: run?.status ?? null,
@@ -577,22 +587,26 @@ Rejected when the automation has no prompt or already has a run queued or runnin
             (candidate) => candidate._id === runId,
           );
           if (!run) {
-            return errorResult(
+            return toolErrorResult(
               "That run is not among this automation's recent runs.",
             );
           }
           if (run.status !== "queued" && run.status !== "running") {
-            return errorResult(
+            return toolErrorResult(
               `That run already finished with status "${run.status}"; there is nothing to cancel.`,
             );
           }
           await mcpCallAsUser(
             ctx,
             clerkUserId,
-            { type: "mutation", path: "automations:cancelRun", args: { runId } },
+            {
+              type: "mutation",
+              path: "automations:cancelRun",
+              args: { runId },
+            },
             z.null(),
           );
-          return textResult({ cancelled: true, runId });
+          return toolJsonResult({ cancelled: true, runId });
         }),
     }),
   );
@@ -623,7 +637,7 @@ Ask the user first and pass confirmed: true only after they say yes. To pause in
             },
             z.null(),
           );
-          return textResult({
+          return toolJsonResult({
             deleted: true,
             id: automationId,
             title: automation.title,
@@ -644,9 +658,7 @@ Ask the user first and pass confirmed: true only after they say yes. To pause in
 Findings that already have a task are skipped, so repeating a call does not duplicate work. autoRun: true also starts each new task's agent straight away. Replies with the ids of the tasks created (empty when every finding already had one).`,
       mutating: true,
       input: {
-        runId: z
-          .string()
-          .describe("The run's id, from get_automation_runs."),
+        runId: z.string().describe("The run's id, from get_automation_runs."),
         findingIds: z
           .array(z.string())
           .min(1)
@@ -670,7 +682,7 @@ Findings that already have a task are skipped, so repeating a call does not dupl
             },
             z.array(z.string()),
           );
-          return textResult({ created: taskIds.length, taskIds, autoRun });
+          return toolJsonResult({ created: taskIds.length, taskIds, autoRun });
         }),
     }),
   );

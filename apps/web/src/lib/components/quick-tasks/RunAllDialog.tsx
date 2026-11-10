@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogFooter,
   Spinner,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 interface RunAllDialogProps {
   isOpen: boolean;

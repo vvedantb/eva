@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, cn, CrossfadeIconSlot, Spinner } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button, CrossfadeIconSlot, Spinner } from "@vvedantb/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import { api, type Id } from "@eva/backend";
 import { useQuery } from "convex/react";

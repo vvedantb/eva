@@ -13,7 +13,9 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+} from "@vvedantb/ui";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
@@ -30,7 +32,8 @@ import {
   PROJECT_PHASES,
   type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
@@ -43,6 +46,7 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  */
 export interface ProjectCardMenuItemsProps {
   variant: "context" | "dropdown";
+  projectId: Id<"projects">;
   title: string;
   phase: ProjectPhase;
   projectLead?: Id<"users">;
@@ -59,6 +63,7 @@ export interface ProjectCardMenuItemsProps {
 
 export function ProjectCardMenuItems({
   variant,
+  projectId,
   title,
   phase,
   projectLead,
@@ -72,6 +77,7 @@ export function ProjectCardMenuItems({
   onEdit,
   onDelete,
 }: ProjectCardMenuItemsProps) {
+  const prs = useOwnerPullRequests({ kind: "project", projectId });
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Sub = variant === "context" ? ContextMenuSub : DropdownMenuSub;
   const SubTrigger =
@@ -164,6 +170,7 @@ export function ProjectCardMenuItems({
           </a>
         </Item>
       ) : null}
+      <PrActionsSubmenus variant={variant} prs={prs} />
       <Item onClick={onEdit}>
         <IconPencil className="size-4" />
         Edit Details

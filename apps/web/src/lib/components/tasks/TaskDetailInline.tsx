@@ -6,7 +6,13 @@ import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api, type Id, type SandboxOwner } from "@eva/backend";
-import { Badge, CircleSpinner, cn, motionFast } from "@eva/ui";
+import { cn } from "@eva/ui";
+import {
+  Badge,
+  Spinner,
+  tokenTransition,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
@@ -20,11 +26,12 @@ import { TaskSubscribers } from "./_components/TaskSubscribers";
 import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
 import { StatusFieldsSection } from "./_components/StatusFieldsSection";
 import { TaskFooter } from "./_components/TaskFooter";
-import { StopConfirmDialog } from "./_components/StopConfirmDialog";
-import { ResolveConfirmDialog } from "./_components/ResolveConfirmDialog";
-import { StartupCommandsConfirmDialog } from "./_components/StartupCommandsConfirmDialog";
-import { RunDevServerConfirmDialog } from "./_components/RunDevServerConfirmDialog";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
+import {
+  StopConfirmDialog,
+  ResolveConfirmDialog,
+  StartupCommandsConfirmDialog,
+  RunDevServerConfirmDialog,
+} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
 import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
@@ -48,10 +55,11 @@ import {
   type SandboxTab,
   type TaskRouteSandboxTab,
 } from "@/lib/search-params";
-import type { UseTaskDetailRouting } from "./useTaskDetail";
+import type { UseTaskDetailRouting } from "./useTaskDetailControls";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useRepo } from "@/lib/contexts/RepoContext";
 
 interface TaskDetailInlineProps {
   onClose: () => void;
@@ -66,6 +74,7 @@ export function TaskDetailInline({
   routing,
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
+  const { basePath } = useRepo();
   const [embeddedSandboxTab, setEmbeddedSandboxTab] =
     useState<SandboxTab>("preview");
   /** Which detail pane is on screen below `md`; both show at `md` and up. */
@@ -141,7 +150,7 @@ export function TaskDetailInline({
   } = useTaskDetail(taskId, routing);
   const isAgentActive = useTaskAgentActive(taskId, task);
   const chatUnread = useChatUnread(taskId);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
 
   useEffect(() => {
     if (!isSandboxActive || !sandboxId) return;
@@ -220,7 +229,7 @@ export function TaskDetailInline({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <CircleSpinner size="sm" className="size-5" />
+        <Spinner variant="circle" size="sm" className="size-5" />
       </div>
     );
   }
@@ -290,6 +299,14 @@ export function TaskDetailInline({
         }
         collapsed={collapsed}
         onToggle={onToggle}
+        miniPlayer={
+          isQuickTask && task.numId !== undefined
+            ? {
+                returnTo: `${basePath}/quick-tasks/${task.numId}/sandbox/preview`,
+                title: task.title,
+              }
+            : undefined
+        }
       />
     ) : (
       <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
@@ -451,7 +468,6 @@ export function TaskDetailInline({
                       isStopping={isStopping}
                       onStopConfirm={() =>
                         requestConfirm(
-                          altHeld,
                           () => setShowStopConfirm(true),
                           handleStopExecution,
                         )
@@ -479,7 +495,6 @@ export function TaskDetailInline({
                 projects={projects}
                 baseBranch={baseBranch}
                 latestDeployment={latestDeployment}
-                hasActiveRun={hasActiveRun}
                 hasRuns={hasRuns}
                 isOwner={isOwner}
                 allTags={allTags}
@@ -521,14 +536,12 @@ export function TaskDetailInline({
         onStopSandbox={handleStopSandbox}
         onRunStartupCommands={() =>
           requestConfirm(
-            altHeld,
             () => setShowStartupCommandsConfirm(true),
             handleRetryStartupCommands,
           )
         }
         onRunDevServer={() =>
           requestConfirm(
-            altHeld,
             () => setShowRunDevServerConfirm(true),
             handleRunDevServer,
           )
@@ -539,7 +552,6 @@ export function TaskDetailInline({
         onStartExecution={handleStartExecution}
         onResolveConfirm={() =>
           requestConfirm(
-            altHeld,
             () => setShowResolveConfirm(true),
             handleResolveConflicts,
           )
@@ -580,7 +592,7 @@ export function TaskDetailInline({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {sandboxContent}
             </m.div>
@@ -591,7 +603,7 @@ export function TaskDetailInline({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={motionFast}
+              transition={tokenTransition.fast}
             >
               {detailContent}
             </m.div>
@@ -602,25 +614,25 @@ export function TaskDetailInline({
         open={showStopConfirm}
         onOpenChange={setShowStopConfirm}
         onConfirm={handleStopExecution}
-        isStopping={isStopping}
+        isLoading={isStopping}
       />
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
-        isStarting={isStarting}
+        isLoading={isStarting}
       />
       <StartupCommandsConfirmDialog
         open={showStartupCommandsConfirm}
         onOpenChange={setShowStartupCommandsConfirm}
         onConfirm={handleRetryStartupCommands}
-        isStarting={isRetryingStartupCommands}
+        isLoading={isRetryingStartupCommands}
       />
       <RunDevServerConfirmDialog
         open={showRunDevServerConfirm}
         onOpenChange={setShowRunDevServerConfirm}
         onConfirm={handleRunDevServer}
-        isRunning={isRunningDevServer}
+        isLoading={isRunningDevServer}
         devCommandLabel={devServerCommandLabel}
       />
     </>

@@ -18,7 +18,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";

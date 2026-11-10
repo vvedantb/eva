@@ -1,26 +1,41 @@
 "use node";
 
+import { requiredEnv } from "@vvedantb/server";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 import { v } from "convex/values";
-import { marked } from "marked";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
-import { buildAutomationEmailHtml } from "./emailTemplates";
+import { renderAutomationEmail } from "./_automations/email";
+import {
+  changelogVoteHmacMessage,
+  type ChangelogFeedback,
+} from "./_changelog/entry";
+import { hmacSha256Hex } from "./_shared/hmac";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
-function getEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set in the Convex environment`);
-  }
-  return value;
+/** Builds the signed one-click feedback link for one recipient of one changelog run. */
+async function changelogFeedbackUrlBuilder(
+  runId: string,
+  userId: string,
+): Promise<(feedback: ChangelogFeedback) => string> {
+  const sig = await hmacSha256Hex(
+    requiredEnv("ENCRYPTION_KEY"),
+    changelogVoteHmacMessage(runId, userId),
+  );
+  const base = `${requiredEnv("CONVEX_SITE_URL")}/api/changelog/vote`;
+  return (feedback) => {
+    const params = new URLSearchParams({ run: runId, user: userId, sig });
+    params.set("vote", feedback.vote);
+    if ("itemIndex" in feedback) params.set("item", String(feedback.itemIndex));
+    return `${base}?${params}`;
+  };
 }
 
 /**
- * Emails an automation's latest successful run summary to every user with email
- * notifications enabled. Scheduled by updateRunStatus when a run succeeds and
- * the automation has sendEmail enabled, so it sends exactly once per successful
- * run. A failed send is logged and skipped so it does not abort the batch.
+ * Delivers a run's `sent` email to every user with email notifications
+ * enabled. Scheduled once, by the mutation that marks the email sent (auto-send
+ * or a reviewed draft). A failed send is logged and skipped so it does not
+ * abort the batch.
  */
 export const sendAutomationEmail = internalAction({
   args: { runId: v.id("automationRuns") },
@@ -31,8 +46,7 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = getEnv("WEB_APP_URL");
-    const contentHtml = await marked.parse(run.content);
+    const appUrl = getEvaBaseUrl();
     const recipients = await ctx.runQuery(
       internal.users.listEmailRecipients,
       {},
@@ -41,19 +55,19 @@ export const sendAutomationEmail = internalAction({
     let sent = 0;
     const failures: string[] = [];
     for (const recipient of recipients) {
-      const html = buildAutomationEmailHtml({
-        recipientName: recipient.name,
-        appUrl,
-        contentHtml,
-        publishedAt: run.publishedAt,
-        heading: run.automationTitle,
-      });
       try {
-        await sendEmail({
-          to: recipient.email,
-          subject: `${run.automationTitle} #${run.runNumber}`,
-          html,
+        const html = renderAutomationEmail({
+          automationTitle: run.automationTitle,
+          body: run.body,
+          publishedAt: run.publishedAt,
+          appUrl,
+          recipientName: recipient.name,
+          feedbackUrl: await changelogFeedbackUrlBuilder(
+            args.runId,
+            recipient.userId,
+          ),
         });
+        await sendEmail({ to: recipient.email, subject: run.subject, html });
         sent += 1;
       } catch (error) {
         failures.push(`${recipient.email}: ${String(error)}`);

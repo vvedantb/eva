@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAction } from "convex/react";
-import { api, type Id } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import {
   Button,
   DropdownMenu,
@@ -13,18 +12,22 @@ import {
   CrossfadeIcon,
   Spinner,
   toast,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import {
   IconDots,
   IconExternalLink,
   IconGitPullRequestClosed,
   IconLink,
   IconRefresh,
+  IconStack2,
 } from "@tabler/icons-react";
 import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
-import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
+import { useClosePullRequest } from "@/lib/components/pr-menu/useClosePullRequest";
+import { useStackNewSession } from "@/lib/components/pr-menu/useStackNewSession";
 
 /**
  * The header's right-hand cluster, in t3code's order: the one filled button that
@@ -50,24 +53,19 @@ export function PrHeaderActions({
   /** Re-reads the overview after something on GitHub changed. */
   onChanged: () => void;
 }) {
-  const update = useAction(api.github.updatePullRequest);
-  const [closing, setClosing] = useState(false);
+  const { close: closePullRequest, closing } = useClosePullRequest();
   const [confirmingClose, setConfirmingClose] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
+  const { stack } = useStackNewSession();
+
+  const stackNewSession = () =>
+    stack({ repoId, prNumber: overview.number, headRef: overview.headRef });
 
   const close = async () => {
-    setClosing(true);
-    try {
-      await update({ repoId, prNumber: overview.number, state: "closed" });
-      setConfirmingClose(false);
-      toast.success("Pull request closed");
-      onChanged();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not close the branch",
-      );
-    }
-    setClosing(false);
+    const closed = await closePullRequest({ repoId, prNumber: overview.number });
+    if (!closed) return;
+    setConfirmingClose(false);
+    onChanged();
   };
 
   const copyLink = () => {
@@ -87,7 +85,9 @@ export function PrHeaderActions({
             size="icon-xs"
             variant="ghost"
             aria-label={
-              refreshing ? "Refreshing pull request" : "More pull request actions"
+              refreshing
+                ? "Refreshing pull request"
+                : "More pull request actions"
             }
           >
             <CrossfadeIcon
@@ -111,13 +111,21 @@ export function PrHeaderActions({
             Copy link
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <a href={overview.htmlUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={overview.htmlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <IconExternalLink size={14} aria-hidden />
               View on GitHub
             </a>
           </DropdownMenuItem>
           {overview.status === "open" ? (
             <>
+              <DropdownMenuItem onSelect={stackNewSession}>
+                <IconStack2 size={14} aria-hidden />
+                Stack a new session
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {/* Closing notifies every reviewer and stops CI, so it asks
                   first. The Radix `onSelect` event carries no modifier, so only
@@ -127,7 +135,6 @@ export function PrHeaderActions({
                 disabled={closing}
                 onSelect={() =>
                   requestConfirm(
-                    altHeld,
                     () => setConfirmingClose(true),
                     () => {
                       void close();

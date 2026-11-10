@@ -83,6 +83,18 @@ export const chatLogEntryKindValidator = v.union(
 );
 export type ChatLogEntryKind = Infer<typeof chatLogEntryKindValidator>;
 
+export const feedbackSentimentValidator = v.union(
+  v.literal("positive"),
+  v.literal("negative"),
+);
+export type FeedbackSentiment = Infer<typeof feedbackSentimentValidator>;
+
+/** "user": thumbs on a turn. "agent": `submit_feedback` from the sandbox. */
+export const feedbackAuthorValidator = v.union(
+  v.literal("user"),
+  v.literal("agent"),
+);
+
 export const chatLogAuthorValidator = v.union(
   v.literal("agent"),
   v.literal("user"),
@@ -403,4 +415,17 @@ export const notificationUrgencyValidator = v.union(
   v.literal("low"),
   v.literal("normal"),
   v.literal("high"),
+);
+
+/** The chat surface a sandbox MCP token or activity row names. */
+export const chatEntityKindValidator = v.union(
+  v.literal("session"),
+  v.literal("task"),
+  v.literal("project"),
+);
+export type ChatEntityKind = Infer<typeof chatEntityKindValidator>;
+
+export const presentationStatusValidator = v.union(
+  v.literal("live"),
+  v.literal("ended"),
 );

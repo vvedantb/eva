@@ -18,6 +18,7 @@ import { Route as SlidesRouteImport } from './routes/slides'
 import { Route as GlobalAutomationsRouteImport } from './routes/_global/automations'
 import { Route as GlobalAveRouteImport } from './routes/_global/ave'
 import { Route as GlobalChangelogRouteImport } from './routes/_global/changelog'
+import { Route as GlobalFeedbackRouteImport } from './routes/_global/feedback'
 import { Route as GlobalHomeRouteImport } from './routes/_global/home'
 import { Route as GlobalInboxRouteImport } from './routes/_global/inbox'
 import { Route as GlobalSessionsRouteImport } from './routes/_global/sessions'
@@ -25,6 +26,8 @@ import { Route as GlobalSettingsRouteRouteImport } from './routes/_global/settin
 import { Route as GlobalTestingRouteImport } from './routes/_global/testing'
 import { Route as GlobalWhatsNewRouteImport } from './routes/_global/whats-new'
 import { Route as DevFeaturePreviewsRouteImport } from './routes/dev/feature-previews'
+import { Route as DevLandingDemosRouteImport } from './routes/dev/landing-demos'
+import { Route as DevUiGalleryRouteImport } from './routes/dev/ui-gallery'
 import { Route as GlobalArtifactsIndexRouteImport } from './routes/_global/artifacts/index'
 import { Route as GlobalArtifactsArtifactIdRouteImport } from './routes/_global/artifacts/$artifactId'
 import { Route as GlobalSettingsIndexRouteImport } from './routes/_global/settings/index'
@@ -43,7 +46,6 @@ import { Route as GlobalSetupIdRouteImport } from './routes/_global/setup/$id'
 import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/index'
 import { Route as GlobalTeamsTeamIdRouteRouteImport } from './routes/_global/teams/$teamId/route'
 import { Route as RepoOwnerRepoRouteImport } from './routes/_repo/$owner/$repo'
-import { Route as McpOauthAuthorizeRouteImport } from './routes/mcp/oauth/authorize'
 import { Route as PKindIdRouteImport } from './routes/p.$kind.$id'
 import { Route as GlobalTeamsTeamIdIndexRouteImport } from './routes/_global/teams/$teamId/index'
 import { Route as GlobalTeamsTeamIdTeamTabRouteImport } from './routes/_global/teams/$teamId/$teamTab'
@@ -192,6 +194,11 @@ const GlobalChangelogRoute = GlobalChangelogRouteImport.update({
   path: '/changelog',
   getParentRoute: () => GlobalRoute,
 } as any)
+const GlobalFeedbackRoute = GlobalFeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => GlobalRoute,
+} as any)
 const GlobalHomeRoute = GlobalHomeRouteImport.update({
   id: '/home',
   path: '/home',
@@ -225,6 +232,16 @@ const GlobalWhatsNewRoute = GlobalWhatsNewRouteImport.update({
 const DevFeaturePreviewsRoute = DevFeaturePreviewsRouteImport.update({
   id: '/dev/feature-previews',
   path: '/dev/feature-previews',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevLandingDemosRoute = DevLandingDemosRouteImport.update({
+  id: '/dev/landing-demos',
+  path: '/dev/landing-demos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevUiGalleryRoute = DevUiGalleryRouteImport.update({
+  id: '/dev/ui-gallery',
+  path: '/dev/ui-gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GlobalArtifactsIndexRoute = GlobalArtifactsIndexRouteImport.update({
@@ -322,11 +339,6 @@ const RepoOwnerRepoRoute = RepoOwnerRepoRouteImport.update({
   id: '/$owner/$repo',
   path: '/$owner/$repo',
   getParentRoute: () => RepoRoute,
-} as any)
-const McpOauthAuthorizeRoute = McpOauthAuthorizeRouteImport.update({
-  id: '/mcp/oauth/authorize',
-  path: '/mcp/oauth/authorize',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const PKindIdRoute = PKindIdRouteImport.update({
   id: '/p/$kind/$id',
@@ -959,12 +971,15 @@ export interface FileRoutesByFullPath {
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
+  '/feedback': typeof GlobalFeedbackRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
+  '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -980,7 +995,6 @@ export interface FileRoutesByFullPath {
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
-  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts/': typeof GlobalArtifactsIndexRoute
   '/settings/': typeof GlobalSettingsIndexRoute
@@ -1097,12 +1111,15 @@ export interface FileRoutesByTo {
   '/automations': typeof GlobalAutomationsRoute
   '/ave': typeof GlobalAveRoute
   '/changelog': typeof GlobalChangelogRoute
+  '/feedback': typeof GlobalFeedbackRoute
   '/home': typeof GlobalHomeRoute
   '/inbox': typeof GlobalInboxRoute
   '/sessions': typeof GlobalSessionsRoute
   '/testing': typeof GlobalTestingRoute
   '/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
+  '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/settings/accounts': typeof GlobalSettingsAccountsRoute
   '/settings/connections': typeof GlobalSettingsConnectionsRoute
@@ -1116,7 +1133,6 @@ export interface FileRoutesByTo {
   '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
-  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/artifacts': typeof GlobalArtifactsIndexRoute
   '/settings': typeof GlobalSettingsIndexRoute
@@ -1215,12 +1231,15 @@ export interface FileRoutesById {
   '/_global/automations': typeof GlobalAutomationsRoute
   '/_global/ave': typeof GlobalAveRoute
   '/_global/changelog': typeof GlobalChangelogRoute
+  '/_global/feedback': typeof GlobalFeedbackRoute
   '/_global/home': typeof GlobalHomeRoute
   '/_global/inbox': typeof GlobalInboxRoute
   '/_global/sessions': typeof GlobalSessionsRoute
   '/_global/testing': typeof GlobalTestingRoute
   '/_global/whats-new': typeof GlobalWhatsNewRoute
   '/dev/feature-previews': typeof DevFeaturePreviewsRoute
+  '/dev/landing-demos': typeof DevLandingDemosRoute
+  '/dev/ui-gallery': typeof DevUiGalleryRoute
   '/_global/teams/$teamId': typeof GlobalTeamsTeamIdRouteRouteWithChildren
   '/_global/artifacts/$artifactId': typeof GlobalArtifactsArtifactIdRoute
   '/_global/settings/accounts': typeof GlobalSettingsAccountsRoute
@@ -1236,7 +1255,6 @@ export interface FileRoutesById {
   '/_global/settings/theme': typeof GlobalSettingsThemeRoute
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
-  '/mcp/oauth/authorize': typeof McpOauthAuthorizeRoute
   '/p/$kind/$id': typeof PKindIdRoute
   '/_global/artifacts/': typeof GlobalArtifactsIndexRoute
   '/_global/settings/': typeof GlobalSettingsIndexRoute
@@ -1356,12 +1374,15 @@ export interface FileRouteTypes {
     | '/automations'
     | '/ave'
     | '/changelog'
+    | '/feedback'
     | '/home'
     | '/inbox'
     | '/sessions'
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
+    | '/dev/ui-gallery'
     | '/teams/$teamId'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
@@ -1377,7 +1398,6 @@ export interface FileRouteTypes {
     | '/settings/theme'
     | '/setup/$id'
     | '/$owner/$repo'
-    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/artifacts/'
     | '/settings/'
@@ -1494,12 +1514,15 @@ export interface FileRouteTypes {
     | '/automations'
     | '/ave'
     | '/changelog'
+    | '/feedback'
     | '/home'
     | '/inbox'
     | '/sessions'
     | '/testing'
     | '/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
+    | '/dev/ui-gallery'
     | '/artifacts/$artifactId'
     | '/settings/accounts'
     | '/settings/connections'
@@ -1513,7 +1536,6 @@ export interface FileRouteTypes {
     | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
-    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/artifacts'
     | '/settings'
@@ -1611,12 +1633,15 @@ export interface FileRouteTypes {
     | '/_global/automations'
     | '/_global/ave'
     | '/_global/changelog'
+    | '/_global/feedback'
     | '/_global/home'
     | '/_global/inbox'
     | '/_global/sessions'
     | '/_global/testing'
     | '/_global/whats-new'
     | '/dev/feature-previews'
+    | '/dev/landing-demos'
+    | '/dev/ui-gallery'
     | '/_global/teams/$teamId'
     | '/_global/artifacts/$artifactId'
     | '/_global/settings/accounts'
@@ -1632,7 +1657,6 @@ export interface FileRouteTypes {
     | '/_global/settings/theme'
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
-    | '/mcp/oauth/authorize'
     | '/p/$kind/$id'
     | '/_global/artifacts/'
     | '/_global/settings/'
@@ -1750,7 +1774,8 @@ export interface RootRouteChildren {
   PreviewAuthRoute: typeof PreviewAuthRoute
   SlidesRoute: typeof SlidesRoute
   DevFeaturePreviewsRoute: typeof DevFeaturePreviewsRoute
-  McpOauthAuthorizeRoute: typeof McpOauthAuthorizeRoute
+  DevLandingDemosRoute: typeof DevLandingDemosRoute
+  DevUiGalleryRoute: typeof DevUiGalleryRoute
   PKindIdRoute: typeof PKindIdRoute
 }
 
@@ -1819,6 +1844,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GlobalChangelogRouteImport
       parentRoute: typeof GlobalRoute
     }
+    '/_global/feedback': {
+      id: '/_global/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof GlobalFeedbackRouteImport
+      parentRoute: typeof GlobalRoute
+    }
     '/_global/home': {
       id: '/_global/home'
       path: '/home'
@@ -1866,6 +1898,20 @@ declare module '@tanstack/react-router' {
       path: '/dev/feature-previews'
       fullPath: '/dev/feature-previews'
       preLoaderRoute: typeof DevFeaturePreviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/landing-demos': {
+      id: '/dev/landing-demos'
+      path: '/dev/landing-demos'
+      fullPath: '/dev/landing-demos'
+      preLoaderRoute: typeof DevLandingDemosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/ui-gallery': {
+      id: '/dev/ui-gallery'
+      path: '/dev/ui-gallery'
+      fullPath: '/dev/ui-gallery'
+      preLoaderRoute: typeof DevUiGalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_global/artifacts/': {
@@ -1993,13 +2039,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/$owner/$repo'
       preLoaderRoute: typeof RepoOwnerRepoRouteImport
       parentRoute: typeof RepoRoute
-    }
-    '/mcp/oauth/authorize': {
-      id: '/mcp/oauth/authorize'
-      path: '/mcp/oauth/authorize'
-      fullPath: '/mcp/oauth/authorize'
-      preLoaderRoute: typeof McpOauthAuthorizeRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/p/$kind/$id': {
       id: '/p/$kind/$id'
@@ -2786,6 +2825,7 @@ interface GlobalRouteChildren {
   GlobalAutomationsRoute: typeof GlobalAutomationsRoute
   GlobalAveRoute: typeof GlobalAveRoute
   GlobalChangelogRoute: typeof GlobalChangelogRoute
+  GlobalFeedbackRoute: typeof GlobalFeedbackRoute
   GlobalHomeRoute: typeof GlobalHomeRoute
   GlobalInboxRoute: typeof GlobalInboxRoute
   GlobalSessionsRoute: typeof GlobalSessionsRoute
@@ -2803,6 +2843,7 @@ const GlobalRouteChildren: GlobalRouteChildren = {
   GlobalAutomationsRoute: GlobalAutomationsRoute,
   GlobalAveRoute: GlobalAveRoute,
   GlobalChangelogRoute: GlobalChangelogRoute,
+  GlobalFeedbackRoute: GlobalFeedbackRoute,
   GlobalHomeRoute: GlobalHomeRoute,
   GlobalInboxRoute: GlobalInboxRoute,
   GlobalSessionsRoute: GlobalSessionsRoute,
@@ -3397,7 +3438,8 @@ const rootRouteChildren: RootRouteChildren = {
   PreviewAuthRoute: PreviewAuthRoute,
   SlidesRoute: SlidesRoute,
   DevFeaturePreviewsRoute: DevFeaturePreviewsRoute,
-  McpOauthAuthorizeRoute: McpOauthAuthorizeRoute,
+  DevLandingDemosRoute: DevLandingDemosRoute,
+  DevUiGalleryRoute: DevUiGalleryRoute,
   PKindIdRoute: PKindIdRoute,
 }
 export const routeTree = rootRouteImport

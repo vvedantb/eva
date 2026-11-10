@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
-import { useIdleCallback } from "@/lib/hooks/useIdleCallback";
 import type { DraftReadiness } from "./readinessHints";
+import { useIdleCallback } from "@vvedantb/ui";
 
 /** Long enough that the judgement lands in a pause, not between two words. */
-export const READINESS_IDLE_MS = 800;
+const READINESS_IDLE_MS = 800;
 /** Below this there is nothing to judge — every short draft is "too vague". */
-export const READINESS_MIN_CHARS = 40;
+const READINESS_MIN_CHARS = 40;
 
 interface DraftReadinessState {
   /** The description the result was judged against; stale results are dropped. */

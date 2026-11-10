@@ -8,12 +8,13 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  CircleSpinner,
-} from "@eva/ui";
+  Spinner,
+} from "@vvedantb/ui";
 import { IconBrandVercel, IconGitPullRequest } from "@tabler/icons-react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 import { prStateIconClass } from "./prStateIconClass";
+import { PrActionsSubmenus } from "./pr-menu/PrActionsSubmenus";
 
 interface PrLinkMenuItemsArgs {
   /** Offers Create PR when set; omit on surfaces without that action. */
@@ -22,8 +23,8 @@ interface PrLinkMenuItemsArgs {
   /** Colours the View PR icon (sessions only); others leave it default. */
   prState?: "draft" | "open" | "merged" | "closed";
   /**
-   * The chat whose PRs these are. When it holds more than one PR, View PR
-   * becomes one item per PR, numbered, instead of a single link.
+   * The chat whose PRs these are. Each PR row becomes a submenu of PR actions:
+   * "View PR" for one, "PR #N" per PR for several (`PrActionsSubmenus`).
    */
   owner?: SandboxOwner;
   /**
@@ -50,9 +51,9 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
     api.pullRequests.listForOwner,
     args.owner !== undefined && !simpleView ? { owner: args.owner } : "skip",
   );
-  const manyPrs = ownerPrs !== undefined && ownerPrs.length > 1;
+  const hasPrRows = ownerPrs !== undefined && ownerPrs.length > 0;
   const showCreatePr = !simpleView && Boolean(args.createPr?.enabled);
-  const showViewPr = !simpleView && (args.prUrl !== undefined || manyPrs);
+  const showViewPr = !simpleView && (args.prUrl !== undefined || hasPrRows);
   const showViewPreview =
     !simpleView && viewVercelDeployment && args.hasDeployment;
   const hasItems = showCreatePr || showViewPr || showViewPreview;
@@ -68,27 +69,18 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
             disabled={createPr.isCreating}
           >
             {createPr.isCreating ? (
-              <CircleSpinner size="sm" className="size-3.5" />
+              <Spinner variant="circle" size="sm" className="size-3.5" />
             ) : (
               <IconGitPullRequest size={14} />
             )}
             Create PR
           </DropdownMenuItem>
         ) : null}
-        {showViewPr && manyPrs
-          ? ownerPrs.map((pr) => (
-              <DropdownMenuItem key={pr._id} asChild>
-                <a href={pr.prUrl} target="_blank" rel="noopener noreferrer">
-                  <IconGitPullRequest
-                    size={14}
-                    className={prStateIconClass(pr.state)}
-                  />
-                  View PR #{pr.prNumber}
-                </a>
-              </DropdownMenuItem>
-            ))
-          : null}
-        {showViewPr && !manyPrs && args.prUrl !== undefined ? (
+        {showViewPr && hasPrRows ? (
+          <PrActionsSubmenus variant="dropdown" prs={ownerPrs} />
+        ) : null}
+        {/* A chat whose PR predates the `pullRequests` rows has only a URL. */}
+        {showViewPr && !hasPrRows && args.prUrl !== undefined ? (
           <DropdownMenuItem asChild>
             <a href={args.prUrl} target="_blank" rel="noopener noreferrer">
               <IconGitPullRequest

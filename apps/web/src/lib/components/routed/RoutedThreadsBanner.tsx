@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { Badge } from "@eva/ui";
+import { Badge } from "@vvedantb/ui";
 import type { ChatEntityRef } from "@/lib/components/chat/sandboxChatSurface";
 import { useAskTeammates } from "@/lib/hooks/useAskTeammates";
 import {
@@ -50,7 +50,7 @@ export function RoutedThreadsBanner({ entity }: { entity: ChatEntityRef }) {
           >
             <Badge
               variant={statusBadgeVariant(thread.status)}
-              className="h-5 shrink-0 px-1.5 text-[10px] font-medium"
+              className="h-5 shrink-0 px-1.5 text-3xs font-medium"
             >
               {statusLabel(thread.status)}
             </Badge>

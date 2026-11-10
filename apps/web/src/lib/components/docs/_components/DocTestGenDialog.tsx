@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 
 export function DocTestGenDialog({
   open,

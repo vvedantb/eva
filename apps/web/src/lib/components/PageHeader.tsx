@@ -1,8 +1,7 @@
 "use client";
 
-import { Button } from "@eva/ui";
+import { Button, useMediaQuery } from "@vvedantb/ui";
 import { IconArrowLeft } from "@tabler/icons-react";
-import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 
 export interface PageHeaderProps {
   title?: React.ReactNode;
@@ -78,7 +77,7 @@ export function PageHeader({
               variant="outline"
               onClick={onBack ?? (() => window.history.back())}
               aria-label="Go back"
-              className="motion-press max-sm:hit-target h-9 w-9 shrink-0 rounded-full hover:scale-[1.03] active:scale-[0.96]"
+              className="motion-press max-sm:hit-target h-9 w-9 shrink-0 hover:scale-[1.03] active:scale-[0.96]"
             >
               <IconArrowLeft size={16} className="text-muted-foreground" />
             </Button>

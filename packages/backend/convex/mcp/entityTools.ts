@@ -1,3 +1,4 @@
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -14,15 +15,13 @@ import {
   type EntityTarget,
 } from "./entityRef";
 import {
-  errorResult,
   mcpGetContext,
   mcpListUserRepos,
   queueParentId,
-  textResult,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { previewWakePath } from "@eva/shared";
 
@@ -157,7 +156,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
         let repos = await mcpListUserRepos(ctx, userId);
         if (repoId !== undefined || repoName !== undefined) {
           const ref = await resolveRepoRef({ repoId, repoName, app }, userId);
-          if ("isError" in ref) return ref;
+          if ("content" in ref) return ref;
           await assertUserRepoAccess(ref.repoId, userId);
           repos = repos.filter((repo) => repo.id === ref.repoId);
         }
@@ -195,7 +194,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
             : {}),
         }));
 
-        return textResult({
+        return toolJsonResult({
           entities,
           count: entities.length,
           truncated: result.truncated,
@@ -219,7 +218,7 @@ Already-active sandboxes are left alone. Each surface has its own gate: a quick 
       handler: async (ref) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const resolved = await resolveEntityTarget(ref, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         const result = await ctx.runAction(
@@ -227,7 +226,7 @@ Already-active sandboxes are left alone. Each surface has its own gate: a quick 
           { clerkUserId, kind: target.kind, id: target.targetId },
         );
 
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           sandboxStatus: result.sandboxStatus,
           started: result.startRequested,
@@ -247,7 +246,7 @@ If a turn is in flight this is REJECTED rather than killing that turn: wait for 
       handler: async (ref) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const resolved = await resolveEntityTarget(ref, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         const result = await ctx.runAction(
@@ -255,7 +254,7 @@ If a turn is in flight this is REJECTED rather than killing that turn: wait for 
           { clerkUserId, kind: target.kind, id: target.targetId },
         );
 
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           sandboxStatus: result.sandboxStatus,
           stopped: result.stopRequested,
@@ -287,16 +286,14 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           ),
       },
       handler: async ({ path, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const [{ userId }, idlePause] = await Promise.all([
+          mcpGetContext(ctx, clerkUserId),
+          ctx.runQuery(internal.sandboxIdlePause.getSettingsInternal, {}),
+        ]);
         const chatRef = withSelfDefault(ref, credentials);
         const resolved = await resolveEntityTarget(chatRef, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
-
-        const idlePause = await ctx.runQuery(
-          internal.sandboxIdlePause.getSettingsInternal,
-          {},
-        );
         const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);
         const summary = {
           ...entitySummary(target),
@@ -308,7 +305,7 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           target.sandboxId === undefined ||
           target.sandboxStatus !== "active"
         ) {
-          return textResult({
+          return toolJsonResult({
             ...summary,
             previewUrl: wakeUrl ?? null,
             rawPreviewUrl: null,
@@ -333,7 +330,7 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
 
         // An unreachable dev server comes back as an empty url, not an error.
         if (preview.url.length === 0) {
-          return textResult({
+          return toolJsonResult({
             ...summary,
             previewUrl: wakeUrl ?? null,
             rawPreviewUrl: null,
@@ -344,7 +341,7 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
         }
 
         const rawPreviewUrl = shareablePreviewUrl(preview.url, path);
-        return textResult({
+        return toolJsonResult({
           ...summary,
           previewUrl: wakeUrl ?? rawPreviewUrl,
           rawPreviewUrl,
@@ -390,19 +387,19 @@ A message the chat dequeued in the same instant is already running and cannot be
       },
       handler: async ({ queuedMessageId, all, ...ref }) => {
         if (!all && queuedMessageId === undefined) {
-          return errorResult(
+          return toolErrorResult(
             'Name what to cancel: pass "queuedMessageId", or "all": true to clear the pending queue.',
           );
         }
         if (all && queuedMessageId !== undefined) {
-          return errorResult(
+          return toolErrorResult(
             'Pass "queuedMessageId" or "all", not both — cancelling one message and cancelling every message are different requests.',
           );
         }
 
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const resolved = await resolveEntityTarget(ref, userId);
-        if ("isError" in resolved) return resolved;
+        if ("content" in resolved) return resolved;
         const { target } = resolved;
 
         const result = await ctx.runAction(
@@ -415,7 +412,7 @@ A message the chat dequeued in the same instant is already running and cannot be
           },
         );
 
-        return textResult({
+        return toolJsonResult({
           ...entitySummary(target),
           cancelled: result.cancelled,
           cancelledCount: result.cancelled.length,

@@ -31,6 +31,25 @@ export function toWorkflowId(workflowId: string): WorkflowId {
   return workflowId as WorkflowId;
 }
 
+/**
+ * True while a tracked workflow is still running. A slot left by a workflow
+ * that crashed or finished without clearing it reads as free, so a busy guard
+ * never locks the user out until the `RUN_TIMEOUT_MS` watchdog runs.
+ */
+export async function isTrackedWorkflowRunning(
+  ctx: MutationCtx,
+  workflowId: string | undefined,
+): Promise<boolean> {
+  if (!workflowId) return false;
+  try {
+    const status = await workflow.status(ctx, toWorkflowId(workflowId));
+    return status.type === "inProgress";
+  } catch {
+    // Unknown id (cleaned up by the component): nothing is running.
+    return false;
+  }
+}
+
 /** Cancels a tracked workflow, swallowing errors when it has already completed or been cancelled. */
 export async function cancelTrackedWorkflow(
   ctx: MutationCtx,

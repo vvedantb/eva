@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs, TabsList, TabsTrigger } from "@eva/ui";
+import { Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
 import {
   isSessionListMode,
   type SessionListMode,

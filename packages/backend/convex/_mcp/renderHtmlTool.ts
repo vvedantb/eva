@@ -9,6 +9,7 @@
  * fake.
  */
 
+import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import {
   HTML_RENDER_MAX_BYTES,
@@ -18,14 +19,14 @@ import {
   HTML_RENDER_PAGE_GUIDE,
 } from "@eva/shared/htmlRender";
 import { defineTool, type EvaTool } from "../mcp/registry";
-import { errorResult, textResult } from "../mcp/toolShared";
 
 export const renderHtmlInputShape = {
   html: z
     .string()
     .min(1)
     .refine(
-      (html) => new TextEncoder().encode(html).byteLength <= HTML_RENDER_MAX_BYTES,
+      (html) =>
+        new TextEncoder().encode(html).byteLength <= HTML_RENDER_MAX_BYTES,
       `The page must be at most ${HTML_RENDER_MAX_BYTES / 1000} KB of UTF-8. Move large data out, or load a library from a CDN instead of inlining it.`,
     )
     .describe("A complete, self-contained HTML document."),
@@ -68,11 +69,11 @@ export function renderHtmlTool(
     handler: async (input) => {
       const renderId = await run(input);
       if (renderId === null) {
-        return errorResult(
+        return toolErrorResult(
           "render_html could not store the page: this sandbox is not attached to a chat any more.",
         );
       }
-      return textResult({
+      return toolJsonResult({
         renderId,
         status: "rendered",
         message:

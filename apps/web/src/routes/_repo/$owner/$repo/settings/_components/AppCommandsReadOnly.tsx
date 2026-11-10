@@ -1,5 +1,4 @@
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsField } from "@/lib/components/settings/SettingsField";
+import { SettingsField, SettingsSection } from "@vvedantb/ui";
 import {
   EvaConfigManagedNote,
   ReadOnlyLines,

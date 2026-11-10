@@ -10,7 +10,7 @@ import {
   workflowCompleteValidator,
   aiModelValidator,
   modelTraitsExecutionFields,
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
 } from "./validators";
 import {
@@ -168,7 +168,7 @@ export const prRecapWorkflow = workflow.define({
         const result = await step.awaitEvent(prRecapCompleteEvent);
 
         if (result.success && result.result) {
-          const parsed = parsePrRecapOutput(result.result);
+          const parsed = parsePrRecapOutput(result.result, diff.filePaths);
           if (!parsed.ok) {
             await finalize({
               kind: "error",
@@ -179,7 +179,7 @@ export const prRecapWorkflow = workflow.define({
           await finalize({
             kind: "ready",
             content: parsed.markdown,
-            html: parsed.html,
+            walkthrough: parsed.walkthrough,
           });
           if (
             args.consumeAgentCommentIds &&
@@ -256,12 +256,7 @@ export const getRepoData = internalQuery({
 export const handleCompletion = authMutation({
   args: {
     docId: v.id("docs"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),

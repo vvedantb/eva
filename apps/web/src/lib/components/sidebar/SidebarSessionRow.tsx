@@ -6,11 +6,13 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  motionFast,
+  tokenTransition,
   toast,
-} from "@eva/ui";
+  useRequestConfirm,
+} from "@vvedantb/ui";
 import { useState } from "react";
 import { SidebarSessionItem } from "@/lib/components/sidebar/SidebarSessionItem";
+import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import type { SandboxStatus } from "@/lib/components/sandbox/sandboxStatusStyles";
 import {
   sessionHrefForRow,
@@ -26,7 +28,6 @@ import {
   useSendSessionForReview,
 } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
-import { requestConfirm, useAltHeld } from "@/lib/confirm";
 
 interface SessionItem {
   _id: Id<"sessions">;
@@ -74,6 +75,10 @@ interface SidebarSessionRowProps<T extends SessionItem> {
   /** Shows Fork session (active and archived lists); opens the fork. */
   onForkNavigate?: (pathSegment: string) => void;
   onRenameRequest?: (session: T) => void;
+  /** The session's app on rows in a cross-repo linked group (mark + hover name). */
+  app?: RepoAppMarkRepo;
+  /** Rows in a linked-session group: shows "Remove from group". */
+  onRemoveFromGroup?: (session: T) => void;
 }
 
 /**
@@ -90,6 +95,8 @@ export function SidebarSessionRow<T extends SessionItem>({
   onUnarchive,
   onForkNavigate,
   onRenameRequest,
+  app,
+  onRemoveFromGroup,
 }: SidebarSessionRowProps<T>) {
   const href = sessionHrefForRow(repo, session);
   const isArchivedList = onUnarchive !== undefined;
@@ -100,7 +107,7 @@ export function SidebarSessionRow<T extends SessionItem>({
   // Row-local: the dialog belongs to this session and the row outlives it
   // (unlike archive, which removes the row and so is owned by the sidebar).
   const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const altHeld = useAltHeld();
+  const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(session._id);
 
   return (
@@ -111,12 +118,12 @@ export function SidebarSessionRow<T extends SessionItem>({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={motionFast}
+            transition={tokenTransition.fast}
           >
             <SharedLayoutNavSurface
               itemId={session._id}
               isActive={isSelected}
-              className="group mx-1 rounded-menu-item"
+              className="group rounded-menu-item"
             >
               <SidebarSessionItem
                 href={href}
@@ -139,6 +146,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 linkedFrom={session.linkedFrom}
                 linkedRepoCount={session.linkedRepoCount}
                 forkedFromSessionId={session.forkedFromSessionId}
+                app={app}
               />
             </SharedLayoutNavSurface>
           </m.div>
@@ -158,12 +166,10 @@ export function SidebarSessionRow<T extends SessionItem>({
               canSendForReview
                 ? () =>
                     requestConfirm(
-                      altHeld,
                       () => setIsReviewOpen(true),
                       () => {
                         void sendForReview().then((ok) => {
-                          if (ok)
-                            toast.success("Sent to the team for review.");
+                          if (ok) toast.success("Sent to the team for review.");
                         });
                       },
                     )
@@ -173,6 +179,9 @@ export function SidebarSessionRow<T extends SessionItem>({
               isArchivedList && onUnarchive
                 ? () => onUnarchive(session)
                 : undefined
+            }
+            onRemoveFromGroup={
+              onRemoveFromGroup ? () => onRemoveFromGroup(session) : undefined
             }
             onArchiveRequest={
               !isArchivedList && onArchiveRequest

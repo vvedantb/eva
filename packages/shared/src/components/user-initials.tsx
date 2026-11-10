@@ -9,7 +9,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { Facehash } from "facehash";
 import type { ReactNode } from "react";

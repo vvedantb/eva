@@ -1,8 +1,5 @@
+import { BulkActionBar, type BulkBarAction } from "@vvedantb/ui";
 import { IconRefresh, IconTrash } from "@tabler/icons-react";
-import {
-  BulkActionBar,
-  type BulkBarAction,
-} from "@/lib/components/ui/BulkActionBar";
 
 /** Bulk actions that open their own dialog. Delete owns its confirm elsewhere. */
 export type ProjectBulkAction = "phase";

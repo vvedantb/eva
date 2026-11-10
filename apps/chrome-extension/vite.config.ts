@@ -69,6 +69,8 @@ function runContentScriptBuild() {
     plugins: [react()],
     resolve: {
       alias: { "@": resolve(__dirname, "src") },
+      // One copy for @eva/ui's provider and the toolbar, so the config applies.
+      dedupe: ["react", "react-dom", "@vvedantb/ui"],
     },
     css: {
       // Tailwind v4 reads its config from `@config` inside content.css; `base`

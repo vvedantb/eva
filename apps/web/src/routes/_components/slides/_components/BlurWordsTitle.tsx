@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { motion } from "motion/react";
 import type { Variants } from "motion/react";
 import { SlideStepContext } from "./SlideShell";
+import { motionEase } from "@vvedantb/ui";
 
 const EVA_WORD = /^(eva)([.,!?:;'"]*)$/i;
 
@@ -24,7 +25,7 @@ const wordVariants: Variants = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.45, ease: motionEase },
   },
 };
 

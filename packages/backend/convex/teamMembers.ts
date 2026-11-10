@@ -1,36 +1,13 @@
-import type { GenericDatabaseReader } from "convex/server";
 import { v } from "convex/values";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import {
+  authQuery,
+  authMutation,
+  getTeamMembership,
+  hasRepoAccess,
+  requireTeamOwner,
+} from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { teamMemberRoleValidator } from "./validators";
-
-/** Fetches a user's membership row for a team, or null if they aren't a member. */
-function getTeamMembership(
-  db: GenericDatabaseReader<DataModel>,
-  teamId: Id<"teams">,
-  userId: Id<"users">,
-): Promise<Doc<"teamMembers"> | null> {
-  return db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-}
-
-/** Throws with the given message unless the user is an owner of the team. */
-async function requireTeamOwner(
-  db: GenericDatabaseReader<DataModel>,
-  teamId: Id<"teams">,
-  userId: Id<"users">,
-  errorMessage: string,
-): Promise<void> {
-  const membership = await getTeamMembership(db, teamId, userId);
-  if (!membership || membership.role !== "owner") {
-    throw new Error(errorMessage);
-  }
-}
 
 /** Lists all members of a team with their user profiles. Returns empty if the requester isn't a member. */
 export const list = authQuery({
@@ -73,32 +50,28 @@ export const list = authQuery({
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .collect();
 
-    const membersWithUsers = [];
-    for (const member of members) {
-      const user = await ctx.db.get(member.userId);
-      if (!user) {
-        membersWithUsers.push({ ...member, user: null });
-        continue;
-      }
-      const seen = mergeLastSeen(
-        await getUserPresenceRow(ctx.db, member.userId),
-        user,
-      );
-      membersWithUsers.push({
-        ...member,
-        user: {
-          _id: user._id,
-          email: user.email,
-          fullName: user.fullName,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          lastSeenAt: seen.lastSeenAt,
-          lastSeenPath: seen.lastSeenPath,
-        },
-      });
-    }
-
-    return membersWithUsers;
+    return await Promise.all(
+      members.map(async (member) => {
+        const [user, presence] = await Promise.all([
+          ctx.db.get(member.userId),
+          getUserPresenceRow(ctx.db, member.userId),
+        ]);
+        if (!user) return { ...member, user: null };
+        const seen = mergeLastSeen(presence, user);
+        return {
+          ...member,
+          user: {
+            _id: user._id,
+            email: user.email,
+            fullName: user.fullName,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            lastSeenAt: seen.lastSeenAt,
+            lastSeenPath: seen.lastSeenPath,
+          },
+        };
+      }),
+    );
   },
 });
 
@@ -129,17 +102,14 @@ export const listForRepo = authQuery({
       .withIndex("by_team", (q) => q.eq("teamId", teamId))
       .collect();
 
-    const users = [];
-    for (const member of members) {
-      const user = await ctx.db.get(member.userId);
-      if (!user) continue;
-      users.push({
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-      });
-    }
-    return users;
+    const users = await Promise.all(
+      members.map((member) => ctx.db.get(member.userId)),
+    );
+    return users.flatMap((user) =>
+      user
+        ? [{ _id: user._id, fullName: user.fullName, email: user.email }]
+        : [],
+    );
   },
 });
 

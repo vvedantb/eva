@@ -7,7 +7,13 @@ import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { useTeamLogoUpload } from "@/lib/hooks/useTeamLogoUpload";
 import { useTeamBackgroundUpload } from "@/lib/hooks/useTeamBackgroundUpload";
-import { Tabs, TabsList, TabsTrigger, Button, CenteredSpinner } from "@eva/ui";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Button,
+  CenteredSpinner,
+} from "@vvedantb/ui";
 import { IconUsers, IconPhoto, IconPhotoOff } from "@tabler/icons-react";
 import { TeamActivityTab } from "./_components/TeamActivityTab";
 import { TeamMembersTab } from "./_components/TeamMembersTab";

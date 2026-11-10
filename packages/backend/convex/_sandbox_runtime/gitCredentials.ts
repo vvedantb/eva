@@ -1,22 +1,17 @@
 "use node";
 
-import { randomBytes } from "crypto";
+import { randomToken, requiredEnv } from "@vvedantb/server";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
-import {
-  execHandle,
-  LEGACY_WORKSPACE_DIR,
-  requireEnv,
-  WORKSPACE_DIR,
-} from "./helpers";
+import { execHandle, LEGACY_WORKSPACE_DIR, WORKSPACE_DIR } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 
 const HELPER_SCRIPT_PATH = "/home/eva/.local/bin/git-credential-eva";
 const HELPER_CONFIG_DIR = "/home/eva/.config/eva";
-const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
+export const HELPER_CONFIG_PATH = `${HELPER_CONFIG_DIR}/git-credentials.env`;
 
 // Repositories that may have a URL-embedded GitHub token in `.git/config` from
 // either a legacy clone or a baked snapshot. We scrub each on every helper
@@ -33,7 +28,7 @@ const KNOWN_REPO_DIRS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR];
 // owner can reach in eva. A short file cache, keyed by repository so tokens
 // never cross installations, trims duplicate mints during a single git
 // operation (clone/fetch/push fan out into several helper invocations).
-const HELPER_SCRIPT = `#!/usr/bin/env bash
+export const HELPER_SCRIPT = `#!/usr/bin/env bash
 set -u
 
 if [ "\${1:-}" != "get" ]; then
@@ -80,13 +75,17 @@ fi
 # token. "home" covers the no-path case (old baked helper scripts).
 CACHE_KEY=$(printf '%s' "\${REQ_PATH:-home}" | cksum | cut -d' ' -f1)
 CACHE_FILE="/tmp/git-cred-cache-$CACHE_KEY"
-CACHE_TTL_SECONDS=3000
+# The backend can hand out a token that is already up to 59 minutes old (the
+# GitHub App client caches it), so the cache runs to the token's own expiry
+# minus this margin — never a fixed TTL from fetch time, which served dead
+# tokens and failed pushes with "Invalid username or token".
+EXPIRY_MARGIN_SECONDS=300
+NOW=$(date +%s)
 
 if [ -f "$CACHE_FILE" ]; then
-  CACHE_TS=$(head -n1 "$CACHE_FILE" 2>/dev/null || printf 0)
-  NOW=$(date +%s)
-  AGE=$((NOW - CACHE_TS))
-  if [ "$AGE" -ge 0 ] && [ "$AGE" -lt "$CACHE_TTL_SECONDS" ]; then
+  CACHE_EXPIRES=$(head -n1 "$CACHE_FILE" 2>/dev/null || printf 0)
+  case "$CACHE_EXPIRES" in ''|*[!0-9]*) CACHE_EXPIRES=0 ;; esac
+  if [ "$NOW" -lt "$((CACHE_EXPIRES - EXPIRY_MARGIN_SECONDS))" ]; then
     CACHED_TOKEN=$(tail -n +2 "$CACHE_FILE")
     if [ -n "$CACHED_TOKEN" ]; then
       printf 'username=x-access-token\\npassword=%s\\n' "$CACHED_TOKEN"
@@ -116,8 +115,12 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-umask 077
-printf '%s\\n%s\\n' "$(date +%s)" "$TOKEN" > "$CACHE_FILE"
+# A response without expiresAt (older backend) is not cached at all.
+EXPIRES_AT=$(printf '%s' "$RESPONSE" | jq -r '.expiresAt // 0 | floor')
+if [ "$NOW" -lt "$((EXPIRES_AT - EXPIRY_MARGIN_SECONDS))" ]; then
+  umask 077
+  printf '%s\\n%s\\n' "$EXPIRES_AT" "$TOKEN" > "$CACHE_FILE"
+fi
 
 printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 `;
@@ -126,7 +129,7 @@ printf 'username=x-access-token\\npassword=%s\\n' "$TOKEN"
 function resolveConvexSiteUrl(): string {
   return (
     resolvePublicConvexSiteUrl(process.env) ??
-    requireEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
+    requiredEnv("CONVEX_CLOUD_URL").replace(".convex.cloud", ".convex.site")
   );
 }
 
@@ -157,23 +160,26 @@ export async function ensureGitCredentialHelper(
   homeRepo: { owner: string; name: string },
   extraInstallationIds: number[] = [],
 ): Promise<void> {
-  const secret = randomBytes(32).toString("hex");
-  await ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
-    sandboxId: sandbox.id,
-    installationId,
-    installationIds: Array.from(
-      new Set([installationId, ...extraInstallationIds]),
-    ),
-    secret,
-    repoOwner: homeRepo.owner,
-    repoName: homeRepo.name,
-  });
-
+  const secret = randomToken(32, "hex");
   const siteUrl = resolveConvexSiteUrl();
   const envFileContent = `EVA_SANDBOX_SECRET=${secret}\nCONVEX_SITE_URL=${siteUrl}\n`;
 
-  await writeSandboxFile(sandbox, HELPER_SCRIPT_PATH, HELPER_SCRIPT);
-  await writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent);
+  // Independent of each other, and nothing calls the helper until the exec
+  // below wires it into git config — so one round trip instead of three.
+  await Promise.all([
+    ctx.runMutation(internal.sandboxGitCredentials.upsertForSandbox, {
+      sandboxId: sandbox.id,
+      installationId,
+      installationIds: Array.from(
+        new Set([installationId, ...extraInstallationIds]),
+      ),
+      secret,
+      repoOwner: homeRepo.owner,
+      repoName: homeRepo.name,
+    }),
+    writeSandboxFile(sandbox, HELPER_SCRIPT_PATH, HELPER_SCRIPT),
+    writeSandboxFile(sandbox, HELPER_CONFIG_PATH, envFileContent),
+  ]);
 
   // Legacy snapshots and pre-helper clones embed the installation token in
   // `remote.origin.url` (e.g. `https://x-access-token:ghs_xxx@github.com/...`).
@@ -219,4 +225,20 @@ export async function ensureGitCredentialHelper(
     ].join(" && "),
     20,
   );
+}
+
+/**
+ * Best-effort teardown of a sandbox eva created and no longer wants: delete
+ * the VM, then the credential-helper row keyed by its id (no-op if absent).
+ */
+export async function deleteSandboxAndCredentials(
+  ctx: GenericActionCtx<DataModel>,
+  sandbox: SandboxHandle,
+): Promise<void> {
+  try {
+    await sandbox.delete();
+  } catch {}
+  await ctx.runMutation(internal.sandboxGitCredentials.deleteBySandboxId, {
+    sandboxId: sandbox.id,
+  });
 }

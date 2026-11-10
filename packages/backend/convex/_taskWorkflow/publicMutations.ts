@@ -1,20 +1,15 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./startRun";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, hasTaskAccess } from "../functions";
+import { authMutation, getActiveTaskRun, hasTaskAccess } from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
 import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
-import {
-  aiModelValidator,
-  turnCheckpointArgs,
-  turnLeaseFenceArgs,
-} from "../validators";
+import { turnCheckpointArgs, turnLeaseFenceArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
   clearStreamingActivity,
@@ -183,96 +178,53 @@ export const cancelExecution = authMutation({
     if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    await cancelTaskRun(ctx, task);
+    return null;
+  },
+});
 
-    await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+/**
+ * Stops a task's agent run (a quick task's first run). Shared by
+ * `cancelExecution` and the mobile app (`mobile.stopTurn`); the caller checks
+ * access.
+ */
+export async function cancelTaskRun(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
 
-    const run = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
+  const run = await getActiveTaskRun(ctx.db, task._id);
 
-    if (run) {
-      await closeOpenTurn(ctx, run._id, "cancelled");
-      await ctx.db.patch(run._id, {
-        status: "cancelled",
-        finalizingAt: undefined,
-        finishedAt: Date.now(),
+  if (run) {
+    await closeOpenTurn(ctx, run._id, "cancelled");
+    await ctx.db.patch(run._id, {
+      status: "cancelled",
+      finalizingAt: undefined,
+      finishedAt: Date.now(),
+    });
+    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
+    // The cancelled status is written here, not through finalizeRunStatus, so
+    // this is the one terminal transition that hook cannot see.
+    await scheduleTaskOrchestratorNotify(ctx, task._id, "cancelled");
+
+    // workflow.cancel() aborts execution before the workflow's own sandbox
+    // cleanup step runs, so we stop the execution sandbox here.
+    if (run.sandboxId && run.repoId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+        sandboxId: run.sandboxId,
+        repoId: run.repoId,
       });
-      await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
-      // The cancelled status is written here, not through finalizeRunStatus, so
-      // this is the one terminal transition that hook cannot see.
-      await scheduleTaskOrchestratorNotify(ctx, args.taskId, "cancelled");
-
-      // workflow.cancel() aborts execution before the workflow's own sandbox
-      // cleanup step runs, so we stop the execution sandbox here.
-      if (run.sandboxId && run.repoId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
-          sandboxId: run.sandboxId,
-          repoId: run.repoId,
-        });
-      }
     }
+  }
 
-    await clearStreamingActivity(ctx, String(args.taskId));
+  await clearStreamingActivity(ctx, String(task._id));
 
-    await ctx.db.patch(args.taskId, {
-      status: "todo",
-      activeWorkflowId: undefined,
-      updatedAt: Date.now(),
-    });
+  await ctx.db.patch(task._id, {
+    // Same rule as run completion: only the run's own `in_progress` resets.
+    ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
+    activeWorkflowId: undefined,
+    updatedAt: Date.now(),
+  });
+}
 
-    return null;
-  },
-});
-
-/** Starts a new task execution workflow for a queued run. */
-export const triggerExecution = authMutation({
-  args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.taskId !== args.taskId) {
-      throw new Error("Run not found");
-    }
-
-    if (task.activeWorkflowId || run.status !== "queued") {
-      return null;
-    }
-
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await startTaskRunWorkflow(ctx, {
-      runId: args.runId,
-      taskId: args.taskId,
-      repoId: args.repoId,
-      installationId: repo.installationId,
-      projectId: args.projectId,
-      branchName: args.branchName,
-      baseBranch: args.baseBranch,
-      isFirstTaskOnBranch: args.isFirstTaskOnBranch,
-      model: args.model,
-      userId: ctx.userId,
-    });
-
-    return null;
-  },
-});

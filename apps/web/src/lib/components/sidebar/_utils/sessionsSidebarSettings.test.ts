@@ -1,16 +1,20 @@
 import { describe, expect, test } from "vitest";
 import {
+  DEFAULT_SESSIONS_SIDEBAR_SETTINGS,
   DEFAULT_SESSION_PREVIEW_COUNT,
   MAX_SESSION_PREVIEW_COUNT,
   MIN_SESSION_PREVIEW_COUNT,
   clampSessionPreviewCount,
+  filterSessionsStartedBy,
   isAppSortOrder,
   isSessionLayout,
   isSessionListMode,
   isSessionSortOrder,
+  parseSessionsSidebarSettings,
   sessionActivityAt,
   sortAppsForSidebar,
   sortSessionsForSidebar,
+  type SessionsSidebarSettings,
 } from "./sessionsSidebarSettings";
 
 describe("sessions sidebar settings parsing", () => {
@@ -103,5 +107,40 @@ describe("sidebar activity ordering", () => {
   test("keeps manual app order untouched", () => {
     const input = [newer, older, createdOnly];
     expect(sortAppsForSidebar(input, "manual", new Map())).toBe(input);
+  });
+});
+
+describe("only my sessions filter", () => {
+  const mine = { id: "mine", userId: "me", createdBy: "me" };
+  const legacyMine = { id: "legacy", userId: "me" };
+  const theirs = { id: "theirs", userId: "me", createdBy: "teammate" };
+
+  test("keeps sessions the user started, falling back to userId", () => {
+    expect(
+      filterSessionsStartedBy([mine, legacyMine, theirs], "me")?.map(
+        (row) => row.id,
+      ),
+    ).toEqual(["mine", "legacy"]);
+  });
+
+  test("stays loading until rows and the current user resolve", () => {
+    expect(filterSessionsStartedBy(undefined, "me")).toBeUndefined();
+    expect(filterSessionsStartedBy([mine], undefined)).toBeUndefined();
+  });
+});
+
+describe("stored sidebar settings", () => {
+  // Regression (#1058): the Active/Archived tab must not persist. Older
+  // localStorage blobs still carry `listMode: "archived"`; parsing (and every
+  // setter, which spreads the parsed value) must drop it.
+  test("drops a stale persisted list mode", () => {
+    const saved: SessionsSidebarSettings = {
+      ...DEFAULT_SESSIONS_SIDEBAR_SETTINGS,
+      layout: "folder",
+    };
+    const stored = { ...saved, listMode: "archived" };
+    const parsed = parseSessionsSidebarSettings(stored);
+    expect(parsed).not.toHaveProperty("listMode");
+    expect(parsed).toEqual(saved);
   });
 });

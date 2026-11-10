@@ -1,0 +1,190 @@
+/* Corner bleed: inset top and left, off the right and bottom edges. */
+.ar .ar-win {
+  position: absolute;
+  top: 28px;
+  left: 28px;
+  width: 720px;
+  height: 420px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+/* Requirements on the left, the gaps they leave on the right. */
+.ar .ar-body {
+  display: grid;
+  grid-template-columns: 264px 284px;
+  align-items: start;
+  gap: 24px;
+  height: 100%;
+  padding: 16px 20px 0;
+  background: var(--ss-surface);
+}
+
+.ar .ar-reqs,
+.ar .ar-gaps {
+  display: flex;
+  flex-direction: column;
+}
+
+.ar .ar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 28px;
+  margin-bottom: 4px;
+  /* The rows' and cards' own inset, so the heading lines up with them. */
+  padding: 0 12px;
+  color: var(--ss-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ar .ar-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.ar .ar-score .ss-count {
+  color: var(--ss-text-strong);
+}
+
+/* A requirement: its status, its words, its number in the document. */
+.ar .ar-req {
+  border-radius: var(--ss-radius-md);
+}
+
+.ar .ar-status {
+  display: grid;
+  width: 16px;
+  height: 16px;
+}
+
+.ar .ar-fail {
+  /* Tabler's filled circle is drawn inside a 2px margin: at 20px its disc
+     matches the 16px check beside it. */
+  margin: -2px;
+  color: var(--ss-danger);
+}
+
+.ar .ar-req-text {
+  color: var(--ss-text);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.ar .ar-req[data-on] .ar-req-text {
+  color: var(--ss-text-strong);
+}
+
+.ar .ar-id {
+  color: var(--ss-text-faint);
+  font-family: var(--ss-mono);
+  font-size: 11px;
+}
+
+/* Gaps: one card each, most severe first. */
+.ar .ar-empty {
+  padding: 8px;
+  color: var(--ss-text-faint);
+  font-size: 12.5px;
+}
+
+.ar .ar-gap {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: var(--ss-radius-lg);
+  background: var(--ss-surface);
+  box-shadow: 0 0 0 1px var(--ss-line);
+  will-change: transform;
+}
+
+.ar .ar-gap[data-top] {
+  box-shadow: 0 0 0 1px var(--ss-line), var(--ss-shadow-card);
+}
+
+.ar .ar-gap-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ar .ar-gap-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ar .ar-gap-title {
+  color: var(--ss-text-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.ar .ar-gap-ref {
+  color: var(--ss-text);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.ar .ar-gap .ss-badge {
+  flex: none;
+}
+
+.ar .ar-create {
+  justify-self: start;
+  display: inline-grid;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--ss-radius-md);
+  background: var(--ss-accent);
+  color: rgb(var(--primary-foreground));
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.ar .ar-create[data-pressed] {
+  background: color-mix(in srgb, var(--ss-accent) 88%, black);
+}
+
+.ar .ar-create[data-state="done"] {
+  background: var(--ss-success-soft);
+  color: var(--ss-success-text);
+}
+
+.ar .ar-created {
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Compact: the gaps under the requirements, the window spanning the column. */
+.ar .ss-stage[data-layout="compact"] .ar-win {
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  height: 480px;
+}
+
+.ar .ss-stage[data-layout="compact"] .ar-body {
+  grid-template-columns: 310px;
+  align-content: start;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+
+.ar .ss-stage[data-layout="compact"] .ar-reqs .ar-head {
+  padding: 0 5px;
+}
+
+.ar .ss-stage[data-layout="compact"] .ar-gap-ref {
+  display: none;
+}

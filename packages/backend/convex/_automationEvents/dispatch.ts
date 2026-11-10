@@ -28,6 +28,9 @@ import {
 } from "./events";
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
+import { isTerminalRunStatus } from "../_automations/runStatus";
+import { findReposByOwnerAndName } from "../_githubRepos/helpers";
+import { chatEntityKindValidator } from "../_validators/enums";
 
 /** Every run an automation made for one PR or issue. */
 async function runsForTarget(
@@ -111,12 +114,7 @@ export const dispatch = internalMutation({
   args: { event: repoEventValidator },
   returns: v.null(),
   handler: async (ctx, { event }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", event.owner).eq("name", event.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, event);
 
     const matched: Array<{
       automation: Doc<"automations">;
@@ -244,6 +242,12 @@ export const settleEventRun = internalMutation({
   handler: async (ctx, { runId, status, message, eventCursor }) => {
     const run = await ctx.db.get(runId);
     if (!run) return null;
+    if (isTerminalRunStatus(run.status)) {
+      // Expired or cancelled first: keep that outcome, but still advance the
+      // cursor so the next webhook does not redo this work.
+      if (eventCursor !== undefined) await ctx.db.patch(runId, { eventCursor });
+      return null;
+    }
     await ctx.db.patch(runId, {
       status,
       finishedAt: Date.now(),
@@ -255,7 +259,7 @@ export const settleEventRun = internalMutation({
 });
 
 const prChatValidator = v.object({
-  kind: v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
 });
@@ -390,12 +394,7 @@ export const noteCiPassed = internalMutation({
   args: { passed: ciPassedValidator },
   returns: v.null(),
   handler: async (ctx, { passed }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", passed.owner).eq("name", passed.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, passed);
     const automationIds: Array<Id<"automations">> = [];
     let installationId: number | null = null;
     for (const repo of repos) {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
-import { Button, CrossfadeIcon, Spinner, toast } from "@eva/ui";
+import { Button, CrossfadeIcon, Spinner, toast } from "@vvedantb/ui";
 import { IconRefresh } from "@tabler/icons-react";
 
 /**
@@ -16,7 +16,8 @@ const FAILURE_COPY: Record<string, string> = {
   unauthorized: "Claude rejected the token. Reconnect the account in Settings.",
   unavailable: "Claude isn't reporting plan rate limits for this account.",
   network: "Couldn't reach Claude. Try again.",
-  "rate-limited": "Claude rate-limited the usage lookup. Try again in a moment.",
+  "rate-limited":
+    "Claude rate-limited the usage lookup. Try again in a moment.",
 };
 
 const GENERIC_FAILURE = "Couldn't refresh plan usage.";

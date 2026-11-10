@@ -10,7 +10,8 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { Button, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 
 type SetHeaderAction = (node: ReactNode) => void;
 
@@ -57,6 +58,7 @@ export function ContextSidebarHeaderIconButton({
     if (!setHeaderAction) return;
     setHeaderAction(
       <Button
+        shape="rounded"
         size="icon-sm"
         variant="ghost"
         className={cn("h-8 w-8 shrink-0 text-sidebar-primary", className)}

@@ -19,8 +19,11 @@ import {
   DropdownMenuLabel,
   ModelPickerContent,
   modelPickerSurfaceClass,
-} from "@eva/ui";
+  ConfirmSkipHint,
+  skipConfirmTitle,
+} from "@vvedantb/ui";
 import { normalizeAIModel, type Id, api } from "@eva/backend";
+import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
   IconArrowMoveRight,
@@ -47,7 +50,8 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
-import { ConfirmSkipHint, skipConfirmTitle } from "@/lib/confirm";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
@@ -98,42 +102,30 @@ export function TaskCardMenuItems({
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
     if (!repoId) return;
-    const current = localStore.getQuery(api.agentTasks.getAllTasks, { repoId });
-    if (current !== undefined) {
-      localStore.setQuery(
-        api.agentTasks.getAllTasks,
-        { repoId },
-        current.map((task) =>
-          task._id === args.id ? { ...task, status: args.status } : task,
-        ),
-      );
-    }
+    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+      cur.map((task) =>
+        task._id === args.id ? { ...task, status: args.status } : task,
+      ),
+    );
   });
   const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
     (localStore, args) => {
       if (!repoId) return;
-      const current = localStore.getQuery(api.agentTasks.getAllTasks, {
-        repoId,
-      });
-      if (current !== undefined) {
-        localStore.setQuery(
-          api.agentTasks.getAllTasks,
-          { repoId },
-          current.map((task) => {
-            if (task._id !== args.id) return task;
-            const updated = { ...task };
-            if (args.tags !== undefined) updated.tags = args.tags;
-            if (args.assignedTo !== undefined)
-              updated.assignedTo = args.assignedTo ?? undefined;
-            if (args.model !== undefined) updated.model = args.model;
-            if (args.providerAccountId !== undefined)
-              updated.providerAccountId = args.providerAccountId ?? undefined;
-            if (args.projectId !== undefined)
-              updated.projectId = args.projectId ?? undefined;
-            return updated;
-          }),
-        );
-      }
+      patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
+        cur.map((task) => {
+          if (task._id !== args.id) return task;
+          const updated = { ...task };
+          if (args.tags !== undefined) updated.tags = args.tags;
+          if (args.assignedTo !== undefined)
+            updated.assignedTo = args.assignedTo ?? undefined;
+          if (args.model !== undefined) updated.model = args.model;
+          if (args.providerAccountId !== undefined)
+            updated.providerAccountId = args.providerAccountId ?? undefined;
+          if (args.projectId !== undefined)
+            updated.projectId = args.projectId ?? undefined;
+          return updated;
+        }),
+      );
     },
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
@@ -149,12 +141,13 @@ export function TaskCardMenuItems({
   // content on demand, so these stay per opened menu rather than per card on
   // the board. PRs come primary first; a project task links its project's.
   const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
-  const taskPrs = useQuery(api.pullRequests.listForOwner, {
-    owner: { kind: "task", taskId: id },
-  });
-  const latestPrUrl =
-    taskPrs?.[0]?.prUrl ??
-    projects?.find((project) => project._id === projectId)?.prUrl;
+  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
+  // A project task without PRs of its own links its project's, which is a bare
+  // URL here: the project's rows are not loaded on a task card.
+  const projectPrUrl =
+    taskPrs.length === 0
+      ? projects?.find((project) => project._id === projectId)?.prUrl
+      : undefined;
 
   const isOwner =
     currentUserId !== undefined &&
@@ -209,7 +202,7 @@ export function TaskCardMenuItems({
         </>
       )}
 
-      {href || latestPrUrl ? (
+      {href || taskPrs.length > 0 || projectPrUrl ? (
         <>
           {href ? (
             <Item
@@ -221,10 +214,11 @@ export function TaskCardMenuItems({
               Open in new tab
             </Item>
           ) : null}
-          {latestPrUrl ? (
+          <PrActionsSubmenus variant={variant} prs={taskPrs} />
+          {projectPrUrl ? (
             <Item
               onSelect={() => {
-                window.open(latestPrUrl, "_blank", "noopener,noreferrer");
+                window.open(projectPrUrl, "_blank", "noopener,noreferrer");
               }}
             >
               <IconGitPullRequest size={16} />

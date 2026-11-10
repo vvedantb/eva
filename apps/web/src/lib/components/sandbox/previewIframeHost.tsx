@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { cn, useWebPreview } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { useWebPreview } from "@vvedantb/ui";
 import {
   armPreviewMiniPlayer,
   disarmPreviewMiniPlayer,
@@ -580,7 +581,7 @@ export function PreviewAnchor({
   const armKey =
     miniPlayer === undefined
       ? "idle"
-      : `${miniPlayer.sessionId}:${miniPlayer.sandboxId}:${miniPlayer.returnTo}:${miniPlayer.title}`;
+      : `${miniPlayer.owner.kind}:${miniPlayer.sandboxId}:${miniPlayer.returnTo}:${miniPlayer.title}`;
 
   return (
     <div

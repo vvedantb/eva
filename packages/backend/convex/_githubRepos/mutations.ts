@@ -1,31 +1,17 @@
 import { v } from "convex/values";
-import type { GenericDatabaseReader } from "convex/server";
-import type { DataModel, Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { authMutation, getRepoWithAccess, hasTeamAccess } from "../functions";
+import {
+  authMutation,
+  getRepoWithAccess,
+  hasTeamAccess,
+  requireTeamOwner,
+} from "../functions";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
-import { findAllSiblingRepoIds } from "./helpers";
-
-/** Throws unless the user connected the repo or shares its team. */
-async function assertRepoWriteAccess(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  repo: Doc<"githubRepos">,
-): Promise<void> {
-  if (repo.connectedBy === userId) return;
-  const teamId = repo.teamId;
-  if (!teamId) throw new Error("Not authorized");
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  if (!membership) throw new Error("Not authorized");
-}
+import { findAllSiblingRepoIds, findReposByOwnerAndName } from "./helpers";
 
 /** Assigns a repository to a team (team owner only). */
 export const assignToTeam = authMutation({
@@ -35,16 +21,12 @@ export const assignToTeam = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership || membership.role !== "owner") {
-      throw new Error("Only team owners can add repositories");
-    }
+    await requireTeamOwner(
+      ctx.db,
+      args.teamId,
+      ctx.userId,
+      "Only team owners can add repositories",
+    );
 
     const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
 
@@ -65,16 +47,12 @@ export const removeFromTeam = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership || membership.role !== "owner") {
-      throw new Error("Only team owners can remove repositories");
-    }
+    await requireTeamOwner(
+      ctx.db,
+      args.teamId,
+      ctx.userId,
+      "Only team owners can remove repositories",
+    );
 
     const repo = await ctx.db.get(args.repoId);
     if (!repo) {
@@ -129,12 +107,7 @@ async function insertRepo(
     }
   }
 
-  const candidates = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", args.owner).eq("name", args.name),
-    )
-    .collect();
+  const candidates = await findReposByOwnerAndName(ctx.db, args);
 
   const duplicate = candidates.find(
     (r) => (r.rootDirectory ?? undefined) === (normalizedRoot ?? undefined),
@@ -263,10 +236,7 @@ export const updateConfig = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await assertRepoWriteAccess(ctx.db, ctx.userId, repo);
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
 
     const editsRunCommands =
       args.devPort !== undefined ||
@@ -388,24 +358,7 @@ export const generateLogoUploadUrl = authMutation({
   args: { repoId: v.id("githubRepos") },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    if (repo.connectedBy !== ctx.userId) {
-      const teamId = repo.teamId;
-      if (teamId) {
-        const membership = await ctx.db
-          .query("teamMembers")
-          .withIndex("by_team_and_user", (q) =>
-            q.eq("teamId", teamId).eq("userId", ctx.userId),
-          )
-          .first();
-        if (!membership) throw new Error("Not authorized");
-      } else {
-        throw new Error("Not authorized");
-      }
-    }
-
+    await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -422,24 +375,7 @@ export const setLogo = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    if (repo.connectedBy !== ctx.userId) {
-      const teamId = repo.teamId;
-      if (teamId) {
-        const membership = await ctx.db
-          .query("teamMembers")
-          .withIndex("by_team_and_user", (q) =>
-            q.eq("teamId", teamId).eq("userId", ctx.userId),
-          )
-          .first();
-        if (!membership) throw new Error("Not authorized");
-      } else {
-        throw new Error("Not authorized");
-      }
-    }
-
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     const previousId = repo.logoStorageId;
     if (previousId && previousId !== args.storageId) {
       await ctx.storage.delete(previousId);
@@ -460,10 +396,7 @@ export const toggleHidden = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await assertRepoWriteAccess(ctx.db, ctx.userId, repo);
+    await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
 
     await ctx.db.patch(args.repoId, {
       hidden: args.hidden || undefined,
@@ -480,10 +413,7 @@ export const updateMcpRootPrompt = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await assertRepoWriteAccess(ctx.db, ctx.userId, repo);
+    await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
 
     const siblingIds = await findAllSiblingRepoIds(ctx.db, args.repoId);
     for (const siblingId of siblingIds) {

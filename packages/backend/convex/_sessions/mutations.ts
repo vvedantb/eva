@@ -1,9 +1,10 @@
 import { v, type Infer } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import {
   authMutation,
+  getRepoWithAccess,
   getSessionWithAccess,
   hasRepoAccess,
 } from "../functions";
@@ -13,10 +14,10 @@ import {
   getAIModelProvider,
   reasoningLevelValidator,
   roleValidator,
-  sessionStatusValidator,
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
+import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
@@ -24,6 +25,7 @@ import {
 } from "../_userProviderAccounts/defaults";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
+import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import {
   cancelSessionSandboxGraceDelete,
@@ -43,20 +45,8 @@ import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
 import {
   ensureMainChat,
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
 } from "../_sessionChats/helpers";
-
-/** Loads a session by id, throwing if it does not exist. */
-async function getSessionOrThrow(
-  db: DatabaseReader,
-  id: Id<"sessions">,
-): Promise<Doc<"sessions">> {
-  const session = await db.get(id);
-  if (!session) {
-    throw new Error("Session not found");
-  }
-  return session;
-}
 
 const createSessionArgs = v.object({
   repoId: v.id("githubRepos"),
@@ -71,6 +61,8 @@ const createSessionArgs = v.object({
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
   baseBranch: v.optional(v.string()),
+  /** "Stack a new session on this PR": the PR whose head is `baseBranch`. */
+  stackOnPrNumber: v.optional(v.number()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
@@ -83,6 +75,11 @@ const createSessionArgs = v.object({
   repoGroupId: v.optional(v.id("repoGroups")),
   /** Whether linked repos install dependencies on clone. Defaults to true. */
   installDependencies: v.optional(v.boolean()),
+  /**
+   * Session whose agent spun this one up (MCP `create_session`). The new
+   * session joins that session's linked-session group.
+   */
+  fromSessionId: v.optional(v.id("sessions")),
 });
 
 type CreateSessionArgs = Infer<typeof createSessionArgs>;
@@ -98,6 +95,18 @@ export interface CreateSessionFork {
 /** Mutation context after `authMutation` injects the caller's user id. */
 export type AuthMutationCtx = MutationCtx & { userId: Id<"users"> };
 
+/** The linked-session group a new session spun up from `sourceId` joins. */
+async function joinSessionGroup(
+  ctx: AuthMutationCtx,
+  sourceId: Id<"sessions">,
+): Promise<Id<"sessionGroups">> {
+  const source = await ctx.db.get(sourceId);
+  if (!source || !(await hasRepoAccess(ctx.db, source.repoId, ctx.userId))) {
+    throw new Error("Source session not found");
+  }
+  return await ensureSessionGroup(ctx.db, source, ctx.userId);
+}
+
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
  * (optionally) the first queued message. Used by the `create` mutation and by
@@ -108,11 +117,7 @@ export async function createSession(
   args: CreateSessionArgs,
   fork?: CreateSessionFork,
 ): Promise<{ sessionId: Id<"sessions">; numId: number }> {
-  if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
-    throw new Error("Not authorized");
-  }
-  const repo = await ctx.db.get(args.repoId);
-  if (!repo) throw new Error("Repository not found");
+  const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
   const title = args.title?.trim() || DEFAULT_SESSION_TITLE;
   const baseBranch = resolveSessionBaseBranch(
     { baseBranch: args.baseBranch },
@@ -132,18 +137,17 @@ export async function createSession(
   const linkedRepoIds = args.linkedRepoIds ?? group?.linkedRepoIds ?? [];
   const linkedRepos: Array<Doc<"githubRepos">> = [];
   for (const linkedRepoId of linkedRepoIds) {
-    if (!(await hasRepoAccess(ctx.db, linkedRepoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const linkedRepo = await ctx.db.get(linkedRepoId);
-    if (!linkedRepo) throw new Error("Repository not found");
-    linkedRepos.push(linkedRepo);
+    linkedRepos.push(await getRepoWithAccess(ctx.db, linkedRepoId, ctx.userId));
   }
   if (linkedRepos.length > 0) {
     assertValidRepoGroupMembers(repo, linkedRepos);
   }
   const installDependencies =
     args.installDependencies ?? group?.installDependencies ?? true;
+  const sessionGroupId =
+    args.fromSessionId === undefined
+      ? undefined
+      : await joinSessionGroup(ctx, args.fromSessionId);
 
   const numId = await allocateNumId(ctx.db, args.repoId, "sessions");
   const model = args.model ?? repo.defaultModel;
@@ -164,10 +168,16 @@ export async function createSession(
     userId: ctx.userId,
     title,
     status: "starting",
+    // The first boot is a start request like any other; see
+    // `_sandbox/transitions.ts`.
+    sandboxStartAttempt: 1,
     createdBy: ctx.userId,
     updatedAt: Date.now(),
     numId,
     baseBranch,
+    ...(args.stackOnPrNumber !== undefined
+      ? { stackOnPrNumber: args.stackOnPrNumber }
+      : {}),
     providerAccountId,
     // The provider the session started on. Informational only — the composer
     // may move the session onto another provider later.
@@ -179,6 +189,7 @@ export async function createSession(
       use1mContext,
       fastMode,
     }),
+    ...(sessionGroupId ? { sessionGroupId } : {}),
     ...(fork
       ? {
           forkedFromSessionId: fork.sourceSessionId,
@@ -241,8 +252,10 @@ export async function createSession(
       baseBranch,
       repoId: args.repoId,
       hasLinkedRepos: linkedRepos.length > 0,
+      startAttempt: 1,
     },
   );
+  await scheduleStuckStartExpiry(ctx, { kind: "session", id: sessionId }, 1);
 
   const content = args.message?.trim() ?? "";
   if (content) {
@@ -317,10 +330,11 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const { chat, session } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const credential =
       args.role === "user"
         ? await resolveMessageCredential(
@@ -361,20 +375,6 @@ export const addMessage = authMutation({
   },
 });
 
-/** Updates the status of a session. */
-export const updateStatus = authMutation({
-  args: {
-    id: v.id("sessions"),
-    status: sessionStatusValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { status: args.status });
-    return null;
-  },
-});
-
 /** Updates editable fields (title, branch) on a session. */
 export const update = authMutation({
   args: {
@@ -406,20 +406,6 @@ export const update = authMutation({
         });
       }
     }
-    return null;
-  },
-});
-
-/** Updates the summary bullet points on a session. */
-export const updateSummary = authMutation({
-  args: {
-    id: v.id("sessions"),
-    summary: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { summary: args.summary });
     return null;
   },
 });
@@ -464,10 +450,7 @@ export const archive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     await archiveSessionDoc(ctx, session);
     return null;
   },
@@ -479,10 +462,7 @@ export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
 
     await reopenArchivedPullRequests(ctx, {
       kind: "session",
@@ -502,42 +482,11 @@ export const updatePlanContent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       planContent: args.planContent,
       updatedAt: Date.now(),
     });
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the most recent message in a chat. */
-export const updateLastMessage = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (!last) return null;
-    const patch: { content?: string; activityLog?: string } = {};
-    if (args.content !== undefined) patch.content = args.content;
-    if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
-    await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(chat._id, { updatedAt: Date.now() });
     return null;
   },
 });

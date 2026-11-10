@@ -7,6 +7,9 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
+import { messageMediaStorageIds } from "../_messages/media";
+import { isScreenshotType, MAX_SCREENSHOTS } from "./visual";
 
 /** Enough history to reach the user message behind a long agent turn. */
 const RECENT_MESSAGE_LIMIT = 60;
@@ -41,7 +44,7 @@ async function resolveRepoId(
 /**
  * The turn's checkpoint shas, its repo, the prompt it answered and the reply it
  * gave — or null when there is nothing to judge (no code changed, no prompt to
- * judge against, or a verdict already landed).
+ * judge against, a verdict already landed, or the asker has the flag off).
  *
  * The reply is what the mention question reads: a change the user was told
  * about is reviewable, one they were not is a surprise in production.
@@ -84,6 +87,10 @@ export const getTurnContext = internalQuery({
       .slice(index + 1)
       .find((row) => row.role === "user" && row.isSystemAlert !== true);
     if (!prompt) return null;
+    // Opt-in per user (settings → Experimental): off means no Jev spend.
+    const asker =
+      prompt.userId === undefined ? null : await ctx.db.get(prompt.userId);
+    if (!resolveExperimentalFlags(asker).scopeCheck) return null;
 
     return {
       repoId,
@@ -92,5 +99,27 @@ export const getTurnContext = internalQuery({
       prompt: prompt.content,
       reply: message.content,
     };
+  },
+});
+
+/**
+ * The turn's screenshots, newest last, for the visual pass. Read at the end of
+ * the check rather than with the turn context: the sandbox uploads media just
+ * after the completion that schedules the check, and by the time the per-hunk
+ * judging is done the captures have landed. A capture slower than that is
+ * missed, and the verdict simply carries no screenshot pass.
+ */
+export const getTurnScreenshots = internalQuery({
+  args: { messageId: v.id("messages") },
+  returns: v.array(v.id("_storage")),
+  handler: async (ctx, args) => {
+    const message = await ctx.db.get(args.messageId);
+    if (!message) return [];
+    const screenshots: Id<"_storage">[] = [];
+    for (const storageId of messageMediaStorageIds(message)) {
+      const meta = await ctx.db.system.get("_storage", storageId);
+      if (isScreenshotType(meta?.contentType)) screenshots.push(storageId);
+    }
+    return screenshots.slice(-MAX_SCREENSHOTS);
   },
 });

@@ -178,7 +178,14 @@ export const search = authQuery({
         : DEFAULT_LIMIT;
     const query = normalizeQuery(args.query);
     const hits: SpotlightHit[] = [];
-    const user = await ctx.db.get(ctx.userId);
+    const [user, memberships, repos] = await Promise.all([
+      ctx.db.get(ctx.userId),
+      ctx.db
+        .query("teamMembers")
+        .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+        .collect(),
+      gatherAccessibleRepos(ctx.db, ctx.userId, false),
+    ]);
     const simpleView = resolveExperimentalFlags(user).simpleView;
 
     for (const page of GLOBAL_PAGES) {
@@ -196,11 +203,6 @@ export const search = authQuery({
         limit,
       );
     }
-
-    const memberships = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .collect();
 
     const teams = (
       await Promise.all(memberships.map((m) => ctx.db.get(m.teamId)))
@@ -221,7 +223,6 @@ export const search = authQuery({
       );
     }
 
-    const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
     let repoPagesAdded = 0;
 
     for (const repo of repos) {
@@ -274,11 +275,17 @@ export const search = authQuery({
       const teamNameById = new Map(
         teams.map((team) => [String(team._id), team.name]),
       );
-      for (const membership of memberships) {
-        const artifacts = await ctx.db
-          .query("artifacts")
-          .withIndex("by_team", (q) => q.eq("boundTeamId", membership.teamId))
-          .take(PER_REPO_TAKE);
+      const artifactsByTeam = await Promise.all(
+        memberships.map((membership) =>
+          ctx.db
+            .query("artifacts")
+            .withIndex("by_team", (q) =>
+              q.eq("boundTeamId", membership.teamId),
+            )
+            .take(PER_REPO_TAKE),
+        ),
+      );
+      for (const artifacts of artifactsByTeam) {
         for (const artifact of artifacts) {
           if (!matchesQuery(artifact.name, query)) continue;
           pushHit(

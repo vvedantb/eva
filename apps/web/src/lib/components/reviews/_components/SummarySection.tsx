@@ -5,7 +5,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 
 /**

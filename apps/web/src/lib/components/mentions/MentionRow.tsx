@@ -4,17 +4,12 @@ import type { ReactNode } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
 import {
-  DocumentsIcon,
-  ProjectsIcon,
-  QuickTasksIcon,
-  SessionsIcon,
-} from "@/lib/components/sidebar/icons/AnimatedNavIcons";
-import {
-  ClaudeLogo,
-  CursorLogo,
-  OpenAILogo,
-  OpenCodeLogo,
-} from "@/lib/components/ui/providerLogos";
+  BoardIcon,
+  ChecklistIcon,
+  DocumentIcon,
+  ProviderIcon,
+  TerminalIcon,
+} from "@vvedantb/ui";
 
 /**
  * What a Data `@` entry points at. Mirrors the backend `DataMentionKind` union
@@ -30,13 +25,13 @@ const KIND_ICON_CLASS = "shrink-0 text-muted-foreground";
 function MentionKindIcon({ kind }: { kind: MentionKind }) {
   switch (kind) {
     case "document":
-      return <DocumentsIcon size={16} className={KIND_ICON_CLASS} />;
+      return <DocumentIcon size={16} className={KIND_ICON_CLASS} />;
     case "session":
-      return <SessionsIcon size={16} className={KIND_ICON_CLASS} />;
+      return <TerminalIcon size={16} className={KIND_ICON_CLASS} />;
     case "project":
-      return <ProjectsIcon size={16} className={KIND_ICON_CLASS} />;
+      return <BoardIcon size={16} className={KIND_ICON_CLASS} />;
     case "quickTask":
-      return <QuickTasksIcon size={16} className={KIND_ICON_CLASS} />;
+      return <ChecklistIcon size={16} className={KIND_ICON_CLASS} />;
   }
 }
 
@@ -45,25 +40,13 @@ function MentionKindIcon({ kind }: { kind: MentionKind }) {
  * recognisable before the word is read. Badges naming anything else (Eva,
  * Person) are text-only.
  */
-const PROVIDER_LOGO: Record<
-  AIProvider,
-  (props: { size: number }) => ReactNode
-> = {
-  claude: ClaudeLogo,
-  codex: OpenAILogo,
-  opencode: OpenCodeLogo,
-  cursor: CursorLogo,
-};
-
-/** The provider mark for a badge, or nothing when the badge names no provider. */
 function BadgeLogo({
   provider,
 }: {
   provider: AIProvider | undefined;
 }): ReactNode {
   if (provider === undefined) return null;
-  const Logo = PROVIDER_LOGO[provider];
-  return <Logo size={11} />;
+  return <ProviderIcon provider={provider} size={11} />;
 }
 
 function previewOneLine(text: string, maxLength = 72): string {

@@ -3,7 +3,7 @@
 import { IconChecklist } from "@tabler/icons-react";
 import type { Id, api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { Spinner } from "@eva/ui";
+import { Spinner } from "@vvedantb/ui";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { QuickTasksListView } from "@/lib/components/quick-tasks/QuickTasksListView";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";

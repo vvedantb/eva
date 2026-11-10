@@ -24,7 +24,6 @@ import {
   runCursorDaemon,
   runCursorTurnWorker,
 } from "./providers/cursorSdkDaemon.js";
-import { callConvexWithRetry } from "./http/convexClient.js";
 import { ensureGithubToken } from "./providers/githubToken.js";
 import { callbackState as S } from "./runtime/state.js";
 import {
@@ -33,10 +32,7 @@ import {
 } from "./runtime/turnLease.js";
 import { waitForPendingClaudeUsageReport } from "./runtime/usageLimits.js";
 import { persistTurnWork } from "./runtime/turnPersist.js";
-import {
-  appendTurnCheckpoint,
-  beginTurnCheckpoint,
-} from "./runtime/turnCheckpoint.js";
+import { beginTurnCheckpoint } from "./runtime/turnCheckpoint.js";
 import { materializeSystemSkills } from "./runtime/systemSkills.js";
 import { startBranchWatcher } from "./runtime/branchWatcher.js";
 import {
@@ -55,6 +51,7 @@ import {
   providerAttemptTimedOut,
   providerAttemptWasInterrupted,
   resolveProviderAttemptOutcome,
+  sendTurnCompletion,
   writeDoneFile,
 } from "./runtime/completion.js";
 import {
@@ -65,7 +62,7 @@ import {
 import type { JsonObject } from "./types.js";
 import { hasNewTaskCommitSince, log, readGitHeadSha } from "./utils.js";
 import { writeOomScoreAdj } from "./runtime/daemonProcess.js";
-import { serializeSteps } from "./parse/stepBudget.js";
+import { serializeFinalSteps, serializeSteps } from "./parse/stepBudget.js";
 
 // Cursor chat turns run in disposable children so the SDK cannot retain heap
 // across messages. The lightweight parent daemon remains alive to claim turns
@@ -244,34 +241,11 @@ try {
     resolveProviderAttemptOutcome(finalAttempt, finalResultEvent);
   let errorValue: string | null = resolvedError;
 
-  // The final result text is delivered separately (rendered as the chat
-  // message via `result`/`resultSummary`). If the last streamed "response"
-  // step carries essentially the same text, drop it so the response isn't
-  // shown twice. Trailing thinking steps are skipped when locating it (a
-  // status step may have been pushed after the response). Intermediate
-  // response steps (earlier turns before a tool call, etc.) are untouched.
-  const finalResultText = (finalResultEvent?.result ?? "").trim();
-  if (finalResultText) {
-    let lastIdx = S.accumulatedSteps.length - 1;
-    while (lastIdx >= 0 && S.accumulatedSteps[lastIdx].type === "thinking") {
-      lastIdx--;
-    }
-    const candidate = lastIdx >= 0 ? S.accumulatedSteps[lastIdx] : undefined;
-    if (candidate && candidate.type === "response") {
-      const detail = (candidate.detail ?? "").trim();
-      if (
-        detail &&
-        (finalResultText === detail ||
-          finalResultText.startsWith(detail) ||
-          detail.startsWith(finalResultText))
-      ) {
-        S.accumulatedSteps.splice(lastIdx, 1);
-      }
-    }
-  }
-
   for (const step of S.accumulatedSteps) step.status = "complete";
-  const activityLog = serializeSteps(S.accumulatedSteps);
+  const activityLog = serializeFinalSteps(
+    S.accumulatedSteps,
+    finalResultEvent?.result ?? "",
+  );
 
   let completionSuccess = agentWasInterrupted
     ? false
@@ -383,9 +357,8 @@ try {
   };
   if (RUN_ID) errorArgs.runId = RUN_ID;
   appendCurrentTurnLease(errorArgs);
-  appendTurnCheckpoint(errorArgs);
   try {
-    await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", errorArgs);
+    await sendTurnCompletion(COMPLETION_MUTATION ?? "", errorArgs);
   } catch {
     /* ignore completion error path failures */
   }

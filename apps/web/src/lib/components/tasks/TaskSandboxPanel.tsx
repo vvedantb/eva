@@ -6,6 +6,7 @@ import { api } from "@eva/backend";
 import type { BackgroundAgentEntry, Id, SandboxOwner } from "@eva/backend";
 import { isSessionSandboxTab, type SandboxTab } from "@/lib/search-params";
 import { SandboxTabBar } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabBar";
+import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
@@ -17,6 +18,8 @@ import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { useTaskChatBinding } from "./TaskSandboxChatPanel";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -60,6 +63,8 @@ interface TaskSandboxPanelProps {
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
+  miniPlayer: { returnTo: string; title: string } | undefined;
 }
 
 /**
@@ -89,9 +94,13 @@ export function TaskSandboxPanel({
   autoWakeEligible,
   collapsed = false,
   onToggle,
+  miniPlayer,
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
   const taskIdStr = String(taskId);
+  const submitAnnotation = useSandboxAnnotationSend(
+    useTaskChatBinding(taskId),
+  );
 
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
   // panel already subscribes to (same entity ids).
@@ -215,39 +224,48 @@ export function TaskSandboxPanel({
             agents={agents}
           />
         </div>
-        <SandboxPaneSlots
-          activeTab={tabBarValue}
-          panes={panes}
-          preview={preview}
-          owner={owner}
-          sandboxId={sandboxId}
-          isActive={isActive}
-          repoId={repoId}
-          cacheKey={taskIdStr}
-          devCommand={devCommand}
-          prUrl={prUrl}
-          agentBrowsingAt={viewState?.agentBrowsingAt}
-          onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-          // Backend starts the app in the Console tmux session after startup.
-          runConsoleDevCommandOnConnect={false}
-          onStartSandbox={onStartSandbox}
-          isSandboxStarting={isSandboxStarting}
-          autoWakeEligible={autoWakeEligible}
-          // A collapsed rail is not on screen: no presence beacon, no auto-wake.
-          presenceEnabled={!collapsed}
-          stickyPreviewPath={viewState?.previewPath}
-          onStickyPreviewPathChange={(path) => {
-            void setPreviewPath({ owner, path });
-          }}
-          stickyTerminalHistoryTail={
-            viewState === undefined
-              ? undefined
-              : (viewState?.terminalHistoryTail ?? "")
-          }
-          onStickyTerminalHistoryTailChange={(tail) => {
-            void setTerminalHistoryTail({ owner, tail });
-          }}
-        />
+        <ReviewChatTargetProvider value={{ kind: "taskChat", taskId }}>
+          <SandboxPaneSlots
+            activeTab={tabBarValue}
+            panes={panes}
+            preview={preview}
+            owner={owner}
+            sandboxId={sandboxId}
+            isActive={isActive}
+            repoId={repoId}
+            cacheKey={taskIdStr}
+            devCommand={devCommand}
+            prUrl={prUrl}
+            agentBrowsingAt={viewState?.agentBrowsingAt}
+            onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
+            // Backend starts the app in the Console tmux session after startup.
+            runConsoleDevCommandOnConnect={false}
+            onStartSandbox={onStartSandbox}
+            isSandboxStarting={isSandboxStarting}
+            autoWakeEligible={autoWakeEligible}
+            onAnnotationSubmit={submitAnnotation}
+            // A collapsed rail is not on screen: no presence beacon, no auto-wake.
+            presenceEnabled={!collapsed}
+            // A collapsed rail keeps its preview parked.
+            miniPlayer={
+              miniPlayer !== undefined && !collapsed
+                ? { ...miniPlayer, owner: { kind: "task", taskId } }
+                : undefined
+            }
+            stickyPreviewPath={viewState?.previewPath}
+            onStickyPreviewPathChange={(path) => {
+              void setPreviewPath({ owner, path });
+            }}
+            stickyTerminalHistoryTail={
+              viewState === undefined
+                ? undefined
+                : (viewState?.terminalHistoryTail ?? "")
+            }
+            onStickyTerminalHistoryTailChange={(tail) => {
+              void setTerminalHistoryTail({ owner, tail });
+            }}
+          />
+        </ReviewChatTargetProvider>
       </div>
     </SandboxPanelFrame>
   );

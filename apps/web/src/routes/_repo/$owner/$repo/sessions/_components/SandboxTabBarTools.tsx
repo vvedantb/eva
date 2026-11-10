@@ -1,5 +1,6 @@
 import { IconLetterCase, IconPlus, IconTerminal2 } from "@tabler/icons-react";
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from "@eva/ui";
+import { cn } from "@eva/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
 
 const SANDBOX_RAIL_ICON_BUTTON_CLASS =

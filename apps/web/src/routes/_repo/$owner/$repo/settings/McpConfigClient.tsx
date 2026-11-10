@@ -16,11 +16,11 @@ import {
   DialogDescription,
   DialogBody,
   DialogFooter,
+  SettingsSection,
+  SettingsEmptyState,
   Badge,
-} from "@eva/ui";
+} from "@vvedantb/ui";
 import { IconPencil, IconPlug } from "@tabler/icons-react";
-import { SettingsSection } from "@/lib/components/settings/SettingsSection";
-import { SettingsEmptyState } from "@/lib/components/settings/SettingsEmptyState";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 export function McpConfigClient() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDurationMs } from "@eva/shared/duration";
-import { useCountUpDisplay } from "@/lib/components/analytics/useCountUpDisplay";
+import { useCountUpDisplay } from "@vvedantb/ui";
 import { formatCost, formatTokens, type LogTotals } from "../_utils";
 
 interface LogsPeriodSummaryProps {

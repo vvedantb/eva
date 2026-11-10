@@ -1,3 +1,4 @@
+import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 
 /**
@@ -5,9 +6,16 @@ import type { BackgroundAgentEntry } from "../_validators/tableFields";
  * settle from the daemon (`settleSubagent` in callback-src), so an entry older
  * than this means the daemon died mid-run and will never report a terminal
  * status — without the cap that session's queue would stay blocked forever.
- * Matches the 2h workflow timeout used elsewhere for the same reason.
+ * Matches the workflow timeout used elsewhere for the same reason.
  */
-export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = 2 * 60 * 60 * 1000;
+export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = RUN_TIMEOUT_MS;
+
+/**
+ * Settled entries kept per surface. The array lives on a doc that the cancel,
+ * finalize and drain paths each read several times in one mutation. Unbounded,
+ * a long chat (700+ subagents) pushed those past Convex's 16 MB read limit.
+ */
+export const MAX_SETTLED_BACKGROUND_AGENTS = 50;
 
 /** Terminal status stamped on entries orphaned by a dead daemon. */
 const STALE_STATUS = "stale";
@@ -62,7 +70,26 @@ export function mergeBackgroundAgents(
       }
     }
   }
-  return [...byToolUseId.values()];
+  return pruneSettledBackgroundAgents([...byToolUseId.values()]);
+}
+
+/**
+ * Keeps every unsettled entry and the most recently settled ones, in their
+ * original order. Returns the same array when nothing is dropped.
+ */
+export function pruneSettledBackgroundAgents(
+  entries: BackgroundAgentEntry[],
+): BackgroundAgentEntry[] {
+  const settled = entries.filter((entry) => entry.settledAt !== undefined);
+  if (settled.length <= MAX_SETTLED_BACKGROUND_AGENTS) return entries;
+  const kept = new Set(
+    settled
+      .toSorted((a, b) => (b.settledAt ?? 0) - (a.settledAt ?? 0))
+      .slice(0, MAX_SETTLED_BACKGROUND_AGENTS),
+  );
+  return entries.filter(
+    (entry) => entry.settledAt === undefined || kept.has(entry),
+  );
 }
 
 /**
@@ -118,9 +145,11 @@ export function settleOrphanedBackgroundAgents(
   if (orphans.length === 0) {
     return null;
   }
-  return (entries ?? []).map((entry) =>
-    orphans.includes(entry)
-      ? { ...entry, status: STALE_STATUS, settledAt: now }
-      : entry,
+  return pruneSettledBackgroundAgents(
+    (entries ?? []).map((entry) =>
+      orphans.includes(entry)
+        ? { ...entry, status: STALE_STATUS, settledAt: now }
+        : entry,
+    ),
   );
 }

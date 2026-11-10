@@ -1,7 +1,7 @@
 import { CONVEX_TOKEN, CONVEX_URL, REPO_ID } from "../config.js";
 import { fetchWithTimeout } from "../http/convexClient.js";
 import type { JsonValue } from "../types.js";
-import { readResponseJson } from "../utils.js";
+import { isJsonObject, readResponseJson } from "../utils.js";
 
 export type GithubTokenFetch = (
   url: string,
@@ -15,11 +15,11 @@ export type GithubTokenEnv = {
 
 /** Pulls `data.value.token` out of a Convex action JSON envelope. */
 export function tokenFromActionResponse(data: JsonValue | null): string | null {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+  if (!isJsonObject(data)) {
     return null;
   }
   const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
   return typeof value.token === "string" ? value.token : null;
@@ -30,7 +30,7 @@ export function tokenFromActionResponse(data: JsonValue | null): string | null {
  * or parse failures return `{ token: null }` so git can keep using whatever
  * is already in the environment.
  */
-export async function fetchInstallationToken(params: {
+async function fetchInstallationToken(params: {
   convexUrl: string;
   convexToken: string;
   repoId: string;

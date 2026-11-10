@@ -46,7 +46,24 @@ function getCyclableSandboxTabs(
   return [...withDocuments, ...customTabSlugs];
 }
 
-/** Cycles the visible right-panel tabs with `cycleSandboxTab`. */
+/**
+ * The tab one `step` away from `activeTab`, wrapping at both ends. An unknown
+ * active tab counts as the first one.
+ */
+export function stepSandboxTab(
+  tabs: ReadonlyArray<string>,
+  activeTab: string,
+  step: 1 | -1,
+): string | undefined {
+  if (tabs.length === 0) return undefined;
+  const currentIndex = Math.max(tabs.indexOf(activeTab), 0);
+  return tabs[(currentIndex + step + tabs.length) % tabs.length];
+}
+
+/**
+ * Cycles the visible right-panel tabs: forward with `cycleSandboxTab`,
+ * backward with `cycleSandboxTabBack`.
+ */
 export function useCycleSandboxTabHotkey({
   activeTab,
   onTabChange,
@@ -89,16 +106,14 @@ export function useCycleSandboxTabHotkey({
     showDocumentsTab,
   );
 
-  useShortcut(
-    "cycleSandboxTab",
-    (e) => {
-      if (cyclableTabs.length === 0) return;
-      e.preventDefault();
-      const currentIndex = cyclableTabs.indexOf(activeTab);
-      const safeIndex = currentIndex === -1 ? 0 : currentIndex;
-      const nextIndex = (safeIndex + 1) % cyclableTabs.length;
-      onTabChange(cyclableTabs[nextIndex]);
-    },
-    { enabled: enabled && cyclableTabs.length > 1 },
-  );
+  const options = { enabled: enabled && cyclableTabs.length > 1 };
+  const cycle = (e: KeyboardEvent, step: 1 | -1) => {
+    const next = stepSandboxTab(cyclableTabs, activeTab, step);
+    if (next === undefined) return;
+    e.preventDefault();
+    onTabChange(next);
+  };
+
+  useShortcut("cycleSandboxTab", (e) => cycle(e, 1), options);
+  useShortcut("cycleSandboxTabBack", (e) => cycle(e, -1), options);
 }

@@ -24,14 +24,15 @@ import {
   AccordionContent,
   Button,
   useDragSensors,
-} from "@eva/ui";
+  ListEnter,
+  useFirstPaintGate,
+} from "@vvedantb/ui";
 import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
 import {
   statusConfig,
   TASK_STATUSES,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { IconGripVertical, IconPlus } from "@tabler/icons-react";
-import { ListEnter, useFirstPaintGate } from "@/lib/components/ui/ListEnter";
 
 type Task = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type TaskStatus = Task["status"];
@@ -86,37 +87,37 @@ function SortableTaskWrapper({
       </button>
       <div className="flex-1 min-w-0">
         <ListEnter index={index} firstPaint={firstPaint}>
-        <QuickTaskCard
-          id={task._id}
-          title={task.title}
-          description={task.description}
-          status={task.status}
-          isAgentActive={task.isExecuting}
-          hasUnread={task.hasUnread}
-          isAwaitingAnswer={task.isAwaitingAnswer}
-          hasError={hasError}
-          sandboxStatus={task.reviewTaskSandboxStatus}
-          numId={task.numId}
-          projectNumId={projectNumId}
-          tags={task.tags}
-          createdAt={task._creationTime}
-          scheduledAt={task.scheduledAt}
-          href={
-            entityPathSegment(task)
-              ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
-              : `${basePath}/quick-tasks`
-          }
-          isActive={selectedTaskId === task._id}
-          onClick={(event) => {
-            event.preventDefault();
-            onSelectTask(task._id);
-          }}
-          assignedTo={task.assignedTo}
-          model={task.model}
-          providerAccountId={task.providerAccountId}
-          projectId={task.projectId}
-          repoId={task.repoId}
-        />
+          <QuickTaskCard
+            id={task._id}
+            title={task.title}
+            description={task.description}
+            status={task.status}
+            isAgentActive={task.isExecuting}
+            hasUnread={task.hasUnread}
+            isAwaitingAnswer={task.isAwaitingAnswer}
+            hasError={hasError}
+            sandboxStatus={task.reviewTaskSandboxStatus}
+            numId={task.numId}
+            projectNumId={projectNumId}
+            tags={task.tags}
+            createdAt={task._creationTime}
+            scheduledAt={task.scheduledAt}
+            href={
+              entityPathSegment(task)
+                ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
+                : `${basePath}/quick-tasks`
+            }
+            isActive={selectedTaskId === task._id}
+            onClick={(event) => {
+              event.preventDefault();
+              onSelectTask(task._id);
+            }}
+            assignedTo={task.assignedTo}
+            model={task.model}
+            providerAccountId={task.providerAccountId}
+            projectId={task.projectId}
+            repoId={task.repoId}
+          />
         </ListEnter>
       </div>
     </div>

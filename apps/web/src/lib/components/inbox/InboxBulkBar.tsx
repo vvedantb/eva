@@ -1,12 +1,12 @@
 "use client";
 
+import { BulkActionBar } from "@vvedantb/ui";
 import {
   IconArchive,
   IconArchiveOff,
   IconMail,
   IconMailOpened,
 } from "@tabler/icons-react";
-import { BulkActionBar } from "@/lib/components/ui/BulkActionBar";
 
 interface InboxBulkBarProps {
   isSelecting: boolean;
