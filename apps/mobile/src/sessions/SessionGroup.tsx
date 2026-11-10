@@ -1,7 +1,7 @@
 import type { api } from "@eva/backend";
 import { prStateLabel, prStateTone, type PrState, type PrStateTone } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconChevronDown, IconDots, IconGitPullRequest } from "@tabler/icons-react-native";
+import { IconChevronDown, IconDots, IconGitPullRequest, IconPlus } from "@tabler/icons-react-native";
 import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
@@ -11,7 +11,7 @@ import { timeAgo } from "@/ui/format";
 import { RowStatus } from "@/ui/RowStatus";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 
-type SessionRow = FunctionReturnType<typeof api.mobile.listChats>[number];
+export type SessionRow = FunctionReturnType<typeof api.mobile.listChats>[number];
 
 /** Rows before "Show more": the web sidebar's default `sessionPreviewCount`. */
 const PREVIEW_LIMIT = 3;
@@ -33,9 +33,24 @@ const PR_TONE_COLOUR: Record<PrStateTone, keyof (typeof EVA_THEME)["light"]> = {
 /**
  * One repo in the Sessions list, as the web `GlobalSessionGroup` at phone
  * width: a header that collapses the group (initial, name, live count,
- * chevron), the first three rows, then "Show more (N)".
+ * chevron) with the web "+" (a new session in this repo, Active list only),
+ * the first three rows, then "Show more (N)". A long press on a row opens its
+ * menu (`onRowLongPress`), as a right-click does on the web.
  */
-export function SessionGroup({ repoLabel, rows, live }: { repoLabel: string; rows: SessionRow[]; live: number }) {
+export function SessionGroup({
+  repoLabel,
+  rows,
+  live,
+  onNew,
+  onRowLongPress,
+}: {
+  repoLabel: string;
+  rows: SessionRow[];
+  live: number;
+  /** Set in the Active list: the header "+". */
+  onNew?: () => void;
+  onRowLongPress: (session: SessionRow) => void;
+}) {
   // The web opens only the group of the repo in the URL; this tab has none, so all start open.
   const [open, setOpen] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -48,54 +63,73 @@ export function SessionGroup({ repoLabel, rows, live }: { repoLabel: string; row
     <View>
       {/* Web header: 40 high at phone width (the row of its `size-10` "+"), an 18
       initial on `bg-muted`, then the text-xs medium muted name, live count and a 14 chevron. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={repoLabel}
-        aria-expanded={open}
-        onPress={() => setOpen(!open)}
-        hitSlop={2}
-        className="min-h-10 flex-row items-center gap-2 px-4 active:opacity-70"
-      >
-        <View
-          className="h-[18px] w-[18px] items-center justify-center rounded-full"
-          style={{ backgroundColor: EVA_THEME[scheme].muted }}
+      <View className="flex-row items-center pr-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={repoLabel}
+          aria-expanded={open}
+          onPress={() => setOpen(!open)}
+          hitSlop={2}
+          className="min-h-10 flex-1 flex-row items-center gap-2 pl-4 active:opacity-70"
         >
-          {/* The web `text-3xs` (10 / 14, 0.01em). */}
-          <Text
-            className="font-instrument-sans-semibold"
-            style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.1, color: muted, fontWeight: "600" }}
+          <View
+            className="h-[18px] w-[18px] items-center justify-center rounded-full"
+            style={{ backgroundColor: EVA_THEME[scheme].muted }}
           >
-            {repoLabel.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View className="flex-row items-center gap-1.5">
-          <Text
-            className="font-instrument-sans-medium text-xs"
-            style={{ color: muted, fontWeight: "500", letterSpacing: XS_TRACKING }}
-          >
-            {repoLabel}
-          </Text>
-          {live > 0 ? (
-            <View className="flex-row items-center gap-1 px-1.5" accessibilityLabel={`${live} running`}>
-              <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.success[scheme] }} />
-              <Text
-                className="font-instrument-sans-medium"
-                style={{ ...TEXT_2XS, color: muted, fontWeight: "500", fontVariant: ["tabular-nums"] }}
-              >
-                {live}
-              </Text>
-            </View>
-          ) : null}
-          <View style={open ? undefined : { transform: [{ rotate: "-90deg" }] }}>
-            <IconChevronDown size={14} color={muted} />
+            {/* The web `text-3xs` (10 / 14, 0.01em). */}
+            <Text
+              className="font-instrument-sans-semibold"
+              style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.1, color: muted, fontWeight: "600" }}
+            >
+              {repoLabel.charAt(0).toUpperCase()}
+            </Text>
           </View>
-        </View>
-      </Pressable>
+          <View className="flex-row items-center gap-1.5">
+            <Text
+              className="font-instrument-sans-medium text-xs"
+              style={{ color: muted, fontWeight: "500", letterSpacing: XS_TRACKING }}
+            >
+              {repoLabel}
+            </Text>
+            {live > 0 ? (
+              <View className="flex-row items-center gap-1 px-1.5" accessibilityLabel={`${live} running`}>
+                <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.success[scheme] }} />
+                <Text
+                  className="font-instrument-sans-medium"
+                  style={{ ...TEXT_2XS, color: muted, fontWeight: "500", fontVariant: ["tabular-nums"] }}
+                >
+                  {live}
+                </Text>
+              </View>
+            ) : null}
+            <View style={open ? undefined : { transform: [{ rotate: "-90deg" }] }}>
+              <IconChevronDown size={14} color={muted} />
+            </View>
+          </View>
+        </Pressable>
+        {onNew ? (
+          // The web group "+": a `size-10` ghost square (radius 8) with a muted 14 plus; the slop makes 44.
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`New session in ${repoLabel}`}
+            onPress={onNew}
+            hitSlop={2}
+            className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
+          >
+            <IconPlus size={14} color={muted} />
+          </Pressable>
+        ) : null}
+      </View>
       {open ? (
         // Web: `pb-1` under the group, `space-y-0.5` between rows.
         <View className="gap-0.5 pb-1">
           {visible.map((session) => (
-            <SessionListRow key={session.sessionId} session={session} scheme={scheme} />
+            <SessionListRow
+              key={session.sessionId}
+              session={session}
+              scheme={scheme}
+              onLongPress={() => onRowLongPress(session)}
+            />
           ))}
           {rows.length > PREVIEW_LIMIT ? (
             // Web `SessionListShowMore`: text-xs medium muted, a 12 dots icon in the 18 status slot.
@@ -122,8 +156,16 @@ export function SessionGroup({ repoLabel, rows, live }: { repoLabel: string; row
   );
 }
 
-/** The web `SidebarSessionItem` row: status, title, PR icon, age. */
-function SessionListRow({ session, scheme }: { session: SessionRow; scheme: Scheme }) {
+/** The web `SidebarSessionItem` row: status, title, PR icon, age. A long press opens its menu. */
+function SessionListRow({
+  session,
+  scheme,
+  onLongPress,
+}: {
+  session: SessionRow;
+  scheme: Scheme;
+  onLongPress: () => void;
+}) {
   const router = useRouter();
   const muted = tokens.color.muted[scheme];
   return (
@@ -131,6 +173,12 @@ function SessionListRow({ session, scheme }: { session: SessionRow; scheme: Sche
       accessibilityRole="button"
       accessibilityLabel={session.title}
       onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
+      onLongPress={onLongPress}
+      // VoiceOver and TalkBack reach the menu through the actions rotor.
+      accessibilityActions={[{ name: "longpress", label: "Session actions" }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "longpress") onLongPress();
+      }}
       hitSlop={ROW_SLOP}
       className="flex-row items-center gap-2 px-4 py-1.5 active:opacity-70"
     >

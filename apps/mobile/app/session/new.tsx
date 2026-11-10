@@ -23,7 +23,7 @@ import {
 import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { AttachButton } from "@/chat/AttachButton";
@@ -39,10 +39,13 @@ import { useScheme } from "@/ui/theme";
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
  * what are we building for <repo ⌄>?" over the composer, and under it the
  * web footer: base branch, stash and model, and the web `@` / `/` picker. Sends with those picks
- * (`mobile.startSession`), then opens the chat.
+ * (`mobile.startSession`), then opens the chat. `?repo=<id>` (a Sessions
+ * group "+", as the web group "+" opens that repo's composer) picks the repo
+ * first; without it, or for a repo not in the list, the first repo.
  */
 export default function NewSessionScreen() {
   const router = useRouter();
+  const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
   const scheme = useScheme();
   const { user } = useUser();
   const repos = useQuery(api.githubRepos.list, {});
@@ -56,7 +59,7 @@ export default function NewSessionScreen() {
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   const [pickedTraits, setPickedTraits] = useState<StoredModelTraits>({});
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
-  const repo = repos?.find((candidate) => candidate._id === picked) ?? repos?.[0];
+  const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam)) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
   const foreground = tokens.color.foreground[scheme];
   const muted = tokens.color.muted[scheme];

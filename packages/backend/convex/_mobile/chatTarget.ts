@@ -36,7 +36,7 @@ export const mobileChatValidator = v.object({
   /**
    * True when the app can reply: pass `parentId` as `target` to
    * `mobile.sendMessage` (and `mobile.stopTurn`). False for an archived
-   * session chat or a deleted task / project.
+   * session or session chat (read-only, as the web) or a deleted task / project.
    */
   canReply: v.boolean(),
   /** The chat's sticky model, which a reply uses. */
@@ -66,6 +66,8 @@ export const mobileChatValidator = v.object({
   prUrl: v.optional(v.string()),
   /** Path on the web app, for "Open on web" and message links. */
   webPath: v.string(),
+  /** Session chats only: the session the web session menu (rename, archive) acts on. */
+  session: v.optional(v.object({ id: v.id("sessions"), title: v.string(), archived: v.boolean() })),
 });
 
 export type MobileChat = typeof mobileChatValidator.type;
@@ -78,6 +80,11 @@ export type MobileChatEntity =
 
 export function repoLabel(repo: Doc<"githubRepos">): string {
   return repo.label ?? repo.name;
+}
+
+/** A session's page on the web app (its Main chat), as the web sidebar row links it. */
+export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions">): string {
+  return `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions/${session.numId ?? ""}`;
 }
 
 /**
@@ -101,7 +108,7 @@ export async function resolveMobileChat(
     const { chat, session } = context;
     const repo = await db.get(session.repoId);
     if (!repo) return null;
-    const base = `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions/${session.numId ?? ""}`;
+    const base = sessionWebPath(repo, session);
     return {
       repoId: repo._id,
       entity: { kind: "session", context },
@@ -111,13 +118,14 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         parentId: chat._id,
-        canReply: chat.archived !== true && session.deletedAt === undefined,
+        canReply: chat.archived !== true && session.archived !== true && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
         traits: storedComposerTraits(chat),
         sandboxBranch: session.status === "active" ? session.sandboxBranch : undefined,
         intendedBranch: session.branchName,
         prUrl: session.prUrl,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
+        session: { id: session._id, title: session.title, archived: session.archived === true },
       },
     };
   }
