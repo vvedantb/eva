@@ -7,15 +7,19 @@ import {
   DropdownMenuTrigger,
   HeaderIconButton,
 } from "@vvedantb/native-ui/primitives";
+import type { SessionMenuAction } from "@eva/shared";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SESSION_ACTION_ITEMS } from "@/sessions/useSessionActions";
 import { useScheme } from "@/ui/theme";
 
 /**
  * The chat header, as the web chat bar: the repo initial and name, then the
  * chat title ("S Storefront / Add dark mode…"), and a ⋯ menu. A back button
- * leads, as phones expect; the web's drawer has no back.
+ * leads, as phones expect; the web's drawer has no back. In a session the
+ * menu also has the session's Rename and Archive / Unarchive, which the web
+ * puts on the session's own tab; the phone has no tab strip.
  */
 export function ChatHeader({
   repoLabel,
@@ -24,6 +28,7 @@ export function ChatHeader({
   onOpenWeb,
   onCopyLink,
   onStop,
+  sessionMenu,
 }: {
   repoLabel: string;
   title: string;
@@ -32,6 +37,8 @@ export function ChatHeader({
   onCopyLink: () => void;
   /** Set while the agent works: Stop in the menu. */
   onStop?: () => void;
+  /** Session chats: these session actions (`useSessionActions`) after Copy link. */
+  sessionMenu?: { actions: SessionMenuAction[]; onSelect: (action: SessionMenuAction) => void };
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -73,6 +80,24 @@ export function ChatHeader({
           <DropdownMenuItem icon={IconLink} onSelect={onCopyLink}>
             Copy link
           </DropdownMenuItem>
+          {sessionMenu && sessionMenu.actions.length > 0 ? (
+            <>
+              <DropdownMenuSeparator />
+              {sessionMenu.actions.map((action) => {
+                const item = SESSION_ACTION_ITEMS[action];
+                return (
+                  <DropdownMenuItem
+                    key={action}
+                    icon={item.icon}
+                    warning={item.warning}
+                    onSelect={() => sessionMenu.onSelect(action)}
+                  >
+                    {item.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </>
+          ) : null}
           {onStop ? (
             <>
               <DropdownMenuSeparator />

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  isInsertedTokenTrigger,
-  renderEditorChipHtml,
-} from "./mentionEditorUtils";
+import { isInsertedTokenTrigger } from "@eva/shared";
+import { renderEditorChipHtml } from "./mentionEditorUtils";
 
 // Regression: accepting a skill inserts `/label `, but a surface that collapses
 // whitespace lets the browser drop that trailing space on the next keystroke.
@@ -12,13 +10,15 @@ describe("isInsertedTokenTrigger", () => {
   const inserted = { startIndex: 0, token: "/caveman-help" };
 
   it("suppresses a trigger that is the intact chip just inserted", () => {
-    expect(isInsertedTokenTrigger("/caveman-helphello", 0, inserted)).toBe(true);
+    expect(isInsertedTokenTrigger("/caveman-helphello", 0, inserted)).toBe(
+      true,
+    );
   });
 
   it("honours a trigger typed after the chip", () => {
-    expect(
-      isInsertedTokenTrigger("/caveman-help /rev", 14, inserted),
-    ).toBe(false);
+    expect(isInsertedTokenTrigger("/caveman-help /rev", 14, inserted)).toBe(
+      false,
+    );
   });
 
   it("honours a trigger once the chip has been edited", () => {

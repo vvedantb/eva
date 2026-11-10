@@ -33,6 +33,8 @@ const toolStepSchema = z.object({
   label: z.string(),
   detail: z.string().optional(),
   status: z.enum(["complete", "active", "pending"]),
+  /** The file an edit, write or notebook step touched (the "Changed files" card). */
+  path: z.string().optional(),
   /** Bash command, fuller than `detail`. */
   command: z.string().optional(),
   /** Tool result transcript (tail-capped by the writer). */

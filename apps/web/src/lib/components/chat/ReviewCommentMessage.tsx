@@ -86,6 +86,7 @@ function CitationCard({
   return (
     <div className="space-y-2">
       <Surface density="none" className="overflow-hidden">
+        {/* design-check-ignore-next-line — a full-width quote row inside the Surface; Button would force control height and padding */}
         <button
           type="button"
           disabled={!citations}

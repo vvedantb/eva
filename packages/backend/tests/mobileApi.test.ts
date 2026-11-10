@@ -6,6 +6,9 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { defaultQuickTaskSections, sessionMenuActions, systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
+import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
+import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 
 /**
  * The mobile app's writes (apps/mobile): replies in every chat kind, Stop and
@@ -255,6 +258,267 @@ describe("mobile api", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "getChat carries the sticky traits and the live sandbox branch",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.chatId, { lastReasoningLevel: "high", lastFastMode: true });
+        await ctx.db.patch(ids.sessionId, { sandboxBranch: "eva/fix-login", branchName: "eva/fix-login" });
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        traits: { effortLevel: "high", fastMode: true },
+        intendedBranch: "eva/fix-login",
+      });
+      // A stopped sandbox has no worktree, so its last branch is not shown.
+      await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "closed" }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).not.toHaveProperty("sandboxBranch");
+      await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "active" }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        sandboxBranch: "eva/fix-login",
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "getChat carries the pull request the web Review pane diffs",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const prUrl = "https://github.com/vvedantb/eva/pull/12";
+      const projectPr = "https://github.com/vvedantb/eva/pull/13";
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).not.toHaveProperty("prUrl");
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { prUrl });
+        await ctx.db.patch(ids.taskId, { prUrl });
+        await ctx.db.patch(ids.projectId, { prUrl: projectPr });
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({ prUrl });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({ prUrl });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
+      // A task in a project ships through the project's pull request.
+      await t.run((ctx) => ctx.db.patch(ids.taskId, { projectId: ids.projectId }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({ prUrl: projectPr });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "setChatModel sets the sticky model and traits a reply then uses",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.sessionId, model: "claude:opus", reasoningLevel: "low" });
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.projectId, model: "claude:opus" });
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.projectId, reasoningLevel: "low" });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
+      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message: "hi" });
+      expect(await sent(t, ids.chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
+      await expect(
+        asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus" }),
+      ).rejects.toThrow("on the web");
+      await expect(
+        asUser.mutation(api.mobile.setChatModel, { target: ids.archivedChatId, model: "claude:opus" }),
+      ).rejects.toThrow("This chat is closed");
+      await expect(
+        asUser.mutation(api.mobile.setChatModel, { target: ids.strangerTaskId, model: "claude:opus" }),
+      ).rejects.toThrow("Not authorized");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "startSession takes the composer footer's model, traits and base branch",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const { sessionId } = await asUser.mutation(api.mobile.startSession, {
+        repoId: ids.repoId,
+        prompt: "Add dark mode",
+        model: "claude:opus",
+        reasoningLevel: "low",
+        baseBranch: "staging",
+      });
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session).toMatchObject({ baseBranch: "staging", lastModel: "claude:opus", lastReasoningLevel: "low" });
+      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      if (!chat) throw new Error("no chat");
+      expect(await sent(t, chat.parentId)).toEqual([
+        { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the Quick Tasks screen files a task in To Do without a run, lists it first and opens it as a chat",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // What the phone form sends: the web `createQuickTask` with its picks.
+      const taskId = await asUser.mutation(api.agentTasks.createQuickTask, {
+        repoId: ids.repoId,
+        title: "Fix the footer",
+        description: "It overlaps the tab bar",
+        baseBranch: "staging",
+        model: "claude:opus",
+        reasoningLevel: "low",
+        priority: "high",
+        tags: ["frontend"],
+      });
+      const task = await t.run((ctx) => ctx.db.get(taskId));
+      expect(task).toMatchObject({
+        status: "todo",
+        baseBranch: "staging",
+        model: "claude:opus",
+        reasoningLevel: "low",
+        priority: "high",
+        tags: ["frontend"],
+      });
+      expect(task?.activeWorkflowId).toBeUndefined();
+      // A task in a project is not in the list the web opens with.
+      await asUser.mutation(api.agentTasks.createQuickTask, {
+        repoId: ids.repoId,
+        title: "Billing step",
+        projectId: ids.projectId,
+      });
+      const sections = defaultQuickTaskSections(await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId }));
+      expect(sections.map((section) => [section.status, section.tasks.map((row) => row.title)])).toEqual([
+        ["todo", ["Fix the footer"]],
+        ["in_progress", []],
+        ["business_review", []],
+        ["code_review", ["Bump the deps"]],
+        ["done", []],
+        ["cancelled", []],
+      ]);
+      expect(await asUser.query(api.mobile.getChat, { target: taskId })).toMatchObject({ kind: "task", canReply: true });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a phone @mention and /skill go on the wire as the backend's own tokens, stored as sent on a reply and a new session",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // What the phone composer sends after picking Grace and a skill. A
+      // production-shaped id: convex-test ids hold a `;`, outside the token charset.
+      const graceId = "k17grace00000000000000000000000g";
+      const skillId = systemSkillTokenId("eva-capture");
+      const message = tokenizeMentionText("ask @Grace Hopper to /eva-capture", {
+        mentionMap: new Map([["Grace Hopper", graceId]]),
+        skillMap: new Map([["eva-capture", skillId]]),
+      });
+      // The regexes `notifyChatMentions` and the skill resolver read.
+      expect([...message.matchAll(MENTION_TOKEN_REGEX)].map((match) => [match[1], match[2]])).toEqual([
+        ["Grace Hopper", graceId],
+      ]);
+      expect([...message.matchAll(SKILL_TOKEN_REGEX)].map((match) => [match[1], match[2]])).toEqual([
+        ["eva-capture", skillId],
+      ]);
+      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message });
+      expect(await sent(t, ids.chatId)).toEqual([expect.objectContaining({ content: message })]);
+      const { sessionId } = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: message });
+      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      if (!chat) throw new Error("no chat");
+      expect(await sent(t, chat.parentId)).toEqual([expect.objectContaining({ content: message })]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the session menu renames, archives and unarchives a session, as the web row menu",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await t.run((ctx) => ctx.db.patch(ids.sessionId, { branchName: "eva/login", sandboxId: "sbx-1" }));
+      const [row] = await asUser.query(api.mobile.listChats, {});
+      expect(row).toMatchObject({
+        repoId: ids.repoId,
+        branchName: "eva/login",
+        webPath: "/vvedantb/eva/sessions/42",
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        session: { id: ids.sessionId, title: "Fix the login bug", archived: false },
+      });
+
+      // Rename: the web `sessions.update`.
+      await asUser.mutation(api.sessions.update, { id: ids.sessionId, title: "Fix the sign-in bug" });
+      expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.title)).toEqual(["Fix the sign-in bug"]);
+
+      // Archive stops the sandbox first, then leaves the Active list for Archived.
+      await asUser.mutation(api.mobile.archiveSession, { sessionId: ids.sessionId });
+      const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
+      expect(archived).toMatchObject({ archived: true, status: "closed" });
+      expect(await asUser.query(api.mobile.listChats, {})).toEqual([]);
+      expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toEqual([
+        ids.sessionId,
+      ]);
+      // Read-only while archived, as the web session page.
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        canReply: false,
+        session: { archived: true },
+      });
+
+      // Unarchive: the web `sessions.unarchive`.
+      await asUser.mutation(api.sessions.unarchive, { id: ids.sessionId });
+      expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.sessionId)).toEqual([ids.sessionId]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "archiveSession refuses a session you cannot access",
+    async () => {
+      const { t, asUser } = await fixture();
+      const strangerSessionId = await t.run(async (ctx) => {
+        const strangerRepo = await ctx.db
+          .query("githubRepos")
+          .filter((q) => q.eq(q.field("owner"), "someone"))
+          .unique();
+        if (!strangerRepo) throw new Error("fixture");
+        return await ctx.db.insert("sessions", {
+          repoId: strangerRepo._id,
+          userId: strangerRepo.connectedBy,
+          title: "Not yours",
+          status: "closed",
+        });
+      });
+      await expect(asUser.mutation(api.mobile.archiveSession, { sessionId: strangerSessionId })).rejects.toThrow();
+      expect(await t.run((ctx) => ctx.db.get(strangerSessionId))).not.toHaveProperty("archived");
+    },
+    TIMEOUT_MS,
+  );
+
+  test("sessionMenuActions lists the web row menu in its order, per list and view", () => {
+    const pr = { branchName: "eva/login", prUrl: "https://github.com/vvedantb/eva/pull/1" };
+    expect(sessionMenuActions({ archived: false, simpleView: false, ...pr })).toEqual([
+      "rename",
+      "regenerateTitle",
+      "copyTitle",
+      "copyLink",
+      "copyBranchName",
+      "openPr",
+      "archive",
+    ]);
+    expect(sessionMenuActions({ archived: true, simpleView: false, ...pr })).toEqual([
+      "copyTitle",
+      "copyLink",
+      "copyBranchName",
+      "openPr",
+      "unarchive",
+    ]);
+    expect(sessionMenuActions({ archived: false, simpleView: true, ...pr })).toEqual([
+      "rename",
+      "regenerateTitle",
+      "copyTitle",
+      "copyLink",
+      "archive",
+    ]);
+  });
 
   test("messageLinkHref aims a web path or URL at one message", () => {
     expect(messageLinkHref("/vvedantb/eva/sessions/42", "m1")).toBe("/vvedantb/eva/sessions/42?message=m1");

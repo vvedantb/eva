@@ -2,13 +2,13 @@ import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
-import { isSandboxPausedAlert } from "@eva/shared";
-import { tokenizedToEditable } from "@/lib/components/mentions";
-import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 import {
   collectChangedFiles,
+  isSandboxPausedAlert,
   type ChangedFile,
-} from "@/lib/components/chat/ChangedFilesCard";
+} from "@eva/shared";
+import { tokenizedToEditable } from "@/lib/components/mentions";
+import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 
 // Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";

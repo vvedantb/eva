@@ -35,7 +35,7 @@ import {
   applyIgnoreWhitespace,
   summarizeDiffSize,
   type DiffFileEntry,
-} from "./diffFiles";
+} from "@eva/shared";
 
 interface DiffsPanelProps {
   /** PR URL for the current surface; absent when no PR exists yet. */

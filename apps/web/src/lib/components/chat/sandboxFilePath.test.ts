@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { toRepoRelativePath, toSandboxFilePath } from "./ChangedFilesCard";
+import { toRepoRelativePath, toSandboxFilePath } from "@eva/shared";
 
 test("toSandboxFilePath prefixes repo-relative paths for ?file=", () => {
   expect(toSandboxFilePath("apps/web/src/billing/InvoiceList.tsx")).toBe(

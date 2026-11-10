@@ -6,32 +6,13 @@ import { api, type Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { Button, Spinner, Textarea, toast } from "@vvedantb/ui";
 import { IconCheck, IconX } from "@tabler/icons-react";
+import {
+  REVIEW_EVENT_OPTIONS,
+  canSubmitReview,
+  verdictSuccessTitle,
+  type ReviewEvent,
+} from "@eva/shared";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
-import { verdictSuccessTitle } from "./prVerdict";
-
-export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
-
-const EVENT_OPTIONS: ReadonlyArray<{
-  event: ReviewEvent;
-  label: string;
-  hint: string;
-}> = [
-  {
-    event: "COMMENT",
-    label: "Comment",
-    hint: "Submit feedback without an explicit approval.",
-  },
-  {
-    event: "APPROVE",
-    label: "Approve",
-    hint: "Submit feedback and approve merging.",
-  },
-  {
-    event: "REQUEST_CHANGES",
-    label: "Request changes",
-    hint: "Submit feedback that must be addressed before merging.",
-  },
-];
 
 /**
  * The composer's Review mode: the line comments drafted on Code plus a summary
@@ -80,11 +61,7 @@ export function PrReviewForm({
   );
   const unanchored = pending.length - comments.length;
   const trimmed = body.trim();
-  // GitHub requires a summary on a changes-requested review.
-  const canSubmit =
-    event === "REQUEST_CHANGES"
-      ? trimmed.length > 0
-      : event === "APPROVE" || comments.length > 0 || trimmed.length > 0;
+  const canSubmit = canSubmitReview(event, trimmed, comments.length);
 
   const submit = () => {
     setSubmitting(true);
@@ -133,7 +110,7 @@ export function PrReviewForm({
         role="radiogroup"
         aria-label="Verdict"
       >
-        {EVENT_OPTIONS.map((option) => (
+        {REVIEW_EVENT_OPTIONS.map((option) => (
           <button
             key={option.event}
             type="button"

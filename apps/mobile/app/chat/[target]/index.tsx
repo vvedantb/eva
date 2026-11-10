@@ -1,8 +1,15 @@
-import { api } from "@eva/backend";
+import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
-import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
+import {
+  buildPrecedingUserTurns,
+  collectForkPrefix,
+  forkThreadTitle,
+  formatForkPrompt,
+  type SessionMenuAction,
+  toRepoRelativePath,
+} from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
@@ -31,17 +38,28 @@ import { Fragment } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
+import { SandboxBranchChip } from "@/chat/BranchChips";
+import { ComposerFooter, useSimpleView } from "@/chat/ComposerFooter";
+import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
+import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
+import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
+import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
+
+/** The session actions the chat header ⋯ adds; it has Copy link of its own. */
+const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename", "archive", "unarchive"]);
 
 /**
  * One chat (session, quick task or project): the transcript with the web
  * message actions, the agent's question when it asks one, and the composer
- * (attachments, Stop beside Send while the agent works).
+ * (attachments, Stop beside Send while the agent works, the web `@` / `/`
+ * picker) with the web footer: the live sandbox branch, the stash and the
+ * chat's sticky model.
  */
 export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
@@ -59,7 +77,27 @@ export default function ChatScreen() {
   const startSession = useMutation(api.mobile.startSession);
   const rate = useMutation(api.feedback.rateTurn);
   const answer = useMutation(api.pendingQuestions.answer);
+  // A pick is the chat's sticky model, as the web; shown at once.
+  const setChatModel = useMutation(api.mobile.setChatModel).withOptimisticUpdate((store, pick) => {
+    const current = store.getQuery(api.mobile.getChat, { target });
+    if (!current) return;
+    store.setQuery(api.mobile.getChat, { target }, {
+      ...current,
+      model: pick.model ?? current.model,
+      traits: {
+        effortLevel: pick.reasoningLevel ?? current.traits.effortLevel,
+        thinkingEnabled: pick.thinkingEnabled ?? current.traits.thinkingEnabled,
+        use1mContext: pick.use1mContext ?? current.traits.use1mContext,
+        fastMode: pick.fastMode ?? current.traits.fastMode,
+      },
+    });
+  });
   const attachments = useAttachments();
+  const simpleView = useSimpleView();
+  // The `/` list follows the chat's model provider, as the web composer.
+  const composer = useMentionComposer(chat?.repoId, chat ? getAIModelProvider(normalizeAIModel(chat.model)) : undefined);
+  // The web leaves a session's page once it is archived; the phone goes back.
+  const sessionActions = useSessionActions({ onArchived: () => router.back() });
 
   if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
   if (chat === null) {
@@ -82,7 +120,16 @@ export default function ChatScreen() {
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
   const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
+  const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
+  // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
+  const openDiff = simpleView
+    ? undefined
+    : (path: string | undefined) =>
+        router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
+  const sessionTarget = chat.session
+    ? { sessionId: chat.session.id, title: chat.session.title, archived: chat.session.archived, webPath: chat.webPath }
+    : null;
 
   const handleSend = (text: string) => {
     if (attachments.uploading) {
@@ -91,9 +138,13 @@ export default function ChatScreen() {
     }
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
-    send({ target: chat.parentId, message: text, attachmentStorageIds }).catch(() => {
+    send({ target: chat.parentId, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
       toast.error("Couldn't send your message");
     });
+  };
+
+  const handlePick = (pick: Omit<Parameters<typeof setChatModel>[0], "target">) => {
+    setChatModel({ target, ...pick }).catch(() => toast.error("Couldn't change the model"));
   };
 
   const handleStop = () => {
@@ -124,7 +175,16 @@ export default function ChatScreen() {
         onOpenWeb={() => void Linking.openURL(webUrl(chat.webPath))}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
+        sessionMenu={
+          sessionTarget
+            ? {
+                actions: sessionActions.actionsFor(sessionTarget).filter((action) => HEADER_SESSION_ACTIONS.has(action)),
+                onSelect: (action) => sessionActions.run(action, sessionTarget),
+              }
+            : undefined
+        }
       />
+      {sessionActions.dialogs}
       <Conversation>
         {/* The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`, messages `gap-3`. */}
         <ConversationContent contentContainerClassName="gap-3 pl-[22px] pr-8">
@@ -149,6 +209,8 @@ export default function ChatScreen() {
                         content={message.content}
                         activityLog={message.activityLog}
                         duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
+                        isLatestAssistantTurn={message._id === latestReplyId}
+                        onOpenDiff={openDiff}
                       />
                     )}
                   </MessageContent>
@@ -204,7 +266,10 @@ export default function ChatScreen() {
           <PromptInput
             layout="inline"
             shape="pill"
+            value={composer.text}
+            onChangeText={composer.setText}
             onSubmit={handleSend}
+            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
             placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
             leading={
               <AttachButton onPress={() => void attachments.pick()} />
@@ -219,6 +284,36 @@ export default function ChatScreen() {
               ) : null
             }
             toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
+            footer={
+              <ComposerFooter
+                repoId={chat.repoId}
+                onRestore={composer.restore}
+                leading={
+                  chat.sandboxBranch && !simpleView ? (
+                    <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
+                  ) : undefined
+                }
+                model={
+                  // A quick task's web picker sets a model a phone reply does not use (`mobile.setChatModel`).
+                  chat.kind === "task" ? undefined : (
+                    <ModelChip
+                      repoId={chat.repoId}
+                      model={normalizeAIModel(chat.model)}
+                      traits={chat.traits}
+                      onModelChange={(model) => handlePick({ model })}
+                      onTraitsChange={(partial) =>
+                        handlePick({
+                          reasoningLevel: partial.effortLevel,
+                          thinkingEnabled: partial.thinkingEnabled,
+                          use1mContext: partial.use1mContext,
+                          fastMode: partial.fastMode,
+                        })
+                      }
+                    />
+                  )
+                }
+              />
+            }
           />
         </View>
       ) : (
