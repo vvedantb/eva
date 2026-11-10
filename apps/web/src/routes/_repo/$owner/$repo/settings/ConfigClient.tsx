@@ -20,17 +20,12 @@ export function ConfigClient() {
   const updateConfig = useMutation(
     api.githubRepos.updateConfig,
   ).withOptimisticUpdate((localStore, args) => {
-    const { repoId: _id, devPort, ...safeFields } = args;
+    const { repoId: _id, ...safeFields } = args;
     patchLoadedQuery(
       localStore,
       api.githubRepos.getByOwnerAndName,
       { owner, name, appName },
-      (current) =>
-        current && {
-          ...current,
-          ...safeFields,
-          ...(devPort !== undefined ? { devPort: devPort ?? undefined } : {}),
-        },
+      (current) => current && { ...current, ...safeFields },
     );
   });
 

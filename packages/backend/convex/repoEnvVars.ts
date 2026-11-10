@@ -6,6 +6,7 @@ import {
   maskEnvVarEntries,
   removeEnvVarEntry,
   sandboxEligibleEnvVars,
+  seedOnlyEnvVars,
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "./_envVars/documentStore";
@@ -48,6 +49,17 @@ export const getForSandbox = internalQuery({
   },
 });
 
+/** Repo env vars marked seed-only (encrypted), for snapshot seed runs only. */
+export const getForSeed = internalQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(v.object({ key: v.string(), value: v.string() })),
+  handler: async (ctx, args) => {
+    const doc = await findRepoEnvVarDoc(ctx.db, args.repoId);
+    if (!doc) return [];
+    return seedOnlyEnvVars(doc.vars);
+  },
+});
+
 /** Inserts or updates a single env var for a repo (internal use only). */
 export const upsertVarInternal = internalMutation({
   args: {
@@ -55,6 +67,7 @@ export const upsertVarInternal = internalMutation({
     key: v.string(),
     value: v.string(),
     sandboxExclude: v.optional(v.boolean()),
+    seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -62,7 +75,10 @@ export const upsertVarInternal = internalMutation({
     const newEntry = {
       key: args.key,
       value: args.value,
-      sandboxExclude: args.sandboxExclude ?? false,
+      // seedOnly implies sandboxExclude, so sandbox readers always skip it.
+      ...(args.seedOnly === true
+        ? { sandboxExclude: true, seedOnly: true }
+        : { sandboxExclude: args.sandboxExclude ?? false }),
     };
     if (doc) {
       await ctx.db.patch(doc._id, {
@@ -103,6 +119,8 @@ export const toggleSandboxExclude = authMutation({
     repoId: v.id("githubRepos"),
     key: v.string(),
     sandboxExclude: v.boolean(),
+    // Seed-only: given to snapshot seed runs, never to sessions.
+    seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -113,6 +131,7 @@ export const toggleSandboxExclude = authMutation({
       doc.vars,
       args.key,
       args.sandboxExclude,
+      args.seedOnly ?? false,
     );
     await ctx.db.patch(doc._id, { vars, updatedAt: Date.now() });
     return null;

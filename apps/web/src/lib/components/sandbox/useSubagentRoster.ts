@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
@@ -37,7 +38,7 @@ export function useSubagentRoster({
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   sandboxRunning: boolean;
 }): SubagentRoster {
-  const messages = useQuery(api.messages.listByParent, { parentId });
+  const messages = useChatTranscript(parentId);
   const streaming = useQuery(api.streaming.get, {
     entityId: streamingEntityId,
   });

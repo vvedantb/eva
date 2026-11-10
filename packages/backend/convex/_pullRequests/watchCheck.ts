@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { z } from "zod";
 import { internalAction } from "../_generated/server";
+import { sleep } from "../_shared/async";
 import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { fetchFeedback, type RepoRef } from "../_automationEvents/flush";
@@ -163,7 +164,7 @@ async function readPullRequest(ref: RepoRef, prNumber: number) {
     reads < MERGEABLE_READS && pr.state === "OPEN" && pr.mergeable === "UNKNOWN";
     reads++
   ) {
-    await new Promise((resolve) => setTimeout(resolve, MERGEABLE_WAIT_MS));
+    await sleep(MERGEABLE_WAIT_MS);
     pr = await read();
   }
   const nodes =

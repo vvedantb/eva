@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAction } from "convex/react";
-import { api, type Id } from "@eva/backend";
+import type { Id } from "@eva/backend";
 import {
   Button,
   DropdownMenu,
@@ -22,10 +21,13 @@ import {
   IconGitPullRequestClosed,
   IconLink,
   IconRefresh,
+  IconStack2,
 } from "@tabler/icons-react";
 import { PrCloseDialog } from "./PrCloseDialog";
 import { PrPrimaryAction } from "./PrPrimaryAction";
 import type { PrOverview } from "./prOverviewMeta";
+import { useClosePullRequest } from "@/lib/components/pr-menu/useClosePullRequest";
+import { useStackNewSession } from "@/lib/components/pr-menu/useStackNewSession";
 
 /**
  * The header's right-hand cluster, in t3code's order: the one filled button that
@@ -51,24 +53,19 @@ export function PrHeaderActions({
   /** Re-reads the overview after something on GitHub changed. */
   onChanged: () => void;
 }) {
-  const update = useAction(api.github.updatePullRequest);
-  const [closing, setClosing] = useState(false);
+  const { close: closePullRequest, closing } = useClosePullRequest();
   const [confirmingClose, setConfirmingClose] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
+  const { stack } = useStackNewSession();
+
+  const stackNewSession = () =>
+    stack({ repoId, prNumber: overview.number, headRef: overview.headRef });
 
   const close = async () => {
-    setClosing(true);
-    try {
-      await update({ repoId, prNumber: overview.number, state: "closed" });
-      setConfirmingClose(false);
-      toast.success("Pull request closed");
-      onChanged();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not close the branch",
-      );
-    }
-    setClosing(false);
+    const closed = await closePullRequest({ repoId, prNumber: overview.number });
+    if (!closed) return;
+    setConfirmingClose(false);
+    onChanged();
   };
 
   const copyLink = () => {
@@ -125,6 +122,10 @@ export function PrHeaderActions({
           </DropdownMenuItem>
           {overview.status === "open" ? (
             <>
+              <DropdownMenuItem onSelect={stackNewSession}>
+                <IconStack2 size={14} aria-hidden />
+                Stack a new session
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {/* Closing notifies every reviewer and stops CI, so it asks
                   first. The Radix `onSelect` event carries no modifier, so only

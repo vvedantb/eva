@@ -30,7 +30,6 @@ export {
   toggleHidden,
   generateLogoUploadUrl,
   setLogo,
-  setRepoCommandsInternal,
   deleteInternal,
 } from "./_githubRepos/mutations";
 

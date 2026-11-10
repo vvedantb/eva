@@ -34,7 +34,7 @@ export function toWorkflowId(workflowId: string): WorkflowId {
 /**
  * True while a tracked workflow is still running. A slot left by a workflow
  * that crashed or finished without clearing it reads as free, so a busy guard
- * never locks the user out until the 2h watchdog runs.
+ * never locks the user out until the `RUN_TIMEOUT_MS` watchdog runs.
  */
 export async function isTrackedWorkflowRunning(
   ctx: MutationCtx,

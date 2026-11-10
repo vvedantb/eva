@@ -3,7 +3,7 @@
 import { v, type Infer } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
-import { jwtVerify, SignJWT, importJWK } from "jose";
+import { jwtVerify } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
@@ -47,7 +47,8 @@ import {
   customerConvexOrigin,
   resolvePublicConvexCloudUrl,
 } from "../_env/publicConvexUrls";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
+import { signSandboxUserJwt } from "../sandboxJwt";
 import { evaMcpServerInfo } from "./serverInfo";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -236,21 +237,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
     return cached.jwt;
   }
 
-  const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
-  if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
-
-  const issuer = requiredEnv("CONVEX_SITE_URL");
-  const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
-  const kid = privateKeyJwk.kid ?? "sandbox-1";
-  const key = await importJWK(privateKeyJwk, "ES256");
-
-  const jwt = await new SignJWT({ sub: clerkUserId })
-    .setProtectedHeader({ alg: "ES256", kid })
-    .setIssuer(issuer)
-    .setAudience("convex")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(key);
+  const jwt = await signSandboxUserJwt(clerkUserId, "1h");
 
   userJwtCache.set(clerkUserId, {
     jwt,

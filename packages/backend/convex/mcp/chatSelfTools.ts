@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { repoBasePath } from "../_githubRepos/helpers";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import {
   entityAccess,
   entityRefArgs,
@@ -31,7 +31,11 @@ type EnvVarScope = z.infer<typeof envVarScope>;
 
 /** Only the name and flag survive: the UI's list also carries a masked value. */
 const envVarNames = z.array(
-  z.object({ key: z.string(), sandboxExclude: z.boolean() }),
+  z.object({
+    key: z.string(),
+    sandboxExclude: z.boolean(),
+    seedOnly: z.boolean().optional(),
+  }),
 );
 
 /** Eva's settings page for one scope's env vars, as a path and, when configured, a full link. */
@@ -375,6 +379,8 @@ Name no chat and it lists for your own. Use it to check whether a secret you nee
           name: row.key,
           scope: row.scope,
           excludedFromSandbox: row.sandboxExclude,
+          // Only snapshot seed runs get it; reference it in seed commands.
+          seedOnly: row.seedOnly ?? false,
         }));
 
         return toolJsonResult({

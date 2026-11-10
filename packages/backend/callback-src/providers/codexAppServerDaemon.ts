@@ -1,3 +1,4 @@
+import { TURN_MAX_RUNTIME_ERROR } from "@eva/shared/agentTurnLimits";
 import {
   confirmSteerAcks,
   deliverSteers,
@@ -455,7 +456,7 @@ export async function runCodexAppServerDaemon(): Promise<void> {
         now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS
       ) {
         await failActiveTurn(
-          "The assistant exceeded the maximum turn runtime.",
+          TURN_MAX_RUNTIME_ERROR,
         );
       } else if (
         supervisor.currentTurn !== null &&

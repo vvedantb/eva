@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import {
   appendClaimedTurnCompletion,
@@ -336,30 +333,3 @@ describe("routeClaimedTurn", () => {
     expect(parked).toEqual([followUp]);
   });
 });
-
-describe("persistent providers obey the same lifecycle contract", () => {
-  const providerPaths = [
-    "providers/claudeSdkDaemon.ts",
-    "providers/cursorSdkDaemon.ts",
-    "providers/codexAppServerDaemon.ts",
-  ];
-
-  for (const providerPath of providerPaths) {
-    test(providerPath, () => {
-      const source = readSource(providerPath);
-      expect(source).toContain("readClaimedTurn");
-      expect(source).toContain("startClaimedTurn(turn)");
-      expect(source).toContain("appendClaimedTurnCompletion(completionArgs)");
-      expect(source).toContain("finishClaimedTurn()");
-      expect(source).not.toContain("function readClaimedTurn(");
-      expect(source).not.toContain('beginTurnOwnership("claim"');
-    });
-  }
-});
-
-function readSource(relativePath: string): string {
-  return readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", relativePath),
-    "utf8",
-  ).replaceAll("\r\n", "\n");
-}

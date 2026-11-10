@@ -4,6 +4,7 @@ import {
   type PrOverview,
   type StatusTone,
 } from "./prOverviewMeta";
+import { stackBlockingReason } from "./prStack";
 
 /**
  * Everything both review surfaces need to say about whether a pull request can
@@ -68,6 +69,7 @@ export interface PrRemedy {
 
 type PrBlockerKind =
   | "draft"
+  | "stack"
   | "checking"
   | "conflicts"
   | "unmergeable"
@@ -98,6 +100,20 @@ export function mergeBlocker(overview: PrOverview): PrBlocker | null {
       label: "Draft",
       headline: "This pull request is still a draft",
       detail: "Mark the pull request ready for review to merge.",
+      remedy: null,
+    };
+  }
+
+  // A lower entry that cannot land stops this one too: GitHub merges a stack
+  // from the base upwards, all or nothing.
+  const stackReason = overview.stack ? stackBlockingReason(overview.stack) : null;
+  if (stackReason !== null) {
+    return {
+      kind: "stack",
+      tone: "failure",
+      label: "Stack blocked",
+      headline: "A pull request lower in the stack is not ready",
+      detail: stackReason,
       remedy: null,
     };
   }
