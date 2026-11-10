@@ -56,6 +56,7 @@ export default function SettingsScreen() {
               description="Receive a daily summary of unread notifications and the weekly changelog by email."
               action={
                 <Switch
+                  size="md"
                   checked={emailEnabled ?? false}
                   disabled={emailEnabled === undefined}
                   onCheckedChange={(enabled: boolean) => void setEmailEnabled({ enabled })}

@@ -14,6 +14,12 @@ import {
 } from "@vvedantb/ui";
 import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
 import {
+  prStateLabel,
+  prStateTone,
+  type PrState,
+  type PrStateTone,
+} from "@eva/shared";
+import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
   showsSandboxStatusDot,
@@ -38,37 +44,16 @@ import {
 /** Identity of a session's actual primary repo, for a row linked in from it. */
 type SessionLinkedFrom = RepoPathParts;
 
-function prStateLabel(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "Open";
-    case "merged":
-      return "Merged";
-    case "closed":
-      return "Closed";
-    case "draft":
-      return "Draft";
-    default:
-      return "PR";
-  }
-}
+/** The web class for each shared PR icon tone. */
+const PR_STATE_TONE_CLASS: Record<PrStateTone, string> = {
+  success: "text-success",
+  codeReview: "text-status-code-review",
+  destructive: "text-destructive",
+  muted: "text-muted-foreground",
+};
 
-function prStateIconColor(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-status-code-review";
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-muted-foreground";
-  }
+export function prStateIconColor(state: PrState | undefined): string {
+  return PR_STATE_TONE_CLASS[prStateTone(state)];
 }
 
 interface SidebarSessionItemProps {
@@ -92,7 +77,7 @@ interface SidebarSessionItemProps {
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /** Branch chosen at session creation, shown in the hover card. */
   baseBranch?: string;
   /** Multi-repo session: how many repos are cloned alongside the primary. */
@@ -152,7 +137,7 @@ function SessionPrIcon({
   prState,
 }: {
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
 }) {
   const simpleView = useSimpleView();
   if (simpleView || !prUrl) return null;

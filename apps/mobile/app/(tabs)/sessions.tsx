@@ -4,23 +4,22 @@ import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { CenteredSpinner, EmptyState, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
-import { palette, tokens, useLargerText, withAlpha } from "@vvedantb/native-ui/theme";
+import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { timeAgo } from "@/ui/format";
-import { RowStatus } from "@/ui/RowStatus";
+import { SessionGroup } from "@/sessions/SessionGroup";
 import { TabScreen } from "@/ui/TabScreen";
-import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { useScheme } from "@/ui/theme";
 
 type SessionTab = "active" | "archived";
 
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
- * at phone width: Active and Archived tabs, one group per repo (its initial,
- * name and live-session count), compact rows with the status, title and time.
+ * at phone width: Active and Archived tabs, then one collapsible group per
+ * repo (`SessionGroup`) with compact rows and "Show more".
  */
 export default function SessionsScreen() {
   const [tab, setTab] = useState<SessionTab>("active");
@@ -82,75 +81,15 @@ export default function SessionsScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}>
-          {[...groups].map(([repoLabel, rows]) => {
-            const live = rows.filter((row) => row.status === "active").length;
-            return (
-              <View key={repoLabel} className="pb-2">
-                {/* Web group header: 18 round initial on `bg-muted`, text-xs medium muted name, green dot + live count. */}
-                <View className="flex-row items-center gap-2 px-4 py-2">
-                  <View
-                    className="h-[18px] w-[18px] items-center justify-center rounded-full"
-                    style={{ backgroundColor: EVA_THEME[scheme].muted }}
-                  >
-                    <Text
-                      className="font-instrument-sans-semibold"
-                      style={{ fontSize: 10, color: muted, fontWeight: "600" }}
-                    >
-                      {repoLabel.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text
-                    className="font-instrument-sans-medium text-xs"
-                    style={{ color: muted, fontWeight: "500", letterSpacing: XS_TRACKING }}
-                  >
-                    {repoLabel}
-                  </Text>
-                  {live > 0 ? (
-                    <View className="flex-row items-center gap-1 px-1.5" accessibilityLabel={`${live} running`}>
-                      <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.success[scheme] }} />
-                      <Text
-                        className="font-instrument-sans-medium text-xs"
-                        style={{ color: muted, fontWeight: "500", fontVariant: ["tabular-nums"] }}
-                      >
-                        {live}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                {rows.map((session) => (
-                  <Pressable
-                    key={session.sessionId}
-                    accessibilityRole="button"
-                    accessibilityLabel={session.title}
-                    onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
-                    // Web rows are py-1.5; 44 high here for touch.
-                    className="min-h-11 flex-row items-center gap-2 px-4 active:opacity-70"
-                  >
-                    <RowStatus
-                      awaitingAnswer={session.isAwaitingAnswer}
-                      // `cancelled` is the muted 40% dot, the web idle `bg-muted-foreground/40`.
-                      tone={session.status === "active" ? "active" : "cancelled"}
-                    />
-                    {/* The web title: `text-2sm leading-[18px]` (13 / 18) at 80% foreground. */}
-                    <Text
-                      numberOfLines={1}
-                      className="font-instrument-sans flex-1 text-[13px] leading-[18px]"
-                      style={{ color: withAlpha(tokens.color.foreground[scheme], 0.8), letterSpacing: 0.065 }}
-                    >
-                      {session.title}
-                    </Text>
-                    {/* The web age: `text-2xs` (11 / 16, 0.01em). */}
-                    <Text
-                      className="font-instrument-sans text-[11px] leading-4"
-                      style={{ color: muted, letterSpacing: 0.11, fontVariant: ["tabular-nums"] }}
-                    >
-                      {timeAgo(session.updatedAt)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            );
-          })}
+          {[...groups].map(([repoLabel, rows]) => (
+            <SessionGroup
+              key={repoLabel}
+              repoLabel={repoLabel}
+              rows={rows}
+              // The web counts running sessions in the Active list only.
+              live={tab === "active" ? rows.filter((row) => row.status === "active").length : 0}
+            />
+          ))}
         </ScrollView>
       )}
     </TabScreen>

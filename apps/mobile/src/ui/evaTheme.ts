@@ -22,7 +22,9 @@ export function applyEvaTheme() {
       separator: pair("border"),
       surface: pair("card"),
       surfaceCard: pair("card"),
-      surfaceSecondary: pair("secondary"),
+      // As the web's `compat-shadcn-rgb.css`: `surface-secondary` is `--muted`,
+      // `surface-tertiary` and `default-foreground` are `--secondary`'s.
+      surfaceSecondary: pair("muted"),
     },
     palette: {
       primary: pair("primary"),
@@ -32,7 +34,8 @@ export function applyEvaTheme() {
       success: pair("success"),
       warning: pair("warning"),
       default: pair("secondary"),
-      defaultForeground: pair("foreground"),
+      defaultForeground: pair("secondaryForeground"),
+      surfaceTertiary: pair("secondary"),
       overlay: pair("popover"),
       overlayForeground: pair("popoverForeground"),
       fieldPlaceholder: pair("mutedForeground"),

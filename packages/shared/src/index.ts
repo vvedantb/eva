@@ -56,6 +56,13 @@ export {
   type ForkTranscriptTurn,
 } from "./messageFork";
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
+export { buildPrecedingUserTurns } from "./precedingUserTurns";
+export {
+  prStateLabel,
+  prStateTone,
+  type PrState,
+  type PrStateTone,
+} from "./prState";
 export {
   getNotificationAppearance,
   type NotificationAppearance,

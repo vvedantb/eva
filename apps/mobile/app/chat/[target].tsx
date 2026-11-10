@@ -2,7 +2,7 @@ import { api } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
-import { collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
+import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled, IconPlus } from "@tabler/icons-react-native";
@@ -77,6 +77,8 @@ export default function ChatScreen() {
       (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog)),
   );
   const dayStarts = findDayBoundaryIds(visible);
+  // The user turn before each reply holds the model it ran on (the footer mark), as the web.
+  const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
   const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
   const webUrl = (path: string) => `${WEB_URL}${path}`;
@@ -156,6 +158,7 @@ export default function ChatScreen() {
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       link={webUrl(messageLinkHref(chat.webPath, message._id))}
                       onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
+                      turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
                       rating={
                         message.role === "assistant"
                           ? {

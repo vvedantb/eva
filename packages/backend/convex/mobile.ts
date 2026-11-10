@@ -13,7 +13,12 @@ import { createSession, type AuthMutationCtx } from "./_sessions/mutations";
 import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
 import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
-import { launchTraitsFromStored, normalizeAIModel, sessionStatusValidator } from "./validators";
+import {
+  launchTraitsFromStored,
+  normalizeAIModel,
+  prStateValidator,
+  sessionStatusValidator,
+} from "./validators";
 
 /**
  * API for the Eva mobile app (apps/mobile). The app opens every chat by one
@@ -193,6 +198,9 @@ export const listChats = authQuery({
       updatedAt: v.number(),
       /** An agent in one of its chats waits on your answer (as the web sidebar shows). */
       isAwaitingAnswer: v.boolean(),
+      /** The session's primary PR and its rolled-up state, as the web sidebar row shows. */
+      prUrl: v.optional(v.string()),
+      prState: v.optional(prStateValidator),
     }),
   ),
   handler: async (ctx, args) => {
@@ -238,6 +246,8 @@ export const listChats = authQuery({
       status: session.status,
       updatedAt,
       isAwaitingAnswer: awaiting.get(repo._id)?.has(String(session._id)) === true,
+      prUrl: session.prUrl,
+      prState: session.prState,
     }));
   },
 });
