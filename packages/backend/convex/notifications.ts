@@ -4,6 +4,7 @@ import {
   internalMutation,
 } from "./_generated/server";
 import { v, type Infer } from "convex/values";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
@@ -138,7 +139,12 @@ export async function createNotification(
   const project = params.projectId ? await ctx.db.get(params.projectId) : null;
   const session = params.sessionId ? await ctx.db.get(params.sessionId) : null;
 
-  let href = params.href;
+  // Notification links stay on-app: an href that is not an app path is
+  // dropped (and re-derived below when there is a repo).
+  let href =
+    params.href !== undefined && isInternalAppHref(params.href)
+      ? params.href
+      : undefined;
   if (!href && params.repoId) {
     const repo = await ctx.db.get(params.repoId);
     if (repo) {

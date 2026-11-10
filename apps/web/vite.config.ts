@@ -18,7 +18,21 @@ function agentLoginPlugin(): Plugin {
     configureServer(server) {
       env = loadEnv("development", server.config.root, "");
 
-      server.middlewares.use("/api/auth/agent-login", async (_req, res) => {
+      server.middlewares.use("/api/auth/agent-login", async (req, res) => {
+        // Mints a sign-in token for the agent user: never serve it to another
+        // machine when the dev server listens on the LAN (`--host`). Traffic
+        // through the in-sandbox preview proxy arrives from loopback.
+        const remote = req.socket.remoteAddress;
+        if (
+          remote !== "127.0.0.1" &&
+          remote !== "::1" &&
+          remote !== "::ffff:127.0.0.1"
+        ) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Forbidden" }));
+          return;
+        }
+
         const secretKey = env.CLERK_SECRET_KEY;
         const agentUserId = env.AGENT_CLERK_USER_ID;
 

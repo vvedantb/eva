@@ -13,6 +13,7 @@
 
 import { z } from "zod";
 import { CHAT_UI_TONES } from "@eva/shared/generativeUi";
+import { isHttpUrl } from "@eva/shared/safeUrl";
 
 export const MAX_BLOCKS = 24;
 export const MAX_PROMPT_CHARS = 600;
@@ -36,7 +37,7 @@ const bodyText = z.string().min(1).max(MAX_TEXT_CHARS);
 const httpUrl = z
   .string()
   .url()
-  .refine((value) => /^https?:$/.test(new URL(value).protocol), {
+  .refine(isHttpUrl, {
     message: "URL must be http or https",
   });
 

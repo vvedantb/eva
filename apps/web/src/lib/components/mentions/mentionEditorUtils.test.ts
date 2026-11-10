@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isInsertedTokenTrigger } from "./mentionEditorUtils";
+import {
+  isInsertedTokenTrigger,
+  renderEditorChipHtml,
+} from "./mentionEditorUtils";
 
 // Regression: accepting a skill inserts `/label `, but a surface that collapses
 // whitespace lets the browser drop that trailing space on the next keystroke.
@@ -34,5 +37,25 @@ describe("isInsertedTokenTrigger", () => {
 
   it("does nothing when no accept has happened", () => {
     expect(isInsertedTokenTrigger("/cave", 0, null)).toBe(false);
+  });
+});
+
+// Chip labels are other people's data (doc titles, names) written into
+// innerHTML, so a quote must not close the attribute it sits in.
+describe("renderEditorChipHtml", () => {
+  it("keeps a quoted label inside its attribute", () => {
+    const label = `x" onmouseover="alert(1)`;
+    const html = renderEditorChipHtml(
+      `@${label}`,
+      new Map([[label, "id1"]]),
+      new Map(),
+      "chip",
+      "skill",
+      true,
+    );
+    expect(html).toContain(
+      'data-mention-label="x&quot; onmouseover=&quot;alert(1)"',
+    );
+    expect(html).not.toContain('" onmouseover="');
   });
 });

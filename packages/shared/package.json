@@ -12,6 +12,7 @@
     "./dates": "./src/utils/dates.ts",
     "./dayLabel": "./src/utils/dayLabel.ts",
     "./duration": "./src/utils/duration.ts",
+    "./escapeHtml": "./src/escapeHtml.ts",
     "./evaMark": "./src/evaMark.ts",
     "./evaTheme": "./src/evaTheme.ts",
     "./generativeUi": "./src/generativeUi/index.ts",
@@ -25,6 +26,7 @@
     "./pendingQuestion": "./src/pendingQuestion.ts",
     "./redactSecrets": "./src/redactSecrets.ts",
     "./resultEvent": "./src/resultEvent.ts",
+    "./safeUrl": "./src/safeUrl.ts",
     "./storageUpload": "./src/storageUpload.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
     "./user-initials": "./src/components/user-initials.tsx"

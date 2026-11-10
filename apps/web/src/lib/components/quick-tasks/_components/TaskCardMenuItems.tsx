@@ -207,7 +207,7 @@ export function TaskCardMenuItems({
           {href ? (
             <Item
               onSelect={() => {
-                window.open(href, "_blank");
+                window.open(href, "_blank", "noopener,noreferrer");
               }}
             >
               <IconExternalLink size={16} />
