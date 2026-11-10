@@ -32,17 +32,15 @@ import {
 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { mergeBlocker } from "./prMergeState";
-import { mergeButtonLabel, stackMergeTargets } from "./prStack";
+import {
+  MERGE_METHODS,
+  canMergePr,
+  mergeBlocker,
+  mergeButtonLabel,
+  stackMergeTargets,
+  type MergeMethod,
+} from "@eva/shared";
 import type { PrOverview } from "./prOverviewMeta";
-
-type MergeMethod = "merge" | "squash" | "rebase";
-
-const MERGE_METHODS: { value: MergeMethod; label: string }[] = [
-  { value: "squash", label: "Squash and merge" },
-  { value: "merge", label: "Create a merge commit" },
-  { value: "rebase", label: "Rebase and merge" },
-];
 
 /**
  * The one loud control on the review surface, in the header where a reader looks
@@ -91,10 +89,8 @@ function MergeAction({
   const [merging, setMerging] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const blocker = mergeBlocker(overview);
-  const canMerge =
-    !overview.draft && overview.mergeable === true && blocker?.kind !== "stack";
-  const blocked = blocker?.detail ?? null;
+  const canMerge = canMergePr(overview);
+  const blocked = mergeBlocker(overview)?.detail ?? null;
   const buttonLabel = mergeButtonLabel(overview);
   // Only a stack that lands more than this PR needs listing in the dialog.
   const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];

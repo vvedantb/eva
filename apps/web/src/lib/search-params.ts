@@ -1,3 +1,4 @@
+import { PR_LIST_STATES } from "@eva/shared";
 import {
   parseAsString,
   parseAsStringLiteral,
@@ -492,11 +493,8 @@ export const commentAnchorParser = parseAsString.withOptions(searchOptions);
 // into copied links, so it replaces rather than pushes, like `?comment`.
 export const messageLinkParser = parseAsString.withOptions(searchOptions);
 
-const pullRequestListStates = ["open", "closed", "all"] as const;
-export type PullRequestListState = (typeof pullRequestListStates)[number];
-export const pullRequestListStateParser = parseAsStringLiteral(
-  pullRequestListStates,
-)
+export type { PullRequestListState } from "@eva/shared";
+export const pullRequestListStateParser = parseAsStringLiteral(PR_LIST_STATES)
   .withDefault("open")
   .withOptions(searchOptions);
 

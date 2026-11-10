@@ -1,14 +1,33 @@
-import type { api, Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
 import { SheetRow } from "@vvedantb/native-ui/primitives";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
+
+/**
+ * The repo a per-repo section of the Sessions tab shows (Quick Tasks,
+ * Reviews), kept in the URL (`?repo=`) as the web keeps it in its path, so
+ * both sections stay on one repo. Default: the first repo.
+ */
+export function useRepoParam() {
+  const router = useRouter();
+  const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
+  const repos = useQuery(api.githubRepos.list, {});
+  const repo = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
+  return {
+    repos,
+    repo,
+    setRepo: (repoId: Id<"githubRepos">) => router.setParams({ repo: repoId }),
+  };
+}
 
 /** A repo's name as the web shows it: its label, else its GitHub name. */
 export function repoName(repo: Repo): string {

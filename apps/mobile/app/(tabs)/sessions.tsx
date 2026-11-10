@@ -11,53 +11,62 @@ import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
+import { useSimpleView } from "@/chat/ComposerFooter";
+import { ReviewsSection } from "@/reviews/ReviewsSection";
 import { SessionGroup } from "@/sessions/SessionGroup";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
 type SessionTab = "active" | "archived";
-type Section = "sessions" | "quick-tasks";
+type Section = "sessions" | "quick-tasks" | "reviews";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "sessions", label: "Sessions" },
   { id: "quick-tasks", label: "Quick Tasks" },
+  { id: "reviews", label: "Reviews" },
 ];
 
 /**
- * The Sessions tab holds the web's two places to start work: Sessions and
- * Quick Tasks, switched by pills under the title (`?section=quick-tasks`, so
- * a link or back press keeps it). The title and "+" follow the section.
+ * The Sessions tab holds the web's places to work on a repo: Sessions, Quick
+ * Tasks and Reviews (pull requests), switched by pills under the title
+ * (`?section=`, so a link or back press keeps it). The title and "+" follow
+ * the section; Reviews has no "+", as the web. Simple view drops Reviews, as
+ * the web Reviews route redirects away in simple view.
  */
 export default function SessionsScreen() {
   const router = useRouter();
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
-  const section: Section = sectionParam === "quick-tasks" ? "quick-tasks" : "sessions";
+  const simpleView = useSimpleView();
+  const sections = simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
+  const section = sections.find((option) => option.id === sectionParam) ?? { id: "sessions", label: "Sessions" };
   const { openNew: openNewQuickTask } = useQuickTaskRepo();
   const muted = tokens.color.muted[useScheme()];
-  const isQuickTasks = section === "quick-tasks";
+  const isQuickTasks = section.id === "quick-tasks";
 
   return (
     <TabScreen>
       <PageHeader
-        title={isQuickTasks ? "Quick Tasks" : "Sessions"}
+        title={section.label}
         action={
-          // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
-            onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
-            hitSlop={2}
-            className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
-          >
-            <IconPlus size={14} color={muted} />
-          </Pressable>
+          section.id === "reviews" ? undefined : (
+            // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
+              onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
+              hitSlop={2}
+              className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
+            >
+              <IconPlus size={14} color={muted} />
+            </Pressable>
+          )
         }
       />
       <View className="px-4 pb-2">
-        <PillTabs options={SECTIONS} value={section} onChange={(next) => router.setParams({ section: next })} />
+        <PillTabs options={sections} value={section.id} onChange={(next) => router.setParams({ section: next })} />
       </View>
-      {isQuickTasks ? <QuickTasksSection /> : <SessionsSection />}
+      {section.id === "reviews" ? <ReviewsSection /> : isQuickTasks ? <QuickTasksSection /> : <SessionsSection />}
     </TabScreen>
   );
 }
