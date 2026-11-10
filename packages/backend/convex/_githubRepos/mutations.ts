@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
 import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { ownsRunCommands } from "../_evaConfig/config";
 import {
   authMutation,
   getRepoWithAccess,
@@ -244,7 +245,7 @@ export const updateConfig = authMutation({
       args.startupCommands !== undefined ||
       args.backgroundCommands !== undefined ||
       args.stopCommands !== undefined;
-    if (repo.evaConfig && editsRunCommands) {
+    if (ownsRunCommands(repo.evaConfig) && editsRunCommands) {
       throw new Error(
         "This repo's commands live in .eva/config.json. Edit the file in the repo.",
       );
