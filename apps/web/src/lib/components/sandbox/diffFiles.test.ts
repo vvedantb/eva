@@ -5,7 +5,8 @@ import {
   diffFileKind,
   ignoreWhitespaceInPatch,
   summarizeDiffSize,
-} from "./diffFiles";
+  unifiedDiffLines,
+} from "@eva/shared";
 
 describe("diffFileKind", () => {
   it.each([
@@ -297,5 +298,32 @@ describe("applyIgnoreWhitespace", () => {
     const entries = applyIgnoreWhitespace(buildDiffFileEntries(source));
 
     expect(entries.map((entry) => entry.path)).toEqual(["kept.ts"]);
+  });
+});
+
+describe("unifiedDiffLines", () => {
+  it("numbers each side from the hunk header and drops the patch header", () => {
+    const rows = unifiedDiffLines(
+      [
+        "diff --git a/src/a.ts b/src/a.ts",
+        "--- a/src/a.ts",
+        "+++ b/src/a.ts",
+        "@@ -10,3 +10,3 @@ export function a() {",
+        " const a = 1;",
+        "-const b = 2;",
+        "+const b = 3;",
+        "\\ No newline at end of file",
+        "@@ -40 +40,2 @@",
+        "+---",
+      ].join("\n"),
+    );
+    expect(rows).toEqual([
+      { kind: "hunk", text: "@@ -10,3 +10,3 @@ export function a() {" },
+      { kind: "context", text: "const a = 1;", oldLine: 10, newLine: 10 },
+      { kind: "removed", text: "const b = 2;", oldLine: 11, newLine: null },
+      { kind: "added", text: "const b = 3;", oldLine: null, newLine: 11 },
+      { kind: "hunk", text: "@@ -40 +40,2 @@" },
+      { kind: "added", text: "---", oldLine: null, newLine: 40 },
+    ]);
   });
 });

@@ -125,3 +125,31 @@ export {
   type NotificationIconName,
   type NotificationTone,
 } from "./notificationAppearance";
+export {
+  collectChangedFiles,
+  groupChangedFilesByRepo,
+  selectChangedFilePreview,
+  shouldAutoExpandChangedFiles,
+  shouldPreviewChangedFiles,
+  toRepoRelativePath,
+  toSandboxFilePath,
+  workspaceRepoName,
+  workspaceRootPath,
+  type ChangedFile,
+  type ChangedFileGroup,
+  type ChangedFileStep,
+} from "./changedFiles";
+export {
+  DIFF_FILE_KINDS,
+  applyIgnoreWhitespace,
+  buildDiffFileEntries,
+  diffFileKind,
+  ignoreWhitespaceInPatch,
+  summarizeDiffSize,
+  unifiedDiffLines,
+  type DiffFileEntry,
+  type DiffFileKind,
+  type DiffFileStatus,
+  type DiffSize,
+  type UnifiedDiffLine,
+} from "./diffFiles";

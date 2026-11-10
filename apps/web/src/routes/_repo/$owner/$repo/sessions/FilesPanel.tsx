@@ -8,7 +8,7 @@ import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { Button, Spinner } from "@vvedantb/ui";
 import { IconFileText, IconRefresh } from "@tabler/icons-react";
-import { toRepoRelativePath } from "@/lib/components/chat/ChangedFilesCard";
+import { toRepoRelativePath } from "@eva/shared";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { ResizableSidebar } from "@/lib/components/ResizableSidebar";
 import type { SandboxFileListApi } from "@/lib/components/sandbox/useSandboxFileList";

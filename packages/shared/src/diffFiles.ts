@@ -1,4 +1,10 @@
-import type { GitStatus } from "@pierre/trees";
+/**
+ * A git diff split into per-file entries, with GitHub-style counts. Pure, so
+ * the web Diffs tab and the phone diff screen read one parser.
+ */
+
+/** A changed file's git status: the subset of the web tree's `GitStatus` a patch header can name. */
+export type DiffFileStatus = "added" | "deleted" | "renamed" | "modified";
 
 /** Splits a multi-file git diff into one self-contained patch string per file. */
 function splitDiffFiles(diff: string): string[] {
@@ -21,7 +27,7 @@ function fileNameFromPatch(patch: string, fallback: string): string {
  * counting +/- lines, so it mirrors git's own semantics; anything else is a
  * plain content change ("modified").
  */
-function diffFileStatus(patch: string): GitStatus {
+function diffFileStatus(patch: string): DiffFileStatus {
   if (/^new file mode /m.test(patch)) return "added";
   if (/^deleted file mode /m.test(patch)) return "deleted";
   if (/^rename (from|to) /m.test(patch)) return "renamed";
@@ -73,7 +79,7 @@ export interface DiffFileEntry {
   readonly patch: string;
   /** The file's (new) path — also the accordion/tree key. */
   readonly path: string;
-  readonly status: GitStatus;
+  readonly status: DiffFileStatus;
   readonly additions: number;
   readonly deletions: number;
   /** Unchanged lines carried as hunk context — for height estimation only. */
@@ -126,6 +132,57 @@ export function buildDiffFileEntries(diff: string): DiffFileEntry[] {
       hasHunks: /^@@ /m.test(patch),
     };
   });
+}
+
+/** One row of a unified diff view: a hunk separator, or a line with its old and new line numbers. */
+export type UnifiedDiffLine =
+  | { readonly kind: "hunk"; readonly text: string }
+  | {
+      readonly kind: "added" | "removed" | "context";
+      /** The line's content, without its `+`/`-`/space marker. */
+      readonly text: string;
+      /** Line number on the old side; null for an added line. */
+      readonly oldLine: number | null;
+      /** Line number on the new side; null for a removed line. */
+      readonly newLine: number | null;
+    };
+
+const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/**
+ * The rows a unified diff view draws for one file's patch: each `@@` header,
+ * then its lines numbered from the header's start lines. The patch header
+ * before the first hunk is skipped, as `diffFileStats` does, and so are
+ * `\ No newline at end of file` markers.
+ */
+export function unifiedDiffLines(patch: string): UnifiedDiffLine[] {
+  const rows: UnifiedDiffLine[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+  let inHunk = false;
+  for (const line of patch.split("\n")) {
+    const header = HUNK_HEADER.exec(line);
+    if (header) {
+      inHunk = true;
+      oldLine = Number(header[1]);
+      newLine = Number(header[2]);
+      rows.push({ kind: "hunk", text: line });
+      continue;
+    }
+    if (!inHunk) continue;
+    if (line.startsWith("+")) {
+      rows.push({ kind: "added", text: line.slice(1), oldLine: null, newLine });
+      newLine += 1;
+    } else if (line.startsWith("-")) {
+      rows.push({ kind: "removed", text: line.slice(1), oldLine, newLine: null });
+      oldLine += 1;
+    } else if (line.startsWith(" ")) {
+      rows.push({ kind: "context", text: line.slice(1), oldLine, newLine });
+      oldLine += 1;
+      newLine += 1;
+    }
+  }
+  return rows;
 }
 
 /** What a changed file is, for splitting a PR's size the way t3code does. */

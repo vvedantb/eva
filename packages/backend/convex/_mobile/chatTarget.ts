@@ -58,6 +58,12 @@ export const mobileChatValidator = v.object({
   sandboxBranch: v.optional(v.string()),
   /** The branch Eva booted the sandbox on, when the chat has one; a different `sandboxBranch` is hinted. */
   intendedBranch: v.optional(v.string()),
+  /**
+   * The chat's pull request, as the web Review pane reads it (a task in a
+   * project uses the project's, as `taskPrUrl`). The phone diff screen passes
+   * it to `github.getPrDiff`; absent before a PR is open.
+   */
+  prUrl: v.optional(v.string()),
   /** Path on the web app, for "Open on web" and message links. */
   webPath: v.string(),
 });
@@ -110,6 +116,7 @@ export async function resolveMobileChat(
         traits: storedComposerTraits(chat),
         sandboxBranch: session.status === "active" ? session.sandboxBranch : undefined,
         intendedBranch: session.branchName,
+        prUrl: session.prUrl,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
       },
     };
@@ -136,6 +143,7 @@ export async function resolveMobileChat(
         model: task.lastChatModel ?? task.model,
         traits: storedComposerTraits(task),
         sandboxBranch: task.reviewTaskSandboxStatus === "active" ? task.sandboxBranch : undefined,
+        prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
         webPath:
           project?.numId !== undefined
             ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
@@ -163,6 +171,7 @@ export async function resolveMobileChat(
         traits: storedComposerTraits(project),
         sandboxBranch: project.reviewProjectSandboxStatus === "active" ? project.sandboxBranch : undefined,
         intendedBranch: project.branchName,
+        prUrl: project.prUrl,
         webPath: `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/projects/${project.numId ?? ""}`,
       },
     };

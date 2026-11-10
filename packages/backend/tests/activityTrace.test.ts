@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { collectChangedFiles } from "@eva/shared";
 import {
   hasStepDetail,
   parseToolSteps,
@@ -23,6 +24,19 @@ describe("activity trace", () => {
 
   test("summarises each kind of work once, as the web does", () => {
     expect(summariseToolSteps(parseToolSteps(log))).toBe("Read files, ran commands");
+  });
+
+  test("keeps an edited file's path for the phone's Changed files card", () => {
+    const steps = parseToolSteps(
+      JSON.stringify([
+        { type: "write", label: "Created file", path: "/tmp/repo/src/toCsv.ts", status: "complete" },
+        { type: "read", label: "Read file", path: "/tmp/repo/src/App.tsx", status: "complete" },
+        { type: "edit", label: "Edited file", path: "/tmp/repo/src/toCsv.ts", status: "complete" },
+      ]),
+    );
+    expect(collectChangedFiles(steps)).toEqual([
+      { path: "/tmp/repo/src/toCsv.ts", name: "toCsv.ts", dir: "src", repoName: null },
+    ]);
   });
 
   test("legacy plain text, empty and missing logs give no steps", () => {
