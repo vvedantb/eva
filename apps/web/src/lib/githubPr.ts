@@ -27,10 +27,3 @@ export function taskPrUrl(
   return projects?.find((project) => project._id === task.projectId)?.prUrl;
 }
 
-/** Parse a positive PR number from a GitHub pull URL, or undefined if absent/invalid. */
-export function prNumberFromGithubUrl(prUrl: string): number | undefined {
-  const match = /\/pull\/(\d+)(?:\/|$|\?|#)/.exec(prUrl);
-  if (match === null) return undefined;
-  const n = Number(match[1]);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-}

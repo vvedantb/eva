@@ -10,7 +10,7 @@ import {
   type SandboxOwner,
 } from "@eva/backend";
 import { reviewPullRequestParser, type ReviewTab } from "@/lib/search-params";
-import { prNumberFromGithubUrl } from "@/lib/githubPr";
+import { prNumberFromGithubUrl } from "@eva/shared";
 import { ReviewTabsPanel } from "@/lib/components/reviews/ReviewTabsPanel";
 import { usePrTabParam } from "./usePrTabParam";
 

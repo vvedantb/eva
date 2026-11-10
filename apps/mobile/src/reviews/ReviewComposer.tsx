@@ -18,9 +18,10 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useAction } from "convex/react";
 import { useRef, useState } from "react";
 import { Text, View, type TextInput } from "react-native";
+import { usePendingLineComments } from "@/diff/prDiffStore";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
-type ComposerMode = "comment" | "review";
+export type ComposerMode = "comment" | "review";
 
 /** The web `text-xs` (12 / 16). */
 const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
@@ -29,15 +30,19 @@ const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
  * The web floating `PrComposer` as a bottom sheet: Comment (a conversation
  * comment, `github.addPrComment`) and, while the pull request is open, Review
  * (a summary and a verdict, `github.submitPrReview`), both posted as the eva
- * GitHub App. The drafts live here, so closing the sheet keeps them. The web
- * Review also carries line comments drawn on Code; the phone has none, so a
- * review is its summary and verdict. The field, verdicts and error scroll
+ * GitHub App. The drafts live here, so closing the sheet keeps them. A review
+ * also carries the line comments drafted on Code (`usePendingLineComments`),
+ * cleared once it is posted. The mode is the caller's, so the button that
+ * opens the sheet can start it on Review while comments are pending, as the
+ * web does. The field, verdicts and error scroll
  * when the keyboard leaves too little room, so the tabs and the post button
  * stay on screen.
  */
 export function ReviewComposer({
   open,
   onOpenChange,
+  mode,
+  onModeChange,
   repoId,
   prNumber,
   isOpen,
@@ -45,6 +50,8 @@ export function ReviewComposer({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode: ComposerMode;
+  onModeChange: (mode: ComposerMode) => void;
   repoId: Id<"githubRepos">;
   prNumber: number;
   /** A closed or merged pull request still takes comments, but no verdict. */
@@ -55,7 +62,16 @@ export function ReviewComposer({
   const muted = EVA_THEME[scheme].mutedForeground;
   const addComment = useAction(api.github.addPrComment);
   const submitPrReview = useAction(api.github.submitPrReview);
-  const [mode, setMode] = useState<ComposerMode>("comment");
+  const pending = usePendingLineComments({ repoId, prNumber });
+  // Every pending comment carries a GitHub anchor: the phone drafts them on the pull request diff only.
+  const comments = pending.comments.map((comment) => ({
+    path: comment.path,
+    body: comment.body,
+    line: comment.line,
+    side: comment.side,
+    startLine: null,
+    startSide: null,
+  }));
   const [commentBody, setCommentBody] = useState("");
   const [reviewBody, setReviewBody] = useState("");
   const [event, setEvent] = useState<ReviewEvent>("COMMENT");
@@ -66,7 +82,7 @@ export function ReviewComposer({
   const activeMode: ComposerMode = isOpen ? mode : "comment";
   const body = activeMode === "comment" ? commentBody : reviewBody;
   const trimmed = body.trim();
-  const canPost = activeMode === "comment" ? trimmed.length > 0 : canSubmitReview(event, trimmed, 0);
+  const canPost = activeMode === "comment" ? trimmed.length > 0 : canSubmitReview(event, trimmed, comments.length);
 
   const done = () => {
     setPosting(false);
@@ -88,9 +104,15 @@ export function ReviewComposer({
       }, fail("Couldn't post the comment"));
       return;
     }
-    submitPrReview({ repoId, prNumber, event, body: trimmed, comments: [] }).then((result) => {
+    submitPrReview({ repoId, prNumber, event, body: trimmed, comments }).then((result) => {
       setReviewBody("");
-      toast.success(verdictSuccessTitle(result.state), { description: "Posted to GitHub as the eva app." });
+      pending.clear();
+      toast.success(verdictSuccessTitle(result.state), {
+        description:
+          comments.length > 0
+            ? `${comments.length} inline comment${comments.length === 1 ? "" : "s"} posted to GitHub.`
+            : "Posted to GitHub as the eva app.",
+      });
       done();
     }, fail("GitHub rejected the review."));
   };
@@ -109,7 +131,7 @@ export function ReviewComposer({
             <Tabs
               value={activeMode}
               onValueChange={(value: string) => {
-                setMode(value === "review" ? "review" : "comment");
+                onModeChange(value === "review" ? "review" : "comment");
                 setError(null);
               }}
             >
@@ -123,6 +145,13 @@ export function ReviewComposer({
           )}
         </SheetHeader>
         <SheetBody contentContainerClassName="gap-3">
+          {activeMode === "review" ? (
+            <Text style={[TEXT_XS, { color: muted }]}>
+              {comments.length === 0
+                ? "No line comments yet — tap lines in Code to add them."
+                : `${comments.length} line comment${comments.length === 1 ? "" : "s"} will be posted with this review.`}
+            </Text>
+          ) : null}
           <Textarea
             ref={field}
             accessibilityLabel={activeMode === "comment" ? "Comment on this pull request" : "Review summary"}
