@@ -7,6 +7,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { sendEmail } from "../email";
 import { buildAgentEmailHtml } from "../emailTemplates";
+import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
 import {
   sendEmailInputShape,
   type SendEmailOutcome,
@@ -63,7 +64,7 @@ export const runSendEmail = internalAction({
       };
     }
 
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!appUrl) {
       return {
         ok: false,

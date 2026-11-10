@@ -43,8 +43,8 @@ export type RepoGroupFingerprintInput = {
  * and a rebuild is skipped.
  *
  * djb2 over the JSON payload — cheap, deterministic, dependency-free
- * (isolate functions cannot reach `node:crypto`). A false match only skips a
- * rebuild.
+ * (isolate functions cannot reach `node:crypto`); mirrors the hash in
+ * `_evaConfig/config.ts`. A false match only skips a rebuild.
  */
 export function computeRepoGroupFingerprint(
   input: RepoGroupFingerprintInput,

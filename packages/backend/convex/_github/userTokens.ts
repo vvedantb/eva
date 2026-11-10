@@ -87,10 +87,7 @@ export const startUserAuthorization = authMutation({
   handler: async (ctx, args) => {
     await rejectSandboxCaller(ctx);
     const clientId = requiredEnv("GITHUB_CLIENT_ID");
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) {
-      throw new Error("CONVEX_SITE_URL is not set");
-    }
+    const siteUrl = requiredEnv("CONVEX_SITE_URL");
     const nonce = crypto.randomUUID();
     await ctx.db.insert("githubOauthStates", {
       nonce,

@@ -1,4 +1,4 @@
-import { bytesToBase64Url, randomToken } from "@vvedantb/server";
+import { bytesToBase64Url, randomToken, requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
@@ -120,8 +120,7 @@ export const startOAuth = authMutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     const { clientId } = readOAuthClient(args.provider);
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) throw new Error("CONVEX_SITE_URL is not set");
+    const siteUrl = requiredEnv("CONVEX_SITE_URL");
     const actor = args.actor ?? "user";
     const { verifier, challenge } = await createPkce();
     const nonce = crypto.randomUUID();

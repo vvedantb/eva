@@ -70,6 +70,19 @@ export const snapshotBuildWorkflow = workflow.define({
     forceImageRebuild: v.optional(v.boolean()),
   },
   handler: async (step, args) => {
+    // Refresh the `.eva/config.json` cache first: the build and seed commands
+    // read below, and the fingerprint stored at capture, must be the file's
+    // values on the branch this build checks out.
+    const snapshotOwner = await step.runQuery(
+      internal.repoSnapshots.getRepoSnapshotInternal,
+      { repoSnapshotId: args.repoSnapshotId },
+    );
+    if (snapshotOwner) {
+      await step.runAction(internal._evaConfig.sync.syncEvaConfig, {
+        repoId: snapshotOwner.repoId,
+      });
+    }
+
     // Resolve config + repo (owner/name/installation drive git fetch auth).
     const config = await step.runQuery(
       internal.repoSnapshots.getRepoSnapshotInternal,
@@ -97,7 +110,7 @@ export const snapshotBuildWorkflow = workflow.define({
       });
       return;
     }
-    const branch = config.workflowRef ?? "main";
+    const branch = config.branch;
 
     const providerKind = await step.runAction(
       internal.sandbox.getSandboxProviderKind,
@@ -439,6 +452,12 @@ export const snapshotBuildWorkflow = workflow.define({
         { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
       );
 
+      // The inputs launchSeedRun is about to read, stamped on the snapshot.
+      const seededFingerprint = await step.runQuery(
+        internal.repoSnapshots.getCurrentSeedFingerprint,
+        { repoId: appRepoId },
+      );
+
       // Launch the whole pipeline detached; poll its outcome markers. The
       // launch is idempotent (live-process guard), so retries can't race a
       // second copy of the script.
@@ -565,6 +584,7 @@ export const snapshotBuildWorkflow = workflow.define({
       await step.runMutation(internal.repoSnapshots.setSeededSnapshotName, {
         repoId: appRepoId,
         seededSnapshotName: effectiveSeededName,
+        ...(seededFingerprint !== null ? { seededFingerprint } : {}),
       });
       await step.runMutation(internal.repoSnapshots.recordSeededApp, {
         buildId: args.buildId,

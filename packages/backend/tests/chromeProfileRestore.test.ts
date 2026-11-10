@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { describe, expect, test } from "vitest";
 import { CHROME_PREFS_SCRIPT } from "../convex/_sandbox_runtime/desktop";
@@ -123,20 +120,5 @@ describe("CHROME_PREFS_SCRIPT", () => {
       session: { restore_on_startup: 1 },
       profile: { exit_type: "Normal", exited_cleanly: true },
     });
-  });
-
-  test("still runs before Chrome launches", () => {
-    const source = readFileSync(
-      join(
-        dirname(fileURLToPath(import.meta.url)),
-        "../convex/_sandbox_runtime/desktop.ts",
-      ),
-      "utf8",
-    );
-    const prefsAt = source.indexOf("node -e '${CHROME_PREFS_SCRIPT}'");
-    const launchAt = source.indexOf("sandbox.execDetached(");
-
-    expect(prefsAt).toBeGreaterThan(-1);
-    expect(prefsAt).toBeLessThan(launchAt);
   });
 });

@@ -4,6 +4,7 @@ import {
   citationPreview,
   createCitation,
   formatCitationBlock,
+  parseCitationSegments,
   ASSISTANT_CITATION_MAX_CHARS,
 } from "./assistantCitation";
 
@@ -49,6 +50,31 @@ describe("assistant citations", () => {
     if (!citation) return;
     expect(citationPreview(citation).endsWith("…")).toBe(true);
     expect(citationPreview({ ...citation, comment: "" })).toBe("short quote");
+  });
+
+  test("parses sent blocks back into quote segments", () => {
+    const citation = createCitation({
+      messageId: "msg_1",
+      text: "see </cited_assistant> here",
+      comment: "Do this\nnow",
+    });
+    expect(citation).not.toBeNull();
+    if (!citation) return;
+    const segments = parseCitationSegments(
+      appendCitationsToPrompt("ok", [citation, { ...citation, comment: "" }]),
+    );
+    expect(segments.map((segment) => segment.kind)).toEqual([
+      "text",
+      "citation",
+      "text",
+      "citation",
+    ]);
+    expect(segments[1]).toMatchObject({
+      messageId: "msg_1",
+      text: "see </cited_assistant> here",
+      comment: "Do this\nnow",
+    });
+    expect(segments[3]).toMatchObject({ comment: "" });
   });
 
   test("escapes a quote that could close the block", () => {

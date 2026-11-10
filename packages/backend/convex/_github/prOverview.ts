@@ -12,6 +12,12 @@ import { getActionRepoWithAccess } from "../functions";
 import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 import { patchPullRequest } from "./pullRequestWrite";
 import { fetchLatestDeploymentStatus } from "./deploymentSnapshot";
+import {
+  fetchPullRequestStack,
+  mergeStackAsync,
+  pullRequestStackValidator,
+  type PullRequestStack,
+} from "./prStack";
 
 const MAX_ISSUE_COMMENTS = 100;
 const MAX_REVIEW_COMMENTS = 100;
@@ -163,6 +169,8 @@ const pullRequestOverviewValidator = v.object({
   previews: v.array(pullRequestPreviewValidator),
   comments: v.array(pullRequestCommentValidator),
   commentsTruncated: v.boolean(),
+  /** GitHub's native PR stack this belongs to; null when not stacked. */
+  stack: v.union(pullRequestStackValidator, v.null()),
 });
 
 type PullRequestComment = {
@@ -260,6 +268,7 @@ type PullRequestOverview = {
   previews: PullRequestPreview[];
   comments: PullRequestComment[];
   commentsTruncated: boolean;
+  stack: PullRequestStack | null;
 };
 
 function derivePrStatus(
@@ -357,6 +366,7 @@ export const fetchPullRequestOverview = internalAction({
       checksRes,
       statusRes,
       deploymentRes,
+      stack,
     ] = await Promise.all([
       prPromise.then((res) => res.data),
       octokit.rest.issues.listComments({
@@ -417,6 +427,11 @@ export const fetchPullRequestOverview = internalAction({
           }),
         )
         .catch(() => ({ data: [] })),
+      fetchPullRequestStack(octokit, {
+        owner: repo.owner,
+        repo: repo.name,
+        pull_number: args.prNumber,
+      }),
     ]);
 
     // The address lives on the deployment's latest *status*, not the deployment,
@@ -575,16 +590,16 @@ export const fetchPullRequestOverview = internalAction({
       commentsTruncated:
         issueRes.data.length >= MAX_ISSUE_COMMENTS ||
         reviewCommentRes.data.length >= MAX_REVIEW_COMMENTS,
+      stack,
     };
   },
 });
 
-// V3: payload gained `reviewEvents` and per-comment `reviewId` for the
-// conversation timeline — a bumped name drops V2 entries instead of serving
-// objects that are missing the new fields.
+// V4: payload gained `stack` — a bumped name drops V3 entries instead of
+// serving objects that are missing the new field.
 const prOverviewCache = new ActionCache(components.actionCache, {
   action: internal._github.prOverview.fetchPullRequestOverview,
-  name: "prOverviewV3",
+  name: "prOverviewV4",
   ttl: PR_OVERVIEW_CACHE_TTL_MS,
 });
 
@@ -760,6 +775,10 @@ export const getPullRequestCommits = action({
  * Merges a pull request from the Overview tab. GitHub rejects the call when the
  * PR is not mergeable, so the thrown message is surfaced to the user as-is
  * rather than being second-guessed here.
+ *
+ * A stacked PR goes through GitHub's asynchronous stack merge, which lands it
+ * with every open entry below it. The stack is re-read here rather than taken
+ * from the client, so a stale overview cannot decide what gets merged.
  */
 export const mergePullRequest = action({
   args: {
@@ -784,10 +803,45 @@ export const mergePullRequest = action({
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const octokit = await getInstallationOctokit(repo.installationId);
-    const { data } = await octokit.rest.pulls.merge({
+    const target = {
       owner: repo.owner,
       repo: repo.name,
       pull_number: args.prNumber,
+    };
+
+    const stack = await fetchPullRequestStack(octokit, target);
+    if (stack !== null) {
+      const outcome = await mergeStackAsync(octokit, target, args.method);
+      if (outcome !== null) {
+        // Every entry at or below this one changed state on GitHub.
+        await Promise.all(
+          stack.entries
+            .filter((entry) => entry.position <= stack.position)
+            .map((entry) =>
+              invalidatePrOverviewCache(ctx, {
+                repoId: args.repoId,
+                prNumber: entry.number,
+              }),
+            ),
+        );
+        const count = stack.entries.filter(
+          (entry) =>
+            entry.position <= stack.position && entry.status === "open",
+        ).length;
+        const noun = count === 1 ? "pull request" : `${count} pull requests`;
+        return {
+          merged: outcome === "merged",
+          sha: null,
+          message:
+            outcome === "merged"
+              ? `Merged ${noun}`
+              : `Added ${noun} to the merge queue`,
+        };
+      }
+    }
+
+    const { data } = await octokit.rest.pulls.merge({
+      ...target,
       merge_method: args.method,
     });
 
