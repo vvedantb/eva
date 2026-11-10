@@ -5,9 +5,11 @@ import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { cleanUpStaleRun } from "./recovery";
 import { clearTaskRunStreaming, sendCompletionEvent } from "./helpers";
+import { RUN_TIMEOUT_MS } from "./staleness";
 
+const RUN_TIMEOUT_MESSAGE = `Run timed out after ${RUN_TIMEOUT_MS / 3_600_000} hours`;
 
-/** Hard-timeout handler that kills a run after the maximum allowed duration (2 hours). */
+/** Hard-timeout handler that kills a run after `RUN_TIMEOUT_MS`. */
 export const handleStaleRun = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
@@ -42,13 +44,13 @@ export const handleStaleRun = internalMutation({
         sandboxId: run.sandboxId,
         repoId: run.repoId,
         isProjectTask: !!task.projectId,
-        errorMessage: "Run timed out after 2 hours",
+        errorMessage: RUN_TIMEOUT_MESSAGE,
         exitReason: "run_timeout",
         taskStatus: task.status,
       });
     } else {
       await closeOpenTurn(ctx, args.runId, "error", {
-        error: "Run timed out after 2 hours",
+        error: RUN_TIMEOUT_MESSAGE,
       });
       const taskStatus =
         run && run.status === "success" ? "business_review" : "todo";

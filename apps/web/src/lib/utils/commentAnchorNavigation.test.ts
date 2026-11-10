@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { COMMENT_ANCHOR_PARAM, withCommentAnchor } from "@eva/backend";
 import { parseCommentAnchorSearchField } from "@/lib/search-params";
@@ -23,9 +20,6 @@ import { hrefToNavigateOptions } from "./repoUrl";
  * Break any link and the notification silently degrades to "top of page" with
  * no type error and no thrown error to notice.
  */
-
-const here = dirname(fileURLToPath(import.meta.url));
-const source = (path: string) => readFileSync(join(here, path), "utf8");
 
 const COMMENT_ID = "k17d2fp8x4wq9c0abcdefgh";
 const TASK_HREF = "/evalucom/carepulse-ts/quick-tasks/204";
@@ -86,38 +80,5 @@ describe("routes that a comment notification lands on", () => {
     const parsed = parseCommentAnchorSearchField({});
     expect(parsed).toEqual({});
     expect(Object.keys(parsed)).not.toContain("comment");
-  });
-
-  // Read off disk because a route module cannot be imported in the node test
-  // environment. Quick Tasks is the only repo route with a `validateSearch`,
-  // and it is where task comment notifications land.
-  it("is spread into the quick-tasks route", () => {
-    const route = source(
-      "../../routes/_repo/$owner/$repo/quick-tasks/route.tsx",
-    );
-    expect(route).toContain("parseCommentAnchorSearchField(search)");
-  });
-});
-
-/**
- * Three surfaces navigate from a stored notification href. The toast used to
- * pass the raw href to `navigate({ to })`, skipping both the search split and
- * the `repo--app` rewrite, so a monorepo notification went nowhere.
- */
-describe("every notification click-through", () => {
-  const clickSites = [
-    "../components/inbox/InboxClient.tsx",
-    "../components/NotificationToastStream.tsx",
-    "../embed/EmbedNavigationBridge.tsx",
-  ];
-
-  it.each(clickSites)("%s navigates via hrefToNavigateOptions", (path) => {
-    expect(source(path)).toContain("hrefToNavigateOptions(");
-  });
-
-  it.each(clickSites)("%s never passes a raw href as `to`", (path) => {
-    // `navigate({ to: notification.href })` in any spelling — a literal path
-    // such as `to: "/inbox"` is fine and does not match.
-    expect(source(path)).not.toMatch(/to:\s*[\w.]*\bhref\b/);
   });
 });

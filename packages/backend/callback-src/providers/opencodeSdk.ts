@@ -262,12 +262,20 @@ export async function ensureEvaMcpServers(
           const added = await client.mcp.add({
             body: {
               name,
-              config: {
-                type: "remote",
-                url: server.url,
-                headers: server.headers,
-                enabled: true,
-              },
+              config:
+                server.type === "stdio"
+                  ? {
+                      type: "local",
+                      command: [server.command, ...server.args],
+                      environment: server.env,
+                      enabled: true,
+                    }
+                  : {
+                      type: "remote",
+                      url: server.url,
+                      headers: server.headers,
+                      enabled: true,
+                    },
             },
           });
           log(

@@ -39,6 +39,9 @@ pass after the owner-boundary repair. A regression test that never demonstrably
 failed proves the mock, not the fix. One regression at the owner boundary
 covers the bug; do not replay the same scenario at every layer it crosses.
 
+A regression test must fail on the old code, and it must run in CI (`pnpm
+test`). A test that nothing runs protects nothing.
+
 ## Junk patterns
 
 The shared checklist for both modes: the authoring gate rejects a new test that

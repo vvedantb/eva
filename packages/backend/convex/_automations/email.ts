@@ -6,7 +6,7 @@
  * double click or a retry cannot send twice.
  */
 
-import { requiredEnv } from "@vvedantb/server";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { v } from "convex/values";
 import { marked } from "marked";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -259,7 +259,7 @@ export const previewRunEmail = authQuery({
         automationTitle: resolveAutomationDoc(automation).title,
         body: run.email.body,
         publishedAt: run.finishedAt ?? run.startedAt,
-        appUrl: requiredEnv("WEB_APP_URL"),
+        appUrl: getEvaBaseUrl(),
         recipientName: viewer?.firstName ?? viewer?.fullName,
         feedbackUrl: () => "#",
       }),

@@ -7,8 +7,8 @@ export {
   deleteRepoSnapshot,
   getSeededAppStatus,
   setSeededSnapshotName,
+  getCurrentSeedFingerprint,
   setBaseSnapshotId,
-  setSeedCommandsInternal,
   listAllProtectedSnapshotIds,
 } from "./_repoSnapshots/config";
 
@@ -29,6 +29,7 @@ export {
 export {
   getRepo,
   getStartupCommands,
+  getAppRunCommands,
   getBackgroundCommands,
   getStopCommands,
 } from "./_repoSnapshots/repoMetadata";
