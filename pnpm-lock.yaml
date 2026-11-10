@@ -240,8 +240,8 @@ importers:
         specifier: ^3.49.0
         version: 3.50.0(react-native-svg@15.15.4(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3))(react@19.2.3)
       '@vvedantb/native-ui':
-        specifier: github:vvedantb/packages#59670ddcd190bf450693ad73c3796457c8eb97ec&path:/packages/native-ui
-        version: https://codeload.github.com/vvedantb/packages/tar.gz/59670ddcd190bf450693ad73c3796457c8eb97ec#path:/packages/native-ui(481ba2130c664490f227c9913f17811b)
+        specifier: github:vvedantb/packages#12830d0c14e18e017690a939cd6f14a510aabe0d&path:/packages/native-ui
+        version: https://codeload.github.com/vvedantb/packages/tar.gz/12830d0c14e18e017690a939cd6f14a510aabe0d#path:/packages/native-ui(481ba2130c664490f227c9913f17811b)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -6355,8 +6355,8 @@ packages:
       '@electron/asar':
         optional: true
 
-  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/59670ddcd190bf450693ad73c3796457c8eb97ec#path:/packages/native-ui':
-    resolution: {path: /packages/native-ui, tarball: https://codeload.github.com/vvedantb/packages/tar.gz/59670ddcd190bf450693ad73c3796457c8eb97ec}
+  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/12830d0c14e18e017690a939cd6f14a510aabe0d#path:/packages/native-ui':
+    resolution: {path: /packages/native-ui, tarball: https://codeload.github.com/vvedantb/packages/tar.gz/12830d0c14e18e017690a939cd6f14a510aabe0d}
     version: 0.15.0
     peerDependencies:
       '@clerk/clerk-expo': '*'
@@ -17714,7 +17714,7 @@ snapshots:
 
   '@vvedantb/config@0.4.0': {}
 
-  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/59670ddcd190bf450693ad73c3796457c8eb97ec#path:/packages/native-ui(481ba2130c664490f227c9913f17811b)':
+  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/12830d0c14e18e017690a939cd6f14a510aabe0d#path:/packages/native-ui(481ba2130c664490f227c9913f17811b)':
     dependencies:
       '@expo/vector-icons': 15.1.1(expo-font@57.0.4)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
       '@rn-primitives/select': 1.5.2(@rn-primitives/portal@1.5.3(@types/react@19.3.0)(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
