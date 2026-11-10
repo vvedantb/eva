@@ -8,7 +8,7 @@ import { Button, Spinner, toast } from "@vvedantb/ui";
 import { IconSparkles } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { systemSkillTokenId } from "@/lib/components/mentions";
-import { formatSkillToken } from "@/lib/components/mentions/skillToken";
+import { formatSkillToken } from "@eva/shared";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 const EVA_SETUP_SKILL = "eva-setup";

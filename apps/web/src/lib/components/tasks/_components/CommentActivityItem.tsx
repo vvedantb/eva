@@ -21,7 +21,7 @@ import {
   RelativeDateTime,
 } from "@vvedantb/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
-import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
+import { mentionTokensToEditableText } from "@eva/shared";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";

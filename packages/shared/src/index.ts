@@ -4,7 +4,48 @@
 // Convex bundler cannot resolve. Import them from `@eva/shared/user-initials`.
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
-export { mentionTokensToEditableText, tokenizedToDisplayText } from "./mentionText";
+export {
+  CONVEX_ID_PATTERN,
+  MENTION_TOKEN_REGEX,
+  SKILL_TOKEN_REGEX,
+  buildMentionPattern,
+  buildSkillPattern,
+  escapeRegExp,
+  formatMentionToken,
+  formatSkillToken,
+  harnessSkillTokenId,
+  isHarnessSkillTokenId,
+  isSystemSkillTokenId,
+  mentionTokensToEditableText,
+  systemSkillTokenId,
+  tokenizeMentionText,
+  tokenizedToDisplayText,
+  tokenizedToEditable,
+  type MentionTokenMaps,
+} from "./mentionText";
+export {
+  CLAUDE_HARNESS_SKILLS,
+  acceptMentionTrigger,
+  dataMentionItems,
+  filterMentionItems,
+  findMentionTrigger,
+  harnessCatalogProvider,
+  harnessSlashItems,
+  isClaudeSkillSourcePath,
+  isInsertedTokenTrigger,
+  matchesMentionQuery,
+  mergeMentionItems,
+  peopleMentionItems,
+  selectRepoSkillsForProvider,
+  shouldShowMentionPicker,
+  skillSlashItems,
+  type HarnessSkill,
+  type InsertedToken,
+  type MentionItem,
+  type MentionKind,
+  type MentionTrigger,
+  type SlashItem,
+} from "./mentionComposer";
 export {
   SANDBOX_STOPPED_ALERT,
   isSandboxPausedAlert,

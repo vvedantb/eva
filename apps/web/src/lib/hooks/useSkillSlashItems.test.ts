@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  harnessSlashItems,
-  isClaudeSkillSourcePath,
-  selectRepoSkillsForProvider,
-} from "@/lib/hooks/useSkillSlashItems";
-import { CLAUDE_HARNESS_SKILLS } from "@/lib/components/mentions/harnessSkills";
-import {
+  CLAUDE_HARNESS_SKILLS,
   SKILL_TOKEN_REGEX,
   formatSkillToken,
   harnessSkillTokenId,
-  isSkillTokenId,
-} from "@/lib/components/mentions/skillToken";
+  harnessSlashItems,
+  isClaudeSkillSourcePath,
+  selectRepoSkillsForProvider,
+} from "@eva/shared";
+import { isSkillTokenId } from "@/lib/components/mentions/skillToken";
 
 const skills = [
   {

@@ -1,4 +1,4 @@
-import { api, normalizeAIModel } from "@eva/backend";
+import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
@@ -27,7 +27,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
@@ -36,16 +36,19 @@ import { ComposerFooter, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
+import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
+import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { textColor, useScheme } from "@/ui/theme";
 
 /**
  * One chat (session, quick task or project): the transcript with the web
  * message actions, the agent's question when it asks one, and the composer
- * (attachments, Stop beside Send while the agent works) with the web footer:
- * the live sandbox branch, the stash and the chat's sticky model.
+ * (attachments, Stop beside Send while the agent works, the web `@` / `/`
+ * picker) with the web footer: the live sandbox branch, the stash and the
+ * chat's sticky model.
  */
 export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
@@ -80,7 +83,8 @@ export default function ChatScreen() {
   });
   const attachments = useAttachments();
   const simpleView = useSimpleView();
-  const [draft, setDraft] = useState("");
+  // The `/` list follows the chat's model provider, as the web composer.
+  const composer = useMentionComposer(chat?.repoId, chat ? getAIModelProvider(normalizeAIModel(chat.model)) : undefined);
 
   if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
   if (chat === null) {
@@ -112,7 +116,7 @@ export default function ChatScreen() {
     }
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
-    send({ target: chat.parentId, message: text, attachmentStorageIds }).catch(() => {
+    send({ target: chat.parentId, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
       toast.error("Couldn't send your message");
     });
   };
@@ -229,9 +233,10 @@ export default function ChatScreen() {
           <PromptInput
             layout="inline"
             shape="pill"
-            value={draft}
-            onChangeText={setDraft}
+            value={composer.text}
+            onChangeText={composer.setText}
             onSubmit={handleSend}
+            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
             placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
             leading={
               <AttachButton onPress={() => void attachments.pick()} />
@@ -249,8 +254,7 @@ export default function ChatScreen() {
             footer={
               <ComposerFooter
                 repoId={chat.repoId}
-                draft={draft}
-                onDraftChange={setDraft}
+                onRestore={composer.restore}
                 leading={
                   chat.sandboxBranch && !simpleView ? (
                     <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
