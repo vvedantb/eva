@@ -56,10 +56,41 @@ export function sandboxOwnerKey(owner: SandboxOwner): string {
  * persisted and subscribed to by apps/web (session detail, task detail,
  * project sandbox); do not change them.
  */
+const SESSION_STARTUP_PREFIX = "session-startup-";
+const TASK_STARTUP_PREFIX = "task-sandbox-startup-";
+const PROJECT_STARTUP_PREFIX = "project-sandbox-startup-";
+
 export function sandboxStartupEntityId(owner: SandboxOwner): string {
-  if (owner.kind === "session") return `session-startup-${owner.sessionId}`;
-  if (owner.kind === "task") return `task-sandbox-startup-${owner.taskId}`;
-  return `project-sandbox-startup-${owner.projectId}`;
+  if (owner.kind === "session") {
+    return `${SESSION_STARTUP_PREFIX}${owner.sessionId}`;
+  }
+  if (owner.kind === "task") return `${TASK_STARTUP_PREFIX}${owner.taskId}`;
+  return `${PROJECT_STARTUP_PREFIX}${owner.projectId}`;
+}
+
+/** Inverse of `sandboxStartupEntityId`: null when `entityId` is not a startup row. */
+export function parseSandboxStartupEntityId(
+  db: Pick<GenericDatabaseReader<DataModel>, "normalizeId">,
+  entityId: string,
+): SandboxOwner | null {
+  const after = (prefix: string) =>
+    entityId.startsWith(prefix) ? entityId.slice(prefix.length) : null;
+  const session = after(SESSION_STARTUP_PREFIX);
+  if (session !== null) {
+    const sessionId = db.normalizeId("sessions", session);
+    return sessionId ? { kind: "session", sessionId } : null;
+  }
+  const task = after(TASK_STARTUP_PREFIX);
+  if (task !== null) {
+    const taskId = db.normalizeId("agentTasks", task);
+    return taskId ? { kind: "task", taskId } : null;
+  }
+  const project = after(PROJECT_STARTUP_PREFIX);
+  if (project !== null) {
+    const projectId = db.normalizeId("projects", project);
+    return projectId ? { kind: "project", projectId } : null;
+  }
+  return null;
 }
 
 /**
