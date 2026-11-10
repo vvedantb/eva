@@ -2,7 +2,7 @@ export {
   listByProject,
   get,
   getByNumId,
-  countSandboxTasks,
+  getActiveTasks,
   getAllTasks,
   getDependentTasks,
   getStatusesByIds,

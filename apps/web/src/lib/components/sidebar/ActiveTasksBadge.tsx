@@ -15,11 +15,18 @@ interface ActiveTasksBadgeProps {
  * hover card, and no separate in-progress count.
  */
 export function ActiveTasksBadge({ repoId }: ActiveTasksBadgeProps) {
-  const count = useQuery(api.agentTasks.countSandboxTasks, { repoId }) ?? 0;
+  const allTasks = useQuery(api.agentTasks.getActiveTasks, { repoId });
+  const sandboxTasks =
+    allTasks?.filter(
+      (t) =>
+        !t.projectId &&
+        (t.reviewTaskSandboxStatus === "active" ||
+          t.reviewTaskSandboxStatus === "starting"),
+    ) ?? [];
 
   return (
     <AnimatePresence>
-      {count > 0 ? (
+      {sandboxTasks.length > 0 ? (
         <m.div
           key="active-tasks"
           className="ml-auto"
@@ -33,12 +40,12 @@ export function ActiveTasksBadge({ repoId }: ActiveTasksBadgeProps) {
             className="cursor-default items-center gap-2 border-none bg-sidebar-accent/50 px-1.5 py-0.5"
           >
             <CountPop
-              label={countLabel(count)}
+              label={countLabel(sandboxTasks.length)}
               className="flex items-center gap-1.5"
             >
               <span className="h-2 w-2 rounded-full bg-success" />
               <span className="text-2xs font-medium text-muted-foreground tabular-nums">
-                {count}
+                {sandboxTasks.length}
               </span>
             </CountPop>
           </Badge>
