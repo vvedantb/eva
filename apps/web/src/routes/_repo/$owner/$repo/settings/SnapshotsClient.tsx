@@ -22,16 +22,12 @@ import {
   TabsList,
   TabsTrigger,
   tokenTransition,
-  SettingsField,
   SettingsSection,
   SettingsEmptyState,
   ListEnter,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import {
-  EvaConfigManagedNote,
-  ReadOnlyLines,
-} from "@/lib/components/evaConfig/EvaConfigReadOnly";
+import { EvaConfigSection } from "@/lib/components/evaConfig/EvaConfigSection";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import {
@@ -297,23 +293,7 @@ function SnapshotConfigurationTab({
 
       {snapshot && <RebuildRequiredWarning />}
 
-      <SettingsSection title="Build and Seed Commands">
-        <div className="grid gap-5">
-          {repo.evaConfig ? (
-            <EvaConfigManagedNote evaConfig={repo.evaConfig} />
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Set in <code>.eva/config.json</code> under <code>snapshot</code>.
-            </p>
-          )}
-          <SettingsField label="Build">
-            <ReadOnlyLines lines={snapshot?.buildCommands} />
-          </SettingsField>
-          <SettingsField label="Seed">
-            <ReadOnlyLines lines={snapshot?.seedCommands} />
-          </SettingsField>
-        </div>
-      </SettingsSection>
+      <EvaConfigSection />
 
       <p className="text-xs leading-relaxed text-muted-foreground">
         Requires Vercel Sandbox credentials:{" "}

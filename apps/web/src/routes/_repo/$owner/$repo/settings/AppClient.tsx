@@ -8,7 +8,7 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import { Textarea, SettingsSection } from "@vvedantb/ui";
 import { LogoSettingsSection } from "./_components/LogoSettingsSection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { AppCommandsReadOnly } from "./_components/AppCommandsReadOnly";
+import { EvaConfigSection } from "@/lib/components/evaConfig/EvaConfigSection";
 
 const COMMAND_TEXTAREA_CLASS = "resize-y bg-background font-mono text-xs";
 
@@ -58,14 +58,7 @@ export function AppClient() {
         />
       </SettingsSection>
 
-      <AppCommandsReadOnly
-        evaConfig={repo.evaConfig}
-        devPort={repo.devPort}
-        devCommand={repo.devCommand}
-        startupCommands={repo.startupCommands}
-        backgroundCommands={repo.backgroundCommands}
-        stopCommands={repo.stopCommands}
-      />
+      <EvaConfigSection />
     </SettingsPage>
   );
 }
