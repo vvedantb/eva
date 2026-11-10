@@ -16,13 +16,12 @@ import {
 import type { Id } from "@eva/backend";
 import {
   IconExternalLink,
-  IconGitPullRequest,
-  IconGitPullRequestClosed,
+    IconGitPullRequestClosed,
   IconLink,
   IconStack2,
 } from "@tabler/icons-react";
 import { ConfirmSkipHint, requestConfirm, useAltHeld } from "@/lib/confirm";
-import { prStateIconClass } from "@/lib/components/prStateIconClass";
+import { PrRow } from "./PrRow";
 import { requestPrClose } from "./prCloseRequest";
 import { useClosePullRequest } from "./useClosePullRequest";
 import { useStackNewSession } from "./useStackNewSession";
@@ -34,13 +33,13 @@ export interface PrMenuPullRequest {
   prNumber: number;
   state: "draft" | "open" | "merged" | "closed";
   headBranch?: string;
+  title?: string;
   repoId: Id<"githubRepos">;
 }
 
 /**
- * The PR entry of a chat's "…" menu and right-click menu: "View PR" for one
- * pull request, or "PR #N" per pull request when the chat holds several. Each
- * opens the same actions as the review header's menu — View on GitHub, Copy
+ * The PR entries of a chat's "…" menu and right-click menu: one row per pull
+ * request, drawn like the stack popover's (`PrRow`). Each opens the same actions as the review header's menu — View on GitHub, Copy
  * link, Stack a new session, Close without merging — so a PR can be handled
  * without opening its review first.
  */
@@ -57,18 +56,19 @@ export function PrActionsSubmenus({
   const SubContent =
     variant === "context" ? ContextMenuSubContent : DropdownMenuSubContent;
   const iconSize = variant === "context" ? 16 : 14;
-  const many = prs.length > 1;
 
   return (
     <>
       {prs.map((pr) => (
         <Sub key={pr._id}>
-          <SubTrigger>
-            <IconGitPullRequest
-              size={iconSize}
-              className={prStateIconClass(pr.state)}
+          <SubTrigger className="max-w-80 items-start">
+            <PrRow
+              status={pr.state === "draft" ? "open" : pr.state}
+              draft={pr.state === "draft"}
+              title={pr.title}
+              number={pr.prNumber}
+              branch={pr.headBranch}
             />
-            {many ? `PR #${pr.prNumber}` : "View PR"}
           </SubTrigger>
           <SubContent>
             <PrActionItems variant={variant} pr={pr} iconSize={iconSize} />

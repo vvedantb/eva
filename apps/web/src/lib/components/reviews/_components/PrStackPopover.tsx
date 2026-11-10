@@ -5,7 +5,8 @@ import { Button, Popover, PopoverContent, PopoverTrigger, cn } from "@eva/ui";
 import { IconStack2 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { statusMeta, type StatusTone } from "./prOverviewMeta";
+import type { StatusTone } from "./prOverviewMeta";
+import { PrRow } from "@/lib/components/pr-menu/PrRow";
 import { stackVerdict, type PrStack } from "./prStack";
 
 const VERDICT_TONE_CLASS: Record<StatusTone, string> = {
@@ -58,8 +59,6 @@ export function PrStackPopover({ stack }: { stack: PrStack }) {
         <ol className="max-h-80 overflow-y-auto px-1.5 pb-1.5">
           {entriesTopDown.map((entry) => {
             const current = entry.position === stack.position;
-            const state = statusMeta(entry.status, entry.draft);
-            const StateIcon = state.icon;
             return (
               <li key={entry.number}>
                 <Link
@@ -72,19 +71,13 @@ export function PrStackPopover({ stack }: { stack: PrStack }) {
                     current ? "bg-muted" : "hover:bg-muted/60",
                   )}
                 >
-                  <StateIcon
-                    size={14}
-                    aria-label={state.label}
-                    className={cn("mt-0.5 shrink-0", state.textClassName)}
+                  <PrRow
+                    status={entry.status}
+                    draft={entry.draft}
+                    title={entry.title}
+                    number={entry.number}
+                    branch={entry.headRef}
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-foreground">
-                      {entry.title}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      #{entry.number} · {entry.headRef}
-                    </span>
-                  </span>
                 </Link>
               </li>
             );
