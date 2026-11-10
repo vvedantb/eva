@@ -3,6 +3,7 @@
 import { requiredEnv } from "@vvedantb/server";
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
@@ -75,7 +76,8 @@ const RUNNER_LOG_TAIL_MAX_CHARS = 2_000;
  *
  * Collapses runs of identical lines into `line (xN)` and keeps the LAST
  * `RUNNER_LOG_TAIL_MAX_CHARS` characters, since the tail is where the actual
- * failure lands.
+ * failure lands. Redacts before clipping so a cut cannot leave a token whose
+ * prefix no longer matches.
  */
 export function condenseRunnerLogTail(log: string): string {
   const collapsed: string[] = [];
@@ -89,7 +91,7 @@ export function condenseRunnerLogTail(log: string): string {
     if (shown === undefined) return;
     collapsed.push(repeats > 1 ? `${shown} (x${repeats})` : shown);
   };
-  for (const line of log.split("\n")) {
+  for (const line of redactSecrets(log).split("\n")) {
     const trimmed = line.trim();
     // Compare on the message, not the timestamps/backoff figures that differ on
     // every retry of the same failure.

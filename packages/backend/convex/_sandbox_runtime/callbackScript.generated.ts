@@ -400,6 +400,27 @@ import {
   writeFileSync
 } from "fs";
 
+// ../shared/src/redactSecrets.ts
+var SECRET_PATTERNS = [
+  [/gh[spour]_[A-Za-z0-9_]+/g, "***"],
+  [/\\bgithub_pat_[A-Za-z0-9_]+/g, "***"],
+  [/\\bsk-[A-Za-z0-9_-]{10,}\\b/g, "***"],
+  [/\\bAKIA[0-9A-Z]{16}\\b/g, "***"],
+  // Length floor keeps prose ("the bearer of bad news") intact in chat text.
+  [/(?<=\\bBearer\\s+)[A-Za-z0-9._~+/=-]{20,}/gi, "***"],
+  [/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9._-]+/g, "***"],
+  // URL userinfo: \`https://user:secret@host\` keeps the user, drops the secret.
+  // The secret stops at \`/\`, so \`//localhost:5173/@fs/x\` is not userinfo.
+  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//\$1:***@"]
+];
+function redactSecrets(text) {
+  let out = text;
+  for (const [pattern, replacement] of SECRET_PATTERNS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
 // callback-src/runtime/gitExec.ts
 import { spawnSync } from "child_process";
 var GIT_STEP_TIMEOUT_MS = 2e4;
@@ -706,7 +727,7 @@ function narrowJsonValue(value) {
   return obj;
 }
 function log(msg) {
-  const line = "[callback " + (/* @__PURE__ */ new Date()).toISOString() + "] " + msg + "\\n";
+  const line = "[callback " + (/* @__PURE__ */ new Date()).toISOString() + "] " + redactSecrets(msg) + "\\n";
   console.error(line.trim());
   try {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
@@ -830,9 +851,12 @@ function copyBaseClaudeConfig() {
     "copyBaseClaudeConfig finished in " + String(Date.now() - startedAt) + "ms"
   );
 }
+function isSafeClaudeSessionId(sessionId) {
+  return /^[A-Za-z0-9._-]+\$/.test(sessionId) && !/^\\.+\$/.test(sessionId);
+}
 function logTranscriptStats(sessionId, label) {
-  if (!sessionId) {
-    log(label + ": no session id");
+  if (!isSafeClaudeSessionId(sessionId)) {
+    log(label + ": no valid session id");
     return;
   }
   const transcriptPath = buildClaudeTranscriptPath(
@@ -855,6 +879,9 @@ function logTranscriptStats(sessionId, label) {
   }
 }
 function buildClaudeTranscriptPath(projectDir, sessionId) {
+  if (!isSafeClaudeSessionId(sessionId)) {
+    throw new Error("Invalid Claude session id");
+  }
   return projectDir + "/" + sessionId + ".jsonl";
 }
 function attemptElapsedMs() {
@@ -1454,7 +1481,7 @@ function capContentPreview(content) {
   return headCap(content, STEP_FIELD_CAPS.contentPreview).text;
 }
 function buildStepOutput(text, exitCode) {
-  const trimmed = text.trim();
+  const trimmed = redactSecrets(text).trim();
   if (!trimmed && exitCode === void 0) {
     return void 0;
   }
@@ -2318,7 +2345,7 @@ function readClaudeSessionState() {
   );
   if (!parsed) return null;
   const resumeSessionId = typeof parsed.resumeSessionId === "string" ? parsed.resumeSessionId.trim() : "";
-  if (!resumeSessionId) {
+  if (!isSafeClaudeSessionId(resumeSessionId)) {
     return null;
   }
   return { resumeSessionId };
@@ -2359,7 +2386,7 @@ function collectClaudeTranscriptSessionIds() {
   if (currentSessionId) {
     sessionIds.add(currentSessionId);
   }
-  return Array.from(sessionIds);
+  return Array.from(sessionIds).filter(isSafeClaudeSessionId);
 }
 function hydratePersistedClaudeState() {
   const startedAt = Date.now();
@@ -5197,6 +5224,7 @@ async function bootWarmDaemon(params) {
 // callback-src/runtime/completion.ts
 import {
   existsSync as existsSync6,
+  lstatSync,
   mkdirSync as mkdirSync6,
   readFileSync as readFileSync6,
   readdirSync as readdirSync2,
@@ -5586,7 +5614,16 @@ async function attachRunMediaIfAny(uploaded) {
     3
   );
 }
+var REDACTED_COMPLETION_FIELDS = [
+  "result",
+  "error",
+  "rawResultEvent"
+];
 async function sendTurnCompletion(mutation, args) {
+  for (const field of REDACTED_COMPLETION_FIELDS) {
+    const value = args[field];
+    if (typeof value === "string") args[field] = redactSecrets(value);
+  }
   appendTurnCheckpoint(args);
   releaseTurnLeaseForCompletion();
   await callConvexWithRetry("mutation", mutation, args);
@@ -5595,6 +5632,17 @@ async function deliverCompletionWithMedia(completionArgs) {
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
   await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
   if (!RUN_ID) await uploadAndAttachSandboxMedia({});
+}
+function harvestableFile(dir, file) {
+  if (file === "." || file === ".." || file.includes("/")) return null;
+  try {
+    if (!lstatSync(dir).isDirectory()) return null;
+    const fp = dir + "/" + file;
+    const st = lstatSync(fp);
+    return st.isFile() && st.nlink === 1 ? fp : null;
+  } catch {
+    return null;
+  }
 }
 function archivePostedFile(dir, file) {
   const postedDir = dir + "/.posted";
@@ -5615,7 +5663,8 @@ async function uploadAndAttachSandboxMedia(target2) {
     if (!existsSync6(recDir)) continue;
     for (const file of readdirSync2(recDir)) {
       if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
+      const fp = harvestableFile(recDir, file);
+      if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
       try {
         if (!isDuplicate(fp)) {
@@ -5638,7 +5687,8 @@ async function uploadAndAttachSandboxMedia(target2) {
     if (!existsSync6(ssDir)) continue;
     for (const file of readdirSync2(ssDir)) {
       if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
+      const fp = harvestableFile(ssDir, file);
+      if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
       const mimeType = mimeMap[ext] || "image/png";
       try {

@@ -2,6 +2,7 @@
 
 import { ConvexError, v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
@@ -295,18 +296,20 @@ export async function runStartupCommandsDirect(
 
   const errors: string[] = [];
   for (const command of commands) {
-    console.log(`[sandbox] runStartupCommands: running: ${command}`);
+    // Repo-configured commands can embed tokens; logs and errors show this.
+    const shown = redactSecrets(command);
+    console.log(`[sandbox] runStartupCommands: running: ${shown}`);
     try {
       // 10 minute timeout per command (supabase start can take a while)
       const output = await execHandle(sandbox, command, 600);
-      console.log(`[sandbox] runStartupCommands: completed: ${command}`);
+      console.log(`[sandbox] runStartupCommands: completed: ${shown}`);
       if (output.trim()) {
-        console.log(`[sandbox] output: ${output.slice(0, 500)}`);
+        console.log(`[sandbox] output: ${redactSecrets(output.slice(0, 500))}`);
       }
     } catch (e) {
       const msg = errorMessage(e, "command failed");
-      console.error(`[sandbox] runStartupCommands: failed: ${command}`, msg);
-      errors.push(`${command}: ${msg}`);
+      console.error(`[sandbox] runStartupCommands: failed: ${shown}`, msg);
+      errors.push(`${shown}: ${msg}`);
       // Continue with other commands even if one fails
     }
   }
@@ -485,6 +488,8 @@ export const runBackgroundCommands = internalAction({
     let restartAttempted = false;
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
+      // Repo-configured commands can embed tokens; logs and errors show this.
+      const shown = redactSecrets(command);
       const isConvexCommand = isConvexBackendCommand(command);
       // Everything per command runs in one try — including the pid check and
       // cleanup execs, which used to throw uncaught out of the whole action
@@ -508,7 +513,7 @@ export const runBackgroundCommands = internalAction({
           ).trim();
           if (alive === "alive") {
             console.log(
-              `[sandbox] runBackgroundCommands: still alive, skip: ${command}`,
+              `[sandbox] runBackgroundCommands: still alive, skip: ${shown}`,
             );
             continue;
           }
@@ -562,7 +567,7 @@ export const runBackgroundCommands = internalAction({
           ? buildConvexBackgroundScriptBody(command)
           : command;
         console.log(
-          `[sandbox] runBackgroundCommands: launching: ${command} (log: ${logPath})`,
+          `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );
         // The file API, not `echo <base64> | base64 -d`. The command is
         // repo-supplied and the Convex wrapper adds a multi-KB preamble, so an
@@ -614,10 +619,10 @@ export const runBackgroundCommands = internalAction({
         }
         const msg = errorMessage(e, "command failed");
         console.error(
-          `[sandbox] runBackgroundCommands: failed to launch: ${command}`,
+          `[sandbox] runBackgroundCommands: failed to launch: ${shown}`,
           msg,
         );
-        errors.push(`${command}: ${msg}`);
+        errors.push(`${shown}: ${msg}`);
         if (verdict !== "command-failed") {
           // The VM cannot run commands (wedged, or no longer running). Stop
           // cascading: record the skip and return a handled result — heal
@@ -800,7 +805,7 @@ export const watchConvexReadiness = internalAction({
       // Tail is best-effort context only.
     }
     const detail =
-      `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${logTail}`.slice(
+      `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${redactSecrets(logTail)}`.slice(
         0,
         4000,
       );

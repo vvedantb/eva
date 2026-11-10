@@ -7,7 +7,13 @@ import { action, internalAction } from "../_generated/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { internal } from "../_generated/api";
-import { execHandle, getSandboxHandle, workspaceDirShell } from "./helpers";
+import {
+  execHandle,
+  getSandboxHandle,
+  LEGACY_WORKSPACE_DIR,
+  WORKSPACE_DIR,
+  workspaceDirShell,
+} from "./helpers";
 import { WORKSPACE_ROOT } from "./workspaceLayout";
 import { launchChrome, startDesktopWithChrome } from "./desktop";
 import { VERCEL_EDITOR_INTERNAL_PORT } from "./previewProxy";
@@ -351,6 +357,9 @@ export const readSandboxFile = action({
     v.object({ status: v.literal("binary") }),
   ),
   handler: async (ctx, args) => {
+    if (!isValidSandboxViewerPath(args.path)) {
+      return { status: "not_found" as const };
+    }
     const handle = await authorizedRunningHandle(
       ctx,
       args.repoId,
@@ -360,15 +369,13 @@ export const readSandboxFile = action({
       return { status: "not_running" as const };
     }
 
-    // `p` is single-quoted by shell-quote, so an arbitrary path cannot inject.
     // Output: first line is the byte count (or the not-found marker), and the
     // file bytes follow the first newline. The script always exits 0 so
     // execHandle does not throw for a missing file.
-    const p = quote([args.path]);
     const script =
-      `p=${p}; ` +
-      `if [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
-      `else wc -c < "$p" | tr -d ' '; head -c ${MAX_FILE_VIEWER_BYTES} "$p"; fi`;
+      resolveViewerPathScript(args.path) +
+      `if [ ! -f "$c" ]; then echo ${NOT_FOUND_MARKER}; ` +
+      `else wc -c < "$c" | tr -d ' '; head -c ${MAX_FILE_VIEWER_BYTES} "$c"; fi`;
     const out = await execHandle(handle, script, 30);
 
     const newlineIndex = out.indexOf("\n");
@@ -405,6 +412,49 @@ export function isValidSandboxWritePath(path: string): boolean {
 }
 
 /**
+ * Roots the File Viewer may touch: the primary checkout (current and legacy
+ * path) and the multi-repo workspace. Home, config and `/tmp` at large hold
+ * bootstrap secrets (git credential helper config, sandbox env file).
+ */
+const VIEWER_ROOTS = [WORKSPACE_DIR, LEGACY_WORKSPACE_DIR, WORKSPACE_ROOT];
+
+/** Path segments the viewer never serves, even inside a root. */
+const VIEWER_DENIED_NAMES = [".git", ".eva-env.sh", "git-credentials.env"];
+
+/**
+ * Whether the File Viewer may read or write `path`: a clean absolute path
+ * under a viewer root with no denied segment. A pre-check only — symlinks are
+ * resolved and re-checked in the sandbox by `resolveViewerPathScript`.
+ */
+export function isValidSandboxViewerPath(path: string): boolean {
+  if (!isValidSandboxWritePath(path)) return false;
+  if (path.split("/").some((part) => VIEWER_DENIED_NAMES.includes(part))) {
+    return false;
+  }
+  return VIEWER_ROOTS.some((root) => path.startsWith(`${root}/`));
+}
+
+/**
+ * Shell prefix that sets `$c` to the symlink-resolved form of `path`, or to
+ * "" when the resolved path leaves the viewer roots or hits a denied name. A
+ * symlink inside the repo (or a symlinked parent dir) must not hop to
+ * credentials elsewhere in the sandbox. `path` is single-quoted by
+ * shell-quote, so it cannot inject.
+ */
+function resolveViewerPathScript(path: string): string {
+  const roots = VIEWER_ROOTS.map((root) => `${root}/*`).join("|");
+  const denied = VIEWER_DENIED_NAMES.flatMap((name) => [
+    `*/${name}`,
+    `*/${name}/*`,
+  ]).join("|");
+  return (
+    `p=${quote([path])}; c=$(readlink -f -- "$p" 2>/dev/null); ` +
+    `case "$c" in ${roots}) ;; *) c= ;; esac; ` +
+    `case "$c" in ${denied}) c= ;; esac; `
+  );
+}
+
+/**
  * Writes a file back into a running sandbox — the File Viewer's save path.
  *
  * Authorization is identical to readSandboxFile: authorizedRunningHandle checks
@@ -428,7 +478,7 @@ export const writeSandboxFile = action({
     v.object({ status: v.literal("too_large"), size: v.number() }),
   ),
   handler: async (ctx, args) => {
-    if (!isValidSandboxWritePath(args.path)) {
+    if (!isValidSandboxViewerPath(args.path)) {
       throw new Error("Invalid file path");
     }
 
@@ -450,10 +500,18 @@ export const writeSandboxFile = action({
       return { status: "not_running" as const };
     }
 
+    // Writes to the resolved path so a symlink cannot redirect the save
+    // outside the viewer roots. Only the path goes into this probe.
+    const probe = `${resolveViewerPathScript(args.path)}printf %s "$c"`;
+    const target = (await execHandle(handle, probe, 10)).trim();
+    if (!isValidSandboxViewerPath(target)) {
+      throw new Error("Invalid file path");
+    }
+
     // Goes through the provider's writeFile, never a shell command — see
     // MAX_INLINE_EXEC_CONTENT_BYTES in sandboxFiles.ts for why content must
     // never be interpolated into an exec argument.
-    await writeFileToSandbox(handle, args.path, args.content);
+    await writeFileToSandbox(handle, target, args.content);
     return { status: "ok" as const, size };
   },
 });
@@ -483,6 +541,9 @@ export const readSandboxMediaFile = action({
     v.object({ status: v.literal("too_large"), size: v.number() }),
   ),
   handler: async (ctx, args) => {
+    if (!isValidSandboxViewerPath(args.path)) {
+      return { status: "not_found" as const };
+    }
     const handle = await authorizedRunningHandle(
       ctx,
       args.repoId,
@@ -496,13 +557,12 @@ export const readSandboxMediaFile = action({
     // the first line, payload after the first newline. `base64 | tr -d '\n'`
     // rather than `base64 -w0` so this does not depend on GNU coreutils flags.
     // The script always exits 0 so execHandle does not throw for a missing file.
-    const p = quote([args.path]);
     const script =
-      `p=${p}; ` +
-      `if [ ! -f "$p" ]; then echo ${NOT_FOUND_MARKER}; ` +
-      `else sz=$(wc -c < "$p" | tr -d ' '); ` +
+      resolveViewerPathScript(args.path) +
+      `if [ ! -f "$c" ]; then echo ${NOT_FOUND_MARKER}; ` +
+      `else sz=$(wc -c < "$c" | tr -d ' '); ` +
       `if [ "$sz" -gt ${MAX_MEDIA_VIEWER_BYTES} ]; then echo ${TOO_LARGE_MARKER}; echo "$sz"; ` +
-      `else echo "$sz"; base64 "$p" | tr -d '\\n'; fi; fi`;
+      `else echo "$sz"; base64 "$c" | tr -d '\\n'; fi; fi`;
     const out = await execHandle(handle, script, 30);
 
     const newlineIndex = out.indexOf("\n");

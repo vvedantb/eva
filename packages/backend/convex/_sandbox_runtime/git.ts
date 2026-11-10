@@ -3,6 +3,7 @@
 import type { GenericActionCtx } from "convex/server";
 import { quote } from "shell-quote";
 import { formatDurationMsShort } from "@eva/shared/duration";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import {
   AUTO_PUBLISH_BRANCH_GIT_CONFIG,
   COMMIT_EXCLUDE_PATHSPECS,
@@ -137,13 +138,6 @@ async function cleanupTimedOutGitState(sandbox: SandboxHandle): Promise<void> {
   }
 }
 
-/** Strips GitHub tokens from command strings for safe logging.
- * Matches all GitHub token prefixes (ghs_, ghp_, gho_, ghu_) regardless of URL escaping.
- */
-function sanitizeCommand(command: string): string {
-  return command.replace(/gh[spou]_[A-Za-z0-9_]+/g, "***");
-}
-
 /** Executes a git command, cleaning up lock files on timeout errors. */
 /**
  * One lock for every Eva-side git command on a sandbox. Parallel chats share
@@ -165,7 +159,7 @@ async function execGitCommand(
   command: string,
   timeoutSeconds: number,
 ): Promise<string> {
-  const sanitized = sanitizeCommand(command);
+  const sanitized = redactSecrets(command);
   const startedAt = Date.now();
   logGit(`exec [timeout=${timeoutSeconds}s]: ${sanitized}`);
   try {
@@ -182,7 +176,7 @@ async function execGitCommand(
     const elapsed = Date.now() - startedAt;
     const message = error instanceof Error ? error.message : String(error);
     logGit(
-      `exec failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${sanitized} — ${message}`,
+      `exec failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${sanitized} — ${redactSecrets(message)}`,
     );
     if (isSandboxExecTimeout(message)) {
       await cleanupTimedOutGitState(sandbox);

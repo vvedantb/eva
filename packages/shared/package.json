@@ -23,6 +23,7 @@
     "./notificationTitle": "./src/notificationTitle.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",
+    "./redactSecrets": "./src/redactSecrets.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./storageUpload": "./src/storageUpload.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",

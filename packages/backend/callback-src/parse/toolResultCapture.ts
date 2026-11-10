@@ -6,6 +6,7 @@ import type {
   ToolCompleteResult,
 } from "../types.js";
 import { isJsonObject, readStringField } from "../utils.js";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import { headCap, STEP_FIELD_CAPS, tailCap } from "./stepBudget.js";
 
 /** Caps a command string for ProgressStep.command. */
@@ -23,7 +24,7 @@ export function buildStepOutput(
   text: string,
   exitCode?: number,
 ): StepOutput | undefined {
-  const trimmed = text.trim();
+  const trimmed = redactSecrets(text).trim();
   if (!trimmed && exitCode === undefined) {
     return undefined;
   }

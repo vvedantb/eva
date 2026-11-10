@@ -1,6 +1,7 @@
 "use node";
 import { randomToken, sha256Hex } from "@vvedantb/server";
 import { createHash } from "crypto";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import type { GenericActionCtx } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
@@ -161,11 +162,13 @@ export async function execHandle(
     (message) => new SandboxExecTimeoutError(message),
   );
   if (resp.exitCode !== 0) {
-    const output = resp.output?.trim() ?? "";
+    // Redacted: this error text reaches Convex logs and chat warnings, and a
+    // failing clone/push echoes its token-bearing URL.
+    const output = redactSecrets(resp.output?.trim() ?? "");
     // The command prefix is the only clue when the provider discards output on
     // a kill (e.g. exit 143 = SIGTERM at timeout) — without it the failing exec
     // is unidentifiable in logs.
-    const cmdHint = `cmd=${JSON.stringify(cmd.slice(0, 80))}`;
+    const cmdHint = `cmd=${JSON.stringify(redactSecrets(cmd.slice(0, 80)))}`;
     // Typed, not a bare Error: the sandbox answered, so it is alive. The type
     // is what stops its output (`relation "X" does not exist`) from ever being
     // read as "the sandbox is gone". See sandboxErrors.ts.
