@@ -106,6 +106,30 @@ export async function unreadLookupForRepo(
 }
 
 /**
+ * Up to this many entities, a list reads each one's chat read row by point
+ * lookup. Longer lists read the user's whole repo once instead
+ * (`unreadLookupForRepo`). Both give the same answer.
+ *
+ * The repo-wide read holds every session, task and project row the user has
+ * in the repo, so a short list of one kind pays for all three: `projects.list`
+ * read 618 documents for 50 projects in a repo with 300 sessions (load test).
+ */
+export const POINT_READ_LIMIT = 50;
+
+/** Unread check for a list of `count` entities in one repo (see `POINT_READ_LIMIT`). */
+export async function unreadLookupForList(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+  count: number,
+): Promise<(entity: ChatEntity) => Promise<boolean>> {
+  if (count <= POINT_READ_LIMIT) {
+    return (entity) => hasUnreadByPointRead(db, userId, entity);
+  }
+  return unreadLookupForRepo(db, userId, repoId);
+}
+
+/**
  * One-row variant of `unreadLookupForRepo` for short lists: a point read
  * instead of the user's whole repo. It ignores a read row filed under another
  * repo, exactly as the repo-wide lookup does, so both give the same answer.

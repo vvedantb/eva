@@ -118,6 +118,22 @@ function filler(seed: number, length: number): string {
   return out.join(" ").slice(0, length);
 }
 
+/**
+ * Sub-agent roster on a task or project row, about 850 bytes: the production
+ * average for `backgroundAgents` (400 newest tasks, 10 November 2026). List
+ * queries drop it, so it shows in bytes returned.
+ */
+function backgroundAgents(seed: number, startedAt: number) {
+  return Array.from({ length: 5 }, (_, i) => ({
+    toolUseId: `toolu_loadtest_${seed}_${i}_${"x".repeat(12)}`,
+    taskId: `b${seed}${i}loadtest`,
+    description: filler(seed + i, 60),
+    status: "completed",
+    startedAt: startedAt + i * 1000,
+    settledAt: startedAt + i * 1000 + 30_000,
+  }));
+}
+
 /** Spread timestamps across the last 60 days, newest last. */
 function ago(now: number, i: number, total: number): number {
   return now - Math.floor(((total - i) / Math.max(total, 1)) * 60 * DAY);
@@ -336,6 +352,7 @@ async function insertTaskWithChildren(
     repoId,
     projectId,
     taskNumber: i,
+    backgroundAgents: backgroundAgents(i, createdAt),
     ...(status === "draft" ? {} : { lastTurnFinishedAt: createdAt + DAY }),
     ...(i % 10 === 7 ? { deletedAt: createdAt + 2 * DAY } : {}),
   });
@@ -549,6 +566,7 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       phase: i % 4 === 0 ? "completed" : "in_progress",
       planningMode: i % 2 === 0 ? "interview" : "tasks_only",
       lastTurnFinishedAt: ago(now, i, total) + DAY,
+      backgroundAgents: backgroundAgents(i, ago(now, i, total)),
       ...(i % 10 === 9 ? { deletedAt: ago(now, i, total) } : {}),
     });
     await db.insert("projectDetails", {

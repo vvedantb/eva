@@ -33,9 +33,19 @@ export const projectPlanningModeValidator = v.union(
   v.literal("tasks_only"),
 );
 
-/** List rows always include a resolved planning mode (stored or inferred). */
+const {
+  backgroundAgents: _backgroundAgents,
+  terminalPanes: _terminalPanes,
+  terminalHistoryTail: _terminalHistoryTail,
+  ...projectListFields
+} = projectSummaryFields;
+
+/**
+ * List rows (`listRow`) always include a resolved planning mode (stored or
+ * inferred). The open project's panel reads the dropped fields from `get`.
+ */
 export const projectListItemValidator = v.object({
-  ...projectSummaryFields,
+  ...projectListFields,
   planningMode: projectPlanningModeValidator,
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
