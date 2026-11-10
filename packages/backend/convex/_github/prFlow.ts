@@ -11,6 +11,9 @@ import { isBranchNotAheadError } from "./prErrors";
 import { getActionRepoWithAccess } from "../functions";
 import type { Doc, Id } from "../_generated/dataModel";
 import { sessionRepoPullRequest } from "../_pullRequests/store";
+import { getInstallationOctokit } from "../githubAuth";
+import { addPullRequestToStack } from "./prStack";
+import { invalidatePrOverviewCache } from "./prOverview";
 import { sessionPullRequestLabels } from "./prLabels";
 
 /**
@@ -258,6 +261,14 @@ export const createDraftSessionPr = internalAction({
       `[github] Created draft PR for session ${args.sessionId}: ${result}`,
     );
 
+    if (session.stackOnPrNumber !== undefined) {
+      await ctx.scheduler.runAfter(0, internal.github.linkSessionPrToStack, {
+        repoId: session.repoId,
+        parentPrNumber: session.stackOnPrNumber,
+        prUrl: result,
+      });
+    }
+
     return result;
   },
 });
@@ -348,5 +359,55 @@ export const createDraftSessionRepoPr = internalAction({
     );
 
     return result;
+  },
+});
+
+/**
+ * Joins a stacked session's new PR to the GitHub stack of the PR it was started
+ * on. Scheduled after the draft opens rather than awaited, and best-effort: a
+ * repository without stacked PRs, or a parent that is no longer the top of its
+ * stack, leaves an ordinary PR whose base is the parent's branch — still
+ * reviewable and mergeable, only without the one-step stack merge.
+ */
+export const linkSessionPrToStack = internalAction({
+  args: {
+    repoId: v.id("githubRepos"),
+    parentPrNumber: v.number(),
+    prUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const childPrNumber = extractPrNumber(args.prUrl);
+    if (!childPrNumber) return null;
+    const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+      id: args.repoId,
+    });
+    if (!repo) return null;
+
+    const octokit = await getInstallationOctokit(repo.installationId);
+    try {
+      const stackNumber = await addPullRequestToStack(
+        octokit,
+        { owner: repo.owner, repo: repo.name },
+        args.parentPrNumber,
+        childPrNumber,
+      );
+      console.log(
+        `[github] Stacked #${childPrNumber} on #${args.parentPrNumber} (stack #${stackNumber})`,
+      );
+    } catch (error) {
+      console.error(
+        `[github] Could not stack #${childPrNumber} on #${args.parentPrNumber}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+
+    // Both overviews gained or changed a stack.
+    await Promise.all(
+      [args.parentPrNumber, childPrNumber].map((prNumber) =>
+        invalidatePrOverviewCache(ctx, { repoId: args.repoId, prNumber }),
+      ),
+    );
+    return null;
   },
 });

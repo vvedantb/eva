@@ -7,6 +7,7 @@ import { IconArrowNarrowRight, IconArrowUpRight } from "@tabler/icons-react";
 import { headerBlocker } from "./prMergeState";
 import { PrHeaderActions } from "./PrHeaderActions";
 import { PrRemedyButton } from "./PrRemedyButton";
+import { PrStackPopover } from "./PrStackPopover";
 import {
   ToneIcon,
   statusMeta,
@@ -71,6 +72,9 @@ export function ReviewHeader({
             />
             <span className="shrink-0">{overview.baseRef}</span>
           </span>
+          {overview.stack === null ? null : (
+            <PrStackPopover stack={overview.stack} />
+          )}
           <PrHeaderActions
             repoId={repoId}
             overview={overview}
