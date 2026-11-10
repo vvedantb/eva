@@ -256,6 +256,81 @@ describe("mobile api", () => {
     TIMEOUT_MS,
   );
 
+  test(
+    "getChat carries the sticky traits and the live sandbox branch",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.chatId, { lastReasoningLevel: "high", lastFastMode: true });
+        await ctx.db.patch(ids.sessionId, { sandboxBranch: "eva/fix-login", branchName: "eva/fix-login" });
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        traits: { effortLevel: "high", fastMode: true },
+        intendedBranch: "eva/fix-login",
+      });
+      // A stopped sandbox has no worktree, so its last branch is not shown.
+      await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "closed" }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).not.toHaveProperty("sandboxBranch");
+      await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "active" }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        sandboxBranch: "eva/fix-login",
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "setChatModel sets the sticky model and traits a reply then uses",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.sessionId, model: "claude:opus", reasoningLevel: "low" });
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.projectId, model: "claude:opus" });
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.projectId, reasoningLevel: "low" });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
+      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
+      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message: "hi" });
+      expect(await sent(t, ids.chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
+      await expect(
+        asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus" }),
+      ).rejects.toThrow("on the web");
+      await expect(
+        asUser.mutation(api.mobile.setChatModel, { target: ids.archivedChatId, model: "claude:opus" }),
+      ).rejects.toThrow("This chat is closed");
+      await expect(
+        asUser.mutation(api.mobile.setChatModel, { target: ids.strangerTaskId, model: "claude:opus" }),
+      ).rejects.toThrow("Not authorized");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "startSession takes the composer footer's model, traits and base branch",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const { sessionId } = await asUser.mutation(api.mobile.startSession, {
+        repoId: ids.repoId,
+        prompt: "Add dark mode",
+        model: "claude:opus",
+        reasoningLevel: "low",
+        baseBranch: "staging",
+      });
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session).toMatchObject({ baseBranch: "staging", lastModel: "claude:opus", lastReasoningLevel: "low" });
+      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      if (!chat) throw new Error("no chat");
+      expect(await sent(t, chat.parentId)).toEqual([
+        { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
   test("messageLinkHref aims a web path or URL at one message", () => {
     expect(messageLinkHref("/vvedantb/eva/sessions/42", "m1")).toBe("/vvedantb/eva/sessions/42?message=m1");
     expect(messageLinkHref("/vvedantb/eva/sessions/42?chat=2", "m1")).toBe(

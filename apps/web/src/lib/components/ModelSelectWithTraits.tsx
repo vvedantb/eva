@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  getModelTraits,
-  getReasoningLevelLabel,
-  resolveTraitsForDisplay,
+  modelTraitSummary,
   SIMPLE_VIEW_MODEL_LADDER,
   snapToSimpleViewLadder,
   type AIModel,
@@ -13,30 +11,6 @@ import { ModelPicker } from "@vvedantb/ui";
 import type { ModelPickerProps } from "@vvedantb/ui";
 import { ModelTraitsMenu } from "@/lib/components/ModelTraitsMenu";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-
-function triggerTraitUi(
-  model: AIModel,
-  traits: StoredModelTraits,
-): { suffix: string | undefined; showFastIcon: boolean } {
-  const config = getModelTraits(model);
-  const display = resolveTraitsForDisplay(model, traits);
-  const parts: string[] = [];
-  if (config.reasoning) {
-    parts.push(
-      getReasoningLevelLabel(display.effortLevel ?? config.reasoning.default),
-    );
-  }
-  if (config.contextWindow1m && display.use1mContext) {
-    parts.push("1M");
-  }
-  if (config.thinkingToggle && !display.thinkingEnabled) {
-    parts.push("No thinking");
-  }
-  return {
-    suffix: parts.length > 0 ? parts.join(" · ") : undefined,
-    showFastIcon: Boolean(config.fastMode && display.fastMode),
-  };
-}
 
 type ModelSelectWithTraitsProps = Omit<
   ModelPickerProps<AIModel>,
@@ -68,7 +42,7 @@ export function ModelSelectWithTraits({
   const traitsUi =
     !simpleView && onTraitsChange !== undefined && traits !== undefined
       ? {
-          ...triggerTraitUi(value, traits),
+          ...modelTraitSummary(value, traits),
           header: (
             <ModelTraitsMenu
               model={value}
@@ -86,7 +60,7 @@ export function ModelSelectWithTraits({
       value={value}
       disabled={disabled}
       triggerSuffix={traitsUi?.suffix}
-      showFastIcon={traitsUi?.showFastIcon}
+      showFastIcon={traitsUi?.fast}
       header={traitsUi?.header}
       simpleLadder={simpleView ? SIMPLE_VIEW_MODEL_LADDER : undefined}
       simpleLadderSnap={simpleView ? snapToSimpleViewLadder(value) : undefined}

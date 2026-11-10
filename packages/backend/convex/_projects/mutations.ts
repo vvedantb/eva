@@ -1,12 +1,15 @@
 import { internal } from "../_generated/api";
+import type { MutationCtx } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import {
   roleValidator,
   phaseValidator,
   priorityValidator,
   aiModelValidator,
   reasoningLevelValidator,
+  type ReasoningLevel,
 } from "../validators";
 import {
   authMutation,
@@ -32,6 +35,7 @@ import {
 import {
   composerTraitFields,
   hasComposerTraitUpdate,
+  type ComposerTraits,
 } from "../_shared/composerTraits";
 
 /**
@@ -365,19 +369,29 @@ export const setChatModel = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const providerAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      project.userId,
-      args.model,
-      project.providerAccountId,
-    );
-    await ctx.db.patch(args.id, {
-      lastChatModel: args.model,
-      providerAccountId,
-    });
+    await setProjectChatModel(ctx, project, args.model);
     return null;
   },
 });
+
+/**
+ * The write behind `setChatModel`, shared with `mobile.setChatModel`: the
+ * sticky chat model, and the owner's sticky account reconciled to its
+ * provider. The caller checks access.
+ */
+export async function setProjectChatModel(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+  model: Infer<typeof aiModelValidator>,
+): Promise<void> {
+  const providerAccountId = await reconcileProviderAccountForModel(
+    ctx.db,
+    project.userId,
+    model,
+    project.providerAccountId,
+  );
+  await ctx.db.patch(project._id, { lastChatModel: model, providerAccountId });
+}
 
 /**
  * Sticky sandbox-chat traits (effort / thinking / 1M). No `updatedAt` bump.
@@ -393,11 +407,22 @@ export const setTraits = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    if (!hasComposerTraitUpdate(args)) {
-      return null;
-    }
-    await ctx.db.patch(args.id, composerTraitFields(args));
+    const { id, ...traits } = args;
+    await getProjectWithAccess(ctx.db, id, ctx.userId);
+    await setProjectTraits(ctx, id, traits);
     return null;
   },
 });
+
+/**
+ * The write behind `setTraits`, shared with `mobile.setChatModel`: patches
+ * only the given traits. The caller checks access.
+ */
+export async function setProjectTraits(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  traits: ComposerTraits<ReasoningLevel>,
+): Promise<void> {
+  if (!hasComposerTraitUpdate(traits)) return;
+  await ctx.db.patch(projectId, composerTraitFields(traits));
+}

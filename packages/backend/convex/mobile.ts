@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { awaitingAnswerEntityIdsForRepo } from "./_chat/turnProjection";
@@ -11,6 +10,8 @@ import {
 } from "./_mobile/chatTarget";
 import { cancelChatExecution, sendSessionChatMessage } from "./_sessions/execution";
 import { createSession, type AuthMutationCtx } from "./_sessions/mutations";
+import { setSessionChatModel, setSessionChatTraits } from "./_sessionChats/mutations";
+import { setProjectChatModel, setProjectTraits } from "./_projects/mutations";
 import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
 import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
@@ -133,8 +134,9 @@ const traitArgs = {
 
 /**
  * The composer model picker: sets a chat's sticky model and traits, which
- * `sendMessage` then uses. Runs the web picker's own mutations, so a pick
- * reconciles the sticky account as it does on the web. Session and project
+ * `sendMessage` then uses. Shares the writes of the web picker's mutations
+ * (`sessionChats.setModel` / `setTraits`, `projects.setChatModel` /
+ * `setTraits`), so a pick reconciles the sticky account as on the web. Session and project
  * chats only: the web task chat picks `agentTasks.model`, which is not the
  * `lastChatModel` a phone task reply uses.
  */
@@ -146,18 +148,14 @@ export const setChatModel = authMutation({
     const { chat, entity } = await resolveWritableChat(ctx, target);
     if (!chat.canReply) throw new Error("This chat is closed");
     switch (entity.kind) {
-      case "session": {
-        const chatId = entity.context.chat._id;
-        if (model !== undefined) await ctx.runMutation(api.sessionChats.setModel, { chatId, model });
-        await ctx.runMutation(api.sessionChats.setTraits, { chatId, ...traits });
+      case "session":
+        if (model !== undefined) await setSessionChatModel(ctx, entity.context, model);
+        await setSessionChatTraits(ctx, entity.context.chat._id, traits);
         return null;
-      }
-      case "project": {
-        const id = entity.project._id;
-        if (model !== undefined) await ctx.runMutation(api.projects.setChatModel, { id, model });
-        await ctx.runMutation(api.projects.setTraits, { id, ...traits });
+      case "project":
+        if (model !== undefined) await setProjectChatModel(ctx, entity.project, model);
+        await setProjectTraits(ctx, entity.project._id, traits);
         return null;
-      }
       case "task":
         throw new Error("Pick a quick task's model on the web");
     }
