@@ -73,6 +73,7 @@ import {
   advanceTurn,
   bindTurnWorkflow,
   closeTurn,
+  isSupersededChatResult,
   openChatTurn,
   resolveCompletionTurn,
 } from "./_chat/turnStore";
@@ -1259,6 +1260,8 @@ export const saveResult = internalMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
+    const turn = await ctx.db.get(args.turnId);
+    if (isSupersededChatResult(turn, task.activeChatWorkflowId)) return null;
 
     const outcome = await applyChatTurnResult(ctx, {
       parentId: args.taskId,
@@ -1283,7 +1286,6 @@ export const saveResult = internalMutation({
       entityId: String(args.taskId),
     });
 
-    const turn = await ctx.db.get(args.turnId);
     if (turn) {
       await closeTurn(
         ctx,

@@ -65,13 +65,16 @@ export const taskExecutionWorkflow = workflow.define({
     let preserveSandboxOnFailure = false;
     let keepTaskSandboxActiveAfterRun = false;
 
-    try {
-      await step.runMutation(internal.taskWorkflow.updateRunToRunning, {
-        runId: args.runId,
-        taskId: args.taskId,
-        repoId: args.repoId,
-      });
+    // Outside the try: a run that is no longer queued (cancelled first) has
+    // nothing to finalize, and its cancel path already released the task slot
+    // and turn. Running the tail would clear a newer run's workflow id.
+    const startResult = await step.runMutation(
+      internal.taskWorkflow.updateRunToRunning,
+      { runId: args.runId, taskId: args.taskId, repoId: args.repoId },
+    );
+    if (startResult === "not_queued") return;
 
+    try {
       const data = await step.runQuery(internal.taskWorkflow.getTaskData, {
         taskId: args.taskId,
         repoId: args.repoId,

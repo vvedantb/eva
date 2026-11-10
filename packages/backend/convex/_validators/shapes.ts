@@ -226,6 +226,8 @@ export const scopeCheckHunkValidator = v.object({
   surface: v.optional(v.string()),
   /** P(the assistant's reply told the user about this change), 0..1. */
   mentioned: v.optional(v.number()),
+  /** P(the change shows in the turn's screenshots), 0..1; absent when none were judged. */
+  visible: v.optional(v.number()),
 });
 
 /**
@@ -246,6 +248,15 @@ export const scopeCheckValidator = v.object({
   /** True when the diff was clipped or hunks past the cap were skipped. */
   partial: v.boolean(),
   evaluatedAt: v.number(),
+  /** The screenshot pass; absent when the turn posted no judgeable screenshot. */
+  screenshots: v.optional(
+    v.object({
+      /** Screenshots Jev read. */
+      checked: v.number(),
+      /** P(the screenshots show what the prompt asked for); absent when unanswered. */
+      showsRequest: v.optional(v.number()),
+    }),
+  ),
 });
 
 export const automationFindingValidator = v.object({
@@ -368,6 +379,8 @@ export const envVarEntryValidator = v.object({
   key: v.string(),
   value: v.string(),
   sandboxExclude: v.optional(v.boolean()),
+  // Given to snapshot seed runs only; always stored with sandboxExclude: true.
+  seedOnly: v.optional(v.boolean()),
 });
 
 /** An env var entry as listed to the client: value masked, flag resolved. */
@@ -375,6 +388,7 @@ export const maskedEnvVarEntryValidator = v.object({
   key: v.string(),
   value: v.string(),
   sandboxExclude: v.boolean(),
+  seedOnly: v.boolean(),
 });
 
 /** One chat surface, keyed by its kind and the id of its owning row. */

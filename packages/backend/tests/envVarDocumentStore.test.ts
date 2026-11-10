@@ -4,6 +4,7 @@ import {
   maskEnvVarEntries,
   removeEnvVarEntry,
   sandboxEligibleEnvVars,
+  seedOnlyEnvVars,
   toggleEnvVarSandboxExclude,
   upsertEnvVarEntry,
 } from "../convex/_envVars/documentStore";
@@ -42,10 +43,59 @@ test("mask and sandbox filters", () => {
     { key: "B", value: "kept" },
   ];
   expect(maskEnvVarEntries(vars)).toEqual([
-    { key: "A", value: MASKED_ENV_VAR_VALUE, sandboxExclude: true },
-    { key: "B", value: MASKED_ENV_VAR_VALUE, sandboxExclude: false },
+    {
+      key: "A",
+      value: MASKED_ENV_VAR_VALUE,
+      sandboxExclude: true,
+      seedOnly: false,
+    },
+    {
+      key: "B",
+      value: MASKED_ENV_VAR_VALUE,
+      sandboxExclude: false,
+      seedOnly: false,
+    },
   ]);
   expect(sandboxEligibleEnvVars(vars)).toEqual([{ key: "B", value: "kept" }]);
+});
+
+test("seed-only vars reach seed runs and never sandboxes", () => {
+  const vars = toggleEnvVarSandboxExclude(
+    [
+      { key: "DEPLOY_KEY", value: "secret" },
+      { key: "PLAIN", value: "kept" },
+    ],
+    "DEPLOY_KEY",
+    false,
+    true,
+  );
+  expect(vars[0]).toEqual({
+    key: "DEPLOY_KEY",
+    value: "secret",
+    sandboxExclude: true,
+    seedOnly: true,
+  });
+  expect(sandboxEligibleEnvVars(vars)).toEqual([
+    { key: "PLAIN", value: "kept" },
+  ]);
+  expect(seedOnlyEnvVars(vars)).toEqual([
+    { key: "DEPLOY_KEY", value: "secret" },
+  ]);
+});
+
+test("a value edit keeps a seed-only var seed-only; un-toggling clears it", () => {
+  const seed = [
+    { key: "K", value: "1", sandboxExclude: true, seedOnly: true },
+  ];
+  expect(
+    upsertEnvVarEntry(seed, { key: "K", value: "2", sandboxExclude: true }),
+  ).toEqual([{ key: "K", value: "2", sandboxExclude: true, seedOnly: true }]);
+  expect(toggleEnvVarSandboxExclude(seed, "K", false)).toEqual([
+    { key: "K", value: "1", sandboxExclude: false },
+  ]);
+  expect(seedOnlyEnvVars(toggleEnvVarSandboxExclude(seed, "K", true))).toEqual(
+    [],
+  );
 });
 
 test("extractPrNumber reads /pull/N", () => {
