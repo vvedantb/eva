@@ -340,6 +340,14 @@ export function mergeButtonLabel(overview: PrOverview): string {
 
 // ── Reviews ─────────────────────────────────────────────────────────────────
 
+/** Parse a positive PR number from a GitHub pull URL, or undefined if absent/invalid. */
+export function prNumberFromGithubUrl(prUrl: string): number | undefined {
+  const match = /\/pull\/(\d+)(?:\/|$|\?|#)/.exec(prUrl);
+  if (match === null) return undefined;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
 /** The verdicts a review can carry, in the web composer order. */

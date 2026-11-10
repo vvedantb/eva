@@ -4,6 +4,7 @@ import {
   buildDiffFileEntries,
   diffFileKind,
   ignoreWhitespaceInPatch,
+  lineCommentTarget,
   summarizeDiffSize,
   unifiedDiffLines,
 } from "@eva/shared";
@@ -324,6 +325,25 @@ describe("unifiedDiffLines", () => {
       { kind: "added", text: "const b = 3;", oldLine: null, newLine: 11 },
       { kind: "hunk", text: "@@ -40 +40,2 @@" },
       { kind: "added", text: "---", oldLine: null, newLine: 40 },
+    ]);
+  });
+});
+
+describe("lineCommentTarget", () => {
+  it("anchors removed rows on the base side and the rest on the head side", () => {
+    const rows = unifiedDiffLines(
+      [
+        "@@ -9,2 +9,2 @@",
+        " const a = 1;",
+        "-const b = 2;",
+        "+const b = 3;",
+      ].join("\n"),
+    );
+    expect(rows.map(lineCommentTarget)).toEqual([
+      null,
+      { line: 9, side: "RIGHT", label: "9" },
+      { line: 10, side: "LEFT", label: "-10" },
+      { line: 10, side: "RIGHT", label: "+10" },
     ]);
   });
 });
