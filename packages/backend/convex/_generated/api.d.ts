@@ -66,6 +66,7 @@ import type * as _chat_chatParent from "../_chat/chatParent.js";
 import type * as _chat_chatResult from "../_chat/chatResult.js";
 import type * as _chat_daemonClaimPause from "../_chat/daemonClaimPause.js";
 import type * as _chat_projectChatDaemon from "../_chat/projectChatDaemon.js";
+import type * as _chat_runtimeContinue from "../_chat/runtimeContinue.js";
 import type * as _chat_seededRestoreAlert from "../_chat/seededRestoreAlert.js";
 import type * as _chat_stallRetry from "../_chat/stallRetry.js";
 import type * as _chat_stallWatchdog from "../_chat/stallWatchdog.js";
@@ -635,6 +636,7 @@ declare const fullApi: ApiFromModules<{
   "_chat/chatResult": typeof _chat_chatResult;
   "_chat/daemonClaimPause": typeof _chat_daemonClaimPause;
   "_chat/projectChatDaemon": typeof _chat_projectChatDaemon;
+  "_chat/runtimeContinue": typeof _chat_runtimeContinue;
   "_chat/seededRestoreAlert": typeof _chat_seededRestoreAlert;
   "_chat/stallRetry": typeof _chat_stallRetry;
   "_chat/stallWatchdog": typeof _chat_stallWatchdog;
