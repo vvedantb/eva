@@ -114,6 +114,17 @@ export function getTeamMembership(
     .first();
 }
 
+/** Throws unless the user is an Eva app admin (`users.isAdmin`). Gates app-wide settings. */
+export async function requireAppAdmin(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+): Promise<void> {
+  const user = await db.get(userId);
+  if (user?.isAdmin !== true) {
+    throw new Error("Only app admins can change app-wide settings");
+  }
+}
+
 /** Checks if a user has access to a team — i.e. is a member of it. */
 export async function hasTeamAccess(
   db: GenericDatabaseReader<DataModel>,
@@ -133,17 +144,6 @@ export async function requireTeamOwner(
   const membership = await getTeamMembership(db, teamId, userId);
   if (!membership || membership.role !== "owner") {
     throw new Error(errorMessage);
-  }
-}
-
-/** Throws unless the user is an Eva app admin (`users.isAdmin`). Gates app-wide settings. */
-export async function requireAppAdmin(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-): Promise<void> {
-  const user = await db.get(userId);
-  if (user?.isAdmin !== true) {
-    throw new Error("Only app admins can change app-wide settings");
   }
 }
 
