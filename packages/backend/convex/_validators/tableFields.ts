@@ -1050,6 +1050,9 @@ export const githubRepoFields = {
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
   mcpRootPrompt: v.optional(v.string()),
+  // startup/background/stop commands and devPort/devCommand: a read-only cache
+  // of `.eva/config.json` on the default branch (_evaConfig/cache.ts writes
+  // them). Sandboxes read this copy so a boot needs no GitHub call.
   startupCommands: v.optional(v.array(v.string())),
   backgroundCommands: v.optional(v.array(v.string())),
   // Clean-shutdown commands run before snapshotting a seeded sandbox so on-disk
@@ -1065,8 +1068,7 @@ export const githubRepoFields = {
   // differs skips the seeded snapshot (see resolveSandboxContext).
   seededFingerprint: v.optional(v.string()),
   // Last sync of the repo-owned `.eva/` folder on the default branch (see
-  // _evaConfig/sync.ts). Present ⇒ the repo owns its commands: the command
-  // fields above are a read-only cache of `.eva/config.json`.
+  // _evaConfig/sync.ts). Absent ⇒ the repo has no `.eva/config.json` yet.
   evaConfig: v.optional(
     v.object({
       ref: v.string(),
@@ -1074,7 +1076,7 @@ export const githubRepoFields = {
       // Parse error of the current file; the cache keeps the last good values.
       error: v.optional(v.string()),
       // False when the repo has the file but it does not list this app: the
-      // app keeps Convex-managed (editable) commands. See ownsRunCommands.
+      // app's commands are left as they were (add it to the file to set them).
       appListed: v.optional(v.boolean()),
       mcpServers: v.array(
         v.object({

@@ -145,9 +145,9 @@ export function SnapshotStatusTab({
           </h4>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Running-sandbox capture with DB and services already started. Only
-            needed when cold boot is too slow. Configure Stop Commands on an app
-            (Settings → App); upload seed files only if startup commands
-            reference them.
+            needed when cold boot is too slow. Add <code>stop</code> commands
+            for the app in <code>.eva/config.json</code>; upload seed files only
+            if startup commands reference them.
           </p>
           <div className="mt-3">
             <SeededSnapshotStatus
