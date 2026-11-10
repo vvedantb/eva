@@ -136,12 +136,24 @@ export async function requireTeamOwner(
   }
 }
 
-/** Checks if a user can access a task by verifying access to its parent repo or project. */
+/** A `draft` task is private to its creator; every other status is shared. */
+export function isTaskVisibleTo(
+  task: Pick<Doc<"agentTasks">, "status" | "createdBy">,
+  userId: Id<"users">,
+): boolean {
+  return task.status !== "draft" || task.createdBy === userId;
+}
+
+/** Checks if a user can access a task: draft privacy, then its parent repo or project. */
 export async function hasTaskAccess(
   db: GenericDatabaseReader<DataModel>,
-  task: { repoId?: Id<"githubRepos">; projectId?: Id<"projects"> },
+  task: Pick<
+    Doc<"agentTasks">,
+    "repoId" | "projectId" | "status" | "createdBy"
+  >,
   userId: Id<"users">,
 ): Promise<boolean> {
+  if (!isTaskVisibleTo(task, userId)) return false;
   if (task.repoId) return hasRepoAccess(db, task.repoId, userId);
   if (task.projectId) {
     const project = await db.get(task.projectId);

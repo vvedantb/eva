@@ -312,6 +312,13 @@ export const completeSyntheticTurn = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (
+      !project ||
+      !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))
+    ) {
+      throw new Error("Not authorized");
+    }
     const turnResolution = await resolveCompletionTurn(ctx, {
       entityId: args.projectId,
       turnId: args.turnId,

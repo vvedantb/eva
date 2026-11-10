@@ -17,7 +17,6 @@ export {
   remove,
   deleteCascade,
   clearMessages,
-  updateProjectSandbox,
   clearProjectSandbox,
   updateLastSandboxActivity,
   updateLastConversationMessage,

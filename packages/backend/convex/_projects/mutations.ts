@@ -2,7 +2,6 @@ import { internal } from "../_generated/api";
 import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { v } from "convex/values";
 import {
-  roleValidator,
   phaseValidator,
   priorityValidator,
   aiModelValidator,
@@ -213,13 +212,15 @@ export const update = authMutation({
   },
 });
 
-/** Appends a message to the project conversation history. */
+/**
+ * Appends the caller's own answer to the project interview. Assistant turns
+ * are written only by the interview workflow (internal mutations).
+ */
 export const addMessage = authMutation({
   args: {
     id: v.id("projects"),
-    role: roleValidator,
+    role: v.literal("user"),
     content: v.string(),
-    activityLog: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -230,7 +231,6 @@ export const addMessage = authMutation({
       {
         role: args.role,
         content: args.content,
-        activityLog: args.activityLog,
         userId: ctx.userId,
         startedAt: Date.now(),
       },
@@ -275,23 +275,6 @@ export const clearMessages = authMutation({
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await setProjectConversation(ctx.db, args.id, []);
-    return null;
-  },
-});
-
-/** Associates a sandbox ID with a project and records the activity timestamp. */
-export const updateProjectSandbox = authMutation({
-  args: {
-    id: v.id("projects"),
-    sandboxId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, {
-      sandboxId: args.sandboxId,
-      lastSandboxActivity: Date.now(),
-    });
     return null;
   },
 });
@@ -354,8 +337,8 @@ export const updateLastConversationMessage = authMutation({
 /**
  * Sticky sandbox-chat model (`lastChatModel`). No `updatedAt` bump — picker
  * changes are not conversation activity. Distinct from `projects.model`
- * (metadata / build prefs). A cross-provider pick also reconciles the owner's
- * sticky account to the new model's provider.
+ * (metadata / build prefs). An owner's cross-provider pick also reconciles
+ * their sticky account to the new model's provider.
  */
 export const setChatModel = authMutation({
   args: {
@@ -365,6 +348,13 @@ export const setChatModel = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    // Only the owner's pick moves the owner's sticky account (as for tasks in
+    // `applyProviderAccountUpdate`); a teammate's turn still reconciles it per
+    // turn in `resolveTurnProviderAccountId`.
+    if (ctx.userId !== project.userId) {
+      await ctx.db.patch(args.id, { lastChatModel: args.model });
+      return null;
+    }
     const providerAccountId = await reconcileProviderAccountForModel(
       ctx.db,
       project.userId,

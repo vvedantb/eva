@@ -398,6 +398,7 @@ export const handleCompletion = authMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !project.activeWorkflowId) return null;
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
     if (
       !(await settleAgentTurnCompletion(ctx, {
         entityId: args.projectId,

@@ -157,6 +157,14 @@ export const setSubscription = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     const targetUserId = args.userId ?? ctx.userId;
+    // A teammate can be added only if they can see the task; otherwise its
+    // notifications would leak the task to them. Removal is always allowed.
+    if (
+      args.subscribed &&
+      targetUserId !== ctx.userId &&
+      !(await hasTaskAccess(ctx.db, task, targetUserId))
+    )
+      throw new Error("That user cannot access this task");
     const existing = await ctx.db
       .query("taskSubscribers")
       .withIndex("by_task_and_user", (q) =>

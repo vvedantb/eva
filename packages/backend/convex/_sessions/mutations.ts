@@ -43,6 +43,7 @@ import {
 } from "../repoGroups";
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
+import { assertComposerMessageRole } from "../_messages/publicRole";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -319,7 +320,6 @@ export const addMessage = authMutation({
     chatId: v.id("sessionChats"),
     role: roleValidator,
     content: v.string(),
-    activityLog: v.optional(v.string()),
     clientId: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
@@ -330,6 +330,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    assertComposerMessageRole(args);
     const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
@@ -348,7 +349,6 @@ export const addMessage = authMutation({
       role: args.role,
       content: args.content,
       timestamp: Date.now(),
-      activityLog: args.activityLog,
       clientId: args.clientId,
       userId: ctx.userId,
       attachmentStorageIds: args.attachmentStorageIds,

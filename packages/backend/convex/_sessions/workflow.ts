@@ -1463,6 +1463,8 @@ export const completeSyntheticTurn = authMutation({
     const chatId = await resolveDaemonChatId(ctx.db, args);
     if (chatId === null) return null;
     const { chat, session } = await getSessionChatOrThrow(ctx.db, chatId);
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+      throw new Error("Not authorized");
     const streamingEntityId = sessionChatStreamingEntityId(chat._id);
     const turnResolution = await resolveCompletionTurn(ctx, {
       entityId: chat._id,
