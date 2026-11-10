@@ -7,8 +7,13 @@ import { Button, ModelPicker, Switch, toast, SettingsField, SettingsStack, Setti
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
+import { AlertWebhookFields } from "./AlertWebhookFields";
 import { IssueLabelField } from "./TriggerSection";
-import { automationTriggerOf, describeTrigger } from "./trigger";
+import {
+  automationTriggerOf,
+  createsTasks,
+  describeTrigger,
+} from "./trigger";
 
 /**
  * Settings tab for an installed system automation. eva owns the title, prompt
@@ -61,13 +66,23 @@ export function SystemAutomationSettings({
         <SettingsSection
           title="Trigger"
           description={describeTrigger(trigger)}
-          bodyVariant={trigger.event === "issue_labeled" ? "form" : "compact"}
+          bodyVariant={
+            trigger.event === "issue_labeled" ||
+            trigger.event === "production_alert"
+              ? "form"
+              : "compact"
+          }
+          bodyClassName={
+            trigger.event === "production_alert" ? "grid gap-5" : undefined
+          }
         >
           {trigger.event === "issue_labeled" ? (
             <IssueLabelField
               trigger={trigger}
               onChange={(next) => commit({ trigger: next })}
             />
+          ) : trigger.event === "production_alert" ? (
+            <AlertWebhookFields automationId={automation._id} />
           ) : (
             <p className="text-sm text-muted-foreground">
               Runs automatically; there is no schedule to set.
@@ -98,6 +113,19 @@ export function SystemAutomationSettings({
             />
           }
         />
+        {createsTasks(trigger) ? (
+          <SettingsToggleRow
+            title="Start tasks automatically"
+            description="Start each new task as soon as it is created. When off, tasks wait in To do for someone to start them."
+            action={
+              <Switch
+                checked={automation.autoStartTasks !== false}
+                onCheckedChange={(next) => commit({ autoStartTasks: next })}
+                aria-label="Start tasks automatically"
+              />
+            }
+          />
+        ) : null}
         {/* Event presets post a one-line note per run, so there is no
             summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (

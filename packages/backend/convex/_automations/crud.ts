@@ -134,6 +134,7 @@ export const update = authMutation({
     actionsEnabled: v.optional(v.boolean()),
     shared: v.optional(v.boolean()),
     sendEmail: v.optional(v.boolean()),
+    autoStartTasks: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -184,6 +185,9 @@ export const update = authMutation({
     if (args.actionsEnabled !== undefined)
       patch.actionsEnabled = args.actionsEnabled;
     if (args.sendEmail !== undefined) patch.sendEmail = args.sendEmail;
+    if (args.autoStartTasks !== undefined) {
+      patch.autoStartTasks = args.autoStartTasks;
+    }
 
     if (args.shared !== undefined) {
       if (args.contextRepoId === undefined) {

@@ -34,6 +34,11 @@ export {
 } from "./_automations/runs";
 
 export {
+  getAlertWebhook,
+  rotateAlertSecret,
+} from "./_automations/alertWebhook";
+
+export {
   createTasksFromFindings,
   autoStartTask,
 } from "./_automations/findings";
