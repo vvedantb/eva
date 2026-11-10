@@ -8,6 +8,14 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { IS_EMBEDDED } from "@/lib/embed/embedded";
 
 /**
+ * The routed content card. On `lg+` it sits inset in the shell (8px gap from
+ * `useSidebarContentOffset`) as a rounded `bg-surface` card, as in the
+ * `@vvedantb/ui` `AppShell.Content`. Below `lg` it stays full-bleed.
+ */
+export const SHELL_CONTENT_CARD_CLASS =
+  "bg-background lg:overflow-hidden lg:rounded-lg lg:bg-surface";
+
+/**
  * Padding that keeps routed content clear of the fixed sidebar in `Sidebar.tsx`.
  * Below `lg` it clears the mobile header (3.5rem plus the notch inset); on `lg+`
  * it clears the rail, or the rail plus panel. Uses the same `routeHasSidePanel`
@@ -27,8 +35,10 @@ export function useSidebarContentOffset(): string | null {
       isRepoRoute: parseSidebarRepoRoute(pathname).isRepoRoute,
       useChromeSessionTabs,
     });
-  // `20rem` matches the sidebar default until localStorage hydrates the width.
+  // `lg:p-2` is the 8px inset around the content card; the left pad adds the
+  // same 0.5rem to the sidebar width. `20rem` matches the sidebar default
+  // until localStorage hydrates the width.
   return railOnly
-    ? "pt-(--eva-mobile-header-height) lg:pt-0 lg:pl-16"
-    : "pt-(--eva-mobile-header-height) lg:pt-0 lg:pl-(--eva-sidebar-width,20rem)";
+    ? "pt-(--eva-mobile-header-height) lg:p-2 lg:pl-[calc(4rem+0.5rem)]"
+    : "pt-(--eva-mobile-header-height) lg:p-2 lg:pl-[calc(var(--eva-sidebar-width,20rem)+0.5rem)]";
 }

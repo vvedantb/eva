@@ -3,7 +3,10 @@ import type { ReactNode } from "react";
 import { SetupBanner } from "@/lib/components/SetupBanner";
 import { SessionChromeTabsBar } from "@/lib/components/sidebar/session-tabs/SessionChromeTabsBar";
 import { useChromeSessionTabsActive } from "@/lib/components/sidebar/session-tabs/useChromeSessionTabs";
-import { useSidebarContentOffset } from "@/lib/components/sidebar/useSidebarContentOffset";
+import {
+  SHELL_CONTENT_CARD_CLASS,
+  useSidebarContentOffset,
+} from "@/lib/components/sidebar/useSidebarContentOffset";
 import { RepoProvider, RepoGate } from "@/lib/contexts/RepoContext";
 import { LiveCursors } from "@/lib/components/LiveCursors";
 import { IS_EMBEDDED } from "@/lib/embed/embedded";
@@ -28,7 +31,12 @@ function MainContent({ children }: { children: ReactNode }) {
         contentOffset,
       )}
     >
-      <div className="relative flex h-full flex-col overflow-hidden bg-background">
+      <div
+        className={cn(
+          "relative flex h-full flex-col overflow-hidden",
+          SHELL_CONTENT_CARD_CLASS,
+        )}
+      >
         {chromeSessionTabs ? (
           <SessionChromeTabsBar pathname={pathname} />
         ) : null}
