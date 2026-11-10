@@ -6,6 +6,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { useSessionOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
+import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import {
   chatTurnOpenFromStatus,
@@ -49,10 +50,7 @@ export function useSessionAnnotationSend(
     isRouteActive,
   );
 
-  const messages = useHeldQuery(
-    api.messages.listByParent,
-    isRouteActive ? { parentId: chatId } : "skip",
-  );
+  const messages = useChatTranscript(isRouteActive ? chatId : "skip");
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
     isRouteActive ? { entityId: chatId } : "skip",
