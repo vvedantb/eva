@@ -74,8 +74,8 @@ const PROFILE_FIELDS: ReadonlyArray<ProfileField> = [
 
 /**
  * Resolves the current Clerk identity to a user record, creating one only as a
- * last resort. Lookup order: Clerk ID, then email (rebinding that record's
- * Clerk ID), then insert.
+ * last resort. Lookup order: Clerk ID, then verified email (rebinding that
+ * record's Clerk ID), then insert.
  */
 export const ensureUserExists = mutation({
   args: {},
@@ -140,7 +140,11 @@ export const ensureUserExists = mutation({
     // addresses unique per instance, so within one instance this can only fire
     // after an account is deleted and recreated, where reclaiming the record is
     // also what you want.
-    if (email) {
+    //
+    // Only a verified address may claim a record: otherwise anyone who signs up
+    // with an existing user's address unverified would take over their account.
+    // Unverified callers get a fresh record below instead.
+    if (email && identity.emailVerified === true) {
       const userWithSameEmail = await ctx.db
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", email))
