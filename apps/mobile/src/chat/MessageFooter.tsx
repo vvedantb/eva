@@ -2,7 +2,8 @@ import { findAIModelOption, getReasoningLevelLabel } from "@eva/backend";
 import { formatClockTime } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
 import { IconCheck, IconGitFork, IconLink } from "@tabler/icons-react-native";
-import { MessageAction, MessageActionsBar, MessageMeta, ProviderIcon } from "@vvedantb/native-ui/ai";
+import { MessageAction, MessageActionsBar, MessageMeta } from "@vvedantb/native-ui/ai";
+import { ProviderIcon } from "@vvedantb/native-ui/brand";
 import { palette } from "@vvedantb/native-ui/theme";
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
@@ -88,10 +89,19 @@ export function MessageFooter({
 }
 
 /**
- * The 12 provider mark in a 16 box, as the web `MessageModelIcon`. The web
- * tooltip text (model, effort, account) is its accessible name.
+ * The 12 provider mark in a 16 box, as the web `MessageModelIcon`. Its
+ * accessible name is the web tooltip's model, effort and account, without the
+ * provider prefix the web adds to the model (`formatModelDisplayLabel`).
  */
-function ModelIcon({ model, reasoningLevel, credentialSourceLabel }: { model: string; reasoningLevel?: string; credentialSourceLabel?: string }) {
+function ModelIcon({
+  model,
+  reasoningLevel,
+  credentialSourceLabel,
+}: {
+  model: string;
+  reasoningLevel?: string;
+  credentialSourceLabel?: string;
+}) {
   const option = findAIModelOption(model);
   const title = [option.label, reasoningLevel ? getReasoningLevelLabel(reasoningLevel) : undefined, credentialSourceLabel]
     .filter(Boolean)
