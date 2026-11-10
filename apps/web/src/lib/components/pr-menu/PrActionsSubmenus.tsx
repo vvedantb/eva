@@ -1,0 +1,155 @@
+"use client";
+
+import {
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  ConfirmSkipHint,
+  toast,
+  useRequestConfirm,
+} from "@vvedantb/ui";
+import type { Id } from "@eva/backend";
+import {
+  IconExternalLink,
+    IconGitPullRequestClosed,
+  IconLink,
+  IconStack2,
+} from "@tabler/icons-react";
+import { PrRow } from "./PrRow";
+import { requestPrClose } from "./prCloseRequest";
+import { useClosePullRequest } from "./useClosePullRequest";
+import { useStackNewSession } from "./useStackNewSession";
+
+/** The fields of a `pullRequests.listForOwner` row these menus need. */
+export interface PrMenuPullRequest {
+  _id: string;
+  prUrl: string;
+  prNumber: number;
+  state: "draft" | "open" | "merged" | "closed";
+  headBranch?: string;
+  title?: string;
+  repoId: Id<"githubRepos">;
+}
+
+/**
+ * The PR entries of a chat's "…" menu and right-click menu: one row per pull
+ * request, drawn like the stack popover's (`PrRow`). Each opens the same actions as the review header's menu — View on GitHub, Copy
+ * link, Stack a new session, Close without merging — so a PR can be handled
+ * without opening its review first.
+ */
+export function PrActionsSubmenus({
+  variant,
+  prs,
+}: {
+  variant: "context" | "dropdown";
+  prs: readonly PrMenuPullRequest[];
+}) {
+  const Sub = variant === "context" ? ContextMenuSub : DropdownMenuSub;
+  const SubTrigger =
+    variant === "context" ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
+  const SubContent =
+    variant === "context" ? ContextMenuSubContent : DropdownMenuSubContent;
+  const iconSize = variant === "context" ? 16 : 14;
+
+  return (
+    <>
+      {prs.map((pr) => (
+        <Sub key={pr._id}>
+          <SubTrigger className="max-w-80 items-start">
+            <PrRow
+              status={pr.state === "draft" ? "open" : pr.state}
+              draft={pr.state === "draft"}
+              title={pr.title}
+              number={pr.prNumber}
+              branch={pr.headBranch}
+            />
+          </SubTrigger>
+          <SubContent>
+            <PrActionItems variant={variant} pr={pr} iconSize={iconSize} />
+          </SubContent>
+        </Sub>
+      ))}
+    </>
+  );
+}
+
+function PrActionItems({
+  variant,
+  pr,
+  iconSize,
+}: {
+  variant: "context" | "dropdown";
+  pr: PrMenuPullRequest;
+  iconSize: number;
+}) {
+  const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
+  const Separator =
+    variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
+  const { request: requestConfirm } = useRequestConfirm();
+  const { close } = useClosePullRequest();
+  const { canStack, stack } = useStackNewSession();
+  const live = pr.state === "open" || pr.state === "draft";
+  const headRef = pr.headBranch;
+  const target = { repoId: pr.repoId, prNumber: pr.prNumber };
+
+  return (
+    <>
+      <Item asChild>
+        <a href={pr.prUrl} target="_blank" rel="noopener noreferrer">
+          <IconExternalLink size={iconSize} aria-hidden />
+          View on GitHub
+        </a>
+      </Item>
+      <Item
+        onSelect={() => {
+          void navigator.clipboard
+            .writeText(pr.prUrl)
+            .then(() => toast.success("Link copied"))
+            .catch(() => toast.error("Couldn't copy the link"));
+        }}
+      >
+        <IconLink size={iconSize} aria-hidden />
+        Copy link
+      </Item>
+      {live && headRef !== undefined && canStack(pr.repoId) ? (
+        <Item
+          onSelect={() =>
+            stack({ repoId: pr.repoId, prNumber: pr.prNumber, headRef })
+          }
+        >
+          <IconStack2 size={iconSize} aria-hidden />
+          Stack a new session
+        </Item>
+      ) : null}
+      {live ? (
+        <>
+          <Separator />
+          {/* Closing notifies every reviewer and stops CI, so it asks first;
+              Alt-held skips the dialog, as on the review header. */}
+          <Item
+            className="text-destructive"
+            onSelect={() =>
+              requestConfirm(
+                () => requestPrClose(target),
+                () => {
+                  void close(target);
+                },
+              )
+            }
+          >
+            <IconGitPullRequestClosed size={iconSize} aria-hidden />
+            Close without merging
+            <ConfirmSkipHint />
+          </Item>
+        </>
+      ) : null}
+    </>
+  );
+}

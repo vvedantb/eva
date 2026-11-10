@@ -1,6 +1,7 @@
 "use node";
 
 import { requiredEnv } from "@vvedantb/server";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -31,8 +32,8 @@ async function changelogFeedbackUrlBuilder(
 }
 
 /**
- * Delivers a run's `sent` email to every user with email notifications
- * enabled. Scheduled once, by the mutation that marks the email sent (auto-send
+ * Delivers a run's `sent` email to its recipients (`getRunForEmail`).
+ * Scheduled once, by the mutation that marks the email sent (auto-send
  * or a reviewed draft). A failed send is logged and skipped so it does not
  * abort the batch.
  */
@@ -45,11 +46,8 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = requiredEnv("WEB_APP_URL");
-    const recipients = await ctx.runQuery(
-      internal.users.listEmailRecipients,
-      {},
-    );
+    const appUrl = getEvaBaseUrl();
+    const { recipients } = run;
 
     let sent = 0;
     const failures: string[] = [];

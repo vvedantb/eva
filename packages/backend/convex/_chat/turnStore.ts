@@ -405,6 +405,25 @@ export async function resolveCompletionTurn(
   return { status: "current", turn };
 }
 
+/**
+ * True when a chat result arrives for a turn that was already closed (cancel,
+ * lease sweep) while a newer workflow holds the chat's slot. Saving it would
+ * write into the newer turn's reply and clear its slot, so the queue starts a
+ * third turn on top of the live one. Every chat surface binds the turn's
+ * workflow id before it fills the slot, so a mismatch means "not mine".
+ */
+export function isSupersededChatResult(
+  turn: Doc<"turns"> | null,
+  activeWorkflowId: string | undefined,
+): boolean {
+  return (
+    turn !== null &&
+    !turn.open &&
+    activeWorkflowId !== undefined &&
+    activeWorkflowId !== turn.workflowId
+  );
+}
+
 export async function closeTurn(
   ctx: MutationCtx,
   turn: Doc<"turns">,

@@ -12,6 +12,7 @@ import {
   KEEP_LAST_SNAPSHOTS,
   SNAPSHOT_TTL_MS,
 } from "../_sandbox/vercelSnapshotOptions";
+import { errorMessage } from "@vvedantb/server";
 
 function snapshotStillExpiring(expiresAt: number | null | undefined): boolean {
   if (expiresAt === null || expiresAt === undefined) return false;
@@ -226,7 +227,7 @@ export const inspectSnapshotRetention = internalAction({
               } catch (err) {
                 tombstoneGets.push({
                   id: snap.id,
-                  status: `get-failed:${err instanceof Error ? err.message : String(err)}`,
+                  status: `get-failed:${errorMessage(err)}`,
                   sizeBytes: -1,
                   expiresAt: null,
                 });
@@ -277,7 +278,7 @@ export const inspectSnapshotRetention = internalAction({
             snapshots: [],
             tombstoneGets: [],
             anyStillExpiring: false,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorMessage(err),
           });
         }
       }
@@ -372,7 +373,7 @@ export const bulkUpdateSnapshotRetention = internalAction({
           await handle.refresh();
         } catch (refreshErr) {
           console.log(
-            `[bulkUpdateSnapshotRetention] skip gone ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`,
+            `[bulkUpdateSnapshotRetention] skip gone ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${errorMessage(refreshErr)}`,
           );
           return { outcome: "skipped" };
         }
@@ -439,7 +440,7 @@ export const bulkUpdateSnapshotRetention = internalAction({
         return { outcome: "stillExpiring", cycled: true };
       } catch (err) {
         console.warn(
-          `[bulkUpdateSnapshotRetention] failed ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${err instanceof Error ? err.message : String(err)}`,
+          `[bulkUpdateSnapshotRetention] failed ${candidate.kind}=${candidate.entityId} sandbox=${candidate.sandboxId}: ${errorMessage(err)}`,
         );
         return { outcome: "skipped" };
       }
@@ -563,7 +564,7 @@ export const purgeDeletedSnapshotTombstones = internalAction({
             } catch (err) {
               console.warn(
                 `[purgeDeletedSnapshotTombstones] failed snapshotId=${snapshotId}: ${
-                  err instanceof Error ? err.message : String(err)
+                  errorMessage(err)
                 }`,
               );
               return "failed" as const;
@@ -581,7 +582,7 @@ export const purgeDeletedSnapshotTombstones = internalAction({
     } catch (err) {
       console.warn(
         `[purgeDeletedSnapshotTombstones] skip repo=${repoId}: ${
-          err instanceof Error ? err.message : String(err)
+          errorMessage(err)
         }`,
       );
     }
@@ -664,7 +665,7 @@ export const inspectSnapshotsByIds = internalAction({
       } catch (err) {
         console.warn(
           `[inspectSnapshotsByIds] skip repo=${repoId}: ${
-            err instanceof Error ? err.message : String(err)
+            errorMessage(err)
           }`,
         );
         continue;
@@ -689,7 +690,7 @@ export const inspectSnapshotsByIds = internalAction({
       } catch (err) {
         console.warn(
           `[inspectSnapshotsByIds] Sandbox.list failed project=${credentials.projectId}: ${
-            err instanceof Error ? err.message : String(err)
+            errorMessage(err)
           }`,
         );
       }
@@ -733,7 +734,7 @@ export const inspectSnapshotsByIds = internalAction({
                 row.deleted = true;
               } catch (delErr) {
                 row.error =
-                  delErr instanceof Error ? delErr.message : String(delErr);
+                  errorMessage(delErr);
               }
             }
           } else if (tryDelete && String(snap.status) !== "created") {

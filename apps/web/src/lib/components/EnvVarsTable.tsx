@@ -25,6 +25,7 @@ import {
   ListEnter,
 } from "@vvedantb/ui";
 import {
+  IconCamera,
   IconCheck,
   IconClipboard,
   IconCopy,
@@ -58,6 +59,18 @@ export interface EnvVar {
   key: string;
   value: string;
   sandboxExclude: boolean;
+  /** Given to snapshot seed runs only; implies sandboxExclude. */
+  seedOnly?: boolean;
+}
+
+/** Lock button cycle: in sandbox → seed only → excluded → in sandbox. */
+function nextSandboxScope(v: EnvVar): {
+  sandboxExclude: boolean;
+  seedOnly: boolean;
+} {
+  if (!v.sandboxExclude) return { sandboxExclude: true, seedOnly: true };
+  if (v.seedOnly) return { sandboxExclude: true, seedOnly: false };
+  return { sandboxExclude: false, seedOnly: false };
 }
 
 interface EnvVarsTableProps {
@@ -66,12 +79,14 @@ interface EnvVarsTableProps {
     key: string,
     value: string,
     sandboxExclude: boolean,
+    seedOnly?: boolean,
   ) => Promise<void>;
   onReveal?: (key: string) => Promise<string | null>;
   onRemove?: (key: string) => Promise<void>;
   onToggleSandboxExclude?: (
     key: string,
     sandboxExclude: boolean,
+    seedOnly: boolean,
   ) => Promise<void>;
   description: string;
   /** Repo tab shows VERCEL_PROJECT_ID; team tab omits repo-only infra slots. */
@@ -89,7 +104,9 @@ export function EnvVarsTable({
   scope = "repo",
   readOnly = false,
 }: EnvVarsTableProps) {
-  const [adding, setAdding] = useState(false);
+  /** Which section's add row is open: sandbox vars or seed-only vars. */
+  const [addingTo, setAddingTo] = useState<"sandbox" | "seed" | null>(null);
+  const adding = addingTo !== null;
   const [keyInput, setKeyInput] = useState("");
   const [valueInput, setValueInput] = useState("");
   const [saving, setSaving] = useState(false);
@@ -110,29 +127,31 @@ export function EnvVarsTable({
   const [bulkText, setBulkText] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
 
-  const startAdd = () => {
-    setAdding(true);
+  const startAdd = (target: "sandbox" | "seed") => {
+    setAddingTo(target);
     setKeyInput("");
     setValueInput("");
   };
 
   const cancelAdd = () => {
-    setAdding(false);
+    setAddingTo(null);
     setKeyInput("");
     setValueInput("");
   };
 
   const handleAdd = async () => {
     if (!keyInput.trim() || !valueInput.trim() || !onUpsert) return;
+    // A seed var is saved seed-only at once, so it never reaches a sandbox.
+    const seedOnly = addingTo === "seed";
     setSaving(true);
     try {
       await withMutationToast(
-        onUpsert(keyInput.trim(), valueInput, false),
+        onUpsert(keyInput.trim(), valueInput, seedOnly, seedOnly),
         "Variable added",
         "Couldn't add variable",
         "env-var-add",
       );
-      setAdding(false);
+      setAddingTo(null);
       setKeyInput("");
       setValueInput("");
     } catch {
@@ -274,10 +293,14 @@ export function EnvVarsTable({
   const sandboxVars = (
     freeformVars?.filter((v) => !v.sandboxExclude) ?? []
   ).sort((a, b) => a.key.localeCompare(b.key));
+  const seedOnlyVars = (freeformVars?.filter((v) => v.seedOnly) ?? []).sort(
+    (a, b) => a.key.localeCompare(b.key),
+  );
   const excludedVars = (
-    freeformVars?.filter((v) => v.sandboxExclude) ?? []
+    freeformVars?.filter((v) => v.sandboxExclude && !v.seedOnly) ?? []
   ).sort((a, b) => a.key.localeCompare(b.key));
-  const showTable = (freeformVars && freeformVars.length > 0) || adding;
+  const showTable =
+    (freeformVars && freeformVars.length > 0) || addingTo === "sandbox";
 
   const renderRow = (v: EnvVar, index: number) => (
     <ListEnter
@@ -383,20 +406,29 @@ export function EnvVarsTable({
                     size="icon-sm"
                     variant="ghost"
                     className="max-sm:hit-target"
-                    onClick={() =>
+                    onClick={() => {
+                      const next = nextSandboxScope(v);
                       void catchMutationError(
-                        onToggleSandboxExclude(v.key, !v.sandboxExclude),
+                        onToggleSandboxExclude(
+                          v.key,
+                          next.sandboxExclude,
+                          next.seedOnly,
+                        ),
                         "Couldn't update sandbox setting",
                         "env-var-sandbox-exclude",
-                      )
-                    }
+                      );
+                    }}
                     title={
-                      v.sandboxExclude
-                        ? "Excluded from sandbox (click to include)"
-                        : "Included in sandbox (click to exclude)"
+                      v.seedOnly
+                        ? "Snapshot builds only (click to exclude)"
+                        : v.sandboxExclude
+                          ? "Excluded from sandbox (click to include)"
+                          : "Included in sandbox (click for snapshot builds only)"
                     }
                   >
-                    {v.sandboxExclude ? (
+                    {v.seedOnly ? (
+                      <IconCamera size={14} className="text-warning" />
+                    ) : v.sandboxExclude ? (
                       <IconLock size={14} className="text-warning" />
                     ) : (
                       <IconLockOpen size={14} />
@@ -504,6 +536,10 @@ export function EnvVarsTable({
     </TableRow>
   ) : null;
 
+  // Seed-only vars need the scope toggle backend (repo and team tables).
+  const canAddSeedVars =
+    !readOnly && onUpsert !== undefined && onToggleSandboxExclude !== undefined;
+
   /** Add and bulk-paste both create free-form vars, so they sit on that card. */
   const freeformActions = readOnly ? undefined : (
     <div className="flex shrink-0 items-center gap-2">
@@ -515,7 +551,7 @@ export function EnvVarsTable({
         <IconClipboard size={14} />
         Paste
       </Button>
-      <Button size="sm" onClick={startAdd} disabled={adding}>
+      <Button size="sm" onClick={() => startAdd("sandbox")} disabled={adding}>
         <IconPlus size={14} />
         Add Variable
       </Button>
@@ -586,7 +622,7 @@ export function EnvVarsTable({
         <>
           {/* The table owns the card's full width, so the body carries no padding. */}
           <SettingsSection
-            title="Other variables"
+            title="Sandbox variables"
             description="Anything not covered by a known slot above."
             action={freeformActions}
             bodyVariant="list"
@@ -596,9 +632,9 @@ export function EnvVarsTable({
                 <Table className="min-w-[360px]">
                   {tableHeader}
                   <TableBody>
-                    {addingRow}
+                    {addingTo === "sandbox" && addingRow}
                     {sandboxVars.map(renderRow)}
-                    {sandboxVars.length === 0 && !adding && (
+                    {sandboxVars.length === 0 && addingTo !== "sandbox" && (
                       <TableRow className="hover:bg-transparent">
                         <TableCell
                           colSpan={3}
@@ -614,11 +650,54 @@ export function EnvVarsTable({
             ) : (
               <SettingsEmptyState
                 icon={IconKey}
-                title="No other variables"
+                title="No sandbox variables"
                 description="Add one to inject it into every sandbox for this scope."
               />
             )}
           </SettingsSection>
+
+          {(seedOnlyVars.length > 0 || canAddSeedVars) && (
+            <SettingsSection
+              title={
+                <span className="flex items-center gap-1.5">
+                  <IconCamera size={14} className="text-warning" />
+                  Snapshot builds only
+                </span>
+              }
+              description="Given to snapshot seed runs only — never injected into a session sandbox. Reference them in seed commands as $NAME."
+              action={
+                canAddSeedVars ? (
+                  <Button
+                    size="sm"
+                    onClick={() => startAdd("seed")}
+                    disabled={adding}
+                  >
+                    <IconPlus size={14} />
+                    Add Seed Variable
+                  </Button>
+                ) : undefined
+              }
+              bodyVariant="list"
+            >
+              {seedOnlyVars.length > 0 || addingTo === "seed" ? (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[360px]">
+                    {tableHeader}
+                    <TableBody>
+                      {addingTo === "seed" && addingRow}
+                      {seedOnlyVars.map(renderRow)}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <SettingsEmptyState
+                  icon={IconCamera}
+                  title="No seed variables"
+                  description="Add secrets that only snapshot seed commands need, such as a staging deploy key."
+                />
+              )}
+            </SettingsSection>
+          )}
 
           {excludedVars.length > 0 && (
             <SettingsSection

@@ -16,7 +16,7 @@ import {
   automationFindingValidator,
   findingTriageValidator,
   runStatusValidator,
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
 } from "../validators";
 import { authQuery, authMutation, hasRepoAccess } from "../functions";
@@ -35,7 +35,7 @@ import {
   recordCompletionLog,
   sendCompletionEvent,
 } from "../_taskWorkflow/helpers";
-import { listAutomationsForRepo, loadRunWithAccess } from "./helpers";
+import { automationsVisibleInRepo, loadRunWithAccess } from "./helpers";
 import { automationRunStreamingEntityId } from "../_chat/agentStreamIds";
 
 /** Lists the most recent 50 runs for a given automation, newest first. */
@@ -109,8 +109,35 @@ export const countUnreadAll = authQuery({
   returns: v.number(),
   handler: async (ctx) => {
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
+    // Reuse the repo rows already loaded: resolve each canonical id from them
+    // (reading a parent only when it is not in the list), and read each repo's
+    // automations once even when several child apps share one root.
+    const loadedRepoIds = new Set(repos.map((repo) => repo._id));
+    const rowsByRepo = new Map<
+      Id<"githubRepos">,
+      Promise<Array<Doc<"automations">>>
+    >();
+    const loadRepoRows = (repoId: Id<"githubRepos">) => {
+      const cached = rowsByRepo.get(repoId);
+      if (cached) return cached;
+      const rows = ctx.db
+        .query("automations")
+        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+        .collect();
+      rowsByRepo.set(repoId, rows);
+      return rows;
+    };
     const perRepo = await Promise.all(
-      repos.map((repo) => listAutomationsForRepo(ctx.db, repo._id)),
+      repos.map(async (repo) => {
+        const parentId = repo.parentRepoId;
+        const canonicalId =
+          parentId === undefined
+            ? repo._id
+            : loadedRepoIds.has(parentId) || (await ctx.db.get(parentId))
+              ? parentId
+              : repo._id;
+        return automationsVisibleInRepo(repo._id, canonicalId, loadRepoRows);
+      }),
     );
     // Shared monorepo automations surface into every child app, so dedupe
     // before counting or one unread run is counted once per app.
@@ -316,12 +343,7 @@ export const handleCompletion = authMutation({
   args: {
     automationRunId: v.id("automationRuns"),
     runId: v.optional(v.string()),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),

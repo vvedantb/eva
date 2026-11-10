@@ -15,6 +15,7 @@ import {
   resolveAutomationRepoId,
 } from "./helpers";
 import { resolveCanonicalRepoId } from "../_githubRepos/helpers";
+import { CHANGELOG_AUTOMATION_TITLE } from "../_changelog/entry";
 import {
   automationCronspec,
   getSystemAutomation,
@@ -34,6 +35,16 @@ function visibleAutomation(
 ): Doc<"automations"> | null {
   const visible = entityVisible(automation);
   return visible ? resolveAutomationDoc(visible) : null;
+}
+
+/**
+ * The weekly changelog title is reserved: `changelog.ts` finds that automation
+ * by title and it broadcasts to every user, so no other automation may take it.
+ */
+function assertTitleNotReserved(title: string): void {
+  if (title.trim() === CHANGELOG_AUTOMATION_TITLE) {
+    throw new Error("That automation title is reserved");
+  }
 }
 
 /** Lists all automations for a given repository. */
@@ -107,6 +118,7 @@ export const create = authMutation({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    assertTitleNotReserved(args.title);
     const now = Date.now();
     const numId = await allocateNumId(ctx.db, args.repoId, "automations");
     return await ctx.db.insert("automations", {
@@ -176,6 +188,11 @@ export const update = authMutation({
       ) {
         throw new Error("A system automation's trigger is managed by eva");
       }
+    }
+
+    // The changelog automation itself may keep (re-save) its own title.
+    if (args.title !== undefined && args.title !== automation.title) {
+      assertTitleNotReserved(args.title);
     }
 
     const patch: Partial<Doc<"automations">> = { updatedAt: Date.now() };

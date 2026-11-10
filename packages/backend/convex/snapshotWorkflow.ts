@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
 import { isTerminalSnapshotState } from "./_sandbox_runtime/snapshotStates";
+import { errorMessage } from "@vvedantb/server";
 
 // Detached seed-run poll loop (per app). The whole per-app pipeline (git
 // update, deps/build, daemons, seed, clean stop) runs as ONE detached script on
@@ -68,12 +69,21 @@ export const snapshotBuildWorkflow = workflow.define({
     // Rebuild the declarative base Image first (bootstrap / toolchain
     // changes). The nightly cron and Rebuild Now leave this unset.
     forceImageRebuild: v.optional(v.boolean()),
-    // Operational bootstrap path: seed app snapshots from the base Image
-    // instead of their previous seeded snapshots. Use once when a seeded app
-    // snapshot is too stale to boot its local services cleanly.
-    forceBaseSeed: v.optional(v.boolean()),
   },
   handler: async (step, args) => {
+    // Refresh the `.eva/config.json` cache first: the build and seed commands
+    // read below, and the fingerprint stored at capture, must be the file's
+    // values on the branch this build checks out.
+    const snapshotOwner = await step.runQuery(
+      internal.repoSnapshots.getRepoSnapshotInternal,
+      { repoSnapshotId: args.repoSnapshotId },
+    );
+    if (snapshotOwner) {
+      await step.runAction(internal._evaConfig.sync.syncEvaConfig, {
+        repoId: snapshotOwner.repoId,
+      });
+    }
+
     // Resolve config + repo (owner/name/installation drive git fetch auth).
     const config = await step.runQuery(
       internal.repoSnapshots.getRepoSnapshotInternal,
@@ -101,7 +111,7 @@ export const snapshotBuildWorkflow = workflow.define({
       });
       return;
     }
-    const branch = config.workflowRef ?? "main";
+    const branch = config.branch;
 
     const providerKind = await step.runAction(
       internal.sandbox.getSandboxProviderKind,
@@ -319,7 +329,7 @@ export const snapshotBuildWorkflow = workflow.define({
             } catch (e) {
               console.error(
                 `[snapshot] failed to delete previous Vercel base snapshot ${previousBaseSnapshotId}: ${
-                  e instanceof Error ? e.message : String(e)
+                  errorMessage(e)
                 }`,
               );
             }
@@ -441,6 +451,12 @@ export const snapshotBuildWorkflow = workflow.define({
           repoId: appRepoId,
         },
         { retry: { maxAttempts: 3, initialBackoffMs: 10000, base: 2 } },
+      );
+
+      // The inputs launchSeedRun is about to read, stamped on the snapshot.
+      const seededFingerprint = await step.runQuery(
+        internal.repoSnapshots.getCurrentSeedFingerprint,
+        { repoId: appRepoId },
       );
 
       // Launch the whole pipeline detached; poll its outcome markers. The
@@ -569,6 +585,7 @@ export const snapshotBuildWorkflow = workflow.define({
       await step.runMutation(internal.repoSnapshots.setSeededSnapshotName, {
         repoId: appRepoId,
         seededSnapshotName: effectiveSeededName,
+        ...(seededFingerprint !== null ? { seededFingerprint } : {}),
       });
       await step.runMutation(internal.repoSnapshots.recordSeededApp, {
         buildId: args.buildId,
@@ -600,7 +617,7 @@ export const snapshotBuildWorkflow = workflow.define({
       } catch (e) {
         console.error(
           `[snapshot] failed to schedule repo group rebuilds for repo ${appRepoId}: ${
-            e instanceof Error ? e.message : String(e)
+            errorMessage(e)
           }`,
         );
       }
@@ -620,14 +637,14 @@ export const snapshotBuildWorkflow = workflow.define({
         } catch (e) {
           console.error(
             `[snapshot] failed to delete previous seeded snapshot ${previousSeededSnapshotName}: ${
-              e instanceof Error ? e.message : String(e)
+              errorMessage(e)
             }`,
           );
         }
       }
     } catch (e) {
       console.error(
-        `[snapshot] single seeded build failed: ${e instanceof Error ? e.message : String(e)}`,
+        `[snapshot] single seeded build failed: ${errorMessage(e)}`,
       );
       if (prepSandboxId) {
         await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
@@ -635,7 +652,7 @@ export const snapshotBuildWorkflow = workflow.define({
           repoId: appRepoId,
         });
       }
-      await failBuild(e instanceof Error ? e.message : String(e));
+      await failBuild(errorMessage(e));
     }
   },
 });

@@ -26,6 +26,7 @@ import {
   IconMaximize,
 } from "@tabler/icons-react";
 import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
+import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import {
@@ -217,7 +218,7 @@ export function PreviewNavBar({
   });
 
   function postHistoryCommand(type: PreviewHistoryCommand) {
-    currentIframe()?.contentWindow?.postMessage({ type }, "*");
+    postToFrame(currentIframe(), { type });
   }
 
   useEffect(() => {
@@ -237,7 +238,7 @@ export function PreviewNavBar({
       const source = currentIframeRef.current();
       if (
         source === null ||
-        event.source !== source.contentWindow ||
+        !isFromFrame(event, source) ||
         typeof event.data !== "object" ||
         event.data === null ||
         !("type" in event.data)

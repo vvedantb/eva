@@ -8,6 +8,7 @@ import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import {
   previewActivityHmacMessage,
@@ -488,15 +489,17 @@ const pushWebhookSchema = z.object({
 });
 
 const SKILLS_ROOT_PREFIXES = [".agents/skills", ".claude/skills"];
+const EVA_CONFIG_ROOT_PREFIXES = [".eva"];
 
-/** True when a commit touches a supported skill root, or when GitHub sent no
+/** True when a commit touches one of the given roots, or when GitHub sent no
  * path lists (force-push / truncated payloads) so we still resync. */
-function pushTouchesSkills(
+function pushTouchesRoots(
   commits: Array<{
     added: string[];
     modified: string[];
     removed: string[];
   }>,
+  prefixes: ReadonlyArray<string>,
 ): boolean {
   if (commits.length === 0) return true;
   let sawAnyPath = false;
@@ -508,7 +511,7 @@ function pushTouchesSkills(
     ]) {
       sawAnyPath = true;
       if (
-        SKILLS_ROOT_PREFIXES.some(
+        prefixes.some(
           (prefix) => path === prefix || path.startsWith(`${prefix}/`),
         )
       ) {
@@ -684,12 +687,19 @@ http.route({
         );
         await ctx.scheduler.runAfter(
           0,
-          internal.githubWebhook.handlePushForSkillSync,
+          internal.githubWebhook.handlePushToBaseBranch,
           {
             owner: parsed.data.repository.owner.login,
             name: parsed.data.repository.name,
             branch,
-            touchedSkillsPath: pushTouchesSkills(parsed.data.commits),
+            touchedSkillsPath: pushTouchesRoots(
+              parsed.data.commits,
+              SKILLS_ROOT_PREFIXES,
+            ),
+            touchedEvaConfig: pushTouchesRoots(
+              parsed.data.commits,
+              EVA_CONFIG_ROOT_PREFIXES,
+            ),
           },
         );
       }
@@ -704,7 +714,7 @@ http.route({
  * installations resume setup; anything else lands on the codebase list.
  */
 function githubAuthReturnUrl(installationId: number | null): string {
-  const webAppUrl = process.env.WEB_APP_URL ?? "";
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   return installationId === null
     ? `${webAppUrl}/home`
     : `${webAppUrl}/setup/${installationId}`;
@@ -779,7 +789,7 @@ http.route({
 });
 
 function connectorAuthReturnUrl(returnPath: string | null): string {
-  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   const path =
     returnPath &&
     returnPath.startsWith("/settings") &&
@@ -884,7 +894,7 @@ http.route({
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!expected || !appUrl) {
       return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
         status: 500,

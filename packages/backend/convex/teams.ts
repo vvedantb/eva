@@ -14,6 +14,7 @@ import {
   requireTeamOwner,
 } from "./functions";
 import { teamFields } from "./_validators/tableFields";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Team doc fields plus resolved media URLs and membership role for list/get. */
 const teamWithLogoValidator = v.object({
@@ -281,6 +282,7 @@ export const remove = authMutation({
   args: { id: v.id("teams") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     const team = await ctx.db.get(args.id);
     if (!team) throw new Error("Team not found");
 

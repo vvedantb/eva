@@ -28,6 +28,7 @@ import {
   insertPrDescription,
   stripPrDescription,
 } from "./prDescriptionPrompt";
+import { errorMessage } from "@vvedantb/server";
 
 /** Claude CLI alias. Haiku (used for session summaries) misreads diffs when
  * asked to sketch their shape; the description is one short call per push. */
@@ -148,7 +149,7 @@ export const generatePrDescription = internalAction({
             });
           } catch (stopError) {
             console.error(
-              `[pr-description] ${label} re-stop failed: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
+              `[pr-description] ${label} re-stop failed: ${errorMessage(stopError)}`,
             );
           }
         }
@@ -178,7 +179,7 @@ export const generatePrDescription = internalAction({
       );
     } catch (error) {
       console.error(
-        `[pr-description] ${label} failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[pr-description] ${label} failed: ${errorMessage(error)}`,
       );
     }
     return null;

@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -8,15 +5,10 @@ import schema from "../convex/schema";
 import { sessionPrArchiveNotificationCopy } from "../convex/_sessions/prArchive";
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const testsDir = dirname(fileURLToPath(import.meta.url));
 
 const PR_URL = "https://github.com/vvedantb/eva/pull/664";
 const SESSION_TITLE = "Fix the login bug";
 const TIMEOUT_MS = 30_000;
-
-function notificationsSource(): string {
-  return readFileSync(join(testsDir, "../convex/notifications.ts"), "utf8");
-}
 
 async function fixture() {
   const t = convexTest(schema, modules);
@@ -355,27 +347,6 @@ describe("a session holding several pull requests", () => {
     },
     TIMEOUT_MS,
   );
-});
-
-describe("session_archived stays off the email pipeline", () => {
-  const source = notificationsSource();
-
-  test("is excluded from the daily digest", () => {
-    expect(source).toContain('"session_archived"');
-    const digestBlock = source.slice(
-      source.indexOf("const DIGEST_EXCLUDED_TYPES"),
-      source.indexOf("const DIGEST_EXCLUDED_TYPES") + 600,
-    );
-    expect(digestBlock).toContain('"session_archived"');
-  });
-
-  test("is not an instant-email type", () => {
-    const instantBlock = source.slice(
-      source.indexOf("const EMAIL_NOTIFICATION_TYPES"),
-      source.indexOf("const EMAIL_NOTIFICATION_TYPES") + 400,
-    );
-    expect(instantBlock).not.toContain("session_archived");
-  });
 });
 
 describe("disableAutoArchive experimental flag", () => {

@@ -3,7 +3,7 @@
 import { v, type Infer } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
-import { jwtVerify, SignJWT, importJWK } from "jose";
+import { jwtVerify } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
@@ -22,7 +22,7 @@ import {
   PR_WATCH_TOOL_NAMES,
 } from "./tools";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
-import { supabaseTools } from "./supabase";
+import { supabaseProjectRef, supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
@@ -43,9 +43,14 @@ import {
 import { prStateValidator } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { chatSourceArg, repoRefLabel } from "./toolShared";
-import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import {
+  customerConvexOrigin,
+  resolvePublicConvexCloudUrl,
+} from "../_env/publicConvexUrls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
+import { signSandboxUserJwt } from "../sandboxJwt";
 import { evaMcpServerInfo } from "./serverInfo";
+import { sleep } from "../_shared/async";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -233,21 +238,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
     return cached.jwt;
   }
 
-  const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
-  if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
-
-  const issuer = requiredEnv("CONVEX_SITE_URL");
-  const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
-  const kid = privateKeyJwk.kid ?? "sandbox-1";
-  const key = await importJWK(privateKeyJwk, "ES256");
-
-  const jwt = await new SignJWT({ sub: clerkUserId })
-    .setProtectedHeader({ alg: "ES256", kid })
-    .setIssuer(issuer)
-    .setAudience("convex")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(key);
+  const jwt = await signSandboxUserJwt(clerkUserId, "mcp");
 
   userJwtCache.set(clerkUserId, {
     jwt,
@@ -412,7 +403,9 @@ export const getRepoConvexCredentials = internalAction({
     if (!urlEntry || !keyEntry) return null;
 
     const creds: { convexUrl: string; deployKey: string; expiresAt: number } = {
-      convexUrl: urlEntry.value.replace(/\/$/, ""),
+      // Every deploy-key request (listTables, queryTable, runTestQuery) uses
+      // this URL, so this is the one place it is checked.
+      convexUrl: customerConvexOrigin(urlEntry.value.trim()),
       deployKey: keyEntry.value,
       expiresAt: Date.now() + CACHE_TTL_MS,
     };
@@ -1260,10 +1253,6 @@ async function readChatDocAsUser(
   return raw;
 }
 
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Reads one entity's preview sandbox state as the calling user, so the read
  * doubles as the access check. Each surface parks that state somewhere
@@ -1309,7 +1298,7 @@ async function ensureEntitySandboxActive(
         [surface.idArg]: id,
       });
     },
-    sleep: delay,
+    sleep,
   });
 }
 
@@ -1591,7 +1580,7 @@ export const mcpStopEntitySandbox = internalAction({
     const deadline = Date.now() + SANDBOX_STOP_SETTLE_TIMEOUT_MS;
     let settled = "stopping";
     while (Date.now() < deadline) {
-      await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
+      await sleep(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
       settled = await readEntitySandboxStatus(clerkUserId, kind, id);
       if (settled !== "stopping") break;
     }
@@ -1767,51 +1756,47 @@ export const orchestratorSetWatch = internalAction({
 // Supabase Proxy Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const supabaseTokenCache = new Map<
+const supabaseCredentialsCache = new Map<
   string,
-  { token: string; expiresAt: number }
+  { token: string; projectRef: string; expiresAt: number }
 >();
 
-export const resolveSupabaseToken = internalAction({
-  args: { clerkUserId: v.string() },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { clerkUserId }): Promise<string | null> => {
-    const cached = supabaseTokenCache.get(clerkUserId);
+/**
+ * The repo's own Supabase access token and project. A Supabase token reaches
+ * every project in its account, so tools only run against the project the
+ * repo names, never a token borrowed from another of the user's repos.
+ */
+export const resolveSupabaseCredentials = internalAction({
+  args: { repoId: v.string() },
+  returns: v.union(
+    v.object({ token: v.string(), projectRef: v.string() }),
+    v.null(),
+  ),
+  handler: async (
+    ctx,
+    { repoId },
+  ): Promise<{ token: string; projectRef: string } | null> => {
+    const cached = supabaseCredentialsCache.get(repoId);
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.token;
+      return { token: cached.token, projectRef: cached.projectRef };
     }
 
-    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
-      clerkId: clerkUserId,
-    });
-    if (!user) return null;
-    const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
-      userId: user._id,
-    });
+    const vars: EnvVar[] = await ctx.runAction(
+      internal.mcp.routes.getDecryptedRepoEnvVars,
+      { repoId },
+    );
+    const token = vars
+      .find((entry) => entry.key === "SUPABASE_ACCESS_TOKEN")
+      ?.value.trim();
+    const projectRef = supabaseProjectRef(vars);
+    if (!token || !projectRef) return null;
 
-    // Search for Supabase token in each repo's env vars
-    for (const { id: repoId } of repos) {
-      try {
-        const vars: EnvVar[] = await ctx.runAction(
-          internal.mcp.routes.getDecryptedRepoEnvVars,
-          { repoId },
-        );
-        const match: EnvVar | undefined = vars.find(
-          (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
-        );
-        if (match) {
-          supabaseTokenCache.set(clerkUserId, {
-            token: match.value,
-            expiresAt: Date.now() + CACHE_TTL_MS,
-          });
-          return match.value;
-        }
-      } catch {
-        // Skip failed repos
-      }
-    }
-
-    return null;
+    supabaseCredentialsCache.set(repoId, {
+      token,
+      projectRef,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+    return { token, projectRef };
   },
 });
 

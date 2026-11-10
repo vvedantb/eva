@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { deploymentStatusValidator, agentRunFields } from "../validators";
-import { authQuery, hasTaskAccess, hasRepoAccess } from "../functions";
+import {
+  authQuery,
+  hasTaskAccess,
+  hasRepoAccess,
+  isTaskVisibleTo,
+} from "../functions";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 
 /** Loads a run and its parent task, enforcing task access. Returns null if the run is missing or inaccessible. */
@@ -16,6 +21,23 @@ async function loadAccessibleRun(
   const task = await db.get(run.taskId);
   if (!task || !(await hasTaskAccess(db, task, userId))) return null;
   return { run, task };
+}
+
+/**
+ * Whether the caller may read a task named in a batch query that already
+ * checked `repoId`. A task in that repo needs only the draft check; any other
+ * task falls back to the full access check.
+ */
+async function canReadBatchTask(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+  taskId: Id<"agentTasks">,
+): Promise<boolean> {
+  const task = await db.get(taskId);
+  if (!task) return false;
+  if (task.repoId === repoId) return isTaskVisibleTo(task, userId);
+  return hasTaskAccess(db, task, userId);
 }
 
 export const agentRunValidator = v.object({
@@ -140,6 +162,8 @@ export const getTaskIdsWithLatestRunError = authQuery({
 
     const results = await Promise.all(
       args.taskIds.map(async (taskId) => {
+        if (!(await canReadBatchTask(ctx.db, ctx.userId, args.repoId, taskId)))
+          return null;
         const latestRun = await ctx.db
           .query("agentRuns")
           .withIndex("by_task", (q) => q.eq("taskId", taskId))
@@ -169,6 +193,8 @@ export const getLatestDeploymentStatuses = authQuery({
 
     const results = await Promise.all(
       args.taskIds.map(async (taskId) => {
+        if (!(await canReadBatchTask(ctx.db, ctx.userId, args.repoId, taskId)))
+          return null;
         const latestRunWithDeployment = await ctx.db
           .query("agentRuns")
           .withIndex("by_task", (q) => q.eq("taskId", taskId))

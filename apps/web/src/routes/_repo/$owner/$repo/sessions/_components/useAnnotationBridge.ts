@@ -6,6 +6,7 @@ import {
   parseAnnotationInbound,
   type PreviewAnnotationContext,
 } from "../_utils/-previewAnnotation";
+import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 
 export interface AnnotationPending {
   context: PreviewAnnotationContext;
@@ -16,7 +17,7 @@ function postAnnotateMessage(
   iframeRef: RefObject<HTMLIFrameElement | null>,
   payload: { type: string; active?: boolean },
 ): void {
-  iframeRef.current?.contentWindow?.postMessage(payload, "*");
+  postToFrame(iframeRef.current, payload);
 }
 
 /**
@@ -53,7 +54,7 @@ export function useAnnotationBridge({
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (!isFromFrame(event, iframeRef.current)) return;
 
       if (
         typeof event.data === "object" &&

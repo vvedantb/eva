@@ -35,6 +35,7 @@
  */
 import type { SandboxHandle } from "../_sandbox/provider";
 import { SWAP_FILE_PATH, writeSandboxFile } from "./sandboxFiles";
+import { errorMessage } from "@vvedantb/server";
 
 const ENSURE_SCRIPT_PATH = "/tmp/eva-ensure-swap.sh";
 const RELEASE_SCRIPT_PATH = "/tmp/eva-release-swap.sh";
@@ -238,7 +239,7 @@ async function runSwapScript(
     return status;
   } catch (error) {
     console.log(
-      `[sandbox] ${label}: skipped on ${sandbox.id} — ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox] ${label}: skipped on ${sandbox.id} — ${errorMessage(error)}`,
     );
     return "";
   }

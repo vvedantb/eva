@@ -1,3 +1,5 @@
+import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
+
 export type PreviewScreenshotInbound =
   | { type: "screenshot"; requestId: string; dataUrl: string }
   | { type: "error"; requestId: string; message: string };
@@ -38,7 +40,9 @@ const CAPTURE_TIMEOUT_MS = 15_000;
  * Asks the preview page to render its viewport and resolves with a PNG data
  * URL. Rejects with the page's own message, or on timeout.
  */
-export function requestPreviewScreenshot(target: Window): Promise<string> {
+export function requestPreviewScreenshot(
+  frame: HTMLIFrameElement,
+): Promise<string> {
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
@@ -47,7 +51,7 @@ export function requestPreviewScreenshot(target: Window): Promise<string> {
     }, CAPTURE_TIMEOUT_MS);
 
     function onMessage(event: MessageEvent) {
-      if (event.source !== target) return;
+      if (!isFromFrame(event, frame)) return;
       if (typeof event.data !== "object" || event.data === null) return;
       const inbound = parseScreenshotInbound(event.data);
       if (!inbound || inbound.requestId !== requestId) return;
@@ -61,9 +65,6 @@ export function requestPreviewScreenshot(target: Window): Promise<string> {
     }
 
     window.addEventListener("message", onMessage);
-    target.postMessage(
-      { type: "eva-preview-screenshot-capture", requestId },
-      "*",
-    );
+    postToFrame(frame, { type: "eva-preview-screenshot-capture", requestId });
   });
 }

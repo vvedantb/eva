@@ -7,7 +7,12 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { authMutation, authQuery, hasActiveRun } from "./functions";
+import {
+  authMutation,
+  authQuery,
+  hasActiveRun,
+  requireAppAdmin,
+} from "./functions";
 import {
   gatherAccessibleRepos,
   repoBasePath,
@@ -40,8 +45,8 @@ import {
   resolveIdleThresholds,
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
+import { chatEntityKindValidator } from "./_validators/enums";
 import {
-  sandboxActivityKindValidator,
   sandboxActivitySourceValidator,
   sandboxIdlePauseModeValidator,
 } from "./_validators/tableFields";
@@ -80,11 +85,12 @@ export const getSandboxIdlePauseSettings = authQuery({
   },
 });
 
-/** Settings-page write. Upserts the single `appSettings` row. */
+/** Settings-page write. Upserts the single `appSettings` row. App admins only. */
 export const setSandboxIdlePauseSettings = authMutation({
   args: settingsShape,
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireAppAdmin(ctx.db, ctx.userId);
     if (
       !Number.isFinite(args.afterAgentMinutes) ||
       !Number.isFinite(args.afterInteractionMinutes) ||
@@ -121,7 +127,7 @@ export const setSandboxIdlePauseSettings = authMutation({
 const AWAKE_PER_REPO_LIMIT = 64;
 
 const awakeSandboxValidator = v.object({
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
   title: v.string(),
   repoLabel: v.string(),

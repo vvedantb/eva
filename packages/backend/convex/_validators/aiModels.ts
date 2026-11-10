@@ -113,6 +113,8 @@ export const DEFAULT_REASONING_LEVEL: ReasoningLevel = "medium";
 export interface ModelReasoningTraits {
   levels: ReadonlyArray<ReasoningLevel>;
   default: ReasoningLevel;
+  /** The CLI's own default when Eva's `default` differs; omitted means equal. */
+  providerDefault?: ReasoningLevel;
   ultrathink?: boolean;
 }
 
@@ -142,6 +144,13 @@ const CLAUDE_REASONING_FULL: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh", "max"],
   default: "high",
   ultrathink: true,
+};
+
+/** Opus defaults to medium in Eva; the Claude CLI defaults to high. */
+const CLAUDE_REASONING_OPUS: ModelReasoningTraits = {
+  ...CLAUDE_REASONING_FULL,
+  default: "medium",
+  providerDefault: "high",
 };
 
 const CLAUDE_REASONING_NO_XHIGH: ModelReasoningTraits = {
@@ -284,7 +293,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     provider: "claude",
     label: "Opus",
     requiresAuth: true,
-    reasoning: CLAUDE_REASONING_FULL,
+    reasoning: CLAUDE_REASONING_OPUS,
     contextWindow: 200000,
   },
   {
@@ -751,13 +760,12 @@ export function buildTraitsExecutionPayload(
   const traits = getModelTraits(model);
   const payload: ModelTraitsExecutionArgs = {};
 
-  if (traits.reasoning && stored.effortLevel !== undefined) {
-    const { default: defaultLevel } = traits.reasoning;
-    if (stored.effortLevel !== defaultLevel) {
-      const resolved = resolveReasoningLevel(model, stored.effortLevel);
-      if (resolved) {
-        payload.reasoningLevel = resolved;
-      }
+  if (traits.reasoning) {
+    const { default: defaultLevel, providerDefault = defaultLevel } =
+      traits.reasoning;
+    const resolved = resolveReasoningLevel(model, stored.effortLevel);
+    if (resolved && resolved !== providerDefault) {
+      payload.reasoningLevel = resolved;
     }
   }
 

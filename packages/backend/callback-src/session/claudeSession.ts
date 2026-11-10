@@ -13,12 +13,13 @@ import { callbackState as S } from "../runtime/state.js";
 import type { SessionMode, StartupStep } from "../types.js";
 import {
   buildClaudeTranscriptPath,
+  isSafeClaudeSessionId,
   copyBaseClaudeConfig,
   copyFileIfPresent,
   log,
   logTranscriptStats,
   runTimedBashSync,
-  tryParseJson,
+  tryParseJsonObject,
 } from "../utils.js";
 
 /** Builds the startup progress step label and detail for the Claude CLI. */
@@ -59,15 +60,15 @@ function readClaudeSessionState(): { resumeSessionId: string } | null {
   if (!existsSync(CLAUDE_LOCAL_STATE_FILE)) {
     return null;
   }
-  const parsed = tryParseJson(readFileSync(CLAUDE_LOCAL_STATE_FILE, "utf8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(
+    readFileSync(CLAUDE_LOCAL_STATE_FILE, "utf8"),
+  );
+  if (!parsed) return null;
   const resumeSessionId =
     typeof parsed.resumeSessionId === "string"
       ? parsed.resumeSessionId.trim()
       : "";
-  if (!resumeSessionId) {
+  if (!isSafeClaudeSessionId(resumeSessionId)) {
     return null;
   }
   return { resumeSessionId };
@@ -117,7 +118,7 @@ function collectClaudeTranscriptSessionIds(): string[] {
   if (currentSessionId) {
     sessionIds.add(currentSessionId);
   }
-  return Array.from(sessionIds);
+  return Array.from(sessionIds).filter(isSafeClaudeSessionId);
 }
 
 function hydratePersistedClaudeState(): void {
@@ -164,12 +165,9 @@ function ensureClaudeWorkspaceTrust(): void {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
   const parsed = existsSync(configPath)
-    ? tryParseJson(readFileSync(configPath, "utf8"))
+    ? tryParseJsonObject(readFileSync(configPath, "utf8"))
     : null;
-  const config =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? { ...parsed }
-      : {};
+  const config = parsed ? { ...parsed } : {};
   const rawProjects = config.projects;
   const projects =
     rawProjects &&

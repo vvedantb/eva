@@ -6,6 +6,8 @@ import { internalQuery } from "../_generated/server";
 import { authQuery, hasTeamAccess, userCanAccessRepo } from "../functions";
 import {
   findReposByOwnerAndName,
+  findSiblingRepos,
+  findSiblingsOf,
   gatherAccessibleRepos,
   githubRepoValidator,
   githubRepoWithLogoValidator,
@@ -295,12 +297,12 @@ export const listByTeam = authQuery({
   },
 });
 
-/** Internal: all repo ids sharing owner/name (monorepo siblings + self). */
-export const listRepoIdsByOwnerAndName = internalQuery({
-  args: { owner: v.string(), name: v.string() },
+/** Internal: sibling repo ids of a repo (same owner/name and team, self included). */
+export const listSiblingRepoIds = internalQuery({
+  args: { repoId: v.id("githubRepos") },
   returns: v.array(v.id("githubRepos")),
   handler: async (ctx, args) => {
-    const siblings = await findReposByOwnerAndName(ctx.db, args);
+    const siblings = await findSiblingRepos(ctx.db, args.repoId);
     return siblings.map((repo) => repo._id);
   },
 });
@@ -336,9 +338,11 @@ export const listSiblingApps = authQuery({
   ),
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
-    if (!repo) return [];
+    if (!repo || !(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
+      return [];
+    }
 
-    const siblings = await findReposByOwnerAndName(ctx.db, repo);
+    const siblings = await findSiblingsOf(ctx.db, repo);
 
     return siblings
       .filter((s) => s._id !== args.repoId && s.rootDirectory)

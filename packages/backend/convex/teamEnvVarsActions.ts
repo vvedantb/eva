@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import { encryptValue } from "./encryption";
 import { decryptStoredEntry } from "./_envVars/encryptedEntries";
 import { assertActionTeamAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
 /** Decrypts and reveals the plaintext value of a specific team env var. */
 export const revealValue = action({
@@ -15,6 +16,7 @@ export const revealValue = action({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await assertActionTeamAccess(ctx, args.teamId);
     const vars: Array<{ key: string; value: string }> = await ctx.runQuery(
       internal.teamEnvVars.getAllInternal,
@@ -31,9 +33,12 @@ export const upsertVar = action({
     key: v.string(),
     value: v.string(),
     sandboxExclude: v.optional(v.boolean()),
+    // Seed-only: stored for snapshot seed runs, never injected into a sandbox.
+    seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await assertActionTeamAccess(ctx, args.teamId);
     const stored = encryptValue(args.value);
     await ctx.runMutation(internal.teamEnvVars.upsertVarInternal, {
@@ -41,6 +46,7 @@ export const upsertVar = action({
       key: args.key,
       value: stored,
       sandboxExclude: args.sandboxExclude,
+      seedOnly: args.seedOnly,
     });
     return null;
   },

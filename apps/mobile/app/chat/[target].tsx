@@ -31,9 +31,6 @@ import { Fragment, useState } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
-import { SandboxBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter, useSimpleView } from "@/chat/ComposerFooter";
-import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
 import { MessageFooter } from "@/chat/MessageFooter";
@@ -229,8 +226,6 @@ export default function ChatScreen() {
           <PromptInput
             layout="inline"
             shape="pill"
-            value={draft}
-            onChangeText={setDraft}
             onSubmit={handleSend}
             placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
             leading={
@@ -246,37 +241,6 @@ export default function ChatScreen() {
               ) : null
             }
             toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
-            footer={
-              <ComposerFooter
-                repoId={chat.repoId}
-                draft={draft}
-                onDraftChange={setDraft}
-                leading={
-                  chat.sandboxBranch && !simpleView ? (
-                    <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
-                  ) : undefined
-                }
-                model={
-                  // A quick task's web picker sets a model a phone reply does not use (`mobile.setChatModel`).
-                  chat.kind === "task" ? undefined : (
-                    <ModelChip
-                      repoId={chat.repoId}
-                      model={normalizeAIModel(chat.model)}
-                      traits={chat.traits}
-                      onModelChange={(model) => handlePick({ model })}
-                      onTraitsChange={(partial) =>
-                        handlePick({
-                          reasoningLevel: partial.effortLevel,
-                          thinkingEnabled: partial.thinkingEnabled,
-                          use1mContext: partial.use1mContext,
-                          fastMode: partial.fastMode,
-                        })
-                      }
-                    />
-                  )
-                }
-              />
-            }
           />
         </View>
       ) : (

@@ -105,6 +105,57 @@ export async function unreadLookupForRepo(
   };
 }
 
+/**
+ * Up to this many tasks, task enrichment reads each task's run summary and
+ * chat read row by point lookup; longer lists read the user's whole repo once
+ * (`unreadLookupForRepo`). Both give the same answer. Point reads for every
+ * task lost here: 216 ms against 146 ms at 150 tasks, and at 1,500 tasks they
+ * hit Convex's 4,096 reads per function (load test, 10 November 2026).
+ */
+export const POINT_READ_LIMIT = 50;
+
+/**
+ * Up to this many entities, `unreadLookupForList` reads one chat read row
+ * each. It costs one read per row, so it stays well under the 4,096 reads a
+ * function may make. The repo-wide read holds every session, task and project
+ * row the user has in the repo, so a list of one kind paid for all three:
+ * `projects.list` for 500 projects beside 3,000 sessions read 6,128 documents
+ * in 1.8 s that way, and 753 documents in 313 ms by point reads (load test).
+ */
+const LIST_POINT_READ_LIMIT = 1_000;
+
+/** Unread check for a list of `count` entities in one repo (see `LIST_POINT_READ_LIMIT`). */
+export async function unreadLookupForList(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+  count: number,
+): Promise<(entity: ChatEntity) => Promise<boolean>> {
+  if (count <= LIST_POINT_READ_LIMIT) {
+    return (entity) => hasUnreadByPointRead(db, userId, entity);
+  }
+  return unreadLookupForRepo(db, userId, repoId);
+}
+
+/**
+ * One-row variant of `unreadLookupForRepo` for short lists: a point read
+ * instead of the user's whole repo. It ignores a read row filed under another
+ * repo, exactly as the repo-wide lookup does, so both give the same answer.
+ */
+export async function hasUnreadByPointRead(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  entity: ChatEntity,
+): Promise<boolean> {
+  if (entity.lastTurnFinishedAt === undefined) return false;
+  const row = await getReadRow(db, userId, entity._id);
+  return hasUnreadFor(
+    userId,
+    entity,
+    row !== null && row.repoId === entity.repoId ? row : null,
+  );
+}
+
 /** Unread state of the open chat, plus the read time the "NEW" divider anchors on. */
 export const isUnread = authQuery({
   args: { parentId: chatTurnEntityIdValidator },

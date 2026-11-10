@@ -20,7 +20,11 @@ import { requireCurrentUserId } from "./_auth/currentUser";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
-import { buildProjectBranchName } from "./_git/branchNames";
+import {
+  buildTaskBranchName,
+  resolveProjectBranchName,
+} from "./_git/branchNames";
+import { cancelScheduledFunction } from "./_scheduling/helpers";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -110,6 +114,17 @@ export function getTeamMembership(
     .first();
 }
 
+/** Throws unless the user is an Eva app admin (`users.isAdmin`). Gates app-wide settings. */
+export async function requireAppAdmin(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+): Promise<void> {
+  const user = await db.get(userId);
+  if (user?.isAdmin !== true) {
+    throw new Error("Only app admins can change app-wide settings");
+  }
+}
+
 /** Checks if a user has access to a team — i.e. is a member of it. */
 export async function hasTeamAccess(
   db: GenericDatabaseReader<DataModel>,
@@ -132,12 +147,24 @@ export async function requireTeamOwner(
   }
 }
 
-/** Checks if a user can access a task by verifying access to its parent repo or project. */
+/** A `draft` task is private to its creator; every other status is shared. */
+export function isTaskVisibleTo(
+  task: Pick<Doc<"agentTasks">, "status" | "createdBy">,
+  userId: Id<"users">,
+): boolean {
+  return task.status !== "draft" || task.createdBy === userId;
+}
+
+/** Checks if a user can access a task: draft privacy, then its parent repo or project. */
 export async function hasTaskAccess(
   db: GenericDatabaseReader<DataModel>,
-  task: { repoId?: Id<"githubRepos">; projectId?: Id<"projects"> },
+  task: Pick<
+    Doc<"agentTasks">,
+    "repoId" | "projectId" | "status" | "createdBy"
+  >,
   userId: Id<"users">,
 ): Promise<boolean> {
+  if (!isTaskVisibleTo(task, userId)) return false;
   if (task.repoId) return hasRepoAccess(db, task.repoId, userId);
   if (task.projectId) {
     const project = await db.get(task.projectId);
@@ -392,9 +419,7 @@ export async function isFirstTaskOnBranch(
   if (projectId) {
     const project = await db.get(projectId);
     if (!project) return true;
-    const branch =
-      project.branchName ??
-      buildProjectBranchName(project._id, project.branchVersion);
+    const branch = resolveProjectBranchName(project._id, project);
     return (
       (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
     );
@@ -405,7 +430,7 @@ export async function isFirstTaskOnBranch(
     (await findLivePullRequestOnBranch(
       db,
       task.repoId,
-      `eva/task-${taskId}`,
+      buildTaskBranchName(taskId),
     )) === null
   );
 }
@@ -416,13 +441,7 @@ export async function deleteTaskRelatedData(
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  if (task?.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
+  await cancelScheduledFunction(ctx, task?.scheduledFunctionId);
   // Quick tasks persist a sandbox; clean it up so we don't leak compute.
   // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
   if (task && !task.projectId && task.sandboxId && task.repoId) {
@@ -478,13 +497,7 @@ export async function softDeleteAgentTask(
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || isEntityDeleted(task)) return;
-  if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-  }
+  await cancelScheduledFunction(ctx, task.scheduledFunctionId);
   if (!task.projectId && task.sandboxId && task.repoId) {
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
       sandboxId: task.sandboxId,

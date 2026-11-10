@@ -16,11 +16,9 @@ import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWor
 import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
 import {
-  aiModelValidator,
   launchTraitsFromStored,
   normalizeAIModel,
   prStateValidator,
-  reasoningLevelValidator,
   sessionStatusValidator,
 } from "./validators";
 

@@ -26,9 +26,6 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { AttachButton } from "@/chat/AttachButton";
-import { BaseBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter } from "@/chat/ComposerFooter";
-import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { useScheme } from "@/ui/theme";
 
@@ -58,13 +55,6 @@ export default function NewSessionScreen() {
   const firstName = user?.firstName?.trim();
   const foreground = tokens.color.foreground[scheme];
   const muted = tokens.color.muted[scheme];
-
-  const model = pickedModel ?? normalizeAIModel(repo?.defaultModel);
-  const traits: StoredModelTraits = { ...(repo ? storedTraitsFromRepoDefaults(repo) : {}), ...pickedTraits };
-  const baseBranch =
-    repo && pickedBranch?.repoId === repo._id
-      ? pickedBranch.branch
-      : (repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
 
   const handleSend = async (prompt: string) => {
     if (!repo || sending) return;

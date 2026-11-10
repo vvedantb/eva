@@ -139,6 +139,14 @@ export type OpencodeMcpRemoteConfig = {
   enabled: boolean;
 };
 
+/** `McpLocalConfig` — a stdio server opencode spawns itself. */
+export type OpencodeMcpLocalConfig = {
+  type: "local";
+  command: string[];
+  environment: Record<string, string>;
+  enabled: boolean;
+};
+
 /** `McpStatus` union; every member carries the discriminant the runner reads. */
 type OpencodeMcpStatus = { status: string };
 
@@ -148,7 +156,10 @@ export type OpencodeClientLike = {
       OpencodeResult<Record<string, OpencodeMcpStatus | undefined>>
     >;
     add: (options: {
-      body: { name: string; config: OpencodeMcpRemoteConfig };
+      body: {
+        name: string;
+        config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
+      };
     }) => Promise<
       OpencodeResult<Record<string, OpencodeMcpStatus | undefined>>
     >;

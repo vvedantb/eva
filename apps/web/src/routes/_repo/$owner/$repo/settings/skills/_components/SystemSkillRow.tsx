@@ -38,7 +38,7 @@ export function SystemSkillRow({
               </p>
               {skill.installed ? (
                 <Badge variant="secondary" className="text-xs">
-                  Installed
+                  {skill.alwaysInstalled ? "Always installed" : "Installed"}
                 </Badge>
               ) : null}
             </div>
@@ -53,18 +53,22 @@ export function SystemSkillRow({
               <IconFileText size={14} />
               View contents
             </Button>
-            <Button
-              type="button"
-              variant={skill.installed ? "outline" : "default"}
-              size="sm"
-              onClick={() =>
-                skill.installed
-                  ? onUninstall(skill.name)
-                  : onInstall(skill.name)
-              }
-            >
-              {skill.installed ? "Uninstall" : "Install"}
-            </Button>
+            {/* Eva needs these on every repo (the "Set up with Eva" button runs
+                eva-setup), so there is nothing to toggle. */}
+            {!skill.alwaysInstalled ? (
+              <Button
+                type="button"
+                variant={skill.installed ? "outline" : "default"}
+                size="sm"
+                onClick={() =>
+                  skill.installed
+                    ? onUninstall(skill.name)
+                    : onInstall(skill.name)
+                }
+              >
+                {skill.installed ? "Uninstall" : "Install"}
+              </Button>
+            ) : null}
           </div>
         </div>
         <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-muted-foreground">

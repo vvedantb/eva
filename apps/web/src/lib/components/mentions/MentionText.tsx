@@ -1,9 +1,9 @@
 import { Fragment, type ReactNode } from "react";
+import { MarkdownLink } from "@vvedantb/ui";
 import { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
 import { MENTION_TOKEN_REGEX } from "./mentionToken";
 import { SKILL_TOKEN_REGEX } from "./skillToken";
-import { LINK_URL_SOURCE } from "./linkChipUtils";
-import { LinkChip } from "./LinkChip";
+import { LINK_URL_SOURCE } from "./linkUrls";
 
 interface MentionMatch {
   label: string;
@@ -109,7 +109,9 @@ const defaultRenderSkill = (match: SkillMatch, key: number): ReactNode => (
 );
 
 const defaultRenderLink = (url: string, key: number): ReactNode => (
-  <LinkChip key={key} url={url} />
+  <MarkdownLink key={key} href={url}>
+    {url}
+  </MarkdownLink>
 );
 
 export function MentionText({

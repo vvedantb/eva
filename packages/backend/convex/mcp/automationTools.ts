@@ -163,7 +163,7 @@ const settingsArgs = {
     .boolean()
     .optional()
     .describe(
-      "true emails each successful run's summary to every user with email notifications on. Each email waits as a draft for review unless emailAutoSend is true.",
+      "true emails each successful run's summary to the repo team's members with email notifications on. Each email waits as a draft for review unless emailAutoSend is true.",
     ),
   emailAutoSend: z
     .boolean()

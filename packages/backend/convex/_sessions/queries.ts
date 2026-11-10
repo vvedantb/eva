@@ -15,8 +15,7 @@ import {
 } from "../validators";
 import { sessionValidator } from "./helpers";
 import {
-  awaitingAnswerEntityIdsForRepo,
-  openChatEntityIdsForRepo,
+  chatTurnFlagsForRepos,
   sessionIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
@@ -213,33 +212,19 @@ async function gatherLinkedSessions(
 }
 
 /**
- * Per-repo turn ids (open, awaiting an answer) for every repo the listed
- * sessions actually run under. Turns are filed against a session's primary
- * repo, so a linked-in row's turn is invisible to this repo's own range.
+ * Turn flags (open, awaiting an answer) for every repo the listed sessions
+ * actually run under. Turns are filed against a session's primary repo, so a
+ * linked-in row's turn is invisible to this repo's own range.
  */
-async function turnIdsIncludingLinked(
+function turnFlagsIncludingLinked(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
   linked: ReadonlyArray<LinkedSession>,
-  idsForRepo: (
-    db: DatabaseReader,
-    repoId: Id<"githubRepos">,
-  ) => Promise<ReadonlySet<string>>,
-): Promise<ReadonlySet<string>> {
-  const repoIds = new Map<string, Id<"githubRepos">>([
-    [String(repoId), repoId],
+) {
+  return chatTurnFlagsForRepos(db, [
+    repoId,
+    ...linked.map((row) => row.session.repoId),
   ]);
-  for (const row of linked) {
-    repoIds.set(String(row.session.repoId), row.session.repoId);
-  }
-  const sets = await Promise.all(
-    [...repoIds.values()].map((id) => idsForRepo(db, id)),
-  );
-  const merged = new Set<string>();
-  for (const set of sets) {
-    for (const id of set) merged.add(id);
-  }
-  return merged;
 }
 
 /** Names of the named linked-session groups these sessions belong to. */
@@ -279,11 +264,11 @@ async function toSessionListItems(
     unreadLookupForRepo(db, userId, repoId),
   ]);
   const rows = [...sessions, ...linked.map((row) => row.session)];
-  const [openSessionIds, awaitingAnswerIds, groupNames] = await Promise.all([
-    turnIdsIncludingLinked(db, repoId, linked, openChatEntityIdsForRepo),
-    turnIdsIncludingLinked(db, repoId, linked, awaitingAnswerEntityIdsForRepo),
-    sessionGroupNames(db, rows),
-  ]);
+  const [{ openIds: openSessionIds, awaitingAnswerIds }, groupNames] =
+    await Promise.all([
+      turnFlagsIncludingLinked(db, repoId, linked),
+      sessionGroupNames(db, rows),
+    ]);
   const linkedFromBySession = new Map(
     linked.map((row) => [String(row.session._id), row.linkedFrom]),
   );

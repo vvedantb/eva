@@ -50,6 +50,7 @@
     "eva/no-json-parse": "warn",
     "eva/no-double-cast": "warn",
     "eva/no-value-block-in-try": "off",
+    "eva/no-source-text-in-tests": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/consistent-type-assertions": [

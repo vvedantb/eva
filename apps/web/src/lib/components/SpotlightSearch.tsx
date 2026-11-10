@@ -30,6 +30,7 @@ import {
   iconForRecent,
 } from "@/lib/components/_components/spotlightGroups";
 import { SpotlightItem } from "@/lib/components/_components/SpotlightItem";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 
 /** What a selected row records in Recents — the shape both hits and recents share. */
 interface SelectableHit {
@@ -61,6 +62,7 @@ export function SpotlightSearch() {
   };
 
   const handleSelect = (hit: SelectableHit) => {
+    if (!isInternalAppHref(hit.href)) return;
     record({
       type: hit.type,
       title: hit.title,

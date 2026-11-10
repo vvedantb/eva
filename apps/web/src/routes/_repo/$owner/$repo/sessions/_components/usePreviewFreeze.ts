@@ -2,6 +2,7 @@
 
 // useEffect: subscribe to the preview iframe's postMessages.
 import { useEffect, useState } from "react";
+import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 
 /**
  * Freezes the preview's animations in place, so a mid-transition state can be
@@ -12,10 +13,9 @@ export function usePreviewFreeze(iframeElement: HTMLIFrameElement | null) {
   const [frozen, setFrozen] = useState(false);
 
   useEffect(() => {
-    const target = iframeElement?.contentWindow;
-    if (!target) return;
+    if (!iframeElement?.contentWindow) return;
     function onMessage(event: MessageEvent) {
-      if (event.source !== target) return;
+      if (!isFromFrame(event, iframeElement)) return;
       if (typeof event.data !== "object" || event.data === null) return;
       const data: object = event.data;
       const type = Reflect.get(data, "type");
@@ -32,10 +32,10 @@ export function usePreviewFreeze(iframeElement: HTMLIFrameElement | null) {
   }, [iframeElement]);
 
   function toggle() {
-    iframeElement?.contentWindow?.postMessage(
-      { type: "eva-preview-annotate-freeze", active: !frozen },
-      "*",
-    );
+    postToFrame(iframeElement, {
+      type: "eva-preview-annotate-freeze",
+      active: !frozen,
+    });
   }
 
   return { frozen, toggle };

@@ -40,7 +40,7 @@ type DetectedApp = FunctionReturnType<
 export function MonorepoClient() {
   const { repo } = useRepo();
   const detectApps = useAction(api.github.detectMonorepoApps);
-  const createRepo = useMutation(api.githubRepos.create);
+  const connectRepo = useAction(api.github.connectRepo);
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
@@ -93,11 +93,10 @@ export function MonorepoClient() {
     setAddingPath(path);
     try {
       await withMutationToast(
-        createRepo({
+        connectRepo({
           owner: repo.owner,
           name: repo.name,
           installationId: repo.installationId,
-          githubId: repo.githubId,
           rootDirectory: path,
           teamId: repo.teamId,
         }),

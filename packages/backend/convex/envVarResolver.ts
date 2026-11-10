@@ -56,18 +56,36 @@ export async function resolveEnvVars(
   };
 }
 
-/** All repos in the same codebase (owner/name), requested repo first. */
+/**
+ * Decrypted seed-only env vars (team + repo, repo wins). Only the snapshot
+ * seed run receives these; session sandboxes never do.
+ */
+export async function resolveSeedOnlyEnvVars(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<Record<string, string>> {
+  const teamId = await ctx.runQuery(internal.githubRepos.getTeamIdForRepo, {
+    repoId,
+  });
+  const teamVars = teamId
+    ? decryptCredentialMap(
+        await ctx.runQuery(internal.teamEnvVars.getForSeed, { teamId }),
+      )
+    : {};
+  const repoVars = decryptCredentialMap(
+    await ctx.runQuery(internal.repoEnvVars.getForSeed, { repoId }),
+  );
+  return { ...teamVars, ...repoVars };
+}
+
+/** Sibling repos of the codebase (same owner/name and team), requested repo first. */
 async function listMonorepoRepoIds(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Array<Id<"githubRepos">>> {
-  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-    id: repoId,
-  });
-  if (!repo) return [repoId];
   const siblingIds = await ctx.runQuery(
-    internal.githubRepos.listRepoIdsByOwnerAndName,
-    { owner: repo.owner, name: repo.name },
+    internal.githubRepos.listSiblingRepoIds,
+    { repoId },
   );
   if (siblingIds.length === 0) return [repoId];
   return [repoId, ...siblingIds.filter((id) => id !== repoId)];

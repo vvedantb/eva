@@ -8,8 +8,9 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
-import { sandboxActivityKindValidator } from "./_validators/tableFields";
+import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
+import { sleep } from "./_shared/async";
 
 /**
  * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
@@ -48,7 +49,7 @@ function resolveWakeTarget(
 
 /** Internal: typed ids for the action below (actions have no `normalizeId`). */
 export const resolveTarget = internalQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(wakeTargetValidator, v.null()),
   handler: async (ctx, args) => resolveWakeTarget(ctx, args.kind, args.id),
 });
@@ -59,7 +60,7 @@ export const resolveTarget = internalQuery({
  * entity is gone, or the caller may not see it.
  */
 export const getWakeTarget = authQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(
     v.object({
       status: v.string(),
@@ -146,16 +147,13 @@ async function start(ctx: ActionCtx, target: WakeTarget): Promise<void> {
   });
 }
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 /**
  * Brings the entity's sandbox to `active` (starting it if paused) and returns.
  * Shares `awaitSandboxActive` with the MCP `start_sandbox` tool, so a wake from
  * a saved link follows the Start button's path, including stop/start races.
  */
 export const ensureEntitySandboxActive = action({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.object({ startRequested: v.boolean() }),
   // Explicit types: the action calls a query from its own module, and Convex's
   // inferred `internal` type would otherwise be circular (and cascade `any`).

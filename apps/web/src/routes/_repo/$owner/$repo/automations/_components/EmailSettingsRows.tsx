@@ -16,7 +16,7 @@ export function EmailSettingsRows({
     <>
       <SettingsToggleRow
         title="Send email"
-        description="Email this automation's run summary to all users when a run succeeds."
+        description="Email this automation's run summary to the repo's team when a run succeeds."
         action={
           <Switch
             checked={automation.sendEmail === true}

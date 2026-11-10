@@ -117,6 +117,41 @@ export interface SidebarPanelFlags {
   isSourceListHeader: boolean;
 }
 
+const isLandingPath = (pathname: string, root: string) =>
+  pathname === root || pathname === `${root}/`;
+
+/** Root settings, plus the dev-only `/testing` pages that share its panel. */
+function isGlobalSettingsPanelPath(pathname: string): boolean {
+  return (
+    isGlobalSettingsPath(pathname) ||
+    (import.meta.env.DEV &&
+      (pathname === "/testing" || pathname.startsWith("/testing/")))
+  );
+}
+
+/**
+ * Whether the route has a second column beside the rail. Shared by `Sidebar`
+ * (which renders it) and `useSidebarContentOffset` (which pads the content
+ * for it), so the two cannot drift.
+ */
+export function routeHasSidePanel({
+  pathname,
+  isRepoRoute,
+  useChromeSessionTabs,
+}: Pick<
+  SidebarPanelInput,
+  "pathname" | "isRepoRoute" | "useChromeSessionTabs"
+>): boolean {
+  // Experimental Chrome tabs replace the sessions second column (rail only).
+  return (
+    ((isRepoRoute || isLandingPath(pathname, "/sessions")) &&
+      !useChromeSessionTabs) ||
+    isLandingPath(pathname, "/automations") ||
+    isHomePath(pathname) ||
+    isGlobalSettingsPanelPath(pathname)
+  );
+}
+
 function getGlobalPanelFlags({
   pathname,
   isRepoRoute,
@@ -124,35 +159,26 @@ function getGlobalPanelFlags({
   useChromeSessionTabs,
 }: SidebarPanelInput) {
   const pathParts = pathname.split("/").filter(Boolean);
-  const isGlobalSessionsLanding =
-    pathname === "/sessions" || pathname === "/sessions/";
+  const isGlobalSessionsLanding = isLandingPath(pathname, "/sessions");
   // Per-app Sessions sidebar was removed; any sessions URL (landing or deep
   // link like /$owner/$repo/.../sessions/$numId/preview) uses the root list.
   const isRepoSessionsPath = isRepoRoute && pathParts.includes("sessions");
   const isSessionsPath = isGlobalSessionsLanding || isRepoSessionsPath;
-  // Experimental Chrome tabs replace the sessions second column (rail only).
   const showGlobalSessionsPanel = isSessionsPath && !useChromeSessionTabs;
   // Automations mirror Sessions: one cross-repo panel behind the rail entry,
   // shown for the landing page and for every repo-scoped automation URL.
-  const isGlobalAutomationsLanding =
-    pathname === "/automations" || pathname === "/automations/";
   const isRepoAutomationsPath =
     isRepoRoute && pathParts.includes("automations");
   const showGlobalAutomationsPanel =
-    !simpleView && (isGlobalAutomationsLanding || isRepoAutomationsPath);
-  const showHomePanel = isHomePath(pathname);
-  const showGlobalSettingsPanel =
-    isGlobalSettingsPath(pathname) ||
-    (import.meta.env.DEV &&
-      (pathname === "/testing" || pathname.startsWith("/testing/")));
+    !simpleView &&
+    (isLandingPath(pathname, "/automations") || isRepoAutomationsPath);
   return {
     isGlobalSessionsLanding,
     isRepoSessionsPath,
     showGlobalSessionsPanel,
-    isGlobalAutomationsLanding,
     showGlobalAutomationsPanel,
-    showHomePanel,
-    showGlobalSettingsPanel,
+    showHomePanel: isHomePath(pathname),
+    showGlobalSettingsPanel: isGlobalSettingsPanelPath(pathname),
   };
 }
 
@@ -160,22 +186,15 @@ function getGlobalPanelFlags({
 export function getSidebarPanelFlags(
   input: SidebarPanelInput,
 ): SidebarPanelFlags {
-  const { isRepoRoute, useChromeSessionTabs, contextSidebarMode } = input;
-  const { isGlobalAutomationsLanding, ...globalFlags } =
-    getGlobalPanelFlags(input);
+  const { isRepoRoute, contextSidebarMode } = input;
+  const globalFlags = getGlobalPanelFlags(input);
   const {
-    isGlobalSessionsLanding,
     showGlobalSessionsPanel,
     showGlobalAutomationsPanel,
     showHomePanel,
     showGlobalSettingsPanel,
   } = globalFlags;
-  const showSidePanel =
-    (isRepoRoute && !useChromeSessionTabs) ||
-    (isGlobalSessionsLanding && !useChromeSessionTabs) ||
-    isGlobalAutomationsLanding ||
-    showHomePanel ||
-    showGlobalSettingsPanel;
+  const showSidePanel = routeHasSidePanel(input);
   const showContextSidebar =
     isRepoRoute &&
     !showGlobalSessionsPanel &&

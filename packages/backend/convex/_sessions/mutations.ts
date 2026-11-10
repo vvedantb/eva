@@ -43,6 +43,7 @@ import {
 } from "../repoGroups";
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
+import { assertComposerMessageRole } from "../_messages/publicRole";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -61,6 +62,8 @@ const createSessionArgs = v.object({
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
   baseBranch: v.optional(v.string()),
+  /** "Stack a new session on this PR": the PR whose head is `baseBranch`. */
+  stackOnPrNumber: v.optional(v.number()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
@@ -173,6 +176,9 @@ export async function createSession(
     updatedAt: Date.now(),
     numId,
     baseBranch,
+    ...(args.stackOnPrNumber !== undefined
+      ? { stackOnPrNumber: args.stackOnPrNumber }
+      : {}),
     providerAccountId,
     // The provider the session started on. Informational only — the composer
     // may move the session onto another provider later.
@@ -314,7 +320,6 @@ export const addMessage = authMutation({
     chatId: v.id("sessionChats"),
     role: roleValidator,
     content: v.string(),
-    activityLog: v.optional(v.string()),
     clientId: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
@@ -325,6 +330,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    assertComposerMessageRole(args);
     const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
@@ -343,7 +349,6 @@ export const addMessage = authMutation({
       role: args.role,
       content: args.content,
       timestamp: Date.now(),
-      activityLog: args.activityLog,
       clientId: args.clientId,
       userId: ctx.userId,
       attachmentStorageIds: args.attachmentStorageIds,
@@ -401,20 +406,6 @@ export const update = authMutation({
         });
       }
     }
-    return null;
-  },
-});
-
-/** Updates the summary bullet points on a session. */
-export const updateSummary = authMutation({
-  args: {
-    id: v.id("sessions"),
-    summary: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { summary: args.summary });
     return null;
   },
 });
@@ -496,35 +487,6 @@ export const updatePlanContent = authMutation({
       planContent: args.planContent,
       updatedAt: Date.now(),
     });
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the most recent message in a chat. */
-export const updateLastMessage = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (!last) return null;
-    const patch: { content?: string; activityLog?: string } = {};
-    if (args.content !== undefined) patch.content = args.content;
-    if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
-    await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(chat._id, { updatedAt: Date.now() });
     return null;
   },
 });

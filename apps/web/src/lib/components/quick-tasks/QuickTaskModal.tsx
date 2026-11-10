@@ -897,6 +897,7 @@ export function QuickTaskModal({
             <DraftReadinessBanner
               result={readiness.resultFor(description)}
               onDismiss={readiness.dismiss}
+              className="mx-5 mb-2"
             />
 
             <TaskFilesSection

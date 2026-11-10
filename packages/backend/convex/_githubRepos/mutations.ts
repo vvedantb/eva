@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation } from "../_generated/server";
-import type { DatabaseWriter } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
 import {
   authMutation,
   getRepoWithAccess,
@@ -10,7 +11,11 @@ import {
 } from "../functions";
 import { normalizePath } from "../repoUtils";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
-import { findAllSiblingRepoIds, findReposByOwnerAndName } from "./helpers";
+import {
+  findAllSiblingRepoIds,
+  findReposByOwnerAndName,
+  isSameTeamSibling,
+} from "./helpers";
 
 /** Assigns a repository to a team (team owner only). */
 export const assignToTeam = authMutation({
@@ -71,7 +76,7 @@ interface CreateRepoArgs {
   owner: string;
   name: string;
   installationId: number;
-  githubId?: number;
+  githubId: number;
   rootDirectory?: string;
   teamId?: Id<"teams">;
 }
@@ -79,12 +84,11 @@ interface CreateRepoArgs {
 /**
  * Inserts a repo row, handling deduplication and monorepo sub-app setup.
  *
- * Callers own the installation authorization decision before calling this — see
- * `create` (Eva-side: the installation is already claimed by this user) and
- * `createForInstallation` (GitHub-side: the user's own token proved access).
+ * The caller (`github:connectRepo`) owns the installation authorization and
+ * passes GitHub's own id, owner and name, never the client's.
  */
 async function insertRepo(
-  ctx: { db: DatabaseWriter },
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
   args: CreateRepoArgs,
   userId: Id<"users">,
 ): Promise<Id<"githubRepos">> {
@@ -92,18 +96,16 @@ async function insertRepo(
     ? normalizePath(args.rootDirectory)
     : undefined;
 
-  if (args.githubId !== undefined) {
-    const byGithubId = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
-      .collect();
-    const match = byGithubId.find(
-      (r) => (r.rootDirectory ?? undefined) === (normalizedRoot ?? undefined),
-    );
-    if (match) {
-      await getRepoWithAccess(ctx.db, match._id, userId);
-      throw new Error("Repository already exists");
-    }
+  const byGithubId = await ctx.db
+    .query("githubRepos")
+    .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
+    .collect();
+  const match = byGithubId.find(
+    (r) => (r.rootDirectory ?? undefined) === (normalizedRoot ?? undefined),
+  );
+  if (match) {
+    await getRepoWithAccess(ctx.db, match._id, userId);
+    throw new Error("Repository already exists");
   }
 
   const candidates = await findReposByOwnerAndName(ctx.db, args);
@@ -113,7 +115,7 @@ async function insertRepo(
   );
   if (duplicate) {
     await getRepoWithAccess(ctx.db, duplicate._id, userId);
-    if (args.githubId !== undefined && duplicate.githubId === undefined) {
+    if (duplicate.githubId === undefined) {
       await ctx.db.patch(duplicate._id, { githubId: args.githubId });
     }
     throw new Error("Repository already exists");
@@ -133,14 +135,19 @@ async function insertRepo(
   }
 
   if (normalizedRoot) {
-    const rootEntry = candidates.find((r) => !r.rootDirectory);
+    // An app row replaces its own team's root row, never another team's.
+    const rootEntry = candidates.find(
+      (r) =>
+        !r.rootDirectory &&
+        isSameTeamSibling(r, { teamId, connectedBy: userId }),
+    );
     if (rootEntry) {
       await getRepoWithAccess(ctx.db, rootEntry._id, userId);
       await ctx.db.delete(rootEntry._id);
     }
   }
 
-  return await ctx.db.insert("githubRepos", {
+  const repoId = await ctx.db.insert("githubRepos", {
     owner: args.owner,
     name: args.name,
     installationId: args.installationId,
@@ -150,53 +157,27 @@ async function insertRepo(
     rootDirectory: normalizedRoot,
     defaultBaseBranch: "staging",
   });
+  // A repo that already commits `.eva/config.json` is ready without setup.
+  await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
+    repoId,
+  });
+  return repoId;
 }
 
-const createRepoArgs = {
-  owner: v.string(),
-  name: v.string(),
-  installationId: v.number(),
-  githubId: v.optional(v.number()),
-  rootDirectory: v.optional(v.string()),
-  teamId: v.optional(v.id("teams")),
-};
-
 /**
- * Adds a repo from an installation this user already connected.
- *
- * Deliberately refuses installations with no Eva rows: for those, nothing here
- * can tell whether the caller has any GitHub-side claim to the id they passed,
- * and binding a row to an installation is what unlocks `getInstallationToken`
- * for it. Fresh installations go through `github:connectRepo`, which verifies
- * against the user's own GitHub token first.
- */
-export const create = authMutation({
-  args: createRepoArgs,
-  returns: v.id("githubRepos"),
-  handler: async (ctx, args) => {
-    const installationRepos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_installation", (q) =>
-        q.eq("installationId", args.installationId),
-      )
-      .collect();
-    if (!installationRepos.some((repo) => repo.connectedBy === ctx.userId)) {
-      throw new Error(
-        "Not authorized to add repositories from this installation",
-      );
-    }
-    return await insertRepo(ctx, args, ctx.userId);
-  },
-});
-
-/**
- * Adds a repo on behalf of a user whose GitHub token already proved access.
- *
- * Internal-only, and only sound when the caller ran `assertUserCanUseRepo`
- * first — it performs no installation check of its own.
+ * Adds a repo for `userId`. Internal-only: `github:connectRepo` authorizes the
+ * installation first and passes GitHub's canonical repo identity.
  */
 export const createForInstallation = internalMutation({
-  args: { ...createRepoArgs, userId: v.id("users") },
+  args: {
+    owner: v.string(),
+    name: v.string(),
+    installationId: v.number(),
+    githubId: v.number(),
+    rootDirectory: v.optional(v.string()),
+    teamId: v.optional(v.id("teams")),
+    userId: v.id("users"),
+  },
   returns: v.id("githubRepos"),
   handler: async (ctx, args) => {
     const { userId, ...repoArgs } = args;
@@ -204,7 +185,7 @@ export const createForInstallation = internalMutation({
   },
 });
 
-/** Updates repository configuration settings, propagating shared settings to sibling repos. */
+/** Updates repository configuration settings, propagating shared settings to same-team sibling repos. */
 export const updateConfig = authMutation({
   args: {
     repoId: v.id("githubRepos"),
@@ -220,17 +201,12 @@ export const updateConfig = authMutation({
     agentMemoryEnabled: v.optional(v.boolean()),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
-    devPort: v.optional(v.union(v.number(), v.null())),
-    devCommand: v.optional(v.string()),
-    startupCommands: v.optional(v.array(v.string())),
-    backgroundCommands: v.optional(v.array(v.string())),
-    stopCommands: v.optional(v.array(v.string())),
     systemPrompt: v.optional(v.string()),
     label: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
+    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
 
     const sharedPatch: Record<string, string | boolean> = {};
     if (args.defaultBaseBranch !== undefined)
@@ -258,6 +234,15 @@ export const updateConfig = authMutation({
     for (const siblingId of siblingIds) {
       await ctx.db.patch(siblingId, sharedPatch);
     }
+    // `.eva/` is read from the default branch, so a new branch means a resync.
+    if (
+      args.defaultBaseBranch !== undefined &&
+      args.defaultBaseBranch !== repo.defaultBaseBranch
+    ) {
+      await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
+        repoId: args.repoId,
+      });
+    }
 
     if (args.deploymentProjectName !== undefined) {
       await ctx.db.patch(args.repoId, {
@@ -268,43 +253,6 @@ export const updateConfig = authMutation({
     if (args.domains !== undefined) {
       await ctx.db.patch(args.repoId, {
         domains: args.domains.length > 0 ? args.domains : undefined,
-      });
-    }
-
-    // Per-app dev config: empty/null clears the override so detection falls back.
-    if (args.devPort !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        devPort: args.devPort === null ? undefined : args.devPort,
-      });
-    }
-
-    if (args.devCommand !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        devCommand:
-          args.devCommand.trim().length > 0 ? args.devCommand : undefined,
-      });
-    }
-
-    if (args.startupCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        startupCommands:
-          args.startupCommands.length > 0 ? args.startupCommands : undefined,
-      });
-    }
-
-    if (args.backgroundCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        backgroundCommands:
-          args.backgroundCommands.length > 0
-            ? args.backgroundCommands
-            : undefined,
-      });
-    }
-
-    if (args.stopCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        stopCommands:
-          args.stopCommands.length > 0 ? args.stopCommands : undefined,
       });
     }
 
@@ -378,7 +326,7 @@ export const toggleHidden = authMutation({
   },
 });
 
-/** Updates the MCP root prompt for a repo and all its siblings. */
+/** Updates the MCP root prompt for a repo and its same-team siblings. */
 export const updateMcpRootPrompt = authMutation({
   args: {
     repoId: v.id("githubRepos"),
@@ -398,47 +346,6 @@ export const updateMcpRootPrompt = authMutation({
   },
 });
 
-/**
- * Sets an app repo's command config directly (internal, CLI/ops use). Stop
- * commands gate seeded-snapshot builds (findSeedableAppRepos), and updateConfig
- * is auth+ownership-checked so it cannot be driven from `npx convex run` when a
- * deployment's config needs backfilling or repair (e.g. prod after a dev-only
- * setup). Each array is optional; an empty array clears the field.
- */
-export const setRepoCommandsInternal = internalMutation({
-  args: {
-    repoId: v.id("githubRepos"),
-    startupCommands: v.optional(v.array(v.string())),
-    backgroundCommands: v.optional(v.array(v.string())),
-    stopCommands: v.optional(v.array(v.string())),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-    if (args.startupCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        startupCommands:
-          args.startupCommands.length > 0 ? args.startupCommands : undefined,
-      });
-    }
-    if (args.backgroundCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        backgroundCommands:
-          args.backgroundCommands.length > 0
-            ? args.backgroundCommands
-            : undefined,
-      });
-    }
-    if (args.stopCommands !== undefined) {
-      await ctx.db.patch(args.repoId, {
-        stopCommands:
-          args.stopCommands.length > 0 ? args.stopCommands : undefined,
-      });
-    }
-    return null;
-  },
-});
 
 /** Deletes a GitHub repo entry by ID (internal use only). */
 export const deleteInternal = internalMutation({
