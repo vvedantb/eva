@@ -20,6 +20,7 @@ import {
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { errorMessage } from "@vvedantb/server";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -146,7 +147,7 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(latestRunningRun._id, {
         finalizingAt: undefined,
       });
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = errorMessage(error);
       console.error(
         `[taskWorkflow] handleCompletion: workflow.sendEvent failed after finalizing; run=${String(args.runId)} task=${String(args.taskId)}: ${detail}`,
       );

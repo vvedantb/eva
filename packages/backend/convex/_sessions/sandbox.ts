@@ -44,6 +44,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+import { errorMessage } from "@vvedantb/server";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
@@ -391,7 +392,7 @@ export const finalizeStopSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorMessage(err);
     }
     await ctx.runMutation(internal._sessions.sandbox.markSandboxClosed, {
       sessionId: args.sessionId,

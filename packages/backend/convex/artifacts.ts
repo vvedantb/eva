@@ -27,6 +27,7 @@ import {
   resolveChatSource,
   type RepoCache,
 } from "./_chatSource/helpers";
+import { errorMessage } from "@vvedantb/server";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Return validators (composed from the single-source-of-truth artifactFields)
@@ -441,7 +442,7 @@ export const callTool = authAction({
           return await callViaMcpServer(ctx, userId, name, args);
       }
     } catch (err) {
-      return errorResult(err instanceof Error ? err.message : String(err));
+      return errorResult(errorMessage(err));
     }
   },
 });

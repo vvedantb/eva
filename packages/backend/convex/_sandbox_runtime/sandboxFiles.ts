@@ -7,6 +7,7 @@
  */
 
 import type { SandboxHandle } from "../_sandbox/provider";
+import { errorMessage } from "@vvedantb/server";
 
 /**
  * Linux caps a single `execve` argument at MAX_ARG_STRLEN — 128 KB, and not
@@ -153,7 +154,7 @@ async function reclaimSandboxDisk(
     return report;
   } catch (error) {
     console.log(
-      `[sandbox] reclaimSandboxDisk skipped on ${sandbox.id}: ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox] reclaimSandboxDisk skipped on ${sandbox.id}: ${errorMessage(error)}`,
     );
     return null;
   }

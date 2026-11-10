@@ -15,6 +15,7 @@ import { getInstallationOctokit } from "../githubAuth";
 import { addPullRequestToStack } from "./prStack";
 import { invalidatePrOverviewCache } from "./prOverview";
 import { sessionPullRequestLabels } from "./prLabels";
+import { errorMessage } from "@vvedantb/server";
 
 /**
  * Promotes a session's draft PR to ready-for-review. Called when the user
@@ -397,7 +398,7 @@ export const linkSessionPrToStack = internalAction({
       );
     } catch (error) {
       console.error(
-        `[github] Could not stack #${childPrNumber} on #${args.parentPrNumber}: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Could not stack #${childPrNumber} on #${args.parentPrNumber}: ${errorMessage(error)}`,
       );
       return null;
     }

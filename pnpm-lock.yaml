@@ -128,8 +128,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.34.0
-        version: 0.34.0(45063c1a5e98da8a872c751081f5394c)
+        specifier: ^0.39.0
+        version: 0.39.0(45063c1a5e98da8a872c751081f5394c)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -520,8 +520,8 @@ importers:
         specifier: ^0.10.0
         version: 0.10.0(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       '@vvedantb/ui':
-        specifier: ^0.34.0
-        version: 0.34.0(4a871ac2be2b41dfb3347b54c7709d02)
+        specifier: ^0.39.0
+        version: 0.39.0(4a871ac2be2b41dfb3347b54c7709d02)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -856,8 +856,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: ^0.34.0
-        version: 0.34.0(8e0dd6921db0a490ebfcf53ed4dd8963)
+        specifier: ^0.39.0
+        version: 0.39.0(8e0dd6921db0a490ebfcf53ed4dd8963)
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
@@ -871,8 +871,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.34.0
-        version: 0.34.0(f8a008e3bd24df7d1d468e3b56130b43)
+        specifier: ^0.39.0
+        version: 0.39.0(f8a008e3bd24df7d1d468e3b56130b43)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6500,8 +6500,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.34.0':
-    resolution: {integrity: sha512-AWfygAMnEyLDPANQg2Tt26EJqrFVl65KfSTNpXq61FqcpVjWB62St7ecEY3VL8dBHIJXDHLyjrFEx8WVvz6hKA==}
+  '@vvedantb/ui@0.39.0':
+    resolution: {integrity: sha512-htyUnnvsvtdfCIeUYvTGg2Z2wumPT7Gq7Mp18iEjez9h9/KM2J07NQzoe4C8BGltdHTeXyoRJG6bRcvAzD+VgA==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -17803,7 +17803,7 @@ snapshots:
       zod: 4.4.3
     optional: true
 
-  '@vvedantb/ui@0.34.0(45063c1a5e98da8a872c751081f5394c)':
+  '@vvedantb/ui@0.39.0(45063c1a5e98da8a872c751081f5394c)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17862,7 +17862,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.34.0(4a871ac2be2b41dfb3347b54c7709d02)':
+  '@vvedantb/ui@0.39.0(4a871ac2be2b41dfb3347b54c7709d02)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17921,7 +17921,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@0.34.0(8e0dd6921db0a490ebfcf53ed4dd8963)':
+  '@vvedantb/ui@0.39.0(8e0dd6921db0a490ebfcf53ed4dd8963)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17980,7 +17980,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@0.34.0(f8a008e3bd24df7d1d468e3b56130b43)':
+  '@vvedantb/ui@0.39.0(f8a008e3bd24df7d1d468e3b56130b43)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)

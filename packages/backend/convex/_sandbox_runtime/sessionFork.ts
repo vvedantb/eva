@@ -8,6 +8,8 @@ import { isMissingGithubBranchError } from "../_github/deploymentSnapshot";
 import { getInstallationOctokit } from "../githubAuth";
 import { getSandboxHandle } from "./helpers";
 import { isSandboxGoneError } from "./sandboxErrors";
+import { errorMessage } from "@vvedantb/server";
+import { sleep } from "../_shared/async";
 
 type ForkSource = FunctionReturnType<typeof internal.sessions.getForkSource>;
 
@@ -17,10 +19,6 @@ const NO_SANDBOX =
 
 const STOP_WAIT_MS = 3 * 60_000;
 const POLL_MS = 2_000;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Whether the source branch is on GitHub, which is what makes it a valid PR
@@ -124,7 +122,7 @@ export const forkSession = authAction({
           });
         } catch (restartError) {
           console.warn(
-            `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${restartError instanceof Error ? restartError.message : String(restartError)}`,
+            `[sandbox][fork] source restart failed sessionId=${args.sessionId}: ${errorMessage(restartError)}`,
           );
         }
       }

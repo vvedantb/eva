@@ -12,6 +12,7 @@ import {
   sendEmailInputShape,
   type SendEmailOutcome,
 } from "../_mcp/sendEmailTool";
+import { errorMessage } from "@vvedantb/server";
 
 const sendEmailInput = z.object(sendEmailInputShape);
 
@@ -87,7 +88,7 @@ export const runSendEmail = internalAction({
       // the user's own address, which is what the agent asked for.
       return { ok: true, to: recipient.email };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       // Never log the body — it is the user's content.
       console.error("[mcp.sendEmail]", message);
       return { ok: false, errorCode: "provider_error", error: message };

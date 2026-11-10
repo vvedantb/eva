@@ -24,7 +24,6 @@ import {
   RESUME_READY_TIMEOUT_SECONDS,
   bootstrapVercelDocker,
   ensureSandboxRunning,
-  sleep,
   withTimeout,
   workspaceDirShell,
 } from "./helpers";
@@ -69,6 +68,8 @@ import {
   VERCEL_DEFAULT_EXPOSED_PORTS,
 } from "../_sandbox/vercelProvider";
 import { buildSandboxLabels } from "../_sandbox/tags";
+import { errorMessage } from "@vvedantb/server";
+import { sleep } from "../_shared/async";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
@@ -133,7 +134,7 @@ async function cleanupTimedOutGitState(sandbox: SandboxHandle): Promise<void> {
     logGit("cleanupTimedOutGitState: cleanup completed");
   } catch (error) {
     logGit(
-      `cleanupTimedOutGitState: cleanup failed (best-effort): ${error instanceof Error ? error.message : String(error)}`,
+      `cleanupTimedOutGitState: cleanup failed (best-effort): ${errorMessage(error)}`,
     );
   }
 }
@@ -174,7 +175,7 @@ async function execGitCommand(
     return result;
   } catch (error) {
     const elapsed = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     logGit(
       `exec failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${sanitized} — ${redactSecrets(message)}`,
     );
@@ -208,7 +209,7 @@ async function execSdkGitOperation<T>(
     return result;
   } catch (error) {
     const elapsed = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     logGit(
       `sdk failed after ${formatDurationMsShort(elapsed)} [timeout=${timeoutSeconds}s]: ${label} — ${message}`,
     );
@@ -235,7 +236,7 @@ export async function runLoggedGitStep<T>(
     return result;
   } catch (error) {
     logGit(
-      `${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${error instanceof Error ? error.message : String(error)}`,
+      `${label} failed after ${formatDurationMsShort(Date.now() - startedAt)}${details ? ` (${details})` : ""}: ${errorMessage(error)}`,
     );
     throw error;
   }
@@ -360,7 +361,7 @@ export async function retryGitNetworkOperation<T>(
       }
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       const shouldRetry = attempt < maxAttempts && isRetryable(message);
       if (!shouldRetry) {
         throw error;
@@ -528,7 +529,7 @@ export async function createSandbox(
             execHandle(sandbox, ensureEvaEnvInteractiveHookScript(), 30, "/"),
         ).catch((hookError) => {
           console.warn(
-            `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${hookError instanceof Error ? hookError.message : String(hookError)}`,
+            `[sandbox][git] createSandbox.ensureEvaEnvInteractiveHook failed on ${sandbox.id} (continuing): ${errorMessage(hookError)}`,
           );
         }),
         // Fresh Vercel sandboxes ship without `jq`, which the git credential
@@ -567,13 +568,13 @@ export async function createSandbox(
       return sandbox;
     } catch (error) {
       console.warn(
-        `[sandbox][git] createSandbox: post-create setup failed for ${sandbox.id}; deleting orphan: ${error instanceof Error ? error.message : String(error)}`,
+        `[sandbox][git] createSandbox: post-create setup failed for ${sandbox.id}; deleting orphan: ${errorMessage(error)}`,
       );
       try {
         await sandbox.delete();
       } catch (deleteError) {
         console.warn(
-          `[sandbox][git] createSandbox: orphan delete failed for ${sandbox.id}: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+          `[sandbox][git] createSandbox: orphan delete failed for ${sandbox.id}: ${errorMessage(deleteError)}`,
         );
       }
       throw error;
@@ -852,7 +853,7 @@ async function pinBranchUpstream(
     );
   } catch (error) {
     logGit(
-      `pinBranchUpstream: failed for ${branchName} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+      `pinBranchUpstream: failed for ${branchName} (continuing): ${errorMessage(error)}`,
     );
   }
 }
@@ -1284,7 +1285,7 @@ async function localBranchReflogShas(
     );
   } catch (error) {
     logGit(
-      `localBranchReflogShas: no reflog for ${branchName}: ${error instanceof Error ? error.message : String(error)}`,
+      `localBranchReflogShas: no reflog for ${branchName}: ${errorMessage(error)}`,
     );
     return [];
   }
@@ -1446,7 +1447,7 @@ async function synchronizeBranchForPublish(
       );
     } catch (error) {
       logGit(
-        `synchronizeBranchForPublish: merge origin/${branchName} failed: ${error instanceof Error ? error.message : String(error)}`,
+        `synchronizeBranchForPublish: merge origin/${branchName} failed: ${errorMessage(error)}`,
       );
       try {
         await execGitCommand(
@@ -1456,7 +1457,7 @@ async function synchronizeBranchForPublish(
         );
       } catch (abortError) {
         logGit(
-          `synchronizeBranchForPublish: merge --abort failed: ${abortError instanceof Error ? abortError.message : String(abortError)}`,
+          `synchronizeBranchForPublish: merge --abort failed: ${errorMessage(abortError)}`,
         );
       }
       throw new Error(
@@ -1676,7 +1677,7 @@ async function publishCheckedOutBranch(
       ).trim();
     } catch (error) {
       logGit(
-        `pushBranchToOrigin: ahead-of-remote gate failed, pushing anyway (${details}): ${error instanceof Error ? error.message : String(error)}`,
+        `pushBranchToOrigin: ahead-of-remote gate failed, pushing anyway (${details}): ${errorMessage(error)}`,
       );
     }
     if (unpushedCount === "0") {
@@ -1694,7 +1695,7 @@ async function publishCheckedOutBranch(
       );
       return { pushed: true, published: true };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       const shouldRetry =
         attempt < maxAttempts &&
         (isRetryableGitNetworkError(message) ||
@@ -1788,7 +1789,7 @@ export async function forcePushBranchToOrigin(
  *   would be silently downgraded to "clone instead" and hide the real fault.
  */
 function isSnapshotUnusableError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
+  const msg = errorMessage(err);
   if (/Snapshot\s+\S+\s+is\s+(error|build_failed)/i.test(msg)) return true;
 
   const requestedASnapshot =
@@ -1872,7 +1873,7 @@ export async function createSandboxAndPrepareRepo(
         } catch (err) {
           if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
             logGit(
-              `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${err instanceof Error ? err.message : String(err)})`,
+              `createSandboxAndPrepareRepo: snapshot ${effectiveSnapshot} is in error state — falling back to default snapshot + git clone (${errorMessage(err)})`,
             );
             if (onProgress)
               await onProgress("Snapshot unavailable — cloning instead...");
@@ -2067,7 +2068,7 @@ async function tryResumeSandbox(
       } catch (refreshErr) {
         if (isSandboxMissingError(refreshErr)) {
           logGit(
-            `getOrCreateSandbox: resume refresh says gone — will create new one (${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)})`,
+            `getOrCreateSandbox: resume refresh says gone — will create new one (${errorMessage(refreshErr)})`,
           );
           return null;
         }
@@ -2103,7 +2104,7 @@ async function tryResumeSandbox(
     } catch (err) {
       if (isSandboxMissingError(err)) {
         logGit(
-          `getOrCreateSandbox: resume failed because sandbox is gone — will create new one (${err instanceof Error ? err.message : String(err)})`,
+          `getOrCreateSandbox: resume failed because sandbox is gone — will create new one (${errorMessage(err)})`,
         );
         // Unresumable (missing snap / deadline): do not burn another 180s retry.
         return null;
@@ -2111,7 +2112,7 @@ async function tryResumeSandbox(
       if (attempt === maxAttempts) throw err;
       const delay = backoffMs[attempt - 1] ?? 8000;
       logGit(
-        `getOrCreateSandbox: resume attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms — ${err instanceof Error ? err.message : String(err)}`,
+        `getOrCreateSandbox: resume attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms — ${errorMessage(err)}`,
       );
       await sleep(delay);
     }

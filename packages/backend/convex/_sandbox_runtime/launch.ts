@@ -1,6 +1,6 @@
 "use node";
 
-import { requiredEnv } from "@vvedantb/server";
+import { requiredEnv, errorMessage } from "@vvedantb/server";
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
 import { redactSecrets } from "@eva/shared/redactSecrets";
@@ -209,7 +209,7 @@ async function resolveLatestCliVersion(
   } catch (error) {
     console.log(
       `[sandbox][cli] ${packageName} registry lookup failed, using floor ${floor}: ${
-        error instanceof Error ? error.message : String(error)
+        errorMessage(error)
       }`,
     );
   }

@@ -40,6 +40,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
+import { errorMessage } from "@vvedantb/server";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -494,7 +495,7 @@ export const finalizeStopProjectSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorMessage(err);
     }
     await ctx.runMutation(internal._projects.sandbox.markProjectSandboxClosed, {
       projectId: args.projectId,

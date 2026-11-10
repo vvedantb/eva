@@ -12,6 +12,7 @@ import { writeSandboxFile } from "./sandboxFiles";
 import { ensureSwapFile } from "./swap";
 import { EVA_ENV_SOURCE_CMD } from "../_sandbox/vercelEnvFile";
 import { buildFreePortLines } from "./httpReadyProbe";
+import { errorMessage } from "@vvedantb/server";
 
 const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
@@ -231,7 +232,7 @@ export async function restoreSeededRuntimeState(
     await restoreSeededSupabaseDump(sandbox);
     return undefined;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     console.warn(
       `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${message}`,
     );

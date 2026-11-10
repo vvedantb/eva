@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
 import { isTerminalSnapshotState } from "./_sandbox_runtime/snapshotStates";
+import { errorMessage } from "@vvedantb/server";
 
 // Detached seed-run poll loop (per app). The whole per-app pipeline (git
 // update, deps/build, daemons, seed, clean stop) runs as ONE detached script on
@@ -328,7 +329,7 @@ export const snapshotBuildWorkflow = workflow.define({
             } catch (e) {
               console.error(
                 `[snapshot] failed to delete previous Vercel base snapshot ${previousBaseSnapshotId}: ${
-                  e instanceof Error ? e.message : String(e)
+                  errorMessage(e)
                 }`,
               );
             }
@@ -616,7 +617,7 @@ export const snapshotBuildWorkflow = workflow.define({
       } catch (e) {
         console.error(
           `[snapshot] failed to schedule repo group rebuilds for repo ${appRepoId}: ${
-            e instanceof Error ? e.message : String(e)
+            errorMessage(e)
           }`,
         );
       }
@@ -636,14 +637,14 @@ export const snapshotBuildWorkflow = workflow.define({
         } catch (e) {
           console.error(
             `[snapshot] failed to delete previous seeded snapshot ${previousSeededSnapshotName}: ${
-              e instanceof Error ? e.message : String(e)
+              errorMessage(e)
             }`,
           );
         }
       }
     } catch (e) {
       console.error(
-        `[snapshot] single seeded build failed: ${e instanceof Error ? e.message : String(e)}`,
+        `[snapshot] single seeded build failed: ${errorMessage(e)}`,
       );
       if (prepSandboxId) {
         await step.runAction(internal.snapshotActions.deleteSeedPrepSandbox, {
@@ -651,7 +652,7 @@ export const snapshotBuildWorkflow = workflow.define({
           repoId: appRepoId,
         });
       }
-      await failBuild(e instanceof Error ? e.message : String(e));
+      await failBuild(errorMessage(e));
     }
   },
 });

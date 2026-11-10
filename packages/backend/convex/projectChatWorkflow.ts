@@ -77,6 +77,7 @@ import {
 } from "./_chat/turnStore";
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
+import { errorMessage } from "@vvedantb/server";
 
 async function buildProjectChatTurnPrompt(
   ctx: QueryCtx,
@@ -987,7 +988,7 @@ export const projectChatExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("chat", error);
         console.error(
-          `[projectChatWorkflow] pushSandboxBranch failed projectId=${String(args.projectId)}: ${error instanceof Error ? error.message : String(error)}`,
+          `[projectChatWorkflow] pushSandboxBranch failed projectId=${String(args.projectId)}: ${errorMessage(error)}`,
         );
         await step.runMutation(internal.projectChatWorkflow.saveResult, {
           projectId: args.projectId,

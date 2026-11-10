@@ -1,4 +1,4 @@
-import { toolErrorResult } from "@vvedantb/server";
+import { toolErrorResult, errorMessage } from "@vvedantb/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
@@ -351,7 +351,7 @@ export async function supabaseTools(
               await client.close();
             }
           } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
+            const message = errorMessage(err);
             return toolErrorResult(`Supabase tool error: ${message}`);
           }
         },

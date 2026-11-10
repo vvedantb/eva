@@ -35,6 +35,7 @@ import {
   type DeploymentStatus,
 } from "./_taskWorkflow/deploymentHelpers";
 import { fetchGitHubDeploymentSnapshot } from "./_github/deploymentSnapshot";
+import { errorMessage } from "@vvedantb/server";
 
 // Re-export URL builders for backwards compatibility
 export { buildEvaTaskUrl, buildEvaSessionUrl } from "./_taskWorkflow/urls";
@@ -78,7 +79,7 @@ async function withVisiblePrFailure<T>(
   try {
     return await attempt();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     console.error(`[pr] ${label} failed: ${message}`);
     throw new ConvexError(message);
   }
@@ -348,7 +349,7 @@ export const updatePrTitle = internalAction({
       await patchPullRequest(octokit, target, { title: `Eva: ${args.title}` });
     } catch (error) {
       console.error(
-        `[github] Failed to update PR title for ${args.prUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to update PR title for ${args.prUrl}: ${errorMessage(error)}`,
       );
     }
     return null;
@@ -381,7 +382,7 @@ export const convertPrToDraft = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to convert PR to draft: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to convert PR to draft: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -428,7 +429,7 @@ export const reopenPullRequest = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to reopen PR: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to reopen PR: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -462,7 +463,7 @@ export const closePullRequest = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to close PR: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to close PR: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -498,7 +499,7 @@ export const markPrReadyForReview = internalAction({
       return true;
     } catch (error) {
       console.error(
-        `[github] Failed to mark PR ready: ${error instanceof Error ? error.message : String(error)}`,
+        `[github] Failed to mark PR ready: ${errorMessage(error)}`,
       );
       return false;
     }
@@ -607,7 +608,7 @@ async function runDeploymentPollAttempt(
     if (shouldReschedule) await maybeReschedule();
   } catch (error) {
     console.error(
-      `${opts.logPrefix} Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${error instanceof Error ? error.message : String(error)}`,
+      `${opts.logPrefix} Error for ${args.repoOwner}/${args.repoName} branch=${args.branchName} attempt=${args.attempt}: ${errorMessage(error)}`,
     );
     await maybeReschedule();
   }

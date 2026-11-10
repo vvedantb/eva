@@ -56,6 +56,7 @@ import {
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "./_sandbox_runtime/packageManager";
+import { errorMessage } from "@vvedantb/server";
 
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
 const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
@@ -663,7 +664,7 @@ export const fetchSeedDiagnostics = internalAction({
         90,
       );
     } catch (e) {
-      return `diagnostics unavailable: ${e instanceof Error ? e.message : String(e)}`;
+      return `diagnostics unavailable: ${errorMessage(e)}`;
     }
   },
 });
@@ -822,7 +823,7 @@ export const deleteSeedPrepSandbox = internalAction({
       // Best-effort: log but do not fail the build if delete fails.
       console.error(
         `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${
-          e instanceof Error ? e.message : String(e)
+          errorMessage(e)
         }`,
       );
     }
@@ -948,7 +949,7 @@ export const stopAllRepoSandboxes = internalAction({
         } catch (err) {
           console.warn(
             `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${
-              err instanceof Error ? err.message : String(err)
+              errorMessage(err)
             }`,
           );
         }
@@ -959,7 +960,7 @@ export const stopAllRepoSandboxes = internalAction({
     } catch (e) {
       console.error(
         `[snapshot] stopAllRepoSandboxes: best-effort sweep failed: ${
-          e instanceof Error ? e.message : String(e)
+          errorMessage(e)
         }`,
       );
     }
@@ -991,7 +992,7 @@ export const deleteSeededSnapshot = internalAction({
     } catch (e) {
       console.error(
         `[snapshot] deleteSeededSnapshot: failed to delete ${args.snapshotName}: ${
-          e instanceof Error ? e.message : String(e)
+          errorMessage(e)
         }`,
       );
     }
@@ -1095,7 +1096,7 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
       } catch (error) {
         console.warn(
           `[snapshot] purgeUnreferencedVercelSnapshots: failed ${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
+            errorMessage(error)
           }`,
         );
       }
@@ -1189,7 +1190,7 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
     } catch (err) {
       console.warn(
         `[purgeUnreferencedVercelSnapshotsAll] skip repo=${repoId}: ${
-          err instanceof Error ? err.message : String(err)
+          errorMessage(err)
         }`,
       );
     }

@@ -74,6 +74,7 @@ import {
   sessionChatPersistenceId,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
+import { errorMessage } from "@vvedantb/server";
 
 // --- Completion event ---
 
@@ -199,7 +200,7 @@ export const sessionSandboxStartupWorkflow = workflow.define({
         await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
           sessionId: args.sessionId,
           content: `Failed to prepare linked repo ${linkedRepo.name}`,
-          errorDetail: error instanceof Error ? error.message : String(error),
+          errorDetail: errorMessage(error),
         });
       }
     }
@@ -488,7 +489,7 @@ export const sessionExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("session", error);
         console.error(
-          `[sessionWorkflow] pushSandboxBranch failed chatId=${args.chatId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[sessionWorkflow] pushSandboxBranch failed chatId=${args.chatId}: ${errorMessage(error)}`,
         );
         await step.runMutation(internal.sessionWorkflow.saveResult, {
           chatId: args.chatId,
@@ -529,7 +530,7 @@ export const sessionExecuteWorkflow = workflow.define({
           });
         } catch (error) {
           const errorDetail =
-            error instanceof Error ? error.message : String(error);
+            errorMessage(error);
           console.error(
             `[sessionWorkflow] createDraftSessionPr failed sessionId=${sessionId}: ${errorDetail}`,
           );
@@ -565,7 +566,7 @@ export const sessionExecuteWorkflow = workflow.define({
         );
       } catch (error) {
         const errorDetail =
-          error instanceof Error ? error.message : String(error);
+          errorMessage(error);
         console.error(
           `[sessionWorkflow] pushLinkedRepoBranches failed sessionId=${sessionId}: ${errorDetail}`,
         );
@@ -586,7 +587,7 @@ export const sessionExecuteWorkflow = workflow.define({
         } catch (error) {
           // One repo's PR failing must not stop its siblings' PRs.
           const errorDetail =
-            error instanceof Error ? error.message : String(error);
+            errorMessage(error);
           console.error(
             `[sessionWorkflow] createDraftSessionRepoPr failed sessionRepoId=${linkedPush.sessionRepoId}: ${errorDetail}`,
           );

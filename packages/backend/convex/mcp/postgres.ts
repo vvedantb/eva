@@ -4,6 +4,7 @@ import { Client } from "pg";
 import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { errorMessage } from "@vvedantb/server";
 import { safePostgresStream } from "../_mcp/postgresSsrfGuard";
 
 const ENV_KEY = "POSTGRES_READ_REPLICA_URL";
@@ -159,7 +160,7 @@ export const runPostgresQuery = internalAction({
       return {
         ok: false,
         errorCode: "query_error",
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       };
     } finally {
       // Always roll back (read-only) and close; ignore failures on a

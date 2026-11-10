@@ -23,7 +23,6 @@ import {
   getSandboxHandle,
   ensureSandboxRunning,
   ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
-  sleep,
   errorMessage,
   signAndLaunchScript,
   KILL_PRIOR_AGENT_PROCESSES_CMD,
@@ -126,6 +125,7 @@ import { createHmac } from "node:crypto";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
+import { sleep } from "../_shared/async";
 
 /**
  * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when

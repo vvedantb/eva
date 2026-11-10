@@ -6,6 +6,7 @@ import { internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { readFileAtRef } from "../_github/contents";
 import { EVA_CONFIG_PATH, EVA_MCP_PATH } from "./config";
+import { errorMessage } from "@vvedantb/server";
 
 /** `.eva/` files are small JSON; anything bigger is a mistake, not config. */
 const MAX_EVA_FILE_BYTES = 200_000;
@@ -61,7 +62,7 @@ export const syncEvaConfig = internalAction({
       ]);
     } catch (error) {
       console.error(
-        `[evaConfig] sync ${target.owner}/${target.name}@${target.ref} failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[evaConfig] sync ${target.owner}/${target.name}@${target.ref} failed: ${errorMessage(error)}`,
       );
       return null;
     }

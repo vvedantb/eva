@@ -11,7 +11,7 @@
  * `longContext` option through AI Gateway.
  *
  * Imports stay confined to the SDK, the leaf modules beside this file and the
- * shared gateway-error leaf (`_ai/gatewayErrors.ts`);
+ * shared gateway-error helpers in `@vvedantb/server/ai`;
  * reaching into `mcp/*` or `functions.ts` would put a `"use node"` chunk in an
  * import cycle, which breaks the Convex prod push.
  */
@@ -23,7 +23,7 @@ import {
   type Experimental_DecisionState,
   type Experimental_DecisionStatePart,
 } from "ai";
-import { classifyGatewayError, errorMessageOf } from "../_ai/gatewayErrors";
+import { classifyGatewayError, errorMessageOf } from "@vvedantb/server/ai";
 import {
   EVALUATE_MODEL,
   evaluateInput,
@@ -52,7 +52,7 @@ function failure(
 
 /**
  * Maps SDK and gateway failures onto the three caller-facing error codes. The
- * gateway classification itself is shared (`_ai/gatewayErrors.ts`); only
+ * gateway classification itself is shared (`@vvedantb/server/ai`); only
  * Jev's own codes and copy live here.
  */
 function classifyError(error: unknown): Failure {
@@ -88,6 +88,11 @@ function classifyError(error: unknown): Failure {
         "provider_error",
         `Jev returned a malformed answer set: ${message}`,
         true,
+      );
+    case "quota":
+      return failure(
+        "provider_error",
+        `AI Gateway quota or credit limit reached: ${message}`,
       );
     case "timeout":
       return failure(

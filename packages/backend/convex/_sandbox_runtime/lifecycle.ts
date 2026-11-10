@@ -16,6 +16,7 @@ import {
 import { releaseSwapFile } from "./swap";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
+import { errorMessage } from "@vvedantb/server";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -209,7 +210,7 @@ export const stopSandbox = internalAction({
             state = sandbox.state;
           } catch (refreshError) {
             console.log(
-              `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+              `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${errorMessage(refreshError)}`,
             );
           }
           // Stop auto-snapshots the filesystem — drop the swapfile first so
@@ -225,7 +226,7 @@ export const stopSandbox = internalAction({
               );
             } catch (swapError) {
               console.log(
-                `[sandbox] stopSandbox swap release failed sandboxId=${args.sandboxId}: ${swapError instanceof Error ? swapError.message : String(swapError)}`,
+                `[sandbox] stopSandbox swap release failed sandboxId=${args.sandboxId}: ${errorMessage(swapError)}`,
               );
             }
           } else {
@@ -240,7 +241,7 @@ export const stopSandbox = internalAction({
       );
       console.log(`[sandbox] stopSandbox ok sandboxId=${args.sandboxId}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       // Already gone / already idle — treat as success so finalize can close.
       //
       // The structured verdict comes first. The provider's own 404 carries no
@@ -332,7 +333,7 @@ export const captureStalledTurnDiagnostics = internalAction({
     try {
       return await readKillDiagnostics(ctx, args.repoId, args.sandboxId);
     } catch (error) {
-      return `diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`;
+      return `diagnostics capture failed: ${errorMessage(error)}`;
     }
   },
 });
@@ -367,7 +368,7 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
       });
     } catch (error) {
       console.log(
-        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${errorMessage(error)}`,
       );
     }
     await ctx.runAction(internal.sandbox.stopSandbox, {
@@ -428,7 +429,7 @@ export const archiveSandbox = internalAction({
     } catch (error) {
       // Sandbox may already be archived, stopped, or deleted
       console.warn(
-        `[sandbox] Failed to archive sandbox ${args.sandboxId}: ${error instanceof Error ? error.message : String(error)}`,
+        `[sandbox] Failed to archive sandbox ${args.sandboxId}: ${errorMessage(error)}`,
       );
     }
     return null;
