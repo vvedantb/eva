@@ -43,7 +43,7 @@ export async function resolveCodebaseDocsRepoId(
   return repoId;
 }
 
-/** True when the user can access any repo row for the same GitHub owner/name codebase. */
+/** True when the user can access any sibling row of the codebase (same team). */
 export async function hasCodebaseRepoAccess(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -56,7 +56,11 @@ export async function hasCodebaseRepoAccess(
   return false;
 }
 
-/** All repo rows for one GitHub owner/name codebase (root + sub-apps). */
+/**
+ * Every repo row for one GitHub owner/name, across ALL teams. Only for routing
+ * GitHub events and GitHub-wide facts; anything that shares data between rows
+ * must use `findSiblingsOf` instead.
+ */
 export function findReposByOwnerAndName(
   db: GenericDatabaseReader<DataModel>,
   repo: { owner: string; name: string },
@@ -69,17 +73,42 @@ export function findReposByOwnerAndName(
     .collect();
 }
 
-/** Finds all repo rows sharing the same GitHub owner and name (root + sub-apps). */
+type SiblingScope = Pick<Doc<"githubRepos">, "teamId" | "connectedBy">;
+
+/**
+ * The one sibling rule: rows of the same owner/name share config, snapshots,
+ * docs and settings only inside one team. A row with no team is visible only to
+ * its connector, so it only pairs with that connector's other team-less rows.
+ */
+export function isSameTeamSibling(a: SiblingScope, b: SiblingScope): boolean {
+  if (a.teamId !== undefined || b.teamId !== undefined) {
+    return a.teamId === b.teamId;
+  }
+  return a.connectedBy !== undefined && a.connectedBy === b.connectedBy;
+}
+
+/** Sibling rows of `repo` (root + monorepo apps in the same team), itself included. */
+export async function findSiblingsOf(
+  db: GenericDatabaseReader<DataModel>,
+  repo: Doc<"githubRepos">,
+): Promise<Array<Doc<"githubRepos">>> {
+  const rows = await findReposByOwnerAndName(db, repo);
+  return rows.filter(
+    (row) => row._id === repo._id || isSameTeamSibling(repo, row),
+  );
+}
+
+/** Sibling rows of a repo id (see `findSiblingsOf`); [] when the repo is gone. */
 export async function findSiblingRepos(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Array<Doc<"githubRepos">>> {
   const repo = await db.get(repoId);
   if (!repo) return [];
-  return await findReposByOwnerAndName(db, repo);
+  return await findSiblingsOf(db, repo);
 }
 
-/** Finds all repo entry ids sharing the same owner and name (root + sub-apps). */
+/** Sibling repo ids (see `findSiblingsOf`), or just `repoId` when it is gone. */
 export async function findAllSiblingRepoIds(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,

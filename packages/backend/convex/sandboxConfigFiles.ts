@@ -6,7 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
-import { findReposByOwnerAndName } from "./_githubRepos/helpers";
+import { findSiblingsOf } from "./_githubRepos/helpers";
 
 /** Regex for safe filenames: alphanumeric, dash, underscore, dot only. */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -30,7 +30,7 @@ async function deleteFileBlobs(
 }
 
 /**
- * All config files across sibling repos sharing the anchor repo's owner/name.
+ * All config files across the anchor repo's siblings (same owner/name and team).
  * Returns [] when the anchor repo is missing. Preserves sibling-then-file order
  * so callers can rely on last-write-wins on filename collision.
  */
@@ -40,7 +40,7 @@ async function collectSiblingConfigFiles(
 ): Promise<Array<Doc<"sandboxConfigFiles">>> {
   const anchorRepo = await ctx.db.get(repoId);
   if (!anchorRepo) return [];
-  const siblings = await findReposByOwnerAndName(ctx.db, anchorRepo);
+  const siblings = await findSiblingsOf(ctx.db, anchorRepo);
   const files: Array<Doc<"sandboxConfigFiles">> = [];
   for (const sibling of siblings) {
     const siblingFiles = await ctx.db
@@ -177,9 +177,9 @@ export const remove = authMutation({
  * Legacy single-blob records are returned as a 1-element chunkUrls array.
  * The snapshot/sandbox builder downloads each chunk in order and concatenates.
  *
- * Aggregates across all sibling repos sharing the snapshot anchor's owner/name —
- * one snapshot is built per (owner, name) and serves the root repo plus every
- * sub-app, so config files uploaded against any sibling repoId must be baked in.
+ * Aggregates across the snapshot anchor's siblings (same owner/name and team):
+ * one snapshot serves the root repo plus every sub-app of that team, so config
+ * files uploaded against any sibling repoId must be baked in.
  * Last write wins on filename collision (later sibling overrides earlier).
  */
 export const getConfigFilesForSnapshot = internalQuery({

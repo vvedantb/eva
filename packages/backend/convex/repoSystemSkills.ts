@@ -4,7 +4,10 @@ import type { GenericDatabaseReader } from "convex/server";
 import { internalQuery } from "./_generated/server";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
-import { resolveCanonicalRepoId } from "./_githubRepos/helpers";
+import {
+  findSiblingsOf,
+  resolveCanonicalRepoId,
+} from "./_githubRepos/helpers";
 import {
   buildStubMarkdown,
   isSystemSkillName,
@@ -54,12 +57,7 @@ async function buildDraftFromConvex(
   db: GenericDatabaseReader<DataModel>,
   repo: Doc<"githubRepos">,
 ): Promise<string> {
-  const siblings = await db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", repo.owner).eq("name", repo.name),
-    )
-    .collect();
+  const siblings = await findSiblingsOf(db, repo);
   // The monorepo root row is not an app unless it is the only row.
   const parentIds = new Set(siblings.map((row) => row.parentRepoId));
   const apps =

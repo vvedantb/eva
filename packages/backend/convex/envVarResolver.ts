@@ -78,18 +78,14 @@ export async function resolveSeedOnlyEnvVars(
   return { ...teamVars, ...repoVars };
 }
 
-/** All repos in the same codebase (owner/name), requested repo first. */
+/** Sibling repos of the codebase (same owner/name and team), requested repo first. */
 async function listMonorepoRepoIds(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Array<Id<"githubRepos">>> {
-  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
-    id: repoId,
-  });
-  if (!repo) return [repoId];
   const siblingIds = await ctx.runQuery(
-    internal.githubRepos.listRepoIdsByOwnerAndName,
-    { owner: repo.owner, name: repo.name },
+    internal.githubRepos.listSiblingRepoIds,
+    { repoId },
   );
   if (siblingIds.length === 0) return [repoId];
   return [repoId, ...siblingIds.filter((id) => id !== repoId)];
