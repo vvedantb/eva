@@ -1,4 +1,5 @@
 import { api, type Doc, type Id } from "@eva/backend";
+import { getNotificationAppearance } from "@eva/shared";
 import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGroups";
 import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
@@ -12,10 +13,9 @@ import { Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WEB_URL } from "@/config";
 import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions";
-import { NOTIFICATION_APPEARANCE } from "@/inbox/notificationAppearance";
-import { NotificationRow } from "@/inbox/NotificationRow";
+import { NotificationRow, type NotificationRepo } from "@/inbox/NotificationRow";
 import { TabScreen } from "@/ui/TabScreen";
-import { useScheme } from "@/ui/theme";
+import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 /**
  * The web inbox at phone width: All / Unread / Archived, grouped by day,
@@ -43,12 +43,14 @@ export default function InboxScreen() {
 
   // The web Unread filter: the inbox list, unread rows only.
   const notifications = filter === "unread" ? listed?.filter((notification) => !notification.read) : listed;
-  const repoLabels = new Map((repos ?? []).map((repo) => [repo._id, repo.label ?? repo.name]));
-  const repoLabelOf = (notification: Doc<"notifications">) =>
-    notification.repoId ? repoLabels.get(notification.repoId) : undefined;
+  const repoById = new Map<Id<"githubRepos">, NotificationRepo>(
+    (repos ?? []).map((repo) => [repo._id, { label: repo.label ?? repo.name, logoUrl: repo.logoUrl }]),
+  );
+  const repoOf = (notification: Doc<"notifications">) =>
+    notification.repoId ? repoById.get(notification.repoId) : undefined;
   const groups = groupNotifications(notifications ?? [], group, {
-    typeLabel: (notification) => NOTIFICATION_APPEARANCE[notification.type].label,
-    repoLabel: repoLabelOf,
+    typeLabel: (notification) => getNotificationAppearance(notification).label,
+    repoLabel: (notification) => repoOf(notification)?.label,
   });
 
   const exitSelect = () => {
@@ -119,14 +121,15 @@ export default function InboxScreen() {
                 borderBottomColor: tokens.color.border[scheme],
               }}
             >
-              <SectionLabel>{section.label}</SectionLabel>
+              {/* The web label is an inline `text-xs` span in a 24 line box. */}
+              <SectionLabel style={{ letterSpacing: XS_TRACKING, lineHeight: 24 }}>{section.label}</SectionLabel>
             </View>,
             <DividedList key={`${section.label}-rows`}>
               {section.items.map((notification) => (
                 <NotificationRow
                   key={notification._id}
                   notification={notification}
-                  repoLabel={repoLabelOf(notification)}
+                  repo={repoOf(notification)}
                   onPress={() => open(notification)}
                   onMarkRead={() => void markAsRead({ id: notification._id })}
                   selection={

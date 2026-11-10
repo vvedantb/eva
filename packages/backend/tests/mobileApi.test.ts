@@ -140,6 +140,27 @@ describe("mobile api", () => {
   );
 
   test(
+    "listChats carries each session's PR link and state",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const [before] = await asUser.query(api.mobile.listChats, {});
+      expect(before).not.toHaveProperty("prUrl");
+      expect(before).not.toHaveProperty("prState");
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { prUrl: "https://github.com/vvedantb/eva/pull/1", prState: "merged" });
+      });
+      expect(await asUser.query(api.mobile.listChats, {})).toEqual([
+        expect.objectContaining({
+          sessionId: ids.sessionId,
+          prUrl: "https://github.com/vvedantb/eva/pull/1",
+          prState: "merged",
+        }),
+      ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "sendMessage delivers to each chat kind with its sticky model",
     async () => {
       const { t, ids, asUser } = await fixture();

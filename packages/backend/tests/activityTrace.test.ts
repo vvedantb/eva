@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { hasStepDetail, parseToolSteps, summariseToolSteps } from "@eva/shared/activityTrace";
+import {
+  hasStepDetail,
+  parseToolSteps,
+  parseTraceSegments,
+  summariseToolSteps,
+} from "@eva/shared/activityTrace";
 
 /** The mobile chat's tool trace reads `messages.activityLog` with no web types. */
 describe("activity trace", () => {
@@ -38,5 +43,54 @@ describe("activity trace", () => {
     expect(steps[0]?.output).toEqual({ text: "ok", exitCode: 0 });
     expect(steps[1]?.edits).toEqual([{ oldText: "a", newText: "b" }]);
     expect(steps.map(hasStepDetail)).toEqual([true, true, true, false]);
+  });
+});
+
+describe("trace segments", () => {
+  const segmentsOf = (steps: object[]) =>
+    parseTraceSegments(JSON.stringify(steps)).map((segment) =>
+      segment.kind === "reasoning"
+        ? `reasoning: ${segment.text}`
+        : `${summariseToolSteps(segment.steps.map(({ step }) => step))} [${segment.steps.map(({ index }) => index).join(",")}]`,
+    );
+
+  test("keeps reasoning as prose and folds the tool steps after it into one run", () => {
+    expect(
+      segmentsOf([
+        { type: "reasoning", label: "Thought", detail: " Find the table. ", status: "complete" },
+        { type: "search_code", label: "Searched code", status: "complete" },
+        { type: "response", label: "Response", detail: "On it.", status: "complete" },
+        { type: "read", label: "Read file", status: "complete" },
+        { type: "thinking", label: "Thought", detail: "Now write it.", status: "complete" },
+        { type: "write", label: "Created file", status: "complete" },
+        { type: "bash", label: "Ran command", status: "active" },
+      ]),
+    ).toEqual([
+      "reasoning: Find the table.",
+      // The reply text is hidden in the folded trace, so it does not split the run.
+      "Searched the code, read files [0,1]",
+      "reasoning: Now write it.",
+      "Created files, ran commands [2,3]",
+    ]);
+  });
+
+  test("a narration step ends a run; filler thinking and status lines do not", () => {
+    expect(
+      segmentsOf([
+        { type: "read", label: "Read file", status: "complete" },
+        { type: "thinking", label: "Thought", detail: "Claude is reasoning...", status: "complete" },
+        { type: "thinking", label: "Generated response", status: "complete" },
+        { type: "read", label: "Read file", status: "complete" },
+        { type: "todos", label: "Task list", status: "complete" },
+        { type: "tool", label: "File change", status: "complete" },
+        { type: "reasoning", label: "Thought", status: "complete" },
+        { type: "bash", label: "Ran command", status: "complete" },
+      ]),
+    ).toEqual(["Read files [0,1]", "Edited files [2]", "reasoning: ", "Ran commands [3]"]);
+  });
+
+  test("a legacy or malformed log has no segments", () => {
+    expect(parseTraceSegments("Ran the tests")).toEqual([]);
+    expect(parseTraceSegments(undefined)).toEqual([]);
   });
 });

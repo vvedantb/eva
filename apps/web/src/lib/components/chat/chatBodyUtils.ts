@@ -10,6 +10,9 @@ import {
   type ChangedFile,
 } from "@/lib/components/chat/ChangedFilesCard";
 
+// Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
+export { buildPrecedingUserTurns } from "@eva/shared";
+
 /**
  * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
  * skill slash items, the prompt stash and repo mentions all switch off.
@@ -423,29 +426,6 @@ export function findLastAssistantMessageId(
     if (message.role === "assistant") return message._id;
   }
   return undefined;
-}
-
-/**
- * Model / account snapshot for each assistant row: the user turn directly
- * before it (where send/dequeue stores model + credentialSourceLabel), skipping
- * system alerts. An assistant row that follows another assistant row has none.
- *
- * One pass for the whole transcript — looking each row up separately was
- * O(n²), and it re-ran on every streamed token.
- */
-export function buildPrecedingUserTurns<
-  T extends Pick<ChatBodyMessage, "_id" | "role" | "isSystemAlert">,
->(messages: ReadonlyArray<T>): Map<string, T> {
-  const byAssistantId = new Map<string, T>();
-  let previous: T | undefined;
-  for (const message of messages) {
-    if (message.isSystemAlert) continue;
-    if (message.role === "assistant" && previous?.role === "user") {
-      byAssistantId.set(message._id, previous);
-    }
-    previous = message;
-  }
-  return byAssistantId;
 }
 
 /** User turns a chat renders when it opens; older turns load on scroll. */

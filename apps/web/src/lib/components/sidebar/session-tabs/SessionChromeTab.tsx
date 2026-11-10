@@ -12,13 +12,17 @@ import {
   LoadingState,
 } from "@vvedantb/ui";
 import { IconGitPullRequest, IconX } from "@tabler/icons-react";
+import type { PrState } from "@eva/shared";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import {
   SANDBOX_STATUS_STYLES,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { SessionHoverCardBody } from "@/lib/components/sidebar/SidebarListHoverCard";
-import { TitleRegeneratingHint } from "@/lib/components/sidebar/SidebarSessionItem";
+import {
+  TitleRegeneratingHint,
+  prStateIconColor,
+} from "@/lib/components/sidebar/SidebarSessionItem";
 import {
   SessionMenuItems,
   useIsRegeneratingTitle,
@@ -44,7 +48,7 @@ interface ChromeTabSession {
   branchName?: string;
   baseBranch?: string;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   sandboxId?: string;
 }
 
@@ -61,22 +65,6 @@ export interface SessionChromeTabProps {
   /** Dismisses the tab locally — the session keeps running. */
   onClose: () => void;
   onForkNavigate: (pathSegment: string) => void;
-}
-
-function prStateIconColor(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-status-code-review";
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-muted-foreground";
-  }
 }
 
 /**

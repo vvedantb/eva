@@ -1,28 +1,34 @@
 import type { Doc } from "@eva/backend";
+import { getNotificationAppearance } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { IconCheck } from "@tabler/icons-react-native";
-import { Checkbox } from "@vvedantb/native-ui/primitives";
+import { Avatar, AvatarFallback, Checkbox } from "@vvedantb/native-ui/primitives";
 import { palette, tokens } from "@vvedantb/native-ui/theme";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { timeAgo } from "@/ui/format";
-import { useScheme } from "@/ui/theme";
-import { NOTIFICATION_APPEARANCE, type NotificationTone } from "./notificationAppearance";
+import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { NOTIFICATION_ICONS, toneColors } from "./notificationAppearance";
+
+/** The repo fields the leading mark reads. */
+export type NotificationRepo = { label: string; logoUrl?: string | null };
 
 /**
  * One inbox row, as Eva's web `NotificationRow` at phone width: a 6-wide unread
- * dot slot, the repo initial in a 28 circle, the subject (medium when unread)
- * over the event line, the time, the type glyph, and a 40 check that marks an
- * unread row read. Flat; `DividedList` draws the hairlines.
+ * dot slot, the source mark (the repo logo or initial, else the type glyph in a
+ * 32 tinted circle), the subject (medium when unread) over the event line, the
+ * time, the type glyph in its tone, and a 40 check that marks an unread row
+ * read. Flat; `DividedList` draws the hairlines.
  */
 export function NotificationRow({
   notification,
-  repoLabel,
+  repo,
   onPress,
   onMarkRead,
   selection,
 }: {
   notification: Doc<"notifications">;
-  repoLabel: string | undefined;
+  repo: NotificationRepo | undefined;
   onPress: () => void;
   onMarkRead: () => void;
   /** Select mode, as the web: a checkbox leads the row, a press toggles it, and Mark read hides. */
@@ -34,15 +40,11 @@ export function NotificationRow({
   // A low-urgency row reads as already read even while unread, as on the web.
   const emphasised = unread && notification.urgency !== "low";
   const { subject, event } = splitNotificationTitle(notification);
-  const appearance = NOTIFICATION_APPEARANCE[notification.type];
-  const Glyph = appearance.icon;
-  const toneColor: Record<NotificationTone, string> = {
-    primary: palette.primary[scheme],
-    success: palette.success[scheme],
-    warning: palette.warning[scheme],
-    danger: palette.danger[scheme],
-    muted,
-  };
+  // No event phrase: the repo keeps a second line, so rows stay one height.
+  const detail = event ?? repo?.label;
+  const appearance = getNotificationAppearance(notification);
+  const Glyph = NOTIFICATION_ICONS[appearance.icon];
+  const tone = toneColors(appearance.tone, scheme);
   return (
     <View className="flex-row items-center gap-3 px-4">
       {selection ? (
@@ -59,16 +61,21 @@ export function NotificationRow({
         className="min-w-0 flex-1 flex-row items-center gap-3 py-3 active:opacity-70"
       >
         <View className="w-1.5 items-center">
-          {unread ? <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.primary[scheme] }} /> : null}
+          {unread ? (
+            <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.primary[scheme] }} />
+          ) : null}
         </View>
-        <View
-          className="h-7 w-7 items-center justify-center rounded-full"
-          style={{ backgroundColor: tokens.color.surfaceSecondary[scheme] }}
-        >
-          <Text className="font-instrument-sans-semibold text-xs" style={{ color: muted, fontWeight: "600" }}>
-            {(repoLabel ?? appearance.label).charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        {repo ? (
+          <RepoMark repo={repo} />
+        ) : (
+          // The web `NotificationIcon`: a bordered 32 avatar with the tone tint
+          // inside. The web `bg-surface-secondary` is `--muted`.
+          <Avatar size={32} style={{ backgroundColor: EVA_THEME[scheme].muted }}>
+            <AvatarFallback style={{ backgroundColor: tone.tint }}>
+              <Glyph size={16} color={tone.glyph} />
+            </AvatarFallback>
+          </Avatar>
+        )}
         <View className="min-w-0 flex-1">
           <Text
             numberOfLines={1}
@@ -77,17 +84,24 @@ export function NotificationRow({
           >
             {subject}
           </Text>
-          {event ? (
-            <Text numberOfLines={1} className="font-instrument-sans text-xs leading-relaxed" style={{ color: muted }}>
-              {event}
+          {detail ? (
+            <Text
+              numberOfLines={1}
+              className="font-instrument-sans text-xs leading-relaxed"
+              style={{ color: muted, letterSpacing: XS_TRACKING }}
+            >
+              {detail}
             </Text>
           ) : null}
         </View>
       </Pressable>
-      <Text className="font-instrument-sans text-xs" style={{ color: muted, fontVariant: ["tabular-nums"] }}>
+      <Text
+        className="font-instrument-sans text-xs"
+        style={{ color: muted, letterSpacing: XS_TRACKING, fontVariant: ["tabular-nums"] }}
+      >
         {timeAgo(notification.createdAt)}
       </Text>
-      <Glyph size={16} color={toneColor[appearance.tone]} accessibilityLabel={appearance.label} />
+      <Glyph size={16} color={tone.glyph} accessibilityLabel={appearance.label} />
       {unread && !selection ? (
         <Pressable
           accessibilityRole="button"
@@ -96,9 +110,37 @@ export function NotificationRow({
           hitSlop={4}
           className="h-10 w-10 items-center justify-center active:opacity-70"
         >
-          <IconCheck size={14} color={muted} />
+          <IconCheck size={16} color={muted} />
         </Pressable>
       ) : null}
+    </View>
+  );
+}
+
+/** The web `RepoLogo` at 28: the uploaded logo, else the repo initial on the muted fill. */
+function RepoMark({ repo }: { repo: NotificationRepo }) {
+  const scheme = useScheme();
+  if (repo.logoUrl) {
+    return (
+      <Image
+        source={{ uri: repo.logoUrl }}
+        accessibilityIgnoresInvertColors
+        className="h-7 w-7 rounded-full border"
+        style={{ borderColor: tokens.color.border[scheme] }}
+      />
+    );
+  }
+  return (
+    <View
+      className="h-7 w-7 items-center justify-center rounded-full"
+      style={{ backgroundColor: EVA_THEME[scheme].muted }}
+    >
+      <Text
+        className="font-instrument-sans-semibold text-xs"
+        style={{ color: tokens.color.muted[scheme], fontWeight: "600" }}
+      >
+        {repo.label.charAt(0).toUpperCase()}
+      </Text>
     </View>
   );
 }
