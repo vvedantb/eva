@@ -18,8 +18,8 @@ import {
   Attachments,
   ChoiceQuestion,
   Conversation,
-  ConversationContent,
   ConversationEmptyState,
+  ConversationList,
   ConversationScrollButton,
   Message,
   MessageContent,
@@ -27,14 +27,13 @@ import {
   PromptInputButton,
   Shimmer,
 } from "@vvedantb/native-ui/ai";
-import { StackPageHeader } from "@vvedantb/native-ui/layout";
+import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Fragment } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
@@ -59,7 +58,9 @@ const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename"
  * message actions, the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
  * picker) with the web footer: the live sandbox branch, the stash and the
- * chat's sticky model.
+ * chat's sticky model. The transcript is a `ConversationList`, so a long chat
+ * draws only the messages near the view. Back returns to where the chat was
+ * opened from, or to the Inbox after a deep link.
  */
 export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
@@ -96,15 +97,18 @@ export default function ChatScreen() {
   const simpleView = useSimpleView();
   // The `/` list follows the chat's model provider, as the web composer.
   const composer = useMentionComposer(chat?.repoId, chat ? getAIModelProvider(normalizeAIModel(chat.model)) : undefined);
-  // The web leaves a session's page once it is archived; the phone goes back.
-  const sessionActions = useSessionActions({ onArchived: () => router.back() });
+  // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
+  const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions") });
 
-  if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
-  if (chat === null) {
+  if (chat === undefined || chat === null) {
     return (
       <View className="flex-1">
-        <StackPageHeader title="Chat" onBack={() => router.back()} />
-        <EmptyState icon={IconMessageCircle} title="Chat not found" description="It was deleted, or you no longer have access." />
+        <RouterStackPageHeader title="Chat" />
+        {chat === undefined ? (
+          <CenteredSpinner label="Loading chat" />
+        ) : (
+          <EmptyState icon={IconMessageCircle} title="Chat not found" description="It was deleted, or you no longer have access." />
+        )}
       </View>
     );
   }
@@ -171,7 +175,7 @@ export default function ChatScreen() {
       <ChatHeader
         repoLabel={chat.repoLabel}
         title={chat.title}
-        onBack={() => router.back()}
+        onBack={() => goBackOrReplace(router)}
         onOpenWeb={() => void Linking.openURL(webUrl(chat.webPath))}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
@@ -187,59 +191,72 @@ export default function ChatScreen() {
       {sessionActions.dialogs}
       <Conversation>
         {/* The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`, messages `gap-3`. */}
-        <ConversationContent contentContainerClassName="gap-3 pl-[22px] pr-8">
-          {messages === undefined ? (
-            <CenteredSpinner label="Loading messages" />
-          ) : messages.length === 0 ? (
-            <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
-          ) : (
-            visible.map((message) => (
-              <Fragment key={message._id}>
-                {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
-                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
-                <Message from={message.role} className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}>
-                  {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`. */}
-                  <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
-                    {message.role === "user" ? (
-                      // The web user text is markdown in `text-sm` (14 / 20).
-                      <Markdown leading="normal">{message.content}</Markdown>
-                    ) : (
-                      <AssistantMessage
-                        messageId={message._id}
-                        content={message.content}
-                        activityLog={message.activityLog}
-                        duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-                        isLatestAssistantTurn={message._id === latestReplyId}
-                        onOpenDiff={openDiff}
-                      />
-                    )}
-                  </MessageContent>
-                  {message.content.trim() !== "" ? (
-                    <MessageFooter
-                      text={message.content}
-                      at={message.timestamp}
-                      finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
-                      link={webUrl(messageLinkHref(chat.webPath, message._id))}
-                      onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
-                      turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
-                      rating={
-                        message.role === "assistant"
-                          ? {
-                              sentiment: mine.get(message._id)?.sentiment,
-                              onRate: (sentiment) => {
-                                rate({ messageId: message._id, sentiment }).catch(() => toast.error("Couldn't save your rating"));
-                              },
-                            }
-                          : undefined
-                      }
+        <ConversationList
+          data={visible}
+          keyExtractor={(message) => message._id}
+          // The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`.
+          contentContainerClassName="pl-[22px] pr-8"
+          // Web: messages `gap-3`.
+          ItemSeparatorComponent={MessageGap}
+          ListEmptyComponent={
+            messages === undefined ? (
+              <CenteredSpinner label="Loading messages" />
+            ) : messages.length === 0 ? (
+              <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
+            ) : null
+          }
+          ListFooterComponent={
+            working && questions === null ? (
+              <View className="pt-3">
+                <Shimmer>Working…</Shimmer>
+              </View>
+            ) : null
+          }
+          renderItem={({ item: message }) => (
+            <View className="gap-3">
+              {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
+              {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
+              <Message from={message.role} className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}>
+                {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`. */}
+                <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
+                  {message.role === "user" ? (
+                    // The web user text is markdown in `text-sm` (14 / 20).
+                    <Markdown leading="normal">{message.content}</Markdown>
+                  ) : (
+                    <AssistantMessage
+                      messageId={message._id}
+                      content={message.content}
+                      activityLog={message.activityLog}
+                      duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
+                      isLatestAssistantTurn={message._id === latestReplyId}
+                      onOpenDiff={openDiff}
                     />
-                  ) : null}
-                </Message>
-              </Fragment>
-            ))
+                  )}
+                </MessageContent>
+                {message.content.trim() !== "" ? (
+                  <MessageFooter
+                    text={message.content}
+                    at={message.timestamp}
+                    finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
+                    link={webUrl(messageLinkHref(chat.webPath, message._id))}
+                    onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
+                    turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
+                    rating={
+                      message.role === "assistant"
+                        ? {
+                            sentiment: mine.get(message._id)?.sentiment,
+                            onRate: (sentiment) => {
+                              rate({ messageId: message._id, sentiment }).catch(() => toast.error("Couldn't save your rating"));
+                            },
+                          }
+                        : undefined
+                    }
+                  />
+                ) : null}
+              </Message>
+            </View>
           )}
-          {working && questions === null ? <Shimmer>Working…</Shimmer> : null}
-        </ConversationContent>
+        />
         <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel />
       </Conversation>
       {pending && questions ? (
@@ -323,4 +340,9 @@ export default function ChatScreen() {
       )}
     </View>
   );
+}
+
+/** The web `gap-3` between two messages. */
+function MessageGap() {
+  return <View className="h-3" />;
 }

@@ -4,6 +4,7 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   Button,
   Sheet,
+  SheetBody,
   SheetContent,
   SheetHeader,
   SheetRow,
@@ -15,8 +16,8 @@ import {
 } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction } from "convex/react";
-import { useState } from "react";
-import { Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Text, View, type TextInput } from "react-native";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type ComposerMode = "comment" | "review";
@@ -30,7 +31,9 @@ const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
  * (a summary and a verdict, `github.submitPrReview`), both posted as the eva
  * GitHub App. The drafts live here, so closing the sheet keeps them. The web
  * Review also carries line comments drawn on Code; the phone has none, so a
- * review is its summary and verdict.
+ * review is its summary and verdict. The field, verdicts and error scroll
+ * when the keyboard leaves too little room, so the tabs and the post button
+ * stay on screen.
  */
 export function ReviewComposer({
   open,
@@ -58,6 +61,8 @@ export function ReviewComposer({
   const [event, setEvent] = useState<ReviewEvent>("COMMENT");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The field, focused once the sheet is on screen (`onShow`): focus is imperative.
+  const field = useRef<TextInput>(null);
   const activeMode: ComposerMode = isOpen ? mode : "comment";
   const body = activeMode === "comment" ? commentBody : reviewBody;
   const trimmed = body.trim();
@@ -98,7 +103,7 @@ export function ReviewComposer({
         if (!posting) onOpenChange(next);
       }}
     >
-      <SheetContent className="gap-3 px-4">
+      <SheetContent className="gap-3 px-4" onShow={() => field.current?.focus()}>
         <SheetHeader>
           {isOpen ? (
             <Tabs
@@ -117,33 +122,35 @@ export function ReviewComposer({
             <SheetTitle>Comment on pull request</SheetTitle>
           )}
         </SheetHeader>
-        <Textarea
-          accessibilityLabel={activeMode === "comment" ? "Comment on this pull request" : "Review summary"}
-          value={body}
-          onChangeText={activeMode === "comment" ? setCommentBody : setReviewBody}
-          placeholder={
-            activeMode === "comment" ? "Leave a comment" : event === "REQUEST_CHANGES" ? "What has to change?" : "Leave a summary…"
-          }
-          autoFocus
-        />
-        {activeMode === "review" ? (
-          <View accessibilityRole="radiogroup" accessibilityLabel="Verdict">
-            {REVIEW_EVENT_OPTIONS.map((option) => (
-              <SheetRow
-                key={option.event}
-                title={option.label}
-                detail={option.hint}
-                active={event === option.event}
-                onPress={() => setEvent(option.event)}
-              />
-            ))}
-          </View>
-        ) : null}
-        {error === null ? null : (
-          <Text accessibilityRole="alert" style={[TEXT_XS, { color: EVA_THEME[scheme].destructive }]}>
-            {error}
-          </Text>
-        )}
+        <SheetBody contentContainerClassName="gap-3">
+          <Textarea
+            ref={field}
+            accessibilityLabel={activeMode === "comment" ? "Comment on this pull request" : "Review summary"}
+            value={body}
+            onChangeText={activeMode === "comment" ? setCommentBody : setReviewBody}
+            placeholder={
+              activeMode === "comment" ? "Leave a comment" : event === "REQUEST_CHANGES" ? "What has to change?" : "Leave a summary…"
+            }
+          />
+          {activeMode === "review" ? (
+            <View accessibilityRole="radiogroup" accessibilityLabel="Verdict">
+              {REVIEW_EVENT_OPTIONS.map((option) => (
+                <SheetRow
+                  key={option.event}
+                  title={option.label}
+                  detail={option.hint}
+                  active={event === option.event}
+                  onPress={() => setEvent(option.event)}
+                />
+              ))}
+            </View>
+          ) : null}
+          {error === null ? null : (
+            <Text accessibilityRole="alert" style={[TEXT_XS, { color: EVA_THEME[scheme].destructive }]}>
+              {error}
+            </Text>
+          )}
+        </SheetBody>
         <View className="flex-row items-center justify-between gap-3">
           {/* eva authenticates as its GitHub App, so GitHub shows the app, not the reader. */}
           <Text className="min-w-0 shrink" style={[TEXT_XS, { color: muted }]}>

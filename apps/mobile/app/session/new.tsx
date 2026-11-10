@@ -12,20 +12,14 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { useUser } from "@clerk/clerk-expo";
 import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
 import { Attachment, Attachments, PromptInput } from "@vvedantb/native-ui/ai";
-import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import {
-  CenteredSpinner,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@vvedantb/native-ui/primitives";
+import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
+import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
 import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter } from "@/chat/ComposerFooter";
@@ -33,15 +27,19 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
+import { repoName, RepoSheet } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
 /**
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
  * what are we building for <repo ⌄>?" over the composer, and under it the
  * web footer: base branch, stash and model, and the web `@` / `/` picker. Sends with those picks
- * (`mobile.startSession`), then opens the chat. `?repo=<id>` (a Sessions
+ * (`mobile.startSession`), then opens the chat in place of this screen, so
+ * Back from the chat does not return to a sent form. `?repo=<id>` (a Sessions
  * group "+", as the web group "+" opens that repo's composer) picks the repo
- * first; without it, or for a repo not in the list, the first repo.
+ * first; without it, or for a repo not in the list, the first repo. The repo
+ * picker is the bottom sheet the other repo pickers use, in place of the web
+ * dropdown.
  */
 export default function NewSessionScreen() {
   const router = useRouter();
@@ -52,6 +50,7 @@ export default function NewSessionScreen() {
   const startSession = useMutation(api.mobile.startSession);
   const attachments = useAttachments();
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
+  const [pickingRepo, setPickingRepo] = useState(false);
   const [sending, setSending] = useState(false);
   // The web landing: model and traits start from the repo defaults, a pick
   // overrides them; the base branch re-seeds to each repo's own default
@@ -102,9 +101,12 @@ export default function NewSessionScreen() {
 
   return (
     <View className="flex-1">
-      <StackPageHeader title="New session" onBack={() => router.back()} />
+      <RouterStackPageHeader title="New session" fallbackHref="/sessions" />
       {repos === undefined ? (
         <CenteredSpinner label="Loading repos" />
+      ) : repos.length === 0 ? (
+        // As the new quick task screen.
+        <EmptyState icon={IconBrandGithub} title="No repos" description="Connect a repo on the web. It shows up here." />
       ) : (
         // The web landing at 390: `p-4` in a column 10 short of the right edge.
         <View className="flex-1 justify-center gap-3 pl-4 pr-[26px]">
@@ -113,31 +115,31 @@ export default function NewSessionScreen() {
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               {firstName ? `${firstName}, what are we building for` : "What are we building for"}
             </Text>
-            <DropdownMenu>
-              <DropdownMenuTrigger accessibilityLabel={`Repo: ${repo ? (repo.label ?? repo.name) : "none"}`} className="flex-row items-center gap-1.5 active:opacity-70">
-                <IconBrandGithub size={28} color={muted} />
-                <Text
-                  className="font-instrument-sans-semibold text-xl"
-                  style={{
-                    color: foreground,
-                    fontWeight: "600",
-                    letterSpacing: -0.5,
-                    textDecorationLine: "underline",
-                    textDecorationColor: withAlpha(foreground, 0.3),
-                  }}
-                >
-                  {repo ? (repo.label ?? repo.name) : "a repo"}
-                </Text>
-                <IconChevronDown size={16} color={foreground} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                {repos.map((candidate) => (
-                  <DropdownMenuRadioItem key={candidate._id} checked={candidate._id === repo?._id} onSelect={() => setPicked(candidate._id)}>
-                    {candidate.label ?? candidate.name}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Repo: ${repo ? repoName(repo) : "none"}`}
+              accessibilityState={{ expanded: pickingRepo }}
+              onPress={() => setPickingRepo(true)}
+              // The headline keeps its 28 line; the slop makes the target 44.
+              hitSlop={{ top: 8, bottom: 8 }}
+              className="flex-row items-center gap-1.5 active:opacity-70"
+            >
+              <IconBrandGithub size={28} color={muted} />
+              <Text
+                className="font-instrument-sans-semibold text-xl"
+                style={{
+                  color: foreground,
+                  fontWeight: "600",
+                  letterSpacing: -0.5,
+                  textDecorationLine: "underline",
+                  textDecorationColor: withAlpha(foreground, 0.3),
+                }}
+              >
+                {repo ? repoName(repo) : "a repo"}
+              </Text>
+              <IconChevronDown size={16} color={foreground} />
+            </Pressable>
+            <RepoSheet open={pickingRepo} onOpenChange={setPickingRepo} repos={repos} value={repo} onChange={setPicked} />
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               ?
             </Text>

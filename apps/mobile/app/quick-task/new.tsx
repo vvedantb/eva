@@ -9,12 +9,13 @@ import {
 import { TASK_TAGS, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
+import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BaseBranchChip } from "@/chat/BranchChips";
@@ -32,7 +33,9 @@ import { useScheme } from "@/ui/theme";
  * the project's when a project is picked), tags and project. "Create Task"
  * sits at the bottom in thumb reach and calls the web's
  * `agentTasks.createQuickTask`, which files the task in To Do without
- * running it; the screen then goes back to the list, as the dialog closes.
+ * running it; the screen then goes back to the list, as the dialog closes
+ * (to Quick Tasks after a deep link). Return on the title moves to the
+ * description.
  *
  * Not here from the web dialog: drafts (save on close, the Drafts menu),
  * attachments, voice input, @ mentions and / skills, the readiness check,
@@ -46,6 +49,9 @@ export default function NewQuickTaskScreen() {
   const insets = useSafeAreaInsets();
   const simpleView = useSimpleView();
   const { repoId: repoParam } = useLocalSearchParams<{ repoId?: string }>();
+  // The description field, for Return on the title: focus is imperative.
+  const descriptionRef = useRef<TextInput>(null);
+  const leave = () => goBackOrReplace(router, "/sessions?section=quick-tasks");
   const repos = useQuery(api.githubRepos.list, {});
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
   const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam)) ?? repos?.[0];
@@ -70,10 +76,10 @@ export default function NewQuickTaskScreen() {
 
   // A task in a project takes the project's base branch (web `useEffectiveProject`).
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip");
-  if (repos === undefined) return <Screen onBack={() => router.back()}><CenteredSpinner label="Loading repos" /></Screen>;
+  if (repos === undefined) return <Screen onBack={leave}><CenteredSpinner label="Loading repos" /></Screen>;
   if (!repo) {
     return (
-      <Screen onBack={() => router.back()}>
+      <Screen onBack={leave}>
         <EmptyState title="No repos" description="Connect a repo on the web. It shows up here." />
       </Screen>
     );
@@ -114,7 +120,7 @@ export default function NewQuickTaskScreen() {
         assignedTo,
         priority,
       });
-      router.back();
+      leave();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't create task");
       setSaving(false);
@@ -122,7 +128,7 @@ export default function NewQuickTaskScreen() {
   };
 
   return (
-    <Screen onBack={() => router.back()}>
+    <Screen onBack={leave}>
       <KeyboardAvoidingView behavior="padding" className="flex-1">
         <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 4, paddingHorizontal: 16, paddingBottom: 16 }}>
           <RepoPicker repos={repos} value={repo} onChange={changeRepo} />
@@ -135,10 +141,13 @@ export default function NewQuickTaskScreen() {
             accessibilityLabel="Task title"
             autoFocus
             returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => descriptionRef.current?.focus()}
             className="font-instrument-sans-medium min-h-11 text-base"
             style={{ color: theme.foreground, fontWeight: "500" }}
           />
           <TextInput
+            ref={descriptionRef}
             value={description}
             onChangeText={setDescription}
             placeholder="Add description..."

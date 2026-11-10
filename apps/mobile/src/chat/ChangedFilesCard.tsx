@@ -16,6 +16,13 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 const XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING } as const;
 
 /**
+ * The header's 16-high fold and "View diff" reach 44: 20 up (the card's
+ * `mt-2` and the reply above) and 8 down, to the row's edge, so they never
+ * cover the file rows under them.
+ */
+const HEADER_SLOP = { top: 20, bottom: 8 };
+
+/**
  * The web `ChangedFilesCard` under an agent reply: "Changed files (N)" with a
  * chevron that folds the list, "View diff" on the right, and a row per file
  * (icon and mono name; the web hides the folder below `sm`). The latest reply
@@ -55,7 +62,7 @@ export function ChangedFilesCard({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: isExpanded }}
-          hitSlop={{ top: 6, bottom: 6 }}
+          hitSlop={HEADER_SLOP}
           onPress={() => setExpanded(!isExpanded)}
           className="min-w-0 flex-row items-center gap-1.5"
         >
@@ -66,7 +73,7 @@ export function ChangedFilesCard({
             {`Changed files (${files.length})`}
           </Text>
         </Pressable>
-        <Pressable accessibilityRole="button" hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }} onPress={() => onOpenDiff(files[0]?.path)}>
+        <Pressable accessibilityRole="button" hitSlop={{ ...HEADER_SLOP, left: 8, right: 8 }} onPress={() => onOpenDiff(files[0]?.path)}>
           <Text className="font-instrument-sans" style={[XS, { color: muted }]}>
             View diff
           </Text>

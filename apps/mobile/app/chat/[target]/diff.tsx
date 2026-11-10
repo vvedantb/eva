@@ -2,8 +2,8 @@ import { api } from "@eva/backend";
 import { buildDiffFileEntries, unifiedDiffLines, type DiffFileEntry } from "@eva/shared";
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconGitPullRequest } from "@tabler/icons-react-native";
 import { DiffStat, UnifiedDiff } from "@vvedantb/native-ui/ai";
-import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
+import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
+import { Button, CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { useAction, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -15,12 +15,20 @@ import { textColor, useScheme } from "@/ui/theme";
 type PrDiff = { status: "ready"; entries: DiffFileEntry[]; truncated: boolean } | { status: "error" };
 
 /**
+ * Lines of one file drawn at a time. A diff line is three views and the diff
+ * scrolls sideways as one block, so it is not a virtualised list; a longer
+ * file shows this many more on each "Show more lines".
+ */
+const DIFF_LINE_CHUNK = 400;
+
+/**
  * The web Review pane's Code tab for one file, read-only: the chat's pull
  * request diff (`github.getPrDiff`, what is pushed to GitHub, so a sleeping
  * sandbox does not matter), opened at the file a "Changed files" row named,
  * or the first file. The header has the path and its +/- counts; the diff is
- * unified and scrolls sideways; the bar at the bottom steps through the files.
- * Before a PR is open, the web "No pull request yet" state.
+ * unified and scrolls sideways; the bar at the bottom steps through the files
+ * (in place, so Back returns to the chat). Before a PR is open, the web "No
+ * pull request yet" state.
  */
 export default function DiffScreen() {
   const { target, file } = useLocalSearchParams<{ target: string; file?: string }>();
@@ -30,6 +38,7 @@ export default function DiffScreen() {
   const chat = useQuery(api.mobile.getChat, { target });
   const getPrDiff = useAction(api.github.getPrDiff);
   const [loaded, setLoaded] = useState<{ prUrl: string; diff: PrDiff } | null>(null);
+  const [shownLines, setShownLines] = useState<{ path: string; count: number } | null>(null);
   const repoId = chat?.repoId;
   const prUrl = chat?.prUrl;
 
@@ -50,15 +59,17 @@ export default function DiffScreen() {
     };
   }, [getPrDiff, repoId, prUrl]);
 
-  const header = <StackPageHeader title="Diff" onBack={() => router.back()} />;
+  // After a deep link, Back opens the chat the diff belongs to.
+  const header = <RouterStackPageHeader title="Diff" fallbackHref={{ pathname: "/chat/[target]", params: { target } }} />;
   const muted = textColor(scheme, "muted");
 
-  if (chat === undefined) return <CenteredSpinner label="Loading chat" />;
-  if (chat === null || prUrl === undefined) {
+  if (chat === undefined || chat === null || prUrl === undefined) {
     return (
       <View className="flex-1">
         {header}
-        {chat === null ? (
+        {chat === undefined ? (
+          <CenteredSpinner label="Loading chat" />
+        ) : chat === null ? (
           <EmptyState icon={IconAlertTriangle} title="Chat not found" description="It was deleted, or you no longer have access." />
         ) : (
           <EmptyState
@@ -99,6 +110,9 @@ export default function DiffScreen() {
   const index = Math.max(0, entries.findIndex((entry) => entry.path === file));
   const entry = entries[index];
   if (entry === undefined) return null;
+  const lines = entry.binary || !entry.hasHunks ? [] : unifiedDiffLines(entry.patch);
+  const shown = shownLines?.path === entry.path ? shownLines.count : DIFF_LINE_CHUNK;
+  const hidden = lines.length - shown;
   const step = (by: number) => {
     const next = entries[index + by];
     if (next) router.setParams({ file: next.path });
@@ -136,7 +150,21 @@ export default function DiffScreen() {
         ) : !entry.hasHunks ? (
           <FileNote text={entry.renamedFrom ? "File renamed without content changes." : "No content changes in this file."} />
         ) : (
-          <UnifiedDiff lines={unifiedDiffLines(entry.patch)} />
+          <>
+            <UnifiedDiff lines={hidden > 0 ? lines.slice(0, shown) : lines} />
+            {hidden > 0 ? (
+              <View className="items-center px-4 py-4">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  fullWidth={false}
+                  onPress={() => setShownLines({ path: entry.path, count: shown + DIFF_LINE_CHUNK })}
+                >
+                  {`Show ${Math.min(hidden, DIFF_LINE_CHUNK).toLocaleString()} more lines`}
+                </Button>
+              </View>
+            ) : null}
+          </>
         )}
       </ScrollView>
       <View

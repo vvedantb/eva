@@ -22,6 +22,7 @@ import {
   HeaderIconButton,
   Spinner,
 } from "@vvedantb/native-ui/primitives";
+import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useQuery } from "convex/react";
@@ -62,7 +63,8 @@ export default function ReviewScreen() {
     (force) => (repoId === undefined ? Promise.reject(new Error("Repo not found")) : getOverview({ repoId, prNumber, force })),
     "Couldn't load pull request",
   );
-  const back = () => (router.canGoBack() ? router.back() : router.replace("/sessions?section=reviews"));
+  // After a deep link, Back opens the Reviews list.
+  const back = () => goBackOrReplace(router, "/sessions?section=reviews");
   const bare = (body: ReactNode) => (
     <View className="flex-1" style={{ paddingTop: insets.top + 8 }}>
       <View className="flex-row px-3 pb-2">
