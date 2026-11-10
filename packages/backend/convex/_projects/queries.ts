@@ -4,6 +4,7 @@ import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { taskSandboxStatusValidator } from "../_validators/enums";
+import { listRow } from "../_validators/listRows";
 import {
   taskProgressValidator,
   taskProgressFields,
@@ -18,7 +19,7 @@ import {
 } from "./helpers";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import { unreadLookupForRepo } from "../chatReads";
+import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 
 /** Builds a project's detail payload (conversation history + optional generated
@@ -72,14 +73,19 @@ export const list = authQuery({
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [projects, hasUnread, awaitingAnswerIds] = await Promise.all([
+    const [projects, awaitingAnswerIds] = await Promise.all([
       liveProjectsForRepo(ctx.db, args.repoId),
-      unreadLookupForRepo(ctx.db, ctx.userId, args.repoId),
       awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
     ]);
+    const hasUnread = await unreadLookupForList(
+      ctx.db,
+      ctx.userId,
+      args.repoId,
+      projects.length,
+    );
     return await Promise.all(
       projects.map(async (project) => ({
-        ...project,
+        ...listRow(project),
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),

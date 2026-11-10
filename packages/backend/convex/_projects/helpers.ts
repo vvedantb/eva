@@ -5,6 +5,7 @@ import type {
   GenericDatabaseWriter,
 } from "convex/server";
 import { projectFields, conversationMessageValidator } from "../validators";
+import { listRow } from "../_validators/listRows";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
 type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
@@ -33,9 +34,12 @@ export const projectPlanningModeValidator = v.union(
   v.literal("tasks_only"),
 );
 
-/** List rows always include a resolved planning mode (stored or inferred). */
+/**
+ * List rows (`listRow`) always include a resolved planning mode (stored or
+ * inferred). The open project's panel reads the dropped fields from `get`.
+ */
 export const projectListItemValidator = v.object({
-  ...projectSummaryFields,
+  ...listRow(projectSummaryFields),
   planningMode: projectPlanningModeValidator,
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
