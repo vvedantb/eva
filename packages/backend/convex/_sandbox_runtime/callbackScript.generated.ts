@@ -6,6 +6,10 @@ import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
 // callback-src/config.ts
 import { existsSync } from "fs";
 
+// ../shared/src/agentTurnLimits.ts
+var TURN_MAX_RUNTIME_MS = 3 * 60 * 60 * 1e3;
+var TURN_BACKSTOP_MS = TURN_MAX_RUNTIME_MS + 30 * 60 * 1e3;
+
 // callback-src/evaMcp.ts
 var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
 var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
@@ -253,7 +257,7 @@ var FIRST_ASSISTANT_EVENT_TIMEOUT_MS = Number(
 );
 var NO_OUTPUT_CHECK_INTERVAL_MS = 5e3;
 var MAX_TOTAL_RUNTIME_MS = Number(
-  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || "5400000"
+  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || String(TURN_MAX_RUNTIME_MS)
 );
 var SCRIPT_STARTED_AT = Date.now();
 var CALLBACK_HTTP_TIMEOUT_MS = Number(

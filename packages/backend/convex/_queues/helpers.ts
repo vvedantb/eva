@@ -65,8 +65,6 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 
-const QUEUE_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-
 /**
  * Grace period between the last subagent settling and the retry drain. The
  * daemon reacts to that same settle by opening a synthetic turn to process the
@@ -739,7 +737,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
   onStarted: async (ctx, id, workflowId, now) => {
     await bindOpenTurnWorkflow(ctx, id, workflowId);
     await ctx.db.patch(id, { updatedAt: now });
-    await trackSessionChatWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
+    await trackSessionChatWorkflow(ctx, id, workflowId);
   },
   recordError: async (ctx, id, content) => {
     await ctx.db.insert("messages", {
@@ -853,7 +851,7 @@ const projectChatQueueConfig: ChatQueueConfig<
   onStarted: async (ctx, id, workflowId, now) => {
     await bindOpenTurnWorkflow(ctx, id, workflowId);
     await ctx.db.patch(id, { updatedAt: now });
-    await trackProjectChatWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
+    await trackProjectChatWorkflow(ctx, id, workflowId);
   },
   recordError: async (ctx, id, content) => {
     await ctx.db.insert("messages", {
@@ -970,7 +968,7 @@ const taskChatQueueConfig: ChatQueueConfig<
   onStarted: async (ctx, id, workflowId, now) => {
     await bindOpenTurnWorkflow(ctx, id, workflowId);
     await ctx.db.patch(id, { updatedAt: now });
-    await trackAgentTaskChatWorkflow(ctx, id, workflowId, QUEUE_RUN_TIMEOUT_MS);
+    await trackAgentTaskChatWorkflow(ctx, id, workflowId);
   },
   recordError: async (ctx, id, content) => {
     await ctx.db.insert("messages", {

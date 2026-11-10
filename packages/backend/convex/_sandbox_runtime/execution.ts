@@ -1040,7 +1040,6 @@ export const previewUrlForAuthorizedSandbox = internalAction({
 });
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
-const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
@@ -2228,7 +2227,6 @@ async function launchAgentOnSandbox(
       fastMode: args.fastMode,
     }),
   );
-  extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
 
   const normalizedModel = normalizeAIModel(args.model);
   const claudeSessionId =
