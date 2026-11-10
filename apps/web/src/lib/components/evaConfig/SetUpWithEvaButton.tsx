@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { Button, Spinner, toast } from "@eva/ui";
+import { Button, Spinner, toast } from "@vvedantb/ui";
 import { IconSparkles } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { systemSkillTokenId } from "@/lib/components/mentions";

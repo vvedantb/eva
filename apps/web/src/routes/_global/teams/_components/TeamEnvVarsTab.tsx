@@ -45,8 +45,8 @@ export function TeamEnvVarsTab({ teamId, teamEnvVars }: TeamEnvVarsTabProps) {
     <EnvVarsTable
       vars={teamEnvVars}
       scope="team"
-      onUpsert={async (key, value, sandboxExclude) => {
-        await upsertTeamVar({ teamId, key, value, sandboxExclude });
+      onUpsert={async (key, value, sandboxExclude, seedOnly) => {
+        await upsertTeamVar({ teamId, key, value, sandboxExclude, seedOnly });
       }}
       onReveal={(key) => revealTeamValue({ teamId, key })}
       onRemove={async (key) => {

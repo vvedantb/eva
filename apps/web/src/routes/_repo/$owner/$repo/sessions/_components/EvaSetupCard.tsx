@@ -1,6 +1,6 @@
 "use client";
 
-import { Surface } from "@eva/ui";
+import { Surface } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SetUpWithEvaButton } from "@/lib/components/evaConfig/SetUpWithEvaButton";
 import { EvaConfigError } from "@/lib/components/evaConfig/EvaConfigReadOnly";

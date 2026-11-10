@@ -72,6 +72,7 @@ export const upsertVarInternal = internalMutation({
     key: v.string(),
     value: v.string(),
     sandboxExclude: v.optional(v.boolean()),
+    seedOnly: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -79,7 +80,10 @@ export const upsertVarInternal = internalMutation({
     const newEntry = {
       key: args.key,
       value: args.value,
-      sandboxExclude: args.sandboxExclude ?? false,
+      // seedOnly implies sandboxExclude, so sandbox readers always skip it.
+      ...(args.seedOnly === true
+        ? { sandboxExclude: true, seedOnly: true }
+        : { sandboxExclude: args.sandboxExclude ?? false }),
     };
     if (doc) {
       await ctx.db.patch(doc._id, {

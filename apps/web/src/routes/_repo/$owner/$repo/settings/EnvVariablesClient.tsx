@@ -33,8 +33,8 @@ export function EnvVariablesClient() {
     <EnvVarsTable
       vars={vars}
       scope="repo"
-      onUpsert={async (key, value, sandboxExclude) => {
-        await upsertVar({ repoId, key, value, sandboxExclude });
+      onUpsert={async (key, value, sandboxExclude, seedOnly) => {
+        await upsertVar({ repoId, key, value, sandboxExclude, seedOnly });
       }}
       onReveal={(key) => revealValue({ repoId, key })}
       onRemove={async (key) => {
