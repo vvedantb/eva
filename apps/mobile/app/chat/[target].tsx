@@ -5,7 +5,7 @@ import { formatDuration } from "@eva/shared/duration";
 import { buildPrecedingUserTurns, collectForkPrefix, forkThreadTitle, formatForkPrompt } from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled, IconPlus } from "@tabler/icons-react-native";
+import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
 import {
   Attachment,
   Attachments,
@@ -30,6 +30,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Fragment } from "react";
 import { Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
+import { AttachButton } from "@/chat/AttachButton";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
 import { MessageFooter } from "@/chat/MessageFooter";
@@ -196,7 +197,7 @@ export default function ChatScreen() {
           />
         </View>
       ) : chat.canReply ? (
-        // Eva's web pill composer, the + on the secondary fill, 10 more in on the right as the
+        // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
         // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
         // it, as `stopMode="alongside"`.
         <View className="pr-2.5">
@@ -206,7 +207,7 @@ export default function ChatScreen() {
             onSubmit={handleSend}
             placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
             leading={
-              <PromptInputButton variant="secondary" icon={IconPlus} label="Add attachment" onPress={() => void attachments.pick()} />
+              <AttachButton onPress={() => void attachments.pick()} />
             }
             header={
               attachments.items.length > 0 ? (

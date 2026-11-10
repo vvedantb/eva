@@ -4,6 +4,7 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Button } from "@vvedantb/native-ui/button";
 import { PageHeader, ScreenContainer, SettingsSection, SettingsToggleRow } from "@vvedantb/native-ui/layout";
 import { ConfirmDialog, Switch } from "@vvedantb/native-ui/primitives";
+import { tokens } from "@vvedantb/native-ui/theme";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { View } from "react-native";
@@ -61,8 +62,9 @@ export default function SettingsScreen() {
                   disabled={emailEnabled === undefined}
                   onCheckedChange={(enabled: boolean) => void setEmailEnabled({ enabled })}
                   accessibilityLabel="Email notifications"
-                  // Eva's web switch is off on `bg-muted`.
+                  // Eva's web switch is off on `bg-muted` with a `bg-white` thumb in both schemes.
                   offColor={EVA_THEME[scheme].muted}
+                  thumbStyle={{ backgroundColor: emailEnabled ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
                 />
               }
             />

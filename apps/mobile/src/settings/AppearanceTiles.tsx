@@ -17,13 +17,14 @@ const MODES: ReadonlyArray<{
   mode: ColorSchemeChoice;
   label: string;
   icon: ComponentType<IconProps>;
-  iconColor: string;
+  /** A fixed web colour; none for the web `text-muted-foreground` of the scheme. */
+  iconColor?: string;
   swatch: "light" | "dark" | "gradient";
 }> = [
   // Web icon colours: text-amber-500, text-blue-300, muted.
   { mode: "light", label: "Light", icon: IconSun, iconColor: "#f59e0b", swatch: "light" },
   { mode: "dark", label: "Dark", icon: IconMoon, iconColor: "#93c5fd", swatch: "dark" },
-  { mode: "system", label: "System", icon: IconDeviceDesktop, iconColor: "#71717a", swatch: "gradient" },
+  { mode: "system", label: "System", icon: IconDeviceDesktop, swatch: "gradient" },
 ];
 
 /** Web `bg-zinc-900`. */
@@ -82,7 +83,7 @@ export function AppearanceTiles() {
                   {swatch === "gradient" ? <GradientSwatch /> : null}
                   {/* Positioned, so the web build paints it over the positioned gradient. */}
                   <View className="absolute inset-0 items-center justify-center">
-                    <Icon size={22} color={iconColor} />
+                    <Icon size={22} color={iconColor ?? tokens.color.muted[scheme]} />
                   </View>
                 </View>
                 {/* After the swatch, so it draws on top of the swatch corner as on the web. */}

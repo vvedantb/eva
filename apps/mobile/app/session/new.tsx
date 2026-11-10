@@ -1,7 +1,7 @@
 import { api, type Id } from "@eva/backend";
 import { useUser } from "@clerk/clerk-expo";
-import { IconBrandGithub, IconChevronDown, IconPlus } from "@tabler/icons-react-native";
-import { Attachment, Attachments, PromptInput, PromptInputButton } from "@vvedantb/native-ui/ai";
+import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
+import { Attachment, Attachments, PromptInput } from "@vvedantb/native-ui/ai";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import {
   CenteredSpinner,
@@ -16,6 +16,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Text, View } from "react-native";
+import { AttachButton } from "@/chat/AttachButton";
 import { useAttachments } from "@/chat/useAttachments";
 import { useScheme } from "@/ui/theme";
 
@@ -104,7 +105,7 @@ export default function NewSessionScreen() {
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
             leading={
-              <PromptInputButton variant="secondary" icon={IconPlus} label="Add attachment" onPress={() => void attachments.pick()} />
+              <AttachButton onPress={() => void attachments.pick()} />
             }
             header={
               attachments.items.length > 0 ? (

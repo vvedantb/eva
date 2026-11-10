@@ -1,5 +1,5 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { configureTheme } from "@vvedantb/native-ui/theme";
+import { configureTheme, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { EVA_FONT } from "./fonts";
 
 const { light, dark } = EVA_THEME;
@@ -25,6 +25,10 @@ export function applyEvaTheme() {
       // As the web's `compat-shadcn-rgb.css`: `surface-secondary` is `--muted`,
       // `surface-tertiary` and `default-foreground` are `--secondary`'s.
       surfaceSecondary: pair("muted"),
+      // Phone-only glass chrome (tab bar, header buttons): in dark, Eva's card
+      // at the package's 88% and Eva's border. Light keeps the package glass.
+      fill: { light: tokens.color.fill.light, dark: withAlpha(dark.card, 0.88) },
+      hairline: { light: tokens.color.hairline.light, dark: dark.border },
     },
     palette: {
       primary: pair("primary"),
