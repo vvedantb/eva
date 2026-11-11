@@ -10,7 +10,7 @@ import type { Doc } from "@eva/backend";
 import { useCycleSandboxTabHotkey } from "@/lib/components/sandbox/useCycleSandboxTabHotkey";
 import { useSandboxViewHotkeys } from "@/lib/components/sandbox/useSandboxViewHotkeys";
 import { SandboxPanelToggleButton } from "@/lib/components/sandbox/SandboxPanelToggleButton";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import type { SandboxTab } from "@/lib/search-params";
 import type { SandboxFileListApi } from "@/lib/components/sandbox/useSandboxFileList";
 import type { ConsoleDockApi } from "@/lib/components/sandbox/useConsoleDock";

@@ -376,7 +376,7 @@ export const sessionExecuteWorkflow = workflow.define({
       // A failed launch must finalize the turn: without this catch the
       // workflow dies after its step retries with no saveResult, leaving the
       // empty placeholder (and activeWorkflowId) stuck on "Working…" until
-      // the 2-hour backstop.
+      // the `TURN_BACKSTOP_MS` backstop.
       try {
         // One-shot providers push the prompt at launch, so hold it until the
         // new sandbox is on the latest base (daemons get this from the

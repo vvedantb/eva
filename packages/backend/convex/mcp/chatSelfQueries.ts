@@ -9,7 +9,7 @@ import {
   taskPrUrl,
   type PrOwnerRef,
 } from "../_pullRequests/store";
-import { slugifyAppTabName } from "../appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
