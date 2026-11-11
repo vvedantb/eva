@@ -13,7 +13,7 @@ import {
   isSessionSandboxTab,
   sandboxTabIdFromParam,
 } from "@/lib/search-params";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { IconClipboardList } from "@tabler/icons-react";
 import { SandboxTabBar } from "./_components/SandboxTabBar";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
@@ -36,10 +36,8 @@ import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import {
-  DEFAULT_PREVIEW_PORT,
-  useSandboxPreview,
-} from "@/lib/components/sandbox/useSandboxPreview";
+import { DEFAULT_PREVIEW_PORT } from "@eva/shared";
+import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import {

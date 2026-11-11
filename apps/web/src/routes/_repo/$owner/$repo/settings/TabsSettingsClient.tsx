@@ -17,7 +17,7 @@ import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import {
   RESERVED_APP_TAB_SLUGS,
   slugifyAppTabName,
-} from "@/lib/utils/appTabSlug";
+} from "@eva/shared/appTabSlug";
 import { TablerIconByName } from "@/lib/components/TablerIconByName";
 import { CustomTabRow } from "./_components/CustomTabRow";
 import { IconLayoutNavbar } from "@tabler/icons-react";

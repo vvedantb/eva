@@ -5,6 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -252,7 +253,7 @@ export function useTaskSandboxControls({
   const sandboxStartupStreaming = useQuery(
     api.streaming.get,
     flags.isSandboxStartingFromStatus
-      ? { entityId: `task-sandbox-startup-${taskId}` }
+      ? { entityId: sandboxStartupEntityId({ kind: "task", taskId }) }
       : "skip",
   );
 

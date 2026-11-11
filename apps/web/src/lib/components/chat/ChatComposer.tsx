@@ -1,4 +1,8 @@
-import { PromptInputProvider, toast } from "@vvedantb/ui";
+import {
+  PromptInputProvider,
+  toast,
+  usePromptInputController,
+} from "@vvedantb/ui";
 import type {
   ModelAccount,
   ModelOption,
@@ -121,6 +125,8 @@ interface ChatComposerProps {
   ) => Promise<void>;
   onCancel: () => Promise<void>;
   preInputContent?: React.ReactNode;
+  /** Chips that share the skill suggestions' row, just above the input. */
+  statusChips?: React.ReactNode;
   /** Live turn activity JSON — its todo snapshot feeds the Tasks panel. */
   streamingActivity?: string;
   /** Message id of the streaming turn; scopes Tasks-panel dismissal to it. */
@@ -157,6 +163,7 @@ export function ChatComposer({
   onSend,
   onCancel,
   preInputContent,
+  statusChips,
   streamingActivity,
   streamingTurnId,
   underCardLeading,
@@ -185,11 +192,12 @@ export function ChatComposer({
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
   const [isUploading, setIsUploading] = useState(false);
+  // The verdict is keyed by the exact text it judged; readers look it up
+  // against PromptInput's live text, which is the only copy of the draft.
   const readiness = useDraftReadiness();
-  // The composer's text lives inside PromptInput; the readiness verdict is
-  // keyed by the exact text it judged, so the last draft is mirrored here.
-  const [draftText, setDraftText] = useState("");
-  const readinessResult = readiness.resultFor(draftText);
+  // A follow-up leans on the thread above it, so "too vague" is a false
+  // alarm there. Only the opening message of a chat is judged.
+  const judgesDraft = messageHistory.length === 0;
   const {
     updateQueuedMessage,
     deleteQueuedMessage,
@@ -242,7 +250,6 @@ export function ChatComposer({
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
     // The judged draft is gone once it is sent; a nudge about it is not.
-    setDraftText("");
     readiness.reset();
     await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
@@ -340,11 +347,7 @@ export function ChatComposer({
         renderContent={renderQueuedContent}
       />
       {/* Last, so it sits flush on the input card it warns about. */}
-      <DraftReadinessBanner
-        result={readinessResult}
-        onDismiss={readiness.dismiss}
-        className="rounded-b-none rounded-t-surface"
-      />
+      {judgesDraft && <ComposerReadinessBanner readiness={readiness} />}
     </>
   );
 
@@ -368,11 +371,10 @@ export function ChatComposer({
       messageHistory={messageHistory}
       allowEmptySubmit={allowEmptySubmit}
       predictionTarget={predictionTarget}
-      warn={shouldNudge(readinessResult)}
+      warnFor={(text) => judgesDraft && shouldNudge(readiness.resultFor(text))}
       onDraftChange={(text) => {
         suggestions.noteDraft(text);
-        setDraftText(text);
-        readiness.noteChange(text);
+        if (judgesDraft) readiness.noteChange(text);
       }}
     />
   );
@@ -382,6 +384,19 @@ export function ChatComposer({
     // composer, so it floats just above it instead of a distant ancestor.
     <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
       {preInputContent}
+      {/* One chip row on the input: status chips first, then skill
+          suggestions. Same inset as the stash dock, so it lines up with the
+          input card. Empty, it takes no height (each chip owns its margin). */}
+      <div className="mx-auto flex w-[calc(100%-1.5rem)] flex-wrap items-center gap-x-1.5">
+        {statusChips}
+        <SkillSuggestionChips
+          chips={suggestions.chips}
+          onPick={(item) => {
+            mentionRef.current?.insertSkill(item);
+            suggestions.dismiss(item.id);
+          }}
+        />
+      </div>
       {isDraftLoading ? (
         <>
           <div
@@ -413,13 +428,6 @@ export function ChatComposer({
               onSave={localDraft.onSave}
             />
           )}
-          <SkillSuggestionChips
-            chips={suggestions.chips}
-            onPick={(item) => {
-              mentionRef.current?.insertSkill(item);
-              suggestions.dismiss(item.id);
-            }}
-          />
           {repo ? (
             <ComposerStash
               repoId={repo.id}
@@ -437,5 +445,21 @@ export function ChatComposer({
         </PromptInputProvider>
       )}
     </div>
+  );
+}
+
+/** The readiness nudge for whatever PromptInput holds right now. */
+function ComposerReadinessBanner({
+  readiness,
+}: {
+  readiness: ReturnType<typeof useDraftReadiness>;
+}) {
+  const { textInput } = usePromptInputController();
+  return (
+    <DraftReadinessBanner
+      result={readiness.resultFor(textInput.value)}
+      onDismiss={readiness.dismiss}
+      className="rounded-b-none rounded-t-surface"
+    />
   );
 }

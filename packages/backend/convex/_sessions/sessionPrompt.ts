@@ -9,6 +9,8 @@ import { buildCustomInstructionsBlock } from "../prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { listLiveSessionChats } from "../_sessionChats/helpers";
+import { buildSessionBranchName } from "../_git/branchNames";
+import { sandboxOwnerKey } from "@eva/shared";
 
 // --- Turn config ---
 
@@ -63,7 +65,7 @@ export async function buildSessionPrompt(
     user?.customInstructions ?? undefined,
   );
 
-  const branchName = session.branchName || `eva/session-${session._id}`;
+  const branchName = session.branchName || buildSessionBranchName(session._id);
 
   const bareCommand = bareHarnessCommandPrompt(resolvedMessage, args.model);
   if (bareCommand !== null) return { prompt: bareCommand, branchName };
@@ -102,7 +104,7 @@ export async function buildSessionPrompt(
     readableRepos,
     linkedRepos,
     runtime: {
-      ownerKey: `session-${session._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       prUrl: session.prUrl,
       devCommand: session.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,

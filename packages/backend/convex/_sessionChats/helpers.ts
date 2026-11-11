@@ -1,18 +1,11 @@
 import { getConvexSize, v } from "convex/values";
+import { MAX_PARALLEL_CHATS } from "@eva/shared";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
-
-/**
- * How many chats of one session may execute a turn at the same time. Each
- * running chat is its own agent process on the shared sandbox; the VM holds
- * three comfortably alongside the dev server. A fourth send queues on its
- * chat until a sibling finishes (`drainSessionChatQueues`).
- */
-export const MAX_PARALLEL_CHATS = 3;
 
 /** Title of the chat every session starts with. */
 export const MAIN_CHAT_TITLE = "Main";

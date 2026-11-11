@@ -1,3 +1,4 @@
+import type { PrState } from "@eva/shared";
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -9,13 +10,20 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
-import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
+import {
+  MAX_PARALLEL_CHATS,
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
+} from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
-import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
+import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
@@ -72,7 +80,7 @@ interface ChatPanelProps {
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   summary?: string[];
   messages: SessionMessage[];
   /** The transcript has not loaded: show the loader, not the empty state. */
@@ -92,7 +100,6 @@ interface ChatPanelProps {
   /** Archive or PR merged/closed — hides composer and shows read-only banner. */
   isReadOnly?: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
-  sandboxCollapsed?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
@@ -108,9 +115,6 @@ interface ChatPanelProps {
    */
   isRouteActive?: boolean;
 }
-
-/** Sessions run at most this many chats at once; mirrors the server cap. */
-const MAX_PARALLEL_CHATS = 3;
 
 export function ChatPanel({
   sessionId,
@@ -410,12 +414,6 @@ export function ChatPanel({
       surface={chatSurface}
       beforeBanner={
         <>
-          {simpleView ? null : (
-            <BackgroundProcessesPanel
-              sessionId={sessionId}
-              isRouteActive={isRouteActive}
-            />
-          )}
           {!isReadOnly ? (
             <PublishRecoveryBanner
               sessionId={sessionId}
@@ -427,6 +425,17 @@ export function ChatPanel({
         </>
       }
     />
+  );
+
+  const composerChips = (
+    <SandboxChatStatusChips surface={chatSurface}>
+      {simpleView ? null : (
+        <BackgroundProcessesChip
+          sessionId={sessionId}
+          isRouteActive={isRouteActive}
+        />
+      )}
+    </SandboxChatStatusChips>
   );
 
   const emptyStateTitle = isSandboxActive
@@ -508,6 +517,7 @@ export function ChatPanel({
             />
           }
           preInputContent={preInputContent}
+          composerChips={composerChips}
           preConversationContent={
             <SessionSummaryAccordion
               summary={summary}

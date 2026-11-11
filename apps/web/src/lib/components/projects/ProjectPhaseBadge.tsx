@@ -16,15 +16,7 @@ import {
 /** Single source of truth: matches Convex `projects.phase`. */
 export type ProjectPhase = Doc<"projects">["phase"];
 
-export const PROJECT_PHASES: ProjectPhase[] = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-];
+export { PROJECT_PHASES } from "@eva/backend";
 
 /** Phases a user can manually switch to via the status dropdown.
  *  Excludes draft/finalized — those are driven by the planning/interview flow. */
@@ -49,6 +41,8 @@ export const phaseConfig: Record<
     bg: string;
     cardBg: string;
     bar: string;
+    /** CSS colour of `bar`, for the timeline's Gantt status. */
+    barColor: string;
     text: string;
     label: string;
     icon: typeof IconNotes;
@@ -58,6 +52,7 @@ export const phaseConfig: Record<
     bg: "bg-secondary",
     cardBg: "bg-secondary/40",
     bar: "bg-muted-foreground/50",
+    barColor: "rgb(var(--muted-foreground) / 0.5)",
     text: "text-muted-foreground",
     label: "Draft",
     icon: IconNotes,
@@ -66,6 +61,7 @@ export const phaseConfig: Record<
     bg: "bg-blue-500/10",
     cardBg: "bg-blue-500/5",
     bar: "bg-blue-500",
+    barColor: "rgb(59 130 246)",
     text: "text-blue-600 dark:text-blue-400",
     label: "Finalized",
     icon: IconCheck,
@@ -74,6 +70,7 @@ export const phaseConfig: Record<
     bg: "bg-status-progress-bg",
     cardBg: "bg-status-progress-subtle/40",
     bar: "bg-status-progress-bar",
+    barColor: "rgb(var(--status-progress-bar))",
     text: "text-status-progress",
     label: "In Progress",
     icon: IconClock,
@@ -82,6 +79,7 @@ export const phaseConfig: Record<
     bg: "bg-status-business-review-bg",
     cardBg: "bg-status-business-review-subtle/40",
     bar: "bg-status-business-review-bar",
+    barColor: "rgb(var(--status-business-review-bar))",
     text: "text-status-business-review",
     label: "Business Review",
     icon: IconClipboardCheck,
@@ -90,6 +88,7 @@ export const phaseConfig: Record<
     bg: "bg-status-code-review-bg",
     cardBg: "bg-status-code-review-subtle/40",
     bar: "bg-status-code-review-bar",
+    barColor: "rgb(var(--status-code-review-bar))",
     text: "text-status-code-review",
     label: "Code Review",
     icon: IconEye,
@@ -98,6 +97,7 @@ export const phaseConfig: Record<
     bg: "bg-status-done-bg",
     cardBg: "bg-status-done-subtle/40",
     bar: "bg-status-done-bar",
+    barColor: "rgb(var(--status-done-bar))",
     text: "text-status-done",
     label: "Merged",
     icon: IconCircleCheck,
@@ -106,6 +106,7 @@ export const phaseConfig: Record<
     bg: "bg-status-cancelled-bg",
     cardBg: "bg-status-cancelled-subtle/40",
     bar: "bg-status-cancelled-bar",
+    barColor: "rgb(var(--status-cancelled-bar))",
     text: "text-status-cancelled",
     label: "Cancelled",
     icon: IconCircleX,

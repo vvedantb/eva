@@ -44,7 +44,12 @@ import {
   PROJECT_CHAT_STREAM_PREFIX,
   TASK_CHAT_STREAM_PREFIX,
 } from "../_chat/surfaceAdapters";
-import { prStateValidator } from "../validators";
+import {
+  CHAT_ENTITY_KINDS,
+  chatEntityKindValidator,
+  prStateValidator,
+  type ChatEntityKind,
+} from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
 import { chatSourceArg, repoRefLabel } from "./toolShared";
 import {
@@ -66,15 +71,9 @@ const internalTokenClaims = z.object({
   aud: z.literal("mcp-internal"),
   repoId: z.string(),
   entityId: z.string().optional(),
-  entityKind: z.enum(["session", "task", "project"]).optional(),
+  entityKind: z.enum(CHAT_ENTITY_KINDS).optional(),
   chatId: z.string().optional(),
 });
-
-const mcpEntityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Actions
@@ -121,7 +120,7 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(mcpEntityKindValidator),
+      entityKind: v.optional(chatEntityKindValidator),
       chatId: v.optional(v.string()),
     }),
     v.null(),
@@ -558,9 +557,7 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
-    sourceKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    sourceKind: v.optional(chatEntityKindValidator),
     sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
@@ -681,23 +678,8 @@ export const listArtifacts = internalAction({
 // master can reach every agent the user can reach and nothing more.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * State, stop and watch reach all three chat surfaces, including a project's
- * sandbox chat. Listing still only enumerates sessions and tasks.
- */
-const agentKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-type AgentKind = "session" | "task" | "project";
-
-/** Every surface a chat message can be sent into. */
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
+// State, stop and watch reach all three chat surfaces, including a project's
+// sandbox chat. Listing still only enumerates sessions and tasks.
 
 /** The user-authorised read that proves the caller may reach each surface. */
 const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
@@ -707,7 +689,7 @@ const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
 };
 
 const orchestratorAgentValidator = v.object({
-  kind: agentKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   repo: v.string(),
@@ -719,7 +701,7 @@ const orchestratorAgentValidator = v.object({
 });
 
 interface OrchestratorAgent {
-  kind: AgentKind;
+  kind: ChatEntityKind;
   id: string;
   numId?: number;
   repo: string;
@@ -862,7 +844,7 @@ const TRANSCRIPT_CHAR_LIMIT = 2000;
  */
 async function setWatchedByAve(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: ChatEntityKind,
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
@@ -873,7 +855,7 @@ async function setWatchedByAve(
 }
 
 /** The watch-pointer mutation per surface, and the id argument it takes. */
-const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
+const WATCH_MUTATION: Record<ChatEntityKind, { fn: string; idArg: string }> = {
   session: { fn: "orchestratorWatch:setSessionWatchedBy", idArg: "sessionId" },
   task: { fn: "orchestratorWatch:setTaskWatchedBy", idArg: "taskId" },
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
@@ -888,7 +870,7 @@ const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
  */
 async function registerWatchIfAve(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: ChatEntityKind,
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
@@ -1038,7 +1020,7 @@ async function readSessionGroup(
 }
 
 const orchestratorAgentStateValidator = v.object({
-  kind: agentKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
@@ -1083,7 +1065,7 @@ const orchestratorAgentStateValidator = v.object({
 export const orchestratorGetAgentState = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     transcriptTail: v.number(),
   },
@@ -1348,7 +1330,7 @@ function chatDelivery(
 export const orchestratorSendMessage = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
@@ -1465,7 +1447,7 @@ export const orchestratorSendMessage = internalAction({
 export const orchestratorStopAgent = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({ buildRunning: v.boolean() }),
@@ -1524,7 +1506,7 @@ export const orchestratorStopAgent = internalAction({
 export const mcpStartEntitySandbox = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({
@@ -1546,7 +1528,7 @@ export const mcpStartEntitySandbox = internalAction({
 export const mcpStopEntitySandbox = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({
@@ -1745,7 +1727,7 @@ export const orchestratorCreateSession = internalAction({
 export const orchestratorSetWatch = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     aveThreadId: v.optional(v.string()),
   },
@@ -1819,7 +1801,7 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(mcpEntityKindValidator),
+    entityKind: v.optional(chatEntityKindValidator),
     chatId: v.optional(v.string()),
     body: v.string(),
   },

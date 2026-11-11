@@ -49,6 +49,7 @@ import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
+import { useDiffSearchParams } from "@/lib/components/sandbox/useDiffSearchParams";
 import {
   fileViewerPathParser,
   isTaskRouteSandboxTab,
@@ -75,13 +76,28 @@ export function TaskDetailInline({
 }: TaskDetailInlineProps) {
   const navigate = useNavigate();
   const { basePath } = useRepo();
-  const [embeddedSandboxTab, setEmbeddedSandboxTab] =
-    useState<SandboxTab>("preview");
   /** Which detail pane is on screen below `md`; both show at `md` and up. */
   const [showMobileProperties, setShowMobileProperties] = useState(false);
-  const [, setFileViewerPath] = useQueryState("file", fileViewerPathParser);
+  const [fileViewerPath, setFileViewerPath] = useQueryState(
+    "file",
+    fileViewerPathParser,
+  );
+  const { diffFile } = useDiffSearchParams();
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
+  // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
+  // it, so a reload lands back on Files / Review. A tab the user picks
+  // afterwards overrides that for this mount.
+  const [pickedSandboxTab, setEmbeddedSandboxTab] =
+    useState<SandboxTab | null>(null);
+  const urlSandboxTab: SandboxTab = simpleView
+    ? "preview"
+    : fileViewerPath
+      ? "files"
+      : diffFile
+        ? "review"
+        : "preview";
+  const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const sandboxRailWidthPx = useSandboxRailWidthPx();
   const prewarmChatDaemon = useMutation(
     api.agentTaskChatWorkflow.prewarmChatDaemon,

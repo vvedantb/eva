@@ -2,6 +2,7 @@ import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -96,7 +97,7 @@ export function SessionDetailClient({
   );
   const startupStreaming = useHeldQuery(
     api.streaming.get,
-    isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
+    isRouteActive ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) } : "skip",
   );
   // Names the browser tab. Gated on `isRouteActive`: up to five session shells
   // stay mounted at once, and a hidden one must not title the tab.
@@ -301,7 +302,7 @@ export function SessionDetailClient({
   // through auto-archive, which the owner can turn off.
   const isArchived = session.archived === true;
 
-  const chatPanel = (sandboxCollapsed?: boolean) => (
+  const chatPanel = (
     <ChatPanel
       // One mount per chat: composer draft, attachments and local state must
       // not carry over to another tab.
@@ -337,7 +338,6 @@ export function SessionDetailClient({
       isArchived={isArchived}
       isReadOnly={isArchived}
       deploymentStatus={session.deploymentStatus}
-      sandboxCollapsed={sandboxCollapsed}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}
@@ -363,9 +363,7 @@ export function SessionDetailClient({
             >
               {(panes, owner, terminalPanel) => (
                 <ResizablePanelLayout
-                  leftPanel={({ rightPanelCollapsed }) =>
-                    chatPanel(rightPanelCollapsed)
-                  }
+                  leftPanel={() => chatPanel}
                   rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
                     <SandboxPanel
                       sessionId={sessionId}
