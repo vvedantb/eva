@@ -1,12 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { Activity, useState, type ReactNode } from "react";
 
 /**
  * A sandbox tab body that mounts the first time its tab is shown, then stays
- * mounted (hidden) so switching back keeps its state.
+ * in a hidden `<Activity>` so switching back keeps its DOM and state while its
+ * effects (subscriptions, timers) pause off screen.
  *
  * Mounting every tab up front made each session open pay for panes the user
  * may never look at: the Review diffs, the file tree, Editor and Browser
  * iframes, docs and artifacts — and every kept-alive session paid it again.
+ *
+ * Terminals must keep streaming while hidden, so they do not use this.
  */
 export function KeepAlivePane({
   active,
@@ -14,7 +17,7 @@ export function KeepAlivePane({
   children,
 }: {
   active: boolean;
-  /** Classes while shown; a hidden pane is `hidden`. */
+  /** Classes on the pane body; `<Activity>` hides it when inactive. */
   className: string;
   children: ReactNode;
 }) {
@@ -23,5 +26,9 @@ export function KeepAlivePane({
   const [visited, setVisited] = useState(active);
   if (active && !visited) setVisited(true);
   if (!visited) return null;
-  return <div className={active ? className : "hidden"}>{children}</div>;
+  return (
+    <Activity mode={active ? "visible" : "hidden"}>
+      <div className={className}>{children}</div>
+    </Activity>
+  );
 }
