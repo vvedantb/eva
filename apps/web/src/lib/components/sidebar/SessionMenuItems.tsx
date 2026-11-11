@@ -6,8 +6,14 @@ import { isTitleRegenerating } from "@eva/shared";
 import {
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   toast,
   ConfirmSkipHint,
   skipConfirmTitle,
@@ -17,6 +23,7 @@ import {
   IconArchive,
   IconArchiveOff,
   IconClipboard,
+  IconCopy,
   IconExternalLink,
   IconEye,
   IconGitBranch,
@@ -100,6 +107,11 @@ export function SessionMenuItems({
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Separator =
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
+  const Sub = variant === "context" ? ContextMenuSub : DropdownMenuSub;
+  const SubTrigger =
+    variant === "context" ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
+  const SubContent =
+    variant === "context" ? ContextMenuSubContent : DropdownMenuSubContent;
   const iconSize = variant === "context" ? 16 : 14;
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
   const forkSession = useAction(api.sandbox.forkSession);
@@ -116,9 +128,8 @@ export function SessionMenuItems({
         ? "Agent working"
         : null;
 
-  // Groups: session actions, copy actions, PR actions, then Archive. A
-  // divider opens a group only when the group above it rendered something.
-  const hasSessionGroup = Boolean(onRenameRequest ?? onForkNavigate);
+  // Groups: session actions (Copy is a submenu there), PR actions, then
+  // Archive. A divider opens a group only when the group has items.
   const showOpenPr = prs.length === 0 && prUrl !== undefined;
   const showSendForReview = onSendForReview !== undefined && !simpleView;
   const hasPrGroup = prs.length > 0 || showOpenPr || showSendForReview;
@@ -197,35 +208,42 @@ export function SessionMenuItems({
           )}
         </Item>
       ) : null}
-      {hasSessionGroup ? <Separator /> : null}
-      <Item
-        onSelect={() => {
-          void navigator.clipboard.writeText(session.title);
-        }}
-      >
-        <IconClipboard size={iconSize} />
-        Copy title
-      </Item>
-      <Item
-        onSelect={() => {
-          void navigator.clipboard.writeText(window.location.origin + href);
-        }}
-      >
-        <IconLink size={iconSize} />
-        Copy link
-      </Item>
-      {branchName ? (
-        <Item
-          onSelect={() => {
-            void navigator.clipboard.writeText(branchName).then(() => {
-              toast.success("Branch name copied");
-            });
-          }}
-        >
-          <IconGitBranch size={iconSize} />
-          Copy branch name
-        </Item>
-      ) : null}
+      <Sub>
+        <SubTrigger>
+          <IconCopy size={iconSize} />
+          Copy
+        </SubTrigger>
+        <SubContent>
+          <Item
+            onSelect={() => {
+              void navigator.clipboard.writeText(session.title);
+            }}
+          >
+            <IconClipboard size={iconSize} />
+            Title
+          </Item>
+          <Item
+            onSelect={() => {
+              void navigator.clipboard.writeText(window.location.origin + href);
+            }}
+          >
+            <IconLink size={iconSize} />
+            Link
+          </Item>
+          {branchName ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(branchName).then(() => {
+                  toast.success("Branch name copied");
+                });
+              }}
+            >
+              <IconGitBranch size={iconSize} />
+              Branch name
+            </Item>
+          ) : null}
+        </SubContent>
+      </Sub>
       {hasPrGroup ? <Separator /> : null}
       <PrActionsSubmenus variant={variant} prs={prs} />
       {/* A session whose PR predates the `pullRequests` rows has only a URL. */}
