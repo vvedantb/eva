@@ -121,6 +121,8 @@ interface ChatComposerProps {
   ) => Promise<void>;
   onCancel: () => Promise<void>;
   preInputContent?: React.ReactNode;
+  /** Chips that share the skill suggestions' row, just above the input. */
+  statusChips?: React.ReactNode;
   /** Live turn activity JSON — its todo snapshot feeds the Tasks panel. */
   streamingActivity?: string;
   /** Message id of the streaming turn; scopes Tasks-panel dismissal to it. */
@@ -157,6 +159,7 @@ export function ChatComposer({
   onSend,
   onCancel,
   preInputContent,
+  statusChips,
   streamingActivity,
   streamingTurnId,
   underCardLeading,
@@ -385,6 +388,19 @@ export function ChatComposer({
     // composer, so it floats just above it instead of a distant ancestor.
     <div className="relative p-3 md:p-4 max-w-3xl mx-auto w-full">
       {preInputContent}
+      {/* One chip row on the input: status chips first, then skill
+          suggestions. Same inset as the stash dock, so it lines up with the
+          input card. Empty, it takes no height (each chip owns its margin). */}
+      <div className="mx-auto flex w-[calc(100%-1.5rem)] flex-wrap items-center gap-x-1.5">
+        {statusChips}
+        <SkillSuggestionChips
+          chips={suggestions.chips}
+          onPick={(item) => {
+            mentionRef.current?.insertSkill(item);
+            suggestions.dismiss(item.id);
+          }}
+        />
+      </div>
       {isDraftLoading ? (
         <>
           <div
@@ -416,13 +432,6 @@ export function ChatComposer({
               onSave={localDraft.onSave}
             />
           )}
-          <SkillSuggestionChips
-            chips={suggestions.chips}
-            onPick={(item) => {
-              mentionRef.current?.insertSkill(item);
-              suggestions.dismiss(item.id);
-            }}
-          />
           {repo ? (
             <ComposerStash
               repoId={repo.id}

@@ -11,7 +11,10 @@ import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
@@ -408,14 +411,6 @@ export function ChatPanel({
   const preInputContent = (
     <SandboxChatPreInput
       surface={chatSurface}
-      chips={
-        simpleView ? null : (
-          <BackgroundProcessesChip
-            sessionId={sessionId}
-            isRouteActive={isRouteActive}
-          />
-        )
-      }
       beforeBanner={
         <>
           {!isReadOnly ? (
@@ -429,6 +424,17 @@ export function ChatPanel({
         </>
       }
     />
+  );
+
+  const composerChips = (
+    <SandboxChatStatusChips surface={chatSurface}>
+      {simpleView ? null : (
+        <BackgroundProcessesChip
+          sessionId={sessionId}
+          isRouteActive={isRouteActive}
+        />
+      )}
+    </SandboxChatStatusChips>
   );
 
   const emptyStateTitle = isSandboxActive
@@ -510,6 +516,7 @@ export function ChatPanel({
             />
           }
           preInputContent={preInputContent}
+          composerChips={composerChips}
           preConversationContent={
             <SessionSummaryAccordion
               summary={summary}
