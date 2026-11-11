@@ -1,4 +1,5 @@
 import { buildCustomInstructionsBlock } from "../prompts/shared";
+import type { RoleUser } from "../validators";
 
 /**
  * Manager Ave's system instructions. Ave runs server-side with only the
@@ -8,7 +9,7 @@ import { buildCustomInstructionsBlock } from "../prompts/shared";
  */
 export function buildAveInstructions(args: {
   now: Date;
-  role: "business" | "dev" | "designer" | undefined;
+  role: RoleUser | undefined;
   customInstructions: string | undefined;
 }): string {
   const custom = buildCustomInstructionsBlock(

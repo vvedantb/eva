@@ -13,6 +13,7 @@ import {
   schedulePrLifecycleActions,
   type PrLifecycleTransition,
 } from "../_github/prLifecycleActions";
+import { CHAT_ENTITY_KINDS, type ChatEntityKind } from "../_validators/enums";
 
 /**
  * The one module that writes `pullRequests`. Every PR Eva tracks — the draft a
@@ -451,11 +452,11 @@ const EVA_OWNER_BRANCH = /^eva\/(session|task|project)-([^-/]+)(-.+)?$/;
 
 export function parseEvaOwnerBranch(
   branch: string,
-): { kind: "session" | "task" | "project"; id: string } | null {
+): { kind: ChatEntityKind; id: string } | null {
   const match = EVA_OWNER_BRANCH.exec(branch);
   if (!match) return null;
-  const kind = match[1];
-  if (kind !== "session" && kind !== "task" && kind !== "project") return null;
+  const kind = CHAT_ENTITY_KINDS.find((entry) => entry === match[1]);
+  if (!kind) return null;
   return { kind, id: match[2] };
 }
 

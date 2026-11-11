@@ -8,7 +8,11 @@ import {
 } from "../_sessionChats/helpers";
 import { getRepoHref } from "../notifications";
 import { storedComposerTraits } from "../_shared/composerTraits";
-import { aiModelValidator, reasoningLevelValidator } from "../validators";
+import {
+  aiModelValidator,
+  chatEntityKindValidator,
+  reasoningLevelValidator,
+} from "../validators";
 
 /**
  * Chat targets for the Eva mobile app (apps/mobile). The app opens every chat
@@ -19,14 +23,8 @@ import { aiModelValidator, reasoningLevelValidator } from "../validators";
  * without importing the chat workflows `mobile.ts` sends through.
  */
 
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
 export const mobileChatValidator = v.object({
-  kind: chatKindValidator,
+  kind: chatEntityKindValidator,
   title: v.string(),
   repoLabel: v.string(),
   /** The chat's repo, for starting a session from it (fork). */

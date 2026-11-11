@@ -21,6 +21,7 @@ import {
   roleUserValidator,
   routedSourceKindValidator,
   routedThreadStatusValidator,
+  type RoleUser,
 } from "./validators";
 import type { Infer } from "convex/values";
 
@@ -448,7 +449,7 @@ async function enqueueSourceWake(
 type DirectoryMember = {
   userId: Id<"users">;
   name: string;
-  role: "business" | "dev" | "designer" | null;
+  role: RoleUser | null;
 };
 
 /**
@@ -461,7 +462,7 @@ async function resolveParticipants(
     teamId: Id<"teams">;
     actorUserId: Id<"users">;
     userIds?: Id<"users">[];
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
   },
 ): Promise<
   | { ok: true; users: DirectoryMember[] }
@@ -837,7 +838,7 @@ async function askCore(
     question: string;
     context: string;
     topicKey: string;
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
     assigneeUserIds?: Id<"users">[];
   },
 ): Promise<Infer<typeof askResult>> {

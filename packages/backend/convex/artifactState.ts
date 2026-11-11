@@ -2,6 +2,10 @@ import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authQuery, authMutation, hasTeamAccess } from "./functions";
+import {
+  artifactStateScopeValidator,
+  type ArtifactStateScope,
+} from "./validators";
 
 // Persistent state for hosted artifacts (`window.cowork.state` in the iframe
 // shim). Two scopes:
@@ -14,9 +18,6 @@ import { authQuery, authMutation, hasTeamAccess } from "./functions";
 export const MAX_STATE_KEY_LENGTH = 200;
 export const MAX_STATE_VALUE_BYTES = 64 * 1024;
 export const MAX_STATE_KEYS_PER_SCOPE = 200;
-
-const scopeValidator = v.union(v.literal("user"), v.literal("shared"));
-type Scope = "user" | "shared";
 
 const entryValidator = v.object({ key: v.string(), value: v.string() });
 
@@ -43,7 +44,10 @@ async function requireArtifactAccess(
   }
 }
 
-function ownerFor(scope: Scope, userId: Id<"users">): Id<"users"> | undefined {
+function ownerFor(
+  scope: ArtifactStateScope,
+  userId: Id<"users">,
+): Id<"users"> | undefined {
   return scope === "user" ? userId : undefined;
 }
 
@@ -103,7 +107,7 @@ export const list = authQuery({
 export const set = authMutation({
   args: {
     artifactId: v.id("artifacts"),
-    scope: scopeValidator,
+    scope: artifactStateScopeValidator,
     key: v.string(),
     value: v.string(),
   },
@@ -163,7 +167,7 @@ export const set = authMutation({
 export const remove = authMutation({
   args: {
     artifactId: v.id("artifacts"),
-    scope: scopeValidator,
+    scope: artifactStateScopeValidator,
     key: v.string(),
   },
   returns: v.null(),

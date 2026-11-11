@@ -1,7 +1,7 @@
 import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
-import { prStateValidator } from "../validators";
+import { chatEntityKindValidator, prStateValidator } from "../validators";
 import { mcpPullRequestValidator, toMcpPullRequests } from "./queries";
 import {
   listOwnerPullRequests,
@@ -15,12 +15,6 @@ import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
 // tool has already resolved the chat through `resolveEntityTarget`, which is
 // where the per-user access check lives, so this only reads what it was named.
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 const chatDetailsValidator = v.object({
   baseBranch: v.optional(v.string()),
@@ -72,7 +66,7 @@ type ChatOwnerFields = Pick<
 /** The per-surface fields; everything else is shared repo config. */
 async function ownerFields(
   ctx: QueryCtx,
-  kind: Infer<typeof chatKindValidator>,
+  kind: Infer<typeof chatEntityKindValidator>,
   id: string,
 ): Promise<ChatOwnerFields | null> {
   if (kind === "session") {
@@ -145,7 +139,7 @@ function linkedRepoRow(
  */
 export const getChatDetails = internalQuery({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     /** The repo `resolveEntityTarget` settled on (a project task's comes from its project). */
     repoId: v.id("githubRepos"),
