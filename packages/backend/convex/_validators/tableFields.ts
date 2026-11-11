@@ -552,8 +552,11 @@ export const sessionChatFields = {
   lastFastMode: v.optional(v.boolean()),
   // A Main chat backfilled from an existing session keeps the session id as
   // its provider-transcript seed so it resumes the conversation Claude
-  // already holds instead of starting cold. New chats hash their own id.
-  claudePersistenceSeed: v.optional(v.id("sessions")),
+  // already holds instead of starting cold; a quick task's Main chat keeps the
+  // task id its old task chat ran under. New chats hash their own id.
+  claudePersistenceSeed: v.optional(
+    v.union(v.id("sessions"), v.id("agentTasks")),
+  ),
   ...chatDaemonEntityFields,
 };
 

@@ -161,14 +161,22 @@ export async function sessionChatHasFreeSlot(
   return siblingsRunning < MAX_PARALLEL_CHATS;
 }
 
+/** What `sessionChatPersistenceId` returns, for return validators. */
+export const sessionChatPersistenceIdValidator = v.union(
+  v.id("sessions"),
+  v.id("sessionChats"),
+  v.id("agentTasks"),
+);
+
 /**
  * The id Claude's transcript is derived from (`sessionClaudeUuid`). A
- * backfilled Main chat keeps the session's seed so it resumes the
- * conversation Claude already holds; every other chat is its own transcript.
+ * backfilled Main chat keeps the session's seed, and a migrated quick task's
+ * Main chat the task's, so it resumes the conversation Claude already holds;
+ * every other chat is its own transcript.
  */
 export function sessionChatPersistenceId(
   chat: Doc<"sessionChats">,
-): Id<"sessions"> | Id<"sessionChats"> {
+): Id<"sessions"> | Id<"sessionChats"> | Id<"agentTasks"> {
   return chat.claudePersistenceSeed ?? chat._id;
 }
 
@@ -214,15 +222,7 @@ const LEGACY_TRANSCRIPT_PAGE_ROWS = 500;
  * Reads the next bounded page of an index range. `full` means the page hit
  * the budget, so more rows may remain.
  */
-async function takeBoundedPage<
-  T extends Doc<
-    | "messages"
-    | "queuedMessages"
-    | "chatUiPanels"
-    | "chatHtmlRenders"
-    | "envVarRequests"
-  >,
->(
+async function takeBoundedPage<T extends Doc<LegacyChatRowTable>>(
   rows: AsyncIterable<T>,
   maxBytes: number,
 ): Promise<{ page: T[]; bytes: number; full: boolean }> {
@@ -238,89 +238,128 @@ async function takeBoundedPage<
   return { page, bytes, full: false };
 }
 
-/** Moves one bounded page of legacy rows onto the chat. */
-async function repointPage<
-  T extends Doc<
-    | "messages"
-    | "queuedMessages"
-    | "chatUiPanels"
-    | "chatHtmlRenders"
-    | "envVarRequests"
-  >,
->(
-  ctx: MutationCtx,
+/** Moves one bounded page of legacy rows onto the chat with `move`. */
+async function repointPage<T extends Doc<LegacyChatRowTable>>(
   rows: AsyncIterable<T>,
-  chatId: Id<"sessionChats">,
   maxBytes: number,
+  move: (row: T) => Promise<void>,
 ): Promise<{ bytes: number; full: boolean }> {
   const { page, bytes, full } = await takeBoundedPage(rows, maxBytes);
-  for (const row of page) {
-    await ctx.db.patch(row._id, { parentId: chatId });
-  }
+  for (const row of page) await move(row);
   return { bytes, full };
 }
 
+/** Tables whose rows hang off a chat parent and move with its transcript. */
+type LegacyChatRowTable =
+  | "messages"
+  | "queuedMessages"
+  | "chatUiPanels"
+  | "chatHtmlRenders"
+  | "envVarRequests"
+  | "feedback"
+  | "turns";
+
 /**
- * Repoints one bounded page of a session's legacy chat rows onto its Main
- * chat: the transcript, the queue and the inline cards (UI panels, HTML
- * renders, env var requests). Once those are empty it links the chat owner's
- * pre-chat composer draft. Returns true once no legacy row is left. Moved rows
- * leave the `parentId = sessionId` range, so every call starts from the front
- * and a rerun after a failure resumes where the last commit stopped.
- * `chatReads` stay on the session id: the sidebar unread dot reads them there.
+ * Who held a transcript before chats did: a session predating session chats,
+ * or a quick task predating its owned session.
+ */
+export type LegacyTranscriptOwner = Id<"sessions"> | Id<"agentTasks">;
+
+/**
+ * Repoints one bounded page of a legacy chat owner's rows onto a Main chat:
+ * the transcript, the queue and the inline cards (UI panels, HTML renders,
+ * env var requests). A quick task also moves its thumbs (`feedback`) and its
+ * closed chat turns, which become the chat's turns in its session. Once those
+ * are empty a session links the chat owner's pre-chat composer draft. Returns
+ * true once no legacy row is left. Moved rows leave the `parentId = from`
+ * range, so every call starts from the front and a rerun after a failure
+ * resumes where the last commit stopped. A session's `chatReads` stay on the
+ * session id: the sidebar unread dot reads them there.
  */
 export async function moveLegacyTranscriptPage(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  from: LegacyTranscriptOwner,
   chatId: Id<"sessionChats">,
 ): Promise<boolean> {
+  const moveParent = async (row: { _id: Id<LegacyChatRowTable> }) => {
+    await ctx.db.patch(row._id, { parentId: chatId });
+  };
+  const chat = await ctx.db.get(chatId);
+  const taskId = ctx.db.normalizeId("agentTasks", from);
   // Each table reads into what is left of the one byte budget.
   const tables = [
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("queuedMessages")
-          .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("chatUiPanels")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("chatHtmlRenders")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("envVarRequests")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
+    ...(taskId && chat
+      ? [
+          (left: number) =>
+            repointPage(
+              ctx.db
+                .query("feedback")
+                .withIndex("by_parent", (q) => q.eq("parentId", taskId)),
+              left,
+              moveParent,
+            ),
+          // Closed chat turns only: the migration skips a task whose turn is
+          // still open, and a run's turns are keyed on the run.
+          (left: number) =>
+            repointPage(
+              ctx.db
+                .query("turns")
+                .withIndex("by_entity_open", (q) =>
+                  q
+                    .eq("entityId", taskId)
+                    .eq("lane", undefined)
+                    .eq("open", false),
+                ),
+              left,
+              async (turn) => {
+                await ctx.db.patch(turn._id, {
+                  entityId: chatId,
+                  sessionId: chat.sessionId,
+                });
+              },
+            ),
+        ]
+      : []),
   ];
   let budget = LEGACY_TRANSCRIPT_PAGE_BYTES;
   for (const repoint of tables) {
@@ -329,9 +368,10 @@ export async function moveLegacyTranscriptPage(
     budget -= page.bytes;
   }
 
+  const sessionId = ctx.db.normalizeId("sessions", from);
+  if (!sessionId) return true;
   // `drafts` is indexed by user first; other users' pre-chat drafts are moved
   // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
-  const chat = await ctx.db.get(chatId);
   if (!chat) return true;
   const drafts = await ctx.db
     .query("drafts")
@@ -399,7 +439,7 @@ export async function ensureMainChat(
     await ctx.scheduler.runAfter(
       0,
       internal._sessionChats.mutations.moveLegacyTranscript,
-      { sessionId: session._id, chatId: chat._id },
+      { from: session._id, chatId: chat._id },
     );
   }
   return chat;

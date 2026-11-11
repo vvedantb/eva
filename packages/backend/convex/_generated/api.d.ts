@@ -198,6 +198,7 @@ import type * as _migrations_logProjectIds from "../_migrations/logProjectIds.js
 import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyChatRows.js";
 import type * as _migrations_projectInterview from "../_migrations/projectInterview.js";
 import type * as _migrations_projectPhases from "../_migrations/projectPhases.js";
+import type * as _migrations_quickTaskChatsToSessions from "../_migrations/quickTaskChatsToSessions.js";
 import type * as _migrations_removeProjectIdField from "../_migrations/removeProjectIdField.js";
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
@@ -332,6 +333,7 @@ import type * as _sessions_groups from "../_sessions/groups.js";
 import type * as _sessions_helpers from "../_sessions/helpers.js";
 import type * as _sessions_internal from "../_sessions/internal.js";
 import type * as _sessions_mutations from "../_sessions/mutations.js";
+import type * as _sessions_ownedSession from "../_sessions/ownedSession.js";
 import type * as _sessions_owner from "../_sessions/owner.js";
 import type * as _sessions_pendingTurnRecovery from "../_sessions/pendingTurnRecovery.js";
 import type * as _sessions_prArchive from "../_sessions/prArchive.js";
@@ -781,6 +783,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/moveLegacyChatRows": typeof _migrations_moveLegacyChatRows;
   "_migrations/projectInterview": typeof _migrations_projectInterview;
   "_migrations/projectPhases": typeof _migrations_projectPhases;
+  "_migrations/quickTaskChatsToSessions": typeof _migrations_quickTaskChatsToSessions;
   "_migrations/removeProjectIdField": typeof _migrations_removeProjectIdField;
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
@@ -915,6 +918,7 @@ declare const fullApi: ApiFromModules<{
   "_sessions/helpers": typeof _sessions_helpers;
   "_sessions/internal": typeof _sessions_internal;
   "_sessions/mutations": typeof _sessions_mutations;
+  "_sessions/ownedSession": typeof _sessions_ownedSession;
   "_sessions/owner": typeof _sessions_owner;
   "_sessions/pendingTurnRecovery": typeof _sessions_pendingTurnRecovery;
   "_sessions/prArchive": typeof _sessions_prArchive;

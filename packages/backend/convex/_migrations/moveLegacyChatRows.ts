@@ -44,7 +44,7 @@ export const moveLegacyChatRows = internalMutation({
         await ctx.scheduler.runAfter(
           0,
           internal._sessionChats.mutations.moveLegacyTranscript,
-          { sessionId: session._id, chatId: chat._id },
+          { from: session._id, chatId: chat._id },
         );
       }
     }

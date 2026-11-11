@@ -29,19 +29,18 @@ import {
 } from "./helpers";
 
 /**
- * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
- * session's legacy transcript onto its Main chat and reschedules itself
- * until none is left.
+ * Continuation of `ensureMainChat` and of the quick-task migration: moves the
+ * next bounded page of a heavy legacy transcript (a session's or a quick
+ * task's) onto its Main chat and reschedules itself until none is left.
  */
 export const moveLegacyTranscript = internalMutation({
-  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  args: {
+    from: v.union(v.id("sessions"), v.id("agentTasks")),
+    chatId: v.id("sessionChats"),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const done = await moveLegacyTranscriptPage(
-      ctx,
-      args.sessionId,
-      args.chatId,
-    );
+    const done = await moveLegacyTranscriptPage(ctx, args.from, args.chatId);
     if (!done) {
       await ctx.scheduler.runAfter(
         0,

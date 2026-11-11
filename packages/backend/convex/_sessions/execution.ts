@@ -48,6 +48,7 @@ import {
   loadSessionChat,
   sessionChatHasFreeSlot,
   sessionChatPersistenceId,
+  sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
@@ -560,7 +561,7 @@ export const getDaemonPrewarmData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
       providerAccountId: v.optional(v.id("userProviderAccounts")),
-      sessionPersistenceId: v.union(v.id("sessions"), v.id("sessionChats")),
+      sessionPersistenceId: sessionChatPersistenceIdValidator,
     }),
   ),
   handler: async (ctx, args) => {

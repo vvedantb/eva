@@ -74,6 +74,7 @@ import {
   loadSessionChat,
   resolveDaemonChatId,
   sessionChatPersistenceId,
+  sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { errorMessage } from "@vvedantb/server";
@@ -773,7 +774,7 @@ export const getSessionData = internalQuery({
   },
   returns: v.object({
     sessionId: v.id("sessions"),
-    sessionPersistenceId: v.union(v.id("sessions"), v.id("sessionChats")),
+    sessionPersistenceId: sessionChatPersistenceIdValidator,
     sandboxId: v.optional(v.string()),
     status: sessionStatusValidator,
     repoOwner: v.string(),
