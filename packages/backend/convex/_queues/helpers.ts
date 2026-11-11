@@ -45,6 +45,7 @@ import {
   isHeldByUsageLimit,
   type UsageLimitHold,
 } from "../_taskWorkflow/usageLimitReset";
+import { findOpenChatQuestion } from "../pendingQuestions";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
 import { buildSessionPrompt } from "../_sessions/sessionPrompt";
 import {
@@ -339,6 +340,28 @@ export async function usageLimitHoldFor(
 }
 
 /**
+ * The queued message to run next. While the chat's after-turn question is
+ * open, only a message queued after the question appeared may run: it is the
+ * user's answer. Messages queued during the turn wait behind it, so they never
+ * run past the question and hide its card. Null when nothing may run yet.
+ */
+async function nextRunnableQueuedMessage(
+  ctx: MutationCtx,
+  id: ChatQueueId,
+): Promise<Doc<"queuedMessages"> | null> {
+  const queue = ctx.db
+    .query("queuedMessages")
+    .withIndex("by_parent_and_order", (q) => q.eq("parentId", id))
+    .order("asc");
+  const askedAt = (await findOpenChatQuestion(ctx.db, id))?.finishedAt;
+  if (askedAt === undefined) return await queue.first();
+  for await (const message of queue) {
+    if (message.createdAt > askedAt) return message;
+  }
+  return null;
+}
+
+/**
  * Dequeues and starts the next pending message for one chat surface. Single
  * implementation shared by sessions, project chat, and task chat — the three
  * exported `startNextQueuedX` functions below are thin `config` bindings so a
@@ -398,11 +421,7 @@ async function startNextQueuedChatMessage<
     );
   }
 
-  const nextMessage = await ctx.db
-    .query("queuedMessages")
-    .withIndex("by_parent_and_order", (q) => q.eq("parentId", id))
-    .order("asc")
-    .first();
+  const nextMessage = await nextRunnableQueuedMessage(ctx, id);
   if (!nextMessage) {
     await notifyWatchingOrchestrator("completed");
     return false;
