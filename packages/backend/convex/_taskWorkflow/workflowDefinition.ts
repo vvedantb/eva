@@ -40,6 +40,12 @@ export const taskExecutionWorkflowArgs = {
   repoId: v.id("githubRepos"),
   installationId: v.number(),
   projectId: v.optional(v.id("projects")),
+  /**
+   * A quick task's session: the run reads and writes its sandbox there.
+   * Absent for project tasks and for runs started before tasks had sessions,
+   * which keep the sandbox on the task row.
+   */
+  ownedSessionId: v.optional(v.id("sessions")),
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   isFirstTaskOnBranch: v.boolean(),
@@ -83,6 +89,9 @@ export const taskExecutionWorkflow = workflow.define({
         projectId: args.projectId,
         branchName: args.branchName,
         mode: args.mode,
+        ...(args.ownedSessionId !== undefined
+          ? { ownedSessionId: args.ownedSessionId }
+          : {}),
       });
       keepTaskSandboxActiveAfterRun = data.keepTaskSandboxActiveAfterRun;
       // Reuse the persisted sandbox for project tasks (project.sandboxId) or
@@ -162,6 +171,13 @@ export const taskExecutionWorkflow = workflow.define({
       if (args.projectId) {
         await step.runMutation(internal.taskWorkflow.updateProjectSandbox, {
           projectId: args.projectId,
+          sandboxId,
+        });
+      } else if (args.ownedSessionId) {
+        // The task's session owns the sandbox: its chat, preview and sweeps
+        // all read it there.
+        await step.runMutation(internal.sessionWorkflow.updateSandboxId, {
+          sessionId: args.ownedSessionId,
           sandboxId,
         });
       } else {
@@ -414,8 +430,18 @@ export const taskExecutionWorkflow = workflow.define({
       // Stop (don't delete) quick-task sandboxes that were not already open in
       // the reviewer UI. If a change-request reused an active preview sandbox,
       // keep it active so "View Sandbox" continues pointing at a live sandbox.
-      if (
+      if (args.ownedSessionId && sandboxId && !preserveSandboxOnFailure) {
+        // The session's own stop path: it keeps a sandbox the reviewer has
+        // open (status active/starting) and settles through `stopping`.
+        try {
+          await step.runMutation(
+            internal.sessions.stopSandboxAfterTaskRun,
+            { sessionId: args.ownedSessionId },
+          );
+        } catch {}
+      } else if (
         !args.projectId &&
+        !args.ownedSessionId &&
         sandboxId &&
         !preserveSandboxOnFailure &&
         !keepTaskSandboxActiveAfterRun

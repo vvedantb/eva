@@ -30,6 +30,7 @@ import {
 } from "../_sandbox/stopRecovery";
 import {
   stopAlertText,
+  stopPostsDivider,
   stopReasonValidator,
   type StopReason,
 } from "../_sandbox/stopReason";
@@ -345,6 +346,27 @@ export const requestStopSandbox = internalMutation({
 });
 
 /**
+ * A quick task's run is done with its session's sandbox. Stops it unless the
+ * reviewer has it open or a start/stop is already in flight: a `closed` row
+ * here means the run resumed the VM behind a sleeping session. Silent (no
+ * divider), like the task sandbox it replaces.
+ */
+export const stopSandboxAfterTaskRun = internalMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session?.sandboxId || session.status !== "closed") return null;
+    // `requestSessionSandboxStop` re-stops a closed row that still holds a
+    // sandbox id: exactly the run's resumed VM.
+    await requestSessionSandboxStop(ctx, args.sessionId, {
+      stopReason: { kind: "task_run" },
+    });
+    return null;
+  },
+});
+
+/**
  * Schedules session teardown. Every path that flips a session to `"stopping"`
  * must go through here, or a transient on the finalize action wedges that path
  * with no recovery.
@@ -468,13 +490,15 @@ export const markSandboxClosed = internalMutation({
       });
       return null;
     }
-    await ctx.db.insert("messages", {
-      parentId: mainChat._id,
-      role: "assistant",
-      content: stopAlertText(args.stopReason),
-      timestamp: Date.now(),
-      isSystemAlert: true,
-    });
+    if (stopPostsDivider(args.stopReason)) {
+      await ctx.db.insert("messages", {
+        parentId: mainChat._id,
+        role: "assistant",
+        content: stopAlertText(args.stopReason),
+        timestamp: Date.now(),
+        isSystemAlert: true,
+      });
+    }
     await markAllRunningExited(ctx.db, args.sessionId);
     await ctx.db.patch(args.sessionId, {
       status: "closed",

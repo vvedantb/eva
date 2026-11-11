@@ -7,6 +7,7 @@ export {
   getForkLinks,
   listGroup,
   countActive,
+  getOwned,
 } from "./_sessions/queries";
 
 export {
@@ -23,6 +24,7 @@ export {
   archive,
   unarchive,
   updatePlanContent,
+  ensureOwned,
 } from "./_sessions/mutations";
 
 export {
@@ -30,6 +32,7 @@ export {
   forcePushBranch,
   stopSandbox,
   requestStopSandbox,
+  stopSandboxAfterTaskRun,
   sandboxReady,
   clearSandboxSetupPending,
   clearSandboxServicesPending,

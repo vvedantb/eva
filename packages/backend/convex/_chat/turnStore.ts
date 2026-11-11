@@ -17,6 +17,7 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
+import { sessionOwnerTaskId } from "../_sessions/owner";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -449,17 +450,36 @@ export async function closeTurn(
   if (chatParentId && (await ctx.db.get(chatParentId))) {
     await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
   }
-  if (turn.sessionId !== undefined && (await ctx.db.get(turn.sessionId))) {
-    await ctx.db.patch(turn.sessionId, { lastTurnFinishedAt: finishedAt });
+  const session =
+    turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
+  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  if (session && chatParentId) {
+    await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
+    // A task's session reads unread on the task's card, so the task gets the
+    // watermark too (`chatReads.markRead` reads the task with the chat).
+    const ownerTaskId = sessionOwnerTaskId(session);
+    if (ownerTaskId && (await ctx.db.get(ownerTaskId))) {
+      await ctx.db.patch(ownerTaskId, { lastTurnFinishedAt: finishedAt });
+    }
+  }
+  if (session && runId) {
+    // A quick task's run held its session's chats (`sessionChatHasFreeSlot`):
+    // offer them their queued messages now. Scheduled, since the queue
+    // module imports this one.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      { parentId: session._id },
+    );
   }
   // Every durable turn ends here, so this is the one place the idle-pause
   // sweep learns "the agent finished". The id's table names the surface; a
-  // run counts for its task, a session chat for its session.
-  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  // run counts for its task (or the task's session, which holds the
+  // sandbox), a session chat for its session.
   const run = runId ? await ctx.db.get(runId) : null;
   const activityRef = activityRefForParentId(
     ctx.db,
-    run ? run.taskId : (turn.sessionId ?? turn.entityId),
+    turn.sessionId ?? (run ? run.taskId : turn.entityId),
   );
   if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }
