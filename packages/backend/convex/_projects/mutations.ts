@@ -28,6 +28,7 @@ import { scheduleProjectPrSync } from "./prSync";
 import {
   mirrorOwnerIntoSession,
   syncProjectSession,
+  syncProjectSessionBranch,
 } from "../_sessions/ownedSession";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import {
@@ -194,10 +195,12 @@ export const update = authMutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
-    // The session mirrors the title and branches, and follows the phase.
+    // The session mirrors the title and base branch, moves to an edited
+    // branch (the one branch writer), and follows the phase.
     const edited = await ctx.db.get(args.id);
     if (edited) {
       await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });
+      await syncProjectSessionBranch(ctx, args.id);
       await syncProjectSession(ctx, args.id);
     }
     if (args.title !== undefined && args.title !== project.title) {

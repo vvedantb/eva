@@ -6,12 +6,6 @@ import {
   type DatabaseReader,
   type MutationCtx,
 } from "../_generated/server";
-import { isTaskRunning } from "../_agentTasks/runState";
-import { isProjectBuilding } from "../_projects/buildState";
-import {
-  hasOpenChatTurn,
-  isLegacyChatExecuting,
-} from "../_chat/turnProjection";
 import { isSessionArchived } from "../_sessions/archive";
 import { findOwnedSession } from "../_sessions/owner";
 import {
@@ -19,11 +13,11 @@ import {
   ensureOwnerChat,
   isTerminalProjectPhase,
   isTerminalTaskStatus,
+  ownerBusyReason,
   ownerChatUserIds,
   projectSessionOwner,
   retireOwnedSession,
   taskSessionOwner,
-  taskWorkSessionOwner,
   type OwnerEntity,
 } from "../_sessions/ownedSession";
 import { moveLegacyTranscriptPage } from "../_sessionChats/helpers";
@@ -64,58 +58,6 @@ export type OwnerChatMigrationOutcome =
 
 function ownerDoc(entity: OwnerEntity): Doc<"agentTasks"> | Doc<"projects"> {
   return entity.kind === "task" ? entity.task : entity.project;
-}
-
-/** Why an owner's chat cannot move now, or null when it can. */
-async function busyReason(
-  db: DatabaseReader,
-  entity: OwnerEntity,
-): Promise<string | null> {
-  const doc = ownerDoc(entity);
-  if (entity.kind === "task" && isTaskRunning(entity.task)) {
-    return "run in flight";
-  }
-  if (entity.kind === "project") {
-    const { project } = entity;
-    if (isProjectBuilding(project)) return "build in flight";
-    if (project.activeWorkflowId !== undefined) return "interview in flight";
-    const tasks = await db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .collect();
-    if (tasks.some(isTaskRunning)) return "task run in flight";
-  }
-  if (
-    doc.pendingTurn !== undefined ||
-    doc.syntheticTurnMessageId !== undefined ||
-    isLegacyChatExecuting(doc) ||
-    (await hasOpenChatTurn(db, doc._id))
-  ) {
-    return "chat turn open";
-  }
-  const legacyStatus =
-    entity.kind === "task"
-      ? entity.task.reviewTaskSandboxStatus
-      : entity.project.reviewProjectSandboxStatus;
-  if (legacyStatus === "starting" || legacyStatus === "stopping") {
-    return `sandbox ${legacyStatus}`;
-  }
-  // `hasOpenChatTurn` above already covers the session's turns.
-  const session = await findOwnedSession(
-    db,
-    entity.kind === "task"
-      ? taskWorkSessionOwner(entity.task)
-      : projectSessionOwner(entity.project._id),
-  );
-  if (session?.status === "starting" || session?.status === "stopping") {
-    return `session sandbox ${session.status}`;
-  }
-  const queued = await db
-    .query("queuedMessages")
-    .withIndex("by_parent_and_order", (q) => q.eq("parentId", doc._id))
-    .first();
-  if (queued) return "queued message";
-  return null;
 }
 
 /** True when the old chat ever ran a turn, so it has a transcript to resume. */
@@ -213,7 +155,7 @@ async function moveOwnerChat(
   transcript: "inline" | "scheduled",
 ): Promise<OwnerChatMigrationOutcome> {
   const doc = ownerDoc(entity);
-  const busy = await busyReason(ctx.db, entity);
+  const busy = await ownerBusyReason(ctx.db, entity);
   if (busy !== null) {
     console.warn(
       `[ownerChatMigration] skipped ${entity.kind}=${doc._id} reason=${busy}`,
@@ -362,7 +304,7 @@ export const quickTaskChatsLeft = internalQuery({
         .first();
       if (task.sandboxId === undefined && legacyMessage === null) continue;
       left += 1;
-      if ((await busyReason(ctx.db, { kind: "task", task })) !== null) {
+      if ((await ownerBusyReason(ctx.db, { kind: "task", task })) !== null) {
         busy += 1;
       }
     }
@@ -419,7 +361,7 @@ export const projectChatsLeft = internalQuery({
         continue;
       }
       left += 1;
-      if ((await busyReason(ctx.db, { kind: "project", project })) !== null) {
+      if ((await ownerBusyReason(ctx.db, { kind: "project", project })) !== null) {
         busy += 1;
       }
     }

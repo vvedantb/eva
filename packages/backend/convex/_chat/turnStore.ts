@@ -17,7 +17,10 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
-import { sessionOwnerEntityId } from "../_sessions/owner";
+import {
+  chatOwnerEntityId,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -460,7 +463,9 @@ export async function closeTurn(
     // watermark too (`chatReads.markRead` reads it with the chat).
     const chatId = ctx.db.normalizeId("sessionChats", chatParentId);
     const chat = chatId ? await ctx.db.get(chatId) : null;
-    const ownerId = chat?.taskId ?? sessionOwnerEntityId(session);
+    const ownerId = chat
+      ? chatOwnerEntityId(chat, session)
+      : sessionOwnerEntityId(session);
     if (ownerId && (await ctx.db.get(ownerId))) {
       await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
     }

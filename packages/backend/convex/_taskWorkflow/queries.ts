@@ -96,6 +96,8 @@ export const getTaskData = internalQuery({
     projectSandboxId: v.optional(v.string()),
     taskSandboxId: v.optional(v.string()),
     keepTaskSandboxActiveAfterRun: v.boolean(),
+    /** The session's start attempt the run read: fences its attach. */
+    ownedSandboxStartAttempt: v.optional(v.number()),
     deploymentProjectName: v.optional(v.string()),
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
@@ -310,6 +312,9 @@ export const getTaskData = internalQuery({
       projectSandboxId,
       taskSandboxId,
       keepTaskSandboxActiveAfterRun,
+      ownedSandboxStartAttempt: ownedSession
+        ? (ownedSession.sandboxStartAttempt ?? 0)
+        : undefined,
       deploymentProjectName: repo.deploymentProjectName,
       rootDirectory,
       devPort: repo.devPort,

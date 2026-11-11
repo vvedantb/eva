@@ -211,3 +211,40 @@ export async function findOwnedSession(
         .unique();
   }
 }
+
+/** The loaded task or project an owned session belongs to. */
+export type OwnerEntity =
+  | { kind: "task"; task: Doc<"agentTasks"> }
+  | { kind: "project"; project: Doc<"projects"> };
+
+/** A session and one of its chats. */
+export type OwnerChat = {
+  session: Doc<"sessions">;
+  chat: Doc<"sessionChats">;
+};
+
+/**
+ * Who one chat speaks for: a project task's own chat (`sessionChats.taskId`)
+ * for that task, any other chat for its session's owner. Attribution, unread,
+ * mentions, watches and the busy light all resolve through here.
+ */
+export function chatOwner(
+  chat: Pick<Doc<"sessionChats">, "taskId">,
+  session: OwnerFields,
+): SessionOwner {
+  return chat.taskId !== undefined
+    ? { kind: "task", taskId: chat.taskId }
+    : sessionOwner(session);
+}
+
+/** `chatOwner`'s task or project id; undefined for a standalone session. */
+export function chatOwnerEntityId(
+  chat: Pick<Doc<"sessionChats">, "taskId">,
+  session: OwnerFields,
+): Id<"agentTasks"> | Id<"projects"> | undefined {
+  const owner = chatOwner(chat, session);
+  if (owner.kind === "task") return owner.taskId;
+  if (owner.kind === "project") return owner.projectId;
+  return undefined;
+}
+

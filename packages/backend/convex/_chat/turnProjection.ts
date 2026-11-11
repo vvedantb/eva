@@ -8,10 +8,11 @@ import {
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
-  findOwnedSession,
+  chatOwnerEntityId,
+  findProjectSession,
+  findProjectTaskChat,
   findTaskSession,
   sessionOwnerEntityId,
-  sessionOwnerProjectId,
 } from "../_sessions/owner";
 
 /**
@@ -135,30 +136,32 @@ async function idsOfTurns(
       sessionIds.add(turn.sessionId);
     }
   }
-  const sessions = await Promise.all([...sessionIds].map((id) => db.get(id)));
-  const projectSessionIds = new Set<string>();
-  for (const session of sessions) {
-    const ownerId = session ? sessionOwnerEntityId(session) : undefined;
-    if (ownerId) ids.add(String(ownerId));
-    if (session && sessionOwnerProjectId(session)) {
-      projectSessionIds.add(String(session._id));
-    }
-  }
-  const projectTaskChats = await Promise.all(
-    turns
-      .filter(
-        (turn) =>
-          turn.sessionId !== undefined &&
-          projectSessionIds.has(String(turn.sessionId)),
-      )
-      .map((turn) => {
-        const chatId = db.normalizeId("sessionChats", turn.entityId);
-        return chatId ? db.get(chatId) : null;
-      }),
+  const sessions = new Map(
+    (await Promise.all([...sessionIds].map((id) => db.get(id))))
+      .filter((session) => session !== null)
+      .map((session) => [String(session._id), session]),
   );
-  for (const chat of projectTaskChats) {
-    if (chat?.taskId) ids.add(String(chat.taskId));
-  }
+  // Only an owned session's chats can speak for an owner (`chatOwner`).
+  const ownedTurns = turns.filter((turn) => {
+    const session = sessions.get(String(turn.sessionId));
+    return session !== undefined && sessionOwnerEntityId(session) !== undefined;
+  });
+  const chats = await Promise.all(
+    ownedTurns.map((turn) => {
+      const chatId = db.normalizeId("sessionChats", turn.entityId);
+      return chatId ? db.get(chatId) : null;
+    }),
+  );
+  ownedTurns.forEach((turn, index) => {
+    const session = sessions.get(String(turn.sessionId));
+    if (!session) return;
+    const chat = chats[index];
+    // A run's turn (no chat) lights up the session's owner.
+    const ownerId = chat
+      ? chatOwnerEntityId(chat, session)
+      : sessionOwnerEntityId(session);
+    if (ownerId) ids.add(String(ownerId));
+  });
   return ids;
 }
 
@@ -168,13 +171,19 @@ export async function hasOpenChatTurn(
   entityId: Doc<"turns">["entityId"],
 ): Promise<boolean> {
   // A quick task or a project chats (and runs) through its session: those
-  // turns count too.
+  // turns count too. A project task chats in its own chat of the project's
+  // session: that chat's turn counts.
   const taskId = db.normalizeId("agentTasks", entityId);
   const projectId = db.normalizeId("projects", entityId);
+  const task = taskId ? await db.get(taskId) : null;
+  if (task?.projectId !== undefined) {
+    const taskChat = await findProjectTaskChat(db, task._id);
+    if (taskChat && (await hasOpenChatTurn(db, taskChat._id))) return true;
+  }
   const ownedSession = taskId
     ? await findTaskSession(db, taskId)
     : projectId
-      ? await findOwnedSession(db, { kind: "project", projectId })
+      ? await findProjectSession(db, projectId)
       : null;
   const sessionId = ownedSession?._id ?? db.normalizeId("sessions", entityId);
   if (sessionId) {

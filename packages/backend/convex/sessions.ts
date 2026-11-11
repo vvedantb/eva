@@ -34,6 +34,7 @@ export {
   requestStopSandbox,
   stopSandboxAfterTaskRun,
   attachTaskRunSandbox,
+  stopUnattachedRunSandbox,
   runDevServer,
   runBackgroundCommands,
   patchSessionDevServer,

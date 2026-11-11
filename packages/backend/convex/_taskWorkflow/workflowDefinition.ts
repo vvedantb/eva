@@ -72,6 +72,7 @@ export const taskExecutionWorkflow = workflow.define({
     let runFinalized = false;
     let preserveSandboxOnFailure = false;
     let keepTaskSandboxActiveAfterRun = false;
+    let attachedToSession = false;
 
     // Outside the try: a run that is no longer queued (cancelled first) has
     // nothing to finalize, and its cancel path already released the task slot
@@ -174,10 +175,16 @@ export const taskExecutionWorkflow = workflow.define({
         // sandbox: its chat, preview and sweeps all read it there. Refused
         // while a start/stop owns the row; a quick task's tail then stops
         // this VM on its own.
-        await step.runMutation(internal.sessions.attachTaskRunSandbox, {
-          sessionId: args.ownedSessionId,
-          sandboxId,
-        });
+        attachedToSession = await step.runMutation(
+          internal.sessions.attachTaskRunSandbox,
+          {
+            sessionId: args.ownedSessionId,
+            sandboxId,
+            ...(data.ownedSandboxStartAttempt !== undefined
+              ? { startAttempt: data.ownedSandboxStartAttempt }
+              : {}),
+          },
+        );
       } else if (args.projectId) {
         // Runs started before projects had sessions.
         await step.runMutation(internal.taskWorkflow.updateProjectSandbox, {
@@ -434,9 +441,22 @@ export const taskExecutionWorkflow = workflow.define({
       // Stop (don't delete) quick-task sandboxes that were not already open in
       // the reviewer UI. If a change-request reused an active preview sandbox,
       // keep it active so "View Sandbox" continues pointing at a live sandbox.
-      // A project task's VM stays up, as the project sandbox always did: the
-      // build's next task and the project chat resume it.
+      // A project task's VM stays up when the session holds it, as the
+      // project sandbox always did: the build's next task and the project
+      // chat resume it. One the session refused is the run's alone and stops.
       if (
+        args.projectId &&
+        args.ownedSessionId &&
+        sandboxId &&
+        !attachedToSession
+      ) {
+        try {
+          await step.runMutation(
+            internal.sessions.stopUnattachedRunSandbox,
+            { sessionId: args.ownedSessionId, sandboxId },
+          );
+        } catch {}
+      } else if (
         !args.projectId &&
         args.ownedSessionId &&
         sandboxId &&

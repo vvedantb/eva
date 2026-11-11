@@ -191,11 +191,17 @@ export async function scheduleProjectBuild(
   projectId: Id<"projects">,
   type: "schedule" | "scheduleRetry",
   at: number,
+  /** A busy-session retry carries when the build was first due (`executeScheduledBuild`). */
+  firstScheduledAt?: number,
 ): Promise<ProjectBuildTransition> {
   const jobId = await ctx.scheduler.runAt(
     at,
     internal.buildWorkflow.executeScheduledBuild,
-    { projectId, scheduledAt: at },
+    {
+      projectId,
+      scheduledAt: at,
+      ...(firstScheduledAt !== undefined ? { firstScheduledAt } : {}),
+    },
   );
   const result = await applyProjectBuildEvent(ctx, projectId, {
     type,

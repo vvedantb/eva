@@ -5,6 +5,10 @@
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
+  isProjectPreviewPhase,
+  PROJECT_PREVIEW_PHASES,
+} from "./projectPreview";
+export {
   CONVEX_ID_PATTERN,
   MENTION_HREF_REGEX,
   MENTION_TOKEN_REGEX,

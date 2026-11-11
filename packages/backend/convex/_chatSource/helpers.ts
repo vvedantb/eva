@@ -4,7 +4,11 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 import { isEntityDeleted } from "../numId";
-import { sessionOwner, sessionOwnerEntityId } from "../_sessions/owner";
+import {
+  chatOwnerEntityId,
+  sessionOwner,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 import {
   chatEntityKindValidator,
   chatRefValidator,
@@ -55,11 +59,13 @@ export async function chatSourceFieldsForEntityId(
   const sessionChatId = db.normalizeId("sessionChats", entityId);
   if (sessionChatId) {
     const chat = await db.get(sessionChatId);
-    if (!chat) return null;
-    // A project task's own chat files under that task.
+    const session = chat ? await db.get(chat.sessionId) : null;
+    if (!chat || !session) return null;
+    // An owned session's chat files under its owner (`chatOwner`; a project
+    // task's own chat under that task).
     return chatSourceFieldsForEntityId(
       db,
-      String(chat.taskId ?? chat.sessionId),
+      String(chatOwnerEntityId(chat, session) ?? session._id),
     );
   }
   const sessionId = db.normalizeId("sessions", entityId);

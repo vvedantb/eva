@@ -130,8 +130,9 @@ export const projectInterviewWorkflow = workflow.define({
     );
     const fullPrompt = `${PROJECT_INTERVIEW_SYSTEM_PROMPT} ${questionPrompt}`;
 
+    let sandboxId: string | undefined;
     try {
-      const sandboxId = await prepareInterviewSandbox(
+      sandboxId = await prepareInterviewSandbox(
         step,
         projectData,
         args.installationId,
@@ -193,17 +194,21 @@ export const projectInterviewWorkflow = workflow.define({
         activityLog: message,
       });
       throw error;
+    } finally {
+      await releaseInterviewSandbox(step, projectData, sandboxId);
     }
   },
 });
 
 // --- Supporting internal functions ---
 
-/** Fetches project and repository data needed for sandbox preparation. */
+/** What `ensureInterviewSession` returns. */
 const interviewSessionValidator = v.object({
   sessionId: v.id("sessions"),
   /** The session's VM, when no start or stop owns it right now. */
   sandboxId: v.optional(v.string()),
+  /** The session's start attempt read here: fences the attach. */
+  startAttempt: v.number(),
   repoOwner: v.string(),
   repoName: v.string(),
   repoId: v.id("githubRepos"),
@@ -232,6 +237,7 @@ export const ensureInterviewSession = internalMutation({
     return {
       sessionId: session._id,
       sandboxId: settled ? session.sandboxId : undefined,
+      startAttempt: session.sandboxStartAttempt ?? 0,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoId: project.repoId,
@@ -270,8 +276,26 @@ async function prepareInterviewSandbox(
   await step.runMutation(internal.sessions.attachTaskRunSandbox, {
     sessionId: target.sessionId,
     sandboxId,
+    startAttempt: target.startAttempt,
   });
   return sandboxId;
+}
+
+/**
+ * The agent is done: a VM the session refused (`attachTaskRunSandbox`, e.g.
+ * a start or rotation won the race) is the workflow's alone and stops; the
+ * session's own stays for the chat and builds.
+ */
+async function releaseInterviewSandbox(
+  step: WorkflowCtx,
+  target: Infer<typeof interviewSessionValidator>,
+  sandboxId: string | undefined,
+): Promise<void> {
+  if (sandboxId === undefined) return;
+  await step.runMutation(internal.sessions.stopUnattachedRunSandbox, {
+    sessionId: target.sessionId,
+    sandboxId,
+  });
 }
 
 /** Appends an empty assistant entry to the project conversation for streaming updates. */
@@ -561,6 +585,7 @@ Based on the interview conversation above, generate an implementation spec with 
 
 Output ONLY valid JSON.`;
 
+    let sandboxId: string | undefined;
     try {
       const sandboxId = await prepareInterviewSandbox(
         step,
@@ -606,6 +631,8 @@ Output ONLY valid JSON.`;
         activityLog: message,
       });
       throw error;
+    } finally {
+      await releaseInterviewSandbox(step, projectData, sandboxId);
     }
   },
 });

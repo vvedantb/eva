@@ -1,7 +1,13 @@
 import { v } from "convex/values";
 import { startTaskRun } from "./_taskWorkflow/startRun";
 import { finishTaskRun, taskRunWorkflowId } from "./_agentTasks/runState";
-import { internalMutation, internalQuery } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { closeOpenTurn } from "./_chat/turnStore";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import {
@@ -24,7 +30,9 @@ import {
   scheduleProjectBuild,
 } from "./_projects/buildState";
 import {
+  ensureOwnedSession,
   ownedSessionBusy,
+  syncProjectSession,
   projectSessionOwner,
 } from "./_sessions/ownedSession";
 
@@ -34,6 +42,21 @@ const PROJECT_CHAT_BUSY_ERROR =
 
 /** How long a scheduled build waits for a busy project chat before trying again. */
 const CHAT_BUSY_RETRY_MS = 60_000;
+/** How long a scheduled build keeps waiting for a busy session before it gives up. */
+const CHAT_BUSY_GIVE_UP_MS = 30 * 60_000;
+
+/**
+ * Creates the project's session (or reads it) before the build holds it, so
+ * a project from before sessions hands its own VM over now: once the build
+ * runs, the adoption waits for it (`ownerBusyReason`) and every task would
+ * boot a second VM.
+ */
+async function claimProjectSessionForBuild(
+  ctx: MutationCtx,
+  project: Doc<"projects">,
+): Promise<void> {
+  await ensureOwnedSession(ctx, { kind: "project", project });
+}
 
 // --- Workflow ---
 
@@ -230,6 +253,7 @@ export const startBuild = authMutation({
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
 
+    await claimProjectSessionForBuild(ctx, project);
     const workflowId = await workflow.start(
       ctx,
       internal.buildWorkflow.buildProjectWorkflow,
@@ -258,6 +282,8 @@ export const executeScheduledBuild = internalMutation({
   args: {
     projectId: v.id("projects"),
     scheduledAt: v.optional(v.number()),
+    /** Set on a busy-session retry: when the build was first due. */
+    firstScheduledAt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -272,14 +298,26 @@ export const executeScheduledBuild = internalMutation({
       args.scheduledAt,
     );
     if (!fired.ok || fired.next !== undefined) return null;
-    // The project chat is mid-reply on the shared sandbox: try again shortly
-    // instead of dropping the schedule (`startBuild` refuses a busy chat).
+    // The project's session is busy (chat reply, run, interview, start or
+    // stop): try again shortly instead of dropping the schedule (`startBuild`
+    // refuses a busy session). After `CHAT_BUSY_GIVE_UP_MS` the schedule gives up and
+    // says why on the project.
     if (await ownedSessionBusy(ctx.db, projectSessionOwner(project._id))) {
+      const now = Date.now();
+      const firstDue = args.firstScheduledAt ?? args.scheduledAt ?? now;
+      if (now - firstDue >= CHAT_BUSY_GIVE_UP_MS) {
+        await ctx.db.patch(args.projectId, {
+          lastBuildError:
+            `Scheduled build skipped: the project's sandbox stayed busy for ${CHAT_BUSY_GIVE_UP_MS / 60_000} minutes.`,
+        });
+        return null;
+      }
       await scheduleProjectBuild(
         ctx,
         args.projectId,
         "scheduleRetry",
-        Date.now() + CHAT_BUSY_RETRY_MS,
+        now + CHAT_BUSY_RETRY_MS,
+        firstDue,
       );
       return null;
     }
@@ -287,6 +325,7 @@ export const executeScheduledBuild = internalMutation({
     const repo = await ctx.db.get(project.repoId);
     if (!repo) return null;
 
+    await claimProjectSessionForBuild(ctx, project);
     const workflowId = await workflow.start(
       ctx,
       internal.buildWorkflow.buildProjectWorkflow,
@@ -345,6 +384,50 @@ export const cancelScheduledBuild = authMutation({
   },
 });
 
+/**
+ * Stops a running build: its workflow, every in-progress task's run (back to
+ * todo), then the build state, with `reason` as the build error.
+ */
+async function cancelRunningBuild(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  buildWorkflowId: string,
+  reason: string,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, buildWorkflowId);
+
+  const tasks = await ctx.db
+    .query("agentTasks")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  for (const task of tasks) {
+    if (task.status !== "in_progress") continue;
+
+    await cancelTrackedWorkflow(ctx, taskRunWorkflowId(task));
+
+    const run = await getActiveTaskRun(ctx.db, task._id);
+
+    if (run) {
+      await ctx.db.patch(run._id, {
+        status: "error",
+        error: reason,
+        finishedAt: Date.now(),
+      });
+    }
+
+    await ctx.db.patch(task._id, {
+      status: "todo",
+      updatedAt: Date.now(),
+    });
+    await finishTaskRun(ctx, task._id, undefined);
+  }
+
+  await finishProjectBuild(ctx, projectId, buildWorkflowId);
+  await ctx.db.patch(projectId, { lastBuildError: reason });
+  await recomputeProjectPhase(ctx, projectId);
+}
+
 /** Cancels an active build, stopping all in-progress tasks and their workflows. */
 export const cancelBuild = authMutation({
   args: { projectId: v.id("projects") },
@@ -359,41 +442,45 @@ export const cancelBuild = authMutation({
       throw new Error("No active build to cancel");
     }
 
-    await cancelTrackedWorkflow(ctx, buildWorkflowId);
+    await cancelRunningBuild(
+      ctx,
+      args.projectId,
+      buildWorkflowId,
+      "Build cancelled by user",
+    );
+    return null;
+  },
+});
 
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
-    for (const task of tasks) {
-      if (task.status !== "in_progress") continue;
-
-      await cancelTrackedWorkflow(ctx, taskRunWorkflowId(task));
-
-      const run = await getActiveTaskRun(ctx.db, task._id);
-
-      if (run) {
-        await ctx.db.patch(run._id, {
-          status: "error",
-          error: "Cancelled by user",
-          finishedAt: Date.now(),
-        });
-      }
-
-      await ctx.db.patch(task._id, {
-        status: "todo",
-        updatedAt: Date.now(),
-      });
-      await finishTaskRun(ctx, task._id, undefined);
+/**
+ * The project left the board (completed, cancelled, deleted) while its own
+ * work still holds the session (`projectHoldsSession`): stop the build and
+ * the interview / spec workflow first, then retire the session
+ * (`syncProjectSession`), so nothing keeps running on a VM being stopped.
+ */
+export const releaseProjectSessionForRetire = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) return null;
+    const buildWorkflowId = projectBuildWorkflowId(project);
+    if (buildWorkflowId !== undefined) {
+      await cancelRunningBuild(
+        ctx,
+        args.projectId,
+        buildWorkflowId,
+        "Build stopped: the project was closed",
+      );
     }
-
-    await finishProjectBuild(ctx, args.projectId, buildWorkflowId);
-    await ctx.db.patch(args.projectId, {
-      lastBuildError: "Build cancelled by user",
-    });
-    await recomputeProjectPhase(ctx, args.projectId);
-
+    if (project.activeWorkflowId !== undefined) {
+      await cancelTrackedWorkflow(ctx, project.activeWorkflowId);
+      await closeOpenTurn(ctx, args.projectId, "cancelled", {
+        lane: "interview",
+      });
+      await ctx.db.patch(args.projectId, { activeWorkflowId: undefined });
+    }
+    await syncProjectSession(ctx, args.projectId);
     return null;
   },
 });

@@ -179,6 +179,38 @@ describe("projects on sessions", () => {
   );
 
   test(
+    "a branch rotation waits while the project chat is replying",
+    async () => {
+      const f = await fixture();
+      const { sessionId, chatId } = await ensureProjectSession(f);
+      await f.t.run(async (ctx) => {
+        await ctx.db.patch(sessionId, { sandboxId: "sbx-busy", status: "active" });
+        await openTurn(ctx, {
+          entityId: chatId,
+          sessionId,
+          streamingEntityId: String(chatId),
+          model: DEFAULT_AI_MODEL,
+          repoId: f.repoId,
+        });
+        const project = await ctx.db.get(f.projectId);
+        if (!project) throw new Error("project missing");
+        await rotateProjectBranch(ctx, project);
+      });
+      const [project, session] = await f.t.run(async (ctx) => [
+        await ctx.db.get(f.projectId),
+        await ctx.db.get(sessionId),
+      ]);
+      // The project moves on; the busy session keeps its VM and branch.
+      expect(project?.branchVersion).toBe(2);
+      expect(session).toMatchObject({
+        sandboxId: "sbx-busy",
+        branchName: buildProjectBranchName(f.projectId),
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a completed project retires its session and a reopened one revives it",
     async () => {
       const f = await fixture();

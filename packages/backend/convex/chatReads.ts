@@ -3,7 +3,7 @@ import type { DatabaseReader, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
-import { sessionOwnerEntityId } from "./_sessions/owner";
+import { chatOwnerEntityId } from "./_sessions/owner";
 
 type ChatEntityId =
   | Id<"sessionChats">
@@ -217,7 +217,7 @@ export const markRead = authMutation({
     // A task's or project's session shows its unread dot on the owner's card;
     // a project task's own chat on that task's.
     const ownerId =
-      chat?.taskId ?? (session ? sessionOwnerEntityId(session) : undefined);
+      chat && session ? chatOwnerEntityId(chat, session) : undefined;
     const taskId = ownerId ? ctx.db.normalizeId("agentTasks", ownerId) : null;
     const projectId = ownerId ? ctx.db.normalizeId("projects", ownerId) : null;
     const owner = taskId

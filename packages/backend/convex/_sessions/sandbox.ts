@@ -465,12 +465,20 @@ export const requestStopSandbox = internalMutation({
 
 /**
  * Records the VM a task's run (or a project's interview) prepared as its
- * session's sandbox. Only
- * while no start or stop owns the row: those write the sandbox id themselves,
- * and a run racing them must not re-point it. Returns whether it attached.
+ * session's sandbox. Refused (returns false) while a start or stop owns the
+ * row (those write the sandbox id themselves), while the session runs a
+ * different live VM (the reviewer's open sandbox stays), and when
+ * `startAttempt` (the attempt the run read the session at) is stale: a
+ * branch rotation or a newer start replaced the checkout since. A refused
+ * VM stays the caller's, which stops it (`stopUnattachedRunSandbox`).
  */
 export const attachTaskRunSandbox = internalMutation({
-  args: { sessionId: v.id("sessions"), sandboxId: v.string() },
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    /** Optional only so runs journaled before it replay. */
+    startAttempt: v.optional(v.number()),
+  },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -478,11 +486,39 @@ export const attachTaskRunSandbox = internalMutation({
       return false;
     }
     if (session.sandboxId === args.sandboxId) return true;
+    if (
+      args.startAttempt !== undefined &&
+      args.startAttempt !== (session.sandboxStartAttempt ?? 0)
+    ) {
+      return false;
+    }
+    if (session.status === "active" && session.sandboxId !== undefined) {
+      return false;
+    }
     await ctx.db.patch(args.sessionId, {
       sandboxId: args.sandboxId,
       updatedAt: Date.now(),
     });
     return true;
+  },
+});
+
+/**
+ * A project run or interview is done with `sandboxId`. The session keeps a
+ * VM it holds (the build's next task and the chat resume it); one it never
+ * took (`attachTaskRunSandbox` refused it) is the caller's alone and stops.
+ */
+export const stopUnattachedRunSandbox = internalMutation({
+  args: { sessionId: v.id("sessions"), sandboxId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.sandboxId === args.sandboxId) return null;
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+      sandboxId: args.sandboxId,
+      repoId: session.repoId,
+    });
+    return null;
   },
 });
 

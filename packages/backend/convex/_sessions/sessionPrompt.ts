@@ -12,7 +12,7 @@ import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "../_pullRequests/store";
-import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import { chatOwner } from "./owner";
 import { getProjectGeneratedSpec } from "../_projects/helpers";
 
 // --- Turn config ---
@@ -87,7 +87,8 @@ async function ownerPromptContext(
   chat: Doc<"sessionChats">,
   message: string,
 ): Promise<{ message: string; planContent?: string; prUrl?: string }> {
-  const taskId = chat.taskId ?? sessionOwnerTaskId(session);
+  const owner = chatOwner(chat, session);
+  const taskId = owner.kind === "task" ? owner.taskId : undefined;
   const task = taskId ? await ctx.db.get(taskId) : null;
   if (task) {
     return {
@@ -96,7 +97,7 @@ async function ownerPromptContext(
       prUrl: await taskPrUrl(ctx.db, task),
     };
   }
-  const projectId = sessionOwnerProjectId(session);
+  const projectId = owner.kind === "project" ? owner.projectId : undefined;
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (project) {
     return {

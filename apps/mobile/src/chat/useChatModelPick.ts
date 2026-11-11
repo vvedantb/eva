@@ -29,17 +29,16 @@ function mergeTraits(
 }
 
 /**
- * The chat composer's model chip, wired as the web chat it opens: a session
- * or project chat picks through `mobile.setChatModel` (the web
- * `sessionChats` writes; a project with no session yet creates its chat
- * there), and so does a quick task on its session (its Main chat keeps the
- * model). A quick task with no session yet
- * picks through the task chat's own `agentTasks.update` and
- * `agentTasks.setTraits`. The account rows list what
- * the web picker lists (the session's or task's owner's accounts, the
- * viewer's own for a project) and only for whoever the web lets change it; a
- * switch saves the account, then waits for the new daemon (the web
- * `useProviderAccountHandoff`), and `switching` holds sends until then.
+ * The chat composer's model chip, wired as the web chat it opens. Every chat
+ * (a session chat, a quick task's or project's Main chat, a project task's
+ * own chat) picks its model and traits through `mobile.setChatModel`, which
+ * creates a task's or project's session chat on first need. An account
+ * switch saves on that session chat (created through `sessions.ensureOwned`
+ * when missing), then waits for the new daemon (the web
+ * `useProviderAccountHandoff`), and `switching` holds sends until then. The
+ * account rows list what the web picker lists (the session's or task's
+ * owner's accounts, the viewer's own for a project) and only for whoever the
+ * web lets change it.
  */
 export function useChatModelPick(target: string, chat: Chat | null | undefined, me: Id<"users"> | undefined) {
   const [switching, setSwitching] = useState(false);
@@ -49,67 +48,45 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   const setChatModel = useMutation(api.mobile.setChatModel).withOptimisticUpdate((store, pick) =>
     patchChat(store, target, (current) => ({ model: pick.model ?? current.model, traits: mergeTraits(current.traits, pick) })),
   );
-  const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate((store, args) =>
-    patchChat(store, target, (current) => ({
-      model: args.model ?? current.model,
-      providerAccountId: args.providerAccountId === undefined ? current.providerAccountId : (args.providerAccountId ?? undefined),
-    })),
-  );
-  const setTaskTraits = useMutation(api.agentTasks.setTraits).withOptimisticUpdate((store, args) =>
-    patchChat(store, target, (current) => ({ traits: mergeTraits(current.traits, args) })),
-  );
   const setSessionAccount = useMutation(api.sessionChats.setProviderAccountId).withOptimisticUpdate((store, args) =>
     patchChat(store, target, () => ({ providerAccountId: args.providerAccountId ?? undefined })),
   );
-  const updateProject = useMutation(api.projects.update).withOptimisticUpdate((store, args) =>
-    patchChat(store, target, (current) => ({
-      providerAccountId: args.providerAccountId === undefined ? current.providerAccountId : (args.providerAccountId ?? undefined),
-    })),
-  );
+  const ensureOwned = useMutation(api.sessions.ensureOwned);
   const prewarmSession = useAction(api.sessionWorkflow.prewarmDaemonNow);
-  const prewarmTask = useAction(api.agentTaskChatWorkflow.prewarmChatDaemonNow);
-  const prewarmProject = useAction(api.projectChatWorkflow.prewarmChatDaemonNow);
 
   if (!chat) return { pick: undefined, switching };
-  const { session, project } = chat;
-  // A quick task or a project on its session chats in a session chat: picks go
-  // through the session chat writes. Only a task with no session yet keeps
-  // the task chat's own `agentTasks` writes.
-  const sessionChatId = session?.chatId ?? chat.task?.sessionChatId ?? project?.sessionChatId;
-  const task = chat.task?.sessionChatId === undefined ? chat.task : undefined;
-  // A task chat from a backend without `task` cannot reach the task mutations.
-  if (chat.kind === "task" && !chat.task) return { pick: undefined, switching };
+  const { session, task, project } = chat;
+  const sessionChatId = session?.chatId ?? task?.sessionChatId ?? project?.sessionChatId;
+  // The chat to save an account on, created for a task or project on first need.
+  const resolveChatId = async (): Promise<Id<"sessionChats"> | undefined> => {
+    if (sessionChatId) return sessionChatId;
+    if (task) return (await ensureOwned({ owner: { kind: "task", taskId: task.id } })).chatId;
+    if (project) return (await ensureOwned({ owner: { kind: "project", projectId: project.id } })).chatId;
+    return undefined;
+  };
 
   const failed = () => toast.error("Couldn't change the model");
   const pickTraits = (partial: StoredModelTraits) => {
-    const traits = {
+    setChatModel({
+      target,
       reasoningLevel: partial.effortLevel,
       thinkingEnabled: partial.thinkingEnabled,
       use1mContext: partial.use1mContext,
       fastMode: partial.fastMode,
-    };
-    (task ? setTaskTraits({ id: task.id, ...traits }) : setChatModel({ target, ...traits })).catch(failed);
+    }).catch(failed);
   };
 
-  const switchAccount = (persist: () => Promise<unknown>, prewarm: () => Promise<unknown>) => {
+  const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
     setSwitching(true);
     // Chained, not try / finally, which React Compiler cannot compile.
-    persist()
-      .then(prewarm)
+    resolveChatId()
+      .then(async (chatId) => {
+        if (!chatId) return;
+        await setSessionAccount({ chatId, providerAccountId });
+        await prewarmSession({ chatId });
+      })
       .catch(() => toast.error("Couldn't switch the account"))
       .then(() => setSwitching(false));
-  };
-  const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
-    if (sessionChatId) {
-      switchAccount(
-        () => setSessionAccount({ chatId: sessionChatId, providerAccountId }),
-        () => prewarmSession({ chatId: sessionChatId }),
-      );
-    } else if (task) {
-      switchAccount(() => updateTask({ id: task.id, providerAccountId }), () => prewarmTask({ taskId: task.id }));
-    } else if (project) {
-      switchAccount(() => updateProject({ id: project.id, providerAccountId }), () => prewarmProject({ projectId: project.id }));
-    }
   };
   const accounts = sessionAccounts ?? taskAccounts ?? ownAccounts;
   // The web lets only a task's or project's owner change its account.
@@ -119,7 +96,7 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
     model: normalizeAIModel(chat.model),
     traits: chat.traits,
     onModelChange: (model) => {
-      (task ? updateTask({ id: task.id, model }) : setChatModel({ target, model })).catch(failed);
+      setChatModel({ target, model }).catch(failed);
     },
     onTraitsChange: pickTraits,
     account:

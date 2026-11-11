@@ -7,14 +7,8 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useOwnedSession } from "@/lib/components/sandbox/useOwnedSession";
-import { sandboxStartupEntityId } from "@eva/shared";
+import { isProjectPreviewPhase, sandboxStartupEntityId } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
-
-const PREVIEW_SANDBOX_ALLOWED_PHASES = [
-  "in_progress",
-  "business_review",
-  "code_review",
-];
 
 /**
  * A project's sandbox: its session's (`useOwnedSession`), which the project
@@ -37,8 +31,7 @@ export function useProjectSandbox(
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
     useState(false);
 
-  const canStartSandbox =
-    phase !== undefined && PREVIEW_SANDBOX_ALLOWED_PHASES.includes(phase);
+  const canStartSandbox = isProjectPreviewPhase(phase);
   const isSandboxActive = sandbox.status === "active";
   const isSandboxStartingFromStatus = sandbox.status === "starting";
 

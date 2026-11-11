@@ -5,7 +5,6 @@ import {
   internalMutation,
   type DatabaseReader,
   type MutationCtx,
-  type QueryCtx,
 } from "../_generated/server";
 import { allocateNumId } from "../numId";
 import { getAIModelProvider } from "../validators";
@@ -18,7 +17,6 @@ import { composerTraitFields } from "../_shared/composerTraits";
 import {
   createSessionChat,
   ensureMainChat,
-  findMainChat,
   type ChatSettingsSource,
 } from "../_sessionChats/helpers";
 import { resolveSessionBaseBranch } from "./baseBranch";
@@ -36,11 +34,17 @@ import {
   taskUsesOwnedSession,
   taskWorkSessionOwner,
   type OwnedSessionOwner,
+  type OwnerChat,
+  type OwnerEntity,
 } from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
+import {
+  findOwnerChat,
+  ownerHoldsSession,
+  projectHoldsSession,
+} from "./ownerState";
 import { isTaskRunning } from "../_agentTasks/runState";
 import { isProjectBuilding } from "../_projects/buildState";
-import { findOpenTurn } from "../_chat/turnStore";
 import {
   hasOpenChatTurn,
   isLegacyChatExecuting,
@@ -66,13 +70,11 @@ export type OwnedSessionContext = {
   mainChat: Doc<"sessionChats">;
 };
 
-/** The loaded task or project an owned session belongs to. */
-export type OwnerEntity =
-  | { kind: "task"; task: Doc<"agentTasks"> }
-  | { kind: "project"; project: Doc<"projects"> };
-
-// The lookups live in the leaf `owner.ts` so low-level modules can use them.
+// The lookups live in the leaf `owner.ts` (and `ownerState.ts`) so
+// low-level modules can use them.
+export type { OwnerChat, OwnerEntity };
 export {
+  findOwnerChat,
   findProjectSession,
   findProjectTaskChat,
   findQuickTaskSession,
@@ -168,11 +170,6 @@ export async function ensureTaskChat(
 }
 
 /** A session and one of its chats. */
-export type OwnerChat = {
-  session: Doc<"sessions">;
-  chat: Doc<"sessionChats">;
-};
-
 /**
  * The chat an owner talks in, created on first need: a task's
  * (`ensureTaskChat`) or a project's Main chat.
@@ -184,23 +181,6 @@ export async function ensureOwnerChat(
   if (entity.kind === "task") return await ensureTaskChat(ctx, entity.task);
   const { session, mainChat } = await ensureOwnedSession(ctx, entity);
   return { session, chat: mainChat };
-}
-
-/** `ensureOwnerChat` without the writes: null until something needed it. */
-export async function findOwnerChat(
-  db: DatabaseReader,
-  entity: OwnerEntity,
-): Promise<OwnerChat | null> {
-  const session =
-    entity.kind === "task"
-      ? await findTaskWorkSession(db, entity.task)
-      : await findProjectSession(db, entity.project._id);
-  if (!session) return null;
-  const chat =
-    entity.kind === "task" && entity.task.projectId !== undefined
-      ? await findProjectTaskChat(db, entity.task._id)
-      : await findMainChat(db, session._id);
-  return chat ? { session, chat } : null;
 }
 
 /**
@@ -365,41 +345,62 @@ export async function adoptChatDrafts(
 }
 
 /**
- * Whether the owner's own sandbox can change hands now: nothing on the old
- * owner path is starting, stopping or running on it. A project also waits
- * for a build, a task run, or an interview started before projects had
- * sessions: those still write `projects.sandboxId`.
+ * Why an owner's old chat and sandbox cannot change hands now, or null when
+ * they can. The one busy rule for sandbox adoption (`adoptLegacySandbox`)
+ * and the migration: a run, build, task run or interview in flight (they
+ * still write the owner's own `sandboxId` when started before sessions), a
+ * chat turn open or pending (old path or session), the old sandbox or the
+ * session's starting/stopping, or a message still queued on the owner.
  */
-async function legacySandboxSettled(
-  ctx: QueryCtx,
+export async function ownerBusyReason(
+  db: DatabaseReader,
   entity: OwnerEntity,
-): Promise<boolean> {
+): Promise<string | null> {
   const doc = entity.kind === "task" ? entity.task : entity.project;
-  const status =
-    entity.kind === "task"
-      ? entity.task.reviewTaskSandboxStatus
-      : entity.project.reviewProjectSandboxStatus;
-  if (
-    status === "starting" ||
-    status === "stopping" ||
-    isLegacyChatExecuting(doc) ||
-    doc.pendingTurn !== undefined
-  ) {
-    return false;
+  if (entity.kind === "task" && isTaskRunning(entity.task)) {
+    return "run in flight";
   }
-  if (entity.kind === "task" && isTaskRunning(entity.task)) return false;
   if (entity.kind === "project") {
     const { project } = entity;
-    if (isProjectBuilding(project) || project.activeWorkflowId !== undefined) {
-      return false;
-    }
-    const tasks = await ctx.db
+    if (isProjectBuilding(project)) return "build in flight";
+    if (project.activeWorkflowId !== undefined) return "interview in flight";
+    const tasks = await db
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", project._id))
       .collect();
-    if (tasks.some(isTaskRunning)) return false;
+    if (tasks.some(isTaskRunning)) return "task run in flight";
   }
-  return (await findOpenTurn(ctx, doc._id)) === null;
+  if (
+    doc.pendingTurn !== undefined ||
+    doc.syntheticTurnMessageId !== undefined ||
+    isLegacyChatExecuting(doc) ||
+    (await hasOpenChatTurn(db, doc._id))
+  ) {
+    return "chat turn open";
+  }
+  const legacyStatus =
+    entity.kind === "task"
+      ? entity.task.reviewTaskSandboxStatus
+      : entity.project.reviewProjectSandboxStatus;
+  if (legacyStatus === "starting" || legacyStatus === "stopping") {
+    return `sandbox ${legacyStatus}`;
+  }
+  // `hasOpenChatTurn` above already covers the session's turns.
+  const session = await findOwnedSession(
+    db,
+    entity.kind === "task"
+      ? taskWorkSessionOwner(entity.task)
+      : projectSessionOwner(entity.project._id),
+  );
+  if (session?.status === "starting" || session?.status === "stopping") {
+    return `session sandbox ${session.status}`;
+  }
+  const queued = await db
+    .query("queuedMessages")
+    .withIndex("by_parent_and_order", (q) => q.eq("parentId", doc._id))
+    .first();
+  if (queued) return "queued message";
+  return null;
 }
 
 /** Fields the old task and project sandbox paths keep on the owner row. */
@@ -439,7 +440,7 @@ export async function adoptLegacySandbox(
   if (session.sandboxId !== undefined && session.sandboxId !== doc.sandboxId) {
     return "conflict";
   }
-  if (!(await legacySandboxSettled(ctx, entity))) return "busy";
+  if ((await ownerBusyReason(ctx.db, entity)) !== null) return "busy";
   const status =
     entity.kind === "task"
       ? entity.task.reviewTaskSandboxStatus
@@ -475,9 +476,10 @@ export async function adoptLegacySandbox(
 
 /**
  * True while an owned session holds its sandbox for something else: a turn
- * open (a chat reply or a run) or a start/stop in flight. A new run or build
- * waits (user starts are refused, scheduled ones retry): the same
- * one-agent-per-sandbox rule the chat queue applies to runs.
+ * open (a chat reply or a run), a start/stop in flight, or a project's build
+ * or interview (`ownerHoldsSession`). A new run or build waits (user starts
+ * are refused, scheduled ones retry): the same one-agent-per-sandbox rule
+ * the chat queue applies to runs and builds.
  */
 export async function ownedSessionBusy(
   db: DatabaseReader,
@@ -488,14 +490,15 @@ export async function ownedSessionBusy(
   if (session.status === "starting" || session.status === "stopping") {
     return true;
   }
+  if (await ownerHoldsSession(db, session)) return true;
   return await hasOpenChatTurn(db, session._id);
 }
 
 /**
  * Keeps the session's copies of owner fields in step after an owner edit:
- * the title (the session borrows it), the base branch a fresh sandbox checks
- * out from and, for a project, its branch. The owner row stays the source;
- * nothing else writes these (`rotateProjectBranch` calls this too).
+ * the title (the session borrows it) and the base branch a fresh sandbox
+ * checks out from. The owner row stays the source. A project's branch has
+ * its own writer (`syncProjectSessionBranch`): changing it drops the VM.
  */
 export async function mirrorOwnerIntoSession(
   ctx: MutationCtx,
@@ -510,27 +513,20 @@ export async function mirrorOwnerIntoSession(
     { baseBranch: seed.baseBranch },
     repo,
   );
-  if (
-    session.title === seed.title &&
-    session.baseBranch === baseBranch &&
-    session.branchName === seed.branchName
-  ) {
+  if (session.title === seed.title && session.baseBranch === baseBranch) {
     return;
   }
-  await ctx.db.patch(session._id, {
-    title: seed.title,
-    baseBranch,
-    branchName: seed.branchName,
-  });
+  await ctx.db.patch(session._id, { title: seed.title, baseBranch });
 }
 
+/** How long a branch move waits for the project's session to go idle. */
+const BRANCH_SYNC_RETRY_MS = 60_000;
+
 /**
- * The one writer of a project's branch rotation: its PR merged, so the next
- * cycle works on a fresh branch version. Bumps `branchVersion` and the
- * branch on the project, points the session at the new branch, and drops the
- * session's sandbox (checked out on the merged branch): the VM is deleted, a
- * start in flight is fenced off by the bumped start attempt, and the next
- * start boots a fresh checkout. All in this one mutation.
+ * A project's PR merged, so the next cycle works on a fresh branch version:
+ * bumps `branchVersion` and the branch on the project, drops a not yet
+ * migrated project VM (on the merged branch), then moves the session
+ * (`syncProjectSessionBranch`).
  */
 export async function rotateProjectBranch(
   ctx: MutationCtx,
@@ -541,26 +537,47 @@ export async function rotateProjectBranch(
     branchVersion: nextVersion,
     branchName: buildProjectBranchName(project._id, nextVersion),
   });
-  const rotated = await ctx.db.get(project._id);
-  if (!rotated) return;
-  const session = await findOwnedSession(
-    ctx.db,
-    projectSessionOwner(project._id),
-  );
-  // Not migrated yet: the old project sandbox is on the merged branch too.
-  const legacySandboxId = rotated.sandboxId;
-  if (legacySandboxId !== undefined) {
+  if (project.sandboxId !== undefined) {
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: legacySandboxId,
-      repoId: rotated.repoId,
+      sandboxId: project.sandboxId,
+      repoId: project.repoId,
     });
-    await ctx.db.patch(rotated._id, {
+    await ctx.db.patch(project._id, {
       sandboxId: undefined,
       lastSandboxActivity: undefined,
     });
   }
-  if (!session) return;
-  await mirrorOwnerIntoSession(ctx, { kind: "project", project: rotated });
+  await syncProjectSessionBranch(ctx, project._id);
+}
+
+/**
+ * The one writer of a project session's branch after insert (a merged PR's
+ * rotation, a branch edit). The session's VM is checked out on the old
+ * branch, so it is deleted, a start in flight is fenced off by the bumped
+ * start attempt (and so is a run's or interview's attach), and the next
+ * start boots a fresh checkout — all in one write. While the session is busy
+ * (a turn, a run, a build, an interview, a start or stop) the move waits and
+ * retries, so nothing running loses its VM.
+ */
+export async function syncProjectSessionBranch(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+): Promise<void> {
+  const [project, session] = await Promise.all([
+    ctx.db.get(projectId),
+    findProjectSession(ctx.db, projectId),
+  ]);
+  if (!project || !session) return;
+  const branchName = resolveProjectBranchName(project._id, project);
+  if (session.branchName === branchName) return;
+  if (await ownedSessionBusy(ctx.db, projectSessionOwner(projectId))) {
+    await ctx.scheduler.runAfter(
+      BRANCH_SYNC_RETRY_MS,
+      internal._sessions.ownedSession.syncProjectSessionBranchLater,
+      { projectId },
+    );
+    return;
+  }
   if (session.sandboxId !== undefined) {
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
       sandboxId: session.sandboxId,
@@ -569,6 +586,7 @@ export async function rotateProjectBranch(
   }
   await markAllRunningExited(ctx.db, session._id);
   await ctx.db.patch(session._id, {
+    branchName,
     sandboxId: undefined,
     status: "closed",
     sandboxStartAttempt: nextSandboxStartAttempt(session.sandboxStartAttempt),
@@ -577,6 +595,91 @@ export async function rotateProjectBranch(
     sandboxGitSync: undefined,
     updatedAt: Date.now(),
   });
+}
+
+/** `syncProjectSessionBranch`, retried once the session goes idle. */
+export const syncProjectSessionBranchLater = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await syncProjectSessionBranch(ctx, args.projectId);
+    return null;
+  },
+});
+
+
+/**
+ * A project's sandbox status, one source at a time: its session's once it
+ * has one, the project row's (not migrated yet) until then.
+ */
+export async function projectSandboxStatus(
+  db: DatabaseReader,
+  project: Pick<Doc<"projects">, "_id" | "reviewProjectSandboxStatus">,
+): Promise<Doc<"sessions">["status"] | undefined> {
+  const session = await findProjectSession(db, project._id);
+  return session ? session.status : project.reviewProjectSandboxStatus;
+}
+
+type TaskStatusSource = Pick<
+  Doc<"agentTasks">,
+  "_id" | "projectId" | "reviewTaskSandboxStatus"
+>;
+
+/**
+ * A task's sandbox status, the one rule the task page, lists and MCP share:
+ * the session it works on (`taskWorkSessionOwner`) once that exists, else
+ * the row that still holds it (a quick task's own, a project task's
+ * project's, not migrated yet).
+ */
+export async function taskSandboxStatus(
+  db: DatabaseReader,
+  task: TaskStatusSource,
+): Promise<Doc<"sessions">["status"] | undefined> {
+  if (task.projectId !== undefined) {
+    const project = await db.get(task.projectId);
+    return project ? await projectSandboxStatus(db, project) : undefined;
+  }
+  const session = await findTaskSession(db, task._id);
+  return session ? session.status : task.reviewTaskSandboxStatus;
+}
+
+/**
+ * `taskSandboxStatus` for a list: one indexed read per repo and owner kind
+ * for live sessions, and point reads only for rows whose session is not live
+ * (a project read once per project), never one session scan per row.
+ */
+export async function liveTaskSandboxStatuses(
+  db: DatabaseReader,
+  repoIds: Iterable<Id<"githubRepos">>,
+): Promise<
+  (task: TaskStatusSource) => Promise<Doc<"sessions">["status"] | undefined>
+> {
+  const ids = [...repoIds];
+  const [byTask, byProject] = await Promise.all([
+    liveOwnedSessionStatuses(db, ids, "task"),
+    liveOwnedSessionStatuses(db, ids, "project"),
+  ]);
+  const projectStatuses = new Map<
+    string,
+    Promise<Doc<"sessions">["status"] | undefined>
+  >();
+  return async (task) => {
+    if (task.projectId !== undefined) {
+      const key = String(task.projectId);
+      const live = byProject.get(key);
+      if (live) return live;
+      const cached =
+        projectStatuses.get(key) ?? taskSandboxStatus(db, task);
+      projectStatuses.set(key, cached);
+      return await cached;
+    }
+    const live = byTask.get(String(task._id));
+    if (live) return live;
+    // Not live on a session: only a row that still says live needs a read.
+    const legacy = task.reviewTaskSandboxStatus;
+    if (legacy === undefined || legacy === "closed") return undefined;
+    return await taskSandboxStatus(db, task);
+  };
 }
 
 const LIVE_SANDBOX_STATUSES = ["active", "starting", "stopping"] as const;
@@ -736,12 +839,22 @@ export async function syncProjectSession(
   ctx: MutationCtx,
   projectId: Id<"projects">,
 ): Promise<void> {
-  const project = await ctx.db.get(projectId);
-  if (!project) return;
-  const session = await findProjectSession(ctx.db, projectId);
-  if (!session) return;
+  const [project, session] = await Promise.all([
+    ctx.db.get(projectId),
+    findProjectSession(ctx.db, projectId),
+  ]);
+  if (!project || !session) return;
   const retired =
     isTerminalProjectPhase(project.phase) || project.deletedAt !== undefined;
+  // The build or interview stops first; that mutation retires the session.
+  if (retired && !isSessionArchived(session) && projectHoldsSession(project)) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.buildWorkflow.releaseProjectSessionForRetire,
+      { projectId },
+    );
+    return;
+  }
   await syncOwnedSessionWithTerminal(
     ctx,
     projectSessionOwner(projectId),

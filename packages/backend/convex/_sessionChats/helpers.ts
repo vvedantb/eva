@@ -151,14 +151,16 @@ export async function sessionChatHasFreeSlot(
   context: SessionChatContext,
 ): Promise<boolean> {
   const projectId = sessionOwnerProjectId(context.session);
-  const project = projectId ? await db.get(projectId) : null;
+  const [project, openTurns] = await Promise.all([
+    projectId ? db.get(projectId) : null,
+    db
+      .query("turns")
+      .withIndex("by_session_open", (q) =>
+        q.eq("sessionId", context.session._id).eq("open", true),
+      )
+      .collect(),
+  ]);
   if (project && isProjectBuilding(project)) return false;
-  const openTurns = await db
-    .query("turns")
-    .withIndex("by_session_open", (q) =>
-      q.eq("sessionId", context.session._id).eq("open", true),
-    )
-    .collect();
   if (openTurns.some((turn) => db.normalizeId("agentRuns", turn.entityId))) {
     return false;
   }

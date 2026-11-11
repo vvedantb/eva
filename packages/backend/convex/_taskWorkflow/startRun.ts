@@ -19,7 +19,7 @@ import {
 
 /** Why a run did not start: the task's chat holds the sandbox. */
 export const TASK_CHAT_BUSY_ERROR =
-  "Eva is still replying in this chat, or its sandbox is starting or stopping. Try the run again in a moment.";
+  "This sandbox is busy: Eva is replying in its chat, a run or build holds it, or it is starting or stopping. Try the run again in a moment.";
 
 /**
  * True while the session a task works on (its own, or its project's) holds

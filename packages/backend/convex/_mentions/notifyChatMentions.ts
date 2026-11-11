@@ -6,7 +6,7 @@ import { formatMessagePreview } from "../_messages/preview";
 import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
-import { sessionOwner } from "../_sessions/owner";
+import { chatOwner, sessionOwner } from "../_sessions/owner";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -14,7 +14,12 @@ import { sessionOwner } from "../_sessions/owner";
  * the notification (repo, entity id) comes off it.
  */
 export type ChatMentionSurface =
-  | { kind: "session"; session: Doc<"sessions"> }
+  | {
+      kind: "session";
+      session: Doc<"sessions">;
+      /** The chat posted in; a project task's own chat speaks for the task. */
+      chat?: Doc<"sessionChats">;
+    }
   | { kind: "project"; project: Doc<"projects"> }
   | { kind: "task"; task: Doc<"agentTasks"> };
 
@@ -70,7 +75,9 @@ async function ownerSurface(
   surface: ChatMentionSurface,
 ): Promise<ChatMentionSurface> {
   if (surface.kind !== "session") return surface;
-  const owner = sessionOwner(surface.session);
+  const owner = surface.chat
+    ? chatOwner(surface.chat, surface.session)
+    : sessionOwner(surface.session);
   if (owner.kind === "task") {
     const task = await ctx.db.get(owner.taskId);
     return task ? { kind: "task", task } : surface;
