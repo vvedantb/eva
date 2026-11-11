@@ -1,6 +1,6 @@
 import type { DiffFileEntry, DiffFileStatus } from "@eva/shared";
 import { DiffStat } from "@vvedantb/native-ui/ai";
-import { Badge, Checkbox, ListDivider, Text } from "@vvedantb/native-ui/primitives";
+import { Badge, Checkbox, ListDivider, SkeletonList, SkeletonRow, Text } from "@vvedantb/native-ui/primitives";
 import { FlatList, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PendingCommentCount, PrDiffGate, TruncatedNote } from "@/diff/PrFileDiff";
@@ -25,7 +25,17 @@ const STATUS_CHIP: Record<DiffFileStatus, { label: string; variant: "success" | 
 export function ReviewCode({ pr, state, onOpenFile }: { pr: PrRef; state: PrDiffState; onOpenFile: (path: string) => void }) {
   const insets = useSafeAreaInsets();
   return (
-    <PrDiffGate state={state}>
+    <PrDiffGate
+      state={state}
+      // Rows shaped as `FileRow`: the name over its folder, the counts.
+      loading={
+        <SkeletonList
+          label="Loading pull request diff"
+          count={8}
+          renderRow={(row) => <SkeletonRow index={row} lines={2} minHeight={56} />}
+        />
+      }
+    >
       {(diff) => (
         <FlatList
           data={diff.entries}

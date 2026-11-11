@@ -14,7 +14,7 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChecklist, IconChevronRight, IconPlayerPlay, IconPlus } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
-import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
+import { Button, ConfirmDialog, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useLargerText, withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -60,7 +60,7 @@ export function useQuickTaskRepo() {
  */
 export function QuickTasksSection() {
   const { repos, repo, setRepo } = useQuickTaskRepo();
-  if (repos === undefined) return <CenteredSpinner label="Loading quick tasks" />;
+  if (repos === undefined) return <QuickTaskPlaceholders />;
   if (!repo) {
     return <EmptyState icon={IconChecklist} title="No repos" description="Connect a repo on the web. It shows up here." />;
   }
@@ -95,7 +95,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   const insets = useSafeAreaInsets();
   const scheme = useScheme();
 
-  if (tasks === undefined) return <CenteredSpinner label="Loading quick tasks" />;
+  if (tasks === undefined) return <QuickTaskPlaceholders />;
   const changeFilters = (patch: Partial<QuickTaskListFilters>) => setFilters({ ...filters, ...patch });
   const shown = applyQuickTaskFilters(tasks, filters);
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
@@ -201,6 +201,23 @@ function QuickTaskList({ repo }: { repo: Repo }) {
         onConfirm={() => void runAll()}
       />
     </View>
+  );
+}
+
+/** While the tasks load: cards shaped as `QuickTaskRow` (title over tags and age), 6 apart, on the list's `px-3`. */
+function QuickTaskPlaceholders() {
+  const card = EVA_THEME[useScheme()].card;
+  return (
+    <SkeletonList
+      label="Loading quick tasks"
+      divided={false}
+      className="px-3"
+      renderRow={(row) => (
+        <View className="mb-1.5 rounded-lg" style={{ backgroundColor: card }}>
+          <SkeletonRow index={row} lines={2} trailing={false} minHeight={72} className="px-3" />
+        </View>
+      )}
+    />
   );
 }
 

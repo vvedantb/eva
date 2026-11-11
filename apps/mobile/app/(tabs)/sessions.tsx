@@ -4,10 +4,13 @@ import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
-  CenteredSpinner,
   closeSwipeRows,
   EmptyState,
+  ListDivider,
+  Pager,
   PillTabs,
+  SkeletonList,
+  SkeletonRow,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -17,6 +20,7 @@ import { useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
 import { useSimpleView } from "@/chat/ComposerFooter";
@@ -38,16 +42,24 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
 /**
  * The Sessions tab holds the web's places to work on a repo: Sessions, Quick
  * Tasks and Reviews (pull requests), switched by pills under the title
- * (`?section=`, so a link or back press keeps it). The title and "+" follow
- * the section; Reviews has no "+", as the web. Simple view drops Reviews, as
- * the web Reviews route redirects away in simple view.
+ * (`?section=`, so a link or back press keeps it), or by a sideways swipe on
+ * the content (`Pager`): the content follows the finger and the pill
+ * indicator moves with it. A swipe that starts on a session row and goes
+ * left is the row's Archive; one that goes right, or starts anywhere else,
+ * moves the section. Either way the section is set in place (`setParams`),
+ * so it adds no history. The title and "+" follow the section; Reviews has
+ * no "+", as the web. Simple view drops Reviews, as the web Reviews route
+ * redirects away in simple view.
  */
 export default function SessionsScreen() {
   const router = useRouter();
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
   const simpleView = useSimpleView();
   const sections = simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
-  const section = sections.find((option) => option.id === sectionParam) ?? { id: "sessions", label: "Sessions" };
+  const index = Math.max(0, sections.findIndex((option) => option.id === sectionParam));
+  const section = sections[index] ?? { id: "sessions", label: "Sessions" };
+  // Where the pages are, shared by the pager and the pill indicator.
+  const progress = useSharedValue(index);
   const { openNew: openNewQuickTask } = useQuickTaskRepo();
   const muted = tokens.color.muted[useScheme()];
   const isQuickTasks = section.id === "quick-tasks";
@@ -72,9 +84,23 @@ export default function SessionsScreen() {
         }
       />
       <View className="px-4 pb-2">
-        <PillTabs options={sections} value={section.id} onChange={(next) => router.setParams({ section: next })} />
+        <PillTabs
+          options={sections}
+          value={section.id}
+          onChange={(next) => router.setParams({ section: next })}
+          progress={progress}
+        />
       </View>
-      {section.id === "reviews" ? <ReviewsSection /> : isQuickTasks ? <QuickTasksSection /> : <SessionsSection />}
+      <Pager
+        index={index}
+        count={sections.length}
+        progress={progress}
+        onIndexChange={(next) => router.setParams({ section: sections[next]?.id })}
+        renderPage={(page) => {
+          const id = sections[page]?.id;
+          return id === "reviews" ? <ReviewsSection /> : id === "quick-tasks" ? <QuickTasksSection /> : <SessionsSection />;
+        }}
+      />
     </TabScreen>
   );
 }
@@ -82,8 +108,8 @@ export default function SessionsScreen() {
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
  * at phone width: Active and Archived tabs, then one collapsible group per
- * repo (`useSessionGroups`) with compact rows and "Show more", in a
- * `SectionList`. A long press on a row opens the web row menu as a sheet
+ * repo (`useSessionGroups`) with Inbox-sized rows, divided as the Inbox, and
+ * "Show more", in a `SectionList`. A long press on a row opens the web row menu as a sheet
  * (`useSessionActions`); a swipe left reveals its Archive (with the web
  * confirm, then the Undo toast), or Unarchive in the Archived tab.
  */
@@ -120,7 +146,11 @@ function SessionsSection() {
         </Tabs>
       </View>
       {sessions === undefined ? (
-        <CenteredSpinner label="Loading sessions" />
+        <SkeletonList
+          label="Loading sessions"
+          count={8}
+          renderRow={(row) => <SkeletonRow index={row} leading={10} />}
+        />
       ) : sessions.length === 0 ? (
         // The web sidebar's empty copy (`GlobalSessionGroup`).
         <EmptyState
@@ -147,8 +177,8 @@ function SessionsSection() {
               }
             />
           )}
-          // Web: `space-y-0.5` between rows.
-          ItemSeparatorComponent={RowGap}
+          // The Inbox hairline between the rows of a group.
+          ItemSeparatorComponent={ListDivider}
           renderItem={({ item: session }) => {
             const target = { ...session, archived: tab === "archived" };
             const action = tab === "archived" ? "unarchive" : "archive";
@@ -178,9 +208,4 @@ function SessionsSection() {
       {sessionActions.dialogs}
     </>
   );
-}
-
-/** The 2 between two session rows. */
-function RowGap() {
-  return <View className="h-0.5" />;
 }
