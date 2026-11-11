@@ -25,7 +25,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
-import { sandboxStartupEntityId } from "../_sandbox/owner";
+import { sandboxStartupEntityId } from "@eva/shared";
 import {
   canRequestSandboxStart,
   discardUntrackedSandbox,
@@ -35,6 +35,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
+import { buildTaskBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
 
 const PREVIEW_ALLOWED_STATUSES = [
@@ -118,7 +119,7 @@ export async function requestTaskSandboxStart(
     );
     return;
   }
-  const branchName = `eva/task-${task._id}`;
+  const branchName = buildTaskBranchName(task._id);
   const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
     ctx.db,
     task,
@@ -228,7 +229,7 @@ export const retryStartupCommands = authMutation({
     const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
-    const branchName = `eva/task-${args.taskId}`;
+    const branchName = buildTaskBranchName(args.taskId);
     const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
       ctx.db,
       task,

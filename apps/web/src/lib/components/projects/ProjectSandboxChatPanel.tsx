@@ -15,6 +15,7 @@ import {
 } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
+import { insertSentTurnOptimistically } from "@/lib/components/chat/useChatSend";
 import {
   SandboxChatPanel,
   type SandboxChatPanelProps,
@@ -49,7 +50,6 @@ export function useProjectChatBinding(
   const { repo } = useRepo();
   const project = useQuery(api.projects.get, { id: projectId });
 
-  const addMessage = useMutation(api.projectChatWorkflow.addMessage);
   const startExecute = useMutation(
     api.projectChatWorkflow.startExecute,
   ).withOptimisticUpdate((localStore, args) =>
@@ -102,6 +102,17 @@ export function useProjectChatBinding(
           },
           ...accounts,
         ];
+  // `pickerAccounts`: a teammate's bubble names the owner's account too.
+  const addMessage = useMutation(
+    api.projectChatWorkflow.addMessage,
+  ).withOptimisticUpdate((localStore, args) =>
+    insertSentTurnOptimistically(
+      localStore,
+      args.projectId,
+      args,
+      pickerAccounts,
+    ),
+  );
 
   return {
     entity: { kind: "project", projectId },

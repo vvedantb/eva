@@ -3,7 +3,12 @@ import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { internalQuery } from "../_generated/server";
-import { aiModelValidator, taskStatusValidator } from "../validators";
+import {
+  NON_DRAFT_TASK_STATUSES,
+  OPEN_TASK_STATUSES,
+  aiModelValidator,
+  taskStatusValidator,
+} from "../validators";
 import {
   authQuery,
   hasRepoAccess,
@@ -268,12 +273,9 @@ export const getByNumId = authQuery({
 });
 
 /** Task statuses that count as active (not draft, done or cancelled). */
-const ACTIVE_TASK_STATUSES: ReadonlySet<Doc<"agentTasks">["status"]> = new Set([
-  "todo",
-  "in_progress",
-  "code_review",
-  "business_review",
-] as const);
+const ACTIVE_TASK_STATUSES: ReadonlySet<Doc<"agentTasks">["status"]> = new Set(
+  OPEN_TASK_STATUSES,
+);
 
 /**
  * Active tasks across every repo the user can reach, most recently updated
@@ -385,16 +387,9 @@ export const getAllTasks = authQuery({
   returns: v.array(agentTaskWithLastRunValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const nonDraftStatuses = [
-      "todo",
-      "in_progress",
-      "code_review",
-      "business_review",
-      "done",
-      "cancelled",
-    ] as const;
+
     const taskArrays = await Promise.all(
-      nonDraftStatuses.map((status) =>
+      NON_DRAFT_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
           .withIndex("by_repo_status_and_deleted", (q) =>
@@ -472,13 +467,6 @@ export const getStatusesByIds = authQuery({
   },
 });
 
-/** Statuses that still describe work in flight, so a finding can duplicate one. */
-const OPEN_TASK_STATUSES = [
-  "todo",
-  "in_progress",
-  "code_review",
-  "business_review",
-] as const;
 
 /**
  * Cap on duplicate candidates handed to findings triage. Jev takes at most 255

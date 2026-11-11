@@ -5,7 +5,10 @@ import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
 import type { MutationCtx } from "./_generated/server";
-import { buildProjectBranchName } from "./_git/branchNames";
+import {
+  buildProjectBranchName,
+  buildSessionBranchName,
+} from "./_git/branchNames";
 import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
@@ -222,7 +225,7 @@ export const backfillSessionPullRequests = dataMigrations.define({
         state: session.prState ?? "open",
         primary: true,
         origin: "eva",
-        headBranch: session.branchName ?? `eva/session-${session._id}`,
+        headBranch: session.branchName ?? buildSessionBranchName(session._id),
         baseBranch: session.baseBranch,
         title: session.title,
       });

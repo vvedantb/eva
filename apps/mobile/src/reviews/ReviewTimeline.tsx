@@ -28,7 +28,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState, type ComponentType, type ReactNode } from "react";
 import { FlatList, Linking, Pressable, Text, View } from "react-native";
 import { prStatusAppearance, ToneIcon } from "@/reviews/prAppearance";
-import { CommentCard, PrAvatar, TEXT_2XS, TEXT_XS } from "@/reviews/ReviewSummary";
+import { CommentCard, PrAvatar, TEXT_SM, TEXT_XS } from "@/reviews/ReviewSummary";
 import { timeAgo } from "@/ui/format";
 import { type Scheme, useScheme } from "@/ui/theme";
 
@@ -40,6 +40,12 @@ type CommitsLoad =
 
 /** The web rail's gutter: a 32 marker column, then 16 to the row's text (`pl-12`). */
 const GUTTER = 32;
+
+/**
+ * A row's least height: the two-line list row a thumb taps (the Inbox 64),
+ * where the web rail packs its rows to fit their text. The marker sits on its centre.
+ */
+const ROW_HEIGHT = 64;
 
 /**
  * The web Timeline tab at phone width: one rail down the left and every event
@@ -108,13 +114,13 @@ export function ReviewTimeline({ repoId, overview }: { repoId: Id<"githubRepos">
   );
 }
 
-/** The web rail: a 1 px line through the gutter, broken by each row's marker; it stops at the last row. */
+/** The web rail: a 1 px line through the gutter, broken by each row's marker; it stops at the last row. 8 between rows. */
 function Rail({ last, scheme, children }: { last: boolean; scheme: Scheme; children: ReactNode }) {
   return (
-    <View className="pb-5">
+    <View className="pb-2">
       <View
         className="absolute"
-        style={{ left: GUTTER / 2 - 0.5, top: 0, bottom: last ? undefined : 0, height: last ? 20 : undefined, width: 1, backgroundColor: EVA_THEME[scheme].border }}
+        style={{ left: GUTTER / 2 - 0.5, top: 0, bottom: last ? undefined : 0, height: last ? ROW_HEIGHT / 2 : undefined, width: 1, backgroundColor: EVA_THEME[scheme].border }}
       />
       {children}
     </View>
@@ -164,19 +170,19 @@ function IconMarker({ icon: Icon, color, scheme }: { icon: ComponentType<IconPro
   );
 }
 
-/** A row: the marker in the gutter, then the text, 16 to its right. */
+/** A row: the marker in the gutter, then the text, 16 to its right, at least `ROW_HEIGHT`. */
 function Row({ marker, children }: { marker: ReactNode; children: ReactNode }) {
   return (
-    <View className="flex-row items-start gap-4">
+    <View className="flex-row items-center gap-4" style={{ minHeight: ROW_HEIGHT }}>
       {marker}
-      <View className="min-w-0 flex-1 py-1.5">{children}</View>
+      <View className="min-w-0 flex-1 py-2">{children}</View>
     </View>
   );
 }
 
 function When({ at, scheme }: { at: number | string | null; scheme: Scheme }) {
   if (at === null || at === 0) return null;
-  return <Text style={[TEXT_2XS, { color: EVA_THEME[scheme].mutedForeground }]}>{timeAgo(typeof at === "number" ? at : new Date(at).getTime())}</Text>;
+  return <Text style={[TEXT_XS, { color: EVA_THEME[scheme].mutedForeground }]}>{timeAgo(typeof at === "number" ? at : new Date(at).getTime())}</Text>;
 }
 
 /** A push: the headline, the short sha, the author and when. A tap opens it on GitHub. */
@@ -189,7 +195,7 @@ function CommitRow({ commit, scheme }: { commit: PrOverview["commits"][number]; 
       accessibilityRole="link"
       accessibilityLabel={`Commit ${sha}: ${headline}. Open on GitHub`}
       onPress={() => void Linking.openURL(commit.htmlUrl)}
-      className="min-h-11 active:opacity-70"
+      className="active:opacity-70"
     >
       <Row
         marker={
@@ -202,12 +208,12 @@ function CommitRow({ commit, scheme }: { commit: PrOverview["commits"][number]; 
           )
         }
       >
-        <Text numberOfLines={1} className="font-instrument-sans-semibold" style={[TEXT_XS, { color: theme.foreground, fontWeight: "600" }]}>
+        <Text numberOfLines={1} className="font-instrument-sans-semibold" style={[TEXT_SM, { color: theme.foreground, fontWeight: "600" }]}>
           {headline}
         </Text>
         <View className="mt-1 flex-row flex-wrap items-center gap-x-2">
-          <Text style={[TEXT_2XS, { color: theme.mutedForeground, fontFamily: "monospace" }]}>{sha}</Text>
-          {commit.authorLogin === null ? null : <Text style={[TEXT_2XS, { color: theme.mutedForeground }]}>{commit.authorLogin}</Text>}
+          <Text style={[TEXT_XS, { color: theme.mutedForeground, fontFamily: "monospace" }]}>{sha}</Text>
+          {commit.authorLogin === null ? null : <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>{commit.authorLogin}</Text>}
           <When at={commit.committedAt} scheme={scheme} />
         </View>
       </Row>
@@ -246,7 +252,8 @@ function Conversation({
         accessibilityState={{ expanded: open }}
         accessibilityLabel={`${events.length} ${events.length === 1 ? "comment" : "comments"}`}
         onPress={() => setOpen(!open)}
-        className="min-h-11 flex-row items-center gap-4 active:opacity-70"
+        className="flex-row items-center gap-4 active:opacity-70"
+        style={{ minHeight: ROW_HEIGHT }}
       >
         {first === undefined ? (
           <IconMarker icon={IconMessage} color={theme.mutedForeground} scheme={scheme} />
@@ -258,12 +265,12 @@ function Conversation({
           </Marker>
         )}
         <View className="min-w-0 flex-1 py-2" style={{ opacity: open ? 1 : 0.6 }}>
-          <Text className="font-instrument-sans-semibold" style={[TEXT_XS, { color: open ? theme.foreground : theme.mutedForeground, fontWeight: "600" }]}>
+          <Text className="font-instrument-sans-semibold" style={[TEXT_SM, { color: open ? theme.foreground : theme.mutedForeground, fontWeight: "600" }]}>
             {`${events.length} ${events.length === 1 ? "comment" : "comments"}`}
           </Text>
           <View className="flex-row gap-1">
-            <Text style={[TEXT_2XS, { color: theme.mutedForeground }]}>{`${authors.length} ${authors.length === 1 ? "author" : "authors"}`}</Text>
-            <Text style={[TEXT_2XS, { color: theme.mutedForeground }]}>·</Text>
+            <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>{`${authors.length} ${authors.length === 1 ? "author" : "authors"}`}</Text>
+            <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>·</Text>
             <When at={events[0]?.at ?? null} scheme={scheme} />
           </View>
         </View>
@@ -304,7 +311,7 @@ function VerdictRow({ review, stale, scheme }: { review: PrOverview["reviewEvent
         accessibilityRole="link"
         accessibilityLabel={`${review.authorLogin} ${verdictAction(review.state)}. Open on GitHub`}
         onPress={() => void Linking.openURL(review.htmlUrl)}
-        className="min-h-11 active:opacity-70"
+        className="active:opacity-70"
       >
         <Row
           marker={
@@ -323,14 +330,14 @@ function VerdictRow({ review, stale, scheme }: { review: PrOverview["reviewEvent
           }
         >
           <View className="flex-row flex-wrap items-center gap-x-1.5">
-            <Text className="font-instrument-sans-semibold" style={[TEXT_XS, { color: theme.foreground, fontWeight: "600" }]}>
+            <Text className="font-instrument-sans-semibold" style={[TEXT_SM, { color: theme.foreground, fontWeight: "600" }]}>
               {review.authorLogin}
             </Text>
-            <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>{verdictAction(review.state)}</Text>
+            <Text style={[TEXT_SM, { color: theme.mutedForeground }]}>{verdictAction(review.state)}</Text>
           </View>
           <View className="mt-0.5 flex-row items-center gap-2">
             <When at={review.submittedAt} scheme={scheme} />
-            {stale ? <Text style={[TEXT_2XS, { color: theme.mutedForeground }]}>· before the latest push</Text> : null}
+            {stale ? <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>· before the latest push</Text> : null}
           </View>
         </Row>
       </Pressable>
@@ -368,10 +375,10 @@ function LifecycleRow({
   return (
     <Row marker={<IconMarker icon={LIFECYCLE[kind].icon} color={color} scheme={scheme} />}>
       <View className="flex-row flex-wrap items-center gap-1.5">
-        <Text className="font-instrument-sans-semibold" style={[TEXT_XS, { color: theme.foreground, fontWeight: "600" }]}>
+        <Text className="font-instrument-sans-semibold" style={[TEXT_SM, { color: theme.foreground, fontWeight: "600" }]}>
           {actor ?? "Someone"}
         </Text>
-        <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>{LIFECYCLE[kind].label}</Text>
+        <Text style={[TEXT_SM, { color: theme.mutedForeground }]}>{LIFECYCLE[kind].label}</Text>
       </View>
       <View className="mt-0.5">
         <When at={at} scheme={scheme} />

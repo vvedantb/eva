@@ -14,6 +14,9 @@ function useChipColors() {
 
 const CHIP_TEXT = { fontSize: 12, lineHeight: 16, fontWeight: "500" } as const;
 
+/** A composer chip is tappable, so its label is `text-sm` (14 / 20), the phone floor, not the web `text-xs`. */
+const TAPPABLE_CHIP_TEXT = { ...CHIP_TEXT, fontSize: 14, lineHeight: 20 } as const;
+
 function chipText(kind: MentionChipKind, label: string): string {
   return `${kind === "slash" ? "/" : "@"}${label}`;
 }
@@ -69,7 +72,7 @@ export function ComposerMentionChips({ picks, onRemove }: { picks: ComposerPick[
         className="h-8 max-w-full flex-row items-center gap-1 rounded-full pl-2.5 pr-2 active:opacity-70"
         style={{ backgroundColor: colors.background }}
       >
-        <Text numberOfLines={1} className="shrink font-instrument-sans-medium" style={{ ...CHIP_TEXT, color: colors.foreground }}>
+        <Text numberOfLines={1} className="shrink font-instrument-sans-medium" style={{ ...TAPPABLE_CHIP_TEXT, color: colors.foreground }}>
           {text}
         </Text>
         <IconX size={12} color={colors.foreground} />

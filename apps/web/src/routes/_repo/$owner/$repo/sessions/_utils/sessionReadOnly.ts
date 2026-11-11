@@ -1,4 +1,4 @@
-export type SessionPrState = "draft" | "open" | "merged" | "closed";
+import type { PrState } from "@eva/shared";
 
 /**
  * `archived` is the one session lock. A merged/closed PR locks the session
@@ -20,7 +20,7 @@ export function isSessionSidebarActive(session: {
  */
 export function canSendSessionForReview(session: {
   branchName?: string;
-  prState?: SessionPrState;
+  prState?: PrState;
 }): boolean {
   if (!session.branchName) return false;
   return session.prState === undefined || session.prState === "draft";
@@ -32,7 +32,7 @@ export function canSendSessionForReview(session: {
  */
 export function getSessionReadOnlyMessage(args: {
   isArchived: boolean;
-  prState: SessionPrState | undefined;
+  prState: PrState | undefined;
 }): string | undefined {
   if (!args.isArchived) return undefined;
   if (args.prState === "merged") {

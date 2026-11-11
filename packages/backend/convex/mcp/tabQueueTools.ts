@@ -1,7 +1,7 @@
 import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
-import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "../appTabSlug";
+import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "@eva/shared/appTabSlug";
 import {
   entityAccess,
   entityRefArgs,

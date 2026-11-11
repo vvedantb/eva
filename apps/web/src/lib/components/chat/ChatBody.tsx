@@ -15,6 +15,7 @@ import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
 import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
+import { ChatBottomPin } from "@/lib/components/chat/_components/ChatBottomPin";
 import {
   ChatEarlierTurnsLoader,
   type TranscriptScrollAnchor,
@@ -43,6 +44,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
+  SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
@@ -95,10 +97,9 @@ import {
   findLastAssistantMessageId,
   findStreamingTargetMessage,
   findTurnWindowStart,
-  firstNameFromUser,
+  firstNameByUserId,
   isOtherUserChatMessage,
   otherUserIdsInChat,
-  SANDBOX_CHAT_COPY,
   TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
   type ChatBodyMessage,
@@ -236,6 +237,8 @@ interface ChatBodyProps {
   preConversationContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
+  /** Status chips (background agents, processes) on the skill suggestions' row. */
+  composerChips?: React.ReactNode;
   /**
    * Live block at the end of the transcript (session sandbox startup). Takes
    * the empty state's place when there are no messages yet.
@@ -332,6 +335,7 @@ function ChatBodyInner({
   onCancel,
   preConversationContent,
   preInputContent,
+  composerChips,
   transcriptTail,
   underCardLeading,
   draft,
@@ -377,7 +381,7 @@ function ChatBodyInner({
     // Settlement is observed, not awaited: the composer only empties once this
     // resolves, and holding the user's text on screen until the mutation
     // round-trips would undo the optimistic clear every surface relies on.
-    // Same contract as useChatSend's `review?.clear()`: the pending context
+    // Same contract as useChatSend's review comments: the pending context
     // is consumed only once the send has actually succeeded, so a rejected send
     // leaves the chips attached for the retry. And only the exact items that
     // went into this prompt are dropped — `clear()` also threw away anything
@@ -432,6 +436,11 @@ function ChatBodyInner({
   // on the loading spinner and then commit the whole backlog in the render
   // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+  // Rows already there when the chat opens (or finishes loading) render in
+  // place; only rows that arrive later slide in. Fading the last turn in on
+  // every open read as a flicker. Deferred for the same reason as
+  // `backlogReady`: the render that first has rows still sees false.
+  const rowsAnimateIn = useDeferredValue(!isLoadingMessages, false);
   // Keyed on `displayMessages`, which keeps its identity while a turn streams,
   // so the rail's observer is not rebuilt on every token.
   const jumpRailTicks = buildChatJumpRailTicks(
@@ -773,14 +782,7 @@ function ChatBodyInner({
     api.users.getMany,
     otherUserIds.length > 0 ? { ids: otherUserIds } : "skip",
   );
-  const firstNameByUserId = (() => {
-    const map = new Map<Id<"users">, string>();
-    for (const user of users ?? []) {
-      const name = firstNameFromUser(user);
-      if (name) map.set(user._id, name);
-    }
-    return map;
-  })();
+  const firstNames = firstNameByUserId(users ?? []);
 
   // Retry re-sends the failed turn's prompt through the normal send path. It is
   // withheld while a turn is running (the send would only queue behind it) and
@@ -855,7 +857,7 @@ function ChatBodyInner({
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const senderFirstName =
       isOtherUser && message.userId
-        ? firstNameByUserId.get(message.userId)
+        ? firstNames.get(message.userId)
         : undefined;
     const precedingUser = precedingUserTurns.get(message._id);
 
@@ -877,7 +879,7 @@ function ChatBodyInner({
         ) : null}
         <ChatMessage
           message={message}
-          animateIn={!isBacklog}
+          animateIn={!isBacklog && rowsAnimateIn}
           repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
@@ -950,7 +952,14 @@ function ChatBodyInner({
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
           // reader's place itself, and two corrections would add up.
-          scrollClassName="[container-type:size] [overflow-anchor:none]"
+          // Until the backlog commits, the content is only the last turn: the
+          // thumb filled the whole track, then jumped to the bottom when the
+          // older turns landed. A transparent thumb keeps the gutter's width.
+          scrollClassName={
+            displayMessages.length > 0 && !backlogReady
+              ? "[container-type:size] [overflow-anchor:none] [scrollbar-color:transparent_transparent]"
+              : "[container-type:size] [overflow-anchor:none]"
+          }
         >
           {displayMessages.length === 0 ? (
             transcriptTail ? (
@@ -1020,6 +1029,11 @@ function ChatBodyInner({
           />
         ) : null}
         <ConversationScrollButton resetKey={conversationId} />
+        {/* A reply glides only once the chat has opened: the rows it opens
+            with land at the bottom without a scroll. */}
+        <ChatBottomPin
+          glide={streamingTargetId !== undefined && rowsAnimateIn}
+        />
         {/* Mounted with the backlog, so a linked row above the last turn is
             already in the DOM when this scrolls to it. */}
         {backlogReady && linkedMessageId !== undefined ? (
@@ -1095,6 +1109,7 @@ function ChatBodyInner({
                     {preInputContent}
                   </>
                 }
+                statusChips={composerChips}
                 streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}

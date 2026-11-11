@@ -2,6 +2,7 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
+import { PRIORITY_LABELS, TASK_STATUS_LABELS } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import { IconArrowRight } from "@tabler/icons-react";
 import { RelativeDateTime } from "@vvedantb/ui";
@@ -12,22 +13,13 @@ type TaskActivityEvent = NonNullable<
 
 type User = NonNullable<FunctionReturnType<typeof api.users.listAll>>[number];
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  todo: "To Do",
-  in_progress: "In Progress",
-  code_review: "Code Review",
-  business_review: "Business Review",
-  done: "Done",
-  cancelled: "Cancelled",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  urgent: "Urgent",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
+// Activity values are stored as plain strings; look them up by string key.
+const STATUS_LABEL_BY_VALUE = new Map<string, string>(
+  Object.entries(TASK_STATUS_LABELS),
+);
+const PRIORITY_LABEL_BY_VALUE = new Map<string, string>(
+  Object.entries(PRIORITY_LABELS),
+);
 
 function formatFieldLabel(field: TaskActivityEvent["field"]): string {
   switch (field) {
@@ -62,9 +54,9 @@ function formatValue(
   if (!value) return "none";
   switch (field) {
     case "status":
-      return STATUS_LABELS[value] ?? value;
+      return STATUS_LABEL_BY_VALUE.get(value) ?? value;
     case "priority":
-      return PRIORITY_LABELS[value] ?? value;
+      return PRIORITY_LABEL_BY_VALUE.get(value) ?? value;
     case "assignee": {
       const user = users?.find((u) => u._id === value);
       return user?.fullName?.trim() || "Unknown";

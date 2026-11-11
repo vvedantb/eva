@@ -4,7 +4,13 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { prOriginValidator, prStateValidator } from "../validators";
+import {
+  ALL_TASK_STATUSES,
+  PROJECT_PHASES,
+  SANDBOX_STATUSES,
+  prOriginValidator,
+  prStateValidator,
+} from "../validators";
 import {
   findPullRequestByUrl,
   listOwnerPullRequests,
@@ -383,28 +389,6 @@ const listedEntityValidator = v.object({
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
 
-const SESSION_STATUSES = ["active", "starting", "stopping", "closed"] as const;
-
-const TASK_STATUSES = [
-  "draft",
-  "todo",
-  "in_progress",
-  "code_review",
-  "business_review",
-  "done",
-  "cancelled",
-] as const;
-
-const PROJECT_PHASES = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-] as const;
-
 /**
  * Narrows the caller's free-text status onto one kind's own vocabulary, so the
  * per-status index can be used without an assertion. A status that belongs to
@@ -412,14 +396,14 @@ const PROJECT_PHASES = [
  */
 function asSessionStatus(
   status: string,
-): (typeof SESSION_STATUSES)[number] | undefined {
-  return SESSION_STATUSES.find((candidate) => candidate === status);
+): (typeof SANDBOX_STATUSES)[number] | undefined {
+  return SANDBOX_STATUSES.find((candidate) => candidate === status);
 }
 
 function asTaskStatus(
   status: string,
-): (typeof TASK_STATUSES)[number] | undefined {
-  return TASK_STATUSES.find((candidate) => candidate === status);
+): (typeof ALL_TASK_STATUSES)[number] | undefined {
+  return ALL_TASK_STATUSES.find((candidate) => candidate === status);
 }
 
 function asProjectPhase(

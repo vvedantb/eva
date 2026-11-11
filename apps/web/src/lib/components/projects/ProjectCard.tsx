@@ -1,10 +1,7 @@
 "use client";
 
 import type { Id } from "@eva/backend";
-import { useState, type MouseEvent } from "react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
-import { useUpdateProject } from "@/lib/components/projects/useUpdateProject";
+import type { MouseEvent } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
 import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
@@ -15,20 +12,12 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   BorderBeam,
-  Button,
   Checkbox,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  Input,
   LIST_ROW_CONTROL_CLASS,
   ListRow,
-  Textarea,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -39,6 +28,7 @@ import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
+import { useProjectMenu } from "./_components/useProjectMenu";
 import {
   SANDBOX_STATUS_STYLES,
   showsSandboxStatusDot,
@@ -58,7 +48,6 @@ interface ProjectCardProps {
   rawInput?: string;
   branchName?: string;
   numId?: number;
-  repoFullName: string;
   createdAt: number;
   accentColor: string;
   members?: Array<Id<"users">>;
@@ -94,7 +83,6 @@ export function ProjectCard({
   rawInput,
   branchName,
   numId,
-  repoFullName,
   accentColor,
   members,
   projectLead,
@@ -113,12 +101,17 @@ export function ProjectCard({
   onDelete,
 }: ProjectCardProps) {
   const simpleView = useSimpleView();
-  const [editOpen, setEditOpen] = useState(false);
-  const [editTitle, setEditTitle] = useState(title);
-  const [editDescription, setEditDescription] = useState(description ?? "");
-  const updateProject = useUpdateProject(projectId);
-  const currentUserId = useQuery(api.auth.me);
-  const users = useQuery(api.users.listAll);
+  const { menuProps, dialogs, isEditOpen } = useProjectMenu({
+    projectId,
+    title,
+    description,
+    phase,
+    projectLead,
+    href,
+    showOpenInNewTab: true,
+    branchName,
+    onDelete,
+  });
   const memberIds = [
     ...new Set(
       [projectLead, ...(members ?? [])].filter(
@@ -133,36 +126,6 @@ export function ProjectCard({
   const shownAvatarIds = allAvatarIds.slice(0, MAX_AVATARS);
   const hiddenCount = allAvatarIds.length - MAX_AVATARS;
 
-  const menuProps = {
-    projectId,
-    title,
-    phase,
-    projectLead,
-    currentUserId,
-    users,
-    href,
-    branchName,
-    repoFullName,
-    onPhaseChange: (nextPhase: ProjectPhase) => {
-      void updateProject({ id: projectId, phase: nextPhase });
-    },
-    onLeadChange: (value: string) => {
-      if (value === "none") {
-        void updateProject({ id: projectId, projectLead: null });
-        return;
-      }
-      const matchedUser = (users ?? []).find((u) => u._id === value);
-      const leadId = currentUserId === value ? currentUserId : matchedUser?._id;
-      if (!leadId) return;
-      void updateProject({ id: projectId, projectLead: leadId });
-    },
-    onEdit: () => {
-      setEditTitle(title);
-      setEditDescription(description ?? "");
-      setEditOpen(true);
-    },
-    onDelete,
-  };
 
   const cardContent = (
     <ListRow
@@ -175,9 +138,9 @@ export function ProjectCard({
         ) : undefined
       }
       onClick={
-        editOpen || isSelecting || onClick
+        isEditOpen || isSelecting || onClick
           ? (event) => {
-              if (editOpen) {
+              if (isEditOpen) {
                 event.preventDefault();
                 return;
               }
@@ -329,51 +292,7 @@ export function ProjectCard({
         </div>
       </div>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent onClick={(event) => event.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              await updateProject({
-                id: projectId,
-                title: editTitle,
-                description: editDescription || undefined,
-              });
-              setEditOpen(false);
-            }}
-            className="flex flex-col gap-4"
-          >
-            <Input
-              placeholder="Title"
-              value={editTitle}
-              onChange={(event) => setEditTitle(event.target.value)}
-              autoFocus
-            />
-            <Textarea
-              placeholder="Description"
-              value={editDescription}
-              onChange={(event) => setEditDescription(event.target.value)}
-              rows={6}
-              className="min-h-[160px] resize-y"
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setEditOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!editTitle.trim()}>
-                Save
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {dialogs}
     </ListRow>
   );
 

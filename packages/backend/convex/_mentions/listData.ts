@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
 import { entityVisible } from "../numId";
+import { OPEN_TASK_STATUSES } from "../validators";
 import {
   DATA_MENTION_BADGE,
   DATA_MENTION_KINDS,
@@ -129,11 +130,8 @@ export const listData = authQuery({
     }
 
     // Open work only — done tasks rarely need @-mention and dominate large repos.
-    const taskStatuses: Array<
-      "todo" | "in_progress" | "code_review" | "business_review"
-    > = ["todo", "in_progress", "code_review", "business_review"];
     const taskArrays = await Promise.all(
-      taskStatuses.map((status) =>
+      OPEN_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
           .withIndex("by_repo_status_and_deleted", (q) =>
