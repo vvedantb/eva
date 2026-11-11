@@ -308,6 +308,7 @@ export function SessionDetailClient({
       // not carry over to another tab.
       key={activeChat._id}
       sessionId={sessionId}
+      session={session}
       chat={activeChat}
       chats={chats ?? []}
       chatStatuses={chatStatuses ?? []}
@@ -318,7 +319,6 @@ export function SessionDetailClient({
       branchName={session.branchName}
       sandboxBranch={session.sandboxBranch}
       sandboxGitSync={session.sandboxGitSync}
-      prUrl={session.prUrl}
       prState={session.prState}
       summary={session.summary}
       messages={messages ?? []}
@@ -337,7 +337,6 @@ export function SessionDetailClient({
       onSandboxToggle={handleSandboxToggle}
       isArchived={isArchived}
       isReadOnly={isArchived}
-      deploymentStatus={session.deploymentStatus}
       sandboxCollapsed={sandboxCollapsed}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}

@@ -36,8 +36,8 @@ interface PrLinkMenuItemsArgs {
 
 /**
  * The Create PR / View PR(s) / View Preview block of the "More" dropdown, shared
- * by the quick-task footer and header, the session header and the project
- * header. Simple view hides git/PR plumbing here, so the three surfaces cannot
+ * by the quick-task footer and header and the project header. Simple view
+ * hides git/PR plumbing here, so the surfaces cannot
  * drift apart. Returning `hasItems` lets callers keep their own separator
  * logic around the block.
  */

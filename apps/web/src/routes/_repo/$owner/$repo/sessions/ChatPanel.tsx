@@ -60,6 +60,8 @@ type ChatTurnStatus = FunctionReturnType<
 
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
+  /** The session row; the header "…" menu reads its fields. */
+  session: Doc<"sessions">;
   /** The chat tab this panel shows; the transcript, turn and model are its own. */
   chat: Doc<"sessionChats">;
   /** Every live chat of the session, for the tab strip. */
@@ -74,7 +76,6 @@ interface ChatPanelProps {
   /** Branch the sandbox worktree is on right now, reported by its daemon. */
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
-  prUrl?: string;
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
   messages: SessionMessage[];
@@ -94,7 +95,6 @@ interface ChatPanelProps {
   isArchived?: boolean;
   /** Archive or PR merged/closed — hides composer and shows read-only banner. */
   isReadOnly?: boolean;
-  deploymentStatus?: "queued" | "building" | "deployed" | "error";
   sandboxCollapsed?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
@@ -117,6 +117,7 @@ const MAX_PARALLEL_CHATS = 3;
 
 export function ChatPanel({
   sessionId,
+  session,
   chat,
   chats,
   chatStatuses,
@@ -127,7 +128,6 @@ export function ChatPanel({
   branchName,
   sandboxBranch,
   sandboxGitSync,
-  prUrl,
   prState,
   summary,
   messages,
@@ -144,7 +144,6 @@ export function ChatPanel({
   onSandboxToggle,
   isArchived = false,
   isReadOnly = false,
-  deploymentStatus,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -366,20 +365,15 @@ export function ChatPanel({
 
   const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
-    sessionId,
+    session,
     chatId,
-    title,
-    branchName,
-    prUrl,
-    prState,
+    isAnyChatExecuting: runningChatIds.size > 0,
     hasSummary,
     messageCount: messages.length,
     isSandboxActive,
     isSandboxToggling,
     sandboxGitSync,
     isAssistantResponding: isExecuting,
-    deploymentStatus,
-    simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,

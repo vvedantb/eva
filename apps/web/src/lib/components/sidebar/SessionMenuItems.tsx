@@ -6,6 +6,8 @@ import { isTitleRegenerating } from "@eva/shared";
 import {
   ContextMenuItem,
   ContextMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   toast,
   ConfirmSkipHint,
   skipConfirmTitle,
@@ -55,6 +57,8 @@ export function useIsRegeneratingTitle(session: SessionMenuSession): boolean {
 }
 
 interface SessionMenuItemsProps {
+  /** Right-click menu (sidebar row, session tab) or the chat header "…" menu. */
+  variant: "context" | "dropdown";
   session: SessionMenuSession;
   href: string;
   isRegeneratingTitle: boolean;
@@ -70,14 +74,18 @@ interface SessionMenuItemsProps {
   onUnarchive?: () => Promise<void>;
   /** Rows in a linked-session group: take the session out of the group. */
   onRemoveFromGroup?: () => void;
+  /** Chat header only: the summary runs in the open chat's sandbox. */
+  summary?: { hasSummary: boolean; disabled: boolean; onRequest: () => void };
 }
 
 /**
- * Context-menu body shared by the sidebar session row and the Chrome-style
- * session tab. Callers decide which actions apply by passing or omitting the
- * handlers; the items themselves are identical in both places.
+ * Session menu body shared by the sidebar session row, the Chrome-style
+ * session tab and the chat header "…" menu. Callers decide which actions
+ * apply by passing or omitting the handlers; the items themselves are
+ * identical in every place.
  */
 export function SessionMenuItems({
+  variant,
   session,
   href,
   isRegeneratingTitle,
@@ -87,7 +95,12 @@ export function SessionMenuItems({
   onArchiveRequest,
   onUnarchive,
   onRemoveFromGroup,
+  summary,
 }: SessionMenuItemsProps) {
+  const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
+  const Separator =
+    variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
+  const iconSize = variant === "context" ? 16 : 14;
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
   const forkSession = useAction(api.sandbox.forkSession);
   // Simple view hides branch/PR actions, matching the hidden PR chip on the
@@ -103,15 +116,33 @@ export function SessionMenuItems({
         ? "Agent working"
         : null;
 
+  const summaryLabel = summary?.hasSummary
+    ? "Regenerate Summary"
+    : "Summarise Session";
+
   return (
     <>
+      {summary ? (
+        <>
+          <Item
+            onSelect={summary.onRequest}
+            disabled={summary.disabled}
+            title={skipConfirmTitle(summaryLabel)}
+          >
+            <IconSparkles size={iconSize} />
+            {summaryLabel}
+            <ConfirmSkipHint />
+          </Item>
+          <Separator />
+        </>
+      ) : null}
       {onRenameRequest ? (
         <>
-          <ContextMenuItem onSelect={onRenameRequest}>
-            <IconPencil size={16} />
+          <Item onSelect={onRenameRequest}>
+            <IconPencil size={iconSize} />
             Rename
-          </ContextMenuItem>
-          <ContextMenuItem
+          </Item>
+          <Item
             disabled={isRegeneratingTitle}
             onSelect={() => {
               void withMutationToast(
@@ -122,13 +153,13 @@ export function SessionMenuItems({
               );
             }}
           >
-            <IconSparkles size={16} />
+            <IconSparkles size={iconSize} />
             Regenerate title
-          </ContextMenuItem>
+          </Item>
         </>
       ) : null}
       {onForkNavigate ? (
-        <ContextMenuItem
+        <Item
           disabled={forkBlockedReason !== null}
           onSelect={() => {
             // Can take a minute: a running source sandbox is stopped first so
@@ -149,7 +180,7 @@ export function SessionMenuItems({
             );
           }}
         >
-          <IconGitFork size={16} />
+          <IconGitFork size={iconSize} />
           Fork session
           {/* Disabled items drop pointer events, so a title tooltip never shows. */}
           {forkBlockedReason === null ? null : (
@@ -157,95 +188,95 @@ export function SessionMenuItems({
               {forkBlockedReason}
             </span>
           )}
-        </ContextMenuItem>
+        </Item>
       ) : null}
-      <ContextMenuItem
+      <Item
         onSelect={() => {
           void navigator.clipboard.writeText(session.title);
         }}
       >
-        <IconClipboard size={16} />
+        <IconClipboard size={iconSize} />
         Copy title
-      </ContextMenuItem>
-      <ContextMenuItem
+      </Item>
+      <Item
         onSelect={() => {
           void navigator.clipboard.writeText(window.location.origin + href);
         }}
       >
-        <IconLink size={16} />
+        <IconLink size={iconSize} />
         Copy link
-      </ContextMenuItem>
+      </Item>
       {branchName ? (
-        <ContextMenuItem
+        <Item
           onSelect={() => {
             void navigator.clipboard.writeText(branchName).then(() => {
               toast.success("Branch name copied");
             });
           }}
         >
-          <IconGitBranch size={16} />
+          <IconGitBranch size={iconSize} />
           Copy branch name
-        </ContextMenuItem>
+        </Item>
       ) : null}
-      <PrActionsSubmenus variant="context" prs={prs} />
+      <PrActionsSubmenus variant={variant} prs={prs} />
       {/* A session whose PR predates the `pullRequests` rows has only a URL. */}
       {prs.length === 0 && prUrl ? (
-        <ContextMenuItem
+        <Item
           onSelect={() => {
             window.open(prUrl, "_blank", "noopener,noreferrer");
           }}
         >
-          <IconExternalLink size={16} />
+          <IconExternalLink size={iconSize} />
           Open PR
-        </ContextMenuItem>
+        </Item>
       ) : null}
       {onSendForReview && !simpleView ? (
         <>
-          <ContextMenuSeparator />
-          <ContextMenuItem
+          <Separator />
+          <Item
             onSelect={onSendForReview}
             title={skipConfirmTitle("Send for Review")}
           >
-            <IconEye size={16} className="text-status-code-review" />
+            <IconEye size={iconSize} className="text-status-code-review" />
             Send for Review
             <ConfirmSkipHint />
-          </ContextMenuItem>
+          </Item>
         </>
       ) : null}
       {onRemoveFromGroup ? (
         <>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={onRemoveFromGroup}>
-            <IconLinkOff size={16} />
+          <Separator />
+          <Item onSelect={onRemoveFromGroup}>
+            <IconLinkOff size={iconSize} />
             Remove from group
-          </ContextMenuItem>
+          </Item>
         </>
       ) : null}
       {onUnarchive ? (
         <>
-          <ContextMenuSeparator />
-          <ContextMenuItem
+          <Separator />
+          <Item
             onSelect={() => {
               void onUnarchive();
             }}
           >
-            <IconArchiveOff size={16} />
+            <IconArchiveOff size={iconSize} />
             Unarchive
-          </ContextMenuItem>
+          </Item>
         </>
       ) : null}
       {onArchiveRequest ? (
         <>
-          <ContextMenuSeparator />
-          <ContextMenuItem
+          <Separator />
+          <Item
             className="text-warning"
             onSelect={onArchiveRequest}
             title={skipConfirmTitle("Archive")}
           >
-            <IconArchive size={16} />
+            <IconArchive size={iconSize} />
             Archive
             <ConfirmSkipHint />
-          </ContextMenuItem>
+          </Item>
         </>
       ) : null}
     </>

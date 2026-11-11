@@ -1,18 +1,11 @@
 "use client";
 
-import { useMutation, useQueries } from "convex/react";
+import { useQueries } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
   CenteredSpinner,
   tokenTransition,
   useRequestConfirm,
@@ -36,8 +29,12 @@ import {
   useStoredGroupOpen,
 } from "@/lib/components/sidebar/useSidebarAppGroupOpen";
 import { entityPathSegment } from "@/lib/numId";
-import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
+import {
+  SessionDialogs,
+  type SessionArchiveTarget,
+  type SessionRenameTarget,
+} from "@/lib/components/sidebar/SessionDialogs";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -109,7 +106,7 @@ export function GlobalSessionsSidebar({
   // Not persisted: the list opens on Active each time.
   const [listMode, setListMode] = useState<SessionListMode>("active");
   const { request: requestConfirm } = useRequestConfirm();
-  const { archive, isArchiving } = useArchiveSession();
+  const { archive } = useArchiveSession();
   const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
@@ -120,35 +117,11 @@ export function GlobalSessionsSidebar({
     LINKED_SESSION_GROUPS_OPEN_KEY,
     true,
   );
-  const [sessionToRename, setSessionToRename] = useState<{
-    session: SessionListItem;
-    repo: RepoRow;
-  } | null>(null);
+  const [sessionToRename, setSessionToRename] =
+    useState<SessionRenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [sessionToArchive, setSessionToArchive] = useState<{
-    session: SessionListItem;
-    repo: RepoRow;
-    pathSegment: string;
-  } | null>(null);
-  const saveSessionRename = async () => {
-    if (!sessionToRename || !renameValue.trim()) return;
-    setIsRenaming(true);
-    try {
-      await updateSession({
-        id: sessionToRename.session._id,
-        title: renameValue.trim(),
-      });
-      mutationSuccess("Session renamed", "session-rename");
-      setSessionToRename(null);
-    } catch {
-      mutationError("Couldn't rename session", "session-rename");
-      setIsRenaming(false);
-      return;
-    }
-    setIsRenaming(false);
-  };
-  const updateSession = useMutation(api.sessions.update);
+  const [sessionToArchive, setSessionToArchive] =
+    useState<SessionArchiveTarget | null>(null);
 
   // The only watch on the lists: the rows are handed to each group as a prop.
   // The list mode picks active or archived rows, so linked groups form in both.
@@ -194,8 +167,8 @@ export function GlobalSessionsSidebar({
       group.members.map((member) => member.session._id),
     ),
   );
-  const onRenameRequest = (session: SessionListItem, groupRepo: RepoRow) => {
-    setSessionToRename({ session, repo: groupRepo });
+  const onRenameRequest = (session: SessionListItem) => {
+    setSessionToRename({ session });
     setRenameValue(session.title);
   };
   const onArchiveRequest = (session: SessionListItem, groupRepo: RepoRow) => {
@@ -287,87 +260,16 @@ export function GlobalSessionsSidebar({
         </div>
       </div>
 
-      <Dialog
-        open={sessionToRename !== null}
-        onOpenChange={(open) => {
-          if (!open) setSessionToRename(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename session</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && renameValue.trim() && sessionToRename) {
-                e.preventDefault();
-                void saveSessionRename();
-              }
-            }}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setSessionToRename(null)}
-              disabled={isRenaming}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!renameValue.trim() || isRenaming}
-              onClick={() => void saveSessionRename()}
-            >
-              {isRenaming ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={sessionToArchive !== null}
-        onOpenChange={(open) => {
-          if (!open) setSessionToArchive(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Archive Session</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will stop the sandbox and remove{" "}
-            <span className="font-medium text-foreground">
-              {sessionToArchive?.session.title}
-            </span>{" "}
-            from the active list. An open or draft PR will be closed, and
-            reopened if you unarchive.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setSessionToArchive(null)}
-              disabled={isArchiving}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={isArchiving}
-              onClick={() => {
-                if (!sessionToArchive) return;
-                void archive(sessionToArchive, pathname, () => {
-                  setSessionToArchive(null);
-                  if (onNavigate) onNavigate();
-                });
-              }}
-            >
-              {isArchiving ? "Archiving…" : "Archive"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SessionDialogs
+        pathname={pathname}
+        renameTarget={sessionToRename}
+        renameValue={renameValue}
+        onRenameValueChange={setRenameValue}
+        onCloseRename={() => setSessionToRename(null)}
+        archiveTarget={sessionToArchive}
+        onCloseArchive={() => setSessionToArchive(null)}
+        onArchived={onNavigate}
+      />
     </>
   );
 }
