@@ -222,8 +222,6 @@ export function QuickTasksKanbanBoard({
               })
             }
             assignedTo={task.assignedTo}
-            model={task.model}
-            providerAccountId={task.providerAccountId}
             projectId={task.projectId}
             repoId={task.repoId ?? repoId}
             users={users ?? undefined}
@@ -259,8 +257,6 @@ export function QuickTasksKanbanBoard({
             isSelecting={isSelecting}
             isSelected={selectedIds.has(task._id)}
             assignedTo={task.assignedTo}
-            model={task.model}
-            providerAccountId={task.providerAccountId}
             projectId={task.projectId}
             repoId={task.repoId ?? repoId}
             users={users ?? undefined}

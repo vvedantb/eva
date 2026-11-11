@@ -30,6 +30,7 @@ import {
   getMoreMenuVisibility,
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
+import { TaskHeaderMenu } from "./TaskHeaderMenu";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -261,11 +262,30 @@ export function TaskFooter({
           {isHeader ? (
             <PrMergeConfetti owner={{ kind: "task", taskId }} />
           ) : null}
-          {moreMenu.showMoreMenu && (
+          {isHeader && task ? (
+            <TaskHeaderMenu
+              task={task}
+              buttonSize={buttonSize}
+              iconSize={iconSize}
+              createPr={{
+                enabled: canCreatePr,
+                isCreating: isCreatingPr,
+                onCreate: onCreatePr,
+              }}
+              visibility={moreMenu}
+              isStarting={isStarting}
+              isRetryingStartupCommands={isRetryingStartupCommands}
+              isRunningDevServer={isRunningDevServer}
+              isRunningBackgroundCommands={isRunningBackgroundCommands}
+              onResolveConfirm={onResolveConfirm}
+              onRunStartupCommands={onRunStartupCommands}
+              onRunDevServer={onRunDevServer}
+              onRunBackgroundCommands={onRunBackgroundCommands}
+            />
+          ) : moreMenu.showMoreMenu ? (
             <TaskFooterMoreMenu
               visibility={moreMenu}
               prLinks={prLinks}
-              isHeader={isHeader}
               buttonSize={buttonSize}
               iconSize={iconSize}
               isStarting={isStarting}
@@ -277,7 +297,7 @@ export function TaskFooter({
               onRunDevServer={onRunDevServer}
               onRunBackgroundCommands={onRunBackgroundCommands}
             />
-          )}
+          ) : null}
           <SandboxCommitPushButton
             gitSync={task?.sandboxGitSync}
             isSandboxActive={isSandboxActive}

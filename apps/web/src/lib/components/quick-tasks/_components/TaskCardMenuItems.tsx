@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   ContextMenuItem,
   ContextMenuRadioGroup,
@@ -17,20 +18,19 @@ import {
   DropdownMenuSubTrigger,
   ContextMenuLabel,
   DropdownMenuLabel,
-  ModelPickerContent,
-  modelPickerSurfaceClass,
   ConfirmSkipHint,
   skipConfirmTitle,
+  toast,
 } from "@vvedantb/ui";
-import { normalizeAIModel, type Id, api } from "@eva/backend";
+import { type Id, api } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import {
   IconArrowMoveRight,
-  IconBrain,
   IconClipboard,
+  IconCopy,
   IconExternalLink,
-  IconFolder,
+  IconGitBranch,
   IconGitPullRequest,
   IconLink,
   IconPlayerPlay,
@@ -44,16 +44,11 @@ import {
   TASK_STATUSES,
   type TaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
-import { canEditTaskModel } from "@/lib/components/tasks/_components/task-detail-constants";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import {
-  useAvailableAiModels,
-  useTaskOwnerProviderAccounts,
-} from "@/lib/hooks/useAvailableAiModels";
 import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
 import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
-type GroupedCodebase = FunctionReturnType<
+export type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
 >[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -64,11 +59,13 @@ export interface TaskCardMenuItemsProps {
   id: Id<"agentTasks">;
   title: string;
   status: TaskStatus;
+  /** The task page; Copy link copies it. */
   href?: string;
+  /** Cards link elsewhere; the task header already is the task. */
+  showOpenInNewTab?: boolean;
+  /** Task header only: its sandbox and PR commands, above the shared items. */
+  leading?: ReactNode;
   assignedTo?: Id<"users">;
-  model?: string;
-  providerAccountId?: Id<"userProviderAccounts">;
-  createdBy?: Id<"users">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
   groupedCodebases?: GroupedCodebase[];
@@ -79,16 +76,21 @@ export interface TaskCardMenuItemsProps {
   onMove: (targetId: Id<"githubRepos">) => void;
 }
 
+/**
+ * Quick task menu body shared by the card's right-click menu, the card's kebab
+ * and the task header "…" menu. Groups: Run Eva, triage (Status, Code
+ * Reviewer), open and copy, PRs, then Move and Delete. Model and project are
+ * set on the task page, not here.
+ */
 export function TaskCardMenuItems({
   variant,
   id,
   title,
   status,
   href,
+  showOpenInNewTab = false,
+  leading,
   assignedTo,
-  model,
-  providerAccountId,
-  createdBy,
   projectId,
   repoId,
   groupedCodebases,
@@ -112,30 +114,15 @@ export function TaskCardMenuItems({
     (localStore, args) => {
       if (!repoId) return;
       patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
-        cur.map((task) => {
-          if (task._id !== args.id) return task;
-          const updated = { ...task };
-          if (args.tags !== undefined) updated.tags = args.tags;
-          if (args.assignedTo !== undefined)
-            updated.assignedTo = args.assignedTo ?? undefined;
-          if (args.model !== undefined) updated.model = args.model;
-          if (args.providerAccountId !== undefined)
-            updated.providerAccountId = args.providerAccountId ?? undefined;
-          if (args.projectId !== undefined)
-            updated.projectId = args.projectId ?? undefined;
-          return updated;
-        }),
+        cur.map((task) =>
+          task._id === args.id && args.assignedTo !== undefined
+            ? { ...task, assignedTo: args.assignedTo ?? undefined }
+            : task,
+        ),
       );
     },
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const normalizedModel = normalizeAIModel(model);
-  const { options: modelOptions } = useAvailableAiModels(
-    repoId,
-    normalizedModel,
-  );
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(id);
 
   // A card only needs runs and PRs once the menu is open — Radix mounts menu
   // content on demand, so these stay per opened menu rather than per card on
@@ -148,11 +135,8 @@ export function TaskCardMenuItems({
     taskPrs.length === 0
       ? projects?.find((project) => project._id === projectId)?.prUrl
       : undefined;
-
-  const isOwner =
-    currentUserId !== undefined &&
-    createdBy !== undefined &&
-    currentUserId === createdBy;
+  // Tasks store no branch; the primary PR's head is the one Eva works on.
+  const branchName = taskPrs[0]?.headBranch;
 
   // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
   const canRun =
@@ -174,15 +158,24 @@ export function TaskCardMenuItems({
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
   const MenuLabel =
     variant === "context" ? ContextMenuLabel : DropdownMenuLabel;
+  const iconSize = variant === "context" ? 16 : 14;
 
   // Filter out the current repo from move targets
   const moveTargets = groupedCodebases?.filter((codebase) =>
     codebase.apps.some((app) => app._id !== repoId),
   );
   const hasMoveTargets = moveTargets && moveTargets.length > 0;
+  const hasPrGroup = taskPrs.length > 0 || projectPrUrl !== undefined;
 
   return (
     <>
+      {leading ? (
+        <>
+          {leading}
+          <MenuSeparator />
+        </>
+      ) : null}
+
       {!projectId && (
         <>
           <Item
@@ -195,43 +188,16 @@ export function TaskCardMenuItems({
               );
             }}
           >
-            <IconPlayerPlay size={16} />
+            <IconPlayerPlay size={iconSize} />
             Run Eva
           </Item>
           <MenuSeparator />
         </>
       )}
 
-      {href || taskPrs.length > 0 || projectPrUrl ? (
-        <>
-          {href ? (
-            <Item
-              onSelect={() => {
-                window.open(href, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <IconExternalLink size={16} />
-              Open in new tab
-            </Item>
-          ) : null}
-          <PrActionsSubmenus variant={variant} prs={taskPrs} />
-          {projectPrUrl ? (
-            <Item
-              onSelect={() => {
-                window.open(projectPrUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <IconGitPullRequest size={16} />
-              View PR
-            </Item>
-          ) : null}
-          <MenuSeparator />
-        </>
-      ) : null}
-
       <Sub>
         <SubTrigger>
-          <StatusIcon size={16} />
+          <StatusIcon size={iconSize} />
           Status
         </SubTrigger>
         <SubContent>
@@ -248,7 +214,7 @@ export function TaskCardMenuItems({
               const Icon = cfg.icon;
               return (
                 <RadioItem key={s} value={s}>
-                  <Icon size={16} className={cfg.text} />
+                  <Icon size={iconSize} className={cfg.text} />
                   {cfg.label}
                 </RadioItem>
               );
@@ -259,7 +225,7 @@ export function TaskCardMenuItems({
 
       <Sub>
         <SubTrigger>
-          <IconUserPlus size={16} />
+          <IconUserPlus size={iconSize} />
           Code Reviewer
         </SubTrigger>
         <SubContent>
@@ -297,153 +263,141 @@ export function TaskCardMenuItems({
         </SubContent>
       </Sub>
 
-      <Sub>
-        <SubTrigger disabled={!canEditTaskModel(status)}>
-          <IconBrain size={16} />
-          Model
-        </SubTrigger>
-        <SubContent className={modelPickerSurfaceClass}>
-          {/* Same body as QuickTaskModal / ModelSelect — do not hand-roll radios. */}
-          <ModelPickerContent
-            value={normalizedModel}
-            accountId={providerAccountId ?? null}
-            options={modelOptions}
-            accounts={accounts}
-            canSelectTeamWhilePersonal={isOwner}
-            onSelect={(nextModel, nextAccountId) => {
-              if (!isOwner) {
-                updateTask({ id, model: nextModel });
-                return;
-              }
-              updateTask({
-                id,
-                model: nextModel,
-                providerAccountId: resolveAccountId(nextAccountId) ?? null,
-              });
-            }}
-          />
-        </SubContent>
-      </Sub>
-
-      <Sub>
-        <SubTrigger>
-          <IconFolder size={16} />
-          Project
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={projectId ?? "none"}
-            onValueChange={(value) => {
-              if (value === "none") {
-                updateTask({ id, projectId: null });
-              } else {
-                const matched = (projects ?? []).find((p) => p._id === value);
-                if (!matched) return;
-                updateTask({ id, projectId: matched._id });
-              }
-            }}
-          >
-            <RadioItem value="none">No project</RadioItem>
-            {projects?.map((project) => (
-              <RadioItem key={project._id} value={project._id}>
-                {project.title}
-              </RadioItem>
-            ))}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
-
       <MenuSeparator />
 
-      {hasMoveTargets && (
-        <>
-          <Sub>
-            <SubTrigger>
-              <IconArrowMoveRight size={16} />
-              Move to codebase
-            </SubTrigger>
-            <SubContent className="max-h-80 overflow-y-auto">
-              {moveTargets.map((codebase) => {
-                // Filter out current repo from apps
-                const availableApps = codebase.apps.filter(
-                  (app) => app._id !== repoId,
-                );
-                if (availableApps.length === 0) return null;
-
-                // Single app codebase: show directly
-                if (!codebase.isMonorepo || availableApps.length === 1) {
-                  const app = availableApps[0];
-                  return (
-                    <Item
-                      key={app._id}
-                      title={skipConfirmTitle("Move")}
-                      onSelect={() => {
-                        onMove(app._id);
-                      }}
-                    >
-                      {codebase.displayName}
-                      <ConfirmSkipHint />
-                    </Item>
-                  );
-                }
-
-                // Monorepo: show as submenu with apps grouped
-                return (
-                  <Sub key={codebase.codebase}>
-                    <SubTrigger>{codebase.displayName}</SubTrigger>
-                    <SubContent>
-                      <MenuLabel className="text-xs text-muted-foreground">
-                        Apps
-                      </MenuLabel>
-                      {availableApps.map((app) => (
-                        <Item
-                          key={app._id}
-                          title={skipConfirmTitle("Move")}
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            onMove(app._id);
-                          }}
-                        >
-                          {app.appName}
-                          <ConfirmSkipHint />
-                        </Item>
-                      ))}
-                    </SubContent>
-                  </Sub>
-                );
-              })}
-            </SubContent>
-          </Sub>
-          <MenuSeparator />
-        </>
-      )}
-
-      <Item
-        onSelect={() => {
-          navigator.clipboard.writeText(title);
-        }}
-      >
-        <IconClipboard size={16} />
-        Copy title
-      </Item>
-      {href ? (
-        /*
-         * The card hosting this menu sits in a list or on the board, so the
-         * current pathname is that list — not the task. Copy the card's own
-         * href (already the public display-form path) instead.
-         */
+      {showOpenInNewTab && href ? (
         <Item
           onSelect={() => {
-            void navigator.clipboard.writeText(window.location.origin + href);
+            window.open(href, "_blank", "noopener,noreferrer");
           }}
         >
-          <IconLink size={16} />
-          Copy task link
+          <IconExternalLink size={iconSize} />
+          Open in new tab
         </Item>
+      ) : null}
+      <Sub>
+        <SubTrigger>
+          <IconCopy size={iconSize} />
+          Copy
+        </SubTrigger>
+        <SubContent>
+          <Item
+            onSelect={() => {
+              void navigator.clipboard.writeText(title);
+            }}
+          >
+            <IconClipboard size={iconSize} />
+            Title
+          </Item>
+          {href ? (
+            /*
+             * A card sits in a list or on the board, so the current pathname
+             * is that list — not the task. Copy the task's own href instead.
+             */
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(
+                  window.location.origin + href,
+                );
+              }}
+            >
+              <IconLink size={iconSize} />
+              Link
+            </Item>
+          ) : null}
+          {branchName ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(branchName).then(() => {
+                  toast.success("Branch name copied");
+                });
+              }}
+            >
+              <IconGitBranch size={iconSize} />
+              Branch name
+            </Item>
+          ) : null}
+        </SubContent>
+      </Sub>
+
+      {hasPrGroup ? (
+        <>
+          <MenuSeparator />
+          <PrActionsSubmenus variant={variant} prs={taskPrs} />
+          {projectPrUrl ? (
+            <Item
+              onSelect={() => {
+                window.open(projectPrUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              <IconGitPullRequest size={iconSize} />
+              View PR
+            </Item>
+          ) : null}
+        </>
       ) : null}
 
       <MenuSeparator />
 
+      {hasMoveTargets && (
+        <Sub>
+          <SubTrigger>
+            <IconArrowMoveRight size={iconSize} />
+            Move to codebase
+          </SubTrigger>
+          <SubContent className="max-h-80 overflow-y-auto">
+            {moveTargets.map((codebase) => {
+              // Filter out current repo from apps
+              const availableApps = codebase.apps.filter(
+                (app) => app._id !== repoId,
+              );
+              if (availableApps.length === 0) return null;
+
+              // Single app codebase: show directly
+              if (!codebase.isMonorepo || availableApps.length === 1) {
+                const app = availableApps[0];
+                return (
+                  <Item
+                    key={app._id}
+                    title={skipConfirmTitle("Move")}
+                    onSelect={() => {
+                      onMove(app._id);
+                    }}
+                  >
+                    {codebase.displayName}
+                    <ConfirmSkipHint />
+                  </Item>
+                );
+              }
+
+              // Monorepo: show as submenu with apps grouped
+              return (
+                <Sub key={codebase.codebase}>
+                  <SubTrigger>{codebase.displayName}</SubTrigger>
+                  <SubContent>
+                    <MenuLabel className="text-xs text-muted-foreground">
+                      Apps
+                    </MenuLabel>
+                    {availableApps.map((app) => (
+                      <Item
+                        key={app._id}
+                        title={skipConfirmTitle("Move")}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          onMove(app._id);
+                        }}
+                      >
+                        {app.appName}
+                        <ConfirmSkipHint />
+                      </Item>
+                    ))}
+                  </SubContent>
+                </Sub>
+              );
+            })}
+          </SubContent>
+        </Sub>
+      )}
       <Item
         className="text-destructive focus:text-destructive"
         title={skipConfirmTitle("Delete")}
@@ -451,7 +405,7 @@ export function TaskCardMenuItems({
           onDelete();
         }}
       >
-        <IconTrash size={16} />
+        <IconTrash size={iconSize} />
         Delete
         <ConfirmSkipHint />
       </Item>

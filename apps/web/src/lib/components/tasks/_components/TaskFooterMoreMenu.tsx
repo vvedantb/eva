@@ -10,7 +10,6 @@ import {
   DropdownMenuSeparator,
   ConfirmSkipHint,
   skipConfirmTitle,
-  CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import { IconHammer, IconDots } from "@tabler/icons-react";
 import {
@@ -70,10 +69,9 @@ export function getMoreMenuVisibility({
   };
 }
 
-interface TaskFooterMoreMenuProps {
+export interface TaskFooterMoreMenuProps {
   visibility: MoreMenuVisibility;
   prLinks: { hasItems: boolean; items: ReactNode };
-  isHeader: boolean;
   buttonSize: "default" | "sm";
   iconSize: number;
   isStarting: boolean;
@@ -89,7 +87,6 @@ interface TaskFooterMoreMenuProps {
 export function TaskFooterMoreMenu({
   visibility,
   prLinks,
-  isHeader,
   buttonSize,
   iconSize,
   isStarting,
@@ -114,53 +111,88 @@ export function TaskFooterMoreMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {showResolveConflicts && (
-          <DropdownMenuItem
-            onClick={onResolveConfirm}
-            disabled={isStarting}
-            title={skipConfirmTitle("Resolve Conflicts")}
-          >
-            <BusyMenuIcon busy={isStarting}>
-              <IconHammer size={14} />
-            </BusyMenuIcon>
-            Resolve Conflicts
-            <ConfirmSkipHint />
-          </DropdownMenuItem>
-        )}
-        {showResolveConflicts && hasSandboxCommandItems ? (
-          <DropdownMenuSeparator />
-        ) : null}
-        <SandboxCommandMenuItems
-          startupCommands={{
-            show: visibility.showRunStartupCommands,
-            busy: isRetryingStartupCommands,
-            onRun: onRunStartupCommands,
-          }}
-          devServer={{
-            show: visibility.showRunDevServer,
-            busy: isRunningDevServer,
-            onRun: onRunDevServer,
-          }}
-          backgroundCommands={{
-            show: visibility.showRunBackgroundCommands,
-            busy: isRunningBackgroundCommands,
-            onRun: onRunBackgroundCommands,
-          }}
+        <TaskSandboxMenuItems
+          visibility={visibility}
+          isStarting={isStarting}
+          isRetryingStartupCommands={isRetryingStartupCommands}
+          isRunningDevServer={isRunningDevServer}
+          isRunningBackgroundCommands={isRunningBackgroundCommands}
+          onResolveConfirm={onResolveConfirm}
+          onRunStartupCommands={onRunStartupCommands}
+          onRunDevServer={onRunDevServer}
+          onRunBackgroundCommands={onRunBackgroundCommands}
         />
         {(showResolveConflicts || hasSandboxCommandItems) &&
         prLinks.hasItems ? (
           <DropdownMenuSeparator />
         ) : null}
         {prLinks.items}
-        {isHeader ? (
-          <>
-            {(showResolveConflicts ||
-              hasSandboxCommandItems ||
-              prLinks.hasItems) && <DropdownMenuSeparator />}
-            <CopyLinkMenuItem iconSize={14} />
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+export type TaskSandboxMenuItemsProps = Pick<
+  TaskFooterMoreMenuProps,
+  | "visibility"
+  | "isStarting"
+  | "isRetryingStartupCommands"
+  | "isRunningDevServer"
+  | "isRunningBackgroundCommands"
+  | "onResolveConfirm"
+  | "onRunStartupCommands"
+  | "onRunDevServer"
+  | "onRunBackgroundCommands"
+>;
+
+/** Resolve Conflicts and the sandbox command runners; the task header reuses them. */
+export function TaskSandboxMenuItems({
+  visibility,
+  isStarting,
+  isRetryingStartupCommands,
+  isRunningDevServer,
+  isRunningBackgroundCommands,
+  onResolveConfirm,
+  onRunStartupCommands,
+  onRunDevServer,
+  onRunBackgroundCommands,
+}: TaskSandboxMenuItemsProps) {
+  const { showResolveConflicts, hasSandboxCommandItems } = visibility;
+  return (
+    <>
+      {showResolveConflicts && (
+        <DropdownMenuItem
+          onClick={onResolveConfirm}
+          disabled={isStarting}
+          title={skipConfirmTitle("Resolve Conflicts")}
+        >
+          <BusyMenuIcon busy={isStarting}>
+            <IconHammer size={14} />
+          </BusyMenuIcon>
+          Resolve Conflicts
+          <ConfirmSkipHint />
+        </DropdownMenuItem>
+      )}
+      {showResolveConflicts && hasSandboxCommandItems ? (
+        <DropdownMenuSeparator />
+      ) : null}
+      <SandboxCommandMenuItems
+        startupCommands={{
+          show: visibility.showRunStartupCommands,
+          busy: isRetryingStartupCommands,
+          onRun: onRunStartupCommands,
+        }}
+        devServer={{
+          show: visibility.showRunDevServer,
+          busy: isRunningDevServer,
+          onRun: onRunDevServer,
+        }}
+        backgroundCommands={{
+          show: visibility.showRunBackgroundCommands,
+          busy: isRunningBackgroundCommands,
+          onRun: onRunBackgroundCommands,
+        }}
+      />
+    </>
   );
 }
