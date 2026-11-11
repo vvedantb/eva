@@ -65,9 +65,12 @@ function FileRow({ pr, entry, onOpen }: { pr: PrRef; entry: DiffFileEntry; onOpe
           </Text>
         ) : null}
       </View>
-      {chip === null ? null : <Badge variant={chip.variant} textClassName="text-xs">
+      {/* `self-center`: the badge's own `self-start` would lift it to the row's top. */}
+      {chip === null ? null : (
+        <Badge variant={chip.variant} className="self-center" textClassName="text-xs">
           {chip.label}
-        </Badge>}
+        </Badge>
+      )}
       <PendingCommentCount count={comments} />
       {entry.binary ? null : <DiffStat additions={entry.additions} deletions={entry.deletions} hideZero />}
       <View className="size-11 items-center justify-center">

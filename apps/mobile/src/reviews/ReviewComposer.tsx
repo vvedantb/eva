@@ -185,7 +185,7 @@ export function ReviewComposer({
           <Text className="min-w-0 shrink" style={[TEXT_XS, { color: muted }]}>
             Posted as the eva app.
           </Text>
-          <Button fullWidth={false} loading={posting} disabled={!canPost || posting} onPress={post}>
+          <Button fullWidth={false} className="self-center" loading={posting} disabled={!canPost || posting} onPress={post}>
             {activeMode === "comment" ? "Comment" : "Submit review"}
           </Button>
         </View>

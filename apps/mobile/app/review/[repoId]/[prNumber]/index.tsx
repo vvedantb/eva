@@ -37,7 +37,7 @@ import {
   TabsTrigger,
 } from "@vvedantb/native-ui/primitives";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
-import { tokens } from "@vvedantb/native-ui/theme";
+import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
@@ -159,6 +159,7 @@ function ReviewTabs({
 }) {
   const router = useRouter();
   const scheme = useScheme();
+  const largerText = useLargerText();
   const insets = useSafeAreaInsets();
   const repoId = repo._id;
   const pr = { repoId, prNumber: overview.number };
@@ -172,8 +173,9 @@ function ReviewTabs({
   const isOpen = overview.status === "open";
 
   const nav = (
-    // 44 high on both tabs, so Code's ⋯ does not move the content when it shows.
-    <View className="min-h-11 flex-row items-center gap-2 px-1">
+    // As high as Code's ⋯ (a `HeaderIconButton`, 48; 56 with larger text) on
+    // every tab, so the tabs and the content do not move when it shows.
+    <View className={`${largerText ? "min-h-14" : "min-h-12"} flex-row items-center gap-2 px-1`}>
       <Tabs
         value={tab}
         onValueChange={(value: string) => {
@@ -371,8 +373,9 @@ function ReviewHeader({
             {overview.headRef}
           </Text>
           <IconArrowNarrowRight size={14} color={theme.mutedForeground} />
-          {/* The web keeps the base whole; a phone row cannot, so a long base truncates too. */}
-          <Text numberOfLines={1} className="font-instrument-sans min-w-0 shrink text-sm" style={{ color: theme.mutedForeground, maxWidth: "50%" }}>
+          {/* The head gives up its width first, so the base stays whole, as the web;
+              only a base past half the row truncates. */}
+          <Text numberOfLines={1} className="font-instrument-sans shrink-0 text-sm" style={{ color: theme.mutedForeground, maxWidth: "50%" }}>
             {overview.baseRef}
           </Text>
         </View>

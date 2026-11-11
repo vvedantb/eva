@@ -33,6 +33,7 @@ import * as Clipboard from "expo-clipboard";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BackHandler, Linking, Pressable, ScrollView, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MenuSheet } from "@/ui/MenuSheet";
 import { textColor, useScheme } from "@/ui/theme";
 import { usePendingLineComments, useViewedFiles, type PrDiffState, type PrRef } from "./prDiffStore";
 
@@ -243,6 +244,7 @@ export function PrFileDiff({
                   size="sm"
                   variant="secondary"
                   fullWidth={false}
+                  className="self-center"
                   onPress={() => setShownLines({ path: entry.path, count: shown + DIFF_LINE_CHUNK })}
                 >
                   {`Show ${Math.min(hidden, DIFF_LINE_CHUNK).toLocaleString()} more lines`}
@@ -361,28 +363,21 @@ function FileMenu({
     action();
   };
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="gap-3 px-3">
-        <SheetHeader className="px-2">
-          <SheetTitle numberOfLines={1}>{path.split("/").at(-1) ?? path}</SheetTitle>
-        </SheetHeader>
-        <SheetBody contentContainerClassName="gap-3">
-          <SheetRow
-            icon={IconCopy}
-            title="Copy path"
-            onPress={() =>
-              run(() =>
-                void Clipboard.setStringAsync(path).then(
-                  () => toast.success("Path copied"),
-                  () => toast.error("Couldn't copy the path"),
-                ),
-              )
-            }
-          />
-          <SheetRow icon={IconExternalLink} title="View file on GitHub" onPress={() => run(() => void Linking.openURL(githubUrl))} />
-        </SheetBody>
-      </SheetContent>
-    </Sheet>
+    <MenuSheet open={open} onOpenChange={onOpenChange} title={path.split("/").at(-1) ?? path}>
+      <SheetRow
+        icon={IconCopy}
+        title="Copy path"
+        onPress={() =>
+          run(() =>
+            void Clipboard.setStringAsync(path).then(
+              () => toast.success("Path copied"),
+              () => toast.error("Couldn't copy the path"),
+            ),
+          )
+        }
+      />
+      <SheetRow icon={IconExternalLink} title="View file on GitHub" onPress={() => run(() => void Linking.openURL(githubUrl))} />
+    </MenuSheet>
   );
 }
 
