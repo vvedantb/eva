@@ -62,6 +62,8 @@ The redirect is `eva://sso-callback`. If Google sign-in fails with a redirect er
 
 GitHub Actions builds and publishes the signed APK. See [RELEASE.md](RELEASE.md) for the secrets, the variables, the tag prefix (`eva-apk-`) and how to build locally.
 
+A new native module needs a new APK. `react-native-gesture-handler` (the sheet drags, from November 2026) is one: install the first APK built after it. It is autolinked, so it needs no config plugin and no workflow change.
+
 ### UI kit pin
 
 `@vvedantb/native-ui` is pinned to a git commit of `vvedantb/packages` main (0.14.0) in `package.json`, because the npm publish of 0.14.0 failed: CI needs the npm trusted publisher set up for the package. Move to `^0.14.0` once npm has it.
