@@ -163,10 +163,16 @@ export const getTaskData = internalQuery({
     const ownedSession = args.ownedSessionId
       ? await ctx.db.get(args.ownedSessionId)
       : null;
+    // A session sandbox mid-start or mid-stop is not reused: its own start
+    // or stop action owns that VM (the run then prepares a fresh one).
+    const ownedSandboxSettled =
+      ownedSession?.status === "active" || ownedSession?.status === "closed";
     const taskSandboxId = args.projectId
       ? undefined
       : args.ownedSessionId
-        ? ownedSession?.sandboxId
+        ? ownedSandboxSettled
+          ? ownedSession?.sandboxId
+          : undefined
         : task.sandboxId;
     const keepTaskSandboxActiveAfterRun =
       !args.projectId &&

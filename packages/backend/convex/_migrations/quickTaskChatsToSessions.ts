@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 import {
   internalQuery,
   type DatabaseReader,
@@ -13,9 +13,12 @@ import {
 } from "../_chat/turnProjection";
 import { isSessionArchived } from "../_sessions/archive";
 import {
+  adoptTaskChatDrafts,
   ensureOwnedSession,
+  findTaskSession,
   isTerminalTaskStatus,
   retireOwnedSession,
+  taskChatUserIds,
 } from "../_sessions/ownedSession";
 import { moveLegacyTranscriptPage } from "../_sessionChats/helpers";
 
@@ -65,6 +68,11 @@ async function busyReason(
     task.reviewTaskSandboxStatus === "stopping"
   ) {
     return `sandbox ${task.reviewTaskSandboxStatus}`;
+  }
+  // `hasOpenChatTurn` above already covers the session's turns.
+  const session = await findTaskSession(db, task._id);
+  if (session?.status === "starting" || session?.status === "stopping") {
+    return `session sandbox ${session.status}`;
   }
   const queued = await db
     .query("queuedMessages")
@@ -119,50 +127,6 @@ async function adoptTaskChatSettings(
 }
 
 /**
- * Step 3: the sandbox moves to the session. Returns false when the session
- * already holds a different sandbox (a run after deploy created one): the
- * task's VM is left alone for a person to look at.
- */
-async function moveTaskSandbox(
-  ctx: MutationCtx,
-  task: Doc<"agentTasks">,
-  session: Doc<"sessions">,
-): Promise<boolean> {
-  if (task.sandboxId === undefined) return true;
-  if (session.sandboxId !== undefined && session.sandboxId !== task.sandboxId) {
-    return false;
-  }
-  await ctx.db.patch(session._id, {
-    sandboxId: task.sandboxId,
-    status: task.reviewTaskSandboxStatus === "active" ? "active" : "closed",
-    sandboxStartAttempt: task.sandboxStartAttempt ?? session.sandboxStartAttempt,
-    devPort: task.devPort ?? session.devPort,
-    devCommand: task.devCommand ?? session.devCommand,
-    previewPath: task.previewPath ?? session.previewPath,
-    previewPanePaths: task.previewPanePaths ?? session.previewPanePaths,
-    terminalHistoryTail: task.terminalHistoryTail ?? session.terminalHistoryTail,
-    terminalPanes: task.terminalPanes ?? session.terminalPanes,
-    sandboxBranch: task.sandboxBranch ?? session.sandboxBranch,
-    sandboxGitSync: task.sandboxGitSync ?? session.sandboxGitSync,
-  });
-  await ctx.db.patch(task._id, {
-    sandboxId: undefined,
-    reviewTaskSandboxStatus: undefined,
-    sandboxStartAttempt: undefined,
-    sandboxDeleteAfter: undefined,
-    devPort: undefined,
-    devCommand: undefined,
-    previewPath: undefined,
-    previewPanePaths: undefined,
-    terminalHistoryTail: undefined,
-    terminalPanes: undefined,
-    sandboxBranch: undefined,
-    sandboxGitSync: undefined,
-  });
-  return true;
-}
-
-/**
  * The chat's own read rows, copied from the task's for the users who can
  * have one we can find by index (owner, assignee, subscribers). The task's
  * rows stay: task cards read unread on the task id.
@@ -172,17 +136,9 @@ async function copyChatReads(
   task: Doc<"agentTasks">,
   mainChat: Doc<"sessionChats">,
 ): Promise<void> {
-  const subscribers = await ctx.db
-    .query("taskSubscribers")
-    .withIndex("by_task", (q) => q.eq("taskId", task._id))
-    .collect();
-  const userIds = new Set<Id<"users">>([
-    task.createdBy,
-    ...(task.assignedTo ? [task.assignedTo] : []),
-    ...subscribers.map((row) => row.userId),
-  ]);
+  const userIds = await taskChatUserIds(ctx.db, task);
   await Promise.all(
-    [...userIds].map(async (userId) => {
+    userIds.map(async (userId) => {
       const [taskRead, chatRead] = await Promise.all([
         ctx.db
           .query("chatReads")
@@ -223,15 +179,18 @@ export async function migrateQuickTaskToSession(
     );
     return "skipped_busy";
   }
+  // Ensuring the session also hands the task's sandbox over to it.
   const { session, mainChat } = await ensureOwnedSession(ctx, task);
-  if (!(await moveTaskSandbox(ctx, task, session))) {
+  const left = await ctx.db.get(task._id);
+  if (left?.sandboxId !== undefined && left.sandboxId !== session.sandboxId) {
     console.warn(
-      `[quickTaskMigration] skipped task=${task._id} reason=sandbox conflict task=${task.sandboxId} session=${session.sandboxId}`,
+      `[quickTaskMigration] skipped task=${task._id} reason=sandbox conflict task=${left.sandboxId} session=${session.sandboxId}`,
     );
     return "skipped_sandbox_conflict";
   }
   await adoptTaskChatSettings(ctx, task, session, mainChat);
   await copyChatReads(ctx, task, mainChat);
+  await adoptTaskChatDrafts(ctx, task, mainChat);
   if (!(await moveLegacyTranscriptPage(ctx, task._id, mainChat._id))) {
     await ctx.scheduler.runAfter(
       0,

@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import {
   internalAction,
   internalMutation,
+  type DatabaseReader,
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -47,6 +48,11 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
+import { sessionOwnerTaskId } from "./owner";
+import {
+  isPreviewSandboxAllowed,
+  previewSandboxNotAllowedError,
+} from "../_agentTasks/previewGate";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
@@ -83,19 +89,44 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
+    const task = await previewBlockedTask(ctx.db, session);
+    if (task) throw previewSandboxNotAllowedError(task);
     await requestSessionSandboxStart(ctx, session);
     return null;
   },
 });
 
 /**
- * Shared start path for the user Start button and the fork's source restart.
- * Marks the session `"starting"` then schedules resume or create.
+ * A task's session that may not boot a sandbox yet: the same gate the task's
+ * own Start had (a todo task that never ran has no branch to preview; its
+ * first run boots the sandbox). Returns the task when blocked.
+ */
+async function previewBlockedTask(
+  db: DatabaseReader,
+  session: Doc<"sessions">,
+): Promise<Doc<"agentTasks"> | null> {
+  if (session.sandboxId !== undefined) return null;
+  const taskId = sessionOwnerTaskId(session);
+  const task = taskId ? await db.get(taskId) : null;
+  if (!task || (await isPreviewSandboxAllowed(db, task))) return null;
+  return task;
+}
+
+/**
+ * Shared start path for the user Start button, the chat queue's wake and the
+ * fork's source restart. Marks the session `"starting"` then schedules resume
+ * or create.
  */
 export async function requestSessionSandboxStart(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
+  if (await previewBlockedTask(ctx.db, session)) {
+    console.log(
+      `[sessions] startSandbox skipped sessionId=${session._id}: its task cannot preview yet`,
+    );
+    return;
+  }
   if (!canRequestSandboxStart(session.status)) {
     console.log(
       `[sessions] startSandbox skipped sessionId=${session._id} status=${session.status}`,
@@ -227,6 +258,81 @@ export const forcePushBranch = authMutation({
   },
 });
 
+/** The running sandbox of a session the caller can reach, or a thrown reason. */
+async function requireActiveSandbox(
+  ctx: MutationCtx & { userId: Id<"users"> },
+  sessionId: Id<"sessions">,
+  action: string,
+): Promise<{ session: Doc<"sessions">; sandboxId: string }> {
+  const session = await getSessionWithAccess(ctx.db, sessionId, ctx.userId);
+  if (session.status !== "active" || !session.sandboxId) {
+    throw new Error(`Start the sandbox before ${action}`);
+  }
+  return { session, sandboxId: session.sandboxId };
+}
+
+/**
+ * Re-runs the app dev server in the session's running sandbox (repo App
+ * settings, else package.json detection) and stores the resolved port and
+ * command. The quick task panel's "Run dev server".
+ */
+export const runDevServer = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { session, sandboxId } = await requireActiveSandbox(
+      ctx,
+      args.sessionId,
+      "running the dev server",
+    );
+    await ctx.scheduler.runAfter(0, internal.sandbox.runDevServerInSandbox, {
+      owner: { kind: "session", sessionId: session._id },
+      sandboxId,
+      repoId: session.repoId,
+    });
+    return null;
+  },
+});
+
+/** Records the dev server a manual rerun resolved (`runDevServerInSandbox`). */
+export const patchSessionDevServer = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    devPort: v.number(),
+    devCommand: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.sessionId, {
+      devPort: args.devPort,
+      devCommand: args.devCommand,
+    });
+    return null;
+  },
+});
+
+/**
+ * Re-launches the repo's background commands (long-running daemons such as
+ * `npx convex dev`) in the session's running sandbox, for a daemon that died
+ * while the sandbox kept running.
+ */
+export const runBackgroundCommands = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { session, sandboxId } = await requireActiveSandbox(
+      ctx,
+      args.sessionId,
+      "running background commands",
+    );
+    await ctx.scheduler.runAfter(0, internal.sandbox.runBackgroundCommands, {
+      sandboxId,
+      repoId: session.repoId,
+    });
+    return null;
+  },
+});
+
 /**
  * Shared stop path for the user Stop button and PR-terminal webhook auto-stop.
  * Marks the session `"stopping"` then schedules provider teardown.
@@ -346,22 +452,62 @@ export const requestStopSandbox = internalMutation({
 });
 
 /**
- * A quick task's run is done with its session's sandbox. Stops it unless the
- * reviewer has it open or a start/stop is already in flight: a `closed` row
- * here means the run resumed the VM behind a sleeping session. Silent (no
- * divider), like the task sandbox it replaces.
+ * Records the VM a quick task's run prepared as its session's sandbox. Only
+ * while no start or stop owns the row: those write the sandbox id themselves,
+ * and a run racing them must not re-point it. Returns whether it attached.
  */
-export const stopSandboxAfterTaskRun = internalMutation({
-  args: { sessionId: v.id("sessions") },
-  returns: v.null(),
+export const attachTaskRunSandbox = internalMutation({
+  args: { sessionId: v.id("sessions"), sandboxId: v.string() },
+  returns: v.boolean(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session?.sandboxId || session.status !== "closed") return null;
-    // `requestSessionSandboxStop` re-stops a closed row that still holds a
-    // sandbox id: exactly the run's resumed VM.
-    await requestSessionSandboxStop(ctx, args.sessionId, {
-      stopReason: { kind: "task_run" },
+    if (!session || session.status === "starting" || session.status === "stopping") {
+      return false;
+    }
+    if (session.sandboxId === args.sandboxId) return true;
+    await ctx.db.patch(args.sessionId, {
+      sandboxId: args.sandboxId,
+      updatedAt: Date.now(),
     });
+    return true;
+  },
+});
+
+/**
+ * A quick task's run (finished or cancelled) is done with `sandboxId`. The
+ * session's own VM stops through the session stop path unless the reviewer
+ * has it open or a start/stop is in flight: a `closed` row here means the run
+ * resumed the VM behind a sleeping session. Silent (no divider), like the
+ * task sandbox it replaces. A VM the session never took (`attachTaskRunSandbox`
+ * refused it) is the run's alone and stops directly.
+ */
+export async function stopTaskRunSandbox(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  sandboxId: string,
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (!session) return;
+  if (session.sandboxId !== sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+      sandboxId,
+      repoId: session.repoId,
+    });
+    return;
+  }
+  if (session.status !== "closed") return;
+  // `requestSessionSandboxStop` re-stops a closed row that still holds a
+  // sandbox id: exactly the run's resumed VM.
+  await requestSessionSandboxStop(ctx, sessionId, {
+    stopReason: { kind: "task" },
+  });
+}
+
+export const stopSandboxAfterTaskRun = internalMutation({
+  args: { sessionId: v.id("sessions"), sandboxId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await stopTaskRunSandbox(ctx, args.sessionId, args.sandboxId);
     return null;
   },
 });

@@ -85,6 +85,32 @@ describe("quick tasks on sessions", () => {
   );
 
   test(
+    "creating a task's session takes over the task's own sandbox, so no second VM boots",
+    async () => {
+      const f = await fixture();
+      await f.t.run((ctx) =>
+        ctx.db.patch(f.taskId, {
+          sandboxId: "sbx-task",
+          reviewTaskSandboxStatus: "closed",
+          status: "code_review",
+        }),
+      );
+      const { sessionId } = await f.asUser.mutation(api.sessions.ensureOwned, {
+        taskId: f.taskId,
+      });
+      const [session, task] = await f.t.run((ctx) =>
+        Promise.all([ctx.db.get(sessionId), ctx.db.get(f.taskId)]),
+      );
+      expect(session?.sandboxId).toBe("sbx-task");
+      expect(task?.sandboxId).toBeUndefined();
+      await expect(
+        f.asUser.mutation(api.agentTasks.startTaskSandbox, { taskId: f.taskId }),
+      ).rejects.toThrow("runs on its session");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a chat message sent while the task's run is open queues behind the run",
     async () => {
       const f = await fixture();

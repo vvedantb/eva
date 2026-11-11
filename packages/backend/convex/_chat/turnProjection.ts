@@ -7,7 +7,7 @@ import {
 } from "../_projects/buildState";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
-import { sessionOwnerTaskId } from "../_sessions/owner";
+import { findOwnedSession, sessionOwnerTaskId } from "../_sessions/owner";
 
 /**
  * Deployment bridge for task and project chats whose workflow started before
@@ -141,7 +141,12 @@ export async function hasOpenChatTurn(
   db: DatabaseReader,
   entityId: Doc<"turns">["entityId"],
 ): Promise<boolean> {
-  const sessionId = db.normalizeId("sessions", entityId);
+  // A quick task chats (and runs) through its session: those turns count too.
+  const taskId = db.normalizeId("agentTasks", entityId);
+  const taskSession = taskId
+    ? await findOwnedSession(db, { kind: "task", taskId })
+    : null;
+  const sessionId = taskSession?._id ?? db.normalizeId("sessions", entityId);
   if (sessionId) {
     // A session runs through its chats: any chat's open turn counts.
     const chatTurn = await db

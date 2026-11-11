@@ -45,7 +45,7 @@ export {
   validateSandbox,
 } from "./_sandbox_runtime/execution";
 
-export { runDevServerInTaskSandbox } from "./_sandbox_runtime/runDevServer";
+export { runDevServerInSandbox } from "./_sandbox_runtime/runDevServer";
 
 export { ensureSessionPreviewServices } from "./_sandbox_runtime/previewRecovery";
 

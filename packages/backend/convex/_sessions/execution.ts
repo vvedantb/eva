@@ -269,6 +269,9 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       hasActiveWorkflow: await hasOpenChatTurn(ctx.db, chat._id),
     });
     if (lastUserContent === null) return null;
+    // A task run or the parallel-chat cap holds the slot: no restage, the
+    // stall alert stays and the user resends.
+    if (!(await sessionChatHasFreeSlot(ctx.db, context))) return null;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return null;
@@ -324,6 +327,10 @@ export const retryLastTurnWithAccount = authMutation({
       chat.pendingTurn !== undefined
     ) {
       throw new Error("A turn is already running");
+    }
+    // Same gate as a send: a task run or the parallel-chat cap holds the slot.
+    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
+      throw new Error("The sandbox is busy. Try again when it finishes.");
     }
 
     const recent = await ctx.db

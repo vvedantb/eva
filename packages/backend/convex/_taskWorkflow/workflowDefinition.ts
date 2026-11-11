@@ -175,8 +175,9 @@ export const taskExecutionWorkflow = workflow.define({
         });
       } else if (args.ownedSessionId) {
         // The task's session owns the sandbox: its chat, preview and sweeps
-        // all read it there.
-        await step.runMutation(internal.sessionWorkflow.updateSandboxId, {
+        // all read it there. Refused while a start/stop owns the row; the
+        // tail then stops this VM on its own.
+        await step.runMutation(internal.sessions.attachTaskRunSandbox, {
           sessionId: args.ownedSessionId,
           sandboxId,
         });
@@ -436,7 +437,7 @@ export const taskExecutionWorkflow = workflow.define({
         try {
           await step.runMutation(
             internal.sessions.stopSandboxAfterTaskRun,
-            { sessionId: args.ownedSessionId },
+            { sessionId: args.ownedSessionId, sandboxId },
           );
         } catch {}
       } else if (

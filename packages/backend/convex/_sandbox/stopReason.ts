@@ -12,8 +12,8 @@ export const stopReasonValidator = v.optional(
       kind: v.literal("idle"),
       idleMinutes: v.number(),
     }),
-    /** A quick task's run is done with its session's sandbox. */
-    v.object({ kind: v.literal("task_run") }),
+    /** The quick task, not a person, stopped its session (run end, retire). */
+    v.object({ kind: v.literal("task") }),
   ),
 );
 
@@ -25,7 +25,7 @@ export type StopReason = Infer<typeof stopReasonValidator>;
  * stopped silently after every run.
  */
 export function stopPostsDivider(reason: StopReason): boolean {
-  return reason?.kind !== "task_run";
+  return reason?.kind !== "task";
 }
 
 /** Chat-divider text for a settled stop. */

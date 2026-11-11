@@ -13,8 +13,13 @@ import { markTaskRunStarted } from "../_agentTasks/runState";
 import type { taskExecutionWorkflowArgs } from "./workflowDefinition";
 import {
   ensureOwnedSession,
+  taskSessionBusy,
   taskUsesOwnedSession,
 } from "../_sessions/ownedSession";
+
+/** Why a run did not start: the task's chat holds the sandbox. */
+export const TASK_CHAT_BUSY_ERROR =
+  "Eva is still replying in this task's chat, or its sandbox is starting or stopping. Try the run again in a moment.";
 
 /**
  * The one way to start a quick-task or project-task run. Queues an
@@ -42,6 +47,11 @@ export async function startTaskRun(
   },
 ): Promise<Id<"agentRuns">> {
   const { task, repo } = p;
+  // One agent per sandbox: a run waits while the task's session chat is
+  // mid-reply, as a chat message waits behind a run.
+  if (p.projectId === undefined && (await taskSessionBusy(ctx.db, task._id))) {
+    throw new Error(TASK_CHAT_BUSY_ERROR);
+  }
   const startedAt = Date.now();
   const runId = await ctx.db.insert("agentRuns", {
     taskId: task._id,

@@ -1,5 +1,9 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type {
+  DatabaseReader,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
 import { allocateNumId } from "../numId";
 import { getAIModelProvider } from "../validators";
 import { buildTaskBranchName } from "../_git/branchNames";
@@ -13,6 +17,12 @@ import {
   type OwnedSessionOwner,
 } from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
+import { isTaskRunning } from "../_agentTasks/runState";
+import { findOpenTurn } from "../_chat/turnStore";
+import {
+  hasOpenChatTurn,
+  isLegacyChatExecuting,
+} from "../_chat/turnProjection";
 
 /**
  * The session behind a quick task (`owner: { kind: "task" }`). The task stays
@@ -57,6 +67,21 @@ export async function ensureOwnedSession(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
 ): Promise<OwnedSessionContext> {
+  const found = await findOrInsertOwnedSession(ctx, task);
+  // A task that still holds its own sandbox hands it over first, so no path
+  // (run, chat, Start, MCP, mobile) ever boots a second VM for the task.
+  if ((await adoptTaskSandbox(ctx, task, found.session)) !== "moved") {
+    return found;
+  }
+  const session = await ctx.db.get(found.session._id);
+  if (!session) throw new Error("Task session was not found");
+  return { session, mainChat: found.mainChat };
+}
+
+async function findOrInsertOwnedSession(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<OwnedSessionContext> {
   const owner = taskSessionOwner(task._id);
   const existing = await findOwnedSession(ctx.db, owner);
   if (existing) {
@@ -94,7 +119,151 @@ export async function ensureOwnedSession(
   });
   const session = await ctx.db.get(sessionId);
   if (!session) throw new Error("Task session was not created");
-  return { session, mainChat: await ensureMainChat(ctx, session) };
+  const mainChat = await ensureMainChat(ctx, session);
+  await adoptTaskChatDrafts(ctx, task, mainChat);
+  return { session, mainChat };
+}
+
+/**
+ * The users who can hold per-user rows for a task's chat (drafts, read
+ * markers), which are indexed by user first: owner, assignee, subscribers.
+ */
+export async function taskChatUserIds(
+  db: DatabaseReader,
+  task: Doc<"agentTasks">,
+): Promise<Id<"users">[]> {
+  const subscribers = await db
+    .query("taskSubscribers")
+    .withIndex("by_task", (q) => q.eq("taskId", task._id))
+    .collect();
+  return [
+    ...new Set<Id<"users">>([
+      task.createdBy,
+      ...(task.assignedTo ? [task.assignedTo] : []),
+      ...subscribers.map((row) => row.userId),
+    ]),
+  ];
+}
+
+/**
+ * The task chat's unsent composer drafts become the Main chat's, so text
+ * typed before the session existed is still there after the first send.
+ * Drafts are indexed by user first: the task's owner, assignee and
+ * subscribers are the users who can have one.
+ */
+export async function adoptTaskChatDrafts(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  mainChat: Doc<"sessionChats">,
+): Promise<void> {
+  const userIds = await taskChatUserIds(ctx.db, task);
+  const drafts = (
+    await Promise.all(
+      userIds.map((userId) =>
+        ctx.db
+          .query("drafts")
+          .withIndex("by_user_and_task", (q) =>
+            q.eq("userId", userId).eq("taskId", task._id),
+          )
+          .collect(),
+      ),
+    )
+  ).flat();
+  for (const draft of drafts) {
+    if (draft.kind !== "taskChat") continue;
+    await ctx.db.patch(draft._id, {
+      kind: "sessionChat",
+      taskId: undefined,
+      sessionId: mainChat.sessionId,
+      chatId: mainChat._id,
+    });
+  }
+}
+
+/**
+ * Whether the task's own sandbox can change hands now: nothing on the task
+ * path is starting, stopping or running on it.
+ */
+async function taskSandboxSettled(
+  ctx: QueryCtx,
+  task: Doc<"agentTasks">,
+): Promise<boolean> {
+  if (
+    task.reviewTaskSandboxStatus === "starting" ||
+    task.reviewTaskSandboxStatus === "stopping" ||
+    isTaskRunning(task) ||
+    isLegacyChatExecuting(task) ||
+    task.pendingTurn !== undefined
+  ) {
+    return false;
+  }
+  return (await findOpenTurn(ctx, task._id)) === null;
+}
+
+/**
+ * Moves the task's own sandbox (and its preview/terminal state) onto its
+ * session and clears it on the task: one owner per VM, so task sweeps stop
+ * acting on it. `busy`: the task path is mid-start/stop/turn, leave it for a
+ * later call. `conflict`: the session already holds another VM.
+ */
+export async function adoptTaskSandbox(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  session: Doc<"sessions">,
+): Promise<"none" | "moved" | "busy" | "conflict"> {
+  if (task.sandboxId === undefined || task.projectId !== undefined) {
+    return "none";
+  }
+  if (session.sandboxId !== undefined && session.sandboxId !== task.sandboxId) {
+    return "conflict";
+  }
+  if (!(await taskSandboxSettled(ctx, task))) return "busy";
+  await ctx.db.patch(session._id, {
+    sandboxId: task.sandboxId,
+    status: task.reviewTaskSandboxStatus === "active" ? "active" : "closed",
+    sandboxStartAttempt: task.sandboxStartAttempt ?? session.sandboxStartAttempt,
+    devPort: task.devPort ?? session.devPort,
+    devCommand: task.devCommand ?? session.devCommand,
+    previewPath: task.previewPath ?? session.previewPath,
+    previewPanePaths: task.previewPanePaths ?? session.previewPanePaths,
+    terminalHistoryTail: task.terminalHistoryTail ?? session.terminalHistoryTail,
+    terminalPanes: task.terminalPanes ?? session.terminalPanes,
+    sandboxBranch: task.sandboxBranch ?? session.sandboxBranch,
+    sandboxGitSync: task.sandboxGitSync ?? session.sandboxGitSync,
+  });
+  await ctx.db.patch(task._id, {
+    sandboxId: undefined,
+    reviewTaskSandboxStatus: undefined,
+    sandboxStartAttempt: undefined,
+    sandboxDeleteAfter: undefined,
+    devPort: undefined,
+    devCommand: undefined,
+    previewPath: undefined,
+    previewPanePaths: undefined,
+    terminalHistoryTail: undefined,
+    terminalPanes: undefined,
+    sandboxBranch: undefined,
+    sandboxGitSync: undefined,
+  });
+  return "moved";
+}
+
+/**
+ * True while the task's session holds its sandbox for something else: a turn
+ * open (a chat reply or a run) or a start/stop in flight. A new run waits
+ * (user starts are refused, scheduled ones retry): the same
+ * one-agent-per-sandbox rule the chat queue applies to runs.
+ */
+export async function taskSessionBusy(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<boolean> {
+  const session = await findTaskSession(db, taskId);
+  if (!session) return false;
+  if (session.status === "starting" || session.status === "stopping") {
+    return true;
+  }
+  return await hasOpenChatTurn(db, session._id);
 }
 
 /**
@@ -169,9 +338,12 @@ export async function retireOwnedSession(
 ): Promise<void> {
   const session = await findTaskSession(ctx.db, taskId);
   if (!session) return;
-  // A closed session's VM is already stopped; the leak sweep owns strays.
-  if (session.status !== "closed") {
-    await requestSessionSandboxStop(ctx, session._id);
+  // Any VM the session holds is stopped, even behind a `closed` row: a run
+  // resumes it without flipping the status. Silent, like the run's own stop.
+  if (session.sandboxId !== undefined || session.status !== "closed") {
+    await requestSessionSandboxStop(ctx, session._id, {
+      stopReason: { kind: "task" },
+    });
   }
   const stopped = await ctx.db.get(session._id);
   if (stopped) await archiveSession(ctx, stopped);

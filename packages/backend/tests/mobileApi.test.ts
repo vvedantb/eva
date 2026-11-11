@@ -21,6 +21,7 @@ import {
 } from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
+import { openTurn } from "../convex/_chat/turnStore";
 
 /**
  * The mobile app's writes (apps/mobile): replies in every chat kind, Stop and
@@ -113,6 +114,13 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
+/** The Main chat of the session a quick task chats in. */
+async function ownedChatId(asUser: Fixture["asUser"], taskId: Id<"agentTasks">) {
+  const owned = await asUser.query(api.sessions.getOwned, { taskId });
+  if (!owned) throw new Error("The task has no session");
+  return owned.chatId;
+}
+
 /** User rows and still-queued rows on one chat: a send lands in one of them. */
 async function sent(t: Fixture["t"], parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">) {
   return await t.run(async (ctx) => {
@@ -188,7 +196,13 @@ describe("mobile api", () => {
       expect(await sent(t, ids.chatId)).toEqual([
         { content: "hi session", model: "codex:gpt-5.6-sol", userId: ids.userId },
       ]);
-      expect(await sent(t, ids.taskId)).toEqual([{ content: "hi task", model: normalizeAIModel("claude:opus"), userId: ids.userId }]);
+      // A quick task chats in its session's Main chat, on the chat's own model
+      // (seeded from the task chat's last pick, not the run's `model`).
+      const taskChatId = await ownedChatId(asUser, ids.taskId);
+      expect(await sent(t, ids.taskId)).toEqual([]);
+      expect(await sent(t, taskChatId)).toEqual([
+        { content: "hi task", model: "codex:gpt-5.6-sol", userId: ids.userId },
+      ]);
       expect(await sent(t, ids.projectId)).toEqual([
         { content: "hi project", model: DEFAULT_AI_MODEL, userId: ids.userId },
       ]);
@@ -197,20 +211,28 @@ describe("mobile api", () => {
   );
 
   test(
-    "sendMessage queues behind a running task turn",
+    "sendMessage queues behind a quick task's running run",
     async () => {
       const { t, ids, asUser } = await fixture();
-      await t.run((ctx) => ctx.db.patch(ids.taskId, { pendingTurn: { prompt: "earlier", requestedAt: Date.now() } }));
+      const { sessionId, chatId } = await asUser.mutation(api.sessions.ensureOwned, { taskId: ids.taskId });
+      await t.run(async (ctx) => {
+        const runId = await ctx.db.insert("agentRuns", { taskId: ids.taskId, status: "running", logs: [] });
+        await openTurn(ctx, {
+          entityId: runId,
+          sessionId,
+          streamingEntityId: `task-run-${runId}`,
+          model: DEFAULT_AI_MODEL,
+          repoId: ids.repoId,
+        });
+      });
       await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "next" });
       const queued = await t.run((ctx) =>
         ctx.db
           .query("queuedMessages")
-          .withIndex("by_parent_and_order", (q) => q.eq("parentId", ids.taskId))
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
           .collect(),
       );
       expect(queued.map((row) => row.content)).toEqual(["next"]);
-      const task = await t.run((ctx) => ctx.db.get(ids.taskId));
-      expect(task?.pendingTurn?.prompt).toBe("earlier");
     },
     TIMEOUT_MS,
   );
@@ -376,32 +398,28 @@ describe("mobile api", () => {
   );
 
   test(
-    "a quick task chat picks its model, traits and account with the web task chat's mutations, and a reply runs on them",
+    "a quick task on its session picks its model and traits on the session chat, and a reply runs on them",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const accountId = await t.run((ctx) =>
-        ctx.db.insert("userProviderAccounts", {
-          userId: ids.userId,
-          provider: "codex",
-          label: "Mine",
-          credentials: [],
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        }),
-      );
-      // What the phone model sheet calls for a task, as the web `useTaskChatBinding`.
-      await asUser.mutation(api.agentTasks.update, { id: ids.taskId, model: "codex:gpt-5.6-sol", providerAccountId: accountId });
-      await asUser.mutation(api.agentTasks.setTraits, { id: ids.taskId, reasoningLevel: "low" });
-      await t.run((ctx) => ctx.db.patch(ids.taskId, { lastChatModel: "claude:opus" }));
+      const { chatId } = await asUser.mutation(api.sessions.ensureOwned, { taskId: ids.taskId });
+      // Shown as the task, read and written as its session's Main chat.
       expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({
+        kind: "task",
+        parentId: chatId,
         model: "codex:gpt-5.6-sol",
-        traits: { effortLevel: "low" },
-        providerAccountId: accountId,
         accountOwnerId: ids.userId,
-        task: { id: ids.taskId },
+        task: { id: ids.taskId, sessionChatId: chatId },
       });
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus", reasoningLevel: "low" });
+      expect(await asUser.query(api.mobile.getChat, { target: chatId })).toMatchObject({
+        kind: "task",
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
+      // The run's model on the task row is untouched.
+      expect((await t.run((ctx) => ctx.db.get(ids.taskId)))?.model).toBe("claude:opus");
       await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "hi" });
-      expect(await sent(t, ids.taskId)).toEqual([{ content: "hi", model: "codex:gpt-5.6-sol", userId: ids.userId }]);
+      expect(await sent(t, chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
     },
     TIMEOUT_MS,
   );
