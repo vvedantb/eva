@@ -116,6 +116,13 @@ export function SessionMenuItems({
         ? "Agent working"
         : null;
 
+  // Groups: session actions, copy actions, PR actions, then Archive. A
+  // divider opens a group only when the group above it rendered something.
+  const hasSessionGroup = Boolean(onRenameRequest ?? onForkNavigate);
+  const showOpenPr = prs.length === 0 && prUrl !== undefined;
+  const showSendForReview = onSendForReview !== undefined && !simpleView;
+  const hasPrGroup = prs.length > 0 || showOpenPr || showSendForReview;
+
   const summaryLabel = summary?.hasSummary
     ? "Regenerate Summary"
     : "Summarise Session";
@@ -190,6 +197,7 @@ export function SessionMenuItems({
           )}
         </Item>
       ) : null}
+      {hasSessionGroup ? <Separator /> : null}
       <Item
         onSelect={() => {
           void navigator.clipboard.writeText(session.title);
@@ -218,9 +226,10 @@ export function SessionMenuItems({
           Copy branch name
         </Item>
       ) : null}
+      {hasPrGroup ? <Separator /> : null}
       <PrActionsSubmenus variant={variant} prs={prs} />
       {/* A session whose PR predates the `pullRequests` rows has only a URL. */}
-      {prs.length === 0 && prUrl ? (
+      {showOpenPr ? (
         <Item
           onSelect={() => {
             window.open(prUrl, "_blank", "noopener,noreferrer");
@@ -230,18 +239,15 @@ export function SessionMenuItems({
           Open PR
         </Item>
       ) : null}
-      {onSendForReview && !simpleView ? (
-        <>
-          <Separator />
-          <Item
-            onSelect={onSendForReview}
-            title={skipConfirmTitle("Send for Review")}
-          >
-            <IconEye size={iconSize} className="text-status-code-review" />
-            Send for Review
-            <ConfirmSkipHint />
-          </Item>
-        </>
+      {showSendForReview ? (
+        <Item
+          onSelect={onSendForReview}
+          title={skipConfirmTitle("Send for Review")}
+        >
+          <IconEye size={iconSize} className="text-status-code-review" />
+          Send for Review
+          <ConfirmSkipHint />
+        </Item>
       ) : null}
       {onRemoveFromGroup ? (
         <>

@@ -1,5 +1,13 @@
 # Changelog
 
+## Session menu: four groups
+
+Date: 2026-11-11
+
+WHY: The session menu ran seven mixed items in one block and set Send for Review apart on its own.
+
+Architectural: `SessionMenuItems` now groups session actions (Rename, Regenerate title, Fork), copy actions, PR actions (PR rows, Open PR, Send for Review), then Archive. A divider opens a group only when the group above rendered (`hasSessionGroup`, `hasPrGroup`). Same divider count as before. Applies to the sidebar row, session tab and chat header.
+
 ## PR menus: three or more PRs fold into one submenu
 
 Date: 2026-11-11
