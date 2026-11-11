@@ -1,13 +1,14 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { findPullRequestByUrl } from "../_pullRequests/store";
+import { EVA_BRANCH_PREFIX } from "../_git/branchNames";
 
 const EVA_BRANCH_PREFIXES = [
-  "eva/task-",
-  "eva/project-",
-  "eva/session-",
-  "eva/automation-",
-] as const;
+  "task-",
+  "project-",
+  "session-",
+  "automation-",
+].map((kind) => `${EVA_BRANCH_PREFIX}${kind}`);
 
 /**
  * True when this PR belongs to Eva-managed work (session / project / quick task

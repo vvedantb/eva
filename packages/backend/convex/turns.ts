@@ -466,7 +466,7 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
 /**
  * Finalises one expired agent turn (a quick-task run or a one-shot agent)
  * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
- * teardown the 2-hour backstop uses for the others.
+ * teardown the `TURN_BACKSTOP_MS` backstop uses for the others.
  */
 async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,

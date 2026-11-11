@@ -1,3 +1,4 @@
+import type { PrState } from "@eva/shared";
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -15,11 +16,14 @@ import {
   SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
-import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
+import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
@@ -76,7 +80,7 @@ interface ChatPanelProps {
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   summary?: string[];
   messages: SessionMessage[];
   /** The transcript has not loaded: show the loader, not the empty state. */
@@ -411,12 +415,6 @@ export function ChatPanel({
       surface={chatSurface}
       beforeBanner={
         <>
-          {simpleView ? null : (
-            <BackgroundProcessesPanel
-              sessionId={sessionId}
-              isRouteActive={isRouteActive}
-            />
-          )}
           {!isReadOnly ? (
             <PublishRecoveryBanner
               sessionId={sessionId}
@@ -428,6 +426,17 @@ export function ChatPanel({
         </>
       }
     />
+  );
+
+  const composerChips = (
+    <SandboxChatStatusChips surface={chatSurface}>
+      {simpleView ? null : (
+        <BackgroundProcessesChip
+          sessionId={sessionId}
+          isRouteActive={isRouteActive}
+        />
+      )}
+    </SandboxChatStatusChips>
   );
 
   const emptyStateTitle = isSandboxActive
@@ -509,6 +518,7 @@ export function ChatPanel({
             />
           }
           preInputContent={preInputContent}
+          composerChips={composerChips}
           preConversationContent={
             <SessionSummaryAccordion
               summary={summary}

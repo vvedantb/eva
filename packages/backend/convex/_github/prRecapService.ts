@@ -11,6 +11,7 @@ import {
 import { aiModelValidator } from "../validators";
 import { PR_RECAP_COMMENT_MARKER, buildPrRecapCommentBody } from "./prComments";
 import { buildEvaReviewUrl } from "../_taskWorkflow/urls";
+import type { ChangedFile } from "./mergeRisk";
 import { MAX_DIFF_BYTES } from "./prDiff";
 
 const MAX_FILES = 100;
@@ -70,19 +71,35 @@ export type PrDiffResult = {
   truncated: boolean;
 };
 
-/** Fetches a bounded per-file PR diff. Shared by the recap workflow and the
- * generated PR description so both see the same view of the change. */
-export async function fetchPullRequestDiff(
-  octokit: Awaited<ReturnType<typeof getInstallationOctokit>>,
-  params: { owner: string; repo: string; prNumber: number },
-): Promise<PrDiffResult> {
-  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+type Octokit = Awaited<ReturnType<typeof getInstallationOctokit>>;
+type PrRef = { owner: string; repo: string; prNumber: number };
+
+/** Every changed file of a PR, with GitHub's per-file patch. */
+export async function listPullRequestFiles(
+  octokit: Octokit,
+  params: PrRef,
+): Promise<ChangedFile[]> {
+  return await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner: params.owner,
     repo: params.repo,
     pull_number: params.prNumber,
     per_page: 100,
   });
+}
 
+/** Fetches a bounded per-file PR diff. Shared by the recap workflow and the
+ * generated PR description so both see the same view of the change. */
+export async function fetchPullRequestDiff(
+  octokit: Octokit,
+  params: PrRef,
+): Promise<PrDiffResult> {
+  return summarizePullRequestDiff(await listPullRequestFiles(octokit, params));
+}
+
+/** Bounds a PR's files into one diff text that fits a model prompt. */
+export function summarizePullRequestDiff(
+  files: ReadonlyArray<ChangedFile>,
+): PrDiffResult {
   let additions = 0;
   let deletions = 0;
   const chunks: string[] = [];

@@ -42,7 +42,6 @@ import {
   snapshotScheduleValidator,
   taskActivityFieldValidator,
   taskSandboxEventValidator,
-  taskSandboxStatusValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
   themeValidator,
@@ -602,7 +601,7 @@ export const agentTaskFields = {
   // its main run workflow.
   activeChatWorkflowId: v.optional(v.string()),
   // UI state for the reviewer-facing Start/Stop sandbox button.
-  reviewTaskSandboxStatus: v.optional(taskSandboxStatusValidator),
+  reviewTaskSandboxStatus: v.optional(sessionStatusValidator),
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
   // Resolved dev server port + full command for the current sandbox. Stored
@@ -1125,7 +1124,7 @@ export const projectFields = {
   lastSandboxActivity: v.optional(v.number()),
   // UI state for the project-level Start/Stop preview sandbox button.
   // Mirrors `agentTasks.reviewTaskSandboxStatus` lifecycle.
-  reviewProjectSandboxStatus: v.optional(taskSandboxStatusValidator),
+  reviewProjectSandboxStatus: v.optional(sessionStatusValidator),
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
   // Dev port + full command for the active project preview sandbox.

@@ -13,12 +13,8 @@ import {
   UnreadDot,
 } from "@vvedantb/ui";
 import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
-import {
-  prStateLabel,
-  prStateTone,
-  type PrState,
-  type PrStateTone,
-} from "@eva/shared";
+import { prStateLabel, type PrState } from "@eva/shared";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
@@ -44,17 +40,6 @@ import {
 /** Identity of a session's actual primary repo, for a row linked in from it. */
 type SessionLinkedFrom = RepoPathParts;
 
-/** The web class for each shared PR icon tone. */
-const PR_STATE_TONE_CLASS: Record<PrStateTone, string> = {
-  success: "text-success",
-  codeReview: "text-status-code-review",
-  destructive: "text-destructive",
-  muted: "text-muted-foreground",
-};
-
-export function prStateIconColor(state: PrState | undefined): string {
-  return PR_STATE_TONE_CLASS[prStateTone(state)];
-}
 
 interface SidebarSessionItemProps {
   href: string;
@@ -144,7 +129,7 @@ function SessionPrIcon({
   return (
     <IconGitPullRequest
       size={12}
-      className={cn("shrink-0", prStateIconColor(prState))}
+      className={cn("shrink-0", prStateIconClass(prState))}
       title={`PR: ${prStateLabel(prState)}`}
     />
   );

@@ -236,6 +236,8 @@ interface ChatBodyProps {
   preConversationContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
+  /** Status chips (background agents, processes) on the skill suggestions' row. */
+  composerChips?: React.ReactNode;
   /**
    * Live block at the end of the transcript (session sandbox startup). Takes
    * the empty state's place when there are no messages yet.
@@ -332,6 +334,7 @@ function ChatBodyInner({
   onCancel,
   preConversationContent,
   preInputContent,
+  composerChips,
   transcriptTail,
   underCardLeading,
   draft,
@@ -1088,6 +1091,7 @@ function ChatBodyInner({
                     {preInputContent}
                   </>
                 }
+                statusChips={composerChips}
                 streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}

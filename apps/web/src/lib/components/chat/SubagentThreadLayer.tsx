@@ -47,7 +47,7 @@ export function SubagentThreadLayer({
 }) {
   const [subagentId, setSubagentId] = useQueryState("subagent", subagentParser);
   const simpleView = useSimpleView();
-  const requestStop = useStopBackgroundAgent(surface.entity);
+  const { requestStop, stopDialog } = useStopBackgroundAgent(surface.entity);
 
   // Only the messages that mention this agent are parsed — a plain substring
   // test on the id keeps a long transcript from being parsed on every tick.
@@ -121,6 +121,7 @@ export function SubagentThreadLayer({
             onOpenFile={onOpenFile}
           />
         ) : null}
+        {stopDialog}
       </div>
     </OpenSubagentContext>
   );

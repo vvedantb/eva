@@ -1,3 +1,4 @@
+import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -124,10 +125,10 @@ export function stalledAlert(
   };
 }
 
-/** Alert text shared by every surface for the 2-hour workflow-timeout backstop. */
+/** Alert text shared by every surface for the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
 const timeoutAlert: ChatAlert = {
   text: "Execution timed out.",
-  detail: "Turn exceeded the 2-hour workflow limit.",
+  detail: `${TURN_BACKSTOP_ERROR}.`,
 };
 
 const sessionChatAdapter: ChatSurfaceAdapter<
@@ -493,7 +494,7 @@ export function turnAdapterForEntity<R>(
 
 /**
  * Records a workflow as the active workflow for a session chat and schedules
- * the 2-hour backstop. The turn lease (`turns.reconcile`) is the stall check.
+ * the `TURN_BACKSTOP_MS` backstop. The turn lease (`turns.reconcile`) is the stall check.
  */
 export async function trackSessionChatWorkflow(
   ctx: MutationCtx,
@@ -512,7 +513,7 @@ export async function trackSessionChatWorkflow(
 
 /**
  * Records a session-level workflow (the summary) as the session's active
- * workflow and schedules the 2-hour backstop. Chat turns track on their chat
+ * workflow and schedules the `TURN_BACKSTOP_MS` backstop. Chat turns track on their chat
  * (`trackSessionChatWorkflow`); this slot is only for work on the session row.
  */
 export async function trackSessionWorkflow(

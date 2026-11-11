@@ -77,6 +77,11 @@ export { MAX_PARALLEL_CHATS } from "./sessionChats";
 export { terminalHistoryTail } from "./terminalHistory";
 export { isAgentBrowsingActive } from "./agentBrowsing";
 export {
+  SANDBOX_STARTUP_PREFIX,
+  sandboxOwnerKey,
+  sandboxStartupEntityId,
+} from "./sandboxOwnerKeys";
+export {
   PREVIEW_WAKE_KINDS,
   previewWakePath,
   previewWakeSearchSchema,
@@ -126,8 +131,10 @@ export {
   type ChatUserAttribution,
 } from "./teammateMessages";
 export {
+  isLivePrState,
   prStateLabel,
   prStateTone,
+  type LivePrState,
   type PrState,
   type PrStateTone,
 } from "./prState";
@@ -158,7 +165,7 @@ export {
   type QuickTaskSortField,
   type QuickTaskTimeRange,
 } from "./quickTaskFilters";
-export { repoBasePath } from "./repoPath";
+export { ENTITY_SECTION, entityHref, repoBasePath } from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,

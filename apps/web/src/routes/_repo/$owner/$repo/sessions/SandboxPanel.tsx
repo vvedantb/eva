@@ -13,7 +13,7 @@ import {
   isSessionSandboxTab,
   sandboxTabIdFromParam,
 } from "@/lib/search-params";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { IconClipboardList } from "@tabler/icons-react";
 import { SandboxTabBar } from "./_components/SandboxTabBar";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";

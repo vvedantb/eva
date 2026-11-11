@@ -4,7 +4,7 @@ import { useQuery } from "convex/react";
 import { api, type Doc, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { DESKTOP_PORT, EDITOR_PORT, previewWakePath } from "@eva/shared";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { SandboxPresenceBeacon } from "./SandboxPresenceBeacon";
 import { SandboxAutoWake } from "./SandboxAutoWake";
