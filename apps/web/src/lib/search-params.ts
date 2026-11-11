@@ -5,6 +5,7 @@ import {
   PROJECT_PHASES,
 } from "@eva/backend";
 import {
+  PROJECT_SORT_FIELDS,
   PR_LIST_STATES,
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_SORT_FIELDS,
@@ -91,8 +92,7 @@ export const hiddenProjectPhasesParser = parseAsArrayOf(
   .withDefault([])
   .withOptions(searchOptions);
 
-const projectSortFields = ["created", "title", "priority"] as const;
-export const projectSortFieldParser = parseAsStringLiteral(projectSortFields)
+export const projectSortFieldParser = parseAsStringLiteral(PROJECT_SORT_FIELDS)
   .withDefault("created")
   .withOptions(searchOptions);
 

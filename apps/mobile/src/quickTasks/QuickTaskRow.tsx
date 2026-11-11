@@ -23,10 +23,10 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 const MAX_TAGS = 3;
 
 /** The card's secondary text (number, tags, creator, age): the Inbox `text-xs` (12 / 16), not the web 10 and 11. */
-const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
+export const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 
 /** The web sandbox dot: Awake emerald, waking or going to sleep amber, asleep muted. */
-const SANDBOX_DOT = {
+export const SANDBOX_DOT = {
   active: { light: "#10b981", dark: "#10b981", label: "Awake" },
   starting: { light: "#fbbf24", dark: "#fbbf24", label: "Waking up" },
   stopping: { light: "#fbbf24", dark: "#fbbf24", label: "Going to sleep" },
@@ -48,12 +48,15 @@ export function QuickTaskRow({
   status,
   hasError,
   creator,
+  projectNumId,
   onLongPress,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
+  /** In a project's task list: the number reads "#project/task", as the web card. */
+  projectNumId?: number;
   onLongPress: () => void;
 }) {
   const router = useRouter();
@@ -70,7 +73,7 @@ export function QuickTaskRow({
   const sandbox = task.reviewTaskSandboxStatus ? SANDBOX_DOT[task.reviewTaskSandboxStatus] : undefined;
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
-  const numLabel = formatEntityNumLabel({ numId: task.numId });
+  const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
   const creatorFirstName = creator ? firstNameFromUser(creator) : null;
   const scheduled = task.scheduledAt
     ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(task.scheduledAt).format("MMM D, h:mm A")}`
