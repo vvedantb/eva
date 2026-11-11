@@ -454,6 +454,36 @@ describe("mobile api", () => {
   );
 
   test(
+    "the review screen's Revert, blocker fix and Stack start sessions as the web does",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // Revert (and a blocker fix): a titled session on the branch it must land on,
+      // with the shared `revertSessionRequest` (or `PrRemedy`) prompt.
+      const revert = { title: "Revert #7", message: "Revert merge commit `abc123` on `staging`.", baseBranch: "staging" };
+      const reverted = await asUser.mutation(api.mobile.startSession, {
+        repoId: ids.repoId,
+        title: revert.title,
+        prompt: revert.message,
+        baseBranch: revert.baseBranch,
+      });
+      expect(await t.run((ctx) => ctx.db.get(reverted.sessionId))).toMatchObject({ title: "Revert #7", baseBranch: "staging" });
+      const chat = await asUser.query(api.mobile.getChat, { target: reverted.sessionId });
+      if (!chat) throw new Error("no chat");
+      expect((await sent(t, chat.parentId))[0]?.content).toBe(revert.message);
+
+      // Stack: on the PR's head branch, and the session remembers the PR it stacks on.
+      const stacked = await asUser.mutation(api.mobile.startSession, {
+        repoId: ids.repoId,
+        prompt: "Follow up",
+        baseBranch: "feature",
+        stackOnPrNumber: 7,
+      });
+      expect(await t.run((ctx) => ctx.db.get(stacked.sessionId))).toMatchObject({ baseBranch: "feature", stackOnPrNumber: 7 });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "the Quick Tasks screen files a task in To Do without a run, lists it first and opens it as a chat",
     async () => {
       const { t, ids, asUser } = await fixture();

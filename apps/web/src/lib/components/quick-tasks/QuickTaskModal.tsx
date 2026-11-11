@@ -47,7 +47,7 @@ import {
   defaultProviderAccountId,
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
+import { toRunTraitArgs } from "@eva/shared";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";

@@ -13,8 +13,7 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { composerTraitFields, storedComposerTraits } from "@eva/shared";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
+import { composerTraitFields, storedComposerTraits, toRunTraitArgs } from "@eva/shared";
 import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
 import {
   SandboxChatPanel,

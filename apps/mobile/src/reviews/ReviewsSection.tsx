@@ -28,8 +28,8 @@ const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
  * The web Reviews sidebar at phone width, for one repo: the repo picker (the
  * web reads the repo from its path), the Open / Closed / All switch, then the
  * repo's GitHub pull requests, recently updated first (`github.listPullRequests`,
- * every page of them, so a `FlatList`). A tap opens the review screen. The web hover prefetch, the right-click
- * Rename and the "open PRs on GitHub" click setting are not on the phone.
+ * every page of them, so a `FlatList`). A tap opens the review screen. The web hover prefetch and the "open
+ * PRs on GitHub" click setting are not on the phone; the right-click Rename is in the review screen's ⋯ menu.
  */
 export function ReviewsSection() {
   const { repos, repo, setRepo } = useRepoParam();

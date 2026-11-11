@@ -11,7 +11,7 @@ import {
 import { carriedAccountForProvider, defaultAccountForProvider, toPickerAccounts } from "@eva/shared";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { useUser } from "@clerk/clerk-expo";
-import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
+import { IconBrandGithub, IconChevronDown, IconStack2 } from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
@@ -40,11 +40,13 @@ import { useScheme } from "@/ui/theme";
  * group "+", as the web group "+" opens that repo's composer) picks the repo
  * first; without it, or for a repo not in the list, the first repo. The repo
  * picker is the bottom sheet the other repo pickers use, in place of the web
- * dropdown.
+ * dropdown. `?stackOn=<n>&stackBase=<branch>` (a pull request's "Stack a new
+ * session") starts from that branch, and while it stays picked the session's
+ * pull request joins that one's stack ("Stacks on #n"), as the web composer.
  */
 export default function NewSessionScreen() {
   const router = useRouter();
-  const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
+  const { repo: repoParam, stackOn, stackBase } = useLocalSearchParams<{ repo?: string; stackOn?: string; stackBase?: string }>();
   const scheme = useScheme();
   const { user } = useUser();
   const repos = useQuery(api.githubRepos.list, {});
@@ -70,10 +72,17 @@ export default function NewSessionScreen() {
 
   const model = pickedModel ?? normalizeAIModel(repo?.defaultModel);
   const traits: StoredModelTraits = { ...(repo ? storedTraitsFromRepoDefaults(repo) : {}), ...pickedTraits };
+  // The stack belongs to the repo it was opened for.
+  const stack =
+    repo !== undefined && repo._id === repoParam && stackBase !== undefined && Number.isInteger(Number(stackOn))
+      ? { prNumber: Number(stackOn), base: stackBase }
+      : null;
   const baseBranch =
     repo && pickedBranch?.repoId === repo._id
       ? pickedBranch.branch
-      : (repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
+      : (stack?.base ?? repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
+  // Picking another branch abandons the stack: the session's PR would no longer sit on that pull request.
+  const stackOnPrNumber = stack !== null && baseBranch === stack.base ? stack.prNumber : undefined;
   const composer = useMentionComposer(repo?._id, getAIModelProvider(model));
   const providerAccountId = pickedAccount === undefined ? defaultAccountForProvider(accounts, getAIModelProvider(model)) : pickedAccount;
 
@@ -93,6 +102,7 @@ export default function NewSessionScreen() {
         attachmentStorageIds: attachments.storageIds,
         model,
         baseBranch,
+        stackOnPrNumber,
         reasoningLevel: display.effortLevel,
         thinkingEnabled: display.thinkingEnabled,
         use1mContext: display.use1mContext,
@@ -172,12 +182,20 @@ export default function NewSessionScreen() {
                   composer={composer}
                 attachments={attachments}
                   leading={
-                    <BaseBranchChip
-                      repoId={repo._id}
-                      value={baseBranch}
-                      onChange={(branch) => setPickedBranch({ repoId: repo._id, branch })}
-                      disabled={sending}
-                    />
+                    <>
+                      <BaseBranchChip
+                        repoId={repo._id}
+                        value={baseBranch}
+                        onChange={(branch) => setPickedBranch({ repoId: repo._id, branch })}
+                        disabled={sending}
+                      />
+                      {stackOnPrNumber === undefined ? null : (
+                        <View className="flex-row items-center gap-1 pr-1">
+                          <IconStack2 size={13} color={muted} />
+                          <Text className="font-instrument-sans text-xs" style={{ color: muted }}>{`Stacks on #${stackOnPrNumber}`}</Text>
+                        </View>
+                      )}
+                    </>
                   }
                   model={
                     <ModelChip

@@ -8,11 +8,10 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { composerTraitFields, storedComposerTraits } from "@eva/shared";
+import { composerTraitFields, storedComposerTraits, toRunTraitArgs } from "@eva/shared";
 import { useAction, useMutation } from "convex/react";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
 
 /**
  * Chat composer prefs backed by Convex (`sessionChats.lastModel` / trait

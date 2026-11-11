@@ -212,6 +212,8 @@ export const startSession = authMutation({
     /** The model picker's account, as the web landing sends it: null is Team; absent is the user's default. */
     providerAccountId: v.optional(v.union(v.id("userProviderAccounts"), v.null())),
     baseBranch: v.optional(v.string()),
+    /** "Stack a new session" on a pull request: the session's PR joins that PR's stack, as the web composer sends. */
+    stackOnPrNumber: v.optional(v.number()),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
   handler: async (ctx, { prompt: rawPrompt, ...args }) => {

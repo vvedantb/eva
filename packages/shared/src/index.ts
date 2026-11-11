@@ -184,6 +184,7 @@ export {
   diffFileKind,
   ignoreWhitespaceInPatch,
   lineCommentTarget,
+  lineRangeCommentTarget,
   summarizeDiffSize,
   unifiedDiffLines,
   type DiffFileEntry,
@@ -203,11 +204,13 @@ export {
   checksHeadline,
   checksOverallTone,
   countChecks,
+  githubPrUrl,
   headerBlocker,
   mergeBlocker,
   mergeButtonLabel,
   prNumberFromGithubUrl,
   prReviewers,
+  revertSessionRequest,
   reviewStateMeta,
   splitSummaryComments,
   stackBlockingReason,
@@ -229,3 +232,12 @@ export {
   type SummaryComment,
 } from "./prReview";
 export { appLeafName, repoDisplayLabel, repoTileSlot, type RepoTileSlot } from "./repoTile";
+
+export { storedRunTraits, toRunTraitArgs } from "./runTraits";
+export {
+  buildPrTimeline,
+  groupTimelineRows,
+  type ConversationEvent,
+  type TimelineEvent,
+  type TimelineRow,
+} from "./prTimeline";

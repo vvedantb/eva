@@ -1,5 +1,15 @@
-import { lineCommentTarget, unifiedDiffLines, type DiffFileEntry } from "@eva/shared";
-import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconCopy, IconDots, IconExternalLink, IconMessage, IconTrash } from "@tabler/icons-react-native";
+import { lineCommentTarget, lineRangeCommentTarget, unifiedDiffLines, type DiffFileEntry } from "@eva/shared";
+import {
+  IconAlertTriangle,
+  IconArrowsVertical,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCopy,
+  IconDots,
+  IconExternalLink,
+  IconMessage,
+  IconTrash,
+} from "@tabler/icons-react-native";
 import { DiffStat, UnifiedDiff } from "@vvedantb/native-ui/ai";
 import {
   Button,
@@ -20,8 +30,8 @@ import {
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import * as Clipboard from "expo-clipboard";
-import { useRef, useState, type ReactNode } from "react";
-import { Linking, Pressable, ScrollView, View, type TextInput } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { BackHandler, Linking, Pressable, ScrollView, View, type TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { textColor, useScheme } from "@/ui/theme";
 import { usePendingLineComments, useViewedFiles, type PrDiffState, type PrRef } from "./prDiffStore";
@@ -98,7 +108,12 @@ export function TruncatedNote() {
  *
  * With `commentable`, a tap on a line opens the web review comment box as a
  * sheet: the line's pending comments (each can be deleted) and a field to add
- * one. They wait in `usePendingLineComments` for the next review.
+ * one. They wait in `usePendingLineComments` for the next review. The web
+ * drags across lines for a range; here the sheet's "Select more lines" closes
+ * it and a bar asks for the range's other end, which a tap on a second line
+ * sets before the sheet opens again on the range, the draft kept (chose: two
+ * taps, as a drag on a phone scrolls the diff). A range stays in one hunk, as
+ * GitHub anchors it; Back or Cancel leaves the bar.
  */
 export function PrFileDiff({
   pr,
@@ -120,8 +135,21 @@ export function PrFileDiff({
   const pending = usePendingLineComments(pr);
   const [shownLines, setShownLines] = useState<{ path: string; count: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [commentRow, setCommentRow] = useState<number | null>(null);
+  /** The rows the comment sheet is open on (`from` is the first tap); null while it is closed. */
+  const [commentRange, setCommentRange] = useState<{ from: number; to: number } | null>(null);
+  /** While set, the bar asks for the range's other end; the sheet is closed. */
+  const [rangeAnchor, setRangeAnchor] = useState<number | null>(null);
   const muted = textColor(scheme, "muted");
+  // Android back leaves the range bar first, as it closes a sheet first. An
+  // effect because the hardware back button is a subscription outside React.
+  useEffect(() => {
+    if (rangeAnchor === null) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setRangeAnchor(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [rangeAnchor]);
 
   const { entries } = diff;
   const index = Math.max(
@@ -135,15 +163,40 @@ export function PrFileDiff({
   const hidden = lines.length - shown;
   const fileComments = pending.comments.filter((comment) => comment.path === entry.path);
   const targets = lines.map(lineCommentTarget);
+  // A comment shows under its last line, as the web draws it.
   const commentsAt = (row: number) => {
     const target = targets[row];
     return target ? fileComments.filter((comment) => comment.line === target.line && comment.side === target.side) : [];
   };
-  const marked = new Set(targets.flatMap((_, row) => (commentsAt(row).length > 0 ? [row] : [])));
+  const commentTarget = commentRange === null ? null : lineRangeCommentTarget(lines, commentRange.from, commentRange.to);
+  const selection = rangeAnchor !== null ? { from: rangeAnchor, to: rangeAnchor } : commentRange;
+  const marked = new Set(
+    targets.flatMap((_, row) =>
+      commentsAt(row).length > 0 ||
+      (selection !== null && row >= Math.min(selection.from, selection.to) && row <= Math.max(selection.from, selection.to))
+        ? [row]
+        : [],
+    ),
+  );
+  const pressLine = (row: number) => {
+    if (rangeAnchor === null) {
+      setCommentRange({ from: row, to: row });
+      return;
+    }
+    if (lineRangeCommentTarget(lines, rangeAnchor, row) === null) {
+      toast.error("A range stays inside one hunk");
+      return;
+    }
+    setCommentRange({ from: rangeAnchor, to: row });
+    setRangeAnchor(null);
+  };
   const step = (by: number) => {
     const next = entries[index + by];
-    if (next) onPathChange(next.path);
+    if (!next) return;
+    setRangeAnchor(null);
+    onPathChange(next.path);
   };
+
 
   return (
     <View className="flex-1">
@@ -180,8 +233,8 @@ export function PrFileDiff({
           <>
             <UnifiedDiff
               lines={hidden > 0 ? lines.slice(0, shown) : lines}
-              onLinePress={commentable ? setCommentRow : undefined}
-              linePressHint="Comments on this line"
+              onLinePress={commentable ? pressLine : undefined}
+              linePressHint={rangeAnchor === null ? "Comments on this line" : "Ends the range here"}
               markedLines={marked}
             />
             {hidden > 0 ? (
@@ -199,6 +252,28 @@ export function PrFileDiff({
           </>
         )}
       </ScrollView>
+      {rangeAnchor === null ? null : (
+        <View
+          accessibilityLiveRegion="polite"
+          className="flex-row items-center gap-2 pr-1 pl-4"
+          style={{ borderTopWidth: 1, borderColor: tokens.color.border[scheme], backgroundColor: tokens.color.surfaceSecondary[scheme] }}
+        >
+          <IconArrowsVertical size={14} color={muted.color} />
+          <Text className="min-w-0 flex-1 text-sm" style={textColor(scheme)}>
+            {`Tap the other end of the range from ${targets[rangeAnchor]?.label ?? ""}`}
+          </Text>
+          {/* A 44 high target without slop, which would reach the step bar's buttons below. */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setRangeAnchor(null)}
+            className="min-h-11 justify-center rounded-full px-3 active:opacity-70"
+          >
+            <Text className="text-sm" style={muted}>
+              Cancel
+            </Text>
+          </Pressable>
+        </View>
+      )}
       <View
         className="flex-row items-center justify-between px-2 pt-1"
         style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: tokens.color.border[scheme] }}
@@ -217,10 +292,15 @@ export function PrFileDiff({
       />
       {commentable ? (
         <LineCommentSheet
-          target={commentRow === null ? null : (targets[commentRow] ?? null)}
-          comments={commentRow === null ? [] : commentsAt(commentRow)}
-          onClose={() => setCommentRow(null)}
-          onAdd={(target, body) => pending.add({ path: entry.path, line: target.line, side: target.side, label: target.label, body })}
+          target={commentTarget}
+          comments={commentRange === null ? [] : commentsAt(Math.max(commentRange.from, commentRange.to))}
+          onClose={() => setCommentRange(null)}
+          onSelectRange={() => {
+            if (commentRange === null) return;
+            setRangeAnchor(commentRange.from);
+            setCommentRange(null);
+          }}
+          onAdd={(target, body) => pending.add({ path: entry.path, ...target, body })}
           onRemove={pending.remove}
         />
       ) : null}
@@ -306,24 +386,27 @@ function FileMenu({
   );
 }
 
-type LineTarget = NonNullable<ReturnType<typeof lineCommentTarget>>;
+type LineTarget = NonNullable<ReturnType<typeof lineRangeCommentTarget>>;
 
 /**
- * The web review comment box (`DiffCommentDraftBox`, with the line's
+ * The web review comment box (`DiffCommentDraftBox`, with the last line's
  * `DiffCommentPendingCard`s above it) as a sheet: open while `target` is set.
  * Closing drops the draft, as the web Cancel does, so it does not carry to
- * another line.
+ * another line; "Select more lines" (`onSelectRange`) closes it and keeps the
+ * draft for the range.
  */
 function LineCommentSheet({
   target,
   comments,
   onClose,
+  onSelectRange,
   onAdd,
   onRemove,
 }: {
   target: LineTarget | null;
   comments: ReadonlyArray<{ id: string; body: string }>;
   onClose: () => void;
+  onSelectRange: () => void;
   onAdd: (target: LineTarget, body: string) => void;
   onRemove: (id: string) => void;
 }) {
@@ -381,6 +464,18 @@ function LineCommentSheet({
             onChangeText={setText}
             placeholder="Request a change..."
           />
+          <Button
+            size="sm"
+            variant="ghost"
+            fullWidth={false}
+            className="self-start"
+            // 46 high, kept inside half the 12 gap to the field and the footer.
+            hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+            leftIcon={<IconArrowsVertical size={14} color={muted.color} />}
+            onPress={onSelectRange}
+          >
+            {target?.startLine === null ? "Select more lines" : "Change the range"}
+          </Button>
         </SheetBody>
         <SheetFooter>
           <Button variant="ghost" onPress={close}>

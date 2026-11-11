@@ -7,6 +7,7 @@ import {
   countChecks,
   headerBlocker,
   mergeBlocker,
+  revertSessionRequest,
   type PrCheck,
   type PrOverview,
 } from "@eva/shared";
@@ -226,5 +227,20 @@ describe("action gates", () => {
     expect(canSubmitReview("COMMENT", "Nice", 0)).toBe(true);
     expect(canSubmitReview("REQUEST_CHANGES", "", 3)).toBe(false);
     expect(canSubmitReview("REQUEST_CHANGES", "Rename it", 0)).toBe(true);
+  });
+});
+
+describe("revertSessionRequest", () => {
+  test("starts on the base branch and names the merge commit when there is one", () => {
+    const merged = overview({ number: 7, title: "Add feature", status: "merged", baseRef: "main", mergeCommitSha: "abc123" });
+    const request = revertSessionRequest(merged);
+    expect(request.title).toBe("Revert #7");
+    expect(request.baseBranch).toBe("main");
+    expect(request.message).toContain("git revert -m 1 abc123");
+
+    const squashed = revertSessionRequest({ ...merged, mergeCommitSha: null });
+    expect(squashed.message).toBe(
+      'Revert the changes pull request #7 ("Add feature") merged into `main`. Open a pull request with the revert.',
+    );
   });
 });
