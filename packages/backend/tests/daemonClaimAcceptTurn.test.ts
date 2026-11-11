@@ -40,6 +40,7 @@ async function createStagedTurnFixture() {
       installationId: 1,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Claim gate test",
@@ -237,6 +238,7 @@ describe("a daemon that predates session chats", () => {
           installationId: 1,
         });
         return await ctx.db.insert("sessions", {
+          owner: { kind: "standalone" },
           repoId,
           userId,
           title: "Not backfilled",

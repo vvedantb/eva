@@ -40,6 +40,7 @@ type Row = { role: "user" | "assistant"; content: string; finished?: true };
 function busySessionChat(f: Fixture, rows: Row[]) {
   return f.t.run(async (ctx) => {
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: f.repoId,
       userId: f.userId,
       title: "Send burst",

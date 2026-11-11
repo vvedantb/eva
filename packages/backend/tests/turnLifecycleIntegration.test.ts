@@ -49,6 +49,7 @@ async function createSessionFixture() {
       installationId: 1,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Lifecycle test",
@@ -654,6 +655,7 @@ describe("task chat turns share the session turn lifecycle", () => {
         installationId: 1,
       });
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Pick",

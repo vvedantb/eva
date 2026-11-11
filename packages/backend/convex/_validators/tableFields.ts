@@ -70,6 +70,7 @@ import {
 } from "./shapes";
 import { shortcutOverridesValidator } from "./shortcuts";
 import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
+import { sessionOwnerValidator } from "../_sessions/owner";
 
 export const userFields = {
   clerkId: v.optional(v.string()),
@@ -773,6 +774,12 @@ export const sessionFields = {
       sandboxDeleteAfter: v.optional(v.number()),
     }),
   ),
+  /**
+   * Who the session belongs to: the user (standalone), a quick task or a
+   * project. Owned by `_sessions/owner.ts` — read it through `sessionOwner`.
+   * Optional until `backfillSessionOwner` has run in prod.
+   */
+  owner: v.optional(sessionOwnerValidator),
   summary: v.optional(v.array(v.string())),
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),

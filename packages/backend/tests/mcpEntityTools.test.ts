@@ -48,6 +48,7 @@ async function fixture() {
     });
 
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Fix the login bug",
@@ -70,6 +71,7 @@ async function fixture() {
       workflowId: "wf_session",
     });
     const closedSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Old work",
@@ -110,6 +112,7 @@ async function fixture() {
       updatedAt: now - 3_000,
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: otherRepoId,
       userId: strangerUserId,
       title: "Not yours",
@@ -430,6 +433,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     // A `/loop` turn: an open row in `turns` with no workflow bound.
     const loopingSessionId = await f.t.run(async (ctx) => {
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId: f.repoId,
         userId: f.ownerUserId,
         title: "Looping",

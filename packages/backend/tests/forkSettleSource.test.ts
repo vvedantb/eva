@@ -38,6 +38,7 @@ async function fixture(source: {
       connectedBy: userId,
     });
     const sourceId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Seeded local DB",
@@ -48,6 +49,7 @@ async function fixture(source: {
       ...(source.archived ? { archive: { archivedAt: 1 } } : {}),
     });
     const forkId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Fork · Seeded local DB",

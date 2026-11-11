@@ -245,7 +245,10 @@ const schema = defineSchema({
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"])
-    .index("by_session_group", ["sessionGroupId"]),
+    .index("by_session_group", ["sessionGroupId"])
+    // The hidden session a task or project owns (`_sessions/owner.ts`).
+    .index("by_owner_task", ["owner.taskId"])
+    .index("by_owner_project", ["owner.projectId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
