@@ -15,39 +15,15 @@ import { cancelScheduledFunction } from "../_scheduling/helpers";
  * `undefined` is idle. `start` from a schedule cancels its job. The task
  * chat (`activeChatWorkflowId`) and the kanban `status` are separate.
  *
- * Every write of `run` goes through this module, and each write clears the
- * legacy fields (`activeWorkflowId`, `scheduledAt`, `scheduledFunctionId`,
- * `scheduledRetryAt`). Reads go through `taskRunState`, which falls back to the
- * legacy fields for rows `migrateTaskRunState` has not reached yet.
+ * Every write of `run` goes through this module.
  */
 export type TaskRun = Infer<typeof taskRunValidator>;
 
-export type TaskRunSource = Pick<
-  Doc<"agentTasks">,
-  "run" | "activeWorkflowId" | "scheduledAt" | "scheduledFunctionId"
->;
+export type TaskRunSource = Pick<Doc<"agentTasks">, "run">;
 
-/**
- * The task's run state; `undefined` is idle. Legacy rows: a workflow id wins
- * over a schedule (see `migrateTaskRunState`), and a schedule needs both its
- * time and its job. 0e drops the fallback with the legacy fields.
- */
+/** The task's run state; `undefined` is idle. */
 export function taskRunState(task: TaskRunSource): TaskRun | undefined {
-  if (task.run !== undefined) return task.run;
-  if (task.activeWorkflowId !== undefined) {
-    return { state: "running", workflowId: task.activeWorkflowId };
-  }
-  if (
-    task.scheduledAt !== undefined &&
-    task.scheduledFunctionId !== undefined
-  ) {
-    return {
-      state: "scheduled",
-      at: task.scheduledAt,
-      jobId: task.scheduledFunctionId,
-    };
-  }
-  return undefined;
+  return task.run;
 }
 
 /** When the next scheduled or retry run fires, if one is pending. */
@@ -134,7 +110,7 @@ export function nextTaskRun(
       return to(undefined);
     /**
      * Callers gate on `agentRuns` (`hasActiveRun`) first. A leftover
-     * `running` here is replaced, as the legacy field was: rejecting it would
+     * `running` here is replaced: rejecting it would
      * leave a started workflow untracked and block every later run.
      */
     case "start":
@@ -172,13 +148,7 @@ async function applyTaskRunEvent(
   const previous = taskRunState(task);
   const result = nextTaskRun(previous, event);
   if (result.ok) {
-    await ctx.db.patch(taskId, {
-      run: result.next,
-      activeWorkflowId: undefined,
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-      scheduledRetryAt: undefined,
-    });
+    await ctx.db.patch(taskId, { run: result.next });
   }
   return { ...result, previous };
 }

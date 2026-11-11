@@ -112,8 +112,6 @@ const schema = defineSchema({
     .index("by_repo_and_phase", ["repoId", "phase"])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_repo_and_build_state", ["repoId", "build.state"])
-    // Legacy (`activeBuildWorkflowId`); 0e drops it with the field.
-    .index("by_repo_and_build_workflow", ["repoId", "activeBuildWorkflowId"])
     .index("by_repo_and_sandbox_status", [
       "repoId",
       "reviewProjectSandboxStatus",
@@ -239,9 +237,6 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    // Legacy `archived` reads until `backfillSessionArchive` has run; see
-    // `_sessions/archive.ts`. Dropped with the field.
-    .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
     .index("by_repo_deleted_and_archived_at", [
       "repoId",
       "deletedAt",

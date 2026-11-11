@@ -13,55 +13,16 @@ import { SANDBOX_DELETE_GRACE_MS } from "../_sandbox/vercelSnapshotOptions";
  * A delete time exists only inside an archive, so "delete time but live" and
  * "archived but the time disagrees" cannot be written. Every write to it goes
  * through this module.
- *
- * Transition: older rows still carry the legacy `archived` /
- * `sandboxDeleteAfter` pair until `dataMigrations:backfillSessionArchive` runs.
- * Reads fall back to them (`sessionArchive`); every write here clears them.
- * The legacy fields, the fallback and the legacy index read go in 0e.
  */
-export type SessionArchive = NonNullable<Doc<"sessions">["archive"]>;
-
-type ArchiveFields = Pick<
-  Doc<"sessions">,
-  "archive" | "archived" | "sandboxDeleteAfter" | "updatedAt" | "_creationTime"
->;
-
-/** Written with every archive write, so no row keeps the legacy pair. */
-const legacyCleared = { archived: undefined, sandboxDeleteAfter: undefined };
-
-/**
- * The session's archive, or undefined while it is live. A legacy row never
- * recorded when it was archived; its last update is the closest time we have.
- */
-export function sessionArchive(session: ArchiveFields): SessionArchive | undefined {
-  if (session.archive !== undefined) return session.archive;
-  if (session.archived !== true) return undefined;
-  return {
-    archivedAt: session.updatedAt ?? session._creationTime,
-    sandboxDeleteAfter: session.sandboxDeleteAfter,
-  };
-}
+type ArchiveFields = Pick<Doc<"sessions">, "archive">;
 
 export function isSessionArchived(session: ArchiveFields): boolean {
-  return sessionArchive(session) !== undefined;
+  return session.archive !== undefined;
 }
 
-/**
- * The doc as clients see it: `archive` resolved through the legacy fallback,
- * so a row the migration has not reached yet still reads as archived.
- */
-export function withResolvedArchive(
-  session: Doc<"sessions"> | null,
-): Doc<"sessions"> | null {
-  return session && { ...session, archive: sessionArchive(session) };
-}
-
-/**
- * Earliest time the archived session's sandbox may be deleted. A live session
- * never has one: a legacy time left on a live row is ignored.
- */
+/** Earliest time the archived session's sandbox may be deleted. */
 export function sessionDeleteAfter(session: ArchiveFields): number | undefined {
-  return sessionArchive(session)?.sandboxDeleteAfter;
+  return session.archive?.sandboxDeleteAfter;
 }
 
 /**
@@ -79,9 +40,8 @@ export async function archiveSession(
     ? now + SANDBOX_DELETE_GRACE_MS
     : undefined;
   await ctx.db.patch(session._id, {
-    ...legacyCleared,
     archive: {
-      archivedAt: sessionArchive(session)?.archivedAt ?? now,
+      archivedAt: session.archive?.archivedAt ?? now,
       sandboxDeleteAfter,
     },
     updatedAt: now,
@@ -106,7 +66,6 @@ export async function unarchiveSession(
   options: { touch: boolean },
 ): Promise<void> {
   await ctx.db.patch(sessionId, {
-    ...legacyCleared,
     archive: undefined,
     ...(options.touch ? { updatedAt: Date.now() } : {}),
   });
@@ -120,30 +79,16 @@ export async function clearDeletedSessionSandbox(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
-  const archive = sessionArchive(session);
+  const { archive } = session;
   await ctx.db.patch(session._id, {
-    ...legacyCleared,
     sandboxId: undefined,
     archive: archive && { archivedAt: archive.archivedAt },
   });
 }
 
 /**
- * Migration patch from the legacy pair to `archive`, or undefined when the row
- * has nothing to move. Idempotent: a migrated row has no legacy fields left.
- */
-export function legacyArchiveMigrationPatch(session: Doc<"sessions">) {
-  if (session.archived === undefined && session.sandboxDeleteAfter === undefined) {
-    return undefined;
-  }
-  return { ...legacyCleared, archive: sessionArchive(session) };
-}
-
-/**
  * A repo's non-deleted sessions, live or archived. `newest` reads only that
- * many per index, newest first (archived: most recently archived). Legacy
- * archived rows sit in the live bucket of the new index, so the live read
- * filters them out and the archived read adds them from the legacy index.
+ * many, newest first (archived: most recently archived).
  */
 export async function listRepoSessionsByArchive(
   db: DatabaseReader,
@@ -151,7 +96,7 @@ export async function listRepoSessionsByArchive(
   archived: boolean,
   newest?: number,
 ): Promise<Doc<"sessions">[]> {
-  const current = db
+  const query = db
     .query("sessions")
     .withIndex("by_repo_deleted_and_archived_at", (q) => {
       const notDeleted = q.eq("repoId", repoId).eq("deletedAt", undefined);
@@ -159,20 +104,7 @@ export async function listRepoSessionsByArchive(
         ? notDeleted.gte("archive.archivedAt", 0)
         : notDeleted.eq("archive.archivedAt", undefined);
     });
-  const legacy = db
-    .query("sessions")
-    .withIndex("by_repo_archived_and_deleted", (q) =>
-      q.eq("repoId", repoId).eq("archived", true).eq("deletedAt", undefined),
-    );
-  const [rows, legacyRows] = await Promise.all([
-    newest === undefined ? current.collect() : current.order("desc").take(newest),
-    !archived
-      ? []
-      : newest === undefined
-        ? legacy.collect()
-        : legacy.order("desc").take(newest),
-  ]);
-  return [...rows, ...legacyRows].filter(
-    (session) => isSessionArchived(session) === archived,
-  );
+  return newest === undefined
+    ? query.collect()
+    : query.order("desc").take(newest);
 }

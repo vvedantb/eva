@@ -1,12 +1,12 @@
 import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { TurnLane } from "../validators";
-import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
 import {
   isProjectBuilding,
   type ProjectBuildSource,
 } from "../_projects/buildState";
+import type { TurnLane } from "../validators";
+import { findOpenTurn, type TurnEntityId } from "./turnStore";
 
 /**
  * Deployment bridge for task and project chats whose workflow started before

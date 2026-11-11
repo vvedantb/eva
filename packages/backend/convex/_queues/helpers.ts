@@ -913,7 +913,7 @@ const taskChatQueueConfig: ChatQueueConfig<
   ChatQueuePrepared
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
-  // `activeWorkflowId` counts too: the task's own run owns the sandbox, and a
+  // The task's own `run` counts too: it owns the sandbox, and a
   // follow-up may now be queued while that first run is still going. Starting
   // a chat turn on top of it would have two agents in one sandbox.
   hasActiveWorkflow: (task) =>

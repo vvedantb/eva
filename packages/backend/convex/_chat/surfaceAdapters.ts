@@ -1,6 +1,6 @@
-import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { isTaskRunning } from "../_agentTasks/runState";
 import { isProjectBuilding } from "../_projects/buildState";
+import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import type { Doc, Id } from "../_generated/dataModel";
 import type {
   DatabaseReader,

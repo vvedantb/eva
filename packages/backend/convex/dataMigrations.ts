@@ -4,7 +4,7 @@ import type { DataModel } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
-import { isSessionArchived, legacyArchiveMigrationPatch } from "./_sessions/archive";
+import { isSessionArchived } from "./_sessions/archive";
 import type { MutationCtx } from "./_generated/server";
 import {
   buildProjectBranchName,
@@ -14,10 +14,6 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
-import { taskRunState } from "./_agentTasks/runState";
-import { getActiveTaskRun } from "./functions";
-import { cancelScheduledFunction } from "./_scheduling/helpers";
-import { projectBuildState } from "./_projects/buildState";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -365,46 +361,6 @@ export const pruneProjectBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
-/**
- * `clearSessionWorkflowSlots`: clears the retired session workflow slots.
- * Run once per deployment, after the deploy that stops reading them:
- *
- *   npx convex run dataMigrations:clearSessionWorkflowSlots
- *
- * The open turn is the only "busy" signal and holds the workflow id
- * (`turns.workflowId`), so these copies are dead data. Clear only, no cancel:
- * a chat slot with no open turn is a leftover (every chat workflow bound its
- * turn in the same mutation that set the slot, and the 2-hour backstop has
- * long since run). A summary slot whose workflow is still preparing needs
- * nothing either: its lane turn takes the id at launch, and its backstop asks
- * the workflow for its status. Idempotent; 0e drops the fields after this.
- */
-export const clearSessionWorkflowSlots = dataMigrations.runner([
-  internal.dataMigrations.clearSessionChatWorkflowSlot,
-  internal.dataMigrations.clearSessionWorkflowSlot,
-]);
-
-export const clearSessionChatWorkflowSlot = dataMigrations.define({
-  table: "sessionChats",
-  migrateOne: async (_ctx, chat) => {
-    if (chat.activeWorkflowId === undefined) return;
-    return { activeWorkflowId: undefined };
-  },
-});
-
-export const clearSessionWorkflowSlot = dataMigrations.define({
-  table: "sessions",
-  migrateOne: async (_ctx, session) => {
-    if (
-      session.activeWorkflowId === undefined &&
-      session.turnLifecycleVersion === undefined
-    ) {
-      return;
-    }
-    return { activeWorkflowId: undefined, turnLifecycleVersion: undefined };
-  },
-});
-
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
@@ -412,99 +368,3 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneAgentTaskBackgroundAgents,
   internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
-
-/**
- * `npx convex run dataMigrations:migrateTaskRunState` after the deploy that
- * adds `agentTasks.run`. Folds the legacy run fields into `run` and clears
- * them; idempotent (rows without legacy fields are skipped). Until it runs,
- * `taskRunState` reads the legacy fields. Mapping:
- * - `activeWorkflowId` → `running`, with the task's queued/running run as
- *   `runId` when there is one.
- * - `scheduledAt` + `scheduledFunctionId` → `scheduled`. Legacy rows cannot
- *   tell a user schedule from an auto retry; both behave the same.
- * - Both a workflow id and a schedule: `running` wins, so Stop can still
- *   cancel the workflow; the schedule's job is cancelled.
- * - A schedule missing its time or its job, and `scheduledRetryAt` (never
- *   written), become idle.
- */
-export const migrateTaskRunState = dataMigrations.define({
-  table: "agentTasks",
-  migrateOne: async (ctx, task) => {
-    if (
-      task.activeWorkflowId === undefined &&
-      task.scheduledAt === undefined &&
-      task.scheduledFunctionId === undefined &&
-      task.scheduledRetryAt === undefined
-    ) {
-      return;
-    }
-    let run = taskRunState(task);
-    if (run?.state === "running" && run.runId === undefined) {
-      const activeRun = await getActiveTaskRun(ctx.db, task._id);
-      if (activeRun) run = { ...run, runId: activeRun._id };
-    }
-    if (run?.state === "running") {
-      await cancelScheduledFunction(ctx, task.scheduledFunctionId);
-    }
-    return {
-      run,
-      activeWorkflowId: undefined,
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-      scheduledRetryAt: undefined,
-    };
-  },
-});
-
-/**
- * `npx convex run dataMigrations:migrateProjectBuildState` after the deploy
- * that adds `projects.build`. Folds the legacy build fields into `build` and
- * clears them; idempotent (rows without legacy fields are skipped). Until it
- * runs, `projectBuildState` reads the legacy fields. Mapping:
- * - `activeBuildWorkflowId` → `running`.
- * - `scheduledBuildAt` + `scheduledBuildFunctionId` → `scheduled`, or
- *   `running.scheduled` next to a running build (a usage-limit retry or a
- *   schedule set before a manual start). Not a contradiction: the job fires
- *   later and is dropped if the build still runs.
- * - A schedule missing its time or its job becomes idle; an orphan job (no
- *   time, so it would no-op when it fires) is cancelled.
- */
-export const migrateProjectBuildState = dataMigrations.define({
-  table: "projects",
-  migrateOne: async (ctx, project) => {
-    if (
-      project.activeBuildWorkflowId === undefined &&
-      project.scheduledBuildAt === undefined &&
-      project.scheduledBuildFunctionId === undefined
-    ) {
-      return;
-    }
-    const build = projectBuildState(project);
-    const keptJobId =
-      build?.state === "scheduled" ? build.jobId : build?.scheduled?.jobId;
-    if (project.scheduledBuildFunctionId !== keptJobId) {
-      await cancelScheduledFunction(ctx, project.scheduledBuildFunctionId);
-    }
-    return {
-      build,
-      activeBuildWorkflowId: undefined,
-      scheduledBuildAt: undefined,
-      scheduledBuildFunctionId: undefined,
-    };
-  },
-});
-
-/**
- * `backfillSessionArchive`: moves the legacy `sessions.archived` /
- * `sandboxDeleteAfter` pair into the single `archive` field and clears the
- * pair. Run once per deployment after the deploy that adds `archive`:
- *
- *   npx convex run dataMigrations:backfillSessionArchive
- *
- * Idempotent. Reads fall back to the legacy pair until it has run; the fields
- * and the fallback are removed afterwards (0e).
- */
-export const backfillSessionArchive = dataMigrations.define({
-  table: "sessions",
-  migrateOne: (_ctx, session) => legacyArchiveMigrationPatch(session),
-});
