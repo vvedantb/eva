@@ -22,7 +22,7 @@ import { tokens } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { FooterSheet, useFooterChipColor } from "@/chat/ComposerFooter";
+import { FOOTER_CHIP, FooterSheet, useFooterChipColor } from "@/chat/ComposerFooter";
 import { useScheme } from "@/ui/theme";
 
 /** What the model chip shows and changes: the composer's model and its stored traits. */
@@ -154,7 +154,7 @@ export function ModelChip({ repoId, model, traits, onModelChange, onTraitsChange
         }
         label={label}
         suffix={summary.suffix}
-        weight="normal"
+        {...FOOTER_CHIP}
         color={color}
         accessibilityLabel={`Model: ${[label, summary.suffix, summary.fast ? "Fast" : undefined, accountInstance?.label].filter(Boolean).join(", ")}`}
         expanded={open}
