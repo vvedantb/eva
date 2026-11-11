@@ -11,11 +11,14 @@ import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
 import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
-import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
+import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
@@ -410,12 +413,6 @@ export function ChatPanel({
       surface={chatSurface}
       beforeBanner={
         <>
-          {simpleView ? null : (
-            <BackgroundProcessesPanel
-              sessionId={sessionId}
-              isRouteActive={isRouteActive}
-            />
-          )}
           {!isReadOnly ? (
             <PublishRecoveryBanner
               sessionId={sessionId}
@@ -427,6 +424,17 @@ export function ChatPanel({
         </>
       }
     />
+  );
+
+  const composerChips = (
+    <SandboxChatStatusChips surface={chatSurface}>
+      {simpleView ? null : (
+        <BackgroundProcessesChip
+          sessionId={sessionId}
+          isRouteActive={isRouteActive}
+        />
+      )}
+    </SandboxChatStatusChips>
   );
 
   const emptyStateTitle = isSandboxActive
@@ -508,6 +516,7 @@ export function ChatPanel({
             />
           }
           preInputContent={preInputContent}
+          composerChips={composerChips}
           preConversationContent={
             <SessionSummaryAccordion
               summary={summary}
