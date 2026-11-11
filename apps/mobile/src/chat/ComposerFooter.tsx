@@ -88,11 +88,14 @@ export function ComposerFooter({
       className="mx-3 flex-row items-center gap-0.5 px-2 py-0.5"
       style={{ backgroundColor: withAlpha(theme.muted, 0.7), borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
     >
-      {/* 390 wide, the three chips want a few points more than the bar. The
-          model gives them up: its name stays and the trait summary truncates.
-          A long branch truncates at 40%, the web `max-w-[min(220px,40vw)]`. */}
+      {/* As the web phone bar: the leading control takes what the stash and
+          the model leave (`flex-1 basis-0`), so its label truncates first and
+          the model keeps its name and trait ("· High"). It never goes below
+          an icon and a chevron, and never past 40% (the web branch chip's
+          `max-w-[min(220px,40vw)]`). The model truncates only when it alone
+          does not fit. */}
       {leading ? (
-        <View className="shrink-0" style={{ maxWidth: "40%" }}>
+        <View className="flex-1 flex-row" style={{ minWidth: LEADING_MIN_WIDTH, maxWidth: "40%" }}>
           {leading}
         </View>
       ) : null}
@@ -101,6 +104,10 @@ export function ComposerFooter({
     </View>
   );
 }
+
+/** A chip squeezed to its icon and chevron, as the web branch chip at 390: `px-2`, 14 icon, two 6 gaps, 12 chevron. */
+const LEADING_MIN_WIDTH =
+  2 * PROMPT_INPUT_CHIP.paddingX + PROMPT_INPUT_CHIP.iconSize + 2 * PROMPT_INPUT_CHIP.gap + PROMPT_INPUT_CHIP.chevronSize;
 
 /** The web Simple view opt-in (`auth.getExperimentalFlags`); false while it loads. */
 export function useSimpleView(): boolean {
