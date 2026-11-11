@@ -19,8 +19,8 @@ import {
   readOAuthClient,
   type ConnectorProvider,
 } from "./_connectors/providers";
+import { OAUTH_STATE_TTL_MS } from "./_connectors/tokens";
 
-const STATE_TTL_MS = 10 * 60 * 1000;
 const STATE_PATH_PREFIX = "/settings";
 
 const statusValidator = v.object({
@@ -131,7 +131,7 @@ export const startOAuth = authMutation({
       actor,
       returnPath: safeReturnPath(args.returnPath),
       codeVerifier: verifier,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      expiresAt: Date.now() + OAUTH_STATE_TTL_MS,
     });
     const redirectUri = `${siteUrl.replace(/\/$/, "")}/api/connectors/oauth/callback`;
     const params = new URLSearchParams({

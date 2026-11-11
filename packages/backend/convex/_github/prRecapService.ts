@@ -11,8 +11,8 @@ import {
 import { aiModelValidator } from "../validators";
 import { PR_RECAP_COMMENT_MARKER, buildPrRecapCommentBody } from "./prComments";
 import { buildEvaReviewUrl } from "../_taskWorkflow/urls";
+import { MAX_DIFF_BYTES } from "./prDiff";
 
-const MAX_DIFF_BYTES = 500_000;
 const MAX_FILES = 100;
 
 const prDiffResultValidator = v.object({
