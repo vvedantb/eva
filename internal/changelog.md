@@ -1,5 +1,13 @@
 # Changelog
 
+## Composer tasks panel: model the todo status once
+
+Date: 2026-11-11
+
+WHY: A domain-model audit found five ternary chains on one status, a duration field nothing set, a renamed status, and guards for states that cannot occur.
+
+Architectural: `ComposerTasksPanel` uses the activity trace's todo item type directly (no `in_progress` → `inProgress` rename). `TASK_STATUS_STYLE` (a `Record` on status) holds each status's colours, icon and trailing label, so a new status fails the type check. `durationMs` and `formatTaskDuration` are gone. `deriveProgress` takes the first step, so it cannot see an empty list. The panel needs a `turnId`; the old `"current"` fallback key let one dismissal hide every later turn without an id.
+
 ## Single source of truth audit (split PRs)
 
 Date: 2026-11-11
