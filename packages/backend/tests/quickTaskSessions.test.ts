@@ -4,7 +4,7 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
-import { migrateQuickTaskToSession } from "../convex/_migrations/quickTaskChatsToSessions";
+import { migrateQuickTaskToSession } from "../convex/_migrations/ownerChatsToSessions";
 
 /**
  * PR 1b: a quick task runs on one owned session. Guards the rules that keep
@@ -48,14 +48,14 @@ describe("quick tasks on sessions", () => {
     async () => {
       const f = await fixture();
       const first = await f.asUser.mutation(api.sessions.ensureOwned, {
-        taskId: f.taskId,
+        owner: { kind: "task", taskId: f.taskId },
       });
       const second = await f.asUser.mutation(api.sessions.ensureOwned, {
-        taskId: f.taskId,
+        owner: { kind: "task", taskId: f.taskId },
       });
       expect(second).toEqual(first);
       expect(
-        await f.asUser.query(api.sessions.getOwned, { taskId: f.taskId }),
+        await f.asUser.query(api.sessions.getOwned, { owner: { kind: "task", taskId: f.taskId } }),
       ).toEqual(first);
 
       const owned = await f.t.run(async (ctx) => {
@@ -96,7 +96,7 @@ describe("quick tasks on sessions", () => {
         }),
       );
       const { sessionId } = await f.asUser.mutation(api.sessions.ensureOwned, {
-        taskId: f.taskId,
+        owner: { kind: "task", taskId: f.taskId },
       });
       const [session, task] = await f.t.run((ctx) =>
         Promise.all([ctx.db.get(sessionId), ctx.db.get(f.taskId)]),
@@ -116,7 +116,7 @@ describe("quick tasks on sessions", () => {
       const f = await fixture();
       const { sessionId, chatId } = await f.asUser.mutation(
         api.sessions.ensureOwned,
-        { taskId: f.taskId },
+        { owner: { kind: "task", taskId: f.taskId } },
       );
       await f.t.run(async (ctx) => {
         const runId = await ctx.db.insert("agentRuns", {

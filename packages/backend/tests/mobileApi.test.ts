@@ -3,6 +3,7 @@ import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import type { FunctionArgs } from "convex/server";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
@@ -114,10 +115,10 @@ async function fixture() {
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
-/** The Main chat of the session a quick task chats in. */
-async function ownedChatId(asUser: Fixture["asUser"], taskId: Id<"agentTasks">) {
-  const owned = await asUser.query(api.sessions.getOwned, { taskId });
-  if (!owned) throw new Error("The task has no session");
+/** The session chat a quick task or a project chats in. */
+async function ownedChatId(asUser: Fixture["asUser"], owner: FunctionArgs<typeof api.sessions.getOwned>["owner"]) {
+  const owned = await asUser.query(api.sessions.getOwned, { owner });
+  if (!owned) throw new Error("The owner has no session");
   return owned.chatId;
 }
 
@@ -198,12 +199,15 @@ describe("mobile api", () => {
       ]);
       // A quick task chats in its session's Main chat, on the chat's own model
       // (seeded from the task chat's last pick, not the run's `model`).
-      const taskChatId = await ownedChatId(asUser, ids.taskId);
+      const taskChatId = await ownedChatId(asUser, { kind: "task", taskId: ids.taskId });
       expect(await sent(t, ids.taskId)).toEqual([]);
       expect(await sent(t, taskChatId)).toEqual([
         { content: "hi task", model: "codex:gpt-5.6-sol", userId: ids.userId },
       ]);
-      expect(await sent(t, ids.projectId)).toEqual([
+      // A project chats in its session's Main chat too.
+      const projectChatId = await ownedChatId(asUser, { kind: "project", projectId: ids.projectId });
+      expect(await sent(t, ids.projectId)).toEqual([]);
+      expect(await sent(t, projectChatId)).toEqual([
         { content: "hi project", model: DEFAULT_AI_MODEL, userId: ids.userId },
       ]);
     },
@@ -214,7 +218,7 @@ describe("mobile api", () => {
     "sendMessage queues behind a quick task's running run",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const { sessionId, chatId } = await asUser.mutation(api.sessions.ensureOwned, { taskId: ids.taskId });
+      const { sessionId, chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
       await t.run(async (ctx) => {
         const runId = await ctx.db.insert("agentRuns", { taskId: ids.taskId, status: "running", logs: [] });
         await openTurn(ctx, {
@@ -385,9 +389,6 @@ describe("mobile api", () => {
       await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message: "hi" });
       expect(await sent(t, ids.chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
       await expect(
-        asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus" }),
-      ).rejects.toThrow("agentTasks.update");
-      await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.archivedChatId, model: "claude:opus" }),
       ).rejects.toThrow("This chat is closed");
       await expect(
@@ -401,7 +402,7 @@ describe("mobile api", () => {
     "a quick task on its session picks its model and traits on the session chat, and a reply runs on them",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const { chatId } = await asUser.mutation(api.sessions.ensureOwned, { taskId: ids.taskId });
+      const { chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
       // Shown as the task, read and written as its session's Main chat.
       expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({
         kind: "task",

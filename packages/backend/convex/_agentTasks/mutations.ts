@@ -37,10 +37,11 @@ import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
 import { cancelTaskRunSchedule } from "./runState";
 import {
   isTerminalTaskStatus,
-  mirrorTaskIntoOwnedSession,
+  mirrorOwnerIntoSession,
   retireOwnedSession,
   reviveOwnedSession,
   syncOwnedSessionWithTaskStatus,
+  taskSessionOwner,
 } from "../_sessions/ownedSession";
 import {
   applyPrLifecycleTransition,
@@ -88,7 +89,13 @@ export const update = authMutation({
     }
     const updates = await buildTaskUpdates(ctx, task, args);
     await ctx.db.patch(args.id, updates);
-    await mirrorTaskIntoOwnedSession(ctx, { ...task, ...updates });
+    const updated = { ...task, ...updates };
+    await mirrorOwnerIntoSession(ctx, { kind: "task", task: updated });
+    // A quick task moved into a project works on the project's session from
+    // now on (`taskWorkSessionOwner`): its own session retires.
+    if (task.projectId === undefined && updated.projectId !== undefined) {
+      await retireOwnedSession(ctx, taskSessionOwner(task._id));
+    }
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
@@ -273,7 +280,7 @@ export const remove = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await softDeleteAgentTask(ctx, args.id);
-    await retireOwnedSession(ctx, args.id);
+    await retireOwnedSession(ctx, taskSessionOwner(args.id));
     return null;
   },
 });
@@ -302,7 +309,7 @@ export const restore = authMutation({
     // The delete retired the task's session; a live task gets it back. A
     // done/cancelled task stays retired with its status.
     if (!isTerminalTaskStatus(task.status)) {
-      await reviveOwnedSession(ctx, task._id);
+      await reviveOwnedSession(ctx, taskSessionOwner(task._id));
     }
     return null;
   },
@@ -659,7 +666,7 @@ export const deleteCascade = authMutation({
     await collectDependents(args.id);
     for (const taskId of tasksToDelete) {
       await softDeleteAgentTask(ctx, taskId);
-      await retireOwnedSession(ctx, taskId);
+      await retireOwnedSession(ctx, taskSessionOwner(taskId));
     }
     return null;
   },

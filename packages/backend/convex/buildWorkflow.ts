@@ -23,6 +23,17 @@ import {
   projectScheduledBuildAt,
   scheduleProjectBuild,
 } from "./_projects/buildState";
+import {
+  ownedSessionBusy,
+  projectSessionOwner,
+} from "./_sessions/ownedSession";
+
+/** Why a build did not start: the project chat holds the sandbox. */
+const PROJECT_CHAT_BUSY_ERROR =
+  "Eva is still replying in this project's chat, or its sandbox is starting or stopping. Start the build again in a moment.";
+
+/** How long a scheduled build waits for a busy project chat before trying again. */
+const CHAT_BUSY_RETRY_MS = 60_000;
 
 // --- Workflow ---
 
@@ -166,6 +177,7 @@ export const startTaskForBuild = internalMutation({
       triggeringCommentId: task.pendingChangeRequestCommentId,
       clearPendingChangeRequest: true,
       rollbackStatus: "todo",
+      heldByBuild: true,
     });
 
     return null;
@@ -209,6 +221,10 @@ export const startBuild = authMutation({
 
     if (isProjectBuilding(project)) {
       throw new Error("Project already has an active build");
+    }
+    // One agent per sandbox: a build waits for the project chat's reply.
+    if (await ownedSessionBusy(ctx.db, projectSessionOwner(project._id))) {
+      throw new Error(PROJECT_CHAT_BUSY_ERROR);
     }
 
     const repo = await ctx.db.get(project.repoId);
@@ -256,6 +272,17 @@ export const executeScheduledBuild = internalMutation({
       args.scheduledAt,
     );
     if (!fired.ok || fired.next !== undefined) return null;
+    // The project chat is mid-reply on the shared sandbox: try again shortly
+    // instead of dropping the schedule (`startBuild` refuses a busy chat).
+    if (await ownedSessionBusy(ctx.db, projectSessionOwner(project._id))) {
+      await scheduleProjectBuild(
+        ctx,
+        args.projectId,
+        "scheduleRetry",
+        Date.now() + CHAT_BUSY_RETRY_MS,
+      );
+      return null;
+    }
 
     const repo = await ctx.db.get(project.repoId);
     if (!repo) return null;

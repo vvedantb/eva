@@ -12,14 +12,26 @@ import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
 import { markTaskRunStarted } from "../_agentTasks/runState";
 import type { taskExecutionWorkflowArgs } from "./workflowDefinition";
 import {
-  ensureOwnedSession,
-  taskSessionBusy,
-  taskUsesOwnedSession,
+  ensureTaskWorkSession,
+  ownedSessionBusy,
+  taskWorkSessionOwner,
 } from "../_sessions/ownedSession";
 
 /** Why a run did not start: the task's chat holds the sandbox. */
 export const TASK_CHAT_BUSY_ERROR =
-  "Eva is still replying in this task's chat, or its sandbox is starting or stopping. Try the run again in a moment.";
+  "Eva is still replying in this chat, or its sandbox is starting or stopping. Try the run again in a moment.";
+
+/**
+ * True while the session a task works on (its own, or its project's) holds
+ * its sandbox for a chat turn, a run or a start/stop. A run waits then, as a
+ * chat message waits behind a run.
+ */
+export async function taskWorkSessionBusy(
+  db: MutationCtx["db"],
+  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+): Promise<boolean> {
+  return await ownedSessionBusy(db, taskWorkSessionOwner(task));
+}
 
 /**
  * The one way to start a quick-task or project-task run. Queues an
@@ -44,12 +56,19 @@ export async function startTaskRun(
     triggeringCommentId?: Id<"taskComments">;
     clearPendingChangeRequest: boolean;
     rollbackStatus: Doc<"agentTasks">["status"];
+    /**
+     * A project build's task. The build holds the project's session for its
+     * whole run (chat queues behind it, `sessionChatHasFreeSlot`), and the
+     * previous task's run turn may still be closing, so the busy gate is the
+     * build's own (`startBuild`), not this one.
+     */
+    heldByBuild?: boolean;
   },
 ): Promise<Id<"agentRuns">> {
   const { task, repo } = p;
-  // One agent per sandbox: a run waits while the task's session chat is
-  // mid-reply, as a chat message waits behind a run.
-  if (p.projectId === undefined && (await taskSessionBusy(ctx.db, task._id))) {
+  // One agent per sandbox: a run waits while its session's chat is mid-reply,
+  // as a chat message waits behind a run.
+  if (p.heldByBuild !== true && (await taskWorkSessionBusy(ctx.db, task))) {
     throw new Error(TASK_CHAT_BUSY_ERROR);
   }
   const startedAt = Date.now();
@@ -76,13 +95,10 @@ export async function startTaskRun(
       ? { pendingChangeRequestCommentId: undefined }
       : {}),
   });
-  // A quick task runs on its session's sandbox; project tasks keep the
+  // A quick task runs on its own session's sandbox, a project task on its
   // project's. Looked up (or created) here so the run's turn and sandbox
   // writes land on that one session.
-  const ownedSession =
-    p.projectId === undefined && taskUsesOwnedSession(task)
-      ? (await ensureOwnedSession(ctx, task)).session
-      : null;
+  const ownedSession = (await ensureTaskWorkSession(ctx, task)).session;
   try {
     await startTaskRunWorkflow(ctx, {
       runId,
@@ -90,7 +106,7 @@ export async function startTaskRun(
       repoId: repo._id,
       installationId: repo.installationId,
       projectId: p.projectId,
-      ownedSessionId: ownedSession?._id,
+      ownedSessionId: ownedSession._id,
       branchName: p.branchName,
       baseBranch: p.baseBranch,
       isFirstTaskOnBranch: p.isFirstTaskOnBranch,

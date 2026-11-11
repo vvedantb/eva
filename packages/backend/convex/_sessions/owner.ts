@@ -22,6 +22,12 @@ export const sessionOwnerValidator = v.union(
 );
 
 export type SessionOwner = Infer<typeof sessionOwnerValidator>;
+
+/** A task or project owner, as an argument (`sessions.getOwned` / `ensureOwned`). */
+export const ownedSessionOwnerValidator = v.union(
+  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
+);
 /** A task or project owner: the kinds that own at most one session each. */
 export type OwnedSessionOwner = Exclude<SessionOwner, { kind: "standalone" }>;
 
@@ -57,17 +63,36 @@ export function sessionOwnerTaskId(
   return owner.kind === "task" ? owner.taskId : undefined;
 }
 
+/** The project a session belongs to, or undefined for any other owner. */
+export function sessionOwnerProjectId(
+  session: OwnerFields,
+): Id<"projects"> | undefined {
+  const owner = sessionOwner(session);
+  return owner.kind === "project" ? owner.projectId : undefined;
+}
+
+/**
+ * The task or project that owns the session, or undefined for a standalone
+ * one. Attribution (docs, unread, mentions, watches) routes through it.
+ */
+export function sessionOwnerEntityId(
+  session: OwnerFields,
+): Id<"agentTasks"> | Id<"projects"> | undefined {
+  return sessionOwnerTaskId(session) ?? sessionOwnerProjectId(session);
+}
+
 /**
  * Guard for the session-only actions an owned session refuses: fork, add to a
- * group, open another chat, rename. A task's session is one chat that mirrors
- * the task; those actions belong to the task, or to standalone sessions.
+ * group, open another chat, rename. A task's or project's session mirrors its
+ * owner; those actions belong to the owner, or to standalone sessions.
  */
 export function assertStandaloneSession(
   session: OwnerFields,
   action: string,
 ): void {
-  if (!isStandaloneSession(session)) {
-    throw new Error(`A task's session cannot ${action}.`);
+  const owner = sessionOwner(session);
+  if (owner.kind !== "standalone") {
+    throw new Error(`A ${owner.kind}'s session cannot ${action}.`);
   }
 }
 

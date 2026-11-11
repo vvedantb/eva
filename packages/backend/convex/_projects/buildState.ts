@@ -4,6 +4,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { projectBuildValidator } from "../_validators/tableFields";
 import { cancelScheduledFunction } from "../_scheduling/helpers";
+import { findOwnedSession } from "../_sessions/owner";
 
 /**
  * A project's build (`projects.build`), one field instead of three:
@@ -249,15 +250,31 @@ export async function markProjectBuildStarted(
 
 /**
  * The build ended (finished, cancelled or stale). With a `workflowId`, a
- * newer build is left alone; without one, any build ends.
+ * newer build is left alone; without one, any build ends. Chat messages sent
+ * during the build waited in the project session's queue
+ * (`sessionChatHasFreeSlot`): they start now. Scheduled, since the queue
+ * module imports this one.
  */
 export async function finishProjectBuild(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   workflowId: string | undefined,
 ): Promise<ProjectBuildTransition> {
-  return applyProjectBuildEvent(ctx, projectId, {
+  const result = await applyProjectBuildEvent(ctx, projectId, {
     type: "finish",
     workflowId,
   });
+  if (!result.ok) return result;
+  const session = await findOwnedSession(ctx.db, {
+    kind: "project",
+    projectId,
+  });
+  if (session) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      { parentId: session._id },
+    );
+  }
+  return result;
 }

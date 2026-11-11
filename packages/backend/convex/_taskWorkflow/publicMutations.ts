@@ -22,7 +22,7 @@ import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
-import { findTaskSession } from "../_sessions/ownedSession";
+import { findTaskWorkSession } from "../_sessions/ownedSession";
 import { stopTaskRunSandbox } from "../_sessions/sandbox";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
@@ -214,10 +214,10 @@ export async function cancelTaskRun(
 
     // workflow.cancel() aborts execution before the workflow's own sandbox
     // cleanup step runs, so we stop the execution sandbox here.
-    // A quick task's run borrowed its session's sandbox: stop it through the
-    // session, which keeps one the reviewer has open.
+    // A run borrowed its session's sandbox (a project task's: the project's):
+    // stop it through the session, which keeps one the reviewer has open.
     const session = run.sandboxId
-      ? await findTaskSession(ctx.db, task._id)
+      ? await findTaskWorkSession(ctx.db, task)
       : null;
     if (session && run.sandboxId) {
       await stopTaskRunSandbox(ctx, session._id, run.sandboxId);

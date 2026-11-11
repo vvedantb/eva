@@ -30,7 +30,7 @@ import {
   unreadLookupForRepo,
 } from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
-import { liveTaskSessionStatuses } from "../_sessions/ownedSession";
+import { liveOwnedSessionStatuses } from "../_sessions/ownedSession";
 
 /**
  * A task list row (`listRow`) enriched with its latest run and busy state. The
@@ -158,7 +158,7 @@ async function enrichTasksWithLastRun(
     tasks.length <= POINT_READ_LIMIT
       ? pointReadLookups(db, userId, tasks, repoIds)
       : repoWideLookups(db, userId, [...repoIds]),
-    liveTaskSessionStatuses(db, repoIds),
+    liveOwnedSessionStatuses(db, repoIds, "task"),
   ]);
 
   return Promise.all(
@@ -336,9 +336,9 @@ export const countSandboxTasks = authQuery({
       ),
     );
     // A quick task's sandbox lives on its session: count those too.
-    const sessionStatuses = await liveTaskSessionStatuses(ctx.db, [
+    const sessionStatuses = await liveOwnedSessionStatuses(ctx.db, [
       args.repoId,
-    ]);
+    ], "task");
     const liveSessionTasks = await Promise.all(
       [...sessionStatuses]
         .filter(([, status]) => status === "active" || status === "starting")

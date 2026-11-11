@@ -41,9 +41,10 @@ export const taskExecutionWorkflowArgs = {
   installationId: v.number(),
   projectId: v.optional(v.id("projects")),
   /**
-   * A quick task's session: the run reads and writes its sandbox there.
-   * Absent for project tasks and for runs started before tasks had sessions,
-   * which keep the sandbox on the task row.
+   * The session the run works on (a quick task's own, a project task's
+   * project's): the run reads and writes its sandbox there. Absent only for
+   * runs started before tasks and projects had sessions, which keep the
+   * sandbox on the task or project row.
    */
   ownedSessionId: v.optional(v.id("sessions")),
   branchName: v.optional(v.string()),
@@ -168,17 +169,19 @@ export const taskExecutionWorkflow = workflow.define({
         sandboxId,
       });
 
-      if (args.projectId) {
-        await step.runMutation(internal.taskWorkflow.updateProjectSandbox, {
-          projectId: args.projectId,
-          sandboxId,
-        });
-      } else if (args.ownedSessionId) {
-        // The task's session owns the sandbox: its chat, preview and sweeps
-        // all read it there. Refused while a start/stop owns the row; the
-        // tail then stops this VM on its own.
+      if (args.ownedSessionId) {
+        // The task's session (a project task's: the project's) owns the
+        // sandbox: its chat, preview and sweeps all read it there. Refused
+        // while a start/stop owns the row; a quick task's tail then stops
+        // this VM on its own.
         await step.runMutation(internal.sessions.attachTaskRunSandbox, {
           sessionId: args.ownedSessionId,
+          sandboxId,
+        });
+      } else if (args.projectId) {
+        // Runs started before projects had sessions.
+        await step.runMutation(internal.taskWorkflow.updateProjectSandbox, {
+          projectId: args.projectId,
           sandboxId,
         });
       } else {
@@ -431,7 +434,14 @@ export const taskExecutionWorkflow = workflow.define({
       // Stop (don't delete) quick-task sandboxes that were not already open in
       // the reviewer UI. If a change-request reused an active preview sandbox,
       // keep it active so "View Sandbox" continues pointing at a live sandbox.
-      if (args.ownedSessionId && sandboxId && !preserveSandboxOnFailure) {
+      // A project task's VM stays up, as the project sandbox always did: the
+      // build's next task and the project chat resume it.
+      if (
+        !args.projectId &&
+        args.ownedSessionId &&
+        sandboxId &&
+        !preserveSandboxOnFailure
+      ) {
         // The session's own stop path: it keeps a sandbox the reviewer has
         // open (status active/starting) and settles through `stopping`.
         try {

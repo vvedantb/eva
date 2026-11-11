@@ -7,7 +7,11 @@ import {
 } from "../_projects/buildState";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
-import { findOwnedSession, sessionOwnerTaskId } from "../_sessions/owner";
+import {
+  findOwnedSession,
+  sessionOwnerEntityId,
+  sessionOwnerProjectId,
+} from "../_sessions/owner";
 
 /**
  * Deployment bridge for task and project chats whose workflow started before
@@ -111,9 +115,11 @@ async function openChatTurnsForRepo(
 }
 
 /**
- * A turn lights up its entity and its session. A task's session also lights
- * up its task (its card is where that chat lives), read with one point read
- * per distinct open-turn session, never one per list row.
+ * A turn lights up its entity and its session. A task's or project's session
+ * also lights up its owner (its card is where that chat lives), and a project
+ * task's own chat lights up that task. One point read per distinct open-turn
+ * session (and per open chat turn in a project's session), never one per
+ * list row.
  */
 async function idsOfTurns(
   db: DatabaseReader,
@@ -129,9 +135,28 @@ async function idsOfTurns(
     }
   }
   const sessions = await Promise.all([...sessionIds].map((id) => db.get(id)));
+  const projectSessionIds = new Set<string>();
   for (const session of sessions) {
-    const taskId = session ? sessionOwnerTaskId(session) : undefined;
-    if (taskId) ids.add(String(taskId));
+    const ownerId = session ? sessionOwnerEntityId(session) : undefined;
+    if (ownerId) ids.add(String(ownerId));
+    if (session && sessionOwnerProjectId(session)) {
+      projectSessionIds.add(String(session._id));
+    }
+  }
+  const projectTaskChats = await Promise.all(
+    turns
+      .filter(
+        (turn) =>
+          turn.sessionId !== undefined &&
+          projectSessionIds.has(String(turn.sessionId)),
+      )
+      .map((turn) => {
+        const chatId = db.normalizeId("sessionChats", turn.entityId);
+        return chatId ? db.get(chatId) : null;
+      }),
+  );
+  for (const chat of projectTaskChats) {
+    if (chat?.taskId) ids.add(String(chat.taskId));
   }
   return ids;
 }
@@ -141,12 +166,16 @@ export async function hasOpenChatTurn(
   db: DatabaseReader,
   entityId: Doc<"turns">["entityId"],
 ): Promise<boolean> {
-  // A quick task chats (and runs) through its session: those turns count too.
+  // A quick task or a project chats (and runs) through its session: those
+  // turns count too.
   const taskId = db.normalizeId("agentTasks", entityId);
-  const taskSession = taskId
+  const projectId = db.normalizeId("projects", entityId);
+  const ownedSession = taskId
     ? await findOwnedSession(db, { kind: "task", taskId })
-    : null;
-  const sessionId = taskSession?._id ?? db.normalizeId("sessions", entityId);
+    : projectId
+      ? await findOwnedSession(db, { kind: "project", projectId })
+      : null;
+  const sessionId = ownedSession?._id ?? db.normalizeId("sessions", entityId);
   if (sessionId) {
     // A session runs through its chats: any chat's open turn counts.
     const chatTurn = await db

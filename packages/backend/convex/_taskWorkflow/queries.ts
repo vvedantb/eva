@@ -70,7 +70,7 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
-    /** A quick task's session: its sandbox is the one the run reuses. */
+    /** The task's session (a project task's: the project's): its sandbox is the one the run reuses. */
     ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
@@ -137,13 +137,29 @@ export const getTaskData = internalQuery({
       return resolvedMessage;
     };
 
+    // A task's runs reuse one paused filesystem: its session's sandbox (a
+    // project task's is the project's session), or, for runs started before
+    // sessions owned it, the task's or project's own. A session sandbox
+    // mid-start or mid-stop is not reused: its own start or stop action owns
+    // that VM (the run then prepares a fresh one).
+    const ownedSession = args.ownedSessionId
+      ? await ctx.db.get(args.ownedSessionId)
+      : null;
+    const ownedSandboxSettled =
+      ownedSession?.status === "active" || ownedSession?.status === "closed";
+    const ownedSandboxId = ownedSandboxSettled
+      ? ownedSession?.sandboxId
+      : undefined;
+
     let projectSandboxId: string | undefined;
     let projectContext: { title: string; description?: string } | undefined;
     let project = null;
     if (args.projectId) {
       project = await ctx.db.get(args.projectId);
       if (project) {
-        projectSandboxId = project.sandboxId;
+        projectSandboxId = args.ownedSessionId
+          ? ownedSandboxId
+          : project.sandboxId;
 
         projectContext = {
           title: project.title,
@@ -158,21 +174,10 @@ export const getTaskData = internalQuery({
       task.description ?? undefined,
     );
 
-    // Quick tasks reuse one paused filesystem across runs: their session's
-    // sandbox, or (runs from before tasks had sessions) the task's own.
-    const ownedSession = args.ownedSessionId
-      ? await ctx.db.get(args.ownedSessionId)
-      : null;
-    // A session sandbox mid-start or mid-stop is not reused: its own start
-    // or stop action owns that VM (the run then prepares a fresh one).
-    const ownedSandboxSettled =
-      ownedSession?.status === "active" || ownedSession?.status === "closed";
     const taskSandboxId = args.projectId
       ? undefined
       : args.ownedSessionId
-        ? ownedSandboxSettled
-          ? ownedSession?.sandboxId
-          : undefined
+        ? ownedSandboxId
         : task.sandboxId;
     const keepTaskSandboxActiveAfterRun =
       !args.projectId &&

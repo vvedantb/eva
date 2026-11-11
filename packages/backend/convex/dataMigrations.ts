@@ -15,7 +15,10 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
-import { migrateQuickTaskToSession } from "./_migrations/quickTaskChatsToSessions";
+import {
+  migrateProjectToSession,
+  migrateQuickTaskToSession,
+} from "./_migrations/ownerChatsToSessions";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -390,9 +393,9 @@ export const backfillSessionOwner = dataMigrations.define({
  * PR 1b: moves every quick task (no `projectId`) onto its owned session —
  * sandbox fields, Main chat model/traits/transcript seed, transcript rows —
  * and archives the session of a done/cancelled/deleted task. See
- * `_migrations/quickTaskChatsToSessions.ts`. Skips a task mid-turn, mid-run,
+ * `_migrations/ownerChatsToSessions.ts`. Skips a task mid-turn, mid-run,
  * with a queued message or a starting/stopping sandbox (logged
- * `[quickTaskMigration] skipped`). Idempotent: rerun with `{reset: true}`
+ * `[ownerChatMigration] skipped`). Idempotent: rerun with `{reset: true}`
  * until `migrations:quickTaskChatsLeft` reports 0 left.
  *
  * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions '{dryRun: true}'`
@@ -404,5 +407,29 @@ export const migrateQuickTaskChatsToSessions = dataMigrations.define({
   batchSize: 10,
   migrateOne: async (ctx, task) => {
     await migrateQuickTaskToSession(ctx, task);
+  },
+});
+
+/**
+ * PR 2: moves every project onto its owned session — sandbox fields, Main
+ * chat model/traits/transcript seed, transcript rows — and each project
+ * task's old chat onto that task's own chat in the project's session, then
+ * archives the session of a completed/cancelled/deleted project. See
+ * `_migrations/ownerChatsToSessions.ts`. Skips a project mid-turn, mid-build,
+ * mid-interview, with a task run in flight, a queued message or a
+ * starting/stopping sandbox, and a busy project task on its own (logged
+ * `[ownerChatMigration] skipped`). Idempotent: rerun with `{reset: true}`
+ * until `migrations:projectChatsLeft` reports 0 left.
+ *
+ * `npx convex run --prod dataMigrations:migrateProjectChatsToSessions '{dryRun: true}'`
+ * `npx convex run --prod dataMigrations:migrateProjectChatsToSessions`
+ */
+export const migrateProjectChatsToSessions = dataMigrations.define({
+  table: "projects",
+  // A project moves one transcript page inline (up to 2 MiB) and schedules
+  // its tasks' transcripts, so the batch stays small.
+  batchSize: 2,
+  migrateOne: async (ctx, project) => {
+    await migrateProjectToSession(ctx, project);
   },
 });

@@ -199,7 +199,7 @@ import type * as _migrations_logProjectIds from "../_migrations/logProjectIds.js
 import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyChatRows.js";
 import type * as _migrations_projectInterview from "../_migrations/projectInterview.js";
 import type * as _migrations_projectPhases from "../_migrations/projectPhases.js";
-import type * as _migrations_quickTaskChatsToSessions from "../_migrations/quickTaskChatsToSessions.js";
+import type * as _migrations_ownerChatsToSessions from "../_migrations/ownerChatsToSessions.js";
 import type * as _migrations_removeProjectIdField from "../_migrations/removeProjectIdField.js";
 import type * as _migrations_removeSessionStartupRequestedAt from "../_migrations/removeSessionStartupRequestedAt.js";
 import type * as _migrations_removeSnapshotWarmupFields from "../_migrations/removeSnapshotWarmupFields.js";
@@ -785,7 +785,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/moveLegacyChatRows": typeof _migrations_moveLegacyChatRows;
   "_migrations/projectInterview": typeof _migrations_projectInterview;
   "_migrations/projectPhases": typeof _migrations_projectPhases;
-  "_migrations/quickTaskChatsToSessions": typeof _migrations_quickTaskChatsToSessions;
+  "_migrations/ownerChatsToSessions": typeof _migrations_ownerChatsToSessions;
   "_migrations/removeProjectIdField": typeof _migrations_removeProjectIdField;
   "_migrations/removeSessionStartupRequestedAt": typeof _migrations_removeSessionStartupRequestedAt;
   "_migrations/removeSnapshotWarmupFields": typeof _migrations_removeSnapshotWarmupFields;
