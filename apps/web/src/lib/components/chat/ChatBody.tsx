@@ -75,6 +75,7 @@ import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
   startTransition,
   useDeferredValue,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -141,6 +142,9 @@ interface TranscriptWindow {
   scrollTo?: { messageId: string };
 }
 
+/** Typing pause before find searches the history above the loaded rows. */
+const FIND_SEARCH_DELAY_MS = 350;
+
 /** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
 interface InlineCard {
   _id: string;
@@ -191,6 +195,8 @@ interface ChatBodyProps {
    * Must keep its identity: rows receive it through the fork action.
    */
   onReachHistory?: (target: TranscriptReach) => void;
+  /** A `onReachHistory` target is still loading (or still being searched). */
+  isReachingHistory?: boolean;
   queuedMessages: ChatBodyQueuedMessage[];
   /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
   queueLabel?: string;
@@ -328,6 +334,7 @@ function ChatBodyInner({
   hasOlderHistory = false,
   onLoadOlderHistory,
   onReachHistory,
+  isReachingHistory = false,
   queuedMessages,
   queueLabel,
   heldFollowUps,
@@ -513,12 +520,14 @@ function ChatBodyInner({
   // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
   const [forkThroughId, setForkThroughId] = useState<string | null>(null);
-  // Only state setters and the stable `onReachHistory`: rows receive this,
-  // so it keeps its identity across renders.
-  const openFork = (messageId: string) => {
-    setForkThroughId(messageId);
-    onReachHistory?.("all");
-  };
+  // Built on the server while older history is not loaded: the prefix is
+  // every message up to the fork point.
+  const serverForkPrefix = useQuery(
+    api.messages.forkPrefixByParent,
+    forkThroughId !== null && hasOlderHistory && chatParentId
+      ? { parentId: chatParentId, throughMessageId: forkThroughId }
+      : "skip",
+  );
   const pendingQuestionRaw =
     streamingPendingQuestion ??
     streamingTarget?.pendingQuestion ??
@@ -737,16 +746,27 @@ function ChatBodyInner({
     return index < 0 ? -1 : findTurnWindowStart(displayMessages, 1, index + 1);
   };
 
+  // Typing pauses before the server search: each prefix ("a", "au", "aut")
+  // would otherwise load history down to its own oldest match.
+  const findSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [findJumpKey, setFindJumpKey] = useState(0);
+
   // Urgent, in the bar's own input event: the rows must be in the DOM by the
   // time the bar's deferred query paints and jumps, which counts DOM matches.
-  // Every match lies at or below the first one, so its turn is enough. Until
-  // find searches on the server, it loads the whole chat to search it.
+  // Every match lies at or below the first one, so its turn is enough. Older
+  // history is searched on the server, and loaded down to its oldest match.
   const revealFirstFindMatch = (query: string) => {
-    if (hasOlderHistory && onReachHistory && query.trim().length > 0) {
-      setPendingJump({ kind: "find", query });
-      onReachHistory("all");
-    }
     extendWindowTo(firstFindMatchStart(query), {});
+    if (findSearchTimer.current !== null) clearTimeout(findSearchTimer.current);
+    findSearchTimer.current = null;
+    if (!hasOlderHistory || !onReachHistory || query.trim().length === 0) {
+      return;
+    }
+    findSearchTimer.current = setTimeout(() => {
+      findSearchTimer.current = null;
+      setPendingJump({ kind: "find", query });
+      onReachHistory({ search: query });
+    }, FIND_SEARCH_DELAY_MS);
   };
 
   if (pendingJump?.kind === "message") {
@@ -756,12 +776,13 @@ function ChatBodyInner({
     if (index >= 0) {
       setPendingJump(undefined);
       extendWindowTo(index, { scrollTo: { messageId: pendingJump.messageId } });
-    } else if (!hasOlderHistory) {
+    } else if (!isReachingHistory) {
       setPendingJump(undefined);
     }
-  } else if (pendingJump?.kind === "find" && !hasOlderHistory) {
+  } else if (pendingJump?.kind === "find" && !isReachingHistory) {
     setPendingJump(undefined);
     extendWindowTo(firstFindMatchStart(pendingJump.query), {});
+    setFindJumpKey(findJumpKey + 1);
   }
 
   const jumpToNewDivider = () => {
@@ -980,7 +1001,9 @@ function ChatBodyInner({
           citeHighlight={citations?.highlightedMessageId === message._id}
           linkHighlight={message._id === linkedMessageId}
           onFork={
-            onForkTranscript && canForkMessage(message) ? openFork : undefined
+            onForkTranscript && canForkMessage(message)
+              ? setForkThroughId
+              : undefined
           }
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
@@ -1003,6 +1026,7 @@ function ChatBodyInner({
       <ThreadFindBar
         documents={findDocuments}
         onQueryChange={revealFirstFindMatch}
+        jumpKey={findJumpKey}
         scopeKey={windowFirstId}
       />
       <Conversation
@@ -1209,19 +1233,19 @@ function ChatBodyInner({
       )}
       <MessageForkDialog
         prefix={
-          // The prefix is every message up to the fork point: it waits for
-          // the whole chat (`openFork`) until the server builds it.
-          forkThroughId && !hasOlderHistory
-            ? collectForkPrefix(
-                displayMessages.map((message) => ({
-                  id: message._id,
-                  role: message.role,
-                  content: message.content,
-                  isSystemAlert: message.isSystemAlert,
-                })),
-                forkThroughId,
-              )
-            : null
+          forkThroughId === null
+            ? null
+            : hasOlderHistory && chatParentId
+              ? (serverForkPrefix ?? null)
+              : collectForkPrefix(
+                  displayMessages.map((message) => ({
+                    id: message._id,
+                    role: message.role,
+                    content: message.content,
+                    isSystemAlert: message.isSystemAlert,
+                  })),
+                  forkThroughId,
+                )
         }
         open={forkThroughId !== null}
         onOpenChange={(open) => {

@@ -192,6 +192,7 @@ export function SandboxChatPanel({
           hasOlderHistory={history.hasOlder}
           onLoadOlderHistory={history.loadOlder}
           onReachHistory={history.reach}
+          isReachingHistory={history.isReaching}
           queuedMessages={queuedMessages ?? []}
           queueLabel={queueGate.queueLabel(isExecuting)}
           streamingActivity={streaming?.currentActivity}

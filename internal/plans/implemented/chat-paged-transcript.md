@@ -26,16 +26,17 @@ PR 1 (paged history) is built. What changed from the first draft, and why:
 - The user-row query is `listUserMessagesByParent`. It returns full content, because up-arrow recall needs it.
 - Hidden shells hold only the tail (from #1247); loaded older rows drop and reload on return.
 
-## Remaining: PR 2
+## PR 2 (built)
 
-1. Schema: search index `search_content` on `messages.content`, filter field `parentId`. `messages.searchByParent({ parentId, query })` returns matching ids, oldest first. Whole words and word starts are fine (agreed 2026-11-11).
-2. Find bar: the query goes to `searchByParent`; stepping to a match calls `reach({ messageId })`. Remove the "load all" stopgap in `revealFirstFindMatch`.
-3. Fork: the fork mutation takes `throughMessageId` and builds the prefix on the server. Remove the "load all" stopgap in `openFork`.
-4. When nothing calls `before` without `tail` any more, drop that form from `listByParent`.
-5. Measure on a heavy production chat: bytes on open, time to last-turn paint, JS heap. Compare with the loadtest numbers above.
-6. `/ship`.
+- Find: `searchOlderByParent` returns the oldest match above the loaded rows; the chat loads down to it, then finds in the loaded rows as before. 350 ms typing pause; 3-character minimum; top 50 hits by relevance.
+- Fork: `forkPrefixByParent` builds the prefix on the server with the shared `collectForkPrefix`.
+- `before` alone stays in `listByParent`: scrolling past 750 older rows still loads the rest in one step.
+
+## Follow-up
+
+- Measure on a heavy production chat after deploy: bytes on open, time to last-turn paint, JS heap. Compare with the loadtest numbers above.
 
 ## Risks
 
 - A `?message=` link to a very old message loads every step down to it: the same cost as before, but only in that case.
-- Until PR 2, find and fork load the whole chat on use.
+- Search reads its hits as whole documents, and assistant rows carry large activity logs; capped at 50 per query.

@@ -15,6 +15,7 @@ import {
 } from "./_messages/media";
 import { trimActivityLogForTranscript } from "./_messages/activityLog";
 import { resolveStorageEntries } from "./_chat/storageUrls";
+import { collectForkPrefix } from "@eva/shared";
 
 const parentIdValidator = messageFields.parentId;
 
@@ -252,6 +253,100 @@ export const hasMessagesBefore = authQuery({
       )
       .first();
     return older !== null;
+  },
+});
+
+/** Shorter queries match most of a chat by word start: not worth a load. */
+const SEARCH_MIN_QUERY_LENGTH = 3;
+/**
+ * Search hits read per query. Each hit is a whole message read, and assistant
+ * rows carry large activity logs, so the most relevant few must do.
+ */
+const SEARCH_HIT_LIMIT = 50;
+
+/**
+ * Find-in-chat for history the web app has not loaded: the oldest message
+ * created before `before` whose text matches `query`, or null. The client
+ * loads down to it, then finds and highlights in the loaded rows as before.
+ *
+ * Convex search matches whole words, and the last word by its start ("auth"
+ * finds "authentication"; "thenticat" finds nothing). Hits come by
+ * relevance, so the oldest of the top `SEARCH_HIT_LIMIT` is returned.
+ */
+export const searchOlderByParent = authQuery({
+  args: { parentId: parentIdValidator, query: v.string(), before: v.number() },
+  returns: v.union(v.id("messages"), v.null()),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const query = args.query.trim();
+    if (query.length < SEARCH_MIN_QUERY_LENGTH) return null;
+    const hits = await ctx.db
+      .query("messages")
+      .withSearchIndex("search_content", (q) =>
+        q.search("content", query).eq("parentId", args.parentId),
+      )
+      .take(SEARCH_HIT_LIMIT);
+    let oldest: Doc<"messages"> | undefined;
+    for (const hit of hits) {
+      if (hit.isSystemAlert === true || hit._creationTime >= args.before) {
+        continue;
+      }
+      if (!oldest || hit._creationTime < oldest._creationTime) oldest = hit;
+    }
+    return oldest?._id ?? null;
+  },
+});
+
+/**
+ * The transcript a fork carries: every turn up to and including
+ * `throughMessageId`, built here so the client need not load the chat's
+ * history. Null when the id is unknown (an optimistic row), belongs to another
+ * chat, or cannot be forked (`collectForkPrefix`).
+ */
+export const forkPrefixByParent = authQuery({
+  args: { parentId: parentIdValidator, throughMessageId: v.string() },
+  returns: v.union(
+    v.object({
+      throughMessageId: v.string(),
+      turns: v.array(
+        v.object({
+          messageId: v.string(),
+          role: v.union(v.literal("user"), v.literal("assistant")),
+          text: v.string(),
+        }),
+      ),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const throughId = ctx.db.normalizeId("messages", args.throughMessageId);
+    if (!throughId) return null;
+    const through = await ctx.db.get(throughId);
+    if (!through || through.parentId !== args.parentId) return null;
+    const rows = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) =>
+        q
+          .eq("parentId", args.parentId)
+          .lte("_creationTime", through._creationTime),
+      )
+      .collect();
+    const prefix = collectForkPrefix(
+      rows.map((row) => ({
+        id: row._id,
+        role: row.role,
+        content: row.content,
+        isSystemAlert: row.isSystemAlert,
+      })),
+      args.throughMessageId,
+    );
+    return (
+      prefix && {
+        throughMessageId: prefix.throughMessageId,
+        turns: [...prefix.turns],
+      }
+    );
   },
 });
 
