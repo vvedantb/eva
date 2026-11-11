@@ -16,14 +16,6 @@ export type ProjectSandboxState = ReturnType<typeof useProjectSandbox>;
 
 export type ParsedProjectSpec = ProjectSpec;
 
-export function getAgentBrowsingAt(
-  project: ProjectDetailProject | null | undefined,
-) {
-  return project === null || project === undefined
-    ? undefined
-    : project.agentBrowsingAt;
-}
-
 // Written with optional chaining so usePrLinkMenuItems can run above the
 // early returns in ProjectDetailClient (both read `project` /
 // `latestDeployment`, which load late).

@@ -9,7 +9,8 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
 import { canEditTaskText } from "./_components/task-detail-constants";
 import { taskRunStreamingEntityId } from "./firstRunChatTurn";
-import { useTaskSession, type TaskSandboxFields } from "./useTaskSession";
+import { useTaskSession } from "./useTaskSession";
+import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 import {
   type UseTaskDetailRouting,
   useTaskDetailTab,
@@ -32,7 +33,7 @@ type RepoRow = FunctionReturnType<typeof api.githubRepos.get> | undefined;
 function deriveTaskRowFields(
   task: TaskRow,
   repoForTask: RepoRow,
-  sandbox: TaskSandboxFields,
+  sandbox: OwnedSandboxFields,
 ) {
   return {
     baseBranch:
@@ -144,7 +145,6 @@ export function useTaskDetail(
   const data = useTaskDetailQueries(taskId);
   const execution = useTaskExecutionControls(taskId);
   const sandbox = useTaskSandboxControls({
-    taskId,
     task: data.task,
     taskSession: data.taskSession,
     hasRuns: data.hasRuns,

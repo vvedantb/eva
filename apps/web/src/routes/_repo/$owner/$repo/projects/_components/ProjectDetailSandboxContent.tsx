@@ -73,25 +73,25 @@ export function ProjectDetailSandboxContent({
     isSandboxStopping ? (
       <ProjectSandboxPanel
         projectId={projectId}
+        projectSession={sandbox.projectSession}
         projectNumId={projectNumId}
         title={project.title}
         sandboxId={projectSandboxId}
         isActive={isSandboxActive}
         repoId={repoId}
         prUrl={project.prUrl}
-        devPort={project.devPort}
-        devCommand={project.devCommand}
+        devPort={sandbox.sandbox.devPort}
+        devCommand={sandbox.sandbox.devCommand}
         owner={owner}
         panes={panes}
         terminalPanel={terminalPanel}
-        backgroundAgents={project.backgroundAgents}
         sandboxTab={tab}
         onStartSandbox={
           canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
         }
         isSandboxStarting={isSandboxStarting}
         autoWakeEligible={
-          project.reviewProjectSandboxStatus === "closed" &&
+          sandbox.sandbox.status === "closed" &&
           projectSandboxId !== undefined &&
           canStartSandbox &&
           !isProjectBuilding(project) &&
@@ -118,11 +118,11 @@ export function ProjectDetailSandboxContent({
       onOpenDiffsTab={() => openDiffs()}
     >
       <SandboxWorkspace
-        owner={{ kind: "project", projectId }}
+        owner={sandbox.sandbox.owner}
         storageScope={`project:${projectId}`}
         sandboxId={projectSandboxId}
         isActive={isSandboxActive}
-        terminalPanes={project.terminalPanes}
+        terminalPanes={sandbox.sandbox.terminalPanes}
       >
         {(panes, owner, terminalPanel) => (
           <ResizablePanelLayout
@@ -137,6 +137,7 @@ export function ProjectDetailSandboxContent({
             leftPanel={() => (
               <ProjectSandboxChatPanel
                 projectId={projectId}
+                projectSession={sandbox.projectSession}
                 isSandboxActive={isSandboxActive}
                 isSandboxToggling={isSandboxStarting || isSandboxStopping}
                 sandboxStartupActivity={sandboxStartupActivity}

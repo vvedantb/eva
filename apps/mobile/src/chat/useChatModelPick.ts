@@ -31,8 +31,9 @@ function mergeTraits(
 /**
  * The chat composer's model chip, wired as the web chat it opens: a session
  * or project chat picks through `mobile.setChatModel` (the web
- * `sessionChats` / `projects` writes), and so does a quick task on its
- * session (its Main chat keeps the model). A quick task with no session yet
+ * `sessionChats` writes; a project with no session yet creates its chat
+ * there), and so does a quick task on its session (its Main chat keeps the
+ * model). A quick task with no session yet
  * picks through the task chat's own `agentTasks.update` and
  * `agentTasks.setTraits`. The account rows list what
  * the web picker lists (the session's or task's owner's accounts, the
@@ -71,10 +72,10 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
 
   if (!chat) return { pick: undefined, switching };
   const { session, project } = chat;
-  // A quick task on its session chats in that session's Main chat: picks go
+  // A quick task or a project on its session chats in a session chat: picks go
   // through the session chat writes. Only a task with no session yet keeps
   // the task chat's own `agentTasks` writes.
-  const sessionChatId = session?.chatId ?? chat.task?.sessionChatId;
+  const sessionChatId = session?.chatId ?? chat.task?.sessionChatId ?? project?.sessionChatId;
   const task = chat.task?.sessionChatId === undefined ? chat.task : undefined;
   // A task chat from a backend without `task` cannot reach the task mutations.
   if (chat.kind === "task" && !chat.task) return { pick: undefined, switching };

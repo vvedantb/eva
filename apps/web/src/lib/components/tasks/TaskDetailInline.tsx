@@ -102,9 +102,6 @@ export function TaskDetailInline({
         : "preview";
   const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  const prewarmTaskChatDaemon = useMutation(
-    api.agentTaskChatWorkflow.prewarmChatDaemon,
-  );
   const prewarmSessionChatDaemon = useMutation(
     api.sessionWorkflow.prewarmDaemon,
   );
@@ -168,7 +165,8 @@ export function TaskDetailInline({
     taskSession,
   } = useTaskDetail(taskId, routing);
   const { sandbox } = taskSession;
-  // A quick task chats in its session's Main chat; a project task on its row.
+  // A task chats in a session chat (a project task's own chat in the
+  // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
   const chatParentId = chatId ?? taskId;
   const isAgentActive = useTaskAgentActive(chatParentId, task);
@@ -176,20 +174,10 @@ export function TaskDetailInline({
   const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const isQuickTaskChat = taskSession.isQuickTask;
   useEffect(() => {
-    if (!isSandboxActive || !sandboxId) return;
-    if (chatId) void prewarmSessionChatDaemon({ chatId });
-    else if (!isQuickTaskChat) void prewarmTaskChatDaemon({ taskId });
-  }, [
-    taskId,
-    chatId,
-    isQuickTaskChat,
-    isSandboxActive,
-    sandboxId,
-    prewarmTaskChatDaemon,
-    prewarmSessionChatDaemon,
-  ]);
+    if (!isSandboxActive || !sandboxId || !chatId) return;
+    void prewarmSessionChatDaemon({ chatId });
+  }, [chatId, isSandboxActive, sandboxId, prewarmSessionChatDaemon]);
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
