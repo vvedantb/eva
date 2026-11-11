@@ -7,6 +7,13 @@ Date: 2026-11-11
 WHY: A quick task's run lifecycle (idle, scheduled, retry pending, running) lived in four fields that had to agree (`activeWorkflowId`, `scheduledAt`, `scheduledFunctionId`, `scheduledRetryAt`), patched from a dozen files.
 
 Architectural: `agentTasks.run` is one union (`scheduled` / `retry_pending` with `at` + `jobId`, `running` with `workflowId` + `runId`; absent = idle). `_agentTasks/runState.ts` holds the transition table (`nextTaskRun`) and the only writers (`scheduleTaskRun`, `cancelTaskRunSchedule`, `fireTaskRunSchedule`, `markTaskRunStarted`, `finishTaskRun`); each write clears the legacy fields. Reads use `taskRunState` / `taskScheduledAt` / `isTaskRunning` (also exported to web and mobile), which fall back to the legacy fields until `dataMigrations:migrateTaskRunState` runs after deploy. 0e drops the legacy fields and the fallback.
+## Phone: bottom tab pill slides again and is lighter in dark
+
+Date: 2026-11-11
+
+WHY: The remove-animations pass took out the bottom tab bar slide, which the owner wanted to keep. In dark, the app themed `segment` to the web #202020, which also darkened the bar pill on the #101010 glass.
+
+Architectural: native-ui restores the 200 ms `FloatingTabBar` pill slide (instant under Reduce Motion) and gives the pill its own `palette.tabBarPill`. `applyEvaTheme` sets it to Eva's secondary in light (no change) and the package #474747 in dark. The segmented `Tabs` thumb keeps #202020.
 
 ## Sessions: lower tab memory from the session cache
 

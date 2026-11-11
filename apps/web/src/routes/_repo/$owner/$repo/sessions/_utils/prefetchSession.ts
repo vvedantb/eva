@@ -1,6 +1,9 @@
 import { api } from "@eva/backend";
 import { convex } from "@/lib/convex";
-import { transcriptTailArgs } from "@/lib/hooks/useChatTranscript";
+import {
+  transcriptLiveArgs,
+  transcriptTailArgs,
+} from "@/lib/hooks/useChatTranscript";
 import { prefetchRepo, prewarm } from "@/lib/convexPrefetch";
 import { parseRouteNumId } from "@/lib/numId";
 
@@ -39,10 +42,10 @@ export async function prefetchSession(params: {
   if (!chat) return;
   prewarm(api.queuedMessages.listByParent, { parentId: chat._id });
   prewarm(api.streaming.get, { entityId: chat._id });
-  // Tail first, then the full list, in the order `useChatTranscript` asks for
-  // them: sent together, the small tail would wait for the full list.
+  // Tail first, then the live list anchored on it, in the order
+  // `useChatTranscript` asks for them.
   const tailArgs = transcriptTailArgs(chat._id);
   prewarm(api.messages.listByParent, tailArgs);
-  await convex.query(api.messages.listByParent, tailArgs);
-  prewarm(api.messages.listByParent, { parentId: chat._id });
+  const tail = await convex.query(api.messages.listByParent, tailArgs);
+  prewarm(api.messages.listByParent, transcriptLiveArgs(chat._id, tail));
 }
