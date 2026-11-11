@@ -52,19 +52,102 @@ export const generateUploadUrl = authMutation({
   handler: async (ctx) => ctx.storage.generateUploadUrl(),
 });
 
+/**
+ * Largest `tail` a caller may ask for: the web app's biggest older-history
+ * page (`useOlderTranscript`). Past it, the caller asks for everything.
+ */
+const MAX_TAIL = 400;
+
+/**
+ * Which messages of a parent to read, oldest first in the result. Ranges are
+ * on `_creationTime`, the last field of every index.
+ */
+type MessageRange =
+  | { kind: "all" }
+  | { kind: "tail"; count: number }
+  | { kind: "since"; creationTime: number }
+  | { kind: "before"; creationTime: number; count: number }
+  | { kind: "allBefore"; creationTime: number };
+
+function messageRange(args: {
+  tail?: number;
+  since?: number;
+  before?: number;
+}): MessageRange {
+  const { tail, since, before } = args;
+  if (
+    tail !== undefined &&
+    (!Number.isInteger(tail) || tail < 1 || tail > MAX_TAIL)
+  ) {
+    throw new Error(`tail must be an integer from 1 to ${MAX_TAIL}`);
+  }
+  if (since !== undefined) {
+    if (tail !== undefined || before !== undefined) {
+      throw new Error("since cannot be combined with tail or before");
+    }
+    return { kind: "since", creationTime: since };
+  }
+  if (before !== undefined) {
+    return tail === undefined
+      ? { kind: "allBefore", creationTime: before }
+      : { kind: "before", creationTime: before, count: tail };
+  }
+  return tail === undefined ? { kind: "all" } : { kind: "tail", count: tail };
+}
+
+async function readMessages(
+  db: QueryCtx["db"],
+  parentId: typeof parentIdValidator.type,
+  range: MessageRange,
+): Promise<Doc<"messages">[]> {
+  switch (range.kind) {
+    case "all":
+      return db
+        .query("messages")
+        .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+        .collect();
+    case "since":
+      return db
+        .query("messages")
+        .withIndex("by_parent", (q) =>
+          q.eq("parentId", parentId).gte("_creationTime", range.creationTime),
+        )
+        .collect();
+    case "tail":
+      return (
+        await db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+          .order("desc")
+          .take(range.count)
+      ).reverse();
+    case "before":
+      return (
+        await db
+          .query("messages")
+          .withIndex("by_parent", (q) =>
+            q.eq("parentId", parentId).lt("_creationTime", range.creationTime),
+          )
+          .order("desc")
+          .take(range.count)
+      ).reverse();
+    case "allBefore":
+      return db
+        .query("messages")
+        .withIndex("by_parent", (q) =>
+          q.eq("parentId", parentId).lt("_creationTime", range.creationTime),
+        )
+        .collect();
+  }
+}
+
 /** Fetches messages for a parent and resolves their image/video/attachment storage URLs. */
 async function resolveMessageUrls(
   ctx: Pick<QueryCtx, "db" | "storage">,
   parentId: typeof parentIdValidator.type,
-  tail: number | undefined,
+  range: MessageRange,
 ) {
-  const byParent = ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", parentId));
-  const messages =
-    tail === undefined
-      ? await byParent.collect()
-      : (await byParent.order("desc").take(tail)).reverse();
+  const messages = await readMessages(ctx.db, parentId, range);
   if (!messages.some(messageNeedsUrlResolution)) {
     return messages;
   }
@@ -116,23 +199,93 @@ async function resolveMessageUrls(
  * disclosure. `activityLogById` serves the full payload for the one turn that
  * gets expanded.
  *
- * `tail` returns only the newest `tail` messages, oldest first. Its cost does
- * not grow with the chat: the full list of a 400-message chat reads 5.6 MB and
- * returns 3.2 MB (load test, 2026-11-09). A chat opens from the tail and takes
- * the full list after it (`useChatTranscript` in the web app).
+ * The whole list of a 400-message chat reads 5.6 MB and returns 3.2 MB (load
+ * test, 2026-11-09), so the web app never asks for it (mobile still does).
+ * Every result is oldest first:
+ * - `tail`: the newest `tail` messages. A chat opens from this.
+ * - `since`: every message created at or after `since`. The open chat follows
+ *   this, anchored on the oldest row of its first tail, so new messages never
+ *   leave a gap.
+ * - `before` + `tail`: the newest `tail` messages created before `before`. One
+ *   page of older history; its args are fixed, so it caches like any query.
+ *   `before` alone: every message created before it (find and fork, until
+ *   they run on the server).
+ * See `useChatTranscript` in the web app.
  */
 export const listByParent = authQuery({
-  args: { parentId: parentIdValidator, tail: v.optional(v.number()) },
+  args: {
+    parentId: parentIdValidator,
+    tail: v.optional(v.number()),
+    since: v.optional(v.number()),
+    before: v.optional(v.number()),
+  },
   returns: v.array(messageValidator),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
-    const messages = await resolveMessageUrls(ctx, args.parentId, args.tail);
+    const messages = await resolveMessageUrls(
+      ctx,
+      args.parentId,
+      messageRange(args),
+    );
     return messages.map((message) => {
       const activityLog = trimActivityLogForTranscript(message.activityLog);
       return activityLog === message.activityLog
         ? message
         : Object.assign({}, message, { activityLog });
     });
+  },
+});
+
+/**
+ * Whether a chat has any message created before `before`: tells the web app
+ * if history sits above its live rows. Reads at most one row.
+ */
+export const hasMessagesBefore = authQuery({
+  args: { parentId: parentIdValidator, before: v.number() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const older = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (q) =>
+        q.eq("parentId", args.parentId).lt("_creationTime", args.before),
+      )
+      .first();
+    return older !== null;
+  },
+});
+
+/**
+ * Every user message of a chat, oldest first: the jump rail's ticks and the
+ * composer's up-arrow recall. Reads through `by_parent_and_role`, so it never
+ * touches the assistant rows that carry the heavy activity logs.
+ */
+export const listUserMessagesByParent = authQuery({
+  args: { parentId: parentIdValidator },
+  returns: v.array(
+    v.object({
+      _id: v.id("messages"),
+      _creationTime: v.number(),
+      content: v.string(),
+      isSystemAlert: v.optional(v.boolean()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const rows = await ctx.db
+      .query("messages")
+      .withIndex("by_parent_and_role", (q) =>
+        q.eq("parentId", args.parentId).eq("role", "user"),
+      )
+      .collect();
+    return rows.map((row) => ({
+      _id: row._id,
+      _creationTime: row._creationTime,
+      content: row.content,
+      ...(row.isSystemAlert === undefined
+        ? {}
+        : { isSystemAlert: row.isSystemAlert }),
+    }));
   },
 });
 

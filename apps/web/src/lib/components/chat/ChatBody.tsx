@@ -79,6 +79,8 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
+import type { TranscriptReach } from "@/lib/hooks/useChatTranscript";
 import {
   api,
   type BackgroundAgentEntry,
@@ -111,7 +113,7 @@ import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
-  ChatLinkedMessageScroll,
+  ChatMessageScroll,
   useLinkedMessageId,
 } from "@/lib/components/chat/messageLink";
 
@@ -138,9 +140,6 @@ interface TranscriptWindow {
   /** Set by a jump to a turn that was not rendered: scroll there on mount. */
   scrollTo?: { messageId: string };
 }
-
-/** Each jump scrolls once: later renders of its row must not scroll again. */
-const scrolledJumps = new WeakSet<{ messageId: string }>();
 
 /** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
 interface InlineCard {
@@ -180,6 +179,18 @@ interface ChatBodyProps {
    * turns arrive.
    */
   isLoadingMessages?: boolean;
+  /**
+   * More history sits above `messages` (`useOlderTranscript`). Absent (Manager
+   * Ave): `messages` is the whole chat.
+   */
+  hasOlderHistory?: boolean;
+  /** Loads the next step of older history. Must keep its identity. */
+  onLoadOlderHistory?: () => void;
+  /**
+   * Loads older history until a row, or the whole chat, is in `messages`.
+   * Must keep its identity: rows receive it through the fork action.
+   */
+  onReachHistory?: (target: TranscriptReach) => void;
   queuedMessages: ChatBodyQueuedMessage[];
   /** Queue panel heading when the queue waits on something (Eva asleep, a usage limit). */
   queueLabel?: string;
@@ -314,6 +325,9 @@ function ChatBodyInner({
   isRouteActive = true,
   messages,
   isLoadingMessages = false,
+  hasOlderHistory = false,
+  onLoadOlderHistory,
+  onReachHistory,
   queuedMessages,
   queueLabel,
   heldFollowUps,
@@ -441,10 +455,30 @@ function ChatBodyInner({
   // every open read as a flicker. Deferred for the same reason as
   // `backlogReady`: the render that first has rows still sees false.
   const rowsAnimateIn = useDeferredValue(!isLoadingMessages, false);
+  // Every user message, also those above the loaded history: the rail's
+  // ticks and up-arrow recall cover the whole chat. Reads only user rows.
+  const userMessages = useHeldQuery(
+    api.messages.listUserMessagesByParent,
+    chatParentId && isRouteActive ? { parentId: chatParentId } : "skip",
+  );
+  const firstLoadedAt = displayMessages[0]?._creationTime;
+  const unloadedUserMessages =
+    hasOlderHistory && userMessages && firstLoadedAt !== undefined
+      ? userMessages
+          .filter((message) => message._creationTime < firstLoadedAt)
+          .map(
+            (
+              message,
+            ): Pick<
+              ChatBodyMessage,
+              "_id" | "role" | "content" | "isSystemAlert"
+            > => ({ ...message, role: "user" }),
+          )
+      : [];
   // Keyed on `displayMessages`, which keeps its identity while a turn streams,
   // so the rail's observer is not rebuilt on every token.
   const jumpRailTicks = buildChatJumpRailTicks(
-    displayMessages.map((message) => ({
+    [...unloadedUserMessages, ...displayMessages].map((message) => ({
       id: message._id,
       role: message.role,
       content: message.content,
@@ -479,6 +513,12 @@ function ChatBodyInner({
   // the turn executing while waiting for the user; mirroring that would lock the UI.
   const [isAnsweringQuestion, setIsAnsweringQuestion] = useState(false);
   const [forkThroughId, setForkThroughId] = useState<string | null>(null);
+  // Only state setters and the stable `onReachHistory`: rows receive this,
+  // so it keeps its identity across renders.
+  const openFork = (messageId: string) => {
+    setForkThroughId(messageId);
+    onReachHistory?.("all");
+  };
   const pendingQuestionRaw =
     streamingPendingQuestion ??
     streamingTarget?.pendingQuestion ??
@@ -529,7 +569,10 @@ function ChatBodyInner({
     setIsAnsweringQuestion(false);
   };
 
-  const messageHistory = buildMessageHistory(displayMessages);
+  const messageHistory = buildMessageHistory([
+    ...unloadedUserMessages,
+    ...displayMessages,
+  ]);
 
   const lastUserMessageIndex = findLastUserMessageIndex(displayMessages);
 
@@ -661,35 +704,66 @@ function ChatBodyInner({
     });
   };
 
+  // A rail tick or a find query can aim above the loaded history. The chat
+  // asks for the history, and the jump completes in the render that has the
+  // row (or gives up once nothing older is left).
+  const [pendingJump, setPendingJump] = useState<
+    { kind: "message"; messageId: string } | { kind: "find"; query: string }
+  >();
+
   // Rail ticks are user rows: the window starts at the tick's own turn.
   const revealMessage = (messageId: string) => {
+    const index = displayMessages.findIndex(
+      (message) => message._id === messageId,
+    );
+    if (index < 0) {
+      if (!hasOlderHistory || !onReachHistory) return;
+      setPendingJump({ kind: "message", messageId });
+      onReachHistory({ messageId });
+      return;
+    }
     startTransition(() => {
-      extendWindowTo(
-        displayMessages.findIndex((message) => message._id === messageId),
-        { scrollTo: { messageId } },
-      );
+      extendWindowTo(index, { scrollTo: { messageId } });
     });
+  };
+
+  /** The window start that puts the first match of `query` in the DOM. */
+  const firstFindMatchStart = (query: string) => {
+    const first = findThreadMatches(findDocuments, query)[0];
+    if (!first) return -1;
+    const index = displayMessages.findIndex(
+      (message) => message._id === first.messageId,
+    );
+    return index < 0 ? -1 : findTurnWindowStart(displayMessages, 1, index + 1);
   };
 
   // Urgent, in the bar's own input event: the rows must be in the DOM by the
   // time the bar's deferred query paints and jumps, which counts DOM matches.
-  // Every match lies at or below the first one, so its turn is enough.
+  // Every match lies at or below the first one, so its turn is enough. Until
+  // find searches on the server, it loads the whole chat to search it.
   const revealFirstFindMatch = (query: string) => {
-    const first = findThreadMatches(findDocuments, query)[0];
-    if (!first) return;
-    const index = displayMessages.findIndex(
-      (message) => message._id === first.messageId,
-    );
-    if (index < 0) return;
-    extendWindowTo(findTurnWindowStart(displayMessages, 1, index + 1), {});
+    if (hasOlderHistory && onReachHistory && query.trim().length > 0) {
+      setPendingJump({ kind: "find", query });
+      onReachHistory("all");
+    }
+    extendWindowTo(firstFindMatchStart(query), {});
   };
 
-  const scrollToJumpTarget = (node: HTMLDivElement | null) => {
-    const target = ownWindow?.scrollTo;
-    if (!node || !target || scrolledJumps.has(target)) return;
-    scrolledJumps.add(target);
-    node.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  if (pendingJump?.kind === "message") {
+    const index = displayMessages.findIndex(
+      (message) => message._id === pendingJump.messageId,
+    );
+    if (index >= 0) {
+      setPendingJump(undefined);
+      extendWindowTo(index, { scrollTo: { messageId: pendingJump.messageId } });
+    } else if (!hasOlderHistory) {
+      setPendingJump(undefined);
+    }
+  } else if (pendingJump?.kind === "find" && !hasOlderHistory) {
+    setPendingJump(undefined);
+    extendWindowTo(firstFindMatchStart(pendingJump.query), {});
+  }
+
   const jumpToNewDivider = () => {
     newDivider.element?.scrollIntoView({ behavior: "smooth", block: "center" });
     newDivider.markSeen();
@@ -862,15 +936,7 @@ function ChatBodyInner({
     const precedingUser = precedingUserTurns.get(message._id);
 
     return (
-      <div
-        key={message._id}
-        ref={
-          ownWindow?.scrollTo?.messageId === message._id
-            ? scrollToJumpTarget
-            : undefined
-        }
-        className="flex flex-col gap-3"
-      >
+      <div key={message._id} className="flex flex-col gap-3">
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
         ) : null}
@@ -914,9 +980,7 @@ function ChatBodyInner({
           citeHighlight={citations?.highlightedMessageId === message._id}
           linkHighlight={message._id === linkedMessageId}
           onFork={
-            onForkTranscript && canForkMessage(message)
-              ? setForkThroughId
-              : undefined
+            onForkTranscript && canForkMessage(message) ? openFork : undefined
           }
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
@@ -989,16 +1053,25 @@ function ChatBodyInner({
           ) : (
             <>
               {backlogReady &&
-              (windowStart > 0 || ownWindow?.anchor !== undefined) ? (
+              (windowStart > 0 ||
+                ownWindow?.anchor !== undefined ||
+                hasOlderHistory) ? (
                 <ChatEarlierTurnsLoader
-                  key={windowFirstId}
+                  // A landed history step changes the first row: the fresh
+                  // marker observes again and now grows the window over it.
+                  key={`${windowFirstId}:${displayMessages[0]?._id}`}
                   anchor={ownWindow?.anchor}
                   // Only the chat on screen grows its window: a hidden cached
-                  // shell has no reader scrolling up.
+                  // shell has no reader scrolling up. Rendered rows run out
+                  // before loaded ones do; then the next history step loads.
                   onReach={
-                    windowStart > 0 && isRouteActive
-                      ? loadEarlierTurns
-                      : undefined
+                    !isRouteActive
+                      ? undefined
+                      : windowStart > 0
+                        ? loadEarlierTurns
+                        : hasOlderHistory
+                          ? onLoadOlderHistory
+                          : undefined
                   }
                 />
               ) : null}
@@ -1037,9 +1110,19 @@ function ChatBodyInner({
         {/* Mounted with the backlog, so a linked row above the last turn is
             already in the DOM when this scrolls to it. */}
         {backlogReady && linkedMessageId !== undefined ? (
-          <ChatLinkedMessageScroll
+          <ChatMessageScroll
             key={linkedMessageId}
             messageId={linkedMessageId}
+            block="center"
+          />
+        ) : null}
+        {/* A rail jump: mounts in the commit that renders its row. */}
+        {ownWindow?.scrollTo ? (
+          <ChatMessageScroll
+            key={ownWindow.scrollTo.messageId}
+            messageId={ownWindow.scrollTo.messageId}
+            block="start"
+            smooth
           />
         ) : null}
         {/* Mounted with the backlog: the rail resolves its ticks by querying
@@ -1126,7 +1209,9 @@ function ChatBodyInner({
       )}
       <MessageForkDialog
         prefix={
-          forkThroughId
+          // The prefix is every message up to the fork point: it waits for
+          // the whole chat (`openFork`) until the server builds it.
+          forkThroughId && !hasOlderHistory
             ? collectForkPrefix(
                 displayMessages.map((message) => ({
                   id: message._id,
