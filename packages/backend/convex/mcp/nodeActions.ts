@@ -22,7 +22,7 @@ import {
   PR_WATCH_TOOL_NAMES,
 } from "./tools";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
-import { supabaseProjectRefs, supabaseTools } from "./supabase";
+import { supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
@@ -1756,48 +1756,51 @@ export const orchestratorSetWatch = internalAction({
 // Supabase Proxy Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const supabaseCredentialsCache = new Map<
+const supabaseTokenCache = new Map<
   string,
-  { token: string; projectRefs: string[]; expiresAt: number }
+  { token: string; expiresAt: number }
 >();
 
-/**
- * The repo's own Supabase access token and allowed projects. A Supabase token
- * reaches every project in its account, so tools only run against the
- * projects the repo names, never a token borrowed from another of the user's
- * repos.
- */
-export const resolveSupabaseCredentials = internalAction({
-  args: { repoId: v.string() },
-  returns: v.union(
-    v.object({ token: v.string(), projectRefs: v.array(v.string()) }),
-    v.null(),
-  ),
-  handler: async (
-    ctx,
-    { repoId },
-  ): Promise<{ token: string; projectRefs: string[] } | null> => {
-    const cached = supabaseCredentialsCache.get(repoId);
+export const resolveSupabaseToken = internalAction({
+  args: { clerkUserId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { clerkUserId }): Promise<string | null> => {
+    const cached = supabaseTokenCache.get(clerkUserId);
     if (cached && cached.expiresAt > Date.now()) {
-      return { token: cached.token, projectRefs: cached.projectRefs };
+      return cached.token;
     }
 
-    const vars: EnvVar[] = await ctx.runAction(
-      internal.mcp.routes.getDecryptedRepoEnvVars,
-      { repoId },
-    );
-    const token = vars
-      .find((entry) => entry.key === "SUPABASE_ACCESS_TOKEN")
-      ?.value.trim();
-    const projectRefs = supabaseProjectRefs(vars);
-    if (!token || projectRefs.length === 0) return null;
-
-    supabaseCredentialsCache.set(repoId, {
-      token,
-      projectRefs,
-      expiresAt: Date.now() + CACHE_TTL_MS,
+    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
+      clerkId: clerkUserId,
     });
-    return { token, projectRefs };
+    if (!user) return null;
+    const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
+      userId: user._id,
+    });
+
+    // Search for Supabase token in each repo's env vars
+    for (const { id: repoId } of repos) {
+      try {
+        const vars: EnvVar[] = await ctx.runAction(
+          internal.mcp.routes.getDecryptedRepoEnvVars,
+          { repoId },
+        );
+        const match: EnvVar | undefined = vars.find(
+          (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
+        );
+        if (match) {
+          supabaseTokenCache.set(clerkUserId, {
+            token: match.value,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+          });
+          return match.value;
+        }
+      } catch {
+        // Skip failed repos
+      }
+    }
+
+    return null;
   },
 });
 
