@@ -18,6 +18,7 @@ import {
   PROVIDER_PRIMARY_AUTH_KEY,
 } from "../validators";
 import { filterActiveEntities } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
 import { listTeammateUserIds } from "../_userProviderAccounts/sharing";
 
 /** How many live sandboxes this app has across quick tasks and projects. */
@@ -117,7 +118,7 @@ export const countActiveSessions = authQuery({
             )
             .take(64),
         );
-        return sessions.filter((s) => s.archived !== true).length;
+        return sessions.filter((s) => !isSessionArchived(s)).length;
       }),
     );
     return perRepo.reduce((total, n) => total + n, 0);

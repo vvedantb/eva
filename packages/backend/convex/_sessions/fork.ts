@@ -10,6 +10,7 @@ import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { findMainChat } from "../_sessionChats/helpers";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
+import { isSessionArchived } from "./archive";
 
 /** What `forkSession` needs to know about the source before touching its sandbox. */
 export const getForkSource = internalAuthQuery({
@@ -152,7 +153,7 @@ export const settleForkSource = internalMutation({
       const source = await ctx.db.get(fork.forkedFromSessionId);
       // Only a source still parked by the fork: anything else means the user
       // (or a message) already woke it, or archived it since.
-      if (source && source.status === "closed" && source.sandboxId && !source.archived) {
+      if (source && source.status === "closed" && source.sandboxId && !isSessionArchived(source)) {
         await requestSessionSandboxStart(ctx, source);
       }
     }

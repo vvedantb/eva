@@ -639,7 +639,7 @@ describe("mobile api", () => {
       // Archive stops the sandbox first, then leaves the Active list for Archived.
       await asUser.mutation(api.mobile.archiveSession, { sessionId: ids.sessionId });
       const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
-      expect(archived).toMatchObject({ archived: true, status: "closed" });
+      expect(archived).toMatchObject({ archive: { archivedAt: expect.any(Number) }, status: "closed" });
       expect(await asUser.query(api.mobile.listChats, {})).toEqual([]);
       expect((await asUser.query(api.mobile.listChats, { archived: true })).map((r) => r.sessionId)).toEqual([
         ids.sessionId,
@@ -675,7 +675,7 @@ describe("mobile api", () => {
         });
       });
       await expect(asUser.mutation(api.mobile.archiveSession, { sessionId: strangerSessionId })).rejects.toThrow();
-      expect(await t.run((ctx) => ctx.db.get(strangerSessionId))).not.toHaveProperty("archived");
+      expect(await t.run((ctx) => ctx.db.get(strangerSessionId))).not.toHaveProperty("archive");
     },
     TIMEOUT_MS,
   );
