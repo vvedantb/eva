@@ -173,7 +173,7 @@ export function SandboxPanel({
   const artifactSource = { kind: "session" as const, sessionId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
-  // Same subscription as the chat's `useChatSend`, so the panel and the
+  // Same subscription as the chat's `ChatPanel`, so the panel and the
   // composer read one turn status.
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
