@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
+import type { Id, SandboxOwner } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { previewPortParser } from "@/lib/search-params";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
@@ -28,10 +28,12 @@ export interface SandboxPreviewApi {
   /** User-initiated refresh: always remounts the iframe with a fresh URL. */
   reloadPreview: () => Promise<void>;
   effectivePort: number;
-  setPort: (next: number | null) => Promise<URLSearchParams>;
+  /** Persists the owner's Preview port (`devPort`) on Convex. */
+  setPort: (next: number) => Promise<void>;
 }
 
 interface UseSandboxPreviewArgs {
+  owner: SandboxOwner;
   sandboxId: string | undefined;
   isActive: boolean;
   /**
@@ -40,9 +42,8 @@ interface UseSandboxPreviewArgs {
    */
   isRouteActive?: boolean;
   repoId: Id<"githubRepos">;
+  /** The owner's Preview port on Convex: the one source of truth. */
   devPort?: number;
-  /** Fired when the user changes Preview port (sessions → Convex sticky). */
-  onPortPersist?: (port: number) => void;
 }
 
 function clearLegacyPreviewUrlCache(): void {
@@ -68,15 +69,19 @@ export const DEFAULT_PREVIEW_PORT = 3000;
  * memory only because persisting them can resurrect stale iframe targets.
  */
 export function useSandboxPreview({
+  owner,
   sandboxId,
   isActive,
   isRouteActive = true,
   repoId,
   devPort,
-  onPortPersist,
 }: UseSandboxPreviewArgs): SandboxPreviewApi {
-  const [port, setPortQuery] = useQueryState("port", previewPortParser);
-  const effectivePort = port ?? devPort ?? DEFAULT_PREVIEW_PORT;
+  // `?port=` is only a one-time deep link: it is saved to Convex, then
+  // cleared. Until the save lands it still wins, so the preview does not
+  // flash the old port.
+  const [linkPort, setLinkPort] = useQueryState("port", previewPortParser);
+  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
+  const effectivePort = linkPort ?? devPort ?? DEFAULT_PREVIEW_PORT;
   const configKey = `${sandboxId ?? ""}:${effectivePort}`;
 
   // Seed from the iframe-host meta cache: when this hook remounts (route
@@ -95,13 +100,21 @@ export function useSandboxPreview({
   // current epoch (host would keep an iframe the user asked to reload).
   const epochRef = useRef(seed?.epoch ?? 0);
 
-  const setPort = async (next: number | null) => {
-    const params = await setPortQuery(next);
-    if (next !== null) {
-      onPortPersist?.(next);
-    }
-    return params;
+  const setPort = async (next: number) => {
+    await setPreviewPort({ owner, port: next });
   };
+
+  /* eslint-disable no-effect/no-event-handler --
+     The deep link arrives with navigation, not a click: apply it once. Only
+     the route-active shell applies it; cached sibling sessions share the URL
+     and must not take another session's port. */
+  useEffect(() => {
+    if (linkPort === null || !isRouteActive) return;
+    void setPreviewPort({ owner, port: linkPort })
+      .catch(() => undefined)
+      .then(() => setLinkPort(null));
+  }, [linkPort, isRouteActive]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const getPreviewUrl = useAction(api.sandbox.getPreviewUrl);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -22,6 +22,10 @@ import {
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  useAgentBrowsingAutoSwitch,
+  useSandboxLifecycle,
+} from "@/lib/components/sandbox/useSandboxLifecycle";
 
 export function SessionDetailClient({
   sessionId,
@@ -181,40 +185,32 @@ export function SessionDetailClient({
     void stopSandboxMutation({ sessionId });
   }, [session, sessionId, stopSandboxMutation]);
   /* eslint-enable no-effect/no-event-handler */
-  const isSandboxStarting = session?.status === "starting";
   // `stopping` is a transient backend state set synchronously by `stopSandbox`,
   // cleared once the Vercel sandbox's stop call completes. Showing the spinner
   // (and disabling Start) for its full duration prevents the stop/start race
   // that previously orphaned sandboxes.
-  const isSandboxStopping = session?.status === "stopping";
-  const [isStopPending, setIsStopPending] = useState(false);
+  const lifecycle = useSandboxLifecycle(session?.status);
+  const isSandboxStarting = lifecycle.isStarting;
+  const isSandboxStopping = lifecycle.isStopping;
   const simpleView = useSimpleView();
-  const handleSandboxToggle = async (action: "start" | "stop") => {
-    if (action === "start") {
-      await catchMutationError(
-        startSandboxMutation({ sessionId }),
-        "Couldn't start sandbox",
-        "session-sandbox-start",
-      );
-    } else {
-      setIsStopPending(true);
-      try {
-        await catchMutationError(
-          stopSandboxMutation({ sessionId }),
-          "Couldn't stop sandbox",
-          "session-sandbox-stop",
-        );
-      } catch {
-        setIsStopPending(false);
-        return;
-      }
-      setIsStopPending(false);
-    }
-  };
+  const handleSandboxToggle = (action: "start" | "stop") =>
+    lifecycle.run(action, async () => {
+      // The toast is the error report; nothing else to do on failure.
+      await (
+        action === "start"
+          ? catchMutationError(
+              startSandboxMutation({ sessionId }),
+              "Couldn't start sandbox",
+              "session-sandbox-start",
+            )
+          : catchMutationError(
+              stopSandboxMutation({ sessionId }),
+              "Couldn't stop sandbox",
+              "session-sandbox-stop",
+            )
+      ).catch(() => undefined);
+    });
 
-  // Auto-switch to Browser + expand sandbox panel on lock transition only
-  // (undefined → set). Don't fight the user if they switch away mid-lock.
-  const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Must stay above loading/null early returns — Phase 3 review comments
@@ -264,22 +260,14 @@ export function SessionDetailClient({
     onChatChange(chat.number);
   };
 
-  const agentBrowsingAt =
-    session === null || session === undefined
-      ? undefined
-      : session.agentBrowsingAt;
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
-     The agent taking the browser happens inside the sandbox and arrives as a
-     live query change; there is no local event to switch the tab from. */
-  useEffect(() => {
-    const prev = prevAgentBrowsingAt.current;
-    prevAgentBrowsingAt.current = agentBrowsingAt;
-    if (!isRouteActive) return;
-    if (agentBrowsingAt === undefined || prev !== undefined) return;
-    onSandboxTabChange("browser");
-    setExpandRightSignal((n) => n + 1);
-  }, [agentBrowsingAt, onSandboxTabChange, isRouteActive]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
+  useAgentBrowsingAutoSwitch(
+    session?.agentBrowsingAt,
+    () => {
+      onSandboxTabChange("browser");
+      setExpandRightSignal((n) => n + 1);
+    },
+    isRouteActive,
+  );
 
   if (session === undefined || activeChat === undefined) {
     return <CenteredSpinner label="Loading session" />;
@@ -329,10 +317,8 @@ export function SessionDetailClient({
       summaryStreamingActivity={summaryStreaming?.currentActivity}
       startupStreamingActivity={startupStreaming?.currentActivity}
       isSandboxActive={isSandboxActive}
-      isSandboxToggling={
-        isSandboxStarting || isSandboxStopping || isStopPending
-      }
-      isSandboxStopping={isSandboxStopping || isStopPending}
+      isSandboxToggling={isSandboxStarting || isSandboxStopping}
+      isSandboxStopping={isSandboxStopping}
       onSandboxToggle={handleSandboxToggle}
       isArchived={isArchived}
       isReadOnly={isArchived}
@@ -391,7 +377,7 @@ export function SessionDetailClient({
                       onTabChange={onSandboxTabChange}
                       agentBrowsingAt={session.agentBrowsingAt}
                       onStartSandbox={
-                        isArchived || isSandboxStopping || isStopPending
+                        isArchived || isSandboxStopping
                           ? undefined
                           : () => {
                               void handleSandboxToggle("start");

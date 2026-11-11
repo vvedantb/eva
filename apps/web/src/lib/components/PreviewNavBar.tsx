@@ -168,28 +168,31 @@ export function PreviewNavBar({
   // Host-managed iframes only: a legacy ref can't be read during render.
   const documentLoading = usePreviewDocumentLoading(iframeElement ?? null);
   const [portInput, setPortInput] = useState(String(port));
-  const [pathInput, setPathInput] = useState(path ?? defaultPath);
+  // `path` is the owner's value; the draft only exists while the user edits
+  // the input. Uncontrolled bars (no `path`) keep the iframe path as a draft.
+  const [pathDraft, setPathDraft] = useState<string | null>(null);
+  const pathInput = pathDraft ?? path ?? defaultPath;
   // Tracks the last value emitted via onPathChange so the three event sources
   // (input commit, iframe load, in-iframe postMessage) don't fire redundant
-  // notifications for the same path.
+  // notifications for the same path. A controlled bar compares with `path`
+  // instead, so returning to a path after the owner moved it still reports.
   const lastNotifiedPathRef = useRef<string | null>(null);
 
-  // Adjust draft inputs during render when external port/path props change
+  // Adjust the port draft during render when the external port changes
   // (React-recommended alternative to setState-in-effect).
   const [prevPort, setPrevPort] = useState(port);
   if (port !== prevPort) {
     setPrevPort(port);
     setPortInput(String(port));
   }
-  const resolvedPath = path ?? defaultPath;
-  const [prevPath, setPrevPath] = useState(resolvedPath);
-  if (resolvedPath !== prevPath) {
-    setPrevPath(resolvedPath);
-    setPathInput(resolvedPath);
+
+  /** The iframe or a commit settled on `nextPath`: drop the edit draft. */
+  function settlePath(nextPath: string) {
+    setPathDraft(path === undefined ? nextPath : null);
   }
 
   function notifyPathChange(nextPath: string) {
-    if (lastNotifiedPathRef.current === nextPath) return;
+    if ((path ?? lastNotifiedPathRef.current) === nextPath) return;
     lastNotifiedPathRef.current = nextPath;
     onPathChange?.(nextPath);
   }
@@ -201,7 +204,7 @@ export function PreviewNavBar({
     // want that captured as a navigable path.
     if (!href || !/^https?:/i.test(href)) return;
     const nextPath = getPathFromUrl(href);
-    setPathInput(nextPath);
+    settlePath(nextPath);
     notifyPathChange(nextPath);
   }
 
@@ -210,10 +213,12 @@ export function PreviewNavBar({
   // listeners only fire after commit, so the effect-time write is equivalent.
   const syncPathFromIframeRef = useRef(syncPathFromIframe);
   const notifyPathChangeRef = useRef(notifyPathChange);
+  const settlePathRef = useRef(settlePath);
   const currentIframeRef = useRef(currentIframe);
   useEffect(() => {
     syncPathFromIframeRef.current = syncPathFromIframe;
     notifyPathChangeRef.current = notifyPathChange;
+    settlePathRef.current = settlePath;
     currentIframeRef.current = currentIframe;
   });
 
@@ -256,7 +261,7 @@ export function PreviewNavBar({
         typeof event.data.url === "string"
       ) {
         const nextPath = getPathFromUrl(event.data.url);
-        setPathInput(nextPath);
+        settlePathRef.current(nextPath);
         notifyPathChangeRef.current(nextPath);
       }
     }
@@ -298,7 +303,7 @@ export function PreviewNavBar({
     const iframe = currentIframe();
     if (!iframe || !previewUrl) return;
     const nextPath = normalizePreviewPath(path);
-    setPathInput(nextPath);
+    settlePath(nextPath);
     notifyPathChange(nextPath);
     setPreviewDocumentLoading(iframe, true);
     iframe.src = buildUrlWithPath(previewUrl, nextPath);
@@ -361,7 +366,7 @@ export function PreviewNavBar({
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}
-        onValueChange={setPathInput}
+        onValueChange={setPathDraft}
         onCommit={commitPath}
       />
       {/* The port is developer plumbing; simple view keeps path, reload,
