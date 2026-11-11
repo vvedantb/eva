@@ -37,7 +37,8 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { KeyboardAvoidingView, Linking, View } from "react-native";
+import { Linking, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
 import { SandboxBranchChip } from "@/chat/BranchChips";
@@ -73,6 +74,7 @@ export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
   const router = useRouter();
   const scheme = useScheme();
+  const insets = useSafeAreaInsets();
   const chat = useQuery(api.mobile.getChat, { target });
   const parentId = chat?.parentId;
   const messages = useQuery(api.messages.listByParent, parentId ? { parentId } : "skip");
@@ -295,23 +297,21 @@ export default function ChatScreen() {
         <ConversationDock>
           {pending && questions ? (
             // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-            // It rises with the keyboard (its "Other..." field), as the composer's own `KeyboardAvoidingView` does.
-            <KeyboardAvoidingView behavior="padding">
-              <View className="p-3 pr-[22px]">
-                <ChoiceQuestion
-                  key={pending.toolUseId}
-                  questions={questions}
-                  buttonWeight="semibold"
-                  onSubmit={async (answers) => {
-                    try {
-                      await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-                    } catch {
-                      toast.error("Couldn't submit answer");
-                    }
-                  }}
-                />
-              </View>
-            </KeyboardAvoidingView>
+            // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+            <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
+              <ChoiceQuestion
+                key={pending.toolUseId}
+                questions={questions}
+                buttonWeight="semibold"
+                onSubmit={async (answers) => {
+                  try {
+                    await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+                  } catch {
+                    toast.error("Couldn't submit answer");
+                  }
+                }}
+              />
+            </View>
           ) : chat.canReply ? (
             // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
             // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside

@@ -11,12 +11,12 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
+import { Button, CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { KeyboardAvoidingView, ScrollView, TextInput, View } from "react-native";
+import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FunctionReturnType } from "convex/server";
 import { BaseBranchChip } from "@/chat/BranchChips";
@@ -197,7 +197,8 @@ function NewQuickTaskForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[
 
   return (
     <Screen onBack={leave}>
-      <KeyboardAvoidingView behavior="padding" className="flex-1">
+      {/* The kit's: it pads frame by frame with the keyboard (`KeyboardControllerProvider`). */}
+      <KeyboardAvoidingView style={{ flex: 1 }}>
         <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 4, paddingHorizontal: 16, paddingBottom: 16 }}>
           <RepoPicker repos={repos} value={repo} onChange={changeRepo} />
           {/* Web: a borderless `text-base font-medium` title over a borderless description, min 160 high. */}
