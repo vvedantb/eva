@@ -10,7 +10,8 @@ import type { DatabaseReader } from "../_generated/server";
  *   project      the hidden session a project and its tasks share
  *
  * The id lives inside its kind, so "task session without a task" cannot be
- * written. The field is optional only until `dataMigrations:backfillSessionOwner`
+ * written. The owner is set at insert and never changes: there is no
+ * transition to guard. The field is optional only until `dataMigrations:backfillSessionOwner`
  * has run; read it through `sessionOwner`, which treats absent as standalone.
  */
 export const sessionOwnerValidator = v.union(
