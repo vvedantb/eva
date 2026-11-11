@@ -132,7 +132,7 @@ export function ComposerInputChrome({
     fileCount: attachments.files.length,
   });
 
-  // Up to five session shells plus Manager Ave stay mounted, so a shortcut
+  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
   // registered here fires once per mounted composer. Only the one on screen
   // may act — see composerVisibility.ts.
   const isVisibleComposer = () =>
