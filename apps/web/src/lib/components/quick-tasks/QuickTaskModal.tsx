@@ -47,7 +47,6 @@ import {
   defaultProviderAccountId,
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
-import { toRunTraitArgs } from "@eva/shared";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -85,6 +84,7 @@ import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
 import {
   draftCountAfterRemove,
   draftsAfterRemove,
+  toRunTraitArgs,
   visibleDrafts,
 } from "@eva/shared";
 import {
