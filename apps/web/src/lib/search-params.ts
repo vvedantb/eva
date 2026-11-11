@@ -1,4 +1,9 @@
-import { PR_LIST_STATES } from "@eva/shared";
+import {
+  PR_LIST_STATES,
+  QUICK_TASK_FILTER_DEFAULTS,
+  QUICK_TASK_SORT_FIELDS,
+  QUICK_TASK_TIME_RANGES,
+} from "@eva/shared";
 import {
   parseAsString,
   parseAsStringLiteral,
@@ -47,18 +52,10 @@ export const timeRangeParser = parseAsStringLiteral(timeRanges)
 // Quick Tasks list filters (shareable "what you're looking at" state). View
 // mode is a per-user presentation preference and stays in localStorage —
 // see quick-tasks/_utils.ts.
-const quickTaskSortFields = [
-  "status",
-  "lastRun",
-  "updated",
-  "created",
-  "title",
-  "priority",
-] as const;
 // No default here (unlike most parsers): the fallback depends on the active
 // view, so quick-tasks/_utils.ts resolves null against a per-view default.
 export const quickTaskSortFieldParser =
-  parseAsStringLiteral(quickTaskSortFields).withOptions(searchOptions);
+  parseAsStringLiteral(QUICK_TASK_SORT_FIELDS).withOptions(searchOptions);
 
 // Same reason as quickTaskSortFieldParser — the default direction pairs with
 // the per-view default field, so it cannot be baked in here.
@@ -68,45 +65,29 @@ export const quickTaskSortDirParser =
 // Quick Tasks default to "all time" (unlike the generic timeRangeParser's
 // "30d" default used elsewhere) and have no hourly view, so they keep their
 // own vocabulary and default.
-const quickTaskTimeRanges = ["7d", "30d", "90d", "all"] as const;
 export const quickTaskTimeRangeParser = parseAsStringLiteral(
-  quickTaskTimeRanges,
+  QUICK_TASK_TIME_RANGES,
 )
-  .withDefault("all")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.timeRange)
   .withOptions(searchOptions);
 
+// The defaults are the shared ones, so "cleared" (`clearedQuickTaskFilters`)
+// and "not filtered" cannot disagree: the project default is "none".
 export const quickTaskProjectParser = parseAsString
-  .withDefault("none")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.project)
   .withOptions(searchOptions);
 
 export const quickTaskUserParser = parseAsString
-  .withDefault("all")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.user)
   .withOptions(searchOptions);
 
 export const quickTaskAssigneeParser = parseAsString
-  .withDefault("all")
+  .withDefault(QUICK_TASK_FILTER_DEFAULTS.assignee)
   .withOptions(searchOptions);
 
 export const quickTaskTagsParser = parseAsArrayOf(parseAsString)
   .withDefault([])
   .withOptions(searchOptions);
-
-/**
- * The state "no filters applied" means, read off the parsers themselves.
- *
- * Both "is anything filtered?" and "clear all filters" have to agree with the
- * parser defaults, and spelling those out a second time is how `project` ended
- * up cleared to "all" while the parser defaulted to "none" — leaving ?project=all
- * in the URL and treating the default as an active filter.
- */
-export const QUICK_TASK_FILTER_DEFAULTS = {
-  project: quickTaskProjectParser.defaultValue,
-  user: quickTaskUserParser.defaultValue,
-  assignee: quickTaskAssigneeParser.defaultValue,
-  tags: quickTaskTagsParser.defaultValue,
-  statuses: statusesParser.defaultValue,
-  timeRange: quickTaskTimeRangeParser.defaultValue,
-};
 
 // Projects list filters (shareable "what you're looking at" state). View,
 // timelineRange, and timelineZoom are per-user presentation preferences and

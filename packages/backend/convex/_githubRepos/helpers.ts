@@ -5,6 +5,9 @@ import { githubRepoFields } from "../validators";
 import { hasRepoAccess } from "../functions";
 import { pickSandboxRepoId } from "./sandboxRepoPick";
 
+/** Frontend path prefix for a githubRepos row (monorepo apps use `name/app`). */
+export { repoBasePath } from "@eva/shared";
+
 export {
   pickDefaultVisibleAppRepo,
   pickSandboxRepoId,
@@ -157,18 +160,6 @@ export async function gatherAccessibleRepos(
     repos.push(repo);
   }
   return repos;
-}
-
-/** Frontend path prefix for a githubRepos row (monorepo apps use `name/app`). */
-export function repoBasePath(repo: {
-  owner: string;
-  name: string;
-  rootDirectory?: string;
-}): string {
-  if (!repo.rootDirectory) return `/${repo.owner}/${repo.name}`;
-  const appName = repo.rootDirectory.split("/").pop();
-  if (!appName) return `/${repo.owner}/${repo.name}`;
-  return `/${repo.owner}/${repo.name}/${appName}`;
 }
 
 /** Custom label when set; otherwise leaf folder or GitHub name. */

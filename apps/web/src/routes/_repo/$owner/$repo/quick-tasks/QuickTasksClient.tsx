@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -29,7 +29,6 @@ import { QuickTaskDetailShell } from "./_components/QuickTaskDetailShell";
 import { QuickTaskTaskPageContent } from "./_components/QuickTaskTaskPageContent";
 import { useQuickTaskRouteState } from "./_utils/useQuickTaskRouteState";
 import { IconChecklist, IconPlus } from "@tabler/icons-react";
-import { TASK_STATUSES } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTasksToolbar } from "./_components/QuickTasksToolbar";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
 import {
@@ -40,7 +39,13 @@ import { QuickTasksBulkModals } from "./_components/QuickTasksBulkModals";
 import { useFilteredQuickTasks, useQuickTaskFilters } from "./_utils";
 import { useAgentTaskByNumId } from "@/lib/useResolveByNumId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { TASK_TAGS } from "@eva/shared";
+import {
+  TASK_TAGS,
+  clearedQuickTaskFilter,
+  clearedQuickTaskFilters,
+  quickTaskFilterChips,
+  type QuickTaskFilterKey,
+} from "@eva/shared";
 import {
   rangeBetween,
   type SelectionToggleOptions,
@@ -84,10 +89,8 @@ export function QuickTasksClient() {
   );
   const deleteSelected = useBulkDeleteTasks();
   const runSelected = useBulkRunTasks();
-  const [
-    { q, view, project, user, assignee, tags, timeRange, statuses },
-    setParams,
-  ] = useQuickTaskFilters();
+  const [filters, setParams] = useQuickTaskFilters();
+  const { q, view, project, user } = filters;
 
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const users = useQuery(api.users.listAll);
@@ -207,103 +210,32 @@ export function QuickTasksClient() {
     });
   };
 
-  const activeFilterLabels = (() => {
-    const labels: Array<{ key: string; label: ReactNode }> = [];
-    if (project === "all") {
-      labels.push({ key: "project", label: "All Projects" });
-    } else if (project !== "none") {
-      const name = projects?.find((p) => p._id === project)?.title ?? "Project";
-      labels.push({ key: "project", label: `Project: ${name}` });
-    }
-    if (user !== "all") {
-      const u = users?.find((u) => u._id === user);
-      const name = u?.fullName ?? u?.firstName ?? "User";
-      labels.push({
-        key: "user",
-        label: (
-          <>
-            Created by: <span data-pii>{name}</span>
-          </>
-        ),
-      });
-    }
-    if (assignee !== "all") {
-      const name =
-        assignee === "unassigned"
-          ? "Unassigned"
-          : (users?.find((u) => u._id === assignee)?.fullName ??
-            users?.find((u) => u._id === assignee)?.firstName ??
-            "Code Reviewer");
-      labels.push({
-        key: "assignee",
-        label:
-          assignee === "unassigned" ? (
-            `Code reviewer: ${name}`
-          ) : (
-            <>
-              Code reviewer: <span data-pii>{name}</span>
-            </>
-          ),
-      });
-    }
-    if (statuses.length !== TASK_STATUSES.length) {
-      labels.push({
-        key: "statuses",
-        label: `${statuses.length} Status${statuses.length !== 1 ? "es" : ""}`,
-      });
-    }
-    if (tags.length > 0) {
-      labels.push({
-        key: "tags",
-        label: `${tags.length} Tag${tags.length !== 1 ? "s" : ""}`,
-      });
-    }
-    if (timeRange !== "all") {
-      const rangeLabels: Record<string, string> = {
-        "7d": "Last 7 days",
-        "30d": "Last 30 days",
-        "90d": "Last 90 days",
-      };
-      labels.push({
-        key: "timeRange",
-        label: rangeLabels[timeRange] ?? timeRange,
-      });
-    }
-    return labels;
-  })();
+  const userName = (id: string) => {
+    const match = users?.find((u) => u._id === id);
+    return match?.fullName ?? match?.firstName;
+  };
+  const activeFilterLabels = quickTaskFilterChips(filters, {
+    project: (id) => projects?.find((p) => p._id === id)?.title,
+    user: userName,
+  }).map((chip) => ({
+    key: chip.key,
+    label:
+      chip.person === undefined ? (
+        chip.text
+      ) : (
+        <>
+          {chip.text}
+          <span data-pii>{chip.person}</span>
+        </>
+      ),
+  }));
 
-  const clearFilter = (key: string) => {
-    switch (key) {
-      case "project":
-        setParams({ project: "none" });
-        break;
-      case "user":
-        setParams({ user: "all" });
-        break;
-      case "assignee":
-        setParams({ assignee: "all" });
-        break;
-      case "statuses":
-        setParams({ statuses: [...TASK_STATUSES] });
-        break;
-      case "tags":
-        setParams({ tags: [] });
-        break;
-      case "timeRange":
-        setParams({ timeRange: "all" });
-        break;
-    }
+  const clearFilter = (key: QuickTaskFilterKey) => {
+    setParams(clearedQuickTaskFilter(key));
   };
 
   const clearAllFilters = () => {
-    setParams({
-      project: "none",
-      user: "all",
-      assignee: "all",
-      statuses: [...TASK_STATUSES],
-      tags: [],
-      timeRange: "all",
-    });
+    setParams(clearedQuickTaskFilters());
   };
 
   const closeBulkAction = () => setActiveBulkAction(null);

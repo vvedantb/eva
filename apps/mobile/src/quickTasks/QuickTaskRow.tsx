@@ -34,20 +34,22 @@ const SANDBOX_DOT = {
  * One quick task, as the web `QuickTaskCard` at phone width: a card with the
  * status stripe (red with a tinted border when the latest run failed), then
  * the number and title with the priority, live mark, unread dot and schedule
- * clock; the tags; and the creator and age. A tap opens the task chat. The
- * web hover tooltips are spoken in the row's hint instead. The web kebab and
- * context menu (move, delete, status) are not on the phone.
+ * clock; the tags; and the creator and age. A tap opens the task chat; a
+ * long press opens the row menu (`onLongPress`), as the web kebab and
+ * right-click. The web hover tooltips are spoken in the row's hint instead.
  */
 export function QuickTaskRow({
   task,
   status,
   hasError,
   creator,
+  onLongPress,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
+  onLongPress: () => void;
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -89,6 +91,8 @@ export function QuickTaskRow({
       // Web: `px-2.5 py-2 pl-3`, the three lines `gap-1.5`.
       className="gap-1.5 px-2.5 py-2 pl-3"
       onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
+      onLongPress={onLongPress}
+      longPressLabel="Task actions"
     >
       <View className="flex-row items-start gap-2">
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
