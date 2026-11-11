@@ -731,14 +731,29 @@ export const sessionFields = {
    * sandbox — a grey dot with no explanation and no retry.
    */
   sandboxError: v.optional(v.string()),
-  /** Earliest time an archived session's sandbox may be deleted (48h grace). */
+  /** @deprecated Moved to `archive.sandboxDeleteAfter`; cleared by `backfillSessionArchive`. */
   sandboxDeleteAfter: v.optional(v.number()),
   ptySessionId: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
+  /** @deprecated Moved to `archive`; cleared by `backfillSessionArchive`. */
   archived: v.optional(v.boolean()),
+  /**
+   * Set while the session is archived; absent while it is live. Owned by
+   * `_sessions/archive.ts` — read it through `isSessionArchived`.
+   */
+  archive: v.optional(
+    v.object({
+      archivedAt: v.number(),
+      /**
+       * Earliest time the sandbox may be deleted (48h grace). Absent when the
+       * session had no sandbox at archive time, or once it was deleted.
+       */
+      sandboxDeleteAfter: v.optional(v.number()),
+    }),
+  ),
   summary: v.optional(v.array(v.string())),
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),

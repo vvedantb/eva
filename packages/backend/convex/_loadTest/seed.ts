@@ -487,7 +487,7 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       title: `Session ${i}: ${filler(i, 40)}`,
       status: i % 3 === 0 ? "active" : "closed",
       lastTurnFinishedAt: createdAt + 3_600_000,
-      ...(i % 6 === 5 ? { archived: true } : {}),
+      ...(i % 6 === 5 ? { archive: { archivedAt: createdAt } } : {}),
       ...(i % 10 === 9 ? { deletedAt: createdAt + DAY } : {}),
     });
     const chatId = await db.insert("sessionChats", {
