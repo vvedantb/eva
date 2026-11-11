@@ -509,7 +509,8 @@ function RemedyLink({ label, colour, starting, onPress }: { label: string; colou
       className="ml-auto min-h-11 min-w-11 flex-row items-center gap-1 self-stretch pl-2 active:opacity-70"
       style={{ opacity: starting ? 0.7 : 1 }}
     >
-      <Text className="font-instrument-sans-medium text-xs" style={{ color: colour, fontWeight: "500" }}>
+      {/* `text-sm`, the phone floor for tappable text (the web link is `text-xs`). */}
+      <Text className="font-instrument-sans-medium text-sm" style={{ color: colour, fontWeight: "500" }}>
         {label}
       </Text>
       {starting ? <Spinner size="sm" decorative /> : <IconArrowUpRight size={13} color={colour} />}

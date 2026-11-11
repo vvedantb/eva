@@ -7,7 +7,8 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 /**
  * The web `ActiveFiltersBar` below `sm`: "Filtered by", then a 40-high chip
  * per active filter that clears it, and "Clear all" with two or more.
- * Nothing when no filter is on.
+ * The tappable labels are `text-sm` (the web `text-xs`), the phone floor;
+ * "Filtered by" stays `text-xs`. Nothing when no filter is on.
  */
 export function FilterChipsBar<Key extends string>({
   chips,
@@ -22,6 +23,7 @@ export function FilterChipsBar<Key extends string>({
   const muted = theme.mutedForeground;
   if (chips.length === 0) return null;
   const textStyle = { color: muted, letterSpacing: XS_TRACKING };
+  const tappableStyle = { color: muted };
   return (
     <View className="flex-row flex-wrap items-center gap-1.5 px-4 pb-2">
       <Text className="font-instrument-sans mr-0.5 text-xs" style={textStyle}>
@@ -38,7 +40,7 @@ export function FilterChipsBar<Key extends string>({
           className="min-h-10 max-w-full flex-row items-center gap-1 rounded-md px-2 active:opacity-70"
           style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}
         >
-          <Text numberOfLines={1} className="font-instrument-sans shrink text-xs" style={textStyle}>
+          <Text numberOfLines={1} className="font-instrument-sans shrink text-sm" style={tappableStyle}>
             {chip.label}
           </Text>
           <View style={{ opacity: 0.5 }}>
@@ -53,7 +55,7 @@ export function FilterChipsBar<Key extends string>({
           hitSlop={{ top: 2, bottom: 2 }}
           className="ml-1 min-h-10 justify-center active:opacity-70"
         >
-          <Text className="font-instrument-sans text-xs" style={textStyle}>
+          <Text className="font-instrument-sans text-sm" style={tappableStyle}>
             Clear all
           </Text>
         </Pressable>

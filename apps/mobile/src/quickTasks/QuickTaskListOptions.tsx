@@ -212,6 +212,7 @@ export function QuickTaskToolbar({
               leading={<Icon size={20} color={text} />}
               title={TASK_STATUS_LABELS[status]}
               active={filters.statuses.includes(status)}
+              multiple
               onPress={() => onChange({ statuses: toggleQuickTaskStatus(filters.statuses, status) })}
             />
           );
@@ -222,6 +223,7 @@ export function QuickTaskToolbar({
             key={tag}
             title={tag}
             active={filters.tags.includes(tag)}
+            multiple
             onPress={() =>
               onChange({ tags: filters.tags.includes(tag) ? filters.tags.filter((entry) => entry !== tag) : [...filters.tags, tag] })
             }
