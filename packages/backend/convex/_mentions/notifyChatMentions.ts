@@ -97,17 +97,21 @@ export async function notifyChatMentions(
     surface: ChatMentionSurface;
   },
 ): Promise<void> {
-  const surface = await ownerSurface(ctx, args.surface);
-  const target = notificationTarget(surface);
+  // A task and its session share the repo, so the recipients need no owner
+  // read; it only runs once someone is mentioned.
   const recipients = await teamMentionRecipients(
     ctx,
     args.content,
-    target.repoId,
+    notificationTarget(args.surface).repoId,
     new Set([args.authorUserId]),
   );
   if (recipients.length === 0) return;
 
-  const authorName = await authorDisplayName(ctx, args.authorUserId);
+  const [surface, authorName] = await Promise.all([
+    ownerSurface(ctx, args.surface),
+    authorDisplayName(ctx, args.authorUserId),
+  ]);
+  const target = notificationTarget(surface);
   const title = `${authorName} mentioned you in a ${SURFACE_NAME[surface.kind]} chat`;
   const message = formatMessagePreview(args.content);
 
