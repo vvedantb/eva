@@ -63,6 +63,12 @@ export const mobileChatValidator = v.object({
     fastMode: v.optional(v.boolean()),
   }),
   /**
+   * Whether the chat's sandbox runs, as the web reads it (a session's
+   * `status`, a task's or project's review sandbox status is "active"). The
+   * composer placeholder says a send wakes Eva up when it is false.
+   */
+  sandboxActive: v.boolean(),
+  /**
    * The branch the sandbox worktree is on, only while the sandbox runs: the
    * web composer's read-only `SandboxBranchChip`.
    */
@@ -129,6 +135,7 @@ export async function resolveMobileChat(
     const repo = await db.get(session.repoId);
     if (!repo) return null;
     const base = sessionWebPath(repo, session);
+    const sandboxActive = session.status === "active";
     return {
       repoId: repo._id,
       entity: { kind: "session", context },
@@ -142,7 +149,8 @@ export async function resolveMobileChat(
         model: chat.lastModel ?? session.lastModel,
         providerAccountId: chat.providerAccountId,
         traits: storedComposerTraits(chat),
-        sandboxBranch: session.status === "active" ? session.sandboxBranch : undefined,
+        sandboxActive,
+        sandboxBranch: sandboxActive ? session.sandboxBranch : undefined,
         intendedBranch: session.branchName,
         prUrl: session.prUrl,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
@@ -159,6 +167,7 @@ export async function resolveMobileChat(
     const repo = repoId ? await db.get(repoId) : null;
     if (!task || !repo) return null;
     const base = getRepoHref(repo.owner, repo.name, repo.rootDirectory);
+    const sandboxActive = task.reviewTaskSandboxStatus === "active";
     return {
       repoId: repo._id,
       entity: { kind: "task", task },
@@ -175,7 +184,8 @@ export async function resolveMobileChat(
         accountOwnerId: task.createdBy,
         task: { id: task._id },
         traits: storedComposerTraits(task),
-        sandboxBranch: task.reviewTaskSandboxStatus === "active" ? task.sandboxBranch : undefined,
+        sandboxActive,
+        sandboxBranch: sandboxActive ? task.sandboxBranch : undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
         webPath:
           project?.numId !== undefined
@@ -190,6 +200,7 @@ export async function resolveMobileChat(
     const project = await db.get(projectId);
     const repo = project ? await db.get(project.repoId) : null;
     if (!project || !repo) return null;
+    const sandboxActive = project.reviewProjectSandboxStatus === "active";
     return {
       repoId: repo._id,
       entity: { kind: "project", project },
@@ -205,7 +216,8 @@ export async function resolveMobileChat(
         accountOwnerId: project.userId,
         project: { id: project._id },
         traits: storedComposerTraits(project),
-        sandboxBranch: project.reviewProjectSandboxStatus === "active" ? project.sandboxBranch : undefined,
+        sandboxActive,
+        sandboxBranch: sandboxActive ? project.sandboxBranch : undefined,
         intendedBranch: project.branchName,
         prUrl: project.prUrl,
         webPath: `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/projects/${project.numId ?? ""}`,

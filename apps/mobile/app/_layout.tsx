@@ -11,12 +11,15 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { AuthProviders } from "@vvedantb/native-ui/auth";
+import { GestureHandlerProvider } from "@vvedantb/native-ui/gesture-handler";
 import { NativeUiProvider } from "@vvedantb/native-ui/theme";
 import { Toaster } from "@vvedantb/native-ui/toast";
 import { ConvexReactClient } from "convex/react";
 import { type ErrorBoundaryProps, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useEffect, useState } from "react";
+import { StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
 import { restoreColorSchemeChoice } from "@/settings/colorScheme";
 import {
@@ -26,6 +29,7 @@ import {
 import { applyEvaTheme } from "@/ui/evaTheme";
 import { EVA_FONT } from "@/ui/fonts";
 import { StartupFailure } from "@/ui/StartupFailure";
+import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
 // Release builds swallow unhandled rejections: log them first.
@@ -96,6 +100,7 @@ function ClerkGate({ children }: { children: ReactNode }) {
 
 export default function RootLayout() {
   const scheme = useScheme();
+  const stackOptions = useStackScreenOptions();
   const fontsTimedOut = useTimedOut(FONT_TIMEOUT_MS);
   // Inter under the names the classes and JS styles use (`@/ui/fonts`).
   const [fontsLoaded, fontError] = useFonts({
@@ -107,19 +112,30 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError && !fontsTimedOut) return null;
 
   return (
-    <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
-      <ThemeProvider value={navigationTheme(scheme)}>
-        <NativeUiProvider>
-          <ClerkGate>
-            {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
-                drops their state, so Back landed on the Inbox, not the tab it came from.
-                No transition, as before: screens swap at once. */}
-            <Stack screenOptions={{ headerShown: false, animation: "none" }} />
-          </ClerkGate>
-          <Toaster />
-          <StatusBar style={scheme === "dark" ? "light" : "dark"} />
-        </NativeUiProvider>
-      </ThemeProvider>
-    </AuthProviders>
+    // Gesture Handler for the whole app; the kit's sheets drag on it, on the
+    // UI thread (each sheet's `Modal` adds its own root view).
+    <GestureHandlerRootView style={styles.root}>
+      <GestureHandlerProvider>
+        <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
+          <ThemeProvider value={navigationTheme(scheme)}>
+            <NativeUiProvider>
+              <ClerkGate>
+                {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
+                    drops their state, so Back landed on the Inbox, not the tab it came from.
+                    A push deeper (a chat, a review, a new session) runs the platform's own
+                    transition (`useStackScreenOptions`). */}
+                <Stack screenOptions={stackOptions} />
+              </ClerkGate>
+              <Toaster />
+              <StatusBar style={scheme === "dark" ? "light" : "dark"} />
+            </NativeUiProvider>
+          </ThemeProvider>
+        </AuthProviders>
+      </GestureHandlerProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});

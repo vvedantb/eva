@@ -43,6 +43,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
+  SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
@@ -95,10 +96,9 @@ import {
   findLastAssistantMessageId,
   findStreamingTargetMessage,
   findTurnWindowStart,
-  firstNameFromUser,
+  firstNameByUserId,
   isOtherUserChatMessage,
   otherUserIdsInChat,
-  SANDBOX_CHAT_COPY,
   TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
   type ChatBodyMessage,
@@ -773,14 +773,7 @@ function ChatBodyInner({
     api.users.getMany,
     otherUserIds.length > 0 ? { ids: otherUserIds } : "skip",
   );
-  const firstNameByUserId = (() => {
-    const map = new Map<Id<"users">, string>();
-    for (const user of users ?? []) {
-      const name = firstNameFromUser(user);
-      if (name) map.set(user._id, name);
-    }
-    return map;
-  })();
+  const firstNames = firstNameByUserId(users ?? []);
 
   // Retry re-sends the failed turn's prompt through the normal send path. It is
   // withheld while a turn is running (the send would only queue behind it) and
@@ -855,7 +848,7 @@ function ChatBodyInner({
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const senderFirstName =
       isOtherUser && message.userId
-        ? firstNameByUserId.get(message.userId)
+        ? firstNames.get(message.userId)
         : undefined;
     const precedingUser = precedingUserTurns.get(message._id);
 
