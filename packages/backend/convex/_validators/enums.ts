@@ -38,14 +38,17 @@ export const NON_DRAFT_TASK_STATUSES = [
   "cancelled",
 ] as const satisfies readonly TaskStatus[];
 
-export const runStatusValidator = v.union(
-  v.literal("queued"),
-  v.literal("running"),
-  v.literal("success"),
-  v.literal("error"),
+export const RUN_STATUSES = [
+  "queued",
+  "running",
+  "success",
+  "error",
   // User-initiated cancellation. Distinct from "error" so cancelled runs are
   // not flagged as failures (no red card border, neutral timeline badge).
-  v.literal("cancelled"),
+  "cancelled",
+] as const;
+export const runStatusValidator = v.union(
+  ...RUN_STATUSES.map((status) => v.literal(status)),
 );
 
 export const logLevelValidator = v.union(
@@ -210,11 +213,16 @@ export const notificationTypeValidator = v.union(
   v.literal("routed_question"),
 );
 
-export const routedSourceKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
+/** The chat surfaces: a session, a quick task or a project. */
+export const CHAT_ENTITY_KINDS = ["session", "task", "project"] as const;
+/** The chat surface a sandbox MCP token or activity row names. */
+export const chatEntityKindValidator = v.union(
+  ...CHAT_ENTITY_KINDS.map((kind) => v.literal(kind)),
 );
+export type ChatEntityKind = Infer<typeof chatEntityKindValidator>;
+
+/** The chat a routed question came from. */
+export const routedSourceKindValidator = chatEntityKindValidator;
 
 export const routedThreadStatusValidator = v.union(
   v.literal("open"),
@@ -246,6 +254,7 @@ export const roleUserValidator = v.union(
   v.literal("dev"),
   v.literal("designer"),
 );
+export type RoleUser = Infer<typeof roleUserValidator>;
 
 export const snapshotScheduleValidator = v.string();
 
@@ -356,12 +365,16 @@ export const letterSpacingValidator = v.union(
 );
 
 
+export const FINDING_SEVERITIES = [
+  "low",
+  "medium",
+  "high",
+  "critical",
+] as const;
 export const findingSeverityValidator = v.union(
-  v.literal("low"),
-  v.literal("medium"),
-  v.literal("high"),
-  v.literal("critical"),
+  ...FINDING_SEVERITIES.map((severity) => v.literal(severity)),
 );
+export type FindingSeverity = Infer<typeof findingSeverityValidator>;
 
 export const taskSandboxEventValidator = v.union(
   v.literal("started"),
@@ -445,15 +458,17 @@ export const notificationUrgencyValidator = v.union(
   v.literal("high"),
 );
 
-/** The chat surface a sandbox MCP token or activity row names. */
-export const chatEntityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-export type ChatEntityKind = Infer<typeof chatEntityKindValidator>;
-
 export const presentationStatusValidator = v.union(
   v.literal("live"),
   v.literal("ended"),
 );
+
+/**
+ * Artifact state scope (`window.cowork.state`). "user" is private to the
+ * viewer; "shared" is one copy for the artifact's bound team.
+ */
+export const ARTIFACT_STATE_SCOPES = ["user", "shared"] as const;
+export const artifactStateScopeValidator = v.union(
+  ...ARTIFACT_STATE_SCOPES.map((scope) => v.literal(scope)),
+);
+export type ArtifactStateScope = Infer<typeof artifactStateScopeValidator>;
