@@ -2,6 +2,7 @@ import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -13,10 +14,7 @@ import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
-import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
-import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
-import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
+import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import {
   catchMutationError,
   withMutationToast,
@@ -83,9 +81,7 @@ export function SessionDetailClient({
     isRouteActive ? { sessionId } : "skip",
   );
   const chatId = activeChat?._id;
-  const messages = useChatTranscript(
-    isRouteActive && chatId ? chatId : "skip",
-  );
+  const messages = useChatTranscript(isRouteActive && chatId ? chatId : "skip");
   const queuedMessages = useHeldQuery(
     api.queuedMessages.listByParent,
     isRouteActive && chatId ? { parentId: chatId } : "skip",
@@ -100,7 +96,9 @@ export function SessionDetailClient({
   );
   const startupStreaming = useHeldQuery(
     api.streaming.get,
-    isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
+    isRouteActive
+      ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) }
+      : "skip",
   );
   // Names the browser tab. Gated on `isRouteActive`: up to five session shells
   // stay mounted at once, and a hidden one must not title the tab.
@@ -289,7 +287,7 @@ export function SessionDetailClient({
   // through auto-archive, which the owner can turn off.
   const isArchived = session.archived === true;
 
-  const chatPanel = (sandboxCollapsed?: boolean) => (
+  const chatPanel = (
     <ChatPanel
       // One mount per chat: composer draft, attachments and local state must
       // not carry over to another tab.
@@ -323,7 +321,6 @@ export function SessionDetailClient({
       isArchived={isArchived}
       isReadOnly={isArchived}
       deploymentStatus={session.deploymentStatus}
-      sandboxCollapsed={sandboxCollapsed}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}
@@ -334,88 +331,83 @@ export function SessionDetailClient({
   );
 
   return (
-    <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
-      <PendingPreviewSnapshotsProvider>
-        <PendingWebMcpProvider>
-          <OpenSandboxFileProvider onOpenFile={onOpenFile}>
-            <SandboxWorkspace
-              ownerKind="session"
-              ownerId={sessionId}
-              storageScope={`session:${sessionId}`}
-              sandboxId={session.sandboxId}
-              isActive={isSandboxActive}
-              terminalPanes={session.terminalPanes}
-              hotkeyEnabled={isRouteActive}
-            >
-              {(panes, owner, terminalPanel) => (
-                <ResizablePanelLayout
-                  leftPanel={({ rightPanelCollapsed }) =>
-                    chatPanel(rightPanelCollapsed)
-                  }
-                  rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
-                    <SandboxPanel
-                      sessionId={sessionId}
-                      chatId={activeChat._id}
-                      sandboxId={session.sandboxId}
-                      isActive={isSandboxActive}
-                      isRouteActive={isRouteActive}
-                      repoId={session.repoId}
-                      prUrl={session.prUrl}
-                      // Prefer session (set after services start); fall back to app
-                      // settings so preview doesn't default to 3000 before that lands.
-                      devPort={session.devPort ?? repo.devPort}
-                      devCommand={session.devCommand ?? repo.devCommand}
-                      owner={owner}
-                      panes={panes}
-                      terminalPanel={terminalPanel}
-                      planContent={session.planContent}
-                      messages={messages ?? []}
-                      backgroundAgents={activeChat.backgroundAgents}
-                      streamingActivity={streaming?.currentActivity}
-                      isArchived={isArchived}
-                      activeTab={activeSandboxTab}
-                      onTabChange={onSandboxTabChange}
-                      agentBrowsingAt={session.agentBrowsingAt}
-                      onStartSandbox={
-                        isArchived || isSandboxStopping
-                          ? undefined
-                          : () => {
-                              void handleSandboxToggle("start");
-                            }
+    <SandboxSurfaceProviders
+      onOpenFile={onOpenFile}
+      onOpenDiffsTab={handleViewDiff}
+    >
+      <SandboxWorkspace
+        ownerKind="session"
+        ownerId={sessionId}
+        storageScope={`session:${sessionId}`}
+        sandboxId={session.sandboxId}
+        isActive={isSandboxActive}
+        terminalPanes={session.terminalPanes}
+        hotkeyEnabled={isRouteActive}
+      >
+        {(panes, owner, terminalPanel) => (
+          <ResizablePanelLayout
+            leftPanel={() => chatPanel}
+            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
+              <SandboxPanel
+                sessionId={sessionId}
+                chatId={activeChat._id}
+                sandboxId={session.sandboxId}
+                isActive={isSandboxActive}
+                isRouteActive={isRouteActive}
+                repoId={session.repoId}
+                prUrl={session.prUrl}
+                // Prefer session (set after services start); fall back to app
+                // settings so preview doesn't default to 3000 before that lands.
+                devPort={session.devPort ?? repo.devPort}
+                devCommand={session.devCommand ?? repo.devCommand}
+                owner={owner}
+                panes={panes}
+                terminalPanel={terminalPanel}
+                planContent={session.planContent}
+                messages={messages ?? []}
+                backgroundAgents={activeChat.backgroundAgents}
+                streamingActivity={streaming?.currentActivity}
+                isArchived={isArchived}
+                activeTab={activeSandboxTab}
+                onTabChange={onSandboxTabChange}
+                agentBrowsingAt={session.agentBrowsingAt}
+                onStartSandbox={
+                  isArchived || isSandboxStopping
+                    ? undefined
+                    : () => {
+                        void handleSandboxToggle("start");
                       }
-                      isSandboxStarting={isSandboxStarting}
-                      autoWakeEligible={
-                        session.status === "closed" &&
-                        session.sandboxId !== undefined &&
-                        session.sandboxError === undefined &&
-                        !isArchived
+                }
+                isSandboxStarting={isSandboxStarting}
+                autoWakeEligible={
+                  session.status === "closed" &&
+                  session.sandboxId !== undefined &&
+                  session.sandboxError === undefined &&
+                  !isArchived
+                }
+                collapsed={rightPanelCollapsed}
+                onToggle={onToggleRightPanel}
+                miniPlayer={
+                  session.numId !== undefined
+                    ? {
+                        returnTo: `${basePath}/sessions/${session.numId}/preview`,
+                        title: session.title,
                       }
-                      collapsed={rightPanelCollapsed}
-                      onToggle={onToggleRightPanel}
-                      miniPlayer={
-                        session.numId !== undefined
-                          ? {
-                              returnTo: `${basePath}/sessions/${session.numId}/preview`,
-                              title: session.title,
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
-                  leftDefaultSize="40%"
-                  leftMinWidthPx={350}
-                  rightMinWidthPx={300}
-                  rightCollapsedSizePx={sandboxRailWidthPx}
-                  storageKey="sandbox-collapsed"
-                  expandRightSignal={expandRightSignal}
-                  hotkeyEnabled={isRouteActive}
-                  mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-                />
-              )}
-            </SandboxWorkspace>
-          </OpenSandboxFileProvider>
-        </PendingWebMcpProvider>
-      </PendingPreviewSnapshotsProvider>
-    </PendingReviewCommentsProvider>
+                    : undefined
+                }
+              />
+            )}
+            leftDefaultSize="40%"
+            leftMinWidthPx={350}
+            rightMinWidthPx={300}
+            rightCollapsedSizePx={sandboxRailWidthPx}
+            storageKey="sandbox-collapsed"
+            expandRightSignal={expandRightSignal}
+            hotkeyEnabled={isRouteActive}
+            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+          />
+        )}
+      </SandboxWorkspace>
+    </SandboxSurfaceProviders>
   );
 }

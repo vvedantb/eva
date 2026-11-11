@@ -29,6 +29,7 @@
 import { Drive, Sandbox } from "@vercel/sandbox";
 import type { SandboxMounts, SandboxRegion } from "@vercel/sandbox";
 import { z } from "zod";
+import { DEFAULT_PREVIEW_PORT, DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import { SandboxProviderError } from "./provider";
 import type {
   CreateSnapshotParams,
@@ -106,7 +107,10 @@ const STOP_CONFIRMATION_POLL_MS = 1_000;
  */
 const SNAPSHOT_REQUEST_TIMEOUT_MS = 120_000;
 export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
-  3000, 8080, 6080, 54321,
+  DEFAULT_PREVIEW_PORT,
+  EDITOR_PORT,
+  DESKTOP_PORT,
+  54321,
 ];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored

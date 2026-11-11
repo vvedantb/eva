@@ -392,7 +392,6 @@ import type * as agentTaskChatWorkflow from "../agentTaskChatWorkflow.js";
 import type * as agentTasks from "../agentTasks.js";
 import type * as analytics from "../analytics.js";
 import type * as annotations from "../annotations.js";
-import type * as appTabSlug from "../appTabSlug.js";
 import type * as appTabs from "../appTabs.js";
 import type * as arenaActions from "../arenaActions.js";
 import type * as arenaBrowserWorkflow from "../arenaBrowserWorkflow.js";
@@ -972,7 +971,6 @@ declare const fullApi: ApiFromModules<{
   agentTasks: typeof agentTasks;
   analytics: typeof analytics;
   annotations: typeof annotations;
-  appTabSlug: typeof appTabSlug;
   appTabs: typeof appTabs;
   arenaActions: typeof arenaActions;
   arenaBrowserWorkflow: typeof arenaBrowserWorkflow;

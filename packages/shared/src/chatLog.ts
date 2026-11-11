@@ -1,11 +1,13 @@
+import type { Doc } from "@eva/backend";
+
 /**
  * A chat's Log rendered as markdown. One renderer for the three readers: the
  * Documents tab download, the agent's `read_chat_log` tool, and the catch-up
  * block a fresh agent session gets. Rows come from `chatLog:listForSource`.
  */
 
-export type ChatLogKind = "decision" | "change" | "research" | "question" | "note";
-export type ChatLogAuthor = "agent" | "user" | "system";
+export type ChatLogKind = Doc<"chatLogEntries">["kind"];
+export type ChatLogAuthor = Doc<"chatLogEntries">["author"];
 
 export type ChatLogRow = {
   kind: ChatLogKind;

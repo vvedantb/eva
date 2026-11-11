@@ -4,6 +4,7 @@ import { IconRefresh, IconTerminal2 } from "@tabler/icons-react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { SandboxOwner } from "@eva/backend";
+import { terminalHistoryTail } from "@eva/shared";
 import { useSessionStorage } from "usehooks-ts";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -17,7 +18,6 @@ import {
   parseTerminalControlMessage,
   parseVercelExitMessage,
   sendVercelPtyControl,
-  terminalHistoryTail,
   type PtyProtocol,
   type TerminalHistoryWriter,
 } from "./_utils";

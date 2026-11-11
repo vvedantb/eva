@@ -89,7 +89,7 @@ type QueueSandboxState = "awake" | "asleep" | "transitioning";
  * now would race the stop, so the message waits for the next wake.
  */
 function sandboxStateFromStatus(
-  status: "active" | "starting" | "stopping" | "closed" | undefined,
+  status: Doc<"sessions">["status"] | undefined,
 ): QueueSandboxState {
   if (status === "active") return "awake";
   if (status === "starting" || status === "stopping") return "transitioning";
@@ -211,7 +211,7 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
  *
  * Subagents only count on an awake sandbox: they die with their VM, and a stop
  * never settles them. Counting them on a sleeping sandbox held the message
- * without waking Eva, so it sat in "Queued" until the 2-hour cap.
+ * without waking Eva, so it sat in "Queued" until the `TURN_BACKSTOP_MS` cap.
  */
 async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   ctx: MutationCtx,

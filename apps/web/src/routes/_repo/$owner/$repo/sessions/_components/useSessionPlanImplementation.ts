@@ -12,7 +12,7 @@ import {
   buildPlanImplementationThreadTitle,
 } from "./planExport";
 import type { ProposedPlanRow } from "./proposedPlanLogic";
-import type { SessionSendOptions } from "./useChatSend";
+import type { ChatTurnSendOptions } from "@/lib/components/chat/useChatSend";
 
 export function useSessionPlanImplementation({
   sessionId,
@@ -26,7 +26,7 @@ export function useSessionPlanImplementation({
   handleSend: (
     content: string,
     attachmentStorageIds?: Id<"_storage">[],
-    options?: SessionSendOptions,
+    options?: ChatTurnSendOptions,
   ) => void | Promise<void>;
   isRouteActive?: boolean;
 }) {

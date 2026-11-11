@@ -3,9 +3,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { authMutation } from "../functions";
 import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
-
-/** How long an authorize-hop nonce stays redeemable. */
-const STATE_TTL_MS = 10 * 60 * 1000;
+import { OAUTH_STATE_TTL_MS } from "../_connectors/tokens";
 
 const storedTokenValidator = v.object({
   accessToken: v.string(),
@@ -93,7 +91,7 @@ export const startUserAuthorization = authMutation({
       nonce,
       userId: ctx.userId,
       installationId: args.installationId ?? undefined,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      expiresAt: Date.now() + OAUTH_STATE_TTL_MS,
     });
     const params = new URLSearchParams({
       client_id: clientId,

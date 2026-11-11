@@ -2,29 +2,31 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
-import { toast } from "@vvedantb/ui";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
-import { ChatBody, type ChatSendOptions } from "./ChatBody";
-import { readableSendError } from "./chatBodyUtils";
+import { ChatBody } from "./ChatBody";
 import { SandboxBranchChip } from "./SandboxBranchChip";
 import {
   sandboxTurnSettings,
   useSandboxChatTranscript,
   type SandboxChatBinding,
 } from "./sandboxChatBinding";
-import { SandboxChatPreInput } from "./SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "./SandboxChatPreInput";
 import {
   buildSandboxChatSurface,
   startSandboxHandler,
 } from "./sandboxChatSurface";
-import { sandboxChatKeys, sendSandboxTurn } from "./sandboxChatTurn";
+import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
 import { useChatQueueGate } from "./useChatQueueGate";
+import { useChatSend } from "./useChatSend";
 import { useSandboxChatDraft } from "./useSandboxChatDraft";
 
 /** What the page around a task or project sandbox chat hands it. */
@@ -74,7 +76,6 @@ export function SandboxChatPanel({
     entityId: parentId,
   });
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
-  const setDraft = useMutation(api.drafts.set);
   const { draftBundle, isDraftLoading } = useSandboxChatDraft(draftTarget);
   const { isSwitchingAccount, switchProviderAccount } =
     useProviderAccountHandoff({
@@ -106,60 +107,14 @@ export function SandboxChatPanel({
     isUsageLimitHeld: queueGate.isUsageLimitHeld,
   });
 
-  // A thrown send rolls the whole turn back (no placeholder, no workflow) and
-  // the composer has already cleared, so the prompt only exists here. The toast
-  // owns the failure and hands the text back through the same `drafts` row the
-  // composer reads (same contract as useChatSend).
-  const raiseSendFailure = (errorMessage: string, draftContent: string) => {
-    toast.error("Couldn't send your message", {
-      id: `${entity.kind}-chat-send`,
-      description: readableSendError(errorMessage),
-      action: {
-        label: "Restore draft",
-        onClick: () => {
-          void setDraft({
-            target: draftTarget,
-            content: draftContent,
-          });
-        },
-      },
-    });
-  };
-
-  const handleSend = async (
-    content: string,
-    attachmentStorageIds?: Id<"_storage">[],
-    options?: ChatSendOptions,
-  ) => {
-    // What the user typed. A ChatBody send has already appended its citation /
-    // snapshot / WebMCP blocks to `content`, and that XML is not theirs to
-    // re-edit, so the restore has to use the pre-append text.
-    const draftContent = options?.draftContent ?? content;
-    // Hoisted out of the `try`: React Compiler bails on the whole file when it
-    // meets expression-level control flow inside one (eva/no-value-block-in-try).
-    const mode = isExecuting || composer.queuesSends ? "queue" : "start";
-    const settings = sandboxTurnSettings(binding);
-    try {
-      await sendSandboxTurn(
-        binding.ports,
-        settings,
-        { message: content, attachmentStorageIds },
-        mode,
-      );
-    } catch (error) {
-      raiseSendFailure(
-        error instanceof Error ? error.message : "",
-        draftContent,
-      );
-      // Rethrow: the caller tells a delivered send from a failed one by whether
-      // this settles, and keeps its pending chips on a failure.
-      throw error;
-    }
-  };
-
-  const handleCancel = async () => {
-    await binding.cancel();
-  };
+  const { handleSend, handleCancel, hasPendingReviewComments } = useChatSend({
+    ports: binding.ports,
+    settings: sandboxTurnSettings(binding),
+    cancel: binding.cancel,
+    draftTarget,
+    isExecuting,
+    queuesSends: composer.queuesSends,
+  });
 
   const handleAnswerBlockingQuestion = async (
     toolUseId: string,
@@ -180,13 +135,14 @@ export function SandboxChatPanel({
     model,
     isExecuting,
     doc,
-    isOwner: binding.isOwner,
+    canSwitchAccount: binding.isOwner,
     messages,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
     switchProviderAccount,
     isSandboxActive,
-    sendCommand: (command) => handleSend(command),
+    sendCommand: (command) =>
+      handleSend(command, undefined, { skipReviewComments: true }),
   });
 
   const chatMessages = [...(firstRun?.turn ?? []), ...(messages ?? [])];
@@ -207,7 +163,9 @@ export function SandboxChatPanel({
       />
       <SubagentThreadLayer
         surface={chatSurface}
-        parentTitle={doc?.title ?? (entity.kind === "task" ? "Task" : "Project")}
+        parentTitle={
+          doc?.title ?? (entity.kind === "task" ? "Task" : "Project")
+        }
         messages={chatMessages}
         streamingActivity={streaming?.currentActivity}
         sandboxRunning={isSandboxActive}
@@ -258,6 +216,7 @@ export function SandboxChatPanel({
           onSend={handleSend}
           onCancel={handleCancel}
           preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+          composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
             <SandboxBranchChip
               branch={doc?.sandboxBranch}
@@ -269,6 +228,7 @@ export function SandboxChatPanel({
           isDraftLoading={isDraftLoading}
           onOpenFile={onOpenFile}
           onViewDiff={onViewDiff}
+          hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
           backgroundAgents={doc?.backgroundAgents}
           sandboxRunning={isSandboxActive}

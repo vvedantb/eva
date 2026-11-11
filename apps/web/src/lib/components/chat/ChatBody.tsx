@@ -236,6 +236,8 @@ interface ChatBodyProps {
   preConversationContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
+  /** Status chips (background agents, processes) on the skill suggestions' row. */
+  composerChips?: React.ReactNode;
   /**
    * Live block at the end of the transcript (session sandbox startup). Takes
    * the empty state's place when there are no messages yet.
@@ -332,6 +334,7 @@ function ChatBodyInner({
   onCancel,
   preConversationContent,
   preInputContent,
+  composerChips,
   transcriptTail,
   underCardLeading,
   draft,
@@ -377,7 +380,7 @@ function ChatBodyInner({
     // Settlement is observed, not awaited: the composer only empties once this
     // resolves, and holding the user's text on screen until the mutation
     // round-trips would undo the optimistic clear every surface relies on.
-    // Same contract as useChatSend's `review?.clear()`: the pending context
+    // Same contract as useChatSend's review comments: the pending context
     // is consumed only once the send has actually succeeded, so a rejected send
     // leaves the chips attached for the retry. And only the exact items that
     // went into this prompt are dropped — `clear()` also threw away anything
@@ -1088,6 +1091,7 @@ function ChatBodyInner({
                     {preInputContent}
                   </>
                 }
+                statusChips={composerChips}
                 streamingActivity={deferredStreamingActivity}
                 streamingTurnId={streamingTargetId}
                 underCardLeading={underCardLeading}

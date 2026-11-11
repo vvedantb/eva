@@ -1,20 +1,14 @@
-/** Maps a session's PR state to an icon color class.
- *   draft  → grey   (matches GitHub's draft pill)
- *   open   → green  (active, ready for review)
- *   merged → purple (reuses status-code-review token)
- *   closed → red    (closed without merge) */
-export function prStateIconClass(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-status-code-review";
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-muted-foreground";
-  }
+import { prStateTone, type PrState, type PrStateTone } from "@eva/shared";
+
+/** The web class for each shared PR icon tone. */
+const PR_STATE_TONE_CLASS: Record<PrStateTone, string> = {
+  success: "text-success",
+  codeReview: "text-status-code-review",
+  destructive: "text-destructive",
+  muted: "text-muted-foreground",
+};
+
+/** Maps a PR state to its icon colour class (via the shared `prStateTone`). */
+export function prStateIconClass(state: PrState | undefined): string {
+  return PR_STATE_TONE_CLASS[prStateTone(state)];
 }

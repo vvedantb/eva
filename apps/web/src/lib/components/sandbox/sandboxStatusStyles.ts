@@ -1,3 +1,5 @@
+import type { Doc } from "@eva/backend";
+
 /**
  * Shared visual styles for the sandbox status dot — used by the session sidebar
  * item, list/kanban cards, and the Task/Project surface tabs. Each state maps
@@ -9,7 +11,7 @@
  * {@link sandboxDisplayStatus} — the backend has no such status.
  */
 
-export type SandboxStatus = "active" | "starting" | "stopping" | "closed";
+export type SandboxStatus = Doc<"sessions">["status"];
 
 /** Backend statuses plus the client-derived "a wake attempt failed" state. */
 export type SandboxDisplayStatus = SandboxStatus | "error";

@@ -6,6 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
 import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
+import { sandboxStartupEntityId } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
 
 const PREVIEW_SANDBOX_ALLOWED_PHASES = [
@@ -47,7 +48,7 @@ export function useProjectSandbox(
   const sandboxStartupStreaming = useQuery(
     api.streaming.get,
     isSandboxStartingFromStatus
-      ? { entityId: `project-sandbox-startup-${projectId}` }
+      ? { entityId: sandboxStartupEntityId({ kind: "project", projectId }) }
       : "skip",
   );
 

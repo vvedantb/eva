@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { terminalHistoryTail } from "@eva/shared";
 import { authMutation, authQuery } from "./functions";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -15,7 +16,6 @@ import {
 import {
   assertStickyPreviewPort,
   normalizeStickyPreviewPath,
-  truncateTerminalHistoryTail,
 } from "./_sandbox/stickyPreview";
 
 type TerminalPane = NonNullable<Doc<"sessions">["terminalPanes"]>[number];
@@ -208,8 +208,10 @@ export const setTerminalHistoryTail = authMutation({
       ctx.userId,
       args.owner,
     );
-    const terminalHistoryTail = truncateTerminalHistoryTail(args.tail);
-    await patchSandboxOwner(ctx.db, owner, { terminalHistoryTail });
+    // Server-side trim too, so a buggy client cannot inflate entity docs.
+    await patchSandboxOwner(ctx.db, owner, {
+      terminalHistoryTail: terminalHistoryTail(args.tail),
+    });
     return null;
   },
 });

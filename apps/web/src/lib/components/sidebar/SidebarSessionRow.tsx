@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import { m } from "motion/react";
 import type { Id } from "@eva/backend";
 import {
@@ -49,7 +50,7 @@ interface SessionItem {
   branchName?: string;
   baseBranch?: string;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /**
    * Set only on rows this app sees through a linked checkout: the session's
    * primary repo, which owns its URL (see `sessionHrefForRow`).

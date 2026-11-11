@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "./appTabSlug";
+import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "@eva/shared/appTabSlug";
 
 test("RESERVED_APP_TAB_SLUGS keeps computer, legacy desktop, pr, and legacy diffs reserved", () => {
   // Computer tab URL is /computer; desktop stays reserved so custom tabs can't collide.

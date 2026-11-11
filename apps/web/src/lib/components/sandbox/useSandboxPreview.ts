@@ -6,6 +6,7 @@ import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
 import { useQueryState } from "nuqs";
 import { previewPortParser } from "@/lib/search-params";
+import { DEFAULT_PREVIEW_PORT } from "@eva/shared";
 import { stripPreviewGrant } from "@/lib/utils/previewGrant";
 import {
   dropPreviewGroup,
@@ -59,9 +60,6 @@ function clearLegacyPreviewUrlCache(): void {
     sessionStorage.removeItem(key);
   }
 }
-
-/** Port the preview falls back to when the app declares no dev port. */
-export const DEFAULT_PREVIEW_PORT = 3000;
 
 /**
  * Drives the WebPreview pane: resolves a sandbox+port to a live URL and polls

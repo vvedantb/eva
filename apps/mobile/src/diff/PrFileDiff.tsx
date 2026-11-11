@@ -53,13 +53,17 @@ const DIFF_LINE_CHUNK = 400;
  */
 export function PrDiffGate({
   state,
+  loading,
   children,
 }: {
   state: PrDiffState;
+  /** Drawn while the diff loads, in place of the spinner line (a list's placeholder rows). */
+  loading?: ReactNode;
   children: (diff: ReadyDiff) => ReactNode;
 }) {
   const scheme = useScheme();
   const muted = textColor(scheme, "muted");
+  if (state.status === "loading" && loading) return loading;
   if (state.status === "loading") {
     return (
       <View className="flex-1 flex-row items-center justify-center gap-2">

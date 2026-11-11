@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import {
   Button,
   DropdownMenu,
@@ -36,7 +37,7 @@ interface SessionChatHeaderArgs {
   title: string;
   branchName?: string;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   hasSummary: boolean;
   messageCount: number;
   isSandboxActive: boolean;

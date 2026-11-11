@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
+import type { PrState } from "@eva/shared";
 import {
   canSendSessionForReview,
   getSessionReadOnlyMessage,
   isSessionSidebarActive,
-  type SessionPrState,
 } from "./sessionReadOnly";
 
 describe("session read-only state", () => {
@@ -16,7 +16,7 @@ describe("session read-only state", () => {
     expect(isSessionSidebarActive({ archived: false })).toBe(true);
   });
 
-  test.each<SessionPrState>(["merged", "closed"])(
+  test.each<PrState>(["merged", "closed"])(
     "a %s PR kept live (auto-archive off) shows no read-only banner",
     (prState) => {
       expect(
@@ -42,7 +42,7 @@ describe("session read-only state", () => {
     expect(canSendSessionForReview({})).toBe(false);
   });
 
-  test.each<SessionPrState>(["open", "merged", "closed"])(
+  test.each<PrState>(["open", "merged", "closed"])(
     "%s PR is past send for review",
     (prState) => {
       expect(canSendSessionForReview({ branchName: "eva/x", prState })).toBe(

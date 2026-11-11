@@ -1,3 +1,5 @@
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+
 export interface PreviewAnnotationContext {
   tagName: string;
   id: string;
@@ -246,13 +248,13 @@ export function parseAnnotationInbound(
   if (!data || !("type" in data) || typeof data.type !== "string") {
     return null;
   }
-  if (data.type === "eva-preview-annotate-ready") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.annotateReady) {
     return { type: "ready" };
   }
-  if (data.type === "eva-preview-annotate-dismissed") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.annotateDismissed) {
     return { type: "dismissed" };
   }
-  if (data.type === "eva-preview-annotate-rect") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.annotateRect) {
     if (!("rect" in data)) return null;
     if (data.rect === null) {
       return { type: "rect", rect: null };
@@ -260,7 +262,7 @@ export function parseAnnotationInbound(
     if (typeof data.rect !== "object" || data.rect === null) return null;
     return { type: "rect", rect: parseRect(data.rect) };
   }
-  if (data.type === "eva-preview-annotate-selected") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.annotateSelected) {
     if (
       !("context" in data) ||
       !("rect" in data) ||

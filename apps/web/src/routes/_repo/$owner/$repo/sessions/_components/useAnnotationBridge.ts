@@ -2,6 +2,7 @@
 
 // useEffect: subscribe to iframe postMessage + arm annotate mode on toggle/reload.
 import { useEffect, useState, type RefObject } from "react";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import {
   parseAnnotationInbound,
   type PreviewAnnotationContext,
@@ -15,7 +16,12 @@ export interface AnnotationPending {
 
 function postAnnotateMessage(
   iframeRef: RefObject<HTMLIFrameElement | null>,
-  payload: { type: string; active?: boolean },
+  payload: {
+    type:
+      | typeof PREVIEW_FRAME_MESSAGE.annotateMode
+      | typeof PREVIEW_FRAME_MESSAGE.annotateClear;
+    active?: boolean;
+  },
 ): void {
   postToFrame(iframeRef.current, payload);
 }
@@ -38,12 +44,14 @@ export function useAnnotationBridge({
 
   const clearPending = () => {
     setPending(null);
-    postAnnotateMessage(iframeRef, { type: "eva-preview-annotate-clear" });
+    postAnnotateMessage(iframeRef, {
+      type: PREVIEW_FRAME_MESSAGE.annotateClear,
+    });
   };
 
   useEffect(() => {
     postAnnotateMessage(iframeRef, {
-      type: "eva-preview-annotate-mode",
+      type: PREVIEW_FRAME_MESSAGE.annotateMode,
       active: mode,
     });
   }, [iframeRef, mode]);
@@ -60,7 +68,7 @@ export function useAnnotationBridge({
         typeof event.data === "object" &&
         event.data !== null &&
         "type" in event.data &&
-        event.data.type === "navigation"
+        event.data.type === PREVIEW_FRAME_MESSAGE.navigation
       ) {
         setPending(null);
         return;
@@ -74,7 +82,7 @@ export function useAnnotationBridge({
         setPending(null);
         if (mode) {
           postAnnotateMessage(iframeRef, {
-            type: "eva-preview-annotate-mode",
+            type: PREVIEW_FRAME_MESSAGE.annotateMode,
             active: true,
           });
         }

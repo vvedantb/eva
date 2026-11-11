@@ -26,6 +26,7 @@ import {
   IconMaximize,
 } from "@tabler/icons-react";
 import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
@@ -141,8 +142,8 @@ interface PreviewNavBarProps {
 }
 
 type PreviewHistoryCommand =
-  | "eva-preview-history-back"
-  | "eva-preview-history-forward";
+  | typeof PREVIEW_FRAME_MESSAGE.historyBack
+  | typeof PREVIEW_FRAME_MESSAGE.historyForward;
 
 export function PreviewNavBar({
   previewUrl,
@@ -251,12 +252,12 @@ export function PreviewNavBar({
         return;
       }
       // The page is leaving for another document (link, form, location.href).
-      if (event.data.type === "eva-preview-unload") {
+      if (event.data.type === PREVIEW_FRAME_MESSAGE.unload) {
         setPreviewDocumentLoading(source, true);
         return;
       }
       if (
-        event.data.type === "navigation" &&
+        event.data.type === PREVIEW_FRAME_MESSAGE.navigation &&
         "url" in event.data &&
         typeof event.data.url === "string"
       ) {
@@ -276,7 +277,7 @@ export function PreviewNavBar({
   function goBack() {
     const handled = stepIframeHistory(currentIframe(), "back");
     if (!handled) {
-      postHistoryCommand("eva-preview-history-back");
+      postHistoryCommand(PREVIEW_FRAME_MESSAGE.historyBack);
     }
     setTimeout(syncPathFromIframe, 200);
   }
@@ -284,7 +285,7 @@ export function PreviewNavBar({
   function goForward() {
     const handled = stepIframeHistory(currentIframe(), "forward");
     if (!handled) {
-      postHistoryCommand("eva-preview-history-forward");
+      postHistoryCommand(PREVIEW_FRAME_MESSAGE.historyForward);
     }
     setTimeout(syncPathFromIframe, 200);
   }
