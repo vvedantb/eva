@@ -39,16 +39,20 @@ const READ_ONLY_SUPABASE_TOOLS = new Set([
 const PROJECT_FREE_TOOLS = new Set(["search_docs"]);
 
 /**
- * The repo's Supabase project ref: `SUPABASE_PROJECT_ID`, else the subdomain
- * of `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL` (`<ref>.supabase.co`).
+ * The repo's allowed Supabase project refs: `SUPABASE_PROJECT_ID` (one ref or
+ * a comma-separated list, e.g. staging and prod), else the subdomain of
+ * `SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL` (`<ref>.supabase.co`).
  */
-export function supabaseProjectRef(
+export function supabaseProjectRefs(
   vars: Array<{ key: string; value: string }>,
-): string | null {
+): string[] {
   const value = (key: string) =>
     vars.find((entry) => entry.key === key)?.value.trim();
-  const explicit = value("SUPABASE_PROJECT_ID");
-  if (explicit) return explicit;
+  const explicit = (value("SUPABASE_PROJECT_ID") ?? "")
+    .split(",")
+    .map((ref) => ref.trim())
+    .filter((ref) => ref.length > 0);
+  if (explicit.length > 0) return [...new Set(explicit)];
   for (const key of ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]) {
     let hostname: string;
     try {
@@ -57,26 +61,39 @@ export function supabaseProjectRef(
       continue;
     }
     const ref = /^([a-z0-9]+)\.supabase\.co$/.exec(hostname)?.[1];
-    if (ref) return ref;
+    if (ref) return [ref];
   }
-  return null;
+  return [];
 }
 
 /**
- * Forces a tool call onto the repo's project. A `project_id` for any other
- * project is rejected rather than silently rewritten.
+ * Keeps a tool call on one of the repo's projects. With one project,
+ * `project_id` may be omitted; with several, the caller must pick one. Any
+ * other project is rejected rather than silently rewritten.
  */
 export function bindSupabaseProject(
   args: Record<string, unknown>,
-  projectRef: string,
+  projectRefs: readonly string[],
 ): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {
-  if (args.project_id !== undefined && args.project_id !== projectRef) {
+  const allowed = projectRefs.join(", ");
+  const requested = args.project_id;
+  if (requested === undefined) {
+    const [only] = projectRefs;
+    if (projectRefs.length === 1 && only !== undefined) {
+      return { ok: true, args: { ...args, project_id: only } };
+    }
     return {
       ok: false,
-      error: `project_id must be this repo's Supabase project (${projectRef}).`,
+      error: `This repo has several Supabase projects. Pass project_id as one of: ${allowed}.`,
     };
   }
-  return { ok: true, args: { ...args, project_id: projectRef } };
+  if (typeof requested !== "string" || !projectRefs.includes(requested)) {
+    return {
+      ok: false,
+      error: `project_id must be one of this repo's Supabase projects: ${allowed}.`,
+    };
+  }
+  return { ok: true, args };
 }
 
 // In-memory cache (reset on action cold starts)
@@ -217,7 +234,7 @@ async function discoverTools(token: string): Promise<Tool[]> {
   }
 }
 
-type SupabaseCredentials = { token: string; projectRef: string };
+type SupabaseCredentials = { token: string; projectRefs: string[] };
 
 /** Per user: the repo whose token lists Supabase's tools (null = none). */
 const discoveryRepoCache = new Map<
@@ -356,8 +373,8 @@ export async function supabaseTools(
         .optional()
         .describe(
           scopedRepoId === undefined
-            ? "Always the named repo's Supabase project; may be omitted."
-            : `Always this repo's Supabase project (${discovery.projectRef}); may be omitted.`,
+            ? "One of the named repo's Supabase projects (its SUPABASE_PROJECT_ID list). May be omitted when the repo has one; otherwise the error lists the allowed refs. supabase_get_project shows each ref's name."
+            : `One of this repo's Supabase projects: ${discovery.projectRefs.join(", ")}. May be omitted when there is only one.`,
         );
     }
 
@@ -381,7 +398,7 @@ export async function supabaseTools(
           }
           let callArgs = args;
           if (bindsProject) {
-            const bound = bindSupabaseProject(args, current.projectRef);
+            const bound = bindSupabaseProject(args, current.projectRefs);
             if (!bound.ok) return toolErrorResult(bound.error);
             callArgs = bound.args;
           }

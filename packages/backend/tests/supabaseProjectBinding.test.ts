@@ -1,39 +1,51 @@
 import { expect, test } from "vitest";
 import {
   bindSupabaseProject,
-  supabaseProjectRef,
+  supabaseProjectRefs,
 } from "../convex/mcp/supabase";
 
-test("project ref comes from SUPABASE_PROJECT_ID, then the Supabase URL", () => {
+test("project refs come from SUPABASE_PROJECT_ID (one or a list), then the Supabase URL", () => {
   expect(
-    supabaseProjectRef([
+    supabaseProjectRefs([
       { key: "SUPABASE_URL", value: "https://otherref.supabase.co" },
       { key: "SUPABASE_PROJECT_ID", value: " explicitref " },
     ]),
-  ).toBe("explicitref");
+  ).toEqual(["explicitref"]);
   expect(
-    supabaseProjectRef([
+    supabaseProjectRefs([
+      { key: "SUPABASE_PROJECT_ID", value: "stagingref, prodref,,stagingref" },
+    ]),
+  ).toEqual(["stagingref", "prodref"]);
+  expect(
+    supabaseProjectRefs([
       { key: "NEXT_PUBLIC_SUPABASE_URL", value: "https://abcdef123.supabase.co" },
     ]),
-  ).toBe("abcdef123");
+  ).toEqual(["abcdef123"]);
   expect(
-    supabaseProjectRef([
+    supabaseProjectRefs([
       { key: "SUPABASE_URL", value: "https://abc.supabase.co.evil.example" },
-      { key: "NEXT_PUBLIC_SUPABASE_URL", value: "not a url" },
+      { key: "NEXT_PUBLIC_SUPABASE_URL", value: "http://127.0.0.1:54321" },
     ]),
-  ).toBeNull();
-  expect(supabaseProjectRef([])).toBeNull();
+  ).toEqual([]);
+  expect(supabaseProjectRefs([])).toEqual([]);
 });
 
-test("tool calls are forced onto the repo's project", () => {
-  expect(bindSupabaseProject({ query: "select 1" }, "repo-ref")).toEqual({
+test("one project: project_id is filled in; others are rejected", () => {
+  expect(bindSupabaseProject({ query: "select 1" }, ["repo-ref"])).toEqual({
     ok: true,
     args: { query: "select 1", project_id: "repo-ref" },
   });
-  expect(bindSupabaseProject({ project_id: "repo-ref" }, "repo-ref")).toEqual({
+  expect(bindSupabaseProject({ project_id: "other-ref" }, ["repo-ref"]).ok).toBe(
+    false,
+  );
+});
+
+test("several projects: the caller must pick one of them", () => {
+  const refs = ["stagingref", "prodref"];
+  expect(bindSupabaseProject({ query: "select 1" }, refs).ok).toBe(false);
+  expect(bindSupabaseProject({ project_id: "prodref" }, refs)).toEqual({
     ok: true,
-    args: { project_id: "repo-ref" },
+    args: { project_id: "prodref" },
   });
-  const rejected = bindSupabaseProject({ project_id: "other-ref" }, "repo-ref");
-  expect(rejected.ok).toBe(false);
+  expect(bindSupabaseProject({ project_id: "other-ref" }, refs).ok).toBe(false);
 });

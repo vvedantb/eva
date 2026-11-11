@@ -22,7 +22,7 @@ import {
   PR_WATCH_TOOL_NAMES,
 } from "./tools";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
-import { supabaseProjectRef, supabaseTools } from "./supabase";
+import { supabaseProjectRefs, supabaseTools } from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
@@ -1758,27 +1758,28 @@ export const orchestratorSetWatch = internalAction({
 
 const supabaseCredentialsCache = new Map<
   string,
-  { token: string; projectRef: string; expiresAt: number }
+  { token: string; projectRefs: string[]; expiresAt: number }
 >();
 
 /**
- * The repo's own Supabase access token and project. A Supabase token reaches
- * every project in its account, so tools only run against the project the
- * repo names, never a token borrowed from another of the user's repos.
+ * The repo's own Supabase access token and allowed projects. A Supabase token
+ * reaches every project in its account, so tools only run against the
+ * projects the repo names, never a token borrowed from another of the user's
+ * repos.
  */
 export const resolveSupabaseCredentials = internalAction({
   args: { repoId: v.string() },
   returns: v.union(
-    v.object({ token: v.string(), projectRef: v.string() }),
+    v.object({ token: v.string(), projectRefs: v.array(v.string()) }),
     v.null(),
   ),
   handler: async (
     ctx,
     { repoId },
-  ): Promise<{ token: string; projectRef: string } | null> => {
+  ): Promise<{ token: string; projectRefs: string[] } | null> => {
     const cached = supabaseCredentialsCache.get(repoId);
     if (cached && cached.expiresAt > Date.now()) {
-      return { token: cached.token, projectRef: cached.projectRef };
+      return { token: cached.token, projectRefs: cached.projectRefs };
     }
 
     const vars: EnvVar[] = await ctx.runAction(
@@ -1788,15 +1789,15 @@ export const resolveSupabaseCredentials = internalAction({
     const token = vars
       .find((entry) => entry.key === "SUPABASE_ACCESS_TOKEN")
       ?.value.trim();
-    const projectRef = supabaseProjectRef(vars);
-    if (!token || !projectRef) return null;
+    const projectRefs = supabaseProjectRefs(vars);
+    if (!token || projectRefs.length === 0) return null;
 
     supabaseCredentialsCache.set(repoId, {
       token,
-      projectRef,
+      projectRefs,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
-    return { token, projectRef };
+    return { token, projectRefs };
   },
 });
 
