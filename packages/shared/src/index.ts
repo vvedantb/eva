@@ -6,6 +6,7 @@ export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
   CONVEX_ID_PATTERN,
+  MENTION_HREF_REGEX,
   MENTION_TOKEN_REGEX,
   SKILL_TOKEN_REGEX,
   buildMentionPattern,
@@ -16,13 +17,23 @@ export {
   harnessSkillTokenId,
   isHarnessSkillTokenId,
   isSystemSkillTokenId,
+  mentionChipHref,
+  mentionTokensToChipLinks,
   mentionTokensToEditableText,
+  parseMentionChipHref,
   systemSkillTokenId,
   tokenizeMentionText,
   tokenizedToDisplayText,
   tokenizedToEditable,
+  type MentionChipKind,
   type MentionTokenMaps,
 } from "./mentionText";
+export {
+  carriedAccountForProvider,
+  defaultAccountForProvider,
+  toPickerAccounts,
+  type PickerAccount,
+} from "./providerAccounts";
 export {
   CLAUDE_HARNESS_SKILLS,
   acceptMentionTrigger,
@@ -106,12 +117,38 @@ export {
   type PrStateTone,
 } from "./prState";
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
+export {
+  QUICK_TASK_FILTER_DEFAULTS,
+  QUICK_TASK_LIST_DEFAULTS,
+  QUICK_TASK_SORT_DEFAULTS,
+  QUICK_TASK_SORT_FIELDS,
+  QUICK_TASK_SORT_FIELD_LABELS,
+  QUICK_TASK_TIME_RANGES,
+  QUICK_TASK_TIME_RANGE_LABELS,
+  activeQuickTaskFilterKeys,
+  applyQuickTaskFilters,
+  clearedQuickTaskFilter,
+  clearedQuickTaskFilters,
+  hasActiveQuickTaskFilters,
+  quickTaskFilterChips,
+  runAllPlan,
+  startAll,
+  toggleQuickTaskStatus,
+  type FilterableQuickTask,
+  type QuickTaskFilterChip,
+  type QuickTaskFilterKey,
+  type QuickTaskListFilters,
+  type QuickTaskSortDir,
+  type QuickTaskSortField,
+  type QuickTaskTimeRange,
+} from "./quickTaskFilters";
+export { repoBasePath } from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
-  defaultQuickTaskSections,
   formatEntityNumLabel,
   groupByTaskStatus,
   priorityCompare,
@@ -147,6 +184,7 @@ export {
   diffFileKind,
   ignoreWhitespaceInPatch,
   lineCommentTarget,
+  lineRangeCommentTarget,
   summarizeDiffSize,
   unifiedDiffLines,
   type DiffFileEntry,
@@ -166,11 +204,13 @@ export {
   checksHeadline,
   checksOverallTone,
   countChecks,
+  githubPrUrl,
   headerBlocker,
   mergeBlocker,
   mergeButtonLabel,
   prNumberFromGithubUrl,
   prReviewers,
+  revertSessionRequest,
   reviewStateMeta,
   splitSummaryComments,
   stackBlockingReason,
@@ -191,3 +231,13 @@ export {
   type StatusTone,
   type SummaryComment,
 } from "./prReview";
+export { appLeafName, repoDisplayLabel, repoTileSlot, type RepoTileSlot } from "./repoTile";
+
+export { storedRunTraits, toRunTraitArgs } from "./runTraits";
+export {
+  buildPrTimeline,
+  groupTimelineRows,
+  type ConversationEvent,
+  type TimelineEvent,
+  type TimelineRow,
+} from "./prTimeline";

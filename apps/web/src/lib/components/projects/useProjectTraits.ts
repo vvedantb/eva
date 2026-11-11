@@ -7,9 +7,9 @@ import { patchLoadedQuery } from "@vvedantb/server";
 import {
   composerTraitFields,
   storedComposerTraits,
+  toRunTraitArgs,
   type ComposerTraitFields,
 } from "@eva/shared";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
 
 /**
  * Project traits in the shape the traits menu reads. A project has one trait

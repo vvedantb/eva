@@ -338,7 +338,34 @@ export function mergeButtonLabel(overview: PrOverview): string {
   return count > 1 ? `Merge ${count} PRs` : "Merge";
 }
 
+/**
+ * The session a Revert starts on a merged pull request. GitHub has no "undo
+ * this merge" call (a revert is a commit on the base branch), so the web and
+ * the phone start a session on the base with the revert asked for, naming the
+ * merge commit when GitHub reported one.
+ */
+export function revertSessionRequest(overview: PrOverview): {
+  title: string;
+  message: string;
+  baseBranch: string;
+} {
+  const sha = overview.mergeCommitSha;
+  return {
+    title: `Revert #${overview.number}`,
+    message:
+      sha === null
+        ? `Revert the changes pull request #${overview.number} ("${overview.title}") merged into \`${overview.baseRef}\`. Open a pull request with the revert.`
+        : `Revert merge commit \`${sha}\` (pull request #${overview.number}, "${overview.title}") on \`${overview.baseRef}\`. Use \`git revert -m 1 ${sha}\` if it is a merge commit, resolve any conflicts, then open a pull request with the revert.`,
+    baseBranch: overview.baseRef,
+  };
+}
+
 // ── Reviews ─────────────────────────────────────────────────────────────────
+
+/** Canonical GitHub PR URL for an owner/repo + PR number (the key a recap is stored under). */
+export function githubPrUrl(owner: string, repoName: string, prNumber: number): string {
+  return `https://github.com/${owner}/${repoName}/pull/${prNumber}`;
+}
 
 /** Parse a positive PR number from a GitHub pull URL, or undefined if absent/invalid. */
 export function prNumberFromGithubUrl(prUrl: string): number | undefined {
