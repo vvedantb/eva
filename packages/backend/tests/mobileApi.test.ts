@@ -53,6 +53,7 @@ async function fixture() {
       connectedBy: strangerId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Fix the login bug",
@@ -694,6 +695,7 @@ describe("mobile api", () => {
           .unique();
         if (!strangerRepo) throw new Error("fixture");
         return await ctx.db.insert("sessions", {
+          owner: { kind: "standalone" },
           repoId: strangerRepo._id,
           userId: strangerRepo.connectedBy,
           title: "Not yours",

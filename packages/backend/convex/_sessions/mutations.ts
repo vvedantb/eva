@@ -42,6 +42,7 @@ import {
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
+import { STANDALONE_SESSION_OWNER } from "./owner";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -166,6 +167,7 @@ export async function createSession(
     repoId: args.repoId,
     userId: ctx.userId,
     title,
+    owner: STANDALONE_SESSION_OWNER,
     status: "starting",
     // The first boot is a start request like any other; see
     // `_sandbox/transitions.ts`.

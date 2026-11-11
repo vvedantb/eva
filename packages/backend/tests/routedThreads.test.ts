@@ -63,6 +63,7 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       teamId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Empty states",

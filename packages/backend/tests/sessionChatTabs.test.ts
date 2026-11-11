@@ -26,6 +26,7 @@ async function fixture() {
     });
     // No sandbox, so closing a chat schedules no daemon kill.
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Chat tabs",

@@ -30,6 +30,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Seed invoices",
@@ -144,6 +145,7 @@ describe("session reads go through its chats", () => {
       const f = await fixture();
       const otherSessionId = await f.t.run(async (ctx) =>
         ctx.db.insert("sessions", {
+          owner: { kind: "standalone" },
           repoId: f.repoId,
           userId: f.userId,
           title: "Other",

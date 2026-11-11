@@ -84,6 +84,7 @@ async function fixture(options: {
 
     if (entityKind === "session") {
       await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId: homeRepoId,
         userId: ownerUserId,
         title: "Sibling read session",

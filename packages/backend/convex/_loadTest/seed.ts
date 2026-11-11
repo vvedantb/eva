@@ -15,6 +15,7 @@ import type { MutationCtx } from "../_generated/server";
 type SeedDb = Pick<MutationCtx["db"], "insert">;
 import type { Id } from "../_generated/dataModel";
 import { DAILY_STANDUP_KEY } from "../_automations/systemAutomations";
+import { STANDALONE_SESSION_OWNER } from "../_sessions/owner";
 
 export const FOCAL_CLERK_ID = "loadtest_focal_user";
 
@@ -240,6 +241,7 @@ export const setup = internalMutation({
       repoId,
       userId,
       title: "Focal session",
+      owner: STANDALONE_SESSION_OWNER,
       numId: 1,
       status: "active",
       lastTurnFinishedAt: now - 3_600_000,
@@ -485,6 +487,7 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       repoId,
       userId: i % 2 === 0 ? userId : teammate(refs, i),
       title: `Session ${i}: ${filler(i, 40)}`,
+      owner: STANDALONE_SESSION_OWNER,
       status: i % 3 === 0 ? "active" : "closed",
       lastTurnFinishedAt: createdAt + 3_600_000,
       ...(i % 6 === 5 ? { archive: { archivedAt: createdAt } } : {}),

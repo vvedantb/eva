@@ -35,6 +35,7 @@ async function seedSession(
       installationId: 1,
     });
     return ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Preview heal gate",
