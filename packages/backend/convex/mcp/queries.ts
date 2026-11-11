@@ -304,7 +304,7 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: v.optional(v.string()),
       /** Port the app dev server listens on, entity setting before repo default. */
       devPort: v.optional(v.number()),
-      /** A quick task on its session: the session that holds its sandbox. */
+      /** A task or project on its session: the session that holds its sandbox. */
       sandboxSessionId: v.optional(v.id("sessions")),
     }),
   ),

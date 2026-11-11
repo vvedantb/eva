@@ -106,6 +106,20 @@ export async function findProjectSession(
 }
 
 /**
+ * A project task's own chat in its project's session (`sessionChats.taskId`),
+ * if it has one.
+ */
+export async function findProjectTaskChat(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<Doc<"sessionChats"> | null> {
+  return await db
+    .query("sessionChats")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .first();
+}
+
+/**
  * A quick task's own session, or null (a project task, or a quick task not
  * yet on a session). For what only a task's own session holds; a task's
  * sandbox is read through `findTaskWorkSession`.

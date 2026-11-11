@@ -48,7 +48,11 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
-import { sessionOwnerTaskId } from "./owner";
+import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import {
+  isProjectPreviewAllowed,
+  projectPreviewNotAllowedError,
+} from "../_projects/previewGate";
 import {
   isPreviewSandboxAllowed,
   previewSandboxNotAllowedError,
@@ -89,27 +93,35 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    const task = await previewBlockedTask(ctx.db, session);
-    if (task) throw previewSandboxNotAllowedError(task);
+    const blocked = await previewBlockedError(ctx.db, session);
+    if (blocked) throw blocked;
     await requestSessionSandboxStart(ctx, session);
     return null;
   },
 });
 
 /**
- * A task's session that may not boot a sandbox yet: the same gate the task's
- * own Start had (a todo task that never ran has no branch to preview; its
- * first run boots the sandbox). Returns the task when blocked.
+ * Why an owned session may not boot a sandbox yet, or null. The same gates
+ * the owner's own Start had: a todo task that never ran has no branch to
+ * preview (its first run boots the sandbox); a project previews only from
+ * in_progress to code_review. A task with a VM already may resume it.
  */
-async function previewBlockedTask(
+async function previewBlockedError(
   db: DatabaseReader,
   session: Doc<"sessions">,
-): Promise<Doc<"agentTasks"> | null> {
+): Promise<Error | null> {
+  const projectId = sessionOwnerProjectId(session);
+  const project = projectId ? await db.get(projectId) : null;
+  if (project) {
+    return isProjectPreviewAllowed(project)
+      ? null
+      : projectPreviewNotAllowedError(project);
+  }
   if (session.sandboxId !== undefined) return null;
   const taskId = sessionOwnerTaskId(session);
   const task = taskId ? await db.get(taskId) : null;
   if (!task || (await isPreviewSandboxAllowed(db, task))) return null;
-  return task;
+  return previewSandboxNotAllowedError(task);
 }
 
 /**
@@ -121,9 +133,9 @@ export async function requestSessionSandboxStart(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
-  if (await previewBlockedTask(ctx.db, session)) {
+  if (await previewBlockedError(ctx.db, session)) {
     console.log(
-      `[sessions] startSandbox skipped sessionId=${session._id}: its task cannot preview yet`,
+      `[sessions] startSandbox skipped sessionId=${session._id}: its owner cannot preview yet`,
     );
     return;
   }
@@ -452,7 +464,8 @@ export const requestStopSandbox = internalMutation({
 });
 
 /**
- * Records the VM a quick task's run prepared as its session's sandbox. Only
+ * Records the VM a task's run (or a project's interview) prepared as its
+ * session's sandbox. Only
  * while no start or stop owns the row: those write the sandbox id themselves,
  * and a run racing them must not re-point it. Returns whether it attached.
  */

@@ -106,7 +106,7 @@ export interface EntityTarget {
   sandboxStatus: string;
   sandboxId?: string;
   devPort?: number;
-  /** A quick task on its session: the session that holds its sandbox. */
+  /** A task or project on its session: the session that holds its sandbox. */
   sandboxSessionId?: string;
 }
 

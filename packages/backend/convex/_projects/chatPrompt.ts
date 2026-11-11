@@ -2,6 +2,7 @@ import {
   buildEditPrompt,
   type ChatRuntimeFacts,
 } from "../_sessions/prompts";
+import { withProjectContext } from "../_sessions/sessionPrompt";
 
 interface BuildProjectChatPromptArgs {
   repoOwner: string;
@@ -27,13 +28,10 @@ interface BuildProjectChatPromptArgs {
 export function buildProjectChatPrompt(
   args: BuildProjectChatPromptArgs,
 ): string {
-  const descriptionBlock = args.description
-    ? `\nProject description:\n${args.description}`
-    : "";
-
-  const messageWithContext = `In the sandbox for project "${args.title}"${descriptionBlock}
-
-${args.message}`;
+  const messageWithContext = withProjectContext(
+    { title: args.title, description: args.description },
+    args.message,
+  );
 
   return buildEditPrompt({
     repo: { owner: args.repoOwner, name: args.repoName },

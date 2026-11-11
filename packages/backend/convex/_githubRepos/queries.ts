@@ -47,7 +47,24 @@ async function repoActiveSandboxCount(
       .take(64),
   ).filter((t) => t.sandboxId !== undefined);
 
-  return activeProjects.length + activeTasks.length;
+  // A quick task's or project's sandbox lives on its session once it has one.
+  const activeOwnedSessions = (
+    await db
+      .query("sessions")
+      .withIndex("by_repo_and_status", (q) =>
+        q.eq("repoId", repoId).eq("status", "active"),
+      )
+      .take(64)
+  ).filter(
+    (s) =>
+      !isStandaloneSession(s) &&
+      s.deletedAt === undefined &&
+      s.sandboxId !== undefined,
+  );
+
+  return (
+    activeProjects.length + activeTasks.length + activeOwnedSessions.length
+  );
 }
 
 /** Attaches a resolved `logoUrl` (from `logoStorageId`) to each repo. */

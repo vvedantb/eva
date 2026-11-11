@@ -6,7 +6,7 @@ import { formatMessagePreview } from "../_messages/preview";
 import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
-import { sessionOwnerTaskId } from "../_sessions/owner";
+import { sessionOwner } from "../_sessions/owner";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -61,15 +61,25 @@ function surfaceTitle(surface: ChatMentionSurface): string {
   }
 }
 
-/** A task's session notifies as its task: the link opens the task page. */
+/**
+ * A task's or project's session notifies as its owner: the link opens the
+ * task or project page.
+ */
 async function ownerSurface(
   ctx: MutationCtx,
   surface: ChatMentionSurface,
 ): Promise<ChatMentionSurface> {
   if (surface.kind !== "session") return surface;
-  const taskId = sessionOwnerTaskId(surface.session);
-  const task = taskId ? await ctx.db.get(taskId) : null;
-  return task ? { kind: "task", task } : surface;
+  const owner = sessionOwner(surface.session);
+  if (owner.kind === "task") {
+    const task = await ctx.db.get(owner.taskId);
+    return task ? { kind: "task", task } : surface;
+  }
+  if (owner.kind === "project") {
+    const project = await ctx.db.get(owner.projectId);
+    return project ? { kind: "project", project } : surface;
+  }
+  return surface;
 }
 
 /** How much of the message routing is shown. Long enough for the ask, short

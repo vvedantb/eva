@@ -1,9 +1,11 @@
+import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type {
-  DatabaseReader,
-  MutationCtx,
-  QueryCtx,
+import {
+  internalMutation,
+  type DatabaseReader,
+  type MutationCtx,
+  type QueryCtx,
 } from "../_generated/server";
 import { allocateNumId } from "../numId";
 import { getAIModelProvider } from "../validators";
@@ -24,6 +26,7 @@ import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   findOwnedSession,
   findProjectSession,
+  findProjectTaskChat,
   findQuickTaskSession,
   findTaskSession,
   findTaskWorkSession,
@@ -71,6 +74,7 @@ export type OwnerEntity =
 // The lookups live in the leaf `owner.ts` so low-level modules can use them.
 export {
   findProjectSession,
+  findProjectTaskChat,
   findQuickTaskSession,
   findTaskSession,
   findTaskWorkSession,
@@ -197,17 +201,6 @@ export async function findOwnerChat(
       ? await findProjectTaskChat(db, entity.task._id)
       : await findMainChat(db, session._id);
   return chat ? { session, chat } : null;
-}
-
-/** A project task's own chat in its project's session, if it has one. */
-export async function findProjectTaskChat(
-  db: DatabaseReader,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"sessionChats"> | null> {
-  return await db
-    .query("sessionChats")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .first();
 }
 
 /**
@@ -733,17 +726,39 @@ export async function syncOwnedSessionWithTaskStatus(
   );
 }
 
-/** Project phase change → its session (`syncOwnedSessionWithTerminal`). */
-export async function syncOwnedSessionWithProjectPhase(
+/**
+ * Project phase (or delete) → its session. Reads the project's current
+ * state rather than a transition, so it is safe to call after any write and
+ * to run late (`syncProjectSessionLifecycle`): a completed, cancelled or
+ * deleted project's session is retired, any other is live.
+ */
+export async function syncProjectSession(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-  previous: Doc<"projects">["phase"],
-  next: Doc<"projects">["phase"],
 ): Promise<void> {
+  const project = await ctx.db.get(projectId);
+  if (!project) return;
+  const session = await findProjectSession(ctx.db, projectId);
+  if (!session) return;
+  const retired =
+    isTerminalProjectPhase(project.phase) || project.deletedAt !== undefined;
   await syncOwnedSessionWithTerminal(
     ctx,
     projectSessionOwner(projectId),
-    isTerminalProjectPhase(previous),
-    isTerminalProjectPhase(next),
+    isSessionArchived(session),
+    retired,
   );
 }
+
+/**
+ * `syncProjectSession` for phase writers that cannot import this module
+ * (`functions.ts` stays a leaf): scheduled right after the write.
+ */
+export const syncProjectSessionLifecycle = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await syncProjectSession(ctx, args.projectId);
+    return null;
+  },
+});

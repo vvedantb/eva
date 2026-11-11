@@ -3,7 +3,7 @@ import type { DatabaseReader, MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
-import { sessionOwnerTaskId } from "./_sessions/owner";
+import { sessionOwnerEntityId } from "./_sessions/owner";
 
 type ChatEntityId =
   | Id<"sessionChats">
@@ -214,10 +214,18 @@ export const markRead = authMutation({
     const chat = chatId ? await ctx.db.get(chatId) : null;
     const session = chat ? await ctx.db.get(chat.sessionId) : null;
     if (session) await upsertReadRow(ctx, ctx.userId, session);
-    // A task's session shows its unread dot on the task's card.
-    const ownerTaskId = session ? sessionOwnerTaskId(session) : undefined;
-    const task = ownerTaskId ? await ctx.db.get(ownerTaskId) : null;
-    if (task) await upsertReadRow(ctx, ctx.userId, task);
+    // A task's or project's session shows its unread dot on the owner's card;
+    // a project task's own chat on that task's.
+    const ownerId =
+      chat?.taskId ?? (session ? sessionOwnerEntityId(session) : undefined);
+    const taskId = ownerId ? ctx.db.normalizeId("agentTasks", ownerId) : null;
+    const projectId = ownerId ? ctx.db.normalizeId("projects", ownerId) : null;
+    const owner = taskId
+      ? await ctx.db.get(taskId)
+      : projectId
+        ? await ctx.db.get(projectId)
+        : null;
+    if (owner) await upsertReadRow(ctx, ctx.userId, owner);
     return null;
   },
 });

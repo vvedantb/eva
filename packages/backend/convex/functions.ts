@@ -254,6 +254,13 @@ async function applyPhaseTransition(
   if (updated) {
     await scheduleProjectPrSync(ctx, updated, previousPhase, newPhase);
   }
+  // A completed / cancelled project retires its session, a reopened one
+  // revives it. Scheduled: this module stays a leaf.
+  await ctx.scheduler.runAfter(
+    0,
+    internal._sessions.ownedSession.syncProjectSessionLifecycle,
+    { projectId: project._id },
+  );
 }
 
 /** Recalculates a project's delivery phase from child task statuses. */

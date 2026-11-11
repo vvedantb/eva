@@ -41,12 +41,26 @@ import {
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 import { errorMessage } from "@vvedantb/server";
 import { isProjectBuilding } from "./buildState";
+import {
+  isProjectPreviewAllowed,
+  projectPreviewNotAllowedError,
+} from "./previewGate";
+import { findProjectSession } from "../_sessions/owner";
 
-const PREVIEW_ALLOWED_PHASES = [
-  "in_progress",
-  "business_review",
-  "code_review",
-] as const;
+/**
+ * Legacy: a project with a session keeps its sandbox there
+ * (`sessions.startSandbox`); a project-row VM would split its work across two
+ * machines. Unreachable from the apps since PR 2; deleted in PR 3a.
+ */
+const RUNS_ON_SESSION_ERROR =
+  "This project's sandbox runs on its session: start it with sessions.startSandbox.";
+
+async function runsOnSession(
+  db: MutationCtx["db"],
+  project: Doc<"projects">,
+): Promise<boolean> {
+  return (await findProjectSession(db, project._id)) !== null;
+}
 
 /** Starts a preview sandbox for a project, checking out the project branch and running startup commands. */
 export const startProjectSandbox = authMutation({
@@ -60,21 +74,18 @@ export const startProjectSandbox = authMutation({
       args.projectId,
       ctx.userId,
     );
+    if (await runsOnSession(ctx.db, project)) {
+      throw new Error(RUNS_ON_SESSION_ERROR);
+    }
 
-    if (!isPreviewAllowedPhase(project)) {
-      throw new Error(
-        `Project must be in in_progress, business_review, or code_review to start sandbox. Current phase: ${project.phase}`,
-      );
+    if (!isProjectPreviewAllowed(project)) {
+      throw projectPreviewNotAllowedError(project);
     }
 
     await requestProjectSandboxStart(ctx, project);
     return null;
   },
 });
-
-function isPreviewAllowedPhase(project: Doc<"projects">): boolean {
-  return PREVIEW_ALLOWED_PHASES.some((phase) => phase === project.phase);
-}
 
 /**
  * Marks the project's preview sandbox starting and schedules the start. Shared
@@ -85,6 +96,12 @@ async function requestProjectSandboxStart(
   ctx: MutationCtx,
   project: Doc<"projects">,
 ): Promise<void> {
+  if (await runsOnSession(ctx.db, project)) {
+    console.log(
+      `[projects] startProjectSandbox skipped projectId=${project._id}: the project runs on its session`,
+    );
+    return;
+  }
   if (!canRequestSandboxStart(project.reviewProjectSandboxStatus)) {
     console.log(
       `[projects] startProjectSandbox skipped projectId=${project._id} status=${project.reviewProjectSandboxStatus}`,
@@ -156,7 +173,7 @@ export async function wakeProjectSandboxForQueue(
   ctx: MutationCtx,
   project: Doc<"projects">,
 ): Promise<void> {
-  if (!isPreviewAllowedPhase(project)) return;
+  if (!isProjectPreviewAllowed(project)) return;
   await requestProjectSandboxStart(ctx, project);
 }
 
@@ -179,7 +196,10 @@ export const retryProjectStartupCommands = authMutation({
       ctx.userId,
     );
 
-    if (!PREVIEW_ALLOWED_PHASES.some((phase) => phase === project.phase)) {
+    if (await runsOnSession(ctx.db, project)) {
+      throw new Error(RUNS_ON_SESSION_ERROR);
+    }
+    if (!isProjectPreviewAllowed(project)) {
       throw new Error(
         `Project must be in in_progress, business_review, or code_review to run startup commands. Current phase: ${project.phase}`,
       );

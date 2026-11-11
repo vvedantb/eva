@@ -19,7 +19,7 @@ import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
 import { touchAgentFinished } from "../_sandbox/activity";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
-import { findQuickTaskSession } from "../_sessions/owner";
+import { findTaskWorkSession } from "../_sessions/owner";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
 
@@ -42,14 +42,16 @@ export async function resolveTaskSandboxIdForRun(
   task: Doc<"agentTasks">,
   run: Doc<"agentRuns">,
 ): Promise<string | undefined> {
+  // A task's sandbox lives on its session (a project task's on the
+  // project's); rows from before that keep it on the task or project.
+  const session = await findTaskWorkSession(db, task);
   if (task.projectId) {
-    const project = await db.get(task.projectId);
+    const project = session ? null : await db.get(task.projectId);
     return preferPersistedSandboxId({
-      sandboxId: project?.sandboxId ?? run.sandboxId,
+      sandboxId:
+        (session ? session.sandboxId : project?.sandboxId) ?? run.sandboxId,
     });
   }
-  // A quick task's sandbox lives on its session.
-  const session = await findQuickTaskSession(db, task);
   return preferPersistedSandboxId({
     sandboxId: run.sandboxId ?? (session ? session.sandboxId : task.sandboxId),
   });

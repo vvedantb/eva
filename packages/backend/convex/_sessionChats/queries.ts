@@ -89,6 +89,9 @@ function pickDeliveryChat(
   if (chat === undefined) {
     return live.find((candidate) => candidate.isMain) ?? live[0] ?? null;
   }
+  // A project task's own chat is named by its id (`orchestratorSendMessage`).
+  const byId = live.find((candidate) => String(candidate._id) === chat);
+  if (byId) return byId;
   const asNumber = Number(chat);
   if (Number.isInteger(asNumber)) {
     const byNumber = live.find((candidate) => candidate.number === asNumber);

@@ -1339,26 +1339,26 @@ const ownedSessionRefSchema = z.object({
 });
 
 /**
- * Where a message to `kind`/`id` is delivered. A quick task's chat is its
- * session's Main chat (`sessions.ensureOwned` creates it on first use); every
- * other target is delivered to itself.
+ * Where a message to `kind`/`id` is delivered. A task's or project's chat is
+ * a chat of its session (`sessions.ensureOwned` creates it on first use): a
+ * quick task's or project's Main chat, a project task's own chat. A session
+ * is delivered to itself.
  */
 async function resolveSessionTarget(
   clerkUserId: string,
   kind: ChatTargetKind,
   id: string,
-): Promise<{ kind: ChatTargetKind; id: string }> {
-  if (kind !== "task") return { kind, id };
-  const task = agentTaskSchema.parse(
-    await readChatDocAsUser(clerkUserId, "task", id),
-  );
-  if (task.projectId !== undefined) return { kind, id };
+): Promise<{ kind: ChatTargetKind; id: string; chatId?: string }> {
+  if (kind === "session") return { kind, id };
   const owned = ownedSessionRefSchema.parse(
     await runAsUser("mutation", clerkUserId, "sessions:ensureOwned", {
-      taskId: id,
+      owner:
+        kind === "task"
+          ? { kind: "task", taskId: id }
+          : { kind: "project", projectId: id },
     }),
   );
-  return { kind: "session", id: owned.sessionId };
+  return { kind: "session", id: owned.sessionId, chatId: owned.chatId };
 }
 
 export const orchestratorSendMessage = internalAction({
@@ -1400,15 +1400,16 @@ export const orchestratorSendMessage = internalAction({
       sentViaOrchestrator,
     },
   ) => {
-    // A quick task chats in its session's Main chat, so its message is
-    // delivered there; the Ave watch below stays on the task. Project tasks
-    // keep the task chat until projects move onto sessions.
+    // A task or project chats in a chat of its session, so its message is
+    // delivered there; the Ave watch below stays on the task or project.
     const delivery = await resolveSessionTarget(clerkUserId, kind, id);
     const deliveryKind = delivery.kind;
     const deliveryId = delivery.id;
-    // A session message lands in one of its chats: the named one, else Main.
-    // From here on `targetId` is that chat; the session id is only kept for
-    // the sandbox wake and the Ave watch pointer.
+    // A session message lands in one of its chats: the named one, else Main;
+    // a task's or project's lands in its own chat. From here on `targetId` is
+    // that chat; the session id is only kept for the sandbox wake and the Ave
+    // watch pointer.
+    const chatName = delivery.chatId ?? chat;
     let targetId = deliveryId;
     let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
     let rawDoc: JsonValue;
@@ -1417,7 +1418,10 @@ export const orchestratorSendMessage = internalAction({
         "query",
         clerkUserId,
         "sessionChats:resolveDeliveryChat",
-        { sessionId: deliveryId, ...(chat !== undefined ? { chat } : {}) },
+        {
+          sessionId: deliveryId,
+          ...(chatName !== undefined ? { chat: chatName } : {}),
+        },
       );
       if (rawDoc === null) {
         throw new Error(
@@ -1508,6 +1512,23 @@ export const orchestratorStopAgent = internalAction({
       const project = projectDocSchema.parse(
         await readChatDocAsUser(clerkUserId, "project", id),
       );
+      // The project chats in its session (every chat of it goes quiet); a
+      // chat from before that is cancelled on the project.
+      const owned = ownedSessionRefSchema
+        .nullable()
+        .parse(
+          await runAsUser("query", clerkUserId, "sessions:getOwned", {
+            owner: { kind: "project", projectId: id },
+          }),
+        );
+      if (owned) {
+        await runAsUser(
+          "mutation",
+          clerkUserId,
+          "_sessions/execution:cancelSessionExecution",
+          { sessionId: owned.sessionId },
+        );
+      }
       await runAsUser(
         "mutation",
         clerkUserId,
@@ -1554,7 +1575,7 @@ export const mcpStartEntitySandbox = internalAction({
     startRequested: v.boolean(),
   }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
-    // A quick task's sandbox is its session's.
+    // A task's or project's sandbox is its session's.
     const target = await resolveSessionTarget(clerkUserId, kind, id);
     const { startRequested } = await ensureEntitySandboxActive(
       clerkUserId,
@@ -1578,8 +1599,8 @@ export const mcpStopEntitySandbox = internalAction({
     stopRequested: v.boolean(),
   }),
   handler: async (ctx, { clerkUserId, kind, id: entityId }) => {
-    // A quick task's sandbox is its session's; resolving it reads the task
-    // as the user, so the access check still comes first.
+    // A task's or project's sandbox is its session's; resolving it reads the
+    // owner as the user, so the access check still comes first.
     const target = await resolveSessionTarget(clerkUserId, kind, entityId);
     const id = target.id;
     // Reading the entity as the user is the access check, so it comes first —
