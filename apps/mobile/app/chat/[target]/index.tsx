@@ -10,6 +10,8 @@ import {
   formatForkPrompt,
   isOtherUserChatMessage,
   otherUserIdsInChat,
+  SANDBOX_CHAT_COPY,
+  sandboxComposerState,
   type SessionMenuAction,
   toRepoRelativePath,
 } from "@eva/shared";
@@ -121,6 +123,21 @@ export default function ChatScreen() {
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
+  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
+  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
+  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
+  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
+  const composerState = sandboxComposerState({
+    isSandboxActive: chat.sandboxActive,
+    isSwitchingAccount: modelPick.switching,
+    isExecuting: working,
+    isUsageLimitHeld: false,
+  });
+  const placeholder = working
+    ? "Add a follow-up..."
+    : composerState.placeholder === SANDBOX_CHAT_COPY.activePlaceholder
+      ? "Ask Eva anything..."
+      : composerState.placeholder;
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
     ? undefined
@@ -307,7 +324,7 @@ export default function ChatScreen() {
                 onChangeText={composer.setText}
                 onSubmit={handleSend}
                 menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
-                placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
+                placeholder={placeholder}
                 leading={
                   <AttachButton onPress={() => void attachments.pick()} />
                 }

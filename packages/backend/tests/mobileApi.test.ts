@@ -297,6 +297,32 @@ describe("mobile api", () => {
   );
 
   test(
+    "getChat says whether the sandbox runs, as the web composer reads it",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const awake = async () =>
+        Promise.all(
+          [ids.sessionId, ids.taskId, ids.projectId].map(
+            async (target) => (await asUser.query(api.mobile.getChat, { target }))?.sandboxActive,
+          ),
+        );
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { status: "closed" });
+        await ctx.db.patch(ids.taskId, { reviewTaskSandboxStatus: "closed" });
+        await ctx.db.patch(ids.projectId, { reviewProjectSandboxStatus: "closed" });
+      });
+      expect(await awake()).toEqual([false, false, false]);
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { status: "active" });
+        await ctx.db.patch(ids.taskId, { reviewTaskSandboxStatus: "active" });
+        await ctx.db.patch(ids.projectId, { reviewProjectSandboxStatus: "active" });
+      });
+      expect(await awake()).toEqual([true, true, true]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "getChat carries the pull request the web Review pane diffs",
     async () => {
       const { t, ids, asUser } = await fixture();
